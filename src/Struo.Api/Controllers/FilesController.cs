@@ -163,7 +163,7 @@ public sealed class FilesController(
     }
 
     // Default DELETE is trash (recoverable); ?purge=true is the permanent hard delete
-    // (FileService.DeleteAsync — row + sidecar translations + blob + any site_settings.logofileid
+    // (FileService.DeleteAsync — row + sidecar translations + blob + any `SiteSettings.LogoFileId`
     // reference).
     [HttpDelete("{id:guid}")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]

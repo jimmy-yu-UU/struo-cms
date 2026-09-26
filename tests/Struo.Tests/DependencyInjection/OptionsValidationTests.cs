@@ -137,6 +137,32 @@ public sealed class OptionsValidationTests
         options.AutoSyncSchema.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("Struo_")]          // upper-case letter
+    [InlineData("1struo_")]         // must start with a letter
+    [InlineData("struo-")]          // hyphen not allowed
+    [InlineData("struo cms_")]      // whitespace
+    [InlineData("abcdefghijklmnopq")] // 17 characters
+    public async Task Database_table_prefix_outside_the_allowed_shape_fails_startup(string prefix)
+    {
+        var error = await StartupErrorAsync(s => s["Database:TablePrefix"] = prefix);
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull($"Database:TablePrefix '{prefix}' must fail fast at startup");
+        string.Join(" ", ove!.Failures).Should().Contain("TablePrefix");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("struo_")]
+    [InlineData("acme")]
+    [InlineData("a1_b2_")]
+    [InlineData("abcdefghijklmnop")] // 16 characters
+    public async Task Database_table_prefix_inside_the_allowed_shape_starts(string prefix)
+    {
+        var error = await StartupErrorAsync(s => s["Database:TablePrefix"] = prefix);
+        error.Should().BeNull($"Database:TablePrefix '{prefix}' is valid");
+    }
+
     [Fact]
     public void Shipped_appsettings_disables_AutoSyncSchema()
     {

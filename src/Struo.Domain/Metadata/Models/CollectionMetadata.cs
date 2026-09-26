@@ -26,7 +26,7 @@ public sealed record CollectionMetadata
     public bool SoftDelete { get; init; }
 
     /// <summary>
-    /// When true, the collection is revisioned: create/update append a snapshot to the `revisions` table
+    /// When true, the collection is revisioned: create/update append a snapshot to the `Revision` table
     /// and a revert surface applies. Derived by the scanner from `[CmsCollection(Revisions=true)]`.
     /// </summary>
     public bool Revisions { get; init; }

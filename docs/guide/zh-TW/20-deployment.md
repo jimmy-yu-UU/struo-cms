@@ -17,7 +17,7 @@
 
 ### 第一次啟動前就換掉 bootstrap 密碼
 
-`Auth:BootstrapAdmin:Password` 只在 `users` 資料表第一次建立時被讀一次，之後重開行程再怎麼
+`Auth:BootstrapAdmin:Password` 只在 `struo_users` 資料表第一次建立時被讀一次，之後重開行程再怎麼
 改這個值，都不會影響已經存在的帳號。用預設值在 Production 啟動只會在 Warning 等級記一筆，點
 名這個設定鍵，不會擋下啟動。這道警告比對的是目前設定裡的值，不是資料庫裡實際存的雜湊：先用
 預設值種子、之後才改設定，警告會消失，帳號的密碼卻還是預設值那一組。

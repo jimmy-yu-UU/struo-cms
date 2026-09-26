@@ -10,7 +10,7 @@ public sealed record RevisionRecord(
     long? SourceRevisionNumber);
 
 /// <summary>
-/// Storage for per-item revision snapshots. Backed by the framework `revisions` table.
+/// Storage for per-item revision snapshots. Backed by the framework `Revision` table.
 /// Implementations run on the request-scoped SqlSugar client, so <see cref="CaptureAsync"/> called
 /// inside <c>ItemService</c>'s write transaction commits atomically with the write it describes.
 /// </summary>

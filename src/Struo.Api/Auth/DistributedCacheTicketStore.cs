@@ -11,7 +11,7 @@ namespace Struo.Api.Auth;
 /// <summary>Server-side session store for cookie auth, backed by IDistributedCache (Redis in
 /// real environments, in-memory in tests). Enables immediate revocation (logout / logout-all).
 /// <para>
-/// Also keeps the <c>user_sessions</c> index (<see cref="IUserSessionStore"/>) in sync, so a user's
+/// Also keeps the <c>UserSession</c> index (<see cref="IUserSessionStore"/>) in sync, so a user's
 /// live sessions can be enumerated and revoked (see <c>IUserSessionRevocationService</c>) even though
 /// <see cref="IDistributedCache"/> itself has no key-scan/set operation. This class is registered
 /// <c>AddSingleton</c> — required because <c>CookieAuthenticationOptions.SessionStore</c> is resolved

@@ -54,7 +54,7 @@ another folder is just an ordinary item update. `storageKey` carries no `[CmsFie
 never projected out, and no write path can touch it.
 
 The translatable `title` and `alt` live in the `FileTranslation` sidecar entity (table
-`file_translations`, unique on `(fileid, locale)`), exactly the `[CmsTranslations]` mechanism
+`struo_file_translations`, unique on `(fileid, locale)`), exactly the `[CmsTranslations]` mechanism
 described in [Chapter 7: Multilingual Content](07-i18n.md).
 
 On upload, the default locale's `title` is auto-filled from the filename with its extension

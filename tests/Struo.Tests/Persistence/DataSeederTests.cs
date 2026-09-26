@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Localization;
@@ -127,5 +128,24 @@ public class DataSeederTests
         var logger = new ListLogger();
         DataSeeder.WarnIfDefaultAdminPasswordInProduction(isProduction: false, "admin", logger);
         logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Trigger_tables_are_matched_by_the_resolved_name_not_a_literal()
+    {
+        using var dbf = new SqliteTestDatabase();
+        // A factory client with the default prefix: the trigger tables are struo_languages etc.
+        var db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = dbf.ConnectionString },
+            new TestCurrentUserAccessor(Guid.Empty));
+        db.CodeFirst.InitTables(typeof(Language), typeof(User), typeof(Role), typeof(Permission), typeof(UserRole));
+        var existingBefore = new HashSet<string>(StringComparer.Ordinal); // nothing existed before
+
+        await DataSeeder.SeedAsync(db, existingBefore, Hasher,
+            "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
+
+        (await db.Queryable<Language>().CountAsync()).Should().Be(2);
+        (await db.Queryable<User>().CountAsync()).Should().Be(1);
+        (await db.Queryable<Role>().CountAsync()).Should().BeGreaterThan(0);
     }
 }

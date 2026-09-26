@@ -54,7 +54,7 @@ pnpm dev
 # 監聽 http://localhost:5173，並將 /api 轉發到 :5221
 ```
 
-開啟 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。這組帳密只在 `users` 資料
+開啟 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。這組帳密只在 `struo_users` 資料
 表第一次建立時植入；要換帳密，第一次啟動前先設 `Auth__BootstrapAdmin__Email`／
 `Auth__BootstrapAdmin__Password`。
 

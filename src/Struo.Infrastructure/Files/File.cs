@@ -12,7 +12,7 @@ namespace Struo.Infrastructure.Files;
 /// and is read-only thereafter. PK is a <see cref="Guid"/>, assigned by the create flow.
 /// </summary>
 [SugarTable("files")]
-[SugarIndex("ix_files_folderid", nameof(FolderId), OrderByType.Asc)]
+[SugarIndex("ix_{table}_folderid", nameof(FolderId), OrderByType.Asc)]
 [CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true)]
 public sealed class File : AuditableEntity, ISoftDeletable
 {

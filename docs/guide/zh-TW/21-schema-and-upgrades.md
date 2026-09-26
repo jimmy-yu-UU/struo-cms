@@ -121,7 +121,7 @@ schema guard 跟植入資料排在最後，兩者都得看最終的資料表形�
 `SchemaGuard` 只在 Development 執行，跑在建表、結構同步、migration 腳本之後：它驗證兩
 件事真的存在——
 
-- `revisions` 資料表上 `(collectionname, itemid, revisionnumber)` 的複合唯一索引。
+- `struo_revisions` 資料表上 `(collectionname, itemid, revisionnumber)` 的複合唯一索引。
 - 每一個有翻譯 sidecar 的集合，其 sidecar 上 `(fk, locale)` 的唯一索引（sidecar 本身可以
   不存在，但如果存在，索引就得存在）。
 

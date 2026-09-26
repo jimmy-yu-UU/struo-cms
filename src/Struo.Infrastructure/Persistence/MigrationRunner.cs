@@ -5,8 +5,8 @@ namespace Struo.Infrastructure.Persistence;
 
 /// <summary>
 /// Lightweight, forward-only SQL migration runner. Applies the reviewed <c>*.sql</c> files under a
-/// configured directory, tracking applied filenames in a <c>schema_migrations</c> table so each file
-/// runs at most once.
+/// configured directory, tracking applied filenames in the <see cref="SchemaMigration"/> table so each
+/// file runs at most once.
 ///
 /// <para>
 /// Runs on <b>any</b> configured backend. Creating tables is not its job — <see
@@ -28,8 +28,6 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 public static class MigrationRunner
 {
-    internal const string TrackingTable = "schema_migrations";
-
     /// <summary>
     /// Pure helper: keep only <c>*.sql</c> entries and order them by ordinal filename so the numeric
     /// <c>NNN-</c> prefix drives apply order deterministically across platforms.
@@ -138,8 +136,9 @@ public static class MigrationRunner
     // 不受影響，也不需要任何 migration。
     private static void EnsureTrackingTable(ISqlSugarClient db)
     {
+        var tracking = db.EntityMaintenance.GetTableName<SchemaMigration>();
         var exists = db.DbMaintenance.GetTableInfoList(false)
-            .Any(t => t.Name.Equals(TrackingTable, StringComparison.OrdinalIgnoreCase));
+            .Any(t => t.Name.Equals(tracking, StringComparison.OrdinalIgnoreCase));
 
         if (!exists) db.CodeFirst.InitTables(typeof(SchemaMigration));
     }

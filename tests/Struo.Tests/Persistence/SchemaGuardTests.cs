@@ -18,9 +18,9 @@ namespace Struo.Tests.Persistence;
 /// caller-supplied; and (b) a UNIQUE (fk, locale) index on each translation sidecar the CALLER passes in
 /// as a <see cref="TranslationSidecarDescriptor"/> — SchemaGuard itself carries no table names, so
 /// a fork's own sidecars are protected the same way core's file_translations is (Program.cs derives the
-/// descriptor list from metadata). The index NAME differs by backend/creation-path (PG migration =
-/// ux_revisions_item_no; SQLite CodeFirst = Index_revisions_..._Unique), so the guard detects it by
-/// uniqueness + column coverage, not by name.
+/// descriptor list from metadata). The index is declared on Revision as
+/// <c>[SugarIndex("ux_{table}_item_no", …, IsUnique)]</c> and emitted under the resolved table name;
+/// the guard still detects it by uniqueness + column coverage, never by name.
 /// </summary>
 public sealed class SchemaGuardTests
 {
@@ -53,7 +53,7 @@ public sealed class SchemaGuardTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(Revision)); // UniqueGroupNameList -> composite unique index
+            client.CodeFirst.InitTables(typeof(Revision)); // [SugarIndex(IsUnique)] -> composite unique index
 
             var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             await act.Should().NotThrowAsync();
@@ -68,13 +68,14 @@ public sealed class SchemaGuardTests
         {
             // A revisions table that has a PK (its own unique index on id) but NOT the composite unique
             // over (collectionname, itemid, revisionnumber) — simulating a DB where 010 never ran.
+            var revisions = client.EntityMaintenance.GetTableName<Revision>();
             client.Ado.ExecuteCommand(
-                "CREATE TABLE revisions (id text primary key, collectionname text, " +
+                $"CREATE TABLE {revisions} (id text primary key, collectionname text, " +
                 "itemid text, revisionnumber integer, operation text, snapshot text, createdat text)");
 
             var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [], default);
             (await act.Should().ThrowAsync<InvalidOperationException>())
-                .Which.Message.Should().Contain("revisions");
+                .Which.Message.Should().Contain(revisions);
         }
     }
 

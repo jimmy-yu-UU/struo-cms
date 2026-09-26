@@ -64,7 +64,7 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`. The
-account is seeded only when the `users` table is first created; to use a different one, set
+account is seeded only when the `struo_users` table is first created; to use a different one, set
 `Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password` before the first start.
 
 Starting in Production while the password is still the default logs a warning naming

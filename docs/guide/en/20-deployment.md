@@ -23,7 +23,7 @@ doesn't exist makes startup fail outright (see "What fails fast at startup" belo
 
 ### Change the bootstrap password before the first start
 
-`Auth:BootstrapAdmin:Password` is read exactly once, the moment the `users` table is first
+`Auth:BootstrapAdmin:Password` is read exactly once, the moment the `struo_users` table is first
 created; restarting the process after changing this value has no effect on the account that
 already exists. Starting in Production with the default value only logs a Warning naming this
 setting key — it doesn't block startup.

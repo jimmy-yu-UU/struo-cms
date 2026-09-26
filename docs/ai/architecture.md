@@ -425,11 +425,11 @@ Session revocation is a separate pair of seams, registered alongside the five ab
 `AddStruoInfrastructure`
 (`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`): `IUserSessionStore`
 → `SqlSugarUserSessionStore` and `IUserSessionRevocationService` → `UserSessionRevocationService`
-(both `src/Struo.Infrastructure/Identity/`). `IUserSessionStore` backs onto the `user_sessions`
+(both `src/Struo.Infrastructure/Identity/`). `IUserSessionStore` backs onto the `UserSession`
 table (`UserSession.cs`, one row per live cookie ticket, indexed by `UserId`) — the index the ticket
 cache itself has no way to scan, needed to find "every live session for user X".
 `IUserSessionRevocationService.RevokeAllForUserAsync` clears a user's cache entries and
-`user_sessions` rows together, and is invoked on two triggers: password change and
+`UserSession` rows together, and is invoked on two triggers: password change and
 `ItemService.RevokeSessionsIfUserAsync` on **both** DELETE branches (soft-delete and purge) of a
 `user` row — placed in `ItemService` rather than a controller so the GraphQL `deleteUser` mutation
 is covered too. Logout is a narrower, single-ticket operation: `AuthController.Logout` calls

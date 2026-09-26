@@ -1,4 +1,5 @@
 using SqlSugar;
+using Struo.Infrastructure.Revisions;
 
 namespace Struo.Infrastructure.Persistence;
 
@@ -8,19 +9,20 @@ namespace Struo.Infrastructure.Persistence;
 /// throws with an actionable message if one is missing, rather than letting the app run with a silent
 /// gap.
 ///
-/// The critical constraints today are (a) the <c>revisions</c> composite UNIQUE index over
-/// (collectionname, itemid, revisionnumber): the backstop that makes a lost-update race on
+/// The critical constraints today are (a) the composite UNIQUE index over (collectionname, itemid,
+/// revisionnumber) on <c>Revision</c>'s resolved table: the backstop that makes a lost-update race on
 /// per-item revision numbers fail closed; and (b) a UNIQUE (fk, locale) index on each translation
 /// sidecar the running configuration actually has, keeping per-locale overlay reads deterministic.
 /// Sidecars are supplied by the CALLER as <see cref="TranslationSidecarDescriptor"/> values — Program.cs
 /// derives one per collection from <c>IMetadataProvider.GetCollections()</c>'s <c>Translation</c>
 /// metadata, resolving table/column names via <c>ISqlSugarClient.EntityMaintenance</c> (the same
 /// resolution SqlSugar itself uses) — so this guard never hardcodes a collection or table name and a
-/// fork's own sidecars are protected automatically, the same way core's <c>file_translations</c> is.
+/// fork's own sidecars are protected automatically, the same way core's <c>FileTranslation</c> sidecar is.
 /// Indexes on core tables are created by CodeFirst (<c>InitTables</c>) from each entity's own
-/// <c>SugarColumn.UniqueGroupNameList</c> — the <c>revisions</c> composite unique still comes from
-/// <c>Revision</c> declaring it this way. Each translation sidecar's <c>(fk, locale)</c> unique is
-/// different: it is derived, not declared — <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook
+/// class-level <c>[SugarIndex(IsUnique)]</c> declarations — the composite unique comes
+/// from <c>Revision</c> declaring <c>[SugarIndex("ux_{table}_item_no", …, true)]</c>, its name resolved
+/// from the prefixed table at <c>InitTables</c> time. Each translation sidecar's <c>(fk, locale)</c>
+/// unique is different: it is derived, not declared — <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook
 /// reads <c>[CmsTranslations]</c> metadata via a <see cref="TranslationSidecarIndexPolicy"/> (supplied
 /// by <c>AddStruoInfrastructure</c>) and stamps the resolved group name onto the sidecar's fk/locale
 /// columns' <c>EntityColumnInfo.UIndexGroupNameList</c> before <c>InitTables</c> reads it, so a fork's
@@ -52,16 +54,18 @@ public static class SchemaGuard
         // it stays out of the way rather than block startup on a backend whose catalog it does not read.
         if (dbType is not (DbType.PostgreSQL or DbType.Sqlite)) return;
 
-        // Backstop — the `revisions` composite UNIQUE (always present in the app schema; on a DB
-        // that somehow lacks the table the index query returns empty and this fails, which is correct).
-        await AssertUniqueCoverAsync(db, dbType, "revisions",
+        // Backstop — the composite UNIQUE on `Revision`'s resolved table (always present in the app
+        // schema; on a DB that somehow lacks the table the index query returns empty and this fails,
+        // which is correct).
+        var revisionsTable = db.EntityMaintenance.GetTableName<Revision>();
+        await AssertUniqueCoverAsync(db, dbType, revisionsTable,
             ["collectionname", "itemid", "revisionnumber"], requireTableExists: true,
-            "the `revisions` table has no composite UNIQUE index over " +
-            "(collectionname, itemid, revisionnumber). This index is the backstop that makes a concurrent " +
-            "revision-number race fail closed. If this is an existing database whose `revisions` table " +
-            "predates this guarantee, add a reviewed migration under db/migrations/ to create the index; " +
-            "otherwise recreate the dev schema so InitTables re-emits it from Revision's " +
-            "UniqueGroupNameList.", ct);
+            $"the `{revisionsTable}` table (`Revision`'s resolved table) has no composite UNIQUE index " +
+            "over (collectionname, itemid, revisionnumber). This index is the backstop that makes a " +
+            "concurrent revision-number race fail closed. If this is an existing database whose " +
+            $"`{revisionsTable}` table predates this guarantee, add a reviewed migration under " +
+            "db/migrations/ to create the index; otherwise recreate the dev schema so InitTables " +
+            "re-emits it from Revision's [SugarIndex(IsUnique)] declaration.", ct);
 
         // Backstop — each caller-supplied translation sidecar's UNIQUE (fk, locale). Skipped when
         // the table is not present in this database (a fork may not use a given sidecar), rather than

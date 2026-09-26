@@ -11,16 +11,16 @@ grants.
 
 | Collection | Table | Content |
 |---|---|---|
-| `user` | `users` | Email, password hash, active flag, access-token hash, roles |
-| `role` | `roles` | Role name, `isSuperAdmin` flag, description |
-| `permission` | `permissions` | One row per role-collection grant |
+| `user` | `struo_users` | Email, password hash, active flag, access-token hash, roles |
+| `role` | `struo_roles` | Role name, `isSuperAdmin` flag, description |
+| `permission` | `struo_permissions` | One row per role-collection grant |
 
 On `user`, `password` and `accessToken` are both `Hidden` and `ReadOnly` at once, so the password
 and token hashes never appear in an ordinary query result and can't be written directly by a caller.
 
 A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, that means
 ticking role names. The junction between user and role is a fourth table, `userRole` (table
-`user_roles`), which no caller ever sees.
+`struo_user_roles`), which no caller ever sees.
 
 A `permission` row names a role and a collection, and carries exactly three grant flags:
 `canRead`, `canWrite`, `canDelete`. There's no fourth flag, and no separately stored "can read
@@ -99,13 +99,13 @@ would otherwise be allowed to write.
 
 ## Public read
 
-The first time the `roles` table is created, the `admin` and `public` roles are created along with
+The first time the `struo_roles` table is created, the `admin` and `public` roles are created along with
 it, and the first administrator is added to `admin`. `public`'s grants are every caller's floor —
 how they're unioned in is covered above under "How effective permissions are computed". What
 `public` is granted to read is decided by the `Rbac:PublicReadCollections` configuration key.
 
 Each collection name in that list becomes one `canRead = true` grant row on `public`. This key
-only applies the first time the `roles` table is created; changing it and restarting has no
+only applies the first time the `struo_roles` table is created; changing it and restarting has no
 retroactive effect on an existing database. The key name and this limit are in
 [Chapter 4: Configuration Reference](04-configuration.md).
 

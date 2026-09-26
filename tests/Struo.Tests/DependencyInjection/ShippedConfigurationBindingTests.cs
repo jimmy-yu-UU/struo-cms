@@ -127,16 +127,16 @@ public sealed class ShippedConfigurationBindingTests
         var bound = BindThroughProductionRegistration<DatabaseOptions>(
             configuration, (services, _) => services.AddStruoInfrastructure());
 
-        // Honest accounting of what these four assertions can and cannot catch. Only two of them have
+        // Honest accounting of what these five assertions can and cannot catch. Only two of them have
         // real discriminating power: MigrationsPath (shipped "" vs the C# default null) and
-        // ConnectionString (the shipped non-empty string vs the C# default empty string). DbType and
-        // AutoSyncSchema happen to equal the DatabaseOptions default (PostgreSQL / false) in the
-        // shipped file, so they pass whether or not the real value bound correctly — they are kept for
-        // documentation value and because a future change to either default would make them
-        // discriminate too, not because they discriminate today.
+        // ConnectionString (the shipped non-empty string vs the C# default empty string). DbType,
+        // AutoSyncSchema and TablePrefix happen to equal the DatabaseOptions default (PostgreSQL /
+        // false / "struo_") in the shipped file, so they pass whether or not the real value bound
+        // correctly — they are kept for documentation value and because a future change to any of
+        // those defaults would make them discriminate too, not because they discriminate today.
         //
         // In practice, for the section-name-divergence mutation (an unbound/misbound section),
-        // NONE of the four ever get the chance to run: DatabaseOptions.ConnectionString carries
+        // NONE of the five ever get the chance to run: DatabaseOptions.ConnectionString carries
         // [Required(AllowEmptyStrings = false)], so IOptions<DatabaseOptions>.Value throws
         // OptionsValidationException before any Should() call below executes. That exception — not
         // these assertions — is this guard's actual signal today. They remain load-bearing as a
@@ -152,6 +152,7 @@ public sealed class ShippedConfigurationBindingTests
         bound.ConnectionString.Should().Be(shipped.GetProperty("ConnectionString").GetString());
         bound.AutoSyncSchema.Should().Be(shipped.GetProperty("AutoSyncSchema").GetBoolean());
         bound.MigrationsPath.Should().Be(shipped.GetProperty("MigrationsPath").GetString());
+        bound.TablePrefix.Should().Be(shipped.GetProperty("TablePrefix").GetString());
     }
 
     [Fact]

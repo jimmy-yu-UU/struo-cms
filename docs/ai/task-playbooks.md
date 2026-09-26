@@ -242,7 +242,7 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `d
 3. Write plain, portable SQL: standard types (`varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`,
    `numeric(p,s)`), no PostgreSQL-specific syntax (`jsonb`/`uuid`/`timestamptz`/`serial`, `DO $$ … $$`,
    `::` casts, `RETURNING`). **Idempotency is not required, and `IF NOT EXISTS` should be avoided** —
-   the CodeFirst-created `schema_migrations` tracking table already guarantees each filename runs at
+   the CodeFirst-created `SchemaMigration` tracking table already guarantees each filename runs at
    most once, and `IF NOT EXISTS` is not supported on SQL Server. Forward-only — no automatic
    down-migration; a rollback is a new compensating script, not an edit to this one. See
    `db/migrations/README.md` §5 for the full prefer/avoid tables.
@@ -261,7 +261,7 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `d
    column while you're at it unless that specific column is the subject of this migration
    (re-anchoring already-stored values against a session time zone is a silent data shift).
 5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
-   tracks applied migrations by filename only, in the CodeFirst-created `schema_migrations` table, with
+   tracks applied migrations by filename only, in the CodeFirst-created `SchemaMigration` table, with
    no checksum, so an edited file with an already-applied filename is silently never re-run — the rule
    and the by-filename-only tracking it follows from are `db/migrations/README.md` §4. Ship a new file
    instead.
@@ -277,7 +277,8 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `d
    which SQLite may accept or reject differently than your actual target backend). **The migration
    itself can only be verified by applying it**: point `Database:MigrationsPath` at `db/migrations/` (an
    absolute path) against a disposable instance of the backend you are actually configured for, and
-   confirm the script applies cleanly and is recorded in `schema_migrations`. PostgreSQL is this
+   confirm the script applies cleanly and is recorded in the tracking table (`struo_schema_migrations`
+   on a default install). PostgreSQL is this
    repository's only verified live target; on any other backend, that backend needs its own equivalent
    live check — a green SQLite (or PostgreSQL) run does not transfer.
 

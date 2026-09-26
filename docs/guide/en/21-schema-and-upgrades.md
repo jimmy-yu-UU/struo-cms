@@ -153,7 +153,7 @@ message and exit code are in [Chapter 20: Deployment](20-deployment.md).
 `SchemaGuard` runs only in Development, after table creation, schema sync, and migration
 scripts. It verifies two things actually exist:
 
-- A composite unique index over `(collectionname, itemid, revisionnumber)` on the `revisions`
+- A composite unique index over `(collectionname, itemid, revisionnumber)` on the `struo_revisions`
   table.
 - For every collection with a translation sidecar table, a unique index over `(fk, locale)` on
   that sidecar (the sidecar itself may not exist, but if it does, the index has to).

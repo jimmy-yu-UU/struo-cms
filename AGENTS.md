@@ -197,8 +197,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 4. **Add a migration** — next `NNN-short-kebab-description.sql` under `db/migrations/`; the template
    ships **zero** scripts, so a fresh fork's first is `001-...`, and anything already there belongs to
    that fork. Forward-only, plain portable SQL (no PostgreSQL-only syntax); idempotency is not required —
-   `MigrationRunner` tracks applied filenames in `schema_migrations`, so each file runs at most once;
-   never edit an already-applied filename. The runner applies pending scripts on **any** configured
+   `MigrationRunner` tracks applied filenames in the `SchemaMigration` table (`struo_schema_migrations`
+   on a default install), so each file runs at most once; never edit an already-applied filename.
+   The runner applies pending scripts on **any** configured
    backend (no PostgreSQL gate) and is off by default — `Database:MigrationsPath` empty disables it
    entirely. Creating tables isn't its job: `DatabaseInitializer.CreateMissingTables` does that, in
    every environment and on every backend, so scripts here are ALTER-only by convention. See

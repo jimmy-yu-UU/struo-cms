@@ -13,9 +13,6 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 public static class DataSeeder
 {
-    internal const string LanguagesTable = "languages";
-    internal const string UsersTable = "users";
-    internal const string RolesTable = "roles";
     internal const string DefaultAdminPassword = "admin";
 
     /// <summary>Lower-cased ordinal set of current DB table names. Reused for the before-snapshot.</summary>
@@ -36,23 +33,26 @@ public static class DataSeeder
         CancellationToken ct = default)
     {
         var existingAfter = GetTableNames(db);
+        var languagesTable = db.EntityMaintenance.GetTableName<Language>().ToLowerInvariant();
+        var usersTable = db.EntityMaintenance.GetTableName<User>().ToLowerInvariant();
+        var rolesTable = db.EntityMaintenance.GetTableName<Role>().ToLowerInvariant();
         bool JustCreated(string table) =>
             existingAfter.Contains(table) && !existingBefore.Contains(table);
 
-        if (JustCreated(LanguagesTable))
+        if (JustCreated(languagesTable))
             await LanguageSeeder.SeedAsync(db);
         else
-            logger.LogInformation("DataSeeder: skip LanguageSeeder — '{Table}' pre-existed.", LanguagesTable);
+            logger.LogInformation("DataSeeder: skip LanguageSeeder — '{Table}' pre-existed.", languagesTable);
 
-        if (JustCreated(UsersTable))
+        if (JustCreated(usersTable))
             await AdminUserSeeder.SeedAsync(db, hasher, bootstrapAdminEmail, bootstrapAdminPassword);
         else
-            logger.LogInformation("DataSeeder: skip AdminUserSeeder — '{Table}' pre-existed.", UsersTable);
+            logger.LogInformation("DataSeeder: skip AdminUserSeeder — '{Table}' pre-existed.", usersTable);
 
-        if (JustCreated(RolesTable))
+        if (JustCreated(rolesTable))
             await RbacSeeder.SeedAsync(db, bootstrapAdminEmail, publicReadCollections, ct);
         else
-            logger.LogInformation("DataSeeder: skip RbacSeeder — '{Table}' pre-existed.", RolesTable);
+            logger.LogInformation("DataSeeder: skip RbacSeeder — '{Table}' pre-existed.", rolesTable);
 
         WarnIfDefaultAdminPasswordInProduction(isProduction, bootstrapAdminPassword, logger);
     }

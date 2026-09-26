@@ -10,17 +10,16 @@ namespace Struo.Infrastructure.Identity;
 [SugarTable("permissions")]
 // RBAC effective-permission resolution scans permissions by roleid on every authenticated request;
 // CodeFirst creates this index wherever this table does not already exist.
-[SugarIndex("ix_permissions_roleid", nameof(RoleId), OrderByType.Asc)]
+[SugarIndex("ix_{table}_roleid", nameof(RoleId), OrderByType.Asc)]
+[SugarIndex("ux_{table}_role_collection", nameof(RoleId), OrderByType.Asc, nameof(Collection), OrderByType.Asc, true)]
 [CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true, Hidden = true)]
 public sealed class Permission : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
-    [SugarColumn(UniqueGroupNameList = ["uq_permissions_role_collection"])]
     [CmsField(Label = "Role", Interface = FieldInterface.Text, Required = true, Sort = 1)]
     public Guid RoleId { get; set; }
 
-    [SugarColumn(UniqueGroupNameList = ["uq_permissions_role_collection"])]
     [CmsField(Label = "Collection", Interface = FieldInterface.Text, Required = true, Sort = 2)]
     public string Collection { get; set; } = "";
 

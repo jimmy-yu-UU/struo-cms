@@ -38,28 +38,35 @@ public sealed class IndexParityTests
         .Where(t => t.GetCustomAttributes<SugarIndexAttribute>().Any())
         .ToArray();
 
-    public static TheoryData<string> CoreMappedIndexNames()
+    public static TheoryData<Type, string> CoreDeclaredIndexes()
     {
-        var data = new TheoryData<string>();
-        foreach (var name in CoreIndexedEntities
-                     .SelectMany(t => t.GetCustomAttributes<SugarIndexAttribute>())
-                     .Select(a => a.IndexName))
-            data.Add(name);
+        var data = new TheoryData<Type, string>();
+        foreach (var type in CoreIndexedEntities)
+            foreach (var attr in type.GetCustomAttributes<SugarIndexAttribute>())
+                data.Add(type, attr.IndexName);
         return data;
     }
 
-    private static List<string> IndexNames(ISqlSugarClient client) =>
-        client.Ado.SqlQuery<string>("SELECT name FROM sqlite_master WHERE type='index'");
+    private static List<(string Name, bool Unique)> Indexes(ISqlSugarClient client) =>
+        client.Ado.SqlQuery<dynamic>("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+            .Select(r => ((string)r.name, ((string)r.sql).Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
 
     [Theory]
-    [MemberData(nameof(CoreMappedIndexNames))]
-    public void InitTables_emits_each_core_mapped_index(string indexName)
+    [MemberData(nameof(CoreDeclaredIndexes))]
+    public void InitTables_emits_each_declared_core_index_under_the_resolved_table_name(Type type, string declaredName)
     {
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(CoreIndexedEntities.ToArray());
-            IndexNames(client).Should().Contain(indexName);
+            client.CodeFirst.InitTables(type);
+            var expected = declaredName.Replace("{table}", client.EntityMaintenance.GetTableName(type));
+            var declaredUnique = type.GetCustomAttributes<SugarIndexAttribute>()
+                .Single(a => a.IndexName == declaredName).IsUnique;
+
+            var emitted = Indexes(client);
+            emitted.Select(i => i.Name).Should().Contain(expected);
+            emitted.Single(i => i.Name == expected).Unique.Should().Be(declaredUnique);
         }
     }
 
@@ -69,14 +76,47 @@ public sealed class IndexParityTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(CoreIndexedEntities.ToArray());
-            var act = () => client.CodeFirst.InitTables(CoreIndexedEntities.ToArray());
-            act.Should().NotThrow();
+            var types = CoreIndexedEntities.ToArray();
 
-            var allDeclaredIndexNames = CoreIndexedEntities
-                .SelectMany(t => t.GetCustomAttributes<SugarIndexAttribute>())
-                .Select(a => a.IndexName);
-            IndexNames(client).Should().Contain(allDeclaredIndexNames);
+            client.CodeFirst.InitTables(types);
+            var firstPass = Indexes(client);
+
+            var act = () => client.CodeFirst.InitTables(types);
+            act.Should().NotThrow();
+            var secondPass = Indexes(client);
+
+            // A regression here (e.g. {table} left unresolved on the second pass) would surface as either
+            // a duplicate-name error from SqlSugar's "does the index exist" check or a second, differently
+            // named index — either way the two passes' index sets would stop matching.
+            secondPass.Should().BeEquivalentTo(firstPass,
+                "a second InitTables pass must neither duplicate nor recreate any core index");
+
+            foreach (var (type, attr) in CoreIndexedEntities
+                         .SelectMany(t => t.GetCustomAttributes<SugarIndexAttribute>().Select(a => (t, a))))
+            {
+                var expected = attr.IndexName.Replace("{table}", client.EntityMaintenance.GetTableName(type));
+                secondPass.Select(i => i.Name).Should().Contain(expected);
+            }
         }
+    }
+
+    [Fact]
+    public void Every_declared_core_index_name_carries_the_table_placeholder()
+    {
+        foreach (var type in CoreIndexedEntities)
+            foreach (var attr in type.GetCustomAttributes<SugarIndexAttribute>())
+                attr.IndexName.Should().Contain("{table}", $"{type.Name}: '{attr.IndexName}' must follow the prefixed table name");
+    }
+
+    [Fact]
+    public void No_core_entity_declares_a_unique_group_by_column_attribute()
+    {
+        foreach (var type in FrameworkEntityTypes.All.Append(typeof(SchemaMigration)))
+            foreach (var prop in type.GetProperties())
+            {
+                var col = prop.GetCustomAttribute<SugarColumn>();
+                (col?.UniqueGroupNameList ?? []).Should().BeEmpty(
+                    $"{type.Name}.{prop.Name}: unique constraints are declared with [SugarIndex(IsUnique)] so their names follow the table");
+            }
     }
 }

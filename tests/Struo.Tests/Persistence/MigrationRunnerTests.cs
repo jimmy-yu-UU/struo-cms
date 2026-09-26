@@ -87,7 +87,8 @@ public sealed class MigrationRunnerTests
                 var tables = client.DbMaintenance.GetTableInfoList(false);
                 tables.Any(t => t.Name.Equals("widget", StringComparison.OrdinalIgnoreCase))
                       .Should().BeTrue("the runner must no longer be a PostgreSQL-only no-op");
-                tables.Any(t => t.Name.Equals("schema_migrations", StringComparison.OrdinalIgnoreCase))
+                var tracking = client.EntityMaintenance.GetTableName<SchemaMigration>();
+                tables.Any(t => t.Name.Equals(tracking, StringComparison.OrdinalIgnoreCase))
                       .Should().BeTrue("the tracking table is created via CodeFirst on any backend");
             }
             finally { dir.Delete(recursive: true); }
@@ -137,6 +138,24 @@ public sealed class MigrationRunnerTests
                 rows.Should().ContainSingle();
                 rows[0].Filename.Should().Be("001-create-widget.sql");
                 rows[0].AppliedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
+            }
+            finally { dir.Delete(recursive: true); }
+        }
+    }
+
+    [Fact]
+    public async Task Tracking_table_carries_the_configured_prefix()
+    {
+        var (file, client) = NewClient(); // NewClient uses the factory with default options
+        var dir = Directory.CreateTempSubdirectory("struo_mig_");
+        using (file)
+        {
+            try
+            {
+                await MigrationRunner.ApplyAsync(client, dir.FullName, logger: null);
+                client.DbMaintenance.GetTableInfoList(false)
+                    .Select(t => t.Name.ToLowerInvariant())
+                    .Should().Contain("struo_schema_migrations");
             }
             finally { dir.Delete(recursive: true); }
         }

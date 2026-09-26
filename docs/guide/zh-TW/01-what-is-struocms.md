@@ -52,7 +52,7 @@ build 失敗；完整的移除步驟見[第 23 章：範例專案導覽](23-samp
 剛裝好、還沒加入任何集合的 StruoCMS，長這樣：
 
 - 資料庫裡剛好十一張框架資料表；如果你設定了 `Database:MigrationsPath`，啟動時會多建立第十二
-  張 `schema_migrations`，用來追蹤跑過的 migration。
+  張 `struo_schema_migrations`，用來追蹤跑過的 migration。
 - 後台側欄沒有內容群組，只有 System：對 super-admin 來說，裡面是 Language、Role、User。System
   只列出這三項，是因為 File、MediaFolder、Permission、UserRole 這四個框架集合宣告了
   `Hidden = true`——這是顯示層的旗標，不是權限。

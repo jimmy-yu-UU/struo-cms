@@ -44,7 +44,7 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 讀，把檔案搬到另一個資料夾就是一次普通的項目更新。`storageKey` 完全沒有 `[CmsField]`，不會
 投影出去，也沒有任何寫入路徑碰得到它。
 
-可翻譯的 `title` 與 `alt` 存在 sidecar 實體 `FileTranslation`（資料表 `file_translations`，
+可翻譯的 `title` 與 `alt` 存在 sidecar 實體 `FileTranslation`（資料表 `struo_file_translations`，
 在 `(fileid, locale)` 上唯一），跟[第 7 章：多語內容](07-i18n.md)講的 `[CmsTranslations]` 機
 制完全一樣。上傳時，預設 locale 的 `title` 會用檔名去掉副檔名自動填上；去掉副檔名後變成空字
 串（檔名只剩副檔名時）就退回完整檔名，結果一律截到 255 字元。

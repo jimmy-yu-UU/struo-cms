@@ -4,7 +4,7 @@ using SqlSugar;
 namespace Struo.Infrastructure.Identity;
 
 /// <summary>Idempotent. Invoked by <see cref="Persistence.DataSeeder"/> only when the
-/// <c>roles</c> table is created during startup (all environments). Seeds the <c>admin</c> (super)
+/// <c>Role</c> table is created during startup (all environments). Seeds the <c>admin</c> (super)
 /// and <c>public</c> roles, assigns the bootstrap admin user to <c>admin</c>, and grants the
 /// <c>public</c> role read on each configured collection. The collection list is config (never a
 /// <c>samples/*</c> reference).</summary>

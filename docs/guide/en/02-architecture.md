@@ -29,9 +29,12 @@ if a fork renames the test project, both `InternalsVisibleTo` declarations need 
 ## The core/sample boundary
 
 The core is every file under `src/Struo.*`, plus the entities the framework itself persists. Those
-entities are collected in `FrameworkEntityTypes.All`, eleven in total:
+entities are collected in `FrameworkEntityTypes.All`, eleven in total. A table's physical name
+is `Database:TablePrefix` plus the base name; the default prefix is `struo_`, so `User`'s table is
+`struo_users`, and an empty prefix leaves only the base name. Sample and fork collections are never
+prefixed.
 
-| Entity | Table |
+| Entity | Base name |
 |---|---|
 | `Language` | `languages` |
 | `File` | `files` |
