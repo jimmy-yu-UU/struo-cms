@@ -33,6 +33,11 @@ public static class DataServiceCollectionExtensions
             .BindConfiguration(LocalizationOptions.SectionName)
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<LocalizationOptions>, LocalizationOptionsValidator>();
+        // Published by ConfigController; validated here so the fail-fast host test covers it.
+        services.AddOptions<AdminUiOptions>()
+            .BindConfiguration(AdminUiOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AdminUiOptions>, AdminUiOptionsValidator>();
         services.AddScoped<IPermissionService, RbacPermissionService>();
         // Expose reader and writer seams for the SAME scoped CurrentPermissions instance (same
         // request scope, same object) — if they resolved to different instances, the middleware
