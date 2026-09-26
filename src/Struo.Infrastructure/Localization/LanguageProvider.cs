@@ -17,11 +17,14 @@ public sealed class LanguageProvider(ISqlSugarClient db) : ILanguageProvider
 
     public IReadOnlyList<LanguageInfo> Enabled() => _cache.Value;
 
-    public string DefaultCode() =>
-        Enabled().FirstOrDefault(l => l.IsDefault)?.Code
-        ?? Enabled().FirstOrDefault()?.Code
-        ?? throw new InvalidOperationException(
-            "There is no enabled language. Enable at least one row in System > Language (the Language collection).");
+    public string DefaultCode()
+    {
+        var enabled = Enabled();
+        return enabled.FirstOrDefault(l => l.IsDefault)?.Code
+            ?? (enabled.Count > 0 ? enabled[0].Code : null)
+            ?? throw new InvalidOperationException(
+                "There is no enabled language. Enable at least one row in System > Language (the Language collection).");
+    }
 
     public bool IsEnabled(string code) =>
         Enabled().Any(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase));

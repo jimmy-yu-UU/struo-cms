@@ -13,11 +13,9 @@ public sealed class SqlSugarLanguageCollectionRules(ISqlSugarClient db) : ILangu
         var rows = await db.Queryable<Language>().OrderBy(l => l.Id).ToListAsync(ct);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in rows)
-        {
-            if (!seen.Add(row.Code))
-                throw new QueryException($"Language code '{row.Code}' already exists.");
-        }
+        var duplicate = rows.FirstOrDefault(row => !seen.Add(row.Code));
+        if (duplicate is not null)
+            throw new QueryException($"Language code '{duplicate.Code}' already exists.");
 
         var enabled = rows.Where(r => r.Enabled).ToList();
         if (enabled.Count == 0)
