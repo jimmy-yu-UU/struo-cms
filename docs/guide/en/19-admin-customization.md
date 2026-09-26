@@ -242,7 +242,8 @@ Every file except `tokens.css` is under `frontend/src/components/fields/`.
 
 ## UI language
 
-The admin UI's own language is entirely independent of content locales, and never touches the API —
+The admin UI's own language is independent of content locales; the chosen locale is never sent to
+the API, while the set on offer comes from `GET /api/config` —
 see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode; the
 message catalogs are registered in one place, the `catalogs` object in `src/locales/index.ts`, and two
 ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by screen (`nav`,
@@ -266,7 +267,7 @@ Adding an interface language:
 3. Add a `lang.<code>` key (the switcher's option text) to every catalog.
 4. Add the code to `AdminUi:Locales`, and to `AdminUi:DefaultLocale` if it should be the default.
 
-One unit test compares the key sets of **every** registered catalog pairwise; a key added to one but
+One unit test compares every registered catalog's key set with the others; a key added to one but
 not the others fails the admin SPA's test suite. A missing key at runtime falls back to the default
 locale's catalog rather than breaking outright.
 

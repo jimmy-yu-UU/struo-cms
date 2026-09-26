@@ -21,6 +21,13 @@
   do not become `ux_struo_…` on their own.
 - `LanguageSeeder.SeedAsync` and `DataSeeder.SeedAsync` take a `LocalizationOptions` argument; affects only fork code that calls them directly.
 - With no enabled language, `ILanguageProvider.DefaultCode()` throws instead of returning `"en"`. Unreachable in normal operation (see the `language` collection rules below).
+- The admin SPA's UI-locale API changed: the `UiLocale` type moved to `@/locales`; `DEFAULT_UI_LOCALE`
+  is removed; `resolveInitialUiLocale(saved, enabled, fallback)` is pure; `uiLocaleStore.set()` returns
+  a boolean and refuses locales outside the enabled set; `uiLocaleStore.configure()` must run before
+  mount. Forks that edited these files adjust accordingly.
+- The i18n fallback locale is `AdminUi:DefaultLocale` (`zh-TW` as shipped) instead of a fixed `en`.
+- An existing `struo_languages` table that already breaks a rule (zero or two defaults, `en` next to
+  `EN`) refuses any write that leaves it broken; one corrective write fixes it.
 :::
 
 ### Added

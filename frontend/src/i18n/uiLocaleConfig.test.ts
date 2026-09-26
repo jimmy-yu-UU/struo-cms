@@ -22,4 +22,8 @@ describe('applyUiLocaleConfig', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(applyUiLocaleConfig(['en'], 'zh-TW')).toEqual({ enabled: ['en'], defaultLocale: 'en' })
   })
+  it('matches configured codes to catalog keys case-insensitively', () => {
+    expect(applyUiLocaleConfig(['EN'], 'en')).toEqual({ enabled: ['en'], defaultLocale: 'en' })
+    expect(applyUiLocaleConfig(['zh-tw', 'en'], 'ZH-TW')).toEqual({ enabled: ['zh-TW', 'en'], defaultLocale: 'zh-TW' })
+  })
 })

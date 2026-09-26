@@ -301,7 +301,9 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 （`sort` 依序、`enabled` 皆為真、`isDefault` 標在 `DefaultLanguage` 那一列）。表已經存在就完全
 不碰，之後在後台 System › Language 編輯。啟動時驗證：至少一個語言、每個 `Code` 符合
 `[A-Za-z0-9_-]{1,35}` 且不分大小寫唯一、`Name` 非空白、`DefaultLanguage` 在清單內；任一不符啟
-動就失敗。環境變數與 `appsettings.{Environment}.json` 對陣列都是依索引合併：可以改某一項或往後新增（`Localization__Languages__2__Code=ja`），但刪不掉既有的項目；要拿掉語言，直接改 `appsettings.json`（這個檔案由 fork 擁有）。
+動就失敗。環境變數與 `appsettings.{Environment}.json` 對陣列都是依索引合併：
+可以改某一項或往後新增（`Localization__Languages__2__Code=ja`），
+但刪不掉既有的項目；要拿掉語言，直接改 `appsettings.json`（這個檔案由 fork 擁有）。
 
 ## AdminUi
 

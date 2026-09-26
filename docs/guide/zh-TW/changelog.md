@@ -16,6 +16,12 @@
   （`struo_users`）。把舊表改名而不是重建時，舊的索引名稱會留下來，不會自動變成 `ux_struo_…`。
 - `LanguageSeeder.SeedAsync` 與 `DataSeeder.SeedAsync` 多了一個 `LocalizationOptions` 參數；只影響直接呼叫它們的 fork 程式碼。
 - 沒有任何啟用語言時，`ILanguageProvider.DefaultCode()` 擲出例外，不再回傳 `"en"`。正常情況下走不到這裡（見下方 `language` 集合的規則）。
+- 後台 SPA 的介面語言 API 改了：`UiLocale` 型別搬到 `@/locales`；`DEFAULT_UI_LOCALE` 移除；
+  `resolveInitialUiLocale(saved, enabled, fallback)` 改為純函式；`uiLocaleStore.set()` 回傳布林值並拒絕
+  未啟用的語系；掛載前必須先呼叫 `uiLocaleStore.configure()`。fork 若改過這幾個檔案要跟著調整。
+- i18n 的 fallback 語系改為 `AdminUi:DefaultLocale`（出貨為 `zh-TW`），不再固定是 `en`。
+- 既有的 `struo_languages` 表若已違反規則（例如零個或兩個預設、`en` 與 `EN` 並存），任何讓它維持違規
+  的寫入都會被拒絕；做一次修正寫入即可。
 :::
 
 ### 新增
