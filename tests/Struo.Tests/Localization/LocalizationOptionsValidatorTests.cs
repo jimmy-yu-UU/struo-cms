@@ -56,7 +56,7 @@ public sealed class LocalizationOptionsValidatorTests
     {
         var r = Validator.Validate(null, Options("en", ("en", "English"), ("EN", "English again")));
         r.Failed.Should().BeTrue();
-        r.FailureMessage.Should().Contain("en");
+        r.FailureMessage.Should().Contain("Localization:Languages:1:Code");
     }
 
     [Fact]

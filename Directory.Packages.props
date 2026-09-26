@@ -44,7 +44,6 @@
       Microsoft.AspNetCore.OpenApi 11.0.x ships against Microsoft.OpenApi 3.x.
       (dotnet/aspnetcore#64317, #67930; a matching Dependabot ignore rule holds the major back.)
     -->
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
@@ -55,6 +54,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="NetVips" Version="3.2.0" />
