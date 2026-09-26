@@ -149,7 +149,7 @@ public sealed class JunctionPayloadHarness : IDisposable
         Db.CodeFirst.InitTables<JpAdminLink>();
         Db.CodeFirst.InitTables<JpTag>();
         Db.CodeFirst.InitTables<JpChildLink>();
-        LanguageSeeder.SeedAsync(Db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(Db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

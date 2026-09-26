@@ -27,6 +27,17 @@ public static class DataServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
+        // Seed source for the Language table (LanguageSeeder). Validated at boot alongside the other
+        // options so a misconfigured section fails the host, not the first seeding run.
+        services.AddOptions<LocalizationOptions>()
+            .BindConfiguration(LocalizationOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<LocalizationOptions>, LocalizationOptionsValidator>();
+        // Published by ConfigController; validated here so the fail-fast host test covers it.
+        services.AddOptions<AdminUiOptions>()
+            .BindConfiguration(AdminUiOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AdminUiOptions>, AdminUiOptionsValidator>();
         services.AddScoped<IPermissionService, RbacPermissionService>();
         // Expose reader and writer seams for the SAME scoped CurrentPermissions instance (same
         // request scope, same object) — if they resolved to different instances, the middleware
@@ -39,6 +50,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<IRelationExpander, RelationExpander>();
         // Scoped to match ISqlSugarClient's lifetime (the cache is per-request).
         services.AddScoped<ILanguageProvider, LanguageProvider>();
+        services.AddScoped<ILanguageCollectionRules, SqlSugarLanguageCollectionRules>();
         services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
         services.AddScoped<Struo.Application.Settings.ISiteSettingsStore, Struo.Infrastructure.Settings.SqlSugarSiteSettingsStore>();

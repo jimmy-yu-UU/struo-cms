@@ -345,6 +345,7 @@ try
         await DataSeeder.SeedAsync(
             db,
             existingBefore,
+            scope.ServiceProvider.GetRequiredService<IOptions<Struo.Application.Configuration.LocalizationOptions>>().Value,
             hasher,
             builder.Configuration["Auth:BootstrapAdmin:Email"],
             builder.Configuration["Auth:BootstrapAdmin:Password"],

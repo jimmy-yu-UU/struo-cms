@@ -42,7 +42,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         Type[] types = [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)];
         var collections = MetadataScanner.ScanTypes(types);
