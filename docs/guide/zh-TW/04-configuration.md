@@ -290,6 +290,32 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 品牌名稱與 Logo 平常在後台改，不是改設定檔。這兩個鍵只是資料庫 `struo_site_settings` 還沒有值時的預
 設：`GET /api/config` 兩個欄位各自判斷，只有沒存值（或 logo 檔案已下架）時才退回這裡。
 
+## Localization
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `Localization:Languages` | 陣列（`Code`、`Name`） | `en`／`zh-TW` |
+| `Localization:DefaultLanguage` | 字串 | `en` |
+
+這一節只是 `struo_languages` 資料表的**種子來源**：表在這次啟動才建立時，依清單順序種入每一列
+（`sort` 依序、`enabled` 皆為真、`isDefault` 標在 `DefaultLanguage` 那一列）。表已經存在就完全
+不碰，之後在後台 System › Language 編輯。啟動時驗證：至少一個語言、每個 `Code` 符合
+`[A-Za-z0-9_-]{1,35}` 且不分大小寫唯一、`Name` 非空白、`DefaultLanguage` 在清單內；任一不符啟
+動就失敗。環境變數與 `appsettings.{Environment}.json` 對陣列都是依索引合併：可以改某一項或往後新增（`Localization__Languages__2__Code=ja`），但刪不掉既有的項目；要拿掉語言，直接改 `appsettings.json`（這個檔案由 fork 擁有）。
+
+## AdminUi
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `AdminUi:Locales` | 字串陣列 | `["zh-TW", "en"]` |
+| `AdminUi:DefaultLocale` | 字串 | `zh-TW` |
+
+後台介面提供哪些語言、預設哪一個，與內容語言無關。`GET /api/config` 以 `uiLocales` 與
+`uiDefaultLocale` 送給後台；後台只保留自己有打包的訊息目錄（目前是 `zh-TW` 與 `en`），沒有對應
+目錄的代碼會被丟掉並在瀏覽器主控台記一筆錯誤。只啟用一個語言時，語言切換器不會出現。啟動時驗
+證每個代碼的格式與唯一，以及 `DefaultLocale` 在清單內。新增一份目錄的步驟見
+[第 19 章：後台客製](19-admin-customization.md)。
+
 ## Redis
 
 | 鍵 | 型別 | 預設值 |

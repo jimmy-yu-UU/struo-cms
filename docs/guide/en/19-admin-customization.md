@@ -243,27 +243,32 @@ Every file except `tokens.css` is under `frontend/src/components/fields/`.
 ## UI language
 
 The admin UI's own language is entirely independent of content locales, and never touches the API —
-see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode, mounting
-two message catalogs: `zh-TW.ts` as the default and `en.ts` as the fallback, each a nested object
-with top-level namespaces by screen (`nav`, `login`, `itemForm`, `settings`, and so on), with a
-further `richtext` sub-namespace under `fields` holding the editor toolbar's and menus' own labels.
+see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode; the
+message catalogs are registered in one place, the `catalogs` object in `src/locales/index.ts`, and two
+ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by screen (`nav`,
+`login`, `itemForm`, `settings`, and so on) and a `richtext` sub-namespace under `fields`. The
+`UiLocale` type, the i18n message table, the switcher's options and the key-symmetry test are all
+derived from that registry.
 
-The language in effect is decided before any store exists: `struo.uiLocale` from `localStorage`, or
-a hard-coded default when it's absent. A Pinia store takes over from there. Its setter switches the
-i18n locale, updates `<html>`'s `lang` attribute, and persists the choice. `UiLanguageSwitcher`, in
-the app shell, is the only UI component that calls this setter; its own two options are translated
-strings too, so every catalog needs its own copy of the language list, itself included.
+Which catalogs are offered and which is the default come from `AdminUi:Locales` and
+`AdminUi:DefaultLocale` (see [Chapter 4: Configuration Reference](04-configuration.md)), published by
+`GET /api/config`; the SPA keeps only codes present in the registry. The language in effect is decided
+after `/api/config` resolves and before the app mounts: `struo.uiLocale` from `localStorage` when it
+is in the enabled set, otherwise the default; the i18n fallback points at the default too. A Pinia
+store's `set()` switches i18n, updates `<html>`'s `lang` attribute, persists the choice, and refuses a
+value outside the enabled set. `UiLanguageSwitcher`, in the app shell, is the only component that
+calls it; its options are the enabled set, and with a single locale the component is not rendered.
 
 Adding an interface language:
 
-1. Add a new catalog file with the same key structure as the existing ones.
-2. Register it in the i18n instance's message table.
-3. Widen the locale type and validation in the parser that runs before the first render.
-4. Add an option to the switcher, and a `lang.*` key to every catalog.
+1. Add a catalog file with the same key structure as the existing ones.
+2. Register it in `catalogs` in `src/locales/index.ts`.
+3. Add a `lang.<code>` key (the switcher's option text) to every catalog.
+4. Add the code to `AdminUi:Locales`, and to `AdminUi:DefaultLocale` if it should be the default.
 
-One unit test pins the two existing catalogs' key sets as exactly symmetric; a key added on one side
-but not the other fails the admin SPA's test suite. A third catalog is covered only once that test
-is extended; a missing key at runtime falls back to English rather than breaking outright.
+One unit test compares the key sets of **every** registered catalog pairwise; a key added to one but
+not the others fails the admin SPA's test suite. A missing key at runtime falls back to the default
+locale's catalog rather than breaking outright.
 
 ## Branding
 
