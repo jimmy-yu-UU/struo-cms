@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## 0.8.2 — 2026-10-01
+
+### 變更
+
+- 後端套件升級：`AWSSDK.S3` 4.0.103.4、`HotChocolate.AspNetCore` 16.6.7、`Scalar.AspNetCore` 2.17.10。
+- 前端套件升級：`@lucide/vue` 1.48.0、`vite` 8.3.1、`@types/node` 26.6.3。
+
 ## 0.8.1 — 2026-10-01
 
 ### 修正
