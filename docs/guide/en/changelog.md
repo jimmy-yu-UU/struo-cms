@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+### Fixed
+
+- The admin sidebar's version label reads `version` from `frontend/package.json` (inlined by Vite at
+  build time) instead of a literal.
+
 ## 0.8.0 — 2026-10-01
 
 ::: danger Breaking

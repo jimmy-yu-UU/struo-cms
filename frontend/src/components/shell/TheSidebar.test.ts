@@ -1,6 +1,8 @@
+/// <reference types="node" />
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
+import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
@@ -9,6 +11,14 @@ import TheSidebar from './TheSidebar.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
 import { useAppConfigStore } from '@/stores/appConfigStore'
+
+// Hoisted to a local before the `new URL(...)` call: inlined as the call's second argument,
+// `import.meta.url` resolves against jsdom's document location instead of this module's file,
+// under this test environment.
+const testFileUrl = import.meta.url
+const packageVersion = (
+  JSON.parse(readFileSync(new URL('../../../package.json', testFileUrl), 'utf8')) as { version: string }
+).version
 
 const push = vi.fn()
 // Mutable so 'marks the active collection from the route' can point it at a collection
@@ -167,5 +177,11 @@ describe('TheSidebar', () => {
     const separator = w.get('[data-slot="sidebar-separator"]')
     const hasWFull = separator.classes().some((c) => c === 'w-full' || c.endsWith(':w-full'))
     expect(hasWFull).toBe(false)
+  })
+
+  it('footer shows the package version, not a literal', () => {
+    const wrapper = mountSidebar()
+    expect(wrapper.text()).toContain(`v${packageVersion}`)
+    expect(wrapper.text()).not.toContain('v0.9.0')
   })
 })

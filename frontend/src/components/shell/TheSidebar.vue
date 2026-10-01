@@ -28,6 +28,7 @@ const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 const { isMobile, setOpenMobile, state, setOpen } = useSidebar()
+const appVersion = __APP_VERSION__
 
 // Expanded state per real group (default open). Keyed by group name. Explicit v-model
 // (rather than Collapsible's own `default-open`) so a collapsed-rail click can force a
@@ -185,7 +186,7 @@ watch(() => route.path, () => {
 
     <SidebarFooter>
       <p class="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-        v0.9.0 · {{ t('shell.version') }}
+        v{{ appVersion }} · {{ t('shell.version') }}
       </p>
     </SidebarFooter>
   </Sidebar>
