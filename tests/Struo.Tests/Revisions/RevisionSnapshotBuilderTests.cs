@@ -41,7 +41,7 @@ public sealed class SnapshotBuilderHarness : IDisposable
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.MediaFolder>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

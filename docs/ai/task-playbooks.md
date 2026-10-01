@@ -310,10 +310,12 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    into it**; a re-theme changes a token layer or a wrapper component outside `ui/`. See
    `docs/guide/en/19-admin-customization.md`'s "Restyling a vendored `ui/` component" section for
    how to override a component's style without losing a specificity fight. Avoid `!important`.
-3. **i18n**: add the same key to both `frontend/src/locales/en.ts` and `frontend/src/locales/zh-TW.ts`
-   under the right namespace (`common`, `nav`, `dashboard`, `collectionList`, `itemForm`, `media`,
-   `revisions`, `rbac`, `settings`, `fields`, ...) — `en` is the fallback locale, so a key missing only
-   from `zh-TW` degrades gracefully but a key missing from `en` does not.
+3. **i18n**: add the same key to every catalog in the `frontend/src/locales/index.ts` registry
+   (`en.ts`, `zh-TW.ts`) under the right namespace (`common`, `nav`, `dashboard`, `collectionList`,
+   `itemForm`, `media`, `revisions`, `rbac`, `settings`, `fields`, ...) — `uiLocaleStore.configure`
+   moves the i18n fallback locale onto whichever catalog `AdminUi:DefaultLocale` names (`zh-TW` in the
+   shipped `appsettings.json`), so a key missing only from a non-default catalog degrades gracefully
+   but one missing from the default catalog does not.
 4. **A new view/component**: follow the existing `views/` pattern (one component per route, registered
    in `frontend/src/router/index.ts` as a `() => import()` lazy loader — routed views are code-split,
    and `frontend/tests/codeSplitting.test.ts` enforces it — gated by `frontend/src/router/guard.ts` if

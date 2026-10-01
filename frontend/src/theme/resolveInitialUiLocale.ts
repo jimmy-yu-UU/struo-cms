@@ -1,13 +1,20 @@
-export type UiLocale = 'zh-TW' | 'en'
+import type { UiLocale } from '../locales'
 
-export const DEFAULT_UI_LOCALE: UiLocale = 'zh-TW'
+export const UI_LOCALE_STORAGE_KEY = 'struo.uiLocale'
 
-export function resolveInitialUiLocale(): UiLocale {
+export function readSavedUiLocale(): string | null {
   try {
-    const saved = localStorage.getItem('struo.uiLocale')
-    if (saved === 'zh-TW' || saved === 'en') return saved
+    return localStorage.getItem(UI_LOCALE_STORAGE_KEY)
   } catch {
-    /* localStorage unavailable — fall through to the default */
+    return null // localStorage unavailable
   }
-  return DEFAULT_UI_LOCALE
+}
+
+// Pure: the saved value wins only when it is one of the enabled locales; otherwise the configured default.
+export function resolveInitialUiLocale(
+  saved: string | null,
+  enabled: readonly UiLocale[],
+  fallback: UiLocale,
+): UiLocale {
+  return saved !== null && (enabled as readonly string[]).includes(saved) ? (saved as UiLocale) : fallback
 }

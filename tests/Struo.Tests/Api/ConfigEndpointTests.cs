@@ -43,6 +43,8 @@ public class ConfigEndpointTests(ApiFactory factory)
         data.GetProperty("oidcEnabled").GetBoolean().Should().BeFalse();
         data.GetProperty("brandName").GetString().Should().Be("StruoCMS");
         data.GetProperty("brandLogoUrl").ValueKind.Should().Be(JsonValueKind.Null);
+        data.GetProperty("uiLocales").EnumerateArray().Select(e => e.GetString()).Should().Equal("zh-TW", "en");
+        data.GetProperty("uiDefaultLocale").GetString().Should().Be("zh-TW");
     }
 
     [Fact]

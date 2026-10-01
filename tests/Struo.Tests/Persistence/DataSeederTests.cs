@@ -54,7 +54,7 @@ public class DataSeederTests
         // Tables exist now; existingBefore is empty => every trigger table was "just created".
         var existingBefore = new HashSet<string>(StringComparer.Ordinal);
 
-        await DataSeeder.SeedAsync(db, existingBefore, Hasher,
+        await DataSeeder.SeedAsync(db, existingBefore, TestLocalization.Default, Hasher,
             "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
 
         (await db.Queryable<Language>().CountAsync()).Should().Be(2);
@@ -70,7 +70,7 @@ public class DataSeederTests
         // Trigger tables were present BEFORE this run => skip, despite being empty.
         var existingBefore = DataSeeder.GetTableNames(db);
 
-        await DataSeeder.SeedAsync(db, existingBefore, Hasher,
+        await DataSeeder.SeedAsync(db, existingBefore, TestLocalization.Default, Hasher,
             "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
 
         (await db.Queryable<Language>().CountAsync()).Should().Be(0);
@@ -84,10 +84,10 @@ public class DataSeederTests
         using var dbf = new SqliteTestDatabase();
         var db = NewDb(dbf);
 
-        await DataSeeder.SeedAsync(db, new HashSet<string>(StringComparer.Ordinal), Hasher,
+        await DataSeeder.SeedAsync(db, new HashSet<string>(StringComparer.Ordinal), TestLocalization.Default, Hasher,
             "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
         // Second boot: tables now pre-exist.
-        await DataSeeder.SeedAsync(db, DataSeeder.GetTableNames(db), Hasher,
+        await DataSeeder.SeedAsync(db, DataSeeder.GetTableNames(db), TestLocalization.Default, Hasher,
             "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
 
         (await db.Queryable<Language>().CountAsync()).Should().Be(2);
@@ -100,7 +100,7 @@ public class DataSeederTests
         using var dbf = new SqliteTestDatabase();
         var db = NewDb(dbf);
 
-        await DataSeeder.SeedAsync(db, new HashSet<string>(StringComparer.Ordinal), Hasher,
+        await DataSeeder.SeedAsync(db, new HashSet<string>(StringComparer.Ordinal), TestLocalization.Default, Hasher,
             "admin@admin.com", "s3cret-not-default", NoCollections, isProduction: true, NullLogger.Instance);
 
         (await db.Queryable<User>().CountAsync()).Should().Be(1); // not gated out by environment
@@ -141,7 +141,7 @@ public class DataSeederTests
         db.CodeFirst.InitTables(typeof(Language), typeof(User), typeof(Role), typeof(Permission), typeof(UserRole));
         var existingBefore = new HashSet<string>(StringComparer.Ordinal); // nothing existed before
 
-        await DataSeeder.SeedAsync(db, existingBefore, Hasher,
+        await DataSeeder.SeedAsync(db, existingBefore, TestLocalization.Default, Hasher,
             "admin@admin.com", "admin", NoCollections, isProduction: false, NullLogger.Instance);
 
         (await db.Queryable<Language>().CountAsync()).Should().Be(2);

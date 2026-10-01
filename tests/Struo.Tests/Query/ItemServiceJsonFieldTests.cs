@@ -44,7 +44,7 @@ public class ItemServiceJsonFieldTests : IDisposable
         db.CodeFirst.InitTables<JsonThing>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(JsonThing) };
         var collections = MetadataScanner.ScanTypes(types);

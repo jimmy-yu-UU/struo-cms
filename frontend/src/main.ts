@@ -15,7 +15,6 @@ import { useAuthStore } from './stores/authStore'
 import { i18n } from './i18n'
 import { useThemeStore } from './stores/themeStore'
 import { useUiLocaleStore } from './stores/uiLocaleStore'
-import { resolveInitialUiLocale } from './theme/resolveInitialUiLocale'
 import { useAppConfigStore } from './stores/appConfigStore'
 
 const app = createApp(App)
@@ -24,7 +23,6 @@ app.use(pinia)
 app.use(i18n)
 
 useThemeStore(pinia).apply()
-useUiLocaleStore(pinia).set(resolveInitialUiLocale())
 
 const auth = useAuthStore(pinia)
 apiClient.setUnauthorizedHandler(() => {
@@ -36,6 +34,9 @@ apiClient.setUnauthorizedHandler(() => {
 // so the brand renders without a flash. Neither rejection blocks mounting.
 const appConfig = useAppConfigStore(pinia)
 Promise.allSettled([auth.fetchCurrentUser(), appConfig.load()]).finally(() => {
+  // UI locale is decided after /api/config so AdminUi:Locales / DefaultLocale apply; on a failed
+  // config load the store's defaults (every bundled catalog, first one default) are used.
+  useUiLocaleStore(pinia).configure(appConfig.uiLocales, appConfig.uiDefaultLocale)
   // Keep the tab title in sync with the brand name reactively: it changes at runtime when a
   // super-admin edits branding (Site Settings), not only at bootstrap. `immediate` sets it now.
   watch(() => appConfig.brandName, (name) => { document.title = name }, { immediate: true })

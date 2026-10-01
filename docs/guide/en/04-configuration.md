@@ -334,6 +334,37 @@ are only the default used when the `struo_site_settings` table has no value yet:
 for each field independently, and only falls back here when nothing has been saved (or the logo file
 has been taken down).
 
+## Localization
+
+| Key | Type | Default |
+|---|---|---|
+| `Localization:Languages` | array of `Code`, `Name` | `en`, `zh-TW` |
+| `Localization:DefaultLanguage` | string | `en` |
+
+This section is only the **seed source** for the `struo_languages` table: when that table is created
+during a startup, each entry becomes a row in list order (`sort` ascending, `enabled` true,
+`isDefault` on the row whose code is `DefaultLanguage`). An existing table is never touched; from then
+on languages are edited in the admin UI under System › Language. Validated at startup: at least one
+language, every `Code` matching `[A-Za-z0-9_-]{1,35}` and unique case-insensitively, `Name` not
+blank, `DefaultLanguage` present in the list — any failure stops the host. Environment variables and
+`appsettings.{Environment}.json` merge arrays by index: they can change an entry or append one
+(`Localization__Languages__2__Code=ja`) but cannot remove one; to drop a language, edit
+`appsettings.json` itself (the fork owns that file).
+
+## AdminUi
+
+| Key | Type | Default |
+|---|---|---|
+| `AdminUi:Locales` | string array | `["zh-TW", "en"]` |
+| `AdminUi:DefaultLocale` | string | `zh-TW` |
+
+Which languages the admin UI offers and which one it starts in, independent of content languages.
+`GET /api/config` publishes them as `uiLocales` and `uiDefaultLocale`; the SPA keeps only the codes
+for catalogs it ships (`zh-TW` and `en`), dropping the rest with an error in the browser console.
+With a single enabled locale the language switcher is not rendered. Startup validates each code's
+shape and uniqueness and that `DefaultLocale` is in the list. Adding a catalog is described in
+[Chapter 19: Admin Customization](19-admin-customization.md).
+
 ## Redis
 
 | Key | Type | Default |

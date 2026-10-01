@@ -28,7 +28,7 @@ public class LanguageProviderCacheTests : IDisposable
             new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Language>();
-        LanguageSeeder.SeedAsync(_db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();
         _provider = new LanguageProvider(_db);
     }
 
@@ -89,5 +89,26 @@ public class LanguageProviderCacheTests : IDisposable
         ReferenceEquals(after, before).Should().BeFalse("Invalidate must swap in a fresh Lazy, not reuse the old value");
         after.Any(l => l.Code == "fr").Should().BeTrue();
         before.Any(l => l.Code == "fr").Should().BeFalse("the previously returned snapshot must remain unmutated");
+    }
+
+    [Fact]
+    public void DefaultCode_throws_when_no_language_is_enabled()
+    {
+        _db.Updateable<Language>().SetColumns(l => l.Enabled == false).Where(l => true).ExecuteCommand();
+        _provider.Invalidate();
+
+        var act = () => _provider.DefaultCode();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no enabled language*");
+        _provider.Enabled().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DefaultCode_falls_back_to_the_lowest_sort_when_no_row_is_marked_default()
+    {
+        _db.Updateable<Language>().SetColumns(l => l.IsDefault == false).Where(l => true).ExecuteCommand();
+        _provider.Invalidate();
+
+        _provider.DefaultCode().Should().Be("en"); // en has Sort 1 in TestLocalization.Default
     }
 }

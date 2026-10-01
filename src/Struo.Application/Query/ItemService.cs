@@ -42,7 +42,11 @@ public sealed class ItemService(
     ISearchProvider? searchProvider = null,
     // U5b: trailing and optional, same rationale as searchProvider above; null means no listener
     // is registered (or a test harness doesn't care), so NotifyAsync below is a no-op.
-    IItemChangeNotifier? notifier = null) : IItemUseCases
+    IItemChangeNotifier? notifier = null,
+    // Trailing and optional like searchProvider/notifier: tests that construct ItemService directly
+    // keep compiling; DI injects the AddStruoData registration. null means the language collection's
+    // invariants are not enforced (only direct construction in tests).
+    ILanguageCollectionRules? languageRules = null) : IItemUseCases
 {
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
@@ -184,6 +188,7 @@ public sealed class ItemService(
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+            await EnforceLanguageRulesAsync(collection, ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
@@ -288,6 +293,7 @@ public sealed class ItemService(
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+            await EnforceLanguageRulesAsync(collection, ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
@@ -301,9 +307,21 @@ public sealed class ItemService(
         return projector.Project(updated, meta, null);
     }
 
+    private const string LanguageCollection = "language";
+
+    private static bool IsLanguageCollection(string collection) =>
+        string.Equals(collection, LanguageCollection, StringComparison.OrdinalIgnoreCase);
+
+    // Runs INSIDE the write transaction: a violation throws QueryException, the transaction rolls
+    // back, and the API answers 400 with the rule's message.
+    private Task EnforceLanguageRulesAsync(string collection, CancellationToken ct) =>
+        IsLanguageCollection(collection) && languageRules is not null
+            ? languageRules.EnsureInvariantsAsync(ct)
+            : Task.CompletedTask;
+
     private void InvalidateLanguagesIfNeeded(string collection)
     {
-        if (string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase))
+        if (IsLanguageCollection(collection))
             languages.Invalidate();
     }
 
@@ -314,7 +332,7 @@ public sealed class ItemService(
     /// </summary>
     private static void ValidateLanguageCodeIfNeeded(string collection, JsonElement body)
     {
-        if (!string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase)) return;
+        if (!IsLanguageCollection(collection)) return;
         if (!body.TryGetProperty("code", out var codeElem)) return;
         var code = codeElem.ValueKind == JsonValueKind.String ? codeElem.GetString() : null;
         if (code is null) return; // missing/null code handled by required-field validation
@@ -385,8 +403,12 @@ public sealed class ItemService(
         }
 
         var changes = new ItemChangeSet();
-        var existed = await repository.InTransactionAsync(
-            () => this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
+        var existed = await repository.InTransactionAsync(async () =>
+        {
+            var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
+            if (purged) await EnforceLanguageRulesAsync(collection, ct);
+            return purged;
+        }, ct);
         // Gated on the top-level row having existed: with no DB-level FKs, a dangling child row (its FK
         // pointing at an id that was never a real row) could otherwise still be found by the Cascade/
         // SetNull/M2M scans above and raise its own Updated/Purged even though nothing here actually

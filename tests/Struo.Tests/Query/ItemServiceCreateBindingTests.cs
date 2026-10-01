@@ -80,7 +80,7 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
         db.CodeFirst.InitTables<WidgetCategory>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(Widget), typeof(WidgetCategory) };
         var collections = MetadataScanner.ScanTypes(types);
@@ -201,7 +201,7 @@ public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
         db.CodeFirst.InitTables<ArticleTag>();
         db.CodeFirst.InitTables<Category>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

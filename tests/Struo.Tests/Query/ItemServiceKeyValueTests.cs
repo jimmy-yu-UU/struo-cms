@@ -44,7 +44,7 @@ public class ItemServiceKeyValueTests : IDisposable
         db.CodeFirst.InitTables<KvThing>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(KvThing) };
         var collections = MetadataScanner.ScanTypes(types);

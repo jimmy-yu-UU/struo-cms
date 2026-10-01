@@ -134,7 +134,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         db.CodeFirst.InitTables<CascadeNode>();
         db.CodeFirst.InitTables<CascadeNodeTranslation>();
         db.CodeFirst.InitTables<RestrictRef>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

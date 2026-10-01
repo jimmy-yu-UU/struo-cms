@@ -22,8 +22,8 @@ function iso(d: Date): string {
 }
 
 describe('DatePicker', () => {
-  // The shared singleton's initial locale comes from resolveInitialUiLocale(), not a fixed
-  // default, so every test needs 'en' pinned going in, not just restored afterward.
+  // The shared singleton's locale is whatever uiLocaleStore last applied, so every test needs 'en'
+  // pinned going in, not just restored afterward.
   beforeEach(() => {
     i18n.global.locale.value = 'en'
   })

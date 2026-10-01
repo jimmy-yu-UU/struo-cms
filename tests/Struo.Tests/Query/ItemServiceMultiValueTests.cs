@@ -58,7 +58,7 @@ public class ItemServiceMultiValueTests : IDisposable
         db.CodeFirst.InitTables<MvThing>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(MvThing) };
         var collections = MetadataScanner.ScanTypes(types);

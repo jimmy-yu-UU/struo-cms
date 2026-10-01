@@ -106,7 +106,7 @@ public class ItemServicePermissionTests : IDisposable
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.UserRole>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         // User.Roles (M2M TagSelect) navigates through UserRole to Role, so both must be scanned
         // alongside User or RelationshipGraph construction throws "targets unknown collection".

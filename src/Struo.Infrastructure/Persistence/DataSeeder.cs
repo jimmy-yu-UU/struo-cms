@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Localization;
@@ -24,6 +25,7 @@ public static class DataSeeder
     public static async Task SeedAsync(
         ISqlSugarClient db,
         ISet<string> existingBefore,
+        LocalizationOptions localization,
         IPasswordHasher hasher,
         string? bootstrapAdminEmail,
         string? bootstrapAdminPassword,
@@ -40,7 +42,7 @@ public static class DataSeeder
             existingAfter.Contains(table) && !existingBefore.Contains(table);
 
         if (JustCreated(languagesTable))
-            await LanguageSeeder.SeedAsync(db);
+            await LanguageSeeder.SeedAsync(db, localization);
         else
             logger.LogInformation("DataSeeder: skip LanguageSeeder — '{Table}' pre-existed.", languagesTable);
 

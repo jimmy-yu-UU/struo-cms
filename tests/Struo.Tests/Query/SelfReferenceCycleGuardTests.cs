@@ -49,7 +49,7 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
         db.CodeFirst.InitTables<File>();
         db.CodeFirst.InitTables<FileTranslation>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {

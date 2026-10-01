@@ -44,7 +44,7 @@ public class ItemServiceFilesFieldTests : IDisposable
         db.CodeFirst.InitTables<FilesThing>();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
-        LanguageSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[] { typeof(FilesThing) };
         var collections = MetadataScanner.ScanTypes(types);
