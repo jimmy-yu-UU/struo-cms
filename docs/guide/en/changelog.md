@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.2 — 2026-10-01
+
+### Changed
+
+- Backend packages: `AWSSDK.S3` 4.0.103.4, `HotChocolate.AspNetCore` 16.6.7, `Scalar.AspNetCore`
+  2.17.10.
+- Frontend packages: `@lucide/vue` 1.48.0, `vite` 8.3.1, `@types/node` 26.6.3.
+
 ## 0.8.1 — 2026-10-01
 
 ### Fixed
