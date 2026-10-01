@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0
+## 0.8.0 — 2026-10-01
 
 ::: danger Breaking
 - The framework's 12 tables carry a prefix set by `Database:TablePrefix`, default `struo_` (`users` →
