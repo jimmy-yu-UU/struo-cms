@@ -12,9 +12,9 @@ StruoCMS 把它們變成資料表、API 與後台介面。
 
 ## 專案狀態
 
-StruoCMS 仍在開發與測試階段，目前版本是 0.7.x。版本之間可能出現 breaking change：設定鍵的預設
-值、資料表或端點的形狀都可能改變。把新版核心合併進你的 fork 之前，先讀[版本紀錄](docs/guide/zh-TW/changelog.md)
-裡的「破壞性變更」條目，逐條核對你的 fork 有沒有碰到。
+StruoCMS 仍在開發與測試階段，版本之間可能出現 breaking change：設定鍵的預設值、資料表或端點的
+形狀都可能改變。目前版本與每一筆「破壞性變更」都記在[版本紀錄](docs/guide/zh-TW/changelog.md)；
+把新版核心合併進你的 fork 之前，先逐條核對你的 fork 有沒有碰到。
 
 ## 它包含什麼
 
