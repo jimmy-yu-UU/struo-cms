@@ -1,12 +1,19 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
+// The sidebar footer shows this; Vite inlines it at build time so the SPA never carries a literal.
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+) as { version: string }
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   // TipTap + ProseMirror is the SPA's largest dependency and only the richText field needs it.
   // A named group separates that vendor code from RichTextField's own code, so the vendor chunk
   // can cache across app deploys.

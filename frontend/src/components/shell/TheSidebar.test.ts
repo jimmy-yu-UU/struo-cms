@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
+import pkg from '../../../package.json'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
@@ -9,6 +10,8 @@ import TheSidebar from './TheSidebar.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
 import { useAppConfigStore } from '@/stores/appConfigStore'
+
+const packageVersion = pkg.version
 
 const push = vi.fn()
 // Mutable so 'marks the active collection from the route' can point it at a collection
@@ -167,5 +170,11 @@ describe('TheSidebar', () => {
     const separator = w.get('[data-slot="sidebar-separator"]')
     const hasWFull = separator.classes().some((c) => c === 'w-full' || c.endsWith(':w-full'))
     expect(hasWFull).toBe(false)
+  })
+
+  it('footer shows the package version, not a literal', () => {
+    const wrapper = mountSidebar()
+    expect(wrapper.text()).toContain(`v${packageVersion}`)
+    expect(wrapper.text()).not.toContain('v0.9.0')
   })
 })
