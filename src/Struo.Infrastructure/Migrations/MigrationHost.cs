@@ -19,12 +19,13 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     public async Task<IReadOnlyList<MigrationInfo>> ApplyAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        var logger = loggerFactory.CreateLogger<MigrationHost>();
         if (options.DbType == StruoDbType.Oracle)
-            loggerFactory.CreateLogger<MigrationHost>().LogWarning(
+            logger.LogWarning(
                 "Oracle takes no migration lock; running migrate concurrently is unsupported.");
         await using var gate = await MigrationLock.AcquireAsync(
             options.DbType, options.ConnectionString, options.TablePrefix,
-            TimeSpan.FromSeconds(options.LockTimeoutSeconds), ct);
+            TimeSpan.FromSeconds(options.LockTimeoutSeconds), ct, logger);
         var before = GetStatus();
         try
         {

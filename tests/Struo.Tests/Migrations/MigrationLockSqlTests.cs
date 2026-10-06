@@ -41,4 +41,22 @@ public sealed class MigrationLockSqlTests
         MigrationLockSql.TryAcquireSql(db).Should().BeNull();
         MigrationLockSql.ReleaseSql(db).Should().BeNull();
     }
+
+    [Theory]
+    [InlineData(StruoDbType.PostgreSQL, "Host=h;Database=d", "Host=h;Database=d;Pooling=false")]
+    [InlineData(StruoDbType.SqlServer, "Server=s;Database=d;", "Server=s;Database=d;Pooling=false")]
+    [InlineData(StruoDbType.Sqlite, "Data Source=a.db", "Data Source=a.db")]
+    public void Lock_session_connection_string_disables_pooling_for_locking_backends(
+        StruoDbType db, string input, string expected) =>
+        MigrationLockSql.SessionConnectionString(db, input).Should().Be(expected);
+
+    [Fact]
+    public async Task Disposing_a_lock_twice_is_safe()
+    {
+        var gate = await MigrationLock.AcquireAsync(
+            StruoDbType.Sqlite, "Data Source=:memory:", "t_", TimeSpan.FromSeconds(1), default);
+        await gate.DisposeAsync();
+        var act = async () => await gate.DisposeAsync();
+        await act.Should().NotThrowAsync();
+    }
 }

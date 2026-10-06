@@ -20,6 +20,13 @@ internal static class MigrationLockSql
         return unchecked((long)hash);
     }
 
+    /// <summary>Lock sessions bypass the pool so closing the connection ends the database session and the
+    /// server frees the lock, even when the explicit release failed.</summary>
+    public static string SessionConnectionString(StruoDbType db, string connectionString) =>
+        TryAcquireSql(db) is null
+            ? connectionString
+            : connectionString.TrimEnd().TrimEnd(';') + ";Pooling=false";
+
     public static string? TryAcquireSql(StruoDbType db) => db switch
     {
         StruoDbType.PostgreSQL => "SELECT CASE WHEN pg_try_advisory_lock(@key) THEN 1 ELSE 0 END",
