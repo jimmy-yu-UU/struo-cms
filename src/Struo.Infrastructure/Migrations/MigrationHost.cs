@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Migrations;
@@ -15,9 +16,15 @@ namespace Struo.Infrastructure.Migrations;
 public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory loggerFactory)
 {
     /// <summary>Runs every pending migration in version order; returns the ones applied by this run.</summary>
-    public Task<IReadOnlyList<MigrationInfo>> ApplyAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<MigrationInfo>> ApplyAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        if (options.DbType == StruoDbType.Oracle)
+            loggerFactory.CreateLogger<MigrationHost>().LogWarning(
+                "Oracle takes no migration lock; running migrate concurrently is unsupported.");
+        await using var gate = await MigrationLock.AcquireAsync(
+            options.DbType, options.ConnectionString, options.TablePrefix,
+            TimeSpan.FromSeconds(options.LockTimeoutSeconds), ct);
         var before = GetStatus();
         try
         {
@@ -32,7 +39,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
         IReadOnlyList<MigrationInfo> applied = GetStatus()
             .Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
-        return Task.FromResult(applied);
+        return applied;
     }
 
     /// <summary>Known and recorded migrations merged by version. Writes nothing to the database.</summary>
