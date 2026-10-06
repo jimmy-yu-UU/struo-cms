@@ -16,6 +16,14 @@ public abstract class StruoMigration : Migration
     /// <summary>The prefixed name of a framework table.</summary>
     protected string FrameworkTable(string name) => TableNaming.Apply(Struo.TablePrefix, name);
 
+    /// <summary>Creates the unique (foreign key, locale) index a translation sidecar table needs.</summary>
+    protected void CreateTranslationUniqueIndex(
+        string logicalTable, string physicalTable, string foreignKeyColumn, string localeColumn) =>
+        Create.Index(TranslationSidecarIndexPolicy.IndexNameFor(logicalTable)).OnTable(physicalTable)
+            .OnColumn(foreignKeyColumn).Ascending()
+            .OnColumn(localeColumn).Ascending()
+            .WithOptions().Unique();
+
     private StruoMigrationContext Struo => _struo ?? throw new InvalidOperationException(
         $"{GetType().Name}: StruoMigration members are available only inside Up() and Down().");
 

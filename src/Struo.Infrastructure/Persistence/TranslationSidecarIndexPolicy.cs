@@ -43,8 +43,10 @@ public sealed class TranslationSidecarIndexPolicy
     {
         var table = sidecarType.GetCustomAttribute<SugarTable>()?.TableName;
         if (string.IsNullOrWhiteSpace(table)) table = sidecarType.Name.ToLowerInvariant();
-        return new TranslationSidecarKey(foreignKeyProperty, localeProperty, $"ux_{table}_fk_locale");
+        return new TranslationSidecarKey(foreignKeyProperty, localeProperty, IndexNameFor(table));
     }
+
+    public static string IndexNameFor(string logicalTable) => $"ux_{logicalTable}_fk_locale";
 
     public string? UniqueGroupFor(Type entityType, string propertyName)
     {

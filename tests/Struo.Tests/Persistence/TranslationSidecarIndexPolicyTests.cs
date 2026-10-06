@@ -14,6 +14,10 @@ namespace Struo.Tests.Persistence;
 public sealed class TranslationSidecarIndexPolicyTests
 {
     [Fact]
+    public void IndexNameFor_matches_the_name_KeyFor_assigns() =>
+        TranslationSidecarIndexPolicy.IndexNameFor("file_translations").Should().Be("ux_file_translations_fk_locale");
+
+    [Fact]
     public void FromMetadata_derives_the_shipped_file_sidecar_key_and_group_name()
     {
         var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
