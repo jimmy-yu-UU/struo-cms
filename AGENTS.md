@@ -269,7 +269,11 @@ passes silently on SQLite, whose loose typing accepts the comparison without com
 `Testing:PostgresConnection` to a disposable database whose name contains `test` — the test resolves
 it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
-if the env var is unset — or verify directly against a real PostgreSQL instance.
+if the env var is unset — or verify directly against a real PostgreSQL instance. The SQL Server
+migration tests resolve `STRUO_TEST_SQLSERVER_CONNECTION`, then `Testing:SqlServerConnection`, apply
+the same `test`-in-the-name guard, and return early (a pass in about a millisecond) when it is unset,
+so judge them by per-test duration. The database must exist beforehand: SqlSugar's `CreateDatabase`
+cannot create a SQL Server database whose name contains a hyphen.
 
 **`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a
