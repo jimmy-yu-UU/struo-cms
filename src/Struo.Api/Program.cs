@@ -32,7 +32,8 @@ Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger()
 
 try
 {
-    var builder = WebApplication.CreateBuilder(args);
+    var cli = Struo.Infrastructure.Migrations.Commands.MigrationCli.Parse(args);
+    var builder = WebApplication.CreateBuilder(cli.HostArgs);
 
     builder.Host.UseSerilog((context, services, configuration) =>
         configuration.ReadFrom.Configuration(context.Configuration).ReadFrom.Services(services));
@@ -219,6 +220,13 @@ try
     });
 
     var app = builder.Build();
+
+    if (cli.Command is not null)
+    {
+        Environment.ExitCode = await Struo.Infrastructure.Migrations.Commands.MigrationCli.RunAsync(
+            cli, app.Services, Console.Out, Console.Error, CancellationToken.None);
+        return;
+    }
 
     // First in the pipeline, ahead of everything else, so an error response, a CORS preflight, or a
     // bare 404 carries this header just as much as a normal 200 — none of those short-circuit through

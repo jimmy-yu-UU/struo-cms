@@ -30,6 +30,12 @@ public sealed class DatabaseOptions
     public string? MigrationsPath { get; set; }
 
     /// <summary>
+    /// Seconds the <c>migrate</c> command waits for the migration lock before failing. Range 1-3600.
+    /// </summary>
+    [Range(1, 3600)]
+    public int MigrationLockTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>
     /// Allows SqlSugar CodeFirst to structurally sync <b>existing</b> tables (add / modify /
     /// <b>drop</b> columns) against the entity classes. <b>Honoured in Development only</b>; setting it
     /// in any other environment is ignored with a warning. Default <c>false</c>.

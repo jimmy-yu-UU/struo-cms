@@ -1,4 +1,5 @@
 using FluentMigrator.Runner;
+using FluentMigrator.Runner.Exceptions;
 using FluentMigrator.Runner.Initialization;
 using FluentMigrator.Runner.Logging;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,10 +24,9 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         if (options.DbType == StruoDbType.Oracle)
             logger.LogWarning(
                 "Oracle takes no migration lock; running migrate concurrently is unsupported.");
-        await using var gate = await MigrationLock.AcquireAsync(
-            options.DbType, options.ConnectionString, options.TablePrefix,
-            TimeSpan.FromSeconds(options.LockTimeoutSeconds), ct, logger);
+        await using var gate = await AcquireLockAsync(logger, ct);
         var before = GetStatus();
+        if (before.All(m => m.State != MigrationState.Pending)) return [];
         try
         {
             using var sp = BuildRunner(preview: false, loggerFactory);
@@ -43,6 +43,20 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return applied;
     }
 
+    private async Task<IAsyncDisposable> AcquireLockAsync(ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            return await MigrationLock.AcquireAsync(
+                options.DbType, options.ConnectionString, options.TablePrefix,
+                TimeSpan.FromSeconds(options.LockTimeoutSeconds), ct, logger);
+        }
+        catch (Exception ex) when (ex is not (MigrationLockTimeoutException or OperationCanceledException))
+        {
+            throw new MigrationFailedException($"Could not acquire the migration lock: {Innermost(ex).Message}", ex);
+        }
+    }
+
     /// <summary>Known and recorded migrations merged by version. Writes nothing to the database.</summary>
     public IReadOnlyList<MigrationInfo> GetStatus()
     {
@@ -53,6 +67,10 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             using var scope = sp.CreateScope();
             known = scope.ServiceProvider.GetRequiredService<IMigrationInformationLoader>()
                 .LoadMigrations().ToDictionary(kv => kv.Key, kv => kv.Value.Description ?? "");
+        }
+        catch (MissingMigrationsException)
+        {
+            known = new Dictionary<long, string>();
         }
         catch (Exception ex)
         {
@@ -84,6 +102,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     public IReadOnlyList<MigrationInfo> Preview(TextWriter sqlOut)
     {
         var pending = GetStatus().Where(m => m.State == MigrationState.Pending).ToList();
+        if (pending.Count == 0) return pending;
         using var sqlLogging = LoggerFactory.Create(b => b.AddProvider(
             new SqlScriptFluentMigratorLoggerProvider(sqlOut,
                 new SqlScriptFluentMigratorLoggerOptions { ShowSql = true }, disposeWriter: false)));
