@@ -18,6 +18,8 @@ public static class MetadataServiceCollectionExtensions
             .Append(typeof(MetadataServiceCollectionExtensions).Assembly)
             .Distinct().ToArray();
 
+        services.AddSingleton(new ScannedAssemblies(allAssemblies));
+
         // Eager scan at registration -> immutable singleton. No per-request reflection.
         // SafeGetTypes tolerates an assembly with an unresolvable type.
         var allTypes = allAssemblies.SelectMany(MetadataScanner.SafeGetTypes).ToList();
