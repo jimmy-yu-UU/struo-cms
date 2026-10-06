@@ -94,4 +94,18 @@ public sealed class MigrationHostTests : IDisposable
 
         Tables().Should().Contain("acme_ctxprobe");
     }
+
+    [Fact]
+    public void GetStatus_wraps_an_unreachable_database_in_MigrationFailedException()
+    {
+        var missingDir = Path.Combine(Path.GetTempPath(), $"struo_missing_{Guid.NewGuid():N}", "x.db");
+        var host = new MigrationHost(
+            new MigrationHostOptions(StruoDbType.Sqlite, $"Data Source={missingDir}", "struo_",
+                [typeof(MigrationHostTests).Assembly], LockTimeoutSeconds: 5) { NamespaceFilter = $"{Probes}.Upgrade.V1" },
+            NullLoggerFactory.Instance);
+
+        var act = () => host.GetStatus();
+
+        act.Should().Throw<MigrationFailedException>().WithMessage("Could not read applied migrations*");
+    }
 }

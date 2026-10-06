@@ -26,7 +26,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new MigrationFailedException($"Migration {FirstPendingVersion()} failed: {Innermost(ex).Message}", ex);
+            throw new MigrationFailedException($"Migration run failed; first version not recorded: {FirstUnrecordedVersion()}. {Innermost(ex).Message}", ex);
         }
         var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
         IReadOnlyList<MigrationInfo> applied = GetStatus()
@@ -50,7 +50,16 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             throw new MigrationFailedException($"Could not load migrations: {Innermost(ex).Message}", ex);
         }
 
-        var applied = ReadAppliedRows();
+        Dictionary<long, SchemaVersionRow> applied;
+        try
+        {
+            applied = ReadAppliedRows();
+        }
+        catch (Exception ex)
+        {
+            throw new MigrationFailedException($"Could not read applied migrations: {Innermost(ex).Message}", ex);
+        }
+
         return known.Keys.Union(applied.Keys).Order()
             .Select(v => new MigrationInfo(
                 v,
@@ -94,14 +103,15 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return db.Queryable<SchemaVersionRow>().AS(table).ToList().ToDictionary(r => r.Version);
     }
 
-    /// <summary>The lowest version still unapplied after a failed run: the migration that failed.</summary>
-    private string FirstPendingVersion()
+    /// <summary>The lowest version still unrecorded after a failed run, a pointer for diagnosis rather than a
+    /// guarantee of which migration threw. Never throws, so the original failure is always preserved.</summary>
+    private string FirstUnrecordedVersion()
     {
         try
         {
-            return GetStatus().FirstOrDefault(m => m.State == MigrationState.Pending)?.Version.ToString() ?? "(unknown)";
+            return GetStatus().FirstOrDefault(m => m.State == MigrationState.Pending)?.Version.ToString() ?? "(none)";
         }
-        catch (MigrationFailedException)
+        catch (Exception)
         {
             return "(unknown)";
         }
