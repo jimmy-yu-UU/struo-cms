@@ -31,14 +31,14 @@ public static class MigrationCli
             return Usage;
         }
 
-        var db = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
-        var host = new MigrationHost(
-            OptionsOverride(new MigrationHostOptions(
-                db.DbType, db.ConnectionString, db.TablePrefix,
-                services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)),
-            services.GetRequiredService<ILoggerFactory>());
         try
         {
+            var db = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+            var host = new MigrationHost(
+                OptionsOverride(new MigrationHostOptions(
+                    db.DbType, db.ConnectionString, db.TablePrefix,
+                    services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)),
+                services.GetRequiredService<ILoggerFactory>());
             switch (command)
             {
                 case "migrate":
@@ -63,7 +63,7 @@ public static class MigrationCli
             }
             return Success;
         }
-        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException)
+        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or OptionsValidationException)
         {
             await stderr.WriteLineAsync($"{command} failed: {ex.Message}");
             return Failure;

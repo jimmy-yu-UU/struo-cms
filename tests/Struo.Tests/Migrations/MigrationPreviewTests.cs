@@ -45,6 +45,7 @@ public sealed class MigrationPreviewTests : IDisposable
 
         pending.Select(m => m.Version).Should().Equal(2);
         sql.ToString().Should().Contain("probe_beta").And.NotContain("probe_alpha");
+        Host("Upgrade").GetStatus().Single(m => m.Version == 2).State.Should().Be(MigrationState.Pending);
     }
 
     [Fact]

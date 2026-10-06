@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Commands;
@@ -71,7 +72,7 @@ public sealed class MigrationCliTests : IDisposable
 
         var m = await Run(sp, "migrate");
         m.Code.Should().Be(MigrationCli.Success);
-        m.Out.Should().Contain("1").And.Contain("3");
+        m.Out.Should().Contain("Applied 1").And.Contain("Applied 3");
 
         var again = await Run(sp, "migrate");
         again.Out.Should().Contain("Nothing to migrate");
@@ -112,6 +113,33 @@ public sealed class MigrationCliTests : IDisposable
 
         code.Should().Be(MigrationCli.Failure);
         err.Should().StartWith("migrate failed:");
+        err.Should().NotContain("   at ");
+    }
+
+    [Theory]
+    [InlineData("migrate")]
+    [InlineData("migrate:status")]
+    [InlineData("migrate:preview")]
+    public async Task Invalid_database_options_fail_with_one_readable_line(string command)
+    {
+        var sp = new ServiceCollection()
+            .AddOptions<DatabaseOptions>()
+            .Configure(o =>
+            {
+                o.DbType = StruoDbType.Sqlite;
+                o.ConnectionString = _file.ConnectionString;
+                o.MigrationLockTimeoutSeconds = 0;
+            })
+            .Services
+            .AddSingleton<IValidateOptions<DatabaseOptions>, DataAnnotationsValidateOptions<DatabaseOptions>>()
+            .AddSingleton(new ScannedAssemblies([typeof(MigrationCliTests).Assembly]))
+            .AddSingleton<Microsoft.Extensions.Logging.ILoggerFactory>(NullLoggerFactory.Instance)
+            .BuildServiceProvider();
+
+        var (code, _, err) = await Run(sp, command);
+
+        code.Should().Be(MigrationCli.Failure);
+        err.Should().StartWith($"{command} failed:");
         err.Should().NotContain("   at ");
     }
 }

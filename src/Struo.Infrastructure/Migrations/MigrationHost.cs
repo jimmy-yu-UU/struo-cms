@@ -35,7 +35,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new MigrationFailedException($"Migration run failed; first version not recorded: {FirstUnrecordedVersion()}. {Innermost(ex).Message}", ex);
+            throw new MigrationFailedException($"Migration run failed; lowest unrecorded version: {FirstUnrecordedVersion()}. {Innermost(ex).Message}", ex);
         }
         var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
         IReadOnlyList<MigrationInfo> applied = GetStatus()
