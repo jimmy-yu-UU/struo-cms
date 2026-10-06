@@ -81,7 +81,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** Migration
+- **All database access is through SqlSugar, with five deliberate exceptions for raw SQL.** Migration
   scripts under `db/migrations/` are one — the template ships **none**: it holds only its `README.md`,
   and any script there belongs to the fork that put it there. Replaceability is a choice made once, at
   fork time, not a property every deployment must preserve forever: the core ships no vendor-SQL
@@ -114,9 +114,18 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string. Nothing else may
   assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the five exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
+  The fifth is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
+  advisory-lock acquire and release statement per backend (PostgreSQL `pg_try_advisory_lock`, MySQL
+  `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no lock), parameterised, with no
+  request input.
+- **Schema changes may be FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
+  `MigrationHost` runs them through the `migrate`, `migrate:status` and `migrate:preview` commands, the
+  first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`. Application queries
+  and writes stay on SqlSugar. The core ships no migrations; startup still applies `db/migrations/`
+  scripts through `MigrationRunner` and creates tables through CodeFirst.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
