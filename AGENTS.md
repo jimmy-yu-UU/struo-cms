@@ -89,9 +89,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   violation. The second is `SchemaGuard`'s read-only PostgreSQL/SQLite catalog queries
   (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) — needed because SqlSugar's ORM surface cannot
   answer "is there a UNIQUE index covering these columns"; it returns early for MySQL/SqlServer/Oracle
-  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so no vendor-specific
-  SQL ships on the production path (the third and fourth exceptions below assemble portable SQL text,
-  not dialect-specific text).
+  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so `SchemaGuard` puts
+  no vendor-specific SQL on the production path (the third and fourth exceptions below assemble
+  portable SQL text, not dialect-specific text; the fifth is deliberately per-backend lock SQL that
+  runs wherever `migrate` runs).
   The third is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -111,16 +112,16 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   either way) — plus the no-client-sort default clause (`<created> DESC, <id> ASC`, or `<id> ASC`
   alone when the entity has no `CreatedAt`) and the `, <id> ASC` pagination tiebreak/comma-join that
   wrap every sort. Every column name across all of it comes from
-  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string. Nothing else may
-  assemble SQL text, and SqlSugar's own string overloads
+  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string.
+  The fifth is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
+  advisory-lock acquire command and one release command per backend (PostgreSQL
+  `pg_try_advisory_lock`, MySQL `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no
+  lock), parameterised, with no request input.
+  Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
   SQL outside the five exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
-  The fifth is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
-  advisory-lock acquire and release statement per backend (PostgreSQL `pg_try_advisory_lock`, MySQL
-  `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no lock), parameterised, with no
-  request input.
 - **Schema changes may be FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
   `MigrationHost` runs them through the `migrate`, `migrate:status` and `migrate:preview` commands, the
   first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`. Application queries
