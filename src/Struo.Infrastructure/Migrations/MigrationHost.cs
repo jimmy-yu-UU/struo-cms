@@ -1,5 +1,6 @@
 using FluentMigrator.Runner;
 using FluentMigrator.Runner.Initialization;
+using FluentMigrator.Runner.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -69,6 +70,26 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
                     : MigrationState.Orphaned,
                 applied.TryGetValue(v, out var row) ? row.AppliedOn : null))
             .ToList();
+    }
+
+    /// <summary>Pending migrations and their SQL, written to <paramref name="sqlOut"/>. Executes nothing.</summary>
+    public IReadOnlyList<MigrationInfo> Preview(TextWriter sqlOut)
+    {
+        var pending = GetStatus().Where(m => m.State == MigrationState.Pending).ToList();
+        using var sqlLogging = LoggerFactory.Create(b => b.AddProvider(
+            new SqlScriptFluentMigratorLoggerProvider(sqlOut,
+                new SqlScriptFluentMigratorLoggerOptions { ShowSql = true }, disposeWriter: false)));
+        try
+        {
+            using var sp = BuildRunner(preview: true, sqlLogging);
+            using var scope = sp.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
+        }
+        catch (Exception ex)
+        {
+            throw new MigrationFailedException($"Preview failed: {Innermost(ex).Message}", ex);
+        }
+        return pending;
     }
 
     internal ServiceProvider BuildRunner(bool preview, ILoggerFactory logging)
