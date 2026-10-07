@@ -7,9 +7,21 @@ namespace Struo.Sample.Blog.Migrations;
 [Migration(202610080100, "CreateBlogSchema")]
 public sealed class CreateBlogSchema : StruoMigration
 {
+    private const string Categories = "categories";
+    private const string Articles = "articles";
+    private const string ArticleTranslations = "article_translations";
+    private const string ArticleTags = "article_tags";
+
+    private const string CreatedAt = "createdat";
+    private const string CreatedBy = "createdby";
+    private const string UpdatedAt = "updatedat";
+    private const string UpdatedBy = "updatedby";
+    private const string RowVersion = "version";
+    private const string ArticleId = "articleid";
+
     public override void Up()
     {
-        Create.Table("articles")
+        Create.Table(Articles)
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn("deletedat").AsDateTime().Nullable()
             .WithColumn("deletedby").AsGuid().Nullable()
@@ -25,19 +37,19 @@ public sealed class CreateBlogSchema : StruoMigration
             .WithColumn("faqs").AsJson(Db).NotNullable()
             .WithColumn("internalnote").AsString(255).Nullable()
             .WithColumn("categoryid").AsGuid().Nullable()
-            .WithColumn("createdat").AsDateTime().NotNullable()
-            .WithColumn("createdby").AsGuid().Nullable()
-            .WithColumn("updatedat").AsDateTime().NotNullable()
-            .WithColumn("updatedby").AsGuid().Nullable()
-            .WithColumn("version").AsInt64().NotNullable();
+            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedBy).AsGuid().Nullable()
+            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedBy).AsGuid().Nullable()
+            .WithColumn(RowVersion).AsInt64().NotNullable();
 
-        Create.Index("ix_articles_categoryid").OnTable("articles")
+        Create.Index("ix_articles_categoryid").OnTable(Articles)
             .OnColumn("categoryid").Ascending();
 
 
-        Create.Table("article_translations")
+        Create.Table(ArticleTranslations)
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
-            .WithColumn("articleid").AsGuid().NotNullable()
+            .WithColumn(ArticleId).AsGuid().NotNullable()
             .WithColumn("locale").AsString(255).NotNullable()
             .WithColumn("title").AsString(255).NotNullable()
             .WithColumn("body").AsLongText(Db).Nullable()
@@ -46,55 +58,55 @@ public sealed class CreateBlogSchema : StruoMigration
             .WithColumn("seometadescription").AsLongText(Db).Nullable()
             .WithColumn("seoogimageid").AsGuid().Nullable();
 
-        CreateTranslationUniqueIndex("article_translations", "articleid", "locale");
+        CreateTranslationUniqueIndex(ArticleTranslations, ArticleId, "locale");
 
 
-        Create.Table("categories")
+        Create.Table(Categories)
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn("deletedat").AsDateTime().Nullable()
             .WithColumn("deletedby").AsGuid().Nullable()
             .WithColumn("name").AsString(255).NotNullable()
             .WithColumn("parentid").AsGuid().Nullable()
-            .WithColumn("createdat").AsDateTime().NotNullable()
-            .WithColumn("createdby").AsGuid().Nullable()
-            .WithColumn("updatedat").AsDateTime().NotNullable()
-            .WithColumn("updatedby").AsGuid().Nullable()
-            .WithColumn("version").AsInt64().NotNullable();
+            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedBy).AsGuid().Nullable()
+            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedBy).AsGuid().Nullable()
+            .WithColumn(RowVersion).AsInt64().NotNullable();
 
-        Create.Index("ix_categories_parentid").OnTable("categories")
+        Create.Index("ix_categories_parentid").OnTable(Categories)
             .OnColumn("parentid").Ascending();
 
 
         Create.Table("tags")
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn("name").AsString(255).NotNullable()
-            .WithColumn("createdat").AsDateTime().NotNullable()
-            .WithColumn("createdby").AsGuid().Nullable()
-            .WithColumn("updatedat").AsDateTime().NotNullable()
-            .WithColumn("updatedby").AsGuid().Nullable()
-            .WithColumn("version").AsInt64().NotNullable();
+            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedBy).AsGuid().Nullable()
+            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedBy).AsGuid().Nullable()
+            .WithColumn(RowVersion).AsInt64().NotNullable();
 
 
-        Create.Table("article_tags")
+        Create.Table(ArticleTags)
             .WithColumn("id").AsGuid().PrimaryKey()
-            .WithColumn("articleid").AsGuid().NotNullable()
+            .WithColumn(ArticleId).AsGuid().NotNullable()
             .WithColumn("tagid").AsGuid().NotNullable()
             .WithColumn("note").AsString(255).Nullable()
             .WithColumn("sort").AsInt32().NotNullable();
 
-        Create.Index("ix_article_tags_articleid").OnTable("article_tags")
-            .OnColumn("articleid").Ascending();
+        Create.Index("ix_article_tags_articleid").OnTable(ArticleTags)
+            .OnColumn(ArticleId).Ascending();
 
-        Create.Index("ix_article_tags_tagid").OnTable("article_tags")
+        Create.Index("ix_article_tags_tagid").OnTable(ArticleTags)
             .OnColumn("tagid").Ascending();
     }
 
     public override void Down()
     {
-        Delete.Table("article_tags");
+        Delete.Table(ArticleTags);
         Delete.Table("tags");
-        Delete.Table("categories");
-        Delete.Table("article_translations");
-        Delete.Table("articles");
+        Delete.Table(Categories);
+        Delete.Table(ArticleTranslations);
+        Delete.Table(Articles);
     }
 }

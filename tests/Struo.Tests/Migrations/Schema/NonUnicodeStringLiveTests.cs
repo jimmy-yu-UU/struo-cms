@@ -36,7 +36,7 @@ public sealed class NonUnicodeStringLiveTests
         try
         {
             if (db.DbMaintenance.IsAnyTable(table, false)) db.DbMaintenance.DropTable(table);
-            db.CodeFirst.InitTables(typeof(CheckProbe));
+            db.CodeFirst.InitTables<CheckProbe>();
 
             var report = SchemaChecker.Check(db, dbType, [typeof(CheckProbe)]);
 

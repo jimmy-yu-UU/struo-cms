@@ -29,7 +29,7 @@ public sealed class CoreMigrationsLiveTests
             new TestCurrentUserAccessor(Guid.Empty), policy);
     }
 
-    private static Task ApplyCore(StruoDbType dbType, string conn, string prefix) => new MigrationHost(
+    private static Task<IReadOnlyList<MigrationInfo>> ApplyCore(StruoDbType dbType, string conn, string prefix) => new MigrationHost(
         new MigrationHostOptions(dbType, conn, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 30)
         { NamespaceFilter = "Struo.Infrastructure.Migrations.Core", Seed = CoreMigrationHarness.Seed() },
         NullLoggerFactory.Instance).ApplyAsync(default);
