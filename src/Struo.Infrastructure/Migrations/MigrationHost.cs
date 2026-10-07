@@ -29,7 +29,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         if (before.All(m => m.State != MigrationState.Pending)) return [];
         try
         {
-            using var sp = BuildRunner(preview: false, loggerFactory);
+            using var sp = BuildRunner(preview: false, new SqlSuppressingLoggerFactory(loggerFactory));
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
         }

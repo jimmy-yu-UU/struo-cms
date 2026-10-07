@@ -31,11 +31,12 @@ internal sealed class CoreMigrationHarness : IDisposable
         if (_ownsFile) _file.Dispose();
     }
 
-    public MigrationHost Host(CoreSeedData? seed) => new(
-        new MigrationHostOptions(StruoDbType.Sqlite, _file.ConnectionString, Prefix,
+    public MigrationHostOptions HostOptions(CoreSeedData? seed) =>
+        new(StruoDbType.Sqlite, _file.ConnectionString, Prefix,
             [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 5)
-        { NamespaceFilter = "Struo.Infrastructure.Migrations.Core", Seed = seed },
-        NullLoggerFactory.Instance);
+        { NamespaceFilter = "Struo.Infrastructure.Migrations.Core", Seed = seed };
+
+    public MigrationHost Host(CoreSeedData? seed) => new(HostOptions(seed), NullLoggerFactory.Instance);
 
     public ISqlSugarClient Db()
     {
