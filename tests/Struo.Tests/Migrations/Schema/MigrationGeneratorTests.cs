@@ -66,6 +66,17 @@ public class MigrationGeneratorTests
         CompareOrWrite(MigrationGenerator.Generate(spec), Path.Combine(SchemaTestsDir(), "Generated", name + ".cs"));
 
     [Fact]
+    public void Unique_groups_shared_by_two_tables_generate_distinct_index_names()
+    {
+        var client = Client("ug_");
+        var a = MigrationGenerator.Generate(new MigrationSpec("CreateA", 1, null, EntitySchemaReader.Read(client, typeof(GroupAProbe))));
+        var b = MigrationGenerator.Generate(new MigrationSpec("CreateB", 2, null, EntitySchemaReader.Read(client, typeof(GroupBProbe))));
+
+        a.Should().Contain("ux_group_a_probe_unique1").And.NotContain("Create.Index(\"unique1\")");
+        b.Should().Contain("ux_group_b_probe_unique1").And.NotContain("Create.Index(\"unique1\")");
+    }
+
+    [Fact]
     public void Empty_skeleton_has_empty_up_and_down()
     {
         var source = MigrationGenerator.Generate(new MigrationSpec("AddNothing", 1, null, null));
