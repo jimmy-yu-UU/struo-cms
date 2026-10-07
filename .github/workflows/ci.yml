@@ -88,8 +88,9 @@ jobs:
   # The API refuses to start until migrations are applied, so the API smoke test
   # first runs the image with `migrate` against a SQLite file on a named volume,
   # then starts the API on the same volume. It then polls /health/ready rather
-  # than /health/live, because /health/ready additionally exercises the database and cache readiness checks
-  # - /health/live would pass even if those were broken.
+  # than /health/live, because /health/ready additionally exercises the
+  # database and cache readiness checks; /health/live would pass even if
+  # those were broken.
   #
   # The admin smoke test greps the served / for "assets/index-", the entry
   # chunk Vite emits by default -- deliberately stronger than grepping for

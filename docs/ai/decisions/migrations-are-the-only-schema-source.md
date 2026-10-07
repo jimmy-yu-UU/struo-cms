@@ -31,7 +31,7 @@ PostgreSQL connection.
 
 On SQLite the same drop is gated behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`
 (upstream `SqliteCodeFirst.ExistLogic`, `Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs`,
-tag 5.1.4.197). `SqlSugarClientFactory.Create` sets `MoreSettings` only for
+tag 5.1.4.197, the closest tag to the pinned `SqlSugarCore` 5.1.4.221; `column-type-map-per-backend-literals.md` explains why that tag is the reference). `SqlSugarClientFactory.Create` sets `MoreSettings` only for
 `SqlServerCodeFirstNvarchar` (true on SQL Server), never `SqliteCodeFirstEnableDropColumn`, so a
 SQLite run cannot show the drop.
 

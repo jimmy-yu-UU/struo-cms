@@ -33,7 +33,7 @@ public sealed class CreateBlogSchema : StruoMigration
 
         Create.Index("ix_articles_categoryid").OnTable("articles")
             .OnColumn("categoryid").Ascending();
-    
+
 
         Create.Table("article_translations")
             .WithColumn("id").AsInt64().PrimaryKey().Identity()
@@ -47,7 +47,7 @@ public sealed class CreateBlogSchema : StruoMigration
             .WithColumn("seoogimageid").AsGuid().Nullable();
 
         CreateTranslationUniqueIndex("article_translations", "articleid", "locale");
-    
+
 
         Create.Table("categories")
             .WithColumn("id").AsGuid().PrimaryKey()
@@ -63,7 +63,7 @@ public sealed class CreateBlogSchema : StruoMigration
 
         Create.Index("ix_categories_parentid").OnTable("categories")
             .OnColumn("parentid").Ascending();
-    
+
 
         Create.Table("tags")
             .WithColumn("id").AsGuid().PrimaryKey()
@@ -73,7 +73,7 @@ public sealed class CreateBlogSchema : StruoMigration
             .WithColumn("updatedat").AsDateTime().NotNullable()
             .WithColumn("updatedby").AsGuid().Nullable()
             .WithColumn("version").AsInt64().NotNullable();
-    
+
 
         Create.Table("article_tags")
             .WithColumn("id").AsGuid().PrimaryKey()

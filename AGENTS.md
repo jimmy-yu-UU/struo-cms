@@ -78,8 +78,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** The first
-  two assemble portable SQL text; the third is deliberately per-backend lock SQL that runs wherever
+- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** (Schema
+  changes and seed inserts are FluentMigrator migrations, see "Migrations are the only schema source"
+  below.) The first two assemble portable SQL text; the third is deliberately per-backend lock SQL that runs wherever
   `migrate` runs; the fourth is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
   `SchemaChecker.Check`.

@@ -16,14 +16,23 @@ public sealed class NonUnicodeStringLiveTests
         var (_, dbType, connection) = LiveBackend.Get("SqlServer");
         if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
+        var table = "chk_" + Guid.NewGuid().ToString("N")[..12];
         var db = new SqlSugarClient(new ConnectionConfig
         {
             DbType = DbTypeMapper.Map(dbType),
             ConnectionString = conn,
             IsAutoCloseConnection = true,
-            MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = false }
+            MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = false },
+            // SqlSugar caches entity info per ConfigId for the whole process.
+            ConfigId = "probe:" + table,
+            ConfigureExternalServices = new ConfigureExternalServices
+            {
+                EntityNameService = (type, entity) =>
+                {
+                    if (type == typeof(CheckProbe)) entity.DbTableName = table;
+                }
+            }
         });
-        const string table = "chk_probe";
         try
         {
             if (db.DbMaintenance.IsAnyTable(table, false)) db.DbMaintenance.DropTable(table);
