@@ -10,10 +10,13 @@ namespace Struo.Infrastructure.Migrations.Commands;
 public static class MigrationCli
 {
     public const int Success = 0, Failure = 1, Usage = 2;
-    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview"];
+    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "make:migration"];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
+
+    /// <summary>Lets tests fix the version stamp that <c>make:migration</c> derives from the UTC time.</summary>
+    internal static TimeProvider Clock { get; set; } = TimeProvider.System;
 
     public static MigrationCliInvocation Parse(string[] args)
     {
@@ -52,6 +55,9 @@ public static class MigrationCli
                 $"Unknown command '{invocation.Command}'. Available: {string.Join(", ", Runnable)}.");
             return Usage;
         }
+
+        if (command == "make:migration")
+            return await MakeMigrationCommand.RunAsync(invocation.CommandArgs, services, stdout, stderr, Clock);
 
         if (invocation.CommandArgs.Count > 0)
         {
