@@ -38,7 +38,10 @@ public sealed class StartupMigrationGateTests : IDisposable
     {
         await _harness.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        await Run(migrateOnStartup: false, isDevelopment: true);
+        var act = () => Run(migrateOnStartup: false, isDevelopment: true);
+
+        await act.Should().NotThrowAsync();
+        _harness.Host(null).GetStatus().Should().OnlyContain(m => m.State == MigrationState.Applied);
     }
 
     [Fact]
@@ -143,8 +146,11 @@ public sealed class StartupMigrationGateTests : IDisposable
     [Fact]
     public async Task Production_does_not_check_the_schema()
     {
-        await DriftedDatabase();
+        var db = await DriftedDatabase();
 
-        await Run(migrateOnStartup: false, isDevelopment: false);
+        var act = () => Run(migrateOnStartup: false, isDevelopment: false);
+
+        await act.Should().NotThrowAsync();
+        db.DbMaintenance.IsAnyTable(_harness.Prefix + "permissions", false).Should().BeFalse();
     }
 }

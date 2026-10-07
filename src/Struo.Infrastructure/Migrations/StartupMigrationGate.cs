@@ -27,7 +27,9 @@ public static class StartupMigrationGate
 
     private static async Task ApplyAsync(MigrationHost host, ILogger logger, CancellationToken ct)
     {
-        foreach (var applied in await host.ApplyAsync(ct))
+        var appliedMigrations = await host.ApplyAsync(ct);
+        if (!logger.IsEnabled(LogLevel.Information)) return;
+        foreach (var applied in appliedMigrations)
             logger.LogInformation("Applied migration {Version} {Description}.", applied.Version, applied.Description);
     }
 
