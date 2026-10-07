@@ -51,7 +51,7 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("title").AsString(255).Nullable()
             .WithColumn("alt").AsString(255).Nullable();
 
-        CreateTranslationUniqueIndex("file_translations", FrameworkTable("file_translations"), "fileid", "locale");
+        CreateTranslationUniqueIndex(FrameworkTable("file_translations"), "fileid", "locale");
 
         Create.Table(FrameworkTable("media_folders"))
             .WithColumn("id").AsGuid().PrimaryKey()

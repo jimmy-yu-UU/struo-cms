@@ -13,11 +13,23 @@ namespace Struo.Tests.Migrations.Core;
 /// <summary>Applies the core migrations to a fresh SQLite file under a unique table prefix.</summary>
 internal sealed class CoreMigrationHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly SqliteTestDatabase _file;
+    private readonly bool _ownsFile;
 
-    public string Prefix { get; } = $"t{Guid.NewGuid():N}"[..9] + "_";
+    public CoreMigrationHarness() : this(new SqliteTestDatabase(), $"t{Guid.NewGuid():N}"[..9] + "_", true) { }
 
-    public void Dispose() => _file.Dispose();
+    private CoreMigrationHarness(SqliteTestDatabase file, string prefix, bool ownsFile) =>
+        (_file, Prefix, _ownsFile) = (file, prefix, ownsFile);
+
+    public string Prefix { get; }
+
+    /// <summary>A harness over the same database file under another prefix; it does not delete the file.</summary>
+    public CoreMigrationHarness WithPrefix(string prefix) => new(_file, prefix, false);
+
+    public void Dispose()
+    {
+        if (_ownsFile) _file.Dispose();
+    }
 
     public MigrationHost Host(CoreSeedData? seed) => new(
         new MigrationHostOptions(StruoDbType.Sqlite, _file.ConnectionString, Prefix,

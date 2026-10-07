@@ -31,7 +31,7 @@ public sealed class GeneratedMigrationsApplyTests : IDisposable
         db.DbMaintenance.IsAnyIndex("ux_schema_probe_code").Should().BeTrue();
         db.DbMaintenance.IsAnyIndex("ix_schema_probe_name_kind").Should().BeTrue();
         db.DbMaintenance.IsAnyIndex("ux_gen_revisions_item_no").Should().BeTrue();
-        db.DbMaintenance.IsAnyIndex("ux_file_translations_fk_locale").Should().BeTrue();
+        db.DbMaintenance.IsAnyIndex("ux_gen_file_translations_fk_locale").Should().BeTrue();
         db.DbMaintenance.GetColumnInfosByTableName("schema_probe", false).Select(c => c.DbColumnName.ToLowerInvariant())
             .Should().Contain(["id", "code", "displayname", "note", "body", "tags", "createdat", "stamp", "kind", "price", "amount", "ratio", "flag", "ref", "blob"]);
     }

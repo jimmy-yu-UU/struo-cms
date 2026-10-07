@@ -43,4 +43,15 @@ public sealed class CoreSchemaMigrationTests : IDisposable
 
         report.HasErrors.Should().BeFalse(report.ToString());
     }
+
+    [Fact]
+    public async Task Core_migrations_apply_under_two_prefixes_in_one_database()
+    {
+        await _h.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
+        using var second = _h.WithPrefix("u" + Guid.NewGuid().ToString("N")[..8] + "_");
+
+        var applied = await second.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
+
+        applied.Should().HaveCount(2);
+    }
 }

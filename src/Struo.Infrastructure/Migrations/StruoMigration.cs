@@ -21,8 +21,8 @@ public abstract class StruoMigration : Migration
 
     /// <summary>Creates the unique (foreign key, locale) index a translation sidecar table needs.</summary>
     protected void CreateTranslationUniqueIndex(
-        string logicalTable, string physicalTable, string foreignKeyColumn, string localeColumn) =>
-        Create.Index(TranslationSidecarIndexPolicy.IndexNameFor(logicalTable)).OnTable(physicalTable)
+        string physicalTable, string foreignKeyColumn, string localeColumn) =>
+        Create.Index(TranslationSidecarIndexPolicy.IndexNameFor(physicalTable)).OnTable(physicalTable)
             .OnColumn(foreignKeyColumn).Ascending()
             .OnColumn(localeColumn).Ascending()
             .WithOptions().Unique();
