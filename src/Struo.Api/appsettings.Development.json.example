@@ -53,7 +53,13 @@
     // Read directly by PostgresIntegrationTests's own ConfigurationBuilder (no env-var provider
     // registered there), so the env var STRUO_TEST_PG_CONNECTION overrides this key — NOT
     // Testing__PostgresConnection, which the double-underscore convention would otherwise suggest.
-    "PostgresConnection": ""
+    "PostgresConnection": "",
+    // Opt-in migration tests on SQL Server, MySQL and MariaDB. Each needs a DISPOSABLE database whose
+    // name contains "test" and which already exists. Env vars STRUO_TEST_SQLSERVER_CONNECTION,
+    // STRUO_TEST_MYSQL_CONNECTION and STRUO_TEST_MARIADB_CONNECTION override these keys.
+    "SqlServerConnection": "",
+    "MySqlConnection": "",
+    "MariaDbConnection": ""
   },
 
   "Serilog": {

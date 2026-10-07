@@ -11,6 +11,12 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="FluentMigrator.Runner.Core" />
+    <PackageReference Include="FluentMigrator.Runner.MySql" />
+    <PackageReference Include="FluentMigrator.Runner.Oracle" />
+    <PackageReference Include="FluentMigrator.Runner.Postgres" />
+    <PackageReference Include="FluentMigrator.Runner.SQLite" />
+    <PackageReference Include="FluentMigrator.Runner.SqlServer" />
     <PackageReference Include="HtmlSanitizer" />
     <PackageReference Include="Isopoh.Cryptography.Argon2" />
     <PackageReference Include="Microsoft.AspNetCore.WebUtilities" />

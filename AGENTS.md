@@ -81,7 +81,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** Migration
+- **All database access is through SqlSugar, with five deliberate exceptions for raw SQL.** Migration
   scripts under `db/migrations/` are one — the template ships **none**: it holds only its `README.md`,
   and any script there belongs to the fork that put it there. Replaceability is a choice made once, at
   fork time, not a property every deployment must preserve forever: the core ships no vendor-SQL
@@ -89,9 +89,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   violation. The second is `SchemaGuard`'s read-only PostgreSQL/SQLite catalog queries
   (`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`) — needed because SqlSugar's ORM surface cannot
   answer "is there a UNIQUE index covering these columns"; it returns early for MySQL/SqlServer/Oracle
-  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so no vendor-specific
-  SQL ships on the production path (the third and fourth exceptions below assemble portable SQL text,
-  not dialect-specific text).
+  and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so `SchemaGuard` puts
+  no vendor-specific SQL on the production path (the third and fourth exceptions below assemble
+  portable SQL text, not dialect-specific text; the fifth is deliberately per-backend lock SQL that
+  runs wherever `migrate` runs).
   The third is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -111,12 +112,21 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   either way) — plus the no-client-sort default clause (`<created> DESC, <id> ASC`, or `<id> ASC`
   alone when the entity has no `CreatedAt`) and the `, <id> ASC` pagination tiebreak/comma-join that
   wrap every sort. Every column name across all of it comes from
-  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string. Nothing else may
-  assemble SQL text, and SqlSugar's own string overloads
+  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string.
+  The fifth is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
+  advisory-lock acquire command and one release command per backend (PostgreSQL
+  `pg_try_advisory_lock`, MySQL `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no
+  lock), parameterised, with no request input.
+  Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the five exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
+- **Schema changes may be FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
+  `MigrationHost` runs them through the `migrate`, `migrate:status` and `migrate:preview` commands, the
+  first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`. Application queries
+  and writes stay on SqlSugar. The core ships no migrations; startup still applies `db/migrations/`
+  scripts through `MigrationRunner` and creates tables through CodeFirst.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
@@ -233,7 +243,10 @@ result — see `schema/README.md` for the full contract, including the PowerShel
 **Any change to DB behavior** (a migration, a `SqlSugarClientFactory` column-mapping change, a
 query-building change) **should be verified against a live instance of whichever database this
 deployment is actually configured for** — SQLite passing is not evidence of correctness on any other
-backend, and the SQLite suite is a development convenience, not the portability guarantee.
+backend, and the SQLite suite is a development convenience, not the portability guarantee. A project
+built on this template verifies against the database(s) it actually uses; a change to the original
+template project itself is verified against every backend available locally (PostgreSQL, SQL Server,
+MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
 - **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
   recommended for every DB-behavior change, since it is the one backend with an existing suite
@@ -259,7 +272,14 @@ passes silently on SQLite, whose loose typing accepts the comparison without com
 `Testing:PostgresConnection` to a disposable database whose name contains `test` — the test resolves
 it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
-if the env var is unset — or verify directly against a real PostgreSQL instance.
+if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
+subsystem's live tests also run on SQL Server, MySQL and MariaDB (MariaDB on the `MySql` dialect). They
+resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
+`STRUO_TEST_MYSQL_CONNECTION` / `Testing:MySqlConnection` and `STRUO_TEST_MARIADB_CONNECTION` /
+`Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
+about a millisecond) when a connection is unset, so judge them by per-test duration. The database
+must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
+contains a hyphen. Beyond the migration tests and a SqlSugar smoke check, only PostgreSQL has a live suite.
 
 **`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a
