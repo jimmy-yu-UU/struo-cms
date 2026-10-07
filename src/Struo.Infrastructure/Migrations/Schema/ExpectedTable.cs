@@ -1,6 +1,10 @@
 namespace Struo.Infrastructure.Migrations.Schema;
 
-/// <summary>A column an entity declares. <c>Name</c> is lower-case; <c>Length</c> is set for <see cref="ColumnCategory.String"/> only.</summary>
+/// <summary>
+/// A column an entity declares. <c>Name</c> is lower-case. <c>Length</c> is the string length for
+/// <see cref="ColumnCategory.String"/> and the precision for <see cref="ColumnCategory.Decimal"/> (with <c>Scale</c>)
+/// when declared; both are null otherwise.
+/// </summary>
 public sealed record ExpectedColumn(
     string Name,
     ColumnCategory Category,
@@ -8,7 +12,8 @@ public sealed record ExpectedColumn(
     int? Length,
     bool IsPrimaryKey,
     bool IsIdentity,
-    bool IsJson);
+    bool IsJson,
+    int? Scale = null);
 
 /// <summary>An index an entity declares; columns are lower-case, in declaration order.</summary>
 public sealed record ExpectedIndex(string Name, IReadOnlyList<string> Columns, bool IsUnique);

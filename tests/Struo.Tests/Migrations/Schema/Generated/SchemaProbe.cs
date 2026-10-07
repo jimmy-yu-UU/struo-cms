@@ -20,6 +20,8 @@ public sealed class CreateSchemaProbe : StruoMigration
             .WithColumn("stamp").AsShape(ColumnShape.TimestampWithTimeZone, Db).NotNullable()
             .WithColumn("kind").AsInt32().NotNullable()
             .WithColumn("price").AsDecimal().NotNullable()
+            .WithColumn("amount").AsDecimal(10, 2).NotNullable()
+            .WithColumn("ratio").AsDouble().NotNullable()
             .WithColumn("flag").AsBoolean().NotNullable()
             .WithColumn("ref").AsGuid().NotNullable()
             .WithColumn("blob").AsBinary(int.MaxValue).NotNullable();

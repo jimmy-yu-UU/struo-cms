@@ -53,9 +53,13 @@ public static class EntitySchemaReader
     private static ExpectedColumn ToColumn(EntityColumnInfo column, SqlSugar.DbType dbType)
     {
         var category = CategoryOf(column, dbType);
-        int? length = category == ColumnCategory.String
-            ? (column.Length > 0 ? column.Length : DefaultStringLength)
-            : null;
+        int? length = category switch
+        {
+            ColumnCategory.String => column.Length > 0 ? column.Length : DefaultStringLength,
+            ColumnCategory.Decimal => column.Length > 0 ? column.Length : null,
+            _ => null
+        };
+        int? scale = category == ColumnCategory.Decimal && column.DecimalDigits > 0 ? column.DecimalDigits : null;
         return new ExpectedColumn(
             column.DbColumnName.ToLowerInvariant(),
             category,
@@ -63,7 +67,8 @@ public static class EntitySchemaReader
             length,
             column.IsPrimarykey,
             column.IsIdentity,
-            column.IsJson);
+            column.IsJson,
+            scale);
     }
 
     private static ColumnCategory CategoryOf(EntityColumnInfo column, SqlSugar.DbType dbType)
@@ -79,7 +84,8 @@ public static class EntitySchemaReader
         if (type == typeof(string)) return ColumnCategory.String;
         if (type == typeof(int) || type == typeof(short) || type == typeof(byte)) return ColumnCategory.Integer;
         if (type == typeof(long)) return ColumnCategory.BigInteger;
-        if (type == typeof(decimal) || type == typeof(double) || type == typeof(float)) return ColumnCategory.Decimal;
+        if (type == typeof(decimal)) return ColumnCategory.Decimal;
+        if (type == typeof(double) || type == typeof(float)) return ColumnCategory.Double;
         if (type == typeof(bool)) return ColumnCategory.Boolean;
         if (type == typeof(Guid)) return ColumnCategory.Guid;
         if (type == typeof(DateTime)) return ColumnCategory.DateTime;

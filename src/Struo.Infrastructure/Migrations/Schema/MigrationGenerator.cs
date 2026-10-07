@@ -24,8 +24,18 @@ public static class MigrationGenerator
     public static string FileName(MigrationSpec spec) =>
         string.Create(CultureInfo.InvariantCulture, $"{spec.Version}_{spec.ClassName}.cs");
 
-    /// <summary>True for a C# identifier that is not a reserved keyword.</summary>
+    /// <summary>
+    /// True for a C# identifier that is not a keyword, has an upper-case letter (a name without one draws
+    /// compiler warning CS8981), and is not the <see cref="StruoMigration"/> base class name.
+    /// </summary>
     public static bool IsValidClassName(string name) =>
+        IsIdentifier(name) && name.Any(char.IsAsciiLetterUpper) && name != nameof(StruoMigration);
+
+    /// <summary>True for dot-separated segments that are each a C# identifier and not a keyword.</summary>
+    public static bool IsValidNamespace(string ns) =>
+        !string.IsNullOrEmpty(ns) && ns.Split('.').All(IsIdentifier);
+
+    private static bool IsIdentifier(string name) =>
         !string.IsNullOrEmpty(name)
         && (char.IsAsciiLetter(name[0]) || name[0] == '_')
         && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_')
@@ -39,7 +49,7 @@ public static class MigrationGenerator
 
         var sb = new StringBuilder();
         sb.Append("using FluentMigrator;\nusing Struo.Infrastructure.Migrations;\n");
-        if (up.Any(l => l.Contains("ColumnShape.", StringComparison.Ordinal)))
+        if (spec.Table?.Columns.Any(c => TypeCall(c).UsesShape) == true)
             sb.Append("using Struo.Infrastructure.Persistence;\n");
         sb.Append('\n');
         if (spec.Namespace is not null)
@@ -87,27 +97,33 @@ public static class MigrationGenerator
 
     private static string ColumnChain(ExpectedColumn c)
     {
-        var sb = new StringBuilder($".WithColumn({Lit(c.Name)}){TypeCall(c)}");
+        var sb = new StringBuilder($".WithColumn({Lit(c.Name)}){TypeCall(c).Call}");
         if (c.IsPrimaryKey) sb.Append(".PrimaryKey()");
         if (c.IsIdentity) sb.Append(".Identity()");
         if (!c.IsPrimaryKey) sb.Append(c.IsNullable ? ".Nullable()" : ".NotNullable()");
         return sb.ToString();
     }
 
-    private static string TypeCall(ExpectedColumn c) => c.Category switch
+    private static (string Call, bool UsesShape) TypeCall(ExpectedColumn c) => c.Category switch
     {
-        ColumnCategory.String => string.Create(CultureInfo.InvariantCulture, $".AsString({c.Length ?? 255})"),
-        ColumnCategory.LongText => c.IsJson ? ".AsJson(Db)" : ".AsLongText(Db)",
-        ColumnCategory.DateTimeWithTimeZone => ".AsShape(ColumnShape.TimestampWithTimeZone, Db)",
-        ColumnCategory.Integer => ".AsInt32()",
-        ColumnCategory.BigInteger => ".AsInt64()",
-        ColumnCategory.Decimal => ".AsDecimal()",
-        ColumnCategory.Boolean => ".AsBoolean()",
-        ColumnCategory.Guid => ".AsGuid()",
-        ColumnCategory.DateTime => ".AsDateTime()",
-        ColumnCategory.Binary => ".AsBinary(int.MaxValue)",
+        ColumnCategory.String => (string.Create(CultureInfo.InvariantCulture, $".AsString({c.Length ?? 255})"), false),
+        ColumnCategory.LongText => (c.IsJson ? ".AsJson(Db)" : ".AsLongText(Db)", false),
+        ColumnCategory.DateTimeWithTimeZone => (".AsShape(ColumnShape.TimestampWithTimeZone, Db)", true),
+        ColumnCategory.Integer => (".AsInt32()", false),
+        ColumnCategory.BigInteger => (".AsInt64()", false),
+        ColumnCategory.Decimal => (DecimalCall(c), false),
+        ColumnCategory.Double => (".AsDouble()", false),
+        ColumnCategory.Boolean => (".AsBoolean()", false),
+        ColumnCategory.Guid => (".AsGuid()", false),
+        ColumnCategory.DateTime => (".AsDateTime()", false),
+        ColumnCategory.Binary => (".AsBinary(int.MaxValue)", false),
         _ => throw new NotSupportedException($"Column '{c.Name}' has no portable mapping")
     };
+
+    private static string DecimalCall(ExpectedColumn c) =>
+        c.Length is { } precision && c.Scale is { } scale
+            ? string.Create(CultureInfo.InvariantCulture, $".AsDecimal({precision}, {scale})")
+            : ".AsDecimal()";
 
     private static IEnumerable<string> IndexLines(ExpectedTable table, string tableExpr, ExpectedIndex index)
     {
@@ -136,10 +152,14 @@ public static class MigrationGenerator
             return Lit(name);
         var head = name[..at];
         var tail = name[(at + table.PhysicalName.Length)..];
-        return $"$\"{Escape(head)}{{FrameworkTable({Lit(table.LogicalName)})}}{Escape(tail)}\"";
+        return $"$\"{EscapeBraces(Escape(head))}{{FrameworkTable({Lit(table.LogicalName)})}}{EscapeBraces(Escape(tail))}\"";
     }
 
     private static string Lit(string s) => $"\"{Escape(s)}\"";
 
-    private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string Escape(string s) => s
+        .Replace("\\", "\\\\").Replace("\"", "\\\"")
+        .Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+
+    private static string EscapeBraces(string s) => s.Replace("{", "{{").Replace("}", "}}");
 }

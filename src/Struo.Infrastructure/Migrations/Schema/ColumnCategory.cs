@@ -8,6 +8,7 @@ public enum ColumnCategory
     Integer,
     BigInteger,
     Decimal,
+    Double,
     Boolean,
     Guid,
     DateTime,

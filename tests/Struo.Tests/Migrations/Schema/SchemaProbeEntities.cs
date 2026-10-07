@@ -20,6 +20,8 @@ public sealed class SchemaProbe
     [ColumnShape(ColumnShape.TimestampWithTimeZone)] public DateTime Stamp { get; set; }
     public ProbeKind Kind { get; set; }
     public decimal Price { get; set; }
+    [SugarColumn(Length = 10, DecimalDigits = 2)] public decimal Amount { get; set; }
+    public double Ratio { get; set; }
     public bool Flag { get; set; }
     public Guid Ref { get; set; }
     public byte[] Blob { get; set; } = [];

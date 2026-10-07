@@ -38,7 +38,7 @@ public class EntitySchemaReaderTests
         table.IsFrameworkTable.Should().BeFalse();
         table.TranslationLogicalTable.Should().BeNull();
         table.Columns.Select(c => c.Name).Should().BeEquivalentTo(
-            ["id", "code", "displayname", "note", "body", "tags", "createdat", "stamp", "kind", "price", "flag", "ref", "blob"]);
+            ["id", "code", "displayname", "note", "body", "tags", "createdat", "stamp", "kind", "price", "amount", "ratio", "flag", "ref", "blob"]);
     }
 
     [Fact]
@@ -73,6 +73,20 @@ public class EntitySchemaReaderTests
     }
 
     [Fact]
+    public void Decimal_precision_and_scale_are_kept_only_when_declared()
+    {
+        var table = EntitySchemaReader.Read(Client(), typeof(SchemaProbe));
+
+        Col(table, "amount").Length.Should().Be(10);
+        Col(table, "amount").Scale.Should().Be(2);
+        Col(table, "price").Length.Should().BeNull();
+        Col(table, "price").Scale.Should().BeNull();
+        Col(table, "ratio").Length.Should().BeNull();
+        Col(table, "ratio").Scale.Should().BeNull();
+        Col(table, "code").Scale.Should().BeNull();
+    }
+
+    [Fact]
     public void Shapes_json_and_clr_types_map_to_categories()
     {
         var table = EntitySchemaReader.Read(Client(), typeof(SchemaProbe));
@@ -86,6 +100,8 @@ public class EntitySchemaReaderTests
         Col(table, "stamp").Category.Should().Be(ColumnCategory.DateTimeWithTimeZone);
         Col(table, "kind").Category.Should().Be(ColumnCategory.Integer);
         Col(table, "price").Category.Should().Be(ColumnCategory.Decimal);
+        Col(table, "amount").Category.Should().Be(ColumnCategory.Decimal);
+        Col(table, "ratio").Category.Should().Be(ColumnCategory.Double);
         Col(table, "flag").Category.Should().Be(ColumnCategory.Boolean);
         Col(table, "ref").Category.Should().Be(ColumnCategory.Guid);
         Col(table, "blob").Category.Should().Be(ColumnCategory.Binary);
