@@ -74,6 +74,8 @@ public sealed class MigrationLock : IAsyncDisposable
     {
         if (_session is null || _disposed) return;
         _disposed = true;
+        // The explicit token must stay: SqlSugar stores the token passed to GetScalarAsync on the Ado
+        // provider and never clears it, so the acquire loop's token would otherwise carry into the release.
         try { await _session.Ado.GetScalarAsync(_releaseSql!, _parameters, CancellationToken.None); }
         catch (Exception ex)
         {
