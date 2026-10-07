@@ -27,7 +27,7 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   options records (`Configuration/`). References only `Struo.Domain`.
 - **`src/Struo.Infrastructure`** — the concrete implementations: SqlSugar wiring
   (`Persistence/SqlSugarClientFactory.cs`, `Persistence/MigrationRunner.cs`), the FluentMigrator host, base class and CLI commands
-  (`Migrations/`), metadata scanning and
+  (`Migrations/`), the schema reader, generator and checker (`Migrations/Schema/`), metadata scanning and
   caching (`Metadata/MetadataScanner.cs`, `CachedMetadataProvider.cs`, `EntityRegistry.cs`,
   `RelationshipGraph.cs`, `EntityTypeCollector.cs`, `FrameworkEntityTypes.cs`), the query
   implementations (`Query/SqlSugarItemRepository.cs`, `RelationExpander.cs`,

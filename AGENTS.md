@@ -81,7 +81,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with five deliberate exceptions for raw SQL.** Migration
+- **All database access is through SqlSugar, with six deliberate exceptions for raw SQL.** Migration
   scripts under `db/migrations/` are one — the template ships **none**: it holds only its `README.md`,
   and any script there belongs to the fork that put it there. Replaceability is a choice made once, at
   fork time, not a property every deployment must preserve forever: the core ships no vendor-SQL
@@ -92,7 +92,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so `SchemaGuard` puts
   no vendor-specific SQL on the production path (the third and fourth exceptions below assemble
   portable SQL text, not dialect-specific text; the fifth is deliberately per-backend lock SQL that
-  runs wherever `migrate` runs).
+  runs wherever `migrate` runs; the sixth is read-only catalog SQL).
   The third is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -117,14 +117,23 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   advisory-lock acquire command and one release command per backend (PostgreSQL
   `pg_try_advisory_lock`, MySQL `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no
   lock), parameterised, with no request input.
+  The sixth is `IndexCatalog`'s read-only index queries
+  (`src/Struo.Infrastructure/Migrations/Schema/IndexCatalog.cs`), used by `migrate:check` and
+  `SchemaChecker.Check`: one catalog query per backend (PostgreSQL, SQL Server, MySQL/MariaDB, SQLite),
+  parameterised with `@table`, with no request input and no writes. Oracle has no index query, so the
+  index check is skipped with a warning.
   Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the five exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the six exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
 - **Schema changes may be FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
   `MigrationHost` runs them through the `migrate`, `migrate:status` and `migrate:preview` commands, the
-  first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`. Application queries
+  first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`.
+  `make:migration <Name> --output <dir>` writes a `Create.Table` skeleton from entity metadata and never
+  overwrites a file. `migrate:check` compares the live schema with entity metadata, writes nothing and
+  exits 1 on any error. A fork calls `SchemaChecker.Check` from its own tests and asserts no errors.
+  On Oracle, `migrate:check` skips the type and length checks with one warning. Application queries
   and writes stay on SqlSugar. The core ships no migrations; startup still applies `db/migrations/`
   scripts through `MigrationRunner` and creates tables through CodeFirst.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
