@@ -26,7 +26,7 @@ public sealed class MigrationCliTests : IDisposable
         _file.Dispose();
     }
 
-    private IServiceProvider Services(StruoDbType db = StruoDbType.Sqlite, string? conn = null) =>
+    private ServiceProvider Services(StruoDbType db = StruoDbType.Sqlite, string? conn = null) =>
         new ServiceCollection()
             .AddSingleton(Options.Create(new DatabaseOptions
                 { DbType = db, ConnectionString = conn ?? _file.ConnectionString }))

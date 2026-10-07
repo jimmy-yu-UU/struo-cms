@@ -47,12 +47,12 @@ public sealed class MigrationLock : IAsyncDisposable
         });
         try
         {
-            session.Ado.Open();
+            await session.Ado.OpenAsync();
             var deadline = DateTime.UtcNow + timeout;
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                if (Convert.ToInt32(await session.Ado.GetScalarAsync(acquireSql, parameters)) == 1)
+                if (Convert.ToInt32(await session.Ado.GetScalarAsync(acquireSql, parameters, ct)) == 1)
                     return new MigrationLock(session, MigrationLockSql.ReleaseSql(db), parameters, logger);
                 if (DateTime.UtcNow >= deadline)
                     throw new MigrationLockTimeoutException(
@@ -74,7 +74,7 @@ public sealed class MigrationLock : IAsyncDisposable
     {
         if (_session is null || _disposed) return;
         _disposed = true;
-        try { await _session.Ado.GetScalarAsync(_releaseSql!, _parameters); }
+        try { await _session.Ado.GetScalarAsync(_releaseSql!, _parameters, CancellationToken.None); }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Releasing the migration lock failed; closing its session frees it.");

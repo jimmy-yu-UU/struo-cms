@@ -91,11 +91,15 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             .Select(v => new MigrationInfo(
                 v,
                 known.TryGetValue(v, out var d) ? d : applied[v].Description ?? "",
-                known.ContainsKey(v)
-                    ? (applied.ContainsKey(v) ? MigrationState.Applied : MigrationState.Pending)
-                    : MigrationState.Orphaned,
+                StateOf(known.ContainsKey(v), applied.ContainsKey(v)),
                 applied.TryGetValue(v, out var row) ? row.AppliedOn : null))
             .ToList();
+    }
+
+    private static MigrationState StateOf(bool known, bool applied)
+    {
+        if (!known) return MigrationState.Orphaned;
+        return applied ? MigrationState.Applied : MigrationState.Pending;
     }
 
     /// <summary>Pending migrations and their SQL, written to <paramref name="sqlOut"/>. Executes nothing.</summary>
