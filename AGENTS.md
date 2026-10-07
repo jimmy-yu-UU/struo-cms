@@ -92,7 +92,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   and runs only in Development (gated behind `IsDevelopment()` in `Program.cs`), so `SchemaGuard` puts
   no vendor-specific SQL on the production path (the third and fourth exceptions below assemble
   portable SQL text, not dialect-specific text; the fifth is deliberately per-backend lock SQL that
-  runs wherever `migrate` runs; the sixth is read-only catalog SQL).
+  runs wherever `migrate` runs; the sixth is per-backend read-only catalog SQL that runs wherever
+  `migrate:check` or `SchemaChecker.Check` runs).
   The third is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -128,9 +129,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
 - **Schema changes may be FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
-  `MigrationHost` runs them through the `migrate`, `migrate:status` and `migrate:preview` commands, the
-  first argument to `Struo.Api`, and records them in `{TablePrefix}schema_versions`.
-  `make:migration <Name> --output <dir>` writes a `Create.Table` skeleton from entity metadata and never
+  `MigrationHost` runs them and records them in `{TablePrefix}schema_versions`. The commands are
+  `migrate`, `migrate:status`, `migrate:preview`, `make:migration` and `migrate:check`, each the first
+  argument to `Struo.Api`.
+  `make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]` writes a new migration
+  class; with `--entity` it holds a `Create.Table` built from that entity's metadata. It never
   overwrites a file. `migrate:check` compares the live schema with entity metadata, writes nothing and
   exits 1 on any error. A fork calls `SchemaChecker.Check` from its own tests and asserts no errors.
   On Oracle, `migrate:check` skips the type and length checks with one warning. Application queries
