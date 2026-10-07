@@ -6,9 +6,8 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Sample.Blog;
 
 [SugarTable("categories")]
-// CodeFirst-declared secondary index on the self-referencing M2O FK column (ix_categories_parentid),
-// created by InitTables in dev; a downstream fork that keeps this entity should add the equivalent
-// index to its own migrations.
+// Secondary index on the self-referencing M2O FK column (ix_categories_parentid); the sample
+// migration Migrations/202610080100_CreateBlogSchema.cs creates it.
 [SugarIndex("ix_categories_parentid", nameof(ParentId), OrderByType.Asc)]
 [CmsCollection("Category", Icon = "folder", Group = "Content", DefaultDisplayField = nameof(Name))]
 public sealed class Category : AuditableEntity, ISoftDeletable

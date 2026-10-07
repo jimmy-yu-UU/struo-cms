@@ -10,10 +10,8 @@ public sealed class ArticleTranslation : Struo.Domain.Seo.SeoTranslation
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
     // ArticleId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
     // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
-    // composite unique (articleid, locale) to the generated column model at CodeFirst time; SchemaGuard
-    // re-checks the resulting index in Development. This sample schema is not part of core, so a
-    // downstream fork keeping this entity gets the index for free on a fresh CodeFirst table, and only
-    // needs to write its own migration for a table that already exists in the target database.
+    // composite unique (articleid, locale) to the entity schema that SchemaChecker compares against the
+    // database; the sample migration Migrations/202610080100_CreateBlogSchema.cs creates it.
     public Guid ArticleId { get; set; }
     public string Locale { get; set; } = "";
     [CmsField(Label = "Title", Interface = FieldInterface.Text, Required = true, Searchable = true, Sortable = true, Sort = 1, Group = "Content")]
