@@ -27,3 +27,11 @@ public sealed class SchemaProbe
     public byte[] Blob { get; set; } = [];
     [SugarColumn(IsIgnore = true)] public string Ignored { get; set; } = "";
 }
+
+[SugarTable("explicit_type_probe")]
+public sealed class ExplicitTypeProbe
+{
+    [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+    [SugarColumn(ColumnDataType = "varchar(500)")] public string Wide { get; set; } = "";
+    [SugarColumn(Length = 10, DecimalDigits = 0)] public decimal Whole { get; set; }
+}

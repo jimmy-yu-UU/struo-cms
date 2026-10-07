@@ -87,6 +87,25 @@ public class EntitySchemaReaderTests
     }
 
     [Fact]
+    public void Decimal_with_a_precision_and_zero_digits_has_scale_zero()
+    {
+        var whole = Col(EntitySchemaReader.Read(Client(prefix: "ex_"), typeof(ExplicitTypeProbe)), "whole");
+
+        whole.Length.Should().Be(10);
+        whole.Scale.Should().Be(0);
+    }
+
+    [Fact]
+    public void An_explicit_column_data_type_the_reader_does_not_know_is_other()
+    {
+        var table = EntitySchemaReader.Read(Client(prefix: "ex_"), typeof(ExplicitTypeProbe));
+
+        Col(table, "wide").Category.Should().Be(ColumnCategory.Other);
+        Col(table, "wide").Length.Should().BeNull();
+        Col(table, "id").Category.Should().Be(ColumnCategory.BigInteger);
+    }
+
+    [Fact]
     public void Shapes_json_and_clr_types_map_to_categories()
     {
         var table = EntitySchemaReader.Read(Client(), typeof(SchemaProbe));

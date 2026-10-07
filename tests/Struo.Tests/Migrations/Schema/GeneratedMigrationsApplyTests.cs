@@ -2,7 +2,11 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Migrations;
+using Struo.Infrastructure.Migrations.Schema;
+using Struo.Infrastructure.Persistence;
+using Struo.Infrastructure.Revisions;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -30,6 +34,24 @@ public sealed class GeneratedMigrationsApplyTests : IDisposable
         db.DbMaintenance.IsAnyIndex("ux_file_translations_fk_locale").Should().BeTrue();
         db.DbMaintenance.GetColumnInfosByTableName("schema_probe", false).Select(c => c.DbColumnName.ToLowerInvariant())
             .Should().Contain(["id", "code", "displayname", "note", "body", "tags", "createdat", "stamp", "kind", "price", "amount", "ratio", "flag", "ref", "blob"]);
+    }
+
+    [Fact]
+    public async Task Generated_migrations_satisfy_the_schema_checker_for_their_entities()
+    {
+        await ApplyAsync();
+        var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
+        {
+            [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
+        });
+        var db = SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = "gen_" },
+            new TestCurrentUserAccessor(Guid.Empty),
+            policy);
+
+        var report = SchemaChecker.Check(db, StruoDbType.Sqlite, [typeof(SchemaProbe), typeof(Revision), typeof(FileTranslation)]);
+
+        report.HasErrors.Should().BeFalse(report.ToString());
     }
 
     private Task<IReadOnlyList<MigrationInfo>> ApplyAsync() => new MigrationHost(

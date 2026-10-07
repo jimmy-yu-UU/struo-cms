@@ -22,7 +22,6 @@ public sealed class DbTypeCategoriesTests
     [InlineData(Pg, ColumnCategory.Boolean, "bool", 0)]
     [InlineData(Pg, ColumnCategory.LongText, "json", 0)]
     [InlineData(Pg, ColumnCategory.LongText, "jsonb", 0)]
-    [InlineData(Pg, ColumnCategory.DateTime, "date", 0)]
     [InlineData(Pg, ColumnCategory.String, "text", 0)]
     [InlineData(Ms, ColumnCategory.Decimal, "decimal", 18)]
     [InlineData(Ms, ColumnCategory.Decimal, "money", 19)]
@@ -32,7 +31,6 @@ public sealed class DbTypeCategoriesTests
     [InlineData(Ms, ColumnCategory.LongText, "nvarchar", -1)]
     [InlineData(Ms, ColumnCategory.String, "nvarchar", -1)]
     [InlineData(Ms, ColumnCategory.String, "ntext", 16)]
-    [InlineData(Ms, ColumnCategory.DateTime, "date", 3)]
     [InlineData(My, ColumnCategory.Decimal, "decimal", 0)]
     [InlineData(My, ColumnCategory.Double, "double", 0)]
     [InlineData(My, ColumnCategory.Binary, "longblob", 0)]
@@ -42,7 +40,6 @@ public sealed class DbTypeCategoriesTests
     [InlineData(My, ColumnCategory.LongText, "json", 0)]
     [InlineData(My, ColumnCategory.String, "longtext", 0)]
     [InlineData(My, ColumnCategory.String, "mediumtext", 0)]
-    [InlineData(My, ColumnCategory.DateTime, "date", 0)]
     public void Matches_accepts(StruoDbType db, ColumnCategory expected, string type, int length) =>
         DbTypeCategories.Matches(db, expected, Col(type, length)).Should().BeTrue();
 
@@ -54,6 +51,9 @@ public sealed class DbTypeCategoriesTests
     [InlineData(Pg, ColumnCategory.Decimal, "float8", 0)]
     [InlineData(Ms, ColumnCategory.String, "int", 10)]
     [InlineData(Ms, ColumnCategory.Boolean, "int", 10)]
+    [InlineData(Pg, ColumnCategory.DateTime, "date", 0)]
+    [InlineData(Ms, ColumnCategory.DateTime, "date", 3)]
+    [InlineData(My, ColumnCategory.DateTime, "date", 0)]
     public void Matches_rejects(StruoDbType db, ColumnCategory expected, string type, int length) =>
         DbTypeCategories.Matches(db, expected, Col(type, length)).Should().BeFalse();
 

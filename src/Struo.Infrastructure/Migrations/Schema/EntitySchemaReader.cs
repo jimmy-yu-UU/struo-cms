@@ -59,7 +59,10 @@ public static class EntitySchemaReader
             ColumnCategory.Decimal => column.Length > 0 ? column.Length : null,
             _ => null
         };
-        int? scale = category == ColumnCategory.Decimal && column.DecimalDigits > 0 ? column.DecimalDigits : null;
+        // CodeFirst emits decimal(Length, DecimalDigits) whenever Length is set, so zero digits is a real scale.
+        int? scale = category == ColumnCategory.Decimal && (column.DecimalDigits > 0 || column.Length > 0)
+            ? column.DecimalDigits
+            : null;
         return new ExpectedColumn(
             column.DbColumnName.ToLowerInvariant(),
             category,
@@ -78,6 +81,7 @@ public static class EntitySchemaReader
             return ColumnCategory.LongText;
         if (Matches(dataType, ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType)))
             return ColumnCategory.DateTimeWithTimeZone;
+        if (DeclaresUnknownDataType(column, dbType)) return ColumnCategory.Other;
 
         var type = Nullable.GetUnderlyingType(column.UnderType) ?? column.UnderType;
         if (type.IsEnum) return ColumnCategory.Integer;
@@ -93,6 +97,13 @@ public static class EntitySchemaReader
         if (type == typeof(byte[])) return ColumnCategory.Binary;
         return ColumnCategory.Other;
     }
+
+    // An explicit [SugarColumn(ColumnDataType = ...)] other than a ColumnTypeMap literal has no portable category.
+    private static bool DeclaresUnknownDataType(EntityColumnInfo column, SqlSugar.DbType dbType) =>
+        !string.IsNullOrEmpty(column.PropertyInfo?.GetCustomAttribute<SugarColumn>()?.ColumnDataType)
+        && !string.IsNullOrEmpty(column.DataType)
+        && !Matches(column.DataType, ColumnTypeMap.For(ColumnShape.LongText, dbType))
+        && !Matches(column.DataType, ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
 
     private static bool Matches(string? dataType, string literal) =>
         string.Equals(dataType, literal, StringComparison.OrdinalIgnoreCase);

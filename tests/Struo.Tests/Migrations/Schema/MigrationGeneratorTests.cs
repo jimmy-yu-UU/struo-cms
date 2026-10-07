@@ -15,13 +15,13 @@ public class MigrationGeneratorTests
     private const string UpdateEnvVar = "UPDATE_MIGRATION_GOLDEN";
     private const string GeneratedNamespace = "Struo.Tests.Migrations.Schema.Generated";
 
-    private static ISqlSugarClient Client(TranslationSidecarIndexPolicy? policy = null) =>
+    private static ISqlSugarClient Client(string prefix = "struo_", TranslationSidecarIndexPolicy? policy = null) =>
         SqlSugarClientFactory.Create(
             new DatabaseOptions
             {
                 DbType = StruoDbType.Sqlite,
                 ConnectionString = "Data Source=:memory:",
-                TablePrefix = "struo_"
+                TablePrefix = prefix
             },
             new TestCurrentUserAccessor(Guid.Empty),
             policy);
@@ -36,7 +36,7 @@ public class MigrationGeneratorTests
         {
             [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
         });
-        return EntitySchemaReader.Read(Client(policy), typeof(FileTranslation));
+        return EntitySchemaReader.Read(Client(policy: policy), typeof(FileTranslation));
     }
 
     public static TheoryData<string, MigrationSpec> GoldenCases() => new()
@@ -85,6 +85,26 @@ public class MigrationGeneratorTests
         var act = () => MigrationGenerator.Generate(new MigrationSpec("CreateWeird", 1, null, table));
 
         act.Should().Throw<NotSupportedException>().WithMessage("Column 'weird' has no portable mapping");
+    }
+
+    [Fact]
+    public void An_explicit_column_data_type_is_refused_naming_the_column()
+    {
+        var table = EntitySchemaReader.Read(Client("ex_"), typeof(ExplicitTypeProbe));
+
+        var act = () => MigrationGenerator.Generate(new MigrationSpec("CreateExplicit", 1, null, table));
+
+        act.Should().Throw<NotSupportedException>().WithMessage("*'wide'*");
+    }
+
+    [Fact]
+    public void Decimal_with_zero_digits_emits_scale_zero()
+    {
+        var table = EntitySchemaReader.Read(Client("ex_"), typeof(ExplicitTypeProbe));
+        table = table with { Columns = table.Columns.Where(c => c.Name != "wide").ToList() };
+
+        MigrationGenerator.Generate(new MigrationSpec("CreateWhole", 1, null, table))
+            .Should().Contain(".WithColumn(\"whole\").AsDecimal(10, 0)");
     }
 
     [Fact]
