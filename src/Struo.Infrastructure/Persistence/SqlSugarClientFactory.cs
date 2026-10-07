@@ -40,6 +40,9 @@ public static class SqlSugarClientFactory
             ConnectionString = options.ConnectionString,
             DbType = dbType,
             IsAutoCloseConnection = true,
+            // CodeFirst defaults to non-Unicode varchar on SQL Server, which loses CJK text under the
+            // default collation; nvarchar matches what the core migrations create.
+            MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = dbType == SqlSugar.DbType.SqlServer },
             // SqlSugar's EntityInfo cache (behind EntityMaintenance.GetTableName) is process-wide and
             // keyed by ConfigId. Keying it by prefix keeps two clients with different prefixes — the
             // test suite's case — from reading each other's resolved names.
