@@ -10,7 +10,7 @@ namespace Struo.Infrastructure.Migrations.Commands;
 public static class MigrationCli
 {
     public const int Success = 0, Failure = 1, Usage = 2;
-    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "make:migration"];
+    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "migrate:check", "make:migration"];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
@@ -64,6 +64,9 @@ public static class MigrationCli
             await stderr.WriteLineAsync($"Unexpected argument '{invocation.CommandArgs[0]}' for {command}.");
             return Usage;
         }
+
+        if (command == "migrate:check")
+            return await MigrateCheckCommand.RunAsync(services, stdout, stderr);
 
         try
         {
