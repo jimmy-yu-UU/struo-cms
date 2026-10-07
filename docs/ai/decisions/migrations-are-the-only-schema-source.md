@@ -3,7 +3,7 @@
 ## Decision
 
 Every table, column and index of a running application comes from a FluentMigrator migration.
-`Struo.Api` creates nothing at startup: `StartupMigrationGate` applies pending migrations when
+`Struo.Api` issues no DDL outside migrations: `StartupMigrationGate` applies pending migrations when
 `Database:MigrateOnStartup` is `true`, and otherwise refuses to start until the `migrate` command has
 run. The core migrations live in `src/Struo.Infrastructure/Migrations/Core/`.
 
@@ -29,8 +29,11 @@ real PostgreSQL: an unfiltered `InitTables` over a narrowed probe entity, run ag
 from the probe's wide entity, drops the column the narrow entity lacks. It is opt-in and needs a live
 PostgreSQL connection.
 
-On SQLite the same drop is gated behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`,
-which `SqlSugarClientFactory.Create` never sets, so a SQLite run cannot show it.
+On SQLite the same drop is gated behind `ConnectionConfig.MoreSettings.SqliteCodeFirstEnableDropColumn`
+(upstream `SqliteCodeFirst.ExistLogic`, `Src/Asp.NetCore2/SqlSugar/Realization/Sqlite/CodeFirst/SqliteCodeFirst.cs`,
+tag 5.1.4.197). `SqlSugarClientFactory.Create` sets `MoreSettings` only for
+`SqlServerCodeFirstNvarchar` (true on SQL Server), never `SqliteCodeFirstEnableDropColumn`, so a
+SQLite run cannot show the drop.
 
 ## Unknowns
 

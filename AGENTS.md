@@ -66,13 +66,13 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
   `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
   only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
-  creation (the core migrations, and CodeFirst in unit harnesses) is designed and mapped to run on all five backends, via a dialect-neutral
-  `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals in `ColumnTypeMap.cs` —
+  creation (the core migrations, and CodeFirst in unit harnesses) is designed and mapped to run on all
+  five backends, via a dialect-neutral `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals in `ColumnTypeMap.cs` —
   with one gated exception, `SqlSugarClientFactory`'s SQLite identity-column rewrite
   (`ApplySqliteIdentityColumnRewrite`), which hardcodes `INTEGER` for a SQLite identity primary
   key — but that mapping is exercised live only for the core schema (the migration live tests run on
-  SQL Server, MySQL and MariaDB; nothing runs on Oracle), and the query layer is unverified there: some ORDER-BY and literal-coercion code paths are written against
-  PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer,
+  SQL Server, MySQL and MariaDB; nothing runs on Oracle), and the query layer is unverified there: some
+  ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer,
   and what is and is not verified about each, are recorded in
   `docs/ai/decisions/column-type-map-per-backend-literals.md`.
 
@@ -81,7 +81,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** The first
   two assemble portable SQL text; the third is deliberately per-backend lock SQL that runs wherever
   `migrate` runs; the fourth is per-backend read-only catalog SQL that runs wherever `migrate:check`
-  or the Development startup schema check runs.
+  or the Development startup schema check runs, and wherever a fork's tests call
+  `SchemaChecker.Check`.
   The first is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are

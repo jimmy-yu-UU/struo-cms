@@ -60,8 +60,8 @@ Adding a collection is purely additive to a fork's own content project — it ne
    collections" posture permanently), update or remove that test deliberately as part of the same
    change — don't leave it contradicting the new configuration.
 7. **Create the table with a migration.** In your content project run
-   `dotnet run --project src/Struo.Api -- make:migration <Name> --entity <Type> --output <dir> [--namespace <Ns>]`,
-   where `<dir>` is the migrations directory your project uses. The command reads the entity's metadata,
+   `dotnet run --project src/Struo.Api -- make:migration <Name> --entity <Type> --output <dir>
+   [--namespace <Ns>]`, where `<dir>` is the migrations directory your project uses. The command reads the entity's metadata,
    writes a `Create.Table` migration and never overwrites a file. Review the generated file (column
    types, indexes, the translation sidecar if the entity has translatable fields), then apply it with
    `dotnet run --project src/Struo.Api -- migrate`. Start the API and confirm the admin SPA's sidebar
@@ -83,7 +83,8 @@ Adding a collection is purely additive to a fork's own content project — it ne
     touch `docs/guide/**`, so the docs gate does not apply). Add
     live-database verification before a production deploy, against whichever backend you are actually
     configured for — run `migrate` and `migrate:check` and confirm the new table has the
-    columns/indexes/constraints you expect; a green SQLite run does not guarantee the same result on PostgreSQL or another backend.
+    columns/indexes/constraints you expect; a green SQLite run does not guarantee the same result on
+    PostgreSQL or another backend.
 
 ## Playbook 2: Add a field type
 
@@ -241,8 +242,8 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `A
    already in `<dir>`. The class derives from `StruoMigration`. One logical change per migration.
 2. Express the change with FluentMigrator's portable calls (`Create.Table`, `Alter.Table`,
    `Create.Index`, `Insert.IntoTable`, …) and the type helpers: `AsString`, `AsGuid`, `AsInt64`, …,
-   plus `AsShape(shape, Db)`, `AsJson(Db)` and `AsLongText(Db)` for the types that differ per backend. Branch on
-   `StruoMigration.Db` only where a backend genuinely needs its own form. Do not write SQL strings, and
+   plus `AsShape(shape, Db)`, `AsJson(Db)` and `AsLongText(Db)` for the types that differ per backend.
+   Branch on `StruoMigration.Db` only where a backend genuinely needs its own form. Do not write SQL strings, and
    do not reference entity classes from a migration: a migration is a frozen snapshot of the schema at
    the time it was written.
 3. Resolve a framework table's physical name through `FrameworkTable("<logical>")` (it applies
