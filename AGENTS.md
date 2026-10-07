@@ -279,7 +279,7 @@ resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
 `Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
 about a millisecond) when a connection is unset, so judge them by per-test duration. The database
 must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
-contains a hyphen. Outside the migration subsystem, only PostgreSQL has a live suite.
+contains a hyphen. Beyond the migration tests and a SqlSugar smoke check, only PostgreSQL has a live suite.
 
 **`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a
