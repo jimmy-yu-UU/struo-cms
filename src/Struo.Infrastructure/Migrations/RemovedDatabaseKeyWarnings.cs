@@ -3,8 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Struo.Infrastructure.Migrations;
 
-/// <summary>Warns about <c>Database</c> keys the application no longer reads, so a configuration carried
-/// over from an earlier version does not silently expect them to work.</summary>
+/// <summary>Warns about <c>Database</c> keys the application ignores, so a configuration carried over from
+/// an earlier version does not expect them to work.</summary>
 public static class RemovedDatabaseKeyWarnings
 {
     private static readonly (string Key, string Replacement)[] Removed =
