@@ -62,6 +62,9 @@ internal static class SchemaTableComparer
                 $"expected {column.Category}, database has {found}");
             yield break;
         }
+        if (IsNonUnicodeText(dbType, column, actual))
+            yield return new SchemaFinding(FindingSeverity.Warning, FindingKind.NonUnicodeString, table.PhysicalName, column.Name,
+                $"database has non-Unicode {found}; characters outside the collation's code page are lost, use nvarchar");
         if (!column.IsPrimaryKey && column.IsNullable != actual.IsNullable)
             yield return Error(FindingKind.NullabilityMismatch, table, column.Name,
                 $"expected {(column.IsNullable ? "nullable" : "not null")}, database is {(actual.IsNullable ? "nullable" : "not null")}");
@@ -70,6 +73,11 @@ internal static class SchemaTableComparer
             yield return Error(FindingKind.LengthMismatch, table, column.Name,
                 $"expected length {length}, database has {found}");
     }
+
+    private static bool IsNonUnicodeText(StruoDbType dbType, ExpectedColumn column, DbColumnInfo actual) =>
+        dbType == StruoDbType.SqlServer
+        && column.Category is ColumnCategory.String or ColumnCategory.LongText
+        && (actual.DataType ?? "").Trim().ToLowerInvariant() is "varchar" or "char" or "text";
 
     private static IEnumerable<SchemaFinding> CompareUniqueIndexes(
         ISqlSugarClient db, StruoDbType dbType, ExpectedTable table, string liveName)
