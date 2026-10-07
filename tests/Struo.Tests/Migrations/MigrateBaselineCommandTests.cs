@@ -1,3 +1,4 @@
+using Struo.Tests.Support.Seeding;
 using AwesomeAssertions;
 using FluentMigrator.Runner;
 using FluentMigrator.Runner.VersionTableInfo;

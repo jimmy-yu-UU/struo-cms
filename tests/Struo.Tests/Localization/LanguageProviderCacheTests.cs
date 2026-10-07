@@ -1,3 +1,4 @@
+using Struo.Tests.Support.Seeding;
 using System.Collections.Concurrent;
 using System.Reflection;
 using AwesomeAssertions;

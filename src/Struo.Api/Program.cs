@@ -16,6 +16,7 @@ using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Identity;
+using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Persistence;
 
 // A headless JSON API has no culture-formatted output of its own (outbound JSON is always
@@ -285,81 +286,25 @@ try
 
     using (var scope = app.Services.CreateScope())
     {
-        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var sp = scope.ServiceProvider;
+        var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
+        var host = new MigrationHost(
+            MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
+            sp.GetRequiredService<ILoggerFactory>());
 
-        // Snapshot existing tables BEFORE any schema step, so seeders can fire only for tables
-        // created during THIS startup (table-creation is the sole seeding trigger).
-        var existingBefore = DataSeeder.GetTableNames(db);
+        await StartupMigrationGate.RunAsync(
+            sp.GetRequiredService<ISqlSugarClient>(),
+            host,
+            dbOptions,
+            app.Environment.IsDevelopment(),
+            sp.GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>().CollectForInitTables(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
+            CancellationToken.None);
 
-        var dbOptions = scope.ServiceProvider
-            .GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
-
-        var entityTypes = scope.ServiceProvider
-            .GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>()
-            .CollectForInitTables()
-            .ToArray();
-
-        var schemaLogger = scope.ServiceProvider
-            .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.SchemaInit");
-
-        // ALL environments, ALL backends: create tables that do not exist yet, so an empty database
-        // bootstraps itself and DataSeeder can seed the tables created during THIS startup. Existing
-        // tables are never touched here — InitTables in its default mode would modify and DROP
-        // columns, so only entity types whose table is absent are handed to it.
-        DatabaseInitializer.CreateMissingTables(db, existingBefore, schemaLogger, entityTypes);
-
-        // Opt-in, Development only: full CodeFirst structural sync of EXISTING tables. Ignored with a
-        // warning elsewhere. Evolving existing tables outside dev goes through reviewed migrations.
-        if (dbOptions.AutoSyncSchema)
-            DatabaseInitializer.SyncSchema(db, app.Environment, schemaLogger, entityTypes);
-
-        // Reviewed *.sql schema migrations — ALTER-only by convention. Config-driven
-        // (Database:MigrationsPath), all environments, all backends. The template ships zero scripts.
-        // Runs AFTER table creation and BEFORE seeding.
-        var migrationsPath = dbOptions.MigrationsPath;
-        if (!string.IsNullOrWhiteSpace(migrationsPath))
-        {
-            var migrationLogger = scope.ServiceProvider
-                .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.MigrationRunner");
-            await MigrationRunner.ApplyAsync(db, migrationsPath, migrationLogger);
-        }
-
-        // Dev fail-fast: assert correctness-critical constraints exist after schema creation.
-        // Translation sidecars are derived from metadata (not hardcoded) so a fork's own sidecars are
-        // covered the same way core's `FileTranslation` is: table/column names are resolved the same
-        // way SqlSugar does, via EntityMaintenance, so they always match whatever InitTables/the
-        // migrations actually created.
-        if (app.Environment.IsDevelopment())
-        {
-            var metadataProvider = scope.ServiceProvider
-                .GetRequiredService<Struo.Application.Metadata.IMetadataProvider>();
-            var translationSidecars = metadataProvider.GetCollections()
-                .Where(c => c.Translation is not null)
-                .Select(c => c.Translation!)
-                .Select(t => new TranslationSidecarDescriptor(
-                    db.EntityMaintenance.GetTableName(t.TranslationEntityType),
-                    db.EntityMaintenance.GetDbColumnName(t.ForeignKeyProperty, t.TranslationEntityType),
-                    db.EntityMaintenance.GetDbColumnName(t.LocaleProperty, t.TranslationEntityType)))
-                .ToList();
-
-            await SchemaGuard.AssertCriticalConstraintsAsync(db, translationSidecars, default);
-        }
-
-        // Unified initial-data seeding — ALL environments. Each seeder fires only when its trigger
-        // table was created this run (see DataSeeder); pre-existing tables are left untouched.
-        var seedLogger = scope.ServiceProvider
-            .GetRequiredService<ILoggerFactory>().CreateLogger("Struo.DataSeeder");
-        var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
-        await DataSeeder.SeedAsync(
-            db,
-            existingBefore,
-            scope.ServiceProvider.GetRequiredService<IOptions<Struo.Application.Configuration.LocalizationOptions>>().Value,
-            hasher,
-            builder.Configuration["Auth:BootstrapAdmin:Email"],
-            builder.Configuration["Auth:BootstrapAdmin:Password"],
-            builder.Configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? [],
+        BootstrapAdminPasswordWarning.LogIfDefault(
             app.Environment.IsProduction(),
-            seedLogger);
+            builder.Configuration["Auth:BootstrapAdmin:Password"],
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }
 
     app.Run();

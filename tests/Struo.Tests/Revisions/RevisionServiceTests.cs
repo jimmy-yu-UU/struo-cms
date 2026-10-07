@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Revisions/RevisionServiceTests.cs
+using Struo.Tests.Support.Seeding;
 using System.Text.Json;
 using Struo.Application.Configuration;
 using Struo.Application.Query;

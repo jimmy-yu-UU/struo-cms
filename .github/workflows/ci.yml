@@ -86,8 +86,9 @@ jobs:
   # for pull requests from forks and for Dependabot as it does for a normal push.
   #
   # The API smoke test boots the image against SQLite rather than no database at
-  # all: Program.cs creates the schema at startup, so the API cannot come up
-  # without one. It then polls /health/ready rather than /health/live, because
+  # all: the migrations build the schema at startup
+  # (Database__MigrateOnStartup=true), so the API cannot come up without one.
+  # It then polls /health/ready rather than /health/live, because
   # /health/ready additionally exercises the database and cache readiness checks
   # - /health/live would pass even if those were broken.
   #
@@ -107,6 +108,7 @@ jobs:
           docker run --detach --name api --publish 8080:8080 \
             --env Database__DbType=Sqlite \
             --env 'Database__ConnectionString=Data Source=/tmp/struo-ci.db' \
+            --env Database__MigrateOnStartup=true \
             struo-api:ci
           for _ in $(seq 1 30); do
             if curl --fail --silent --show-error http://localhost:8080/health/ready; then exit 0; fi

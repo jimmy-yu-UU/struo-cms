@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/ItemServicePermissionTests.cs
+using Struo.Tests.Support.Seeding;
 using AwesomeAssertions;
 using Struo.Application.Configuration;
 using Struo.Application.Query;

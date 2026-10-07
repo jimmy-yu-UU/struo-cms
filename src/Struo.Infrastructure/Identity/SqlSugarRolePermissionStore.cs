@@ -5,6 +5,10 @@ namespace Struo.Infrastructure.Identity;
 
 public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermissionStore
 {
+    /// <summary>Name of the role that acts as the permission FLOOR for every caller (anonymous and
+    /// authenticated alike). The core seed migration creates it.</summary>
+    public const string PublicRoleName = "public";
+
     /// <remarks>
     /// The <c>public</c> role is the permission FLOOR for every caller, not a fallback for the
     /// role-less: this model has no deny semantics (<see cref="PermissionResolver"/> folds grants with
@@ -16,7 +20,7 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
         if (userId is null) return await ToDataAsync(await PublicRolesAsync(ct), ct);
 
         var roles = await db.Queryable<Role>()
-            .Where(r => r.Name == RbacSeeder.PublicRoleName ||
+            .Where(r => r.Name == PublicRoleName ||
                         SqlFunc.Subqueryable<UserRole>()
                             .Where(ur => ur.RoleId == r.Id && ur.UserId == userId.Value)
                             .Any())
@@ -35,14 +39,14 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
 
         var ids = roleIds.ToList();
         var roles = await db.Queryable<Role>()
-            .Where(r => r.Name == RbacSeeder.PublicRoleName || ids.Contains(r.Id))
+            .Where(r => r.Name == PublicRoleName || ids.Contains(r.Id))
             .ToListAsync(ct);
 
         return await ToDataAsync(roles.DistinctBy(r => r.Id).ToList(), ct);
     }
 
     private Task<List<Role>> PublicRolesAsync(CancellationToken ct) =>
-        db.Queryable<Role>().Where(r => r.Name == RbacSeeder.PublicRoleName).ToListAsync(ct);
+        db.Queryable<Role>().Where(r => r.Name == PublicRoleName).ToListAsync(ct);
 
     private async Task<RolePermissionData> ToDataAsync(List<Role> roles, CancellationToken ct)
     {

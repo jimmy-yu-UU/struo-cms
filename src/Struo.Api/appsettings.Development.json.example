@@ -9,15 +9,9 @@
     "DbType": "PostgreSQL",
     // Matches docker-compose.yml. Local development credentials only.
     "ConnectionString": "Host=localhost;Port=5432;Database=struo;Username=struo;Password=struo",
-    // Directory of reviewed *.sql migration scripts applied at startup, on ANY backend. Empty/absent
-    // = disabled (the default, and this example's setting). Creating missing tables happens in every
-    // environment regardless of this setting — it is not a dev-vs-prod distinction. Scripts here
-    // should only ALTER existing tables — creating tables is CodeFirst's job. See db/migrations/README.md.
-    "MigrationsPath": "",
-    // DEV ONLY. true = CodeFirst structurally syncs EXISTING tables against the entities, which can
-    // MODIFY and DROP columns. Ignored (with a warning) outside Development. Default false — see
-    // db/migrations/README.md for when auto-sync is unsafe.
-    "AutoSyncSchema": false
+    // true = apply pending migrations when the host starts. false (the default) = the host refuses
+    // to start until `dotnet run --project src/Struo.Api -- migrate` has run.
+    "MigrateOnStartup": false
   },
 
   // Uncomment to enable the Blog sample (see docs/guide/en/23-sample-walkthrough.md).

@@ -11,8 +11,8 @@ public sealed class DatabaseOptions
     public string ConnectionString { get; set; } = string.Empty;
 
     /// <summary>
-    /// Prepended to the table name of every framework-owned entity (<c>FrameworkEntityTypes.All</c>
-    /// and <c>SchemaMigration</c>); sample and fork entities are unaffected. Lower-case only: PostgreSQL
+    /// Prepended to the table name of every framework-owned entity (<c>FrameworkEntityTypes.All</c>) and
+    /// the migration version table; sample and fork entities are unaffected. Lower-case only: PostgreSQL
     /// folds unquoted identifiers and SQLite does not, and every table-name comparison in the
     /// infrastructure layer is case-insensitive. Sixteen characters keeps the longest core index
     /// name under PostgreSQL's 63-byte identifier limit. Empty string means no prefix.
@@ -22,27 +22,14 @@ public sealed class DatabaseOptions
     public string TablePrefix { get; set; } = "struo_";
 
     /// <summary>
-    /// Directory of reviewed <c>*.sql</c> migration scripts to apply at startup via
-    /// <c>MigrationRunner</c>. Null/empty (the default) disables the runner. Applies on <b>any</b>
-    /// configured backend — the scripts you place there are yours, and are as portable as you write
-    /// them. See <c>db/migrations/README.md</c>.
-    /// </summary>
-    public string? MigrationsPath { get; set; }
-
-    /// <summary>
     /// Seconds the <c>migrate</c> command waits for the migration lock before failing. Range 1-3600.
     /// </summary>
     [Range(1, 3600)]
     public int MigrationLockTimeoutSeconds { get; set; } = 60;
 
     /// <summary>
-    /// Allows SqlSugar CodeFirst to structurally sync <b>existing</b> tables (add / modify /
-    /// <b>drop</b> columns) against the entity classes. <b>Honoured in Development only</b>; setting it
-    /// in any other environment is ignored with a warning. Default <c>false</c>.
-    ///
-    /// <para>
-    /// Creating tables that do not yet exist is unconditional and unaffected by this flag.
-    /// </para>
+    /// Applies pending migrations at startup, under the migration lock, before the host starts serving.
+    /// Default <c>false</c>: the host then refuses to start until the <c>migrate</c> command has run.
     /// </summary>
-    public bool AutoSyncSchema { get; set; } = false;
+    public bool MigrateOnStartup { get; set; } = false;
 }

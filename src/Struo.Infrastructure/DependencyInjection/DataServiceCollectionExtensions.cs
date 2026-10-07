@@ -27,8 +27,8 @@ public static class DataServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
-        // Seed source for the Language table (LanguageSeeder). Validated at boot alongside the other
-        // options so a misconfigured section fails the host, not the first seeding run.
+        // Seed source for the Language table (the core seed migration). Validated at boot alongside the other
+        // options so a misconfigured section fails the host, not the first migration run.
         services.AddOptions<LocalizationOptions>()
             .BindConfiguration(LocalizationOptions.SectionName)
             .ValidateOnStart();

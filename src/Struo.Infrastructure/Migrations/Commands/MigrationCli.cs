@@ -77,12 +77,9 @@ public static class MigrationCli
 
         try
         {
-            var db = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
             var host = new MigrationHost(
-                OptionsOverride(new MigrationHostOptions(
-                    db.DbType, db.ConnectionString, db.TablePrefix,
-                    services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)
-                    { Seed = command is "migrate" or "migrate:preview" ? CoreSeedData.FromServices(services) : null }),
+                OptionsOverride(MigrationHostOptions.FromServices(
+                    services, includeSeed: command is "migrate" or "migrate:preview")),
                 services.GetRequiredService<ILoggerFactory>());
             switch (command)
             {

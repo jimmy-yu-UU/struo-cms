@@ -7,8 +7,8 @@ public sealed class LanguageSeedEntry
 }
 
 /// <summary>
-/// Seed source for the <c>Language</c> table, read by <c>LanguageSeeder</c> only when that table is
-/// created during a startup. Afterwards the table is authoritative and is edited in the admin UI
+/// Seed source for the <c>Language</c> table, read by the core seed migration when it runs.
+/// Afterwards the table is authoritative and is edited in the admin UI
 /// (System &gt; Language); this section is not consulted again. Bound from <c>Localization</c>.
 /// An empty or absent <c>Languages</c> list means the shipped default.
 /// </summary>

@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Files/MediaFolderTests.cs
+using Struo.Tests.Support.Seeding;
 using System.Text.Json;
 using AwesomeAssertions;
 using Struo.Application.Configuration;

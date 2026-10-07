@@ -14,8 +14,8 @@ public sealed class FileTranslation
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
     // FileId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
     // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
-    // composite unique (fileid, locale) to the generated column model at CodeFirst time.
-    // SchemaGuard.AssertCriticalConstraintsAsync re-checks the resulting index in Development.
+    // composite unique (fileid, locale) to the entity schema that make:migration reads and
+    // SchemaChecker compares against the database.
     public Guid FileId { get; set; }
     public string Locale { get; set; } = "";
 

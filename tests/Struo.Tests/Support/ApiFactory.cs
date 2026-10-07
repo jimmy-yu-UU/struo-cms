@@ -36,6 +36,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = _db.ConnectionString,
+                // The host builds its schema and seed data from the migrations; the startup gate then
+                // checks the result against the entity model (Development).
+                ["Database:MigrateOnStartup"] = "true",
                 // Struo:ContentAssemblies cannot be set here - it is read before Build(). See Support/ContentAssemblyEnvBootstrap.cs.
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,

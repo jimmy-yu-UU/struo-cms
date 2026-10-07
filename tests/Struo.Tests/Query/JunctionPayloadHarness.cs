@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/JunctionPayloadHarness.cs
+using Struo.Tests.Support.Seeding;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;

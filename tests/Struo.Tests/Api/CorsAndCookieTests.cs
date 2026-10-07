@@ -34,6 +34,7 @@ public class CorsAndCookieTests
                 {
                     ["Database:DbType"] = "Sqlite",
                     ["Database:ConnectionString"] = _db.ConnectionString,
+                    ["Database:MigrateOnStartup"] = "true",
                     // Struo:ContentAssemblies cannot be set here - it is read before Build(). See Support/ContentAssemblyEnvBootstrap.cs.
                     ["Struo:Cors:AllowedOrigins:0"] = "https://admin.example.test"
                 }));

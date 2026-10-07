@@ -111,7 +111,7 @@ public sealed class IndexParityTests
     [Fact]
     public void No_core_entity_declares_a_unique_group_by_column_attribute()
     {
-        foreach (var type in FrameworkEntityTypes.All.Append(typeof(SchemaMigration)))
+        foreach (var type in FrameworkEntityTypes.All)
             foreach (var prop in type.GetProperties())
             {
                 var col = prop.GetCustomAttribute<SugarColumn>();

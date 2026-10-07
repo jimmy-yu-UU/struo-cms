@@ -3,8 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Application.Abstractions;
+using Struo.Application.Configuration;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Files;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
@@ -36,7 +38,7 @@ public class InfrastructureRegistrationTests
     }
 
     [Fact]
-    public async Task Container_built_client_derives_the_file_translations_unique_index()
+    public void Container_built_client_derives_the_file_translations_unique_index()
     {
         using var db = new SqliteTestDatabase();
         var config = new ConfigurationBuilder()
@@ -57,11 +59,12 @@ public class InfrastructureRegistrationTests
 
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(FileTranslation));
 
-        var descriptor = new TranslationSidecarDescriptor(
-            client.EntityMaintenance.GetTableName<FileTranslation>(),
-            client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId)),
-            client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.Locale)));
-        var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [descriptor], default);
-        await act.Should().NotThrowAsync();
+        var table = client.EntityMaintenance.GetTableName<FileTranslation>();
+        IndexCatalog.Read(client, StruoDbType.Sqlite, table).Should().Contain(i => i.IsUnique
+            && i.Columns.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(new[]
+            {
+                client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId)),
+                client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.Locale)),
+            }.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase));
     }
 }

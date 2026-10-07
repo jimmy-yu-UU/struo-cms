@@ -1,18 +1,14 @@
-// src/Struo.Infrastructure/Identity/RbacSeeder.cs
 using SqlSugar;
+using Struo.Infrastructure.Identity;
 
-namespace Struo.Infrastructure.Identity;
+namespace Struo.Tests.Support.Seeding;
 
-/// <summary>Idempotent. Invoked by <see cref="Persistence.DataSeeder"/> only when the
-/// <c>Role</c> table is created during startup (all environments). Seeds the <c>admin</c> (super)
-/// and <c>public</c> roles, assigns the bootstrap admin user to <c>admin</c>, and grants the
-/// <c>public</c> role read on each configured collection. The collection list is config (never a
-/// <c>samples/*</c> reference).</summary>
+/// <summary>Test setup, idempotent. Seeds the <c>admin</c> (super) and <c>public</c> roles, assigns the
+/// bootstrap admin user to <c>admin</c>, and grants the <c>public</c> role read on each given
+/// collection.</summary>
 public static class RbacSeeder
 {
-    /// <summary>Name of the role that acts as the permission FLOOR for every caller (anonymous and
-    /// authenticated alike). Seeded here, consumed by <see cref="SqlSugarRolePermissionStore"/>.</summary>
-    public const string PublicRoleName = "public";
+    public const string PublicRoleName = SqlSugarRolePermissionStore.PublicRoleName;
 
     public static async Task SeedAsync(
         ISqlSugarClient db, string? bootstrapAdminEmail,

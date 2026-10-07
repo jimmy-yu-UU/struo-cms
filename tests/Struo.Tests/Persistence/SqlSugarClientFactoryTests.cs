@@ -42,7 +42,6 @@ public class SqlSugarClientFactoryTests
         var client = NewClient(db, "struo_");
 
         Assert.Equal("struo_users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
-        Assert.Equal("struo_schema_migrations", client.EntityMaintenance.GetTableName<SchemaMigration>());
         Assert.Equal("articles", client.EntityMaintenance.GetTableName<Struo.Sample.Blog.Article>());
     }
 
@@ -53,7 +52,6 @@ public class SqlSugarClientFactoryTests
         var client = NewClient(db, "");
 
         Assert.Equal("users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
-        Assert.Equal("schema_migrations", client.EntityMaintenance.GetTableName<SchemaMigration>());
     }
 
     // SqlSugar caches EntityInfo per process, keyed by ConnectionConfig.ConfigId. Two clients with

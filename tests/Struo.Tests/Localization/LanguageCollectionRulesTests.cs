@@ -1,3 +1,4 @@
+using Struo.Tests.Support.Seeding;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;

@@ -112,29 +112,37 @@ public sealed class OptionsValidationTests
     }
 
     [Fact]
-    public void AutoSyncSchema_defaults_to_false()
+    public void MigrateOnStartup_defaults_to_false()
     {
-        // 預設必須是安全側：不開啟就不會有任何自動結構同步。
+        // 預設必須是安全側：不明確開啟，啟動時就不會套用任何 migration。
         new Struo.Application.Configuration.DatabaseOptions()
-            .AutoSyncSchema.Should().BeFalse();
+            .MigrateOnStartup.Should().BeFalse();
     }
 
     [Fact]
-    public void AutoSyncSchema_binds_true_from_configuration()
+    public void MigrateOnStartup_binds_true_from_configuration()
     {
-        // 這個鍵是 Production 上唯一能觸發破壞性結構同步的開關（見 Program.cs 裡 `if (dbOptions.AutoSyncSchema)` 那條分支）。若某次改名或改
-        // section 讓它靜默失聯，行為看起來完全正常（永遠不同步），沒有任何東西會發現它已是死碼。
+        // 這個鍵是啟動時唯一會替你執行 migration 的開關。若某次改名或改 section 讓它靜默失聯，
+        // 行為看起來完全正常（永遠只檢查、不套用），沒有任何東西會發現它已是死碼。
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:AutoSyncSchema"] = "true",
+                [$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:MigrateOnStartup"] = "true",
             })
             .Build();
 
         var options = new Struo.Application.Configuration.DatabaseOptions();
         config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
 
-        options.AutoSyncSchema.Should().BeTrue();
+        options.MigrateOnStartup.Should().BeTrue();
+    }
+
+    [Fact]
+    public void The_removed_schema_options_no_longer_exist()
+    {
+        var properties = typeof(Struo.Application.Configuration.DatabaseOptions).GetProperties().Select(p => p.Name);
+
+        properties.Should().NotContain(["AutoSyncSchema", "MigrationsPath"]);
     }
 
     [Theory]
@@ -164,24 +172,27 @@ public sealed class OptionsValidationTests
     }
 
     [Fact]
-    public void Shipped_appsettings_disables_AutoSyncSchema()
+    public void Shipped_appsettings_leaves_MigrateOnStartup_off_and_drops_the_removed_keys()
     {
         // C# 端預設安全不代表出貨檔安全——模板使用者拿到的是這個 json，不是 new DatabaseOptions()。
         // 用 ConfigurationBuilder 讀取：這是 Program.cs 實際載入設定的同一條路徑，且會走到
-        // 與 AutoSyncSchema_binds_true_from_configuration 相同的 ConfigurationBinder，兩者一起
+        // 與 MigrateOnStartup_binds_true_from_configuration 相同的 ConfigurationBinder，兩者一起
         // 覆蓋真正可能壞掉的機制。
         var path = Path.Combine(RepoRoot.Find(), "src", "Struo.Api", "appsettings.json");
         File.Exists(path).Should().BeTrue($"出貨的 appsettings 必須存在於 '{path}'");
 
         var config = new ConfigurationBuilder().AddJsonFile(path, optional: false).Build();
+        var section = Struo.Application.Configuration.DatabaseOptions.SectionName;
 
         // 先確認鍵存在：鍵被整段刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈。
-        config[$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:AutoSyncSchema"].Should().NotBeNull(
+        config[$"{section}:MigrateOnStartup"].Should().NotBeNull(
             "出貨檔必須明寫這個鍵，讓讀者看得到預設值");
+        config[$"{section}:AutoSyncSchema"].Should().BeNull("the option does not exist");
+        config[$"{section}:MigrationsPath"].Should().BeNull("the option does not exist");
 
         var options = new Struo.Application.Configuration.DatabaseOptions();
-        config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
-        options.AutoSyncSchema.Should().BeFalse("出貨預設必須是安全側");
+        config.GetSection(section).Bind(options);
+        options.MigrateOnStartup.Should().BeFalse("出貨預設必須是安全側");
     }
 
     [Fact]
