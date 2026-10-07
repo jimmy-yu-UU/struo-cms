@@ -24,7 +24,8 @@ public static class MigrationCli
         {
             if (!IsConfigKey(args[i])) { commandArgs.Add(args[i]); continue; }
             hostArgs.Add(args[i]);
-            if (!args[i].Contains('=') && i + 1 < args.Length) hostArgs.Add(args[++i]);
+            if (!args[i].Contains('=') && i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                hostArgs.Add(args[++i]);
         }
         return new MigrationCliInvocation(args[0], commandArgs, [.. hostArgs]);
     }
@@ -32,8 +33,14 @@ public static class MigrationCli
     private static bool IsCommand(string arg) =>
         arg == "migrate" || arg.StartsWith("migrate:", StringComparison.Ordinal) || arg == "make:migration";
 
-    private static bool IsConfigKey(string arg) =>
-        arg.StartsWith("--", StringComparison.Ordinal) && arg.Split('=', 2)[0].Contains(':');
+    private static readonly string[] HostSwitches = ["--environment", "--contentRoot", "--applicationName", "--urls"];
+
+    private static bool IsConfigKey(string arg)
+    {
+        if (!arg.StartsWith("--", StringComparison.Ordinal)) return false;
+        var key = arg.Split('=', 2)[0];
+        return key.Contains(':') || HostSwitches.Contains(key, StringComparer.OrdinalIgnoreCase);
+    }
 
     public static async Task<int> RunAsync(
         MigrationCliInvocation invocation, IServiceProvider services,
@@ -81,6 +88,9 @@ public static class MigrationCli
                     var pending = host.Preview(stdout);
                     await stdout.WriteLineAsync($"-- {pending.Count} migration(s) pending");
                     break;
+                default:
+                    await stderr.WriteLineAsync($"Command '{command}' is not implemented.");
+                    return Usage;
             }
             return Success;
         }

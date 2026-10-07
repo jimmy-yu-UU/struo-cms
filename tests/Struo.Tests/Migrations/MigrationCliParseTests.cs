@@ -29,6 +29,46 @@ public sealed class MigrationCliParseTests
         MigrationCli.Parse(["--urls=http://localhost:5221"]).Should()
             .BeEquivalentTo(new { Command = (string?)null, HostArgs = new[] { "--urls=http://localhost:5221" } });
 
+    [Fact]
+    public void Web_host_args_have_no_command_args() =>
+        MigrationCli.Parse(["--urls=http://localhost:5221"]).CommandArgs.Should().BeEmpty();
+
+    [Fact]
+    public void Command_must_be_migrate_or_a_migrate_subcommand() =>
+        MigrationCli.Parse(["migrateX"]).Command.Should().BeNull();
+
+    [Fact]
+    public void Standard_host_switch_with_a_separate_value_is_a_host_arg()
+    {
+        var inv = MigrationCli.Parse(["migrate", "--environment", "Production"]);
+        inv.HostArgs.Should().Equal("--environment", "Production");
+        inv.CommandArgs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Standard_host_switch_with_equals_is_a_host_arg()
+    {
+        var inv = MigrationCli.Parse(["make:migration", "X", "--urls=http://x", "--output", "d"]);
+        inv.HostArgs.Should().Equal("--urls=http://x");
+        inv.CommandArgs.Should().Equal("X", "--output", "d");
+    }
+
+    [Fact]
+    public void Host_key_followed_by_another_option_has_no_value()
+    {
+        var inv = MigrationCli.Parse(["migrate:check", "--Database:DbType", "--Database:TablePrefix=x"]);
+        inv.HostArgs.Should().Equal("--Database:DbType", "--Database:TablePrefix=x");
+        inv.CommandArgs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Host_key_as_the_last_token_has_no_value()
+    {
+        var inv = MigrationCli.Parse(["migrate:check", "--Database:DbType"]);
+        inv.HostArgs.Should().Equal("--Database:DbType");
+        inv.CommandArgs.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("migrate")]
     [InlineData("migrate:check")]
