@@ -1,4 +1,6 @@
 using AwesomeAssertions;
+using FluentMigrator.Runner;
+using FluentMigrator.Runner.VersionTableInfo;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -156,6 +158,50 @@ public sealed class MigrateBaselineCommandTests : IDisposable
 
         result.Code.Should().Be(MigrationCli.Usage);
     }
+
+    [Fact]
+    public async Task Baseline_records_content_assembly_migrations_alongside_the_core_ones()
+    {
+        var prefix = NewPrefix();
+        await SimulateV08(Client(StruoDbType.Sqlite, _file.ConnectionString, prefix));
+        using var sp = new ServiceCollection()
+            .AddSingleton(Options.Create(new DatabaseOptions
+                { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = prefix }))
+            .AddSingleton(new ScannedAssemblies([typeof(StruoMigration).Assembly, typeof(MigrateBaselineCommandTests).Assembly]))
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .BuildServiceProvider();
+
+        var result = await Run(sp, "migrate:baseline");
+
+        result.Code.Should().Be(MigrationCli.Success, result.Err);
+        result.Out.Should().Contain("202610090000").And.Contain("3 migration(s) recorded");
+        (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
+    }
+
+    [Fact]
+    public async Task A_failure_while_recording_leaves_no_version_rows_so_baseline_can_be_retried()
+    {
+        var prefix = NewPrefix();
+        await SimulateV08(Client(StruoDbType.Sqlite, _file.ConnectionString, prefix));
+        var failing = new MigrationHost(HostOptions(prefix, failOnSecondRecord: true), NullLoggerFactory.Instance);
+
+        var act = () => failing.BaselineAsync(default);
+
+        await act.Should().ThrowAsync<MigrationFailedException>().WithMessage("*injected*");
+        var healthy = new MigrationHost(HostOptions(prefix), NullLoggerFactory.Instance);
+        healthy.GetStatus().Should().OnlyContain(m => m.State == MigrationState.Pending);
+        (await healthy.BaselineAsync(default)).Should().HaveCount(2);
+    }
+
+    private MigrationHostOptions HostOptions(string prefix, bool failOnSecondRecord = false) =>
+        new(StruoDbType.Sqlite, _file.ConnectionString, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 5)
+        {
+            NamespaceFilter = "Struo.Infrastructure.Migrations.Core",
+            ConfigureRunnerServices = failOnSecondRecord
+                ? services => services.AddScoped<IVersionLoader>(sp =>
+                    new FailingVersionLoader(ActivatorUtilities.CreateInstance<VersionLoader>(sp), failAtCall: 2))
+                : null,
+        };
 
     [Fact]
     public async Task Baseline_on_PostgreSQL_joins_a_v08_database()

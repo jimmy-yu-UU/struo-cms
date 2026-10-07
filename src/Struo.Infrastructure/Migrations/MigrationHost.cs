@@ -1,3 +1,5 @@
+using FluentMigrator;
+using FluentMigrator.Infrastructure;
 using FluentMigrator.Runner;
 using FluentMigrator.Runner.Exceptions;
 using FluentMigrator.Runner.Initialization;
@@ -21,9 +23,6 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     {
         ct.ThrowIfCancellationRequested();
         var logger = loggerFactory.CreateLogger<MigrationHost>();
-        if (options.DbType == StruoDbType.Oracle)
-            logger.LogWarning(
-                "Oracle takes no migration lock; running migrate concurrently is unsupported.");
         await using var gate = await AcquireLockAsync(logger, ct);
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
@@ -59,14 +58,31 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             var loader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
             loader.LoadVersionInfo();
             var known = scope.ServiceProvider.GetRequiredService<IMigrationInformationLoader>().LoadMigrations();
-            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
-                loader.UpdateVersionInfo(version, migration.Description ?? "");
+            RecordAll(scope.ServiceProvider.GetRequiredService<IMigrationProcessor>(), loader, known);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             throw new MigrationFailedException($"Baseline failed: {Innermost(ex).Message}", ex);
         }
         return GetStatus().Where(m => m.State == MigrationState.Applied).ToList();
+    }
+
+    // The version loader writes through the scope's processor, so one transaction makes the rows all-or-nothing.
+    private static void RecordAll(
+        IMigrationProcessor processor, IVersionLoader loader, IDictionary<long, IMigrationInfo> known)
+    {
+        processor.BeginTransaction();
+        try
+        {
+            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
+                loader.UpdateVersionInfo(version, migration.Description ?? "");
+            processor.CommitTransaction();
+        }
+        catch
+        {
+            processor.RollbackTransaction();
+            throw;
+        }
     }
 
     private void EnsureBaselineable()
@@ -96,6 +112,9 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
 
     private async Task<IAsyncDisposable> AcquireLockAsync(ILogger logger, CancellationToken ct)
     {
+        if (options.DbType == StruoDbType.Oracle)
+            logger.LogWarning(
+                "Oracle takes no migration lock; running migrate concurrently is unsupported.");
         try
         {
             return await MigrationLock.AcquireAsync(
@@ -190,6 +209,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             .Configure<TypeFilterOptions>(f => { f.Namespace = options.NamespaceFilter; f.NestedNamespaces = true; })
             .AddLogging();
         services.Replace(ServiceDescriptor.Singleton(logging));
+        options.ConfigureRunnerServices?.Invoke(services);
         return services.BuildServiceProvider(validateScopes: false);
     }
 
