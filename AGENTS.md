@@ -243,7 +243,10 @@ result — see `schema/README.md` for the full contract, including the PowerShel
 **Any change to DB behavior** (a migration, a `SqlSugarClientFactory` column-mapping change, a
 query-building change) **should be verified against a live instance of whichever database this
 deployment is actually configured for** — SQLite passing is not evidence of correctness on any other
-backend, and the SQLite suite is a development convenience, not the portability guarantee.
+backend, and the SQLite suite is a development convenience, not the portability guarantee. A project
+built on this template verifies against the database(s) it actually uses; a change to the original
+template project itself is verified against every backend available locally (PostgreSQL, SQL Server,
+MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
 - **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
   recommended for every DB-behavior change, since it is the one backend with an existing suite
@@ -269,11 +272,14 @@ passes silently on SQLite, whose loose typing accepts the comparison without com
 `Testing:PostgresConnection` to a disposable database whose name contains `test` — the test resolves
 it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
-if the env var is unset — or verify directly against a real PostgreSQL instance. The SQL Server
-migration tests resolve `STRUO_TEST_SQLSERVER_CONNECTION`, then `Testing:SqlServerConnection`, apply
-the same `test`-in-the-name guard, and return early (a pass in about a millisecond) when it is unset,
-so judge them by per-test duration. The database must exist beforehand: SqlSugar's `CreateDatabase`
-cannot create a SQL Server database whose name contains a hyphen.
+if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
+subsystem's live tests also run on SQL Server, MySQL and MariaDB (MariaDB on the `MySql` dialect). They
+resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
+`STRUO_TEST_MYSQL_CONNECTION` / `Testing:MySqlConnection` and `STRUO_TEST_MARIADB_CONNECTION` /
+`Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
+about a millisecond) when a connection is unset, so judge them by per-test duration. The database
+must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
+contains a hyphen. Outside the migration subsystem, only PostgreSQL has a live suite.
 
 **`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a

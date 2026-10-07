@@ -15,9 +15,12 @@ downstream forks.
   package hasn't picked up yet. Install via the package manager itself (`dotnet add package` for
   NuGet, `pnpm add <pkg>` for the frontend) and let it write the version string. NuGet versions are
   centralized in `Directory.Packages.props`.
-- **Database behavior is verified against a live instance of the backend you are actually configured
-  for, not just the SQLite test suite.** See `AGENTS.md`, "Verification", for the per-backend rule, the
-  documented divergences, and how to configure a test connection.
+- **Database behavior is verified against live databases, not just the SQLite test suite.** A change
+  to this template itself is verified against every backend available locally: PostgreSQL, SQL Server,
+  MySQL, MariaDB and SQLite, plus Oracle when an instance exists. The migration subsystem's live tests
+  already run on the first four; the rest of the application is live-tested on PostgreSQL only. See
+  `AGENTS.md`, "Verification", for the per-backend rule, the documented divergences, and how to
+  configure a test connection.
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.
 - **When unsure about an architectural decision, stop and ask** rather than guessing.
 - **Comments and docs state the current behavior only.** `StaleNarrativeConventionTests` fails
