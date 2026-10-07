@@ -61,6 +61,17 @@ public sealed class MigrationCliTests : IDisposable
         err.Should().Contain("migrate:status");
     }
 
+    [Theory]
+    [InlineData("migrate")]
+    [InlineData("migrate:status")]
+    [InlineData("migrate:preview")]
+    public async Task Command_arguments_on_a_migrate_command_are_a_usage_error(string command)
+    {
+        var (code, _, err) = await Run(Services(), command, "stray");
+        code.Should().Be(MigrationCli.Usage);
+        err.Should().Contain($"Unexpected argument 'stray' for {command}.");
+    }
+
     [Fact]
     public async Task Status_then_migrate_then_status()
     {
