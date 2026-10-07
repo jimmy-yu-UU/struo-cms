@@ -50,19 +50,44 @@ internal static class MakeMigrationCommand
         }
 
         var path = Path.Combine(parsed.Output, MigrationGenerator.FileName(spec));
-        try
+        var failure = await WriteNewFileAsync(path, source);
+        if (failure is not null)
         {
-            await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
-            await stream.WriteAsync(new UTF8Encoding(false).GetBytes(source));
-        }
-        catch (IOException) when (File.Exists(path))
-        {
-            await stderr.WriteLineAsync($"File already exists: {path}");
+            await stderr.WriteLineAsync(failure);
             return MigrationCli.Failure;
         }
 
         await stdout.WriteLineAsync($"Created {path}");
         return MigrationCli.Success;
+    }
+
+    /// <summary>Creates the file without overwriting; returns the one-line failure message, or null on success.</summary>
+    private static async Task<string?> WriteNewFileAsync(string path, string source)
+    {
+        FileStream stream;
+        try { stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write); }
+        catch (IOException) when (File.Exists(path)) { return $"File already exists: {path}"; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"Could not write {path}: {ex.Message}";
+        }
+
+        try
+        {
+            await using (stream) await stream.WriteAsync(new UTF8Encoding(false).GetBytes(source));
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            TryDelete(path);
+            return $"Could not write {path}: {ex.Message}";
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* nothing more can be done */ }
     }
 
     private static async Task<int> UsageError(TextWriter stderr, string message)
@@ -89,8 +114,8 @@ internal static class MakeMigrationCommand
             var parts = arg.Split('=', 2);
             if (!Options.Contains(parts[0])) return (null, new Failed($"Unknown option '{parts[0]}'."));
             string value;
-            if (parts.Length == 2) value = parts[1];
-            else if (i + 1 < args.Count && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) value = args[++i];
+            if (parts.Length == 2 && parts[1].Length > 0) value = parts[1];
+            else if (parts.Length == 1 && i + 1 < args.Count && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) value = args[++i];
             else return (null, new Failed($"Option '{parts[0]}' needs a value."));
             if (!values.TryAdd(parts[0], value)) return (null, new Failed($"Option '{parts[0]}' was given more than once."));
         }

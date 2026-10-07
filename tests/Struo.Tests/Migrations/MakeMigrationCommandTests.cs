@@ -24,8 +24,11 @@ namespace Struo.Tests.Migrations
         public void Dispose()
         {
             MigrationCli.Clock = TimeProvider.System;
+            foreach (var sp in _providers) sp.Dispose();
             Directory.Delete(_dir, true);
         }
+
+        private readonly List<ServiceProvider> _providers = [];
 
         private sealed class FakeClock(DateTimeOffset now) : TimeProvider
         {
@@ -38,19 +41,25 @@ namespace Struo.Tests.Migrations
         }
 
         // A unique table prefix: SqlSugar caches entity info per prefix for the whole process.
-        private static ServiceProvider Services(params Type[] types) =>
+        private ServiceProvider Services(params Type[] types) => Track(
             new ServiceCollection()
                 .AddSingleton<IEntityTypeCollector>(new StubCollector(types))
                 .AddSingleton(Options.Create(new DatabaseOptions
                     { DbType = StruoDbType.Sqlite, ConnectionString = "Data Source=:memory:", TablePrefix = "mkmig_" }))
                 .AddScoped<ISqlSugarClient>(sp => SqlSugarClientFactory.Create(
                     sp.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
-                .BuildServiceProvider();
+                .BuildServiceProvider());
 
-        private static ServiceProvider DefaultServices() =>
+        private ServiceProvider Track(ServiceProvider sp)
+        {
+            _providers.Add(sp);
+            return sp;
+        }
+
+        private ServiceProvider DefaultServices() =>
             Services(typeof(SchemaProbe), typeof(Revision));
 
-        private static async Task<(int Code, string Out, string Err)> Run(IServiceProvider sp, params string[] args)
+        private async Task<(int Code, string Out, string Err)> Run(IServiceProvider sp, params string[] args)
         {
             var (o, e) = (new StringWriter(), new StringWriter());
             var code = await MakeMigrationCommand.RunAsync(args, sp, o, e, Clock);
@@ -120,9 +129,12 @@ namespace Struo.Tests.Migrations
         {
             var sp = Services(typeof(Schema.B.Widget), typeof(Schema.A.Widget));
 
-            var (code, _, err) = await Run(sp, "CreateW", "--entity", "Widget", "--output", _dir);
+            var (code, stdout, err) = await Run(sp, "CreateW", "--entity", "Widget", "--output", _dir);
 
             code.Should().Be(2);
+            stdout.Should().BeEmpty();
+            err.Should().Contain("make:migration <Name>");
+            Directory.GetFiles(_dir).Should().BeEmpty();
             var a = err.IndexOf("Struo.Tests.Migrations.Schema.A.Widget", StringComparison.Ordinal);
             var b = err.IndexOf("Struo.Tests.Migrations.Schema.B.Widget", StringComparison.Ordinal);
             a.Should().BeGreaterThan(-1);
@@ -189,6 +201,15 @@ namespace Struo.Tests.Migrations
         }
 
         [Fact]
+        public async Task An_empty_option_value_is_a_missing_value()
+        {
+            var (code, _, err) = await Run(DefaultServices(), "CreateX", "--output=");
+
+            code.Should().Be(2);
+            err.Should().Contain("Option '--output' needs a value.");
+        }
+
+        [Fact]
         public async Task An_existing_file_is_not_overwritten()
         {
             var path = Path_("202610070304_CreateThing.cs");
@@ -200,6 +221,21 @@ namespace Struo.Tests.Migrations
             stdout.Should().BeEmpty();
             err.Trim().Should().Be($"File already exists: {path}");
             (await File.ReadAllTextAsync(path)).Should().Be("keep me");
+        }
+
+        [Fact]
+        public async Task A_target_that_cannot_be_opened_for_writing_is_one_line()
+        {
+            var path = Path_("202610070304_CreateThing.cs");
+            Directory.CreateDirectory(path);
+
+            var (code, stdout, err) = await Run(DefaultServices(), "CreateThing", "--output", _dir);
+
+            code.Should().Be(1);
+            stdout.Should().BeEmpty();
+            err.TrimEnd().Should().StartWith($"Could not write {path}: ").And.NotContain("   at ");
+            err.TrimEnd().Split('\n').Should().HaveCount(1);
+            Directory.Exists(path).Should().BeTrue();
         }
 
         [Fact]
