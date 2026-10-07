@@ -135,7 +135,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]` writes a new migration
   class; with `--entity` it holds a `Create.Table` built from that entity's metadata. It never
   overwrites a file. `migrate:check` compares the live schema with entity metadata, writes nothing and
-  exits 1 on any error. A fork calls `SchemaChecker.Check` from its own tests and asserts no errors.
+  exits 1 on any error. A fork calls `SchemaChecker.Check` from its own tests and asserts no errors;
+  it needs the application's DI-configured `ISqlSugarClient`, which supplies the table prefix and the
+  translation-sidecar policy.
   On Oracle, `migrate:check` skips the type and length checks with one warning. Application queries
   and writes stay on SqlSugar. The core ships no migrations; startup still applies `db/migrations/`
   scripts through `MigrationRunner` and creates tables through CodeFirst.
