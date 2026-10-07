@@ -8,11 +8,20 @@ internal static class DbTypeCategories
 {
     private const int SqlServerMax = -1;
 
-    public static bool Matches(StruoDbType db, ColumnCategory expected, DbColumnInfo actual) =>
-        expected == ColumnCategory.Other || Of(db, actual).Contains(expected);
+    /// <summary>False for a backend whose live type names are not mapped (Oracle); its types are not compared.</summary>
+    public static bool TypesSupported(StruoDbType db) => db != StruoDbType.Oracle;
+
+    // An expected String is also satisfied by a long-text type, which is wider.
+    public static bool Matches(StruoDbType db, ColumnCategory expected, DbColumnInfo actual)
+    {
+        if (expected == ColumnCategory.Other) return true;
+        var live = Of(db, actual);
+        return live.Contains(expected) || (expected == ColumnCategory.String && live.Contains(ColumnCategory.LongText));
+    }
 
     public static bool LengthMatches(StruoDbType db, int expected, DbColumnInfo actual) =>
-        actual.Length <= 0 || actual.Length == expected || (db == StruoDbType.SqlServer && actual.Length == SqlServerMax);
+        !Of(db, actual).Contains(ColumnCategory.String)
+        || actual.Length <= 0 || actual.Length == expected || (db == StruoDbType.SqlServer && actual.Length == SqlServerMax);
 
     private static ColumnCategory[] Of(StruoDbType db, DbColumnInfo actual)
     {
@@ -30,14 +39,14 @@ internal static class DbTypeCategories
     private static ColumnCategory[] Postgres(string type) => type switch
     {
         "varchar" or "character varying" or "bpchar" or "character" or "char" => [ColumnCategory.String],
-        "text" => [ColumnCategory.LongText],
+        "text" or "json" or "jsonb" => [ColumnCategory.LongText],
         "int2" or "int4" or "smallint" or "integer" => [ColumnCategory.Integer],
         "int8" or "bigint" => [ColumnCategory.BigInteger],
         "numeric" or "decimal" => [ColumnCategory.Decimal],
         "float4" or "float8" or "real" or "double precision" => [ColumnCategory.Double],
         "bool" or "boolean" => [ColumnCategory.Boolean],
         "uuid" => [ColumnCategory.Guid],
-        "timestamp" or "timestamp without time zone" => [ColumnCategory.DateTime],
+        "timestamp" or "timestamp without time zone" or "date" => [ColumnCategory.DateTime],
         "timestamptz" or "timestamp with time zone" => [ColumnCategory.DateTimeWithTimeZone],
         "bytea" => [ColumnCategory.Binary],
         _ => [],
@@ -54,7 +63,7 @@ internal static class DbTypeCategories
         "float" or "real" => [ColumnCategory.Double],
         "bit" => [ColumnCategory.Boolean],
         "uniqueidentifier" => [ColumnCategory.Guid],
-        "datetime" or "datetime2" => [ColumnCategory.DateTime],
+        "datetime" or "datetime2" or "date" => [ColumnCategory.DateTime],
         "datetimeoffset" => [ColumnCategory.DateTimeWithTimeZone],
         "varbinary" or "binary" or "image" => [ColumnCategory.Binary],
         _ => [],
@@ -63,7 +72,7 @@ internal static class DbTypeCategories
     private static ColumnCategory[] MySql(string type, int length) => type switch
     {
         "varchar" or "char" => length == 36 ? [ColumnCategory.String, ColumnCategory.Guid] : [ColumnCategory.String],
-        "longtext" or "mediumtext" or "text" => [ColumnCategory.LongText],
+        "longtext" or "mediumtext" or "text" or "json" => [ColumnCategory.LongText],
         "tinyint" => length == 1 ? [ColumnCategory.Boolean] : [ColumnCategory.Integer],
         "int" or "smallint" or "mediumint" => [ColumnCategory.Integer],
         "bigint" => [ColumnCategory.BigInteger],
@@ -71,6 +80,7 @@ internal static class DbTypeCategories
         "double" or "float" => [ColumnCategory.Double],
         "bit" => [ColumnCategory.Boolean],
         "datetime" or "timestamp" => [ColumnCategory.DateTime, ColumnCategory.DateTimeWithTimeZone],
+        "date" => [ColumnCategory.DateTime],
         "blob" or "longblob" or "mediumblob" or "varbinary" or "binary" => [ColumnCategory.Binary],
         _ => [],
     };

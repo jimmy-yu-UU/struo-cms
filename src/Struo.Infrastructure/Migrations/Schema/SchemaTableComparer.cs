@@ -25,8 +25,8 @@ internal static class SchemaTableComparer
         }
 
         var declared = table.Columns.Select(c => c.Name).ToHashSet();
-        foreach (var name in live.Keys.Where(n => !declared.Contains(n)))
-            yield return new SchemaFinding(FindingSeverity.Warning, FindingKind.UndeclaredColumn, table.PhysicalName, name,
+        foreach (var extra in live.Where(kv => !declared.Contains(kv.Key)).Select(kv => kv.Value))
+            yield return new SchemaFinding(FindingSeverity.Warning, FindingKind.UndeclaredColumn, table.PhysicalName, extra.DbColumnName,
                 "column exists in the database but no entity declares it");
 
         foreach (var finding in CompareUniqueIndexes(db, dbType, table, liveName))
@@ -42,11 +42,21 @@ internal static class SchemaTableComparer
                     $"unique indexes are not checked on {dbType}")
             ];
 
-    private static IEnumerable<SchemaFinding> CompareColumn(
+    public static IReadOnlyList<SchemaFinding> UnsupportedTypeWarnings(StruoDbType dbType, IReadOnlyList<ExpectedTable> tables) =>
+        DbTypeCategories.TypesSupported(dbType) || tables.Count == 0
+            ? []
+            :
+            [
+                new SchemaFinding(FindingSeverity.Warning, FindingKind.TypeCheckUnsupported, "*", null,
+                    $"column types and lengths are not checked on {dbType}")
+            ];
+
+    internal static IEnumerable<SchemaFinding> CompareColumn(
         StruoDbType dbType, ExpectedTable table, ExpectedColumn column, DbColumnInfo actual)
     {
+        var typesChecked = DbTypeCategories.TypesSupported(dbType);
         var found = $"{actual.DataType} (length {actual.Length})";
-        if (!DbTypeCategories.Matches(dbType, column.Category, actual))
+        if (typesChecked && !DbTypeCategories.Matches(dbType, column.Category, actual))
         {
             yield return Error(FindingKind.TypeMismatch, table, column.Name,
                 $"expected {column.Category}, database has {found}");
@@ -55,7 +65,7 @@ internal static class SchemaTableComparer
         if (!column.IsPrimaryKey && column.IsNullable != actual.IsNullable)
             yield return Error(FindingKind.NullabilityMismatch, table, column.Name,
                 $"expected {(column.IsNullable ? "nullable" : "not null")}, database is {(actual.IsNullable ? "nullable" : "not null")}");
-        if (column.Category == ColumnCategory.String && column.Length is { } length
+        if (typesChecked && column.Category == ColumnCategory.String && column.Length is { } length
             && !DbTypeCategories.LengthMatches(dbType, length, actual))
             yield return Error(FindingKind.LengthMismatch, table, column.Name,
                 $"expected length {length}, database has {found}");

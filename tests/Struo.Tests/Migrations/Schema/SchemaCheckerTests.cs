@@ -94,7 +94,7 @@ public sealed class SchemaCheckerTests : IDisposable
         var report = Check(db, typeof(CheckProbe));
 
         report.HasErrors.Should().BeFalse(report.ToString());
-        report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn && f.Column == "extra");
+        report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn && f.Column == "Extra");
     }
 
     [Fact]
@@ -181,5 +181,24 @@ public sealed class SchemaCheckerTests : IDisposable
 
         oracle.Should().ContainSingle(f => f.Kind == FindingKind.IndexCheckUnsupported && f.Severity == FindingSeverity.Warning);
         SchemaTableComparer.UnsupportedIndexWarnings(StruoDbType.Sqlite, tables).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Oracle_compares_columns_but_skips_type_and_length_with_one_warning()
+    {
+        var db = Client("chkp_");
+        var table = EntitySchemaReader.Read(db, typeof(CheckProbe));
+        var title = table.Columns.Single(c => c.Name == "title");
+        var wrongType = new DbColumnInfo { DbColumnName = "TITLE", DataType = "NUMBER", Length = 3, IsNullable = false };
+
+        var column = SchemaTableComparer.CompareColumn(StruoDbType.Oracle, table, title, wrongType).ToList();
+        var nullability = SchemaTableComparer.CompareColumn(
+            StruoDbType.Oracle, table, title, new DbColumnInfo { DbColumnName = "TITLE", DataType = "NUMBER", IsNullable = true }).ToList();
+
+        column.Should().BeEmpty();
+        nullability.Should().ContainSingle(f => f.Kind == FindingKind.NullabilityMismatch);
+        var warnings = SchemaTableComparer.UnsupportedTypeWarnings(StruoDbType.Oracle, [table]);
+        warnings.Should().ContainSingle(f => f.Kind == FindingKind.TypeCheckUnsupported && f.Severity == FindingSeverity.Warning);
+        SchemaTableComparer.UnsupportedTypeWarnings(StruoDbType.Sqlite, [table]).Should().BeEmpty();
     }
 }

@@ -13,7 +13,8 @@ public enum FindingKind
     LengthMismatch,
     MissingUniqueIndex,
     UndeclaredColumn,
-    IndexCheckUnsupported
+    IndexCheckUnsupported,
+    TypeCheckUnsupported
 }
 
 /// <summary>One difference between the live database and the entity metadata. <c>Column</c> is null for table-level findings.</summary>

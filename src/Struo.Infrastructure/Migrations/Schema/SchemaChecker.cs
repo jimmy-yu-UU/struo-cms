@@ -32,6 +32,7 @@ public static class SchemaChecker
             findings.AddRange(SchemaTableComparer.Compare(db, dbType, table, liveName));
         }
         findings.AddRange(SchemaTableComparer.UnsupportedIndexWarnings(dbType, expected));
+        findings.AddRange(SchemaTableComparer.UnsupportedTypeWarnings(dbType, expected));
         return new SchemaCheckReport(findings);
     }
 }
