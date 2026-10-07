@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.Migrations.Schema;
@@ -34,11 +35,15 @@ internal static class MakeMigrationCommand
         {
             var (type, lookupError) = ResolveEntity(scope.ServiceProvider, parsed.Entity);
             if (type is null) return await UsageError(stderr, lookupError!);
-            table = EntitySchemaReader.Read(scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(), type);
+            try { table = EntitySchemaReader.Read(scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(), type); }
+            catch (OptionsValidationException ex)
+            {
+                await stderr.WriteLineAsync($"make:migration failed: {ex.Message}");
+                return MigrationCli.Failure;
+            }
         }
 
-        var version = long.Parse(
-            clock.GetUtcNow().UtcDateTime.ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        var version = NextFreeVersion(parsed.Output, clock.GetUtcNow().UtcDateTime);
         var spec = new MigrationSpec(parsed.Name, version, parsed.Namespace, table);
 
         string source;
@@ -59,6 +64,21 @@ internal static class MakeMigrationCommand
 
         await stdout.WriteLineAsync($"Created {path}");
         return MigrationCli.Success;
+    }
+
+    private const string VersionFormat = "yyyyMMddHHmm";
+
+    /// <summary>The UTC minute stamp, moved forward minute by minute until no <c>{version}_*.cs</c> file exists in the directory.</summary>
+    private static long NextFreeVersion(string directory, DateTime utcNow)
+    {
+        var stamp = new DateTime(utcNow.Year, utcNow.Month, utcNow.Day, utcNow.Hour, utcNow.Minute, 0, DateTimeKind.Utc);
+        while (true)
+        {
+            var version = stamp.ToString(VersionFormat, CultureInfo.InvariantCulture);
+            if (!Directory.EnumerateFiles(directory, $"{version}_*.cs").Any())
+                return long.Parse(version, CultureInfo.InvariantCulture);
+            stamp = stamp.AddMinutes(1);
+        }
     }
 
     /// <summary>Creates the file without overwriting; returns the one-line failure message, or null on success.</summary>
@@ -111,15 +131,31 @@ internal static class MakeMigrationCommand
                 continue;
             }
 
-            var parts = arg.Split('=', 2);
-            if (!Options.Contains(parts[0])) return (null, new Failed($"Unknown option '{parts[0]}'."));
-            string value;
-            if (parts.Length == 2 && parts[1].Length > 0) value = parts[1];
-            else if (parts.Length == 1 && i + 1 < args.Count && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) value = args[++i];
-            else return (null, new Failed($"Option '{parts[0]}' needs a value."));
-            if (!values.TryAdd(parts[0], value)) return (null, new Failed($"Option '{parts[0]}' was given more than once."));
+            var (option, value, consumedNext, optionError) = ReadOption(args, i);
+            if (optionError is not null) return (null, optionError);
+            if (!values.TryAdd(option, value!)) return (null, new Failed($"Option '{option}' was given more than once."));
+            if (consumedNext) i++;
         }
 
+        return Validate(name, values);
+    }
+
+    private static (string Option, string? Value, bool ConsumedNext, Failed? Error) ReadOption(IReadOnlyList<string> args, int index)
+    {
+        var parts = args[index].Split('=', 2);
+        var option = parts[0];
+        if (!Options.Contains(option)) return (option, null, false, new Failed($"Unknown option '{option}'."));
+        if (parts.Length == 2 && parts[1].Length > 0) return (option, parts[1], false, null);
+
+        var hasNext = parts.Length == 1 && index + 1 < args.Count
+            && !args[index + 1].StartsWith("--", StringComparison.Ordinal);
+        return hasNext
+            ? (option, args[index + 1], true, null)
+            : (option, null, false, new Failed($"Option '{option}' needs a value."));
+    }
+
+    private static (Parsed? Parsed, Failed? Error) Validate(string? name, IReadOnlyDictionary<string, string> values)
+    {
         if (name is null) return (null, new Failed("Missing migration name."));
         if (!MigrationGenerator.IsValidClassName(name)) return (null, new Failed($"'{name}' is not a valid migration class name."));
         if (!values.TryGetValue("--output", out var output)) return (null, new Failed("Missing required option '--output'."));

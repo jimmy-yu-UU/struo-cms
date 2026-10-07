@@ -210,17 +210,63 @@ namespace Struo.Tests.Migrations
         }
 
         [Fact]
-        public async Task An_existing_file_is_not_overwritten()
+        public async Task Two_migrations_in_the_same_minute_get_consecutive_versions()
+        {
+            var sp = DefaultServices();
+
+            await Run(sp, "CreateFirst", "--output", _dir);
+            var (code, stdout, _) = await Run(sp, "CreateSecond", "--output", _dir);
+
+            code.Should().Be(0);
+            stdout.Trim().Should().Be($"Created {Path_("202610070305_CreateSecond.cs")}");
+            (await File.ReadAllTextAsync(Path_("202610070305_CreateSecond.cs")))
+                .Should().Contain("[Migration(202610070305, \"CreateSecond\")]");
+        }
+
+        [Fact]
+        public async Task A_version_taken_by_another_file_is_skipped_across_an_hour_boundary()
+        {
+            var clock = new FakeClock(new DateTimeOffset(2026, 10, 7, 12, 59, 0, TimeSpan.Zero));
+            await File.WriteAllTextAsync(Path_("202610071259_Other.cs"), "keep");
+            var (o, e) = (new StringWriter(), new StringWriter());
+
+            var code = await MakeMigrationCommand.RunAsync(["CreateNext", "--output", _dir], DefaultServices(), o, e, clock);
+
+            code.Should().Be(0, e.ToString());
+            File.Exists(Path_("202610071300_CreateNext.cs")).Should().BeTrue();
+            (await File.ReadAllTextAsync(Path_("202610071259_Other.cs"))).Should().Be("keep");
+        }
+
+        [Fact]
+        public async Task Re_running_the_same_name_creates_a_new_version_and_keeps_the_existing_file()
         {
             var path = Path_("202610070304_CreateThing.cs");
             await File.WriteAllTextAsync(path, "keep me");
 
-            var (code, stdout, err) = await Run(DefaultServices(), "CreateThing", "--output", _dir);
+            var (code, _, err) = await Run(DefaultServices(), "CreateThing", "--output", _dir);
+
+            code.Should().Be(0, err);
+            File.Exists(Path_("202610070305_CreateThing.cs")).Should().BeTrue();
+            (await File.ReadAllTextAsync(path)).Should().Be("keep me");
+        }
+
+        [Fact]
+        public async Task Invalid_database_options_fail_with_one_line()
+        {
+            var sp = Track(new ServiceCollection()
+                .AddSingleton<IEntityTypeCollector>(new StubCollector(typeof(Revision)))
+                .AddOptions<DatabaseOptions>().Validate(_ => false, "DbType is not configured").Services
+                .AddScoped<ISqlSugarClient>(s => SqlSugarClientFactory.Create(
+                    s.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
+                .BuildServiceProvider());
+
+            var (code, stdout, err) = await Run(sp, "CreateX", "--entity", "Revision", "--output", _dir);
 
             code.Should().Be(1);
             stdout.Should().BeEmpty();
-            err.Trim().Should().Be($"File already exists: {path}");
-            (await File.ReadAllTextAsync(path)).Should().Be("keep me");
+            err.TrimEnd().Should().StartWith("make:migration failed: ").And.Contain("DbType is not configured");
+            err.TrimEnd().Split('\n').Should().HaveCount(1);
+            Directory.GetFiles(_dir).Should().BeEmpty();
         }
 
         [Fact]

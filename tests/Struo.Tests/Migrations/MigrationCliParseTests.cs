@@ -69,6 +69,42 @@ public sealed class MigrationCliParseTests
         inv.CommandArgs.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Slash_key_with_equals_is_a_host_arg()
+    {
+        var inv = MigrationCli.Parse(["migrate:check", "/Database:TablePrefix=acme_"]);
+        inv.HostArgs.Should().Equal("/Database:TablePrefix=acme_");
+        inv.CommandArgs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Slash_key_without_equals_takes_the_next_token_as_its_value()
+    {
+        var inv = MigrationCli.Parse(["migrate:check", "/Database:DbType", "Sqlite"]);
+        inv.HostArgs.Should().Equal("/Database:DbType", "Sqlite");
+        inv.CommandArgs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Bare_key_with_equals_is_a_host_arg()
+    {
+        var inv = MigrationCli.Parse(["make:migration", "X", "Database:TablePrefix=acme_", "--output", "d"]);
+        inv.HostArgs.Should().Equal("Database:TablePrefix=acme_");
+        inv.CommandArgs.Should().Equal("X", "--output", "d");
+    }
+
+    [Theory]
+    [InlineData("/tmp/out:dir")]
+    [InlineData(@"C:\out\dir")]
+    [InlineData(@"C:\out=1")]
+    [InlineData("Name")]
+    public void Paths_and_plain_names_stay_command_args(string token)
+    {
+        var inv = MigrationCli.Parse(["make:migration", token]);
+        inv.CommandArgs.Should().Equal(token);
+        inv.HostArgs.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("migrate")]
     [InlineData("migrate:check")]

@@ -38,11 +38,18 @@ public static class MigrationCli
 
     private static readonly string[] HostSwitches = ["--environment", "--contentRoot", "--applicationName", "--urls"];
 
+    // Config keys the host reads: --Key:Sub[=v], /Key:Sub[=v] and bare Key:Sub=v, plus the standard host
+    // switches. A key containing a path separator is a path argument, not a config key.
     private static bool IsConfigKey(string arg)
     {
-        if (!arg.StartsWith("--", StringComparison.Ordinal)) return false;
         var key = arg.Split('=', 2)[0];
-        return key.Contains(':') || HostSwitches.Contains(key, StringComparer.OrdinalIgnoreCase);
+        if (arg.StartsWith("--", StringComparison.Ordinal))
+            return key.Contains(':') || HostSwitches.Contains(key, StringComparer.OrdinalIgnoreCase);
+
+        var slash = key.StartsWith('/');
+        var name = slash ? key[1..] : key;
+        if (name.Contains('/') || name.Contains('\\') || !name.Contains(':')) return false;
+        return slash || arg.Contains('=');
     }
 
     public static async Task<int> RunAsync(
