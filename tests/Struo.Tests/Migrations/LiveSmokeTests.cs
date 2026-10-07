@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Migrations;
 
-public sealed class SqlServerSmokeTests
+public sealed class LiveSmokeTests
 {
     [SugarTable("sqlsugar_smoke_probe")]
     public sealed class SmokeRow
@@ -16,14 +16,17 @@ public sealed class SqlServerSmokeTests
         [SugarColumn(Length = 50)] public string Name { get; set; } = "";
     }
 
-    [Fact]
-    public async Task SqlSugar_round_trips_on_sql_server()
+    public static TheoryData<string> Backends => LiveBackend.Names("SqlServer", "MySql", "MariaDb");
+
+    [Theory, MemberData(nameof(Backends))]
+    public async Task SqlSugar_round_trips_on_the_live_backend(string backend)
     {
-        if (LiveDatabases.SqlServer is not { } conn) return;
+        var (_, dbType, connection) = LiveBackend.Get(backend);
+        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
 
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.SqlServer, ConnectionString = conn },
+            new DatabaseOptions { DbType = dbType, ConnectionString = conn },
             new TestCurrentUserAccessor(Guid.Empty));
         try { db.DbMaintenance.CreateDatabase(); } catch { /* exists or not permitted */ }
         try

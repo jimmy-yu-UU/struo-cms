@@ -11,6 +11,8 @@ namespace Struo.Tests.Migrations;
 
 public sealed class StruoMigrationTypeTests
 {
+    public static TheoryData<string> LiveBackends => LiveBackend.Names();
+
     private static MigrationHost Host(StruoDbType db, string conn, string prefix, string ns) => new(
         new MigrationHostOptions(db, conn, prefix, [typeof(StruoMigrationTypeTests).Assembly], 30)
         { NamespaceFilter = "Struo.Tests.Migrations.Probes." + ns },
@@ -34,13 +36,20 @@ public sealed class StruoMigrationTypeTests
         types["data"].Should().Be("text");
     }
 
-    [Theory]
-    [InlineData(StruoDbType.PostgreSQL, "timestamptz", "text")]
-    [InlineData(StruoDbType.SqlServer, "datetimeoffset", "nvarchar")]
-    public async Task Shapes_resolve_to_the_live_backend_literals(StruoDbType db, string tz, string longText)
+    private static readonly Dictionary<string, (string Tz, string LongText)> LiveLiterals = new()
     {
-        var conn = db == StruoDbType.PostgreSQL ? LiveDatabases.Postgres : LiveDatabases.SqlServer;
-        if (conn is null) return;
+        ["PostgreSQL"] = ("timestamptz", "text"),
+        ["SqlServer"] = ("datetimeoffset", "nvarchar"),
+        ["MySql"] = ("datetime", "longtext"),
+        ["MariaDb"] = ("datetime", "longtext"),
+    };
+
+    [Theory, MemberData(nameof(LiveBackends))]
+    public async Task Shapes_resolve_to_the_live_backend_literals(string backend)
+    {
+        var (_, db, connection) = LiveBackend.Get(backend);
+        var (tz, longText) = LiveLiterals[backend];
+        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
         var client = new SqlSugarClient(new ConnectionConfig

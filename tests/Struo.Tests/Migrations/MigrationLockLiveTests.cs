@@ -11,10 +11,7 @@ namespace Struo.Tests.Migrations;
 
 public sealed class MigrationLockLiveTests
 {
-    public static TheoryData<StruoDbType> Backends => new() { StruoDbType.PostgreSQL, StruoDbType.SqlServer };
-
-    private static string? Conn(StruoDbType db) =>
-        db == StruoDbType.PostgreSQL ? LiveDatabases.Postgres : LiveDatabases.SqlServer;
+    public static TheoryData<string> Backends => LiveBackend.Names();
 
     private static MigrationHost Host(StruoDbType db, string conn, string prefix, int timeout) => new(
         new MigrationHostOptions(db, conn, prefix, [typeof(MigrationLockLiveTests).Assembly], timeout)
@@ -37,9 +34,10 @@ public sealed class MigrationLockLiveTests
     }
 
     [Theory, MemberData(nameof(Backends))]
-    public async Task Concurrent_applies_run_each_migration_exactly_once(StruoDbType db)
+    public async Task Concurrent_applies_run_each_migration_exactly_once(string backend)
     {
-        if (Conn(db) is not { } conn) return;
+        var (_, db, connection) = LiveBackend.Get(backend);
+        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
@@ -55,9 +53,10 @@ public sealed class MigrationLockLiveTests
     }
 
     [Theory, MemberData(nameof(Backends))]
-    public async Task Apply_times_out_while_another_session_holds_the_lock(StruoDbType db)
+    public async Task Apply_times_out_while_another_session_holds_the_lock(string backend)
     {
-        if (Conn(db) is not { } conn) return;
+        var (_, db, connection) = LiveBackend.Get(backend);
+        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";

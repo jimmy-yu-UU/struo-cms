@@ -16,6 +16,12 @@ internal static class LiveDatabases
     public static string? SqlServer { get; } =
         Resolve("STRUO_TEST_SQLSERVER_CONNECTION", "Testing:SqlServerConnection");
 
+    public static string? MySql { get; } =
+        Resolve("STRUO_TEST_MYSQL_CONNECTION", "Testing:MySqlConnection");
+
+    public static string? MariaDb { get; } =
+        Resolve("STRUO_TEST_MARIADB_CONNECTION", "Testing:MariaDbConnection");
+
     /// <summary>Throws unless the connection's database name contains "test".</summary>
     public static void GuardDisposable(string connectionString)
     {
