@@ -103,13 +103,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: docker build --tag struo-api:ci .
       - run: docker build --tag struo-admin:ci frontend
+      # Mirrors how an operator deploys: `migrate` applies the schema and exits, then the API
+      # starts against the same database. The named volume is created from the image's
+      # /app/App_Data, so the non-root `app` user can write the SQLite file in both containers.
       - name: Smoke-test the API image against SQLite
         run: |
-          docker run --detach --name api --publish 8080:8080 \
-            --env Database__DbType=Sqlite \
-            --env 'Database__ConnectionString=Data Source=/tmp/struo-ci.db' \
-            --env Database__MigrateOnStartup=true \
-            struo-api:ci
+          db_env=(--env Database__DbType=Sqlite
+                  --env 'Database__ConnectionString=Data Source=/app/App_Data/struo-ci.db')
+          docker volume create struo-ci-data
+          docker run --rm --volume struo-ci-data:/app/App_Data "${db_env[@]}" struo-api:ci migrate
+          docker run --detach --name api --publish 8080:8080             --volume struo-ci-data:/app/App_Data "${db_env[@]}" struo-api:ci
           for _ in $(seq 1 30); do
             if curl --fail --silent --show-error http://localhost:8080/health/ready; then exit 0; fi
             sleep 2
