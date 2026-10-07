@@ -288,6 +288,8 @@ try
     {
         var sp = scope.ServiceProvider;
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
+        RemovedDatabaseKeyWarnings.Log(
+            builder.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());
