@@ -94,9 +94,12 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         db.Queryable<UserRole>().Count(), db.Queryable<Permission>().Count(),
     ];
 
-    private static async Task AssertBaselineJoinsDatabase(StruoDbType dbType, string conn, string prefix)
+    private static async Task AssertBaselineJoinsDatabase(
+        StruoDbType dbType, string conn, string prefix, bool nonUnicodeSqlServer = false)
     {
         var db = Client(dbType, conn, prefix);
+        // v0.8 created SQL Server string columns as varchar; this client config belongs to this prefix only.
+        if (nonUnicodeSqlServer) db.CurrentConnectionConfig.MoreSettings.SqlServerCodeFirstNvarchar = false;
         await SimulateV08(db);
         var before = Counts(db);
         var passwordBefore = db.Queryable<User>().First().Password;
@@ -114,6 +117,11 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         (await Run(sp, "migrate")).Out.Should().Contain("Nothing to migrate.");
         (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
         (await Run(sp, "migrate:baseline")).Code.Should().Be(MigrationCli.Failure);
+
+        var report = SchemaChecker.Check(db, dbType, FrameworkEntityTypes.All);
+        report.HasErrors.Should().BeFalse(report.ToString());
+        if (nonUnicodeSqlServer)
+            report.Warnings.Should().Contain(f => f.Kind == FindingKind.NonUnicodeString, report.ToString());
     }
 
     [Fact]
@@ -221,14 +229,17 @@ public sealed class MigrateBaselineCommandTests : IDisposable
                 : null,
         };
 
-    [Fact]
-    public async Task Baseline_on_PostgreSQL_joins_a_v08_database()
+    public static TheoryData<string> Backends => LiveBackend.Names();
+
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Baseline_joins_a_v08_database_on_every_live_backend(string backend)
     {
-        if (LiveDatabases.Postgres is not { } conn) return;
+        var (_, dbType, connection) = LiveBackend.Get(backend);
+        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
-        var db = Client(StruoDbType.PostgreSQL, conn, prefix);
-        try { await AssertBaselineJoinsDatabase(StruoDbType.PostgreSQL, conn, prefix); }
+        var db = Client(dbType, conn, prefix);
+        try { await AssertBaselineJoinsDatabase(dbType, conn, prefix, nonUnicodeSqlServer: dbType == StruoDbType.SqlServer); }
         finally
         {
             foreach (var table in CoreSchemaParity.AllTableNames(db, prefix).Append(StruoVersionTableMetaData.TableNameFor(prefix)))
