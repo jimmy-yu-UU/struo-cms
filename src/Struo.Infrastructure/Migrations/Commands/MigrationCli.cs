@@ -10,7 +10,7 @@ namespace Struo.Infrastructure.Migrations.Commands;
 public static class MigrationCli
 {
     public const int Success = 0, Failure = 1, Usage = 2;
-    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "migrate:check", "make:migration"];
+    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "migrate:check", "migrate:baseline", "make:migration"];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
@@ -105,13 +105,19 @@ public static class MigrationCli
                     var pending = host.Preview(stdout);
                     await stdout.WriteLineAsync($"-- {pending.Count} migration(s) pending");
                     break;
+                case "migrate:baseline":
+                    var recorded = await host.BaselineAsync(ct);
+                    foreach (var m in recorded) await stdout.WriteLineAsync($"Recorded {m.Version}  {m.Description}");
+                    await stdout.WriteLineAsync($"{recorded.Count} migration(s) recorded as applied.");
+                    break;
                 default:
                     await stderr.WriteLineAsync($"Command '{command}' is not implemented.");
                     return Usage;
             }
             return Success;
         }
-        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or OptionsValidationException)
+        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or MigrationBaselineRefusedException
+            or OptionsValidationException)
         {
             await stderr.WriteLineAsync($"{command} failed: {ex.Message}");
             return Failure;

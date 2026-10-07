@@ -43,6 +43,57 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return applied;
     }
 
+    /// <summary>Records every known migration as applied without executing it, so a database built by an
+    /// earlier schema source joins the migration history. Refuses a database that already has recorded
+    /// migrations or lacks the core tables; in both cases nothing is written.</summary>
+    public async Task<IReadOnlyList<MigrationInfo>> BaselineAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var logger = loggerFactory.CreateLogger<MigrationHost>();
+        await using var gate = await AcquireLockAsync(logger, ct);
+        EnsureBaselineable();
+        try
+        {
+            using var sp = BuildRunner(preview: false, loggerFactory);
+            using var scope = sp.CreateScope();
+            var loader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
+            loader.LoadVersionInfo();
+            var known = scope.ServiceProvider.GetRequiredService<IMigrationInformationLoader>().LoadMigrations();
+            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
+                loader.UpdateVersionInfo(version, migration.Description ?? "");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new MigrationFailedException($"Baseline failed: {Innermost(ex).Message}", ex);
+        }
+        return GetStatus().Where(m => m.State == MigrationState.Applied).ToList();
+    }
+
+    private void EnsureBaselineable()
+    {
+        try
+        {
+            if (ReadAppliedRows().Count > 0)
+                throw new MigrationBaselineRefusedException(
+                    "migrations are already recorded in this database; baseline only applies to a database with none.");
+            using var db = OpenClient();
+            if (!CoreTables.Exist(db, options.TablePrefix))
+                throw new MigrationBaselineRefusedException(
+                    "the core tables do not exist; run migrate on a new database instead.");
+        }
+        catch (Exception ex) when (ex is not (MigrationBaselineRefusedException or OperationCanceledException))
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
+        }
+    }
+
+    private SqlSugarClient OpenClient() => new(new ConnectionConfig
+    {
+        DbType = DbTypeMapper.Map(options.DbType),
+        ConnectionString = options.ConnectionString,
+        IsAutoCloseConnection = true,
+    });
+
     private async Task<IAsyncDisposable> AcquireLockAsync(ILogger logger, CancellationToken ct)
     {
         try
@@ -145,12 +196,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     private Dictionary<long, SchemaVersionRow> ReadAppliedRows()
     {
         var table = StruoVersionTableMetaData.TableNameFor(options.TablePrefix);
-        using var db = new SqlSugarClient(new ConnectionConfig
-        {
-            DbType = DbTypeMapper.Map(options.DbType),
-            ConnectionString = options.ConnectionString,
-            IsAutoCloseConnection = true,
-        });
+        using var db = OpenClient();
         if (!db.DbMaintenance.IsAnyTable(table, false)) return [];
         return db.Queryable<SchemaVersionRow>().AS(table).ToList().ToDictionary(r => r.Version);
     }
