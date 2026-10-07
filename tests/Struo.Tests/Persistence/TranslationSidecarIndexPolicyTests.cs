@@ -3,6 +3,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -65,8 +66,8 @@ public sealed class TranslationSidecarIndexPolicyTests
         public string Locale { get; set; } = "";
     }
 
-    // ── Hook end-to-end on SQLite. SchemaGuard is the production detector (uniqueness + column
-    //    coverage, name-agnostic), so passing it is the acceptance criterion, not a proxy.
+    // ── Hook end-to-end on SQLite. The index catalog read is name-agnostic (uniqueness + column
+    //    coverage), so a unique index over (fk, locale) is the acceptance criterion, not a proxy.
 
     [SugarTable("policy_probe_translations")]
     private sealed class PolicyProbeTranslation
@@ -92,20 +93,25 @@ public sealed class TranslationSidecarIndexPolicyTests
                 new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
                 new TestCurrentUserAccessor(Guid.Empty), policy);
 
-    private static TranslationSidecarDescriptor ProbeDescriptor(ISqlSugarClient client) => new(
+    private static bool HasUniqueIndexOn(ISqlSugarClient client, string table, params string[] columns) =>
+        IndexCatalog.Read(client, StruoDbType.Sqlite, table).Any(i => i.IsUnique
+            && i.Columns.Order(StringComparer.OrdinalIgnoreCase)
+                .SequenceEqual(columns.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase));
+
+    private static bool HasProbeUnique(ISqlSugarClient client) => HasUniqueIndexOn(
+        client,
         client.EntityMaintenance.GetTableName<PolicyProbeTranslation>(),
         client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.PolicyProbeId)),
         client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.Locale)));
 
     [Fact]
-    public async Task With_policy_InitTables_emits_the_composite_unique_that_SchemaGuard_demands()
+    public void With_policy_InitTables_emits_the_composite_unique_index()
     {
         using var db = new SqliteTestDatabase();
         var client = NewSqliteClient(db, ProbePolicy());
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(PolicyProbeTranslation));
 
-        var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [ProbeDescriptor(client)], default);
-        await act.Should().NotThrowAsync();
+        HasProbeUnique(client).Should().BeTrue();
 
         var pid = Guid.NewGuid();
         client.Insertable(new PolicyProbeTranslation { PolicyProbeId = pid, Locale = "en", Title = "a" }).ExecuteCommand();
@@ -114,15 +120,13 @@ public sealed class TranslationSidecarIndexPolicyTests
     }
 
     [Fact]
-    public async Task Without_policy_the_same_sidecar_gets_no_unique_index()
+    public void Without_policy_the_same_sidecar_gets_no_unique_index()
     {
         using var db = new SqliteTestDatabase();
         var client = NewSqliteClient(db, policy: null);
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(PolicyProbeTranslation));
 
-        var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [ProbeDescriptor(client)], default);
-        (await act.Should().ThrowAsync<InvalidOperationException>())
-            .Which.Message.Should().Contain("policy_probe_translations");
+        HasProbeUnique(client).Should().BeFalse();
     }
 
     [SugarTable("policy_probe_legacy_translations")]
@@ -200,7 +204,7 @@ public sealed class TranslationSidecarIndexPolicyTests
     }
 
     [Fact]
-    public async Task Sample_ArticleTranslation_gets_its_unique_from_metadata_not_from_attributes()
+    public void Sample_ArticleTranslation_gets_its_unique_from_metadata_not_from_attributes()
     {
         typeof(ArticleTranslation).GetProperty(nameof(ArticleTranslation.ArticleId))!
             .GetCustomAttributes(typeof(SugarColumn), inherit: false)
@@ -215,11 +219,11 @@ public sealed class TranslationSidecarIndexPolicyTests
         var client = NewSqliteClient(db, policy);
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(ArticleTranslation));
 
-        var descriptor = new TranslationSidecarDescriptor(
+        HasUniqueIndexOn(
+            client,
             client.EntityMaintenance.GetTableName<ArticleTranslation>(),
             client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.ArticleId)),
-            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.Locale)));
-        var act = () => SchemaGuard.AssertCriticalConstraintsAsync(client, [descriptor], default);
-        await act.Should().NotThrowAsync();
+            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.Locale)))
+            .Should().BeTrue();
     }
 }

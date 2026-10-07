@@ -53,11 +53,14 @@ docker compose up -d
 # 2. Configure the API (gitignored local settings file)
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
 
-# 3. Run the API
+# 3. Create the schema and seed data (the API refuses to start before this has run)
+dotnet run --project src/Struo.Api -- migrate
+
+# 4. Run the API
 dotnet run --project src/Struo.Api
 # listens on http://localhost:5221
 
-# 4. In a second terminal, run the admin SPA
+# 5. In a second terminal, run the admin SPA
 cd frontend
 pnpm install
 pnpm dev
@@ -65,8 +68,8 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`. The
-account is seeded only when the `struo_users` table is first created; to use a different one, set
-`Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password` before the first start.
+account is seeded by the `migrate` command; to use a different one, set
+`Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password` before running it.
 
 Starting in Production while the password is still the default logs a warning naming
 `Auth__BootstrapAdmin__Password` instead of blocking startup — change it before you go live. The

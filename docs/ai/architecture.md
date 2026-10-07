@@ -26,8 +26,8 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   (`Query/Write/Validators/`), file storage and security abstractions (`Files/`, `Security/`),
   options records (`Configuration/`). References only `Struo.Domain`.
 - **`src/Struo.Infrastructure`** — the concrete implementations: SqlSugar wiring
-  (`Persistence/SqlSugarClientFactory.cs`, `Persistence/MigrationRunner.cs`), the FluentMigrator host, base class and CLI commands
-  (`Migrations/`), the schema reader, generator and checker (`Migrations/Schema/`), metadata scanning and
+  (`Persistence/SqlSugarClientFactory.cs`), the FluentMigrator host, base class, startup gate and CLI
+  commands (`Migrations/`), the schema reader, generator and checker (`Migrations/Schema/`), metadata scanning and
   caching (`Metadata/MetadataScanner.cs`, `CachedMetadataProvider.cs`, `EntityRegistry.cs`,
   `RelationshipGraph.cs`, `EntityTypeCollector.cs`, `FrameworkEntityTypes.cs`), the query
   implementations (`Query/SqlSugarItemRepository.cs`, `RelationExpander.cs`,
@@ -147,9 +147,9 @@ Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, 
 SiteSettings, UserSession). Implementation: `EntityTypeCollector`
 (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
 container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
-(`MetadataServiceCollectionExtensions.cs`). Consumed by `DatabaseInitializer.CreateMissingTables`
-(`Program.cs`), which runs in every environment and on every backend — the
-"CodeFirst creates; migrations evolve" invariant in `AGENTS.md`'s "Invariants" section has the full
+(`MetadataServiceCollectionExtensions.cs`). Consumed by `Program.cs`, which hands it to
+`StartupMigrationGate` for the Development schema check, and by `make:migration`/`migrate:check` — the
+"Migrations are the only schema source" invariant in `AGENTS.md`'s "Invariants" section has the full
 rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Three layers, three responsibilities", the
 concepts.
 

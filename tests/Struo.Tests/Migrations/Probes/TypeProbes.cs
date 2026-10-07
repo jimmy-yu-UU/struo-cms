@@ -28,7 +28,7 @@ namespace Struo.Tests.Migrations.Probes.Sidecar
                 .WithColumn("id").AsInt32().PrimaryKey()
                 .WithColumn("probeid").AsInt32()
                 .WithColumn("locale").AsString(35);
-            CreateTranslationUniqueIndex("probe_translations", "probe_translations", "probeid", "locale");
+            CreateTranslationUniqueIndex("probe_translations", "probeid", "locale");
         }
         public override void Down() { }
     }

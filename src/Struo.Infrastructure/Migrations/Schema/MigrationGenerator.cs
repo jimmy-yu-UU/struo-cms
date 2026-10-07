@@ -130,7 +130,7 @@ public static class MigrationGenerator
         if (table.TranslationLogicalTable is not null && index.Columns.Count == 2
             && index.Name == TranslationSidecarIndexPolicy.IndexNameFor(table.TranslationLogicalTable))
         {
-            yield return $"CreateTranslationUniqueIndex({Lit(table.TranslationLogicalTable)}, {tableExpr}, " +
+            yield return $"CreateTranslationUniqueIndex({tableExpr}, " +
                          $"{Lit(index.Columns[0])}, {Lit(index.Columns[1])});";
             yield break;
         }

@@ -43,20 +43,22 @@ docker compose up -d
 # 2. 設定 API（gitignore 排除的本機設定檔）
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
 
-# 3. 執行 API
+# 3. 建立資料表與種子資料（沒跑過這一步，API 不會啟動）
+dotnet run --project src/Struo.Api -- migrate
+
+# 4. 執行 API
 dotnet run --project src/Struo.Api
 # 監聽 http://localhost:5221
 
-# 4. 另開一個終端機，執行管理後台
+# 5. 另開一個終端機，執行管理後台
 cd frontend
 pnpm install
 pnpm dev
 # 監聽 http://localhost:5173，並將 /api 轉發到 :5221
 ```
 
-開啟 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。這組帳密只在 `struo_users` 資料
-表第一次建立時植入；要換帳密，第一次啟動前先設 `Auth__BootstrapAdmin__Email`／
-`Auth__BootstrapAdmin__Password`。
+開啟 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。這組帳密由 `migrate` 指令植入；
+要換帳密，執行它之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`。
 
 用 Production 環境啟動、密碼還是預設值時，log 只會留下一筆警告，不會擋下啟動——上線前先把它改掉。完整
 步驟，包括 PostgreSQL／Redis 埠號覆寫與健康檢查，見

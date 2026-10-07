@@ -4,7 +4,7 @@ using Struo.Infrastructure.Identity;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Identity;
+namespace Struo.Tests.Support.Seeding;
 
 public class AdminUserSeederTests
 {

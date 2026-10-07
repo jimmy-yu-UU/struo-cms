@@ -44,10 +44,9 @@ public enum ColumnShape
 /// <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>) is <b>refused</b>: the hook throws an
 /// <see cref="InvalidOperationException"/> naming the property and the offending interface. For
 /// anything in the <c>InitTables</c> set — every framework entity plus every <c>[CmsCollection]</c>
-/// type — that throw lands at <b>startup</b> whether or not the table already exists, because
-/// <c>DatabaseInitializer.CreateMissingTables</c> asks <c>EntityMaintenance</c> for each type's table
-/// name to compute the missing set, and building that <c>EntityInfo</c> runs this hook over every
-/// property. Only an entity <i>outside</i> that set — a fork's own non-collection entity
+/// type — that throw lands at <b>startup</b> in Development, because the startup gate's
+/// <c>SchemaChecker</c> asks <c>EntityMaintenance</c> for each type's table, and building that
+/// <c>EntityInfo</c> runs this hook over every property. Only an entity <i>outside</i> that set — a fork's own non-collection entity
 /// used directly through <c>ISqlSugarClient</c> — fails on first use instead. Were the
 /// combination allowed, <c>[ColumnShape]</c>'s early <c>return</c> would outrank the hook's later
 /// JSON branch: the property would keep the <c>DataType</c> and lose <c>IsJson</c>. Both branches

@@ -15,7 +15,7 @@ public sealed class CreateFileTranslations : StruoMigration
             .WithColumn("title").AsString(255).Nullable()
             .WithColumn("alt").AsString(255).Nullable();
 
-        CreateTranslationUniqueIndex("file_translations", FrameworkTable("file_translations"), "fileid", "locale");
+        CreateTranslationUniqueIndex(FrameworkTable("file_translations"), "fileid", "locale");
     }
 
     public override void Down()

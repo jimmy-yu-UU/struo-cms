@@ -1,3 +1,5 @@
+using FluentMigrator;
+using FluentMigrator.Infrastructure;
 using FluentMigrator.Runner;
 using FluentMigrator.Runner.Exceptions;
 using FluentMigrator.Runner.Initialization;
@@ -21,15 +23,13 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     {
         ct.ThrowIfCancellationRequested();
         var logger = loggerFactory.CreateLogger<MigrationHost>();
-        if (options.DbType == StruoDbType.Oracle)
-            logger.LogWarning(
-                "Oracle takes no migration lock; running migrate concurrently is unsupported.");
         await using var gate = await AcquireLockAsync(logger, ct);
+        RefuseUnrecordedSchema();
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
         try
         {
-            using var sp = BuildRunner(preview: false, loggerFactory);
+            using var sp = BuildRunner(preview: false, new SqlSuppressingLoggerFactory(loggerFactory));
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
         }
@@ -43,8 +43,110 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return applied;
     }
 
+    /// <summary>Records every known migration as applied without executing it, so a database built by an
+    /// earlier schema source joins the migration history. Refuses a database that already has recorded
+    /// migrations or lacks the core tables; in both cases nothing is written.</summary>
+    public async Task<IReadOnlyList<MigrationInfo>> BaselineAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var logger = loggerFactory.CreateLogger<MigrationHost>();
+        await using var gate = await AcquireLockAsync(logger, ct);
+        EnsureBaselineable();
+        try
+        {
+            using var sp = BuildRunner(preview: false, loggerFactory);
+            using var scope = sp.CreateScope();
+            var loader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
+            loader.LoadVersionInfo();
+            var known = scope.ServiceProvider.GetRequiredService<IMigrationInformationLoader>().LoadMigrations();
+            RecordAll(scope.ServiceProvider.GetRequiredService<IMigrationProcessor>(), loader, known, logger);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new MigrationFailedException($"Baseline failed: {Innermost(ex).Message}", ex);
+        }
+        return GetStatus().Where(m => m.State == MigrationState.Applied).ToList();
+    }
+
+    // The version loader writes through the scope's processor, so one transaction makes the rows all-or-nothing.
+    private static void RecordAll(
+        IMigrationProcessor processor, IVersionLoader loader, IDictionary<long, IMigrationInfo> known, ILogger logger)
+    {
+        processor.BeginTransaction();
+        try
+        {
+            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
+                loader.UpdateVersionInfo(version, migration.Description ?? "");
+            processor.CommitTransaction();
+        }
+        catch
+        {
+            TryRollback(processor, logger);
+            throw;
+        }
+    }
+
+    // A failed rollback must not mask the failure that caused it.
+    private static void TryRollback(IMigrationProcessor processor, ILogger logger)
+    {
+        try
+        {
+            processor.RollbackTransaction();
+        }
+        catch (Exception rollbackFailure)
+        {
+            logger.LogError(rollbackFailure, "Rolling back the baseline records failed.");
+        }
+    }
+
+    /// <summary>A database with the core tables but no version table was built by an earlier schema source;
+    /// running the migrations on it would fail on the existing tables, so it must be baselined first.</summary>
+    private void RefuseUnrecordedSchema()
+    {
+        try
+        {
+            using var db = OpenClient();
+            var versionTable = StruoVersionTableMetaData.TableNameFor(options.TablePrefix);
+            if (!db.DbMaintenance.IsAnyTable(versionTable, false) && CoreTables.Exist(db, options.TablePrefix))
+                throw new MigrationBaselineRefusedException(
+                    "the database has the framework tables but no migration history; run the 'migrate:baseline' command once.");
+        }
+        catch (Exception ex) when (ex is not (MigrationBaselineRefusedException or OperationCanceledException))
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
+        }
+    }
+
+    private void EnsureBaselineable()
+    {
+        try
+        {
+            if (ReadAppliedRows().Count > 0)
+                throw new MigrationBaselineRefusedException(
+                    "migrations are already recorded in this database; baseline only applies to a database with none.");
+            using var db = OpenClient();
+            if (!CoreTables.Exist(db, options.TablePrefix))
+                throw new MigrationBaselineRefusedException(
+                    "the core tables do not exist; run migrate on a new database instead.");
+        }
+        catch (Exception ex) when (ex is not (MigrationBaselineRefusedException or OperationCanceledException))
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
+        }
+    }
+
+    private SqlSugarClient OpenClient() => new(new ConnectionConfig
+    {
+        DbType = DbTypeMapper.Map(options.DbType),
+        ConnectionString = options.ConnectionString,
+        IsAutoCloseConnection = true,
+    });
+
     private async Task<IAsyncDisposable> AcquireLockAsync(ILogger logger, CancellationToken ct)
     {
+        if (options.DbType == StruoDbType.Oracle)
+            logger.LogWarning(
+                "Oracle takes no migration lock; running migrate concurrently is unsupported.");
         try
         {
             return await MigrationLock.AcquireAsync(
@@ -135,22 +237,18 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
                   .AsGlobalPreview(preview)
                   .ScanIn(options.Assemblies.ToArray()).For.Migrations();
             })
-            .AddSingleton(new StruoMigrationContext(options.DbType, options.TablePrefix))
+            .AddSingleton(new StruoMigrationContext(options.DbType, options.TablePrefix, options.Seed))
             .Configure<TypeFilterOptions>(f => { f.Namespace = options.NamespaceFilter; f.NestedNamespaces = true; })
             .AddLogging();
         services.Replace(ServiceDescriptor.Singleton(logging));
+        options.ConfigureRunnerServices?.Invoke(services);
         return services.BuildServiceProvider(validateScopes: false);
     }
 
     private Dictionary<long, SchemaVersionRow> ReadAppliedRows()
     {
         var table = StruoVersionTableMetaData.TableNameFor(options.TablePrefix);
-        using var db = new SqlSugarClient(new ConnectionConfig
-        {
-            DbType = DbTypeMapper.Map(options.DbType),
-            ConnectionString = options.ConnectionString,
-            IsAutoCloseConnection = true,
-        });
+        using var db = OpenClient();
         if (!db.DbMaintenance.IsAnyTable(table, false)) return [];
         return db.Queryable<SchemaVersionRow>().AS(table).ToList().ToDictionary(r => r.Version);
     }

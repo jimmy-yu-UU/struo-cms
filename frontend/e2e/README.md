@@ -17,8 +17,11 @@ Both suites need, at minimum:
 - The API running and reachable at the base URL the specs call (default
   `http://localhost:5221`, the `http` launch profile's `applicationUrl`; override with `E2E_API` — this
   is separate from the Vite dev-proxy target in `vite.config.ts`, which is not environment-driven).
-- A reachable database with the seeded bootstrap admin (`Auth:BootstrapAdmin:Email` /
-  `Auth:BootstrapAdmin:Password`). Override the credentials the specs log in with via `E2E_EMAIL` /
+- A reachable, migrated database with the seeded bootstrap admin (`Auth:BootstrapAdmin:Email` /
+  `Auth:BootstrapAdmin:Password`). The API refuses to start on an unmigrated database: run
+  `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local
+  configuration. A local database built by v0.8.x CodeFirst needs `migrate:baseline` once instead.
+  Override the credentials the specs log in with via `E2E_EMAIL` /
   `E2E_PASSWORD` if your seeded admin differs from the shipped default.
 - No login-rate-limit override needed for a default checkout. `RateLimiting:Login` (the per-client-IP
   limiter, which counts every attempt — success or failure — against its window) ships **disabled** by

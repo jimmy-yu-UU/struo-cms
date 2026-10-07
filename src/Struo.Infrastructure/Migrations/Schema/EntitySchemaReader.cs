@@ -21,7 +21,7 @@ public static class EntitySchemaReader
         var logical = LogicalNameOf(entityType);
 
         var indexes = DeclaredIndexes(entityType, columns, physical)
-            .Concat(GroupedUniqueIndexes(columns))
+            .Concat(GroupedUniqueIndexes(columns, physical, logical))
             .ToList();
         var isSidecar = indexes.Any(i => i.IsUnique && i.Name == TranslationSidecarIndexPolicy.IndexNameFor(logical));
 
@@ -122,9 +122,19 @@ public static class EntitySchemaReader
     }
 
     // Unique groups attached to columns, including the (fk, locale) group the sidecar policy adds.
-    private static IEnumerable<ExpectedIndex> GroupedUniqueIndexes(IReadOnlyList<EntityColumnInfo> columns) =>
+    // Index names are schema-global, so a group name is qualified with its table unless it is the
+    // sidecar group or already names the table.
+    private static IEnumerable<ExpectedIndex> GroupedUniqueIndexes(
+        IReadOnlyList<EntityColumnInfo> columns, string physicalName, string logicalName) =>
         columns
             .SelectMany(c => (c.UIndexGroupNameList ?? []).Select(g => (Group: g, Column: c.DbColumnName.ToLowerInvariant())))
             .GroupBy(x => x.Group, StringComparer.Ordinal)
-            .Select(g => new ExpectedIndex(g.Key, g.Select(x => x.Column).ToList(), true));
+            .Select(g => new ExpectedIndex(
+                QualifiedGroupName(g.Key, physicalName, logicalName), g.Select(x => x.Column).ToList(), true));
+
+    private static string QualifiedGroupName(string group, string physicalName, string logicalName) =>
+        group == TranslationSidecarIndexPolicy.IndexNameFor(logicalName)
+        || group.Contains(physicalName, StringComparison.OrdinalIgnoreCase)
+            ? group
+            : $"ux_{physicalName}_{group}".ToLowerInvariant();
 }

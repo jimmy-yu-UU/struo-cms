@@ -24,7 +24,7 @@ public sealed class SiteSettings
 
     // Time-zone-aware, matching the convention for temporal columns on framework tables added after
     // the baseline. Declared as a dialect-neutral shape rather than a vendor type literal so
-    // CodeFirst creates a valid column on every backend — see ColumnTypeMap.
+    // the column maps to a valid type on every backend — see ColumnTypeMap.
     [ColumnShape(ColumnShape.TimestampWithTimeZone)] public DateTime UpdatedAt { get; set; }
     [SugarColumn(IsNullable = true)] public Guid? UpdatedBy { get; set; }
 }

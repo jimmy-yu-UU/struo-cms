@@ -6,7 +6,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Localization;
+namespace Struo.Tests.Support.Seeding;
 
 public sealed class LanguageSeederTests : IDisposable
 {

@@ -13,13 +13,11 @@ namespace Struo.Sample.Blog;
 // writable [CmsField]s (Interface = FieldInterface.Uuid): MetadataScanner.ValidateJunctionCollections
 // fails fast at startup on any junction collection whose FKs aren't writable, because the generic
 // CRUD API would otherwise create rows with empty keys. A fork that deletes this sample (per
-// AGENTS.md's core/sample boundary) loses nothing else — no core code references this type. An
-// existing dev database picks up the two new columns (note, sort) only through Development's
-// AutoSyncSchema or a fork-authored migration; this table is not part of db/migrations.
+// AGENTS.md's core/sample boundary) loses nothing else — no core code references this type. The
+// sample migration Migrations/202610080100_CreateBlogSchema.cs creates this table.
 [SugarTable("article_tags")]
-// CodeFirst-declared secondary indexes on both M2M junction FKs, both directions (RelationExpander
-// expansion + sync-on-write), created by InitTables in dev; a downstream fork that keeps this
-// entity should add the equivalent indexes to its own migrations.
+// Secondary indexes on both M2M junction FKs, both directions (RelationExpander expansion +
+// sync-on-write); the sample migration creates them.
 [SugarIndex("ix_article_tags_articleid", nameof(ArticleId), OrderByType.Asc)]
 [SugarIndex("ix_article_tags_tagid", nameof(TagId), OrderByType.Asc)]
 [CmsCollection("Article tag", Icon = "tag", Group = "Content", Hidden = true)]

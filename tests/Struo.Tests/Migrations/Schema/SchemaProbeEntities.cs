@@ -35,3 +35,18 @@ public sealed class ExplicitTypeProbe
     [SugarColumn(ColumnDataType = "varchar(500)")] public string Wide { get; set; } = "";
     [SugarColumn(Length = 10, DecimalDigits = 0)] public decimal Whole { get; set; }
 }
+
+[SugarTable("group_a_probe")]
+public sealed class GroupAProbe
+{
+    [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+    [SugarColumn(UniqueGroupNameList = ["unique1"])] public string Code { get; set; } = "";
+}
+
+[SugarTable("group_b_probe")]
+public sealed class GroupBProbe
+{
+    [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+    [SugarColumn(UniqueGroupNameList = ["unique1"])] public string Code { get; set; } = "";
+    [SugarColumn(UniqueGroupNameList = ["ux_group_b_probe_slug"])] public string Slug { get; set; } = "";
+}

@@ -1,11 +1,11 @@
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Localization;
 
-namespace Struo.Infrastructure.Localization;
+namespace Struo.Tests.Support.Seeding;
 
-/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <see cref="Language"/> table is
-/// created during startup (all environments); seeds <see cref="LocalizationOptions.EffectiveLanguages"/>
-/// when the table is empty. <c>Sort</c> is the list position, <c>IsDefault</c> marks the entry whose
+/// <summary>Test setup: seeds <see cref="LocalizationOptions.EffectiveLanguages"/> when the
+/// <see cref="Language"/> table is empty. <c>Sort</c> is the list position, <c>IsDefault</c> marks the entry whose
 /// code equals <see cref="LocalizationOptions.DefaultLanguage"/> (case-insensitively).</summary>
 public static class LanguageSeeder
 {

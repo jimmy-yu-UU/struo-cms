@@ -9,7 +9,7 @@ namespace Struo.Infrastructure.Identity;
 /// <c>permission</c>. Unique on (<see cref="RoleId"/>, <see cref="Collection"/>).</summary>
 [SugarTable("permissions")]
 // RBAC effective-permission resolution scans permissions by roleid on every authenticated request;
-// CodeFirst creates this index wherever this table does not already exist.
+// the core migration creates this index.
 [SugarIndex("ix_{table}_roleid", nameof(RoleId), OrderByType.Asc)]
 [SugarIndex("ux_{table}_role_collection", nameof(RoleId), OrderByType.Asc, nameof(Collection), OrderByType.Asc, true)]
 [CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true, Hidden = true)]

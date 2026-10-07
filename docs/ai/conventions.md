@@ -264,19 +264,22 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   Interfaces are prefixed `I` (`IItemRepository`, `IMetadataProvider`, ...).
 - **Database tables and columns**: base names are lower-case, plural, snake_case (`languages`,
   `file_translations`, `media_folders`, `user_roles`) — every framework and sample entity declares one
-  via `[SugarTable]` (`docs/guide/en/05-collections.md`). The 12 framework tables (`FrameworkEntityTypes.All`
-  plus `SchemaMigration`) are created under `Database:TablePrefix` + base name, default `struo_`
-  (`struo_users`); `TableNaming` decides the set, `SqlSugarClientFactory`'s `EntityNameService` hook
-  applies it, and any code that needs a physical name resolves it through
-  `EntityMaintenance.GetTableName` — never a literal. Sample and fork tables carry no prefix. Columns
+  via `[SugarTable]` (`docs/guide/en/05-collections.md`). The 12 framework tables are created under
+  `Database:TablePrefix` + base name, default `struo_` (`struo_users`). Two mechanisms apply the prefix:
+  `TableNaming` covers the 11 `FrameworkEntityTypes.All` entities, through `SqlSugarClientFactory`'s
+  `EntityNameService` hook, and `StruoVersionTableMetaData.TableNameFor` covers `schema_versions`. Any
+  code that needs a physical name resolves it through `EntityMaintenance.GetTableName` — never a
+  literal; a migration is the exception and uses `StruoMigration.FrameworkTable("<logical>")`, since it
+  never references entity classes. Sample and fork tables carry no prefix. Columns
   follow SqlSugar's default lower-casing of the CLR property name.
 - **Collection/field JSON names**: camelCase on the wire (`fileName`, `createdAt`) — the outbound
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
   `src/Struo.Api/Http/EnvelopeJsonOptionsHolder.cs`, and the MVC `JsonOptions` configured in
   `Program.cs`), and `MetadataScanner` derives each field's camelCase name from the CLR property name.
-- **Migration files**: `NNN-short-kebab-description.sql`, zero-padded, one contiguous series
-  (`db/migrations/README.md`) — the numeric prefix is the apply order via ordinal filename sort, so it
-  must be monotonic and gap-free; the next number is always the current highest **+ 1**.
+- **Migration files**: one FluentMigrator class per file, versioned `yyyyMMddHHmm`
+  (`[Migration(202610080000, "Description")]`) and named `<version>_<Name>.cs`; the version is the apply
+  order, and a migration that may already be applied anywhere is never edited. `make:migration` writes
+  the skeleton and picks a version that does not collide.
 - **Frontend field interfaces**: camelCase string literals (`richText`, `multiSelect`, `checkboxGroup`)
   mirroring the backend `FieldInterface` enum member names. Nothing generates one from the other — a new
   backend member must be added to `frontend/src/lib/fieldTypes/types.ts` **and** given a component in
@@ -356,8 +359,9 @@ row per parent per locale — is **derived, not declared**: nothing on `FileTran
 `Struo.Sample.Blog.ArticleTranslation` names the pair. `TranslationSidecarIndexPolicy`
 (`src/Struo.Infrastructure/Persistence/TranslationSidecarIndexPolicy.cs`) resolves the group name from
 each collection's already-scanned `Translation` metadata, and `SqlSugarClientFactory`'s
-`ApplySidecarUniqueGroup` comment has the stamping mechanism, so CodeFirst ends up emitting the
-composite `UNIQUE` on table creation with no attribute on the entity at all.
+`ApplySidecarUniqueGroup` comment has the stamping mechanism. The stamped group shapes the
+composite `UNIQUE` that `make:migration --entity` generates for the sidecar, that unit-harness CodeFirst
+creates, and that `SchemaChecker` expects, with no attribute on the entity at all.
 
 `SqlSugarClientFactory.Create` takes the policy as an optional third parameter defaulting to
 `TranslationSidecarIndexPolicy.None` (no sidecars, no uniques). `AddStruoInfrastructure`
@@ -366,11 +370,12 @@ as a singleton built from `IMetadataProvider.GetCollections()` and resolves it i
 factory registration, so any host going through DI gets the derivation for free. A fork that constructs
 `SqlSugarClientFactory.Create` itself — bypassing `AddStruoInfrastructure`'s registration, or calling it
 outside DI entirely — must pass `TranslationSidecarIndexPolicy.FromMetadata(metadata.GetCollections())`
-explicitly; omitting it silently falls back to `None` and every sidecar table comes up with no unique
-index at all, not an error at that point. `SchemaGuard.AssertCriticalConstraintsAsync`
-(`src/Struo.Infrastructure/Persistence/SchemaGuard.cs`), run at Development startup, is what actually
-catches the gap: it re-checks each sidecar table for a UNIQUE index covering its `(fk, locale)` columns
-by uniqueness and column coverage, not by name, and throws with an actionable message if one is missing.
+explicitly; omitting it silently falls back to `None`, so a generated sidecar migration, a CodeFirst
+table and the checker's expectations all carry no unique index, and nothing reports the gap. With the
+DI-built client, `SchemaChecker.Check`
+(`src/Struo.Infrastructure/Migrations/Schema/SchemaChecker.cs`), run at Development startup, catches a
+migration that left the `(fk, locale)` index out: it fails startup with the findings. A hand-built
+client without the policy expects no such index, so it hides the gap.
 
 ## Many-to-many junction payload
 
@@ -559,9 +564,10 @@ none is ever surfaced client-side.
   (`src/Struo.Application/Query/Read/TranslationOverlay.cs`) gates translatable Image/File resolution
   on `CanRead` for the file collection. An anonymous-read deployment needs a
   `Rbac:PublicReadCollections` entry for every collection a public filter or `deep=` traverses, not
-  just the root — that key is consulted only at first boot: `DataSeeder.SeedAsync`
-  (`src/Struo.Infrastructure/Persistence/DataSeeder.cs`) only invokes `RbacSeeder.SeedAsync` (which
-  reads it) when the `Role` table was just created this run. See
+  just the root — that key is read only by the `SeedCoreData` migration
+  (`src/Struo.Infrastructure/Migrations/Core/202610080001_SeedCoreData.cs`; `CoreSeedData` is the
+  config record it reads). It applies when that migration first runs, via `migrate` or
+  `MigrateOnStartup`; later edits to the key grant nothing — use the admin UI or a fork migration. See
   `docs/guide/en/17-roles-and-permissions.md`, "Public read".
 
 ## Configuration over hardcoding
@@ -572,12 +578,9 @@ environment-variable overrides (`Section__Key`), never hardcoded in source — `
 (`docs/guide/en/04-configuration.md` is the full reference). A relative filesystem path in
 configuration must be resolved against the correct root explicitly —
 `Struo:Files:ImageTransform:CachePath` is resolved against `IHostEnvironment.ContentRootPath`
-(`FileStorageServiceCollectionExtensions.cs`), which is the pattern to copy; `Database:MigrationsPath`
-by contrast is passed straight to `Directory.Exists` with no content-root resolution of its own, so it
-**must** be given as an absolute path in Production
-(`src/Struo.Infrastructure/Persistence/MigrationRunner.cs`) — see
-`docs/guide/en/20-deployment.md`, "Production checklist". New tunables should follow the
-`ImageTransform:CachePath` pattern (explicit content-root resolution), not the `MigrationsPath` one.
+(`FileStorageServiceCollectionExtensions.cs`), which is the pattern to copy. New tunables that name a
+path follow that pattern (explicit content-root resolution) rather than handing the raw string to the
+filesystem.
 
 ## Immutability
 

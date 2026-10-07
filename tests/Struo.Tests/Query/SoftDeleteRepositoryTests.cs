@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/SoftDeleteRepositoryTests.cs
+using Struo.Tests.Support.Seeding;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;

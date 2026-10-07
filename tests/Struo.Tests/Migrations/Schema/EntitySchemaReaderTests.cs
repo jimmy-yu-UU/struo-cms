@@ -186,6 +186,25 @@ public class EntitySchemaReaderTests
     }
 
     [Fact]
+    public void Unique_group_names_are_qualified_with_their_table()
+    {
+        var client = Client(prefix: "ug_");
+
+        EntitySchemaReader.Read(client, typeof(GroupAProbe)).Indexes.Should().ContainSingle().Which.Should()
+            .BeEquivalentTo(new ExpectedIndex("ux_group_a_probe_unique1", ["code"], true));
+        EntitySchemaReader.Read(client, typeof(GroupBProbe)).Indexes.Select(i => i.Name).Should()
+            .Contain("ux_group_b_probe_unique1");
+    }
+
+    [Fact]
+    public void A_unique_group_that_already_names_the_table_is_kept()
+    {
+        var indexes = EntitySchemaReader.Read(Client(prefix: "ug_"), typeof(GroupBProbe)).Indexes;
+
+        indexes.Should().ContainSingle(i => i.Name == "ux_group_b_probe_slug").Which.Columns.Should().Equal("slug");
+    }
+
+    [Fact]
     public void ReadAll_orders_by_physical_name_and_covers_every_framework_type()
     {
         var tables = EntitySchemaReader.ReadAll(Client(), FrameworkEntityTypes.All);

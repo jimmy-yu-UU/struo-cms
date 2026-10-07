@@ -1,11 +1,10 @@
 using SqlSugar;
 using Struo.Application.Security;
+using Struo.Infrastructure.Identity;
 
-namespace Struo.Infrastructure.Identity;
+namespace Struo.Tests.Support.Seeding;
 
-/// <summary>Invoked by <see cref="Persistence.DataSeeder"/> only when the <c>User</c> table is
-/// created during startup (all environments); seeds an initial admin from config when the table is
-/// empty.</summary>
+/// <summary>Test setup: seeds an initial admin when the <c>User</c> table is empty.</summary>
 public static class AdminUserSeeder
 {
     public static async Task SeedAsync(ISqlSugarClient db, IPasswordHasher hasher, string? email, string? password)

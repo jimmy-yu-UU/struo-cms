@@ -42,7 +42,6 @@ public class SqlSugarClientFactoryTests
         var client = NewClient(db, "struo_");
 
         Assert.Equal("struo_users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
-        Assert.Equal("struo_schema_migrations", client.EntityMaintenance.GetTableName<SchemaMigration>());
         Assert.Equal("articles", client.EntityMaintenance.GetTableName<Struo.Sample.Blog.Article>());
     }
 
@@ -53,7 +52,6 @@ public class SqlSugarClientFactoryTests
         var client = NewClient(db, "");
 
         Assert.Equal("users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
-        Assert.Equal("schema_migrations", client.EntityMaintenance.GetTableName<SchemaMigration>());
     }
 
     // SqlSugar caches EntityInfo per process, keyed by ConnectionConfig.ConfigId. Two clients with
@@ -84,5 +82,20 @@ public class SqlSugarClientFactoryTests
 
         client.Insertable(new Struo.Infrastructure.Identity.Role { Id = Guid.NewGuid(), Name = "editor" }).ExecuteCommand();
         Assert.Equal(1, client.Queryable<Struo.Infrastructure.Identity.Role>().Count());
+    }
+
+    [Fact]
+    public void SqlServer_clients_create_nvarchar_string_columns_with_CodeFirst()
+    {
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions
+            {
+                DbType = StruoDbType.SqlServer,
+                ConnectionString = "Server=unused;Database=unused-test;",
+                TablePrefix = "nv_"
+            },
+            new TestCurrentUserAccessor(null));
+
+        Assert.True(client.CurrentConnectionConfig.MoreSettings?.SqlServerCodeFirstNvarchar);
     }
 }

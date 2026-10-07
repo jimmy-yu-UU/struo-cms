@@ -1,4 +1,5 @@
 // tests/Struo.Tests/Query/TrashRevisionTests.cs
+using Struo.Tests.Support.Seeding;
 using System.Text.Json;
 using SqlSugar;
 using Struo.Application.Configuration;

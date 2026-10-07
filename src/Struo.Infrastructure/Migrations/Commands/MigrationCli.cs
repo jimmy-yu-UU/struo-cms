@@ -10,7 +10,8 @@ namespace Struo.Infrastructure.Migrations.Commands;
 public static class MigrationCli
 {
     public const int Success = 0, Failure = 1, Usage = 2;
-    private static readonly string[] Runnable = ["migrate", "migrate:status", "migrate:preview", "migrate:check", "make:migration"];
+    private const string MigrateCommand = "migrate";
+    private static readonly string[] Runnable = [MigrateCommand, "migrate:status", "migrate:preview", "migrate:check", "migrate:baseline", "make:migration"];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
@@ -34,7 +35,7 @@ public static class MigrationCli
     }
 
     private static bool IsCommand(string arg) =>
-        arg == "migrate" || arg.StartsWith("migrate:", StringComparison.Ordinal) || arg == "make:migration";
+        arg == MigrateCommand || arg.StartsWith("migrate:", StringComparison.Ordinal) || arg == "make:migration";
 
     private static readonly string[] HostSwitches = ["--environment", "--contentRoot", "--applicationName", "--urls"];
 
@@ -77,43 +78,67 @@ public static class MigrationCli
 
         try
         {
-            var db = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
-            var host = new MigrationHost(
-                OptionsOverride(new MigrationHostOptions(
-                    db.DbType, db.ConnectionString, db.TablePrefix,
-                    services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)),
-                services.GetRequiredService<ILoggerFactory>());
-            switch (command)
-            {
-                case "migrate":
-                    var applied = await host.ApplyAsync(ct);
-                    if (applied.Count == 0) await stdout.WriteLineAsync("Nothing to migrate.");
-                    foreach (var m in applied) await stdout.WriteLineAsync($"Applied {m.Version}  {m.Description}");
-                    break;
-                case "migrate:status":
-                    var status = host.GetStatus();
-                    foreach (var m in status)
-                        await stdout.WriteLineAsync(
-                            $"{m.Version,-14} {m.State,-9} {(m.AppliedOn?.ToString("u") ?? "-"),-21} {m.Description}");
-                    await stdout.WriteLineAsync(
-                        $"{status.Count(m => m.State == MigrationState.Applied)} applied, " +
-                        $"{status.Count(m => m.State == MigrationState.Pending)} pending, " +
-                        $"{status.Count(m => m.State == MigrationState.Orphaned)} orphaned");
-                    break;
-                case "migrate:preview":
-                    var pending = host.Preview(stdout);
-                    await stdout.WriteLineAsync($"-- {pending.Count} migration(s) pending");
-                    break;
-                default:
-                    await stderr.WriteLineAsync($"Command '{command}' is not implemented.");
-                    return Usage;
-            }
-            return Success;
+            return await RunHostCommandAsync(command, services, stdout, stderr, ct);
         }
-        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or OptionsValidationException)
+        catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or MigrationBaselineRefusedException
+            or OptionsValidationException)
         {
             await stderr.WriteLineAsync($"{command} failed: {ex.Message}");
             return Failure;
         }
+    }
+
+    private static async Task<int> RunHostCommandAsync(
+        string command, IServiceProvider services, TextWriter stdout, TextWriter stderr, CancellationToken ct)
+    {
+        var host = new MigrationHost(
+            OptionsOverride(MigrationHostOptions.FromServices(
+                services, includeSeed: command is MigrateCommand or "migrate:preview")),
+            services.GetRequiredService<ILoggerFactory>());
+        switch (command)
+        {
+            case MigrateCommand:
+                await ApplyAsync(host, stdout, ct);
+                return Success;
+            case "migrate:status":
+                await WriteStatusAsync(host, stdout);
+                return Success;
+            case "migrate:preview":
+                var pending = host.Preview(stdout);
+                await stdout.WriteLineAsync($"-- {pending.Count} migration(s) pending");
+                return Success;
+            case "migrate:baseline":
+                await BaselineAsync(host, stdout, ct);
+                return Success;
+            default:
+                await stderr.WriteLineAsync($"Command '{command}' is not implemented.");
+                return Usage;
+        }
+    }
+
+    private static async Task ApplyAsync(MigrationHost host, TextWriter stdout, CancellationToken ct)
+    {
+        var applied = await host.ApplyAsync(ct);
+        if (applied.Count == 0) await stdout.WriteLineAsync("Nothing to migrate.");
+        foreach (var m in applied) await stdout.WriteLineAsync($"Applied {m.Version}  {m.Description}");
+    }
+
+    private static async Task WriteStatusAsync(MigrationHost host, TextWriter stdout)
+    {
+        var status = host.GetStatus();
+        foreach (var m in status)
+            await stdout.WriteLineAsync(
+                $"{m.Version,-14} {m.State,-9} {(m.AppliedOn?.ToString("u") ?? "-"),-21} {m.Description}");
+        await stdout.WriteLineAsync(
+            $"{status.Count(m => m.State == MigrationState.Applied)} applied, " +
+            $"{status.Count(m => m.State == MigrationState.Pending)} pending, " +
+            $"{status.Count(m => m.State == MigrationState.Orphaned)} orphaned");
+    }
+
+    private static async Task BaselineAsync(MigrationHost host, TextWriter stdout, CancellationToken ct)
+    {
+        var recorded = await host.BaselineAsync(ct);
+        foreach (var m in recorded) await stdout.WriteLineAsync($"Recorded {m.Version}  {m.Description}");
+        await stdout.WriteLineAsync($"{recorded.Count} migration(s) recorded as applied.");
     }
 }

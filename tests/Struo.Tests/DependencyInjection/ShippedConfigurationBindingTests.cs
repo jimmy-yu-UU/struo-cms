@@ -9,6 +9,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Application.Security;
 using Struo.Infrastructure.DependencyInjection;
+using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
@@ -21,7 +22,7 @@ namespace Struo.Tests.DependencyInjection;
 ///
 /// <para>
 /// <see cref="OptionsValidationTests"/> feeds an in-memory dictionary keyed by the literal
-/// <c>"Database:..."</c>; its <c>Shipped_appsettings_disables_AutoSyncSchema</c> reads the real file
+/// <c>"Database:..."</c>; its <c>Shipped_appsettings_leaves_MigrateOnStartup_off_and_drops_the_removed_keys</c> reads the real file
 /// through <see cref="DatabaseOptions.SectionName"/>. Neither is the combination that boots in
 /// production. So this scenario goes undetected: production binds a literal <c>"Database"</c>,
 /// someone later renames the constant's value to <c>"Db"</c> and updates the shipped file to match —
@@ -112,7 +113,7 @@ public sealed class ShippedConfigurationBindingTests
         // DatabaseOptions). This is load-bearing against the shipped file's own "Database" section
         // going missing or being emptied out: GetChildren() would then be empty and this fails as a
         // plain assertion, matching the sibling idiom at
-        // OptionsValidationTests.Shipped_appsettings_disables_AutoSyncSchema ("鍵被整段
+        // OptionsValidationTests.Shipped_appsettings_leaves_MigrateOnStartup_off_and_drops_the_removed_keys ("鍵被整段
         // 刪掉時 GetValue<bool> 也會回 false，光斷言 false 會假綠燈"). It does NOT, by itself, catch the
         // divergence the section-name-divergence mutation exercises (BindConfiguration bound to a
         // hardcoded "Db" instead of DatabaseOptions.SectionName) — that mutation lives inside
@@ -127,21 +128,20 @@ public sealed class ShippedConfigurationBindingTests
         var bound = BindThroughProductionRegistration<DatabaseOptions>(
             configuration, (services, _) => services.AddStruoInfrastructure());
 
-        // Honest accounting of what these five assertions can and cannot catch. Only two of them have
-        // real discriminating power: MigrationsPath (shipped "" vs the C# default null) and
-        // ConnectionString (the shipped non-empty string vs the C# default empty string). DbType,
-        // AutoSyncSchema and TablePrefix happen to equal the DatabaseOptions default (PostgreSQL /
-        // false / "struo_") in the shipped file, so they pass whether or not the real value bound
-        // correctly — they are kept for documentation value and because a future change to any of
-        // those defaults would make them discriminate too, not because they discriminate today.
+        // Honest accounting of what these four assertions can and cannot catch. Only ConnectionString
+        // has real discriminating power (the shipped non-empty string vs the C# default empty string).
+        // DbType, MigrateOnStartup and TablePrefix happen to equal the DatabaseOptions default
+        // (PostgreSQL / false / "struo_") in the shipped file, so they pass whether or not the real
+        // value bound correctly — they are kept for documentation value and because a future change to
+        // any of those defaults would make them discriminate too, not because they discriminate today.
         //
         // In practice, for the section-name-divergence mutation (an unbound/misbound section),
-        // NONE of the five ever get the chance to run: DatabaseOptions.ConnectionString carries
+        // NONE of the four ever get the chance to run: DatabaseOptions.ConnectionString carries
         // [Required(AllowEmptyStrings = false)], so IOptions<DatabaseOptions>.Value throws
         // OptionsValidationException before any Should() call below executes. That exception — not
         // these assertions — is this guard's actual signal today. They remain load-bearing as a
-        // fallback: if ConnectionString's [Required] is ever relaxed, MigrationsPath and
-        // ConnectionString are what keep this test honest instead of it going silently green.
+        // fallback: if ConnectionString's [Required] is ever relaxed, ConnectionString and
+        // the others are what keep this test honest instead of it going silently green.
         //
         // DbType is compared as a parsed enum, not as a string. ConfigurationBinder parses enum
         // members case-insensitively, so comparing bound.DbType.ToString() against the file's
@@ -150,8 +150,7 @@ public sealed class ShippedConfigurationBindingTests
         var expectedDbType = Enum.Parse<StruoDbType>(shipped.GetProperty("DbType").GetString()!, ignoreCase: true);
         bound.DbType.Should().Be(expectedDbType);
         bound.ConnectionString.Should().Be(shipped.GetProperty("ConnectionString").GetString());
-        bound.AutoSyncSchema.Should().Be(shipped.GetProperty("AutoSyncSchema").GetBoolean());
-        bound.MigrationsPath.Should().Be(shipped.GetProperty("MigrationsPath").GetString());
+        bound.MigrateOnStartup.Should().Be(shipped.GetProperty("MigrateOnStartup").GetBoolean());
         bound.TablePrefix.Should().Be(shipped.GetProperty("TablePrefix").GetString());
     }
 
@@ -178,7 +177,7 @@ public sealed class ShippedConfigurationBindingTests
         bound.S3.Bucket.Should().Be(shippedS3.GetProperty("Bucket").GetString());
 
         // The rest ship values equal to their C# default, so they pass whether or not the section bound.
-        // Kept for the same reason as the Database test's DbType/AutoSyncSchema: they document the
+        // Kept for the same reason as the Database test's DbType/MigrateOnStartup: they document the
         // shipped contract, and they start discriminating the moment either side changes. Note they are
         // not dead weight against a *file-side* drift: GetProperty throws KeyNotFoundException if the
         // file stops spelling one of these keys, which is a red test, not a silent pass.
@@ -240,36 +239,36 @@ public sealed class ShippedConfigurationBindingTests
     }
 
     /// <summary>
-    /// <c>Auth:BootstrapAdmin</c> has no options type: <c>Program</c> passes
+    /// <c>Auth:BootstrapAdmin</c> has no options type: <c>CoreSeedData.FromServices</c> reads
     /// <c>Configuration["Auth:BootstrapAdmin:Email"]</c> and <c>[":Password"]</c> straight into
-    /// <c>DataSeeder.SeedAsync</c>, so there is no binder to compare a bound object against. What makes it
-    /// worth pinning anyway is the failure mode on the consuming side: <c>AdminUserSeeder.SeedAsync</c>
-    /// returns early when either value is null or blank, so a shipped file whose keys have moved from
+    /// <c>CoreSeedData.From</c>, so there is no binder to compare a bound object against. What makes it
+    /// worth pinning anyway is the failure mode on the consuming side: <c>CoreSeedData.From</c>
+    /// creates no admin when either value is null or blank, so a shipped file whose keys have moved from
     /// those literal paths seeds NO admin at all on a fresh install — nobody can log in, and nothing logs
     /// an error.
     /// <para>
-    /// The password is additionally compared against <c>DataSeeder.DefaultAdminPassword</c>, the constant
+    /// The password is additionally compared against <c>BootstrapAdminPasswordWarning.DefaultPassword</c>, the constant
     /// the production default-password WARNING compares against. If those drift apart the warning
     /// silently stops firing while the default account is still created — the exact combination a
     /// production deployment must not be in.
     /// </para>
     /// <para>
-    /// The literal paths below are spelled the way <c>Program</c> spells them. That is the coupling under
-    /// test, and its limit: renaming the section in <c>Program</c> AND in the file leaves this red until
-    /// the test is updated too, which is intended, while a rename in <c>Program</c> alone is invisible
-    /// here because nothing in this test reads <c>Program</c>.
+    /// The literal paths below are spelled the way <c>CoreSeedData</c> spells them. That is the coupling under
+    /// test, and its limit: renaming the section in <c>CoreSeedData</c> AND in the file leaves this red until
+    /// the test is updated too, which is intended, while a rename in <c>CoreSeedData</c> alone is invisible
+    /// here because nothing in this test reads <c>CoreSeedData</c>.
     /// </para>
     /// </summary>
     [Fact]
-    public void Shipped_appsettings_bootstrap_admin_sits_at_the_paths_Program_reads()
+    public void Shipped_appsettings_bootstrap_admin_sits_at_the_paths_CoreSeedData_reads()
     {
         var configuration = ShippedConfiguration();
 
         configuration["Auth:BootstrapAdmin:Email"].Should().NotBeNullOrWhiteSpace(
-            "AdminUserSeeder seeds nothing when the email is null or blank, leaving a fresh install " +
+            "the core seed creates no admin when the email is null or blank, leaving a fresh install " +
             "with no account to log in with");
-        configuration["Auth:BootstrapAdmin:Password"].Should().Be(DataSeeder.DefaultAdminPassword,
-            "the shipped password is what DataSeeder's production WARNING compares against; if the two " +
+        configuration["Auth:BootstrapAdmin:Password"].Should().Be(BootstrapAdminPasswordWarning.DefaultPassword,
+            "the shipped password is what the production startup WARNING compares against; if the two " +
             "drift the warning silently stops firing");
     }
 
@@ -317,7 +316,7 @@ public sealed class ShippedConfigurationBindingTests
     private static void AssertShippedKeysMatchProperties<TOptions>(string sectionName)
     {
         var keys = ShippedConfiguration().GetSection(sectionName).GetChildren()
-            // "// Xxx" keys are this file's own documentation convention (as on Database:MigrationsPath).
+            // "// Xxx" keys are this file's own documentation convention (as on Database:MigrationLockTimeoutSeconds).
             // They are real configuration keys to the provider but bind to nothing, and they sit in the
             // PARENT section of the three covered here — filtered anyway so the convention can be used
             // inside these sections later without turning this test red for a comment.

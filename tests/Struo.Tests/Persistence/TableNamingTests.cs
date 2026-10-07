@@ -11,13 +11,12 @@ public sealed class TableNamingTests
     {
         var data = new TheoryData<Type>();
         foreach (var t in FrameworkEntityTypes.All) data.Add(t);
-        data.Add(typeof(SchemaMigration));
         return data;
     }
 
     [Theory]
     [MemberData(nameof(FrameworkTypes))]
-    public void Every_framework_entity_and_the_migration_tracker_is_a_framework_table(Type type)
+    public void Every_framework_entity_is_a_framework_table(Type type)
     {
         TableNaming.IsFrameworkTable(type).Should().BeTrue();
     }
@@ -41,9 +40,8 @@ public sealed class TableNamingTests
     }
 
     [Fact]
-    public void Twelve_framework_tables_exactly()
+    public void Eleven_framework_entities_exactly()
     {
         FrameworkEntityTypes.All.Count.Should().Be(11);
-        TableNaming.IsFrameworkTable(typeof(SchemaMigration)).Should().BeTrue();
     }
 }

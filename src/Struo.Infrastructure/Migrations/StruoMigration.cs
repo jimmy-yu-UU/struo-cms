@@ -13,13 +13,16 @@ public abstract class StruoMigration : Migration
 
     protected StruoDbType Db => Struo.DbType;
 
+    /// <summary>The core seed inputs; null when the host was built without them.</summary>
+    protected CoreSeedData? Seed => Struo.Seed;
+
     /// <summary>The prefixed name of a framework table.</summary>
     protected string FrameworkTable(string name) => TableNaming.Apply(Struo.TablePrefix, name);
 
     /// <summary>Creates the unique (foreign key, locale) index a translation sidecar table needs.</summary>
     protected void CreateTranslationUniqueIndex(
-        string logicalTable, string physicalTable, string foreignKeyColumn, string localeColumn) =>
-        Create.Index(TranslationSidecarIndexPolicy.IndexNameFor(logicalTable)).OnTable(physicalTable)
+        string physicalTable, string foreignKeyColumn, string localeColumn) =>
+        Create.Index(TranslationSidecarIndexPolicy.IndexNameFor(physicalTable)).OnTable(physicalTable)
             .OnColumn(foreignKeyColumn).Ascending()
             .OnColumn(localeColumn).Ascending()
             .WithOptions().Unique();

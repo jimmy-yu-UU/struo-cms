@@ -7,9 +7,8 @@ using Struo.Domain.Metadata.Models;
 namespace Struo.Sample.Blog;
 
 [SugarTable("articles")]
-// CodeFirst-declared secondary index on the M2O FK column (ix_articles_categoryid), created by
-// InitTables in dev; a downstream fork that keeps this entity should add the equivalent index to
-// its own migrations, since sample schema isn't part of the core baseline.
+// Secondary index on the M2O FK column (ix_articles_categoryid); the sample migration
+// Migrations/202610080100_CreateBlogSchema.cs creates it.
 [SugarIndex("ix_articles_categoryid", nameof(CategoryId), OrderByType.Asc)]
 [CmsCollection("Article", Icon = "article", Group = "Content", DefaultDisplayField = nameof(Status), Revisions = true)]
 [CmsFieldGroup("Content", Label = "Content", Sort = 1)]
