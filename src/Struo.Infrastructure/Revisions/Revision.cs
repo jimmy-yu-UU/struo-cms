@@ -22,9 +22,8 @@ public sealed class Revision
     // makes a concurrent lost-update race fail closed (unique violation -> the capture's transaction
     // rolls back with the item write) instead of silently duplicating a revision number. Declared as the
     // class-level [SugarIndex("ux_{table}_item_no", ..., IsUnique)] above (the same declaration pattern
-    // UserRole uses for its two-column key), so CodeFirst emits it as a single composite unique index
-    // named after the resolved (prefixed) table. CodeFirst creates this index on any backend where the
-    // table does not yet exist; it is never retrofitted onto an already-existing table.
+    // UserRole uses for its two-column key), so it is one composite unique index
+    // named after the resolved (prefixed) table, which the core migration creates.
     public string CollectionName { get; set; } = "";
     public string ItemId { get; set; } = "";
     public long RevisionNumber { get; set; }

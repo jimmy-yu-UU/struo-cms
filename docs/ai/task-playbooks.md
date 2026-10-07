@@ -59,17 +59,19 @@ Adding a collection is purely additive to a fork's own content project — it ne
    into the shipped `appsettings.json` itself (e.g. it is replacing the template's "ships with zero
    collections" posture permanently), update or remove that test deliberately as part of the same
    change — don't leave it contradicting the new configuration.
-7. **Restart the API.** `DatabaseInitializer.CreateMissingTables` creates the table automatically from
-   the entity class — in **every** environment and on **every** backend, not just Development. Because
-   the table doesn't exist yet, this step is inherently non-destructive: it only ever creates, never
-   alters or drops anything on an existing table (that's a separate, opt-in mechanism,
-   `Database:AutoSyncSchema`, Development-only — see `AGENTS.md`'s "Invariants") — confirm the admin
-   SPA's sidebar shows the new collection under its configured `Group`.
+7. **Create the table with a migration.** In your content project run
+   `dotnet run --project src/Struo.Api -- make:migration <Name> --entity <Type> --output <dir> [--namespace <Ns>]`,
+   where `<dir>` is the migrations directory your project uses. The command reads the entity's metadata,
+   writes a `Create.Table` migration and never overwrites a file. Review the generated file (column
+   types, indexes, the translation sidecar if the entity has translatable fields), then apply it with
+   `dotnet run --project src/Struo.Api -- migrate`. Start the API and confirm the admin SPA's sidebar
+   shows the new collection under its configured `Group`.
 8. **Grant RBAC** read/write/delete permissions for the collection to whichever roles need them — a
    brand-new collection has zero grants, so only a super-admin can use it until you add some.
-9. **Nothing further is needed for the table itself before deploying** — CodeFirst creates it in
-   Production the same way it does everywhere else. A migration under `db/migrations/` is only needed
-   later, if you change the shape of a table that already holds data you need to keep (see Playbook 4).
+9. **Deploy the migration with the code.** Production does not create tables itself: run `migrate` as a
+   deployment step, or set `Database:MigrateOnStartup=true` where you want the host to apply it. With
+   neither, the host refuses to start while the migration is pending. Later changes to the table's
+   shape are further migrations (Playbook 4).
 10. **Tests to add**: if the collection has any non-trivial behavior worth locking down (a relation, a
     computed default, an interaction with soft delete/revisions), add a test in your content project's
     own test suite, or, for framework-level behavior you are exercising rather than declaring, follow
@@ -80,8 +82,8 @@ Adding a collection is purely additive to a fork's own content project — it ne
 11. **Gate**: `dotnet build && dotnet test` (the standing gates' backend pair; this playbook does not
     touch `docs/guide/**`, so the docs gate does not apply). Add
     live-database verification before a production deploy, against whichever backend you are actually
-    configured for — confirm CodeFirst creates the new table with the columns/indexes/constraints you
-    expect; a green SQLite run does not guarantee the same result on PostgreSQL or another backend.
+    configured for — run `migrate` and `migrate:check` and confirm the new table has the
+    columns/indexes/constraints you expect; a green SQLite run does not guarantee the same result on PostgreSQL or another backend.
 
 ## Playbook 2: Add a field type
 
@@ -230,57 +232,35 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
 
 ## Playbook 4: Add a migration
 
-Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `db/migrations/README.md`.
+Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `AGENTS.md`'s
+"Migrations are the only schema source" invariant.
 
-1. Determine the next number: the current highest `NNN-*.sql` filename in `db/migrations/` **+ 1**,
-   zero-padded. The template ships **zero** scripts, so a fresh fork's first migration is `001-...`,
-   and anything already there belongs to that fork.
-2. Create `db/migrations/NNN-short-kebab-description.sql` with a header comment (date, author, one-line
-   intent). One logical change per file. Scripts here are ALTER-only by convention: creating a table is
-   CodeFirst's job (`DatabaseInitializer.CreateMissingTables`, every environment, every backend —
-   Playbook 1).
-3. Write plain, portable SQL: standard types (`varchar(n)`, `integer`, `bigint`, `boolean`, `timestamp`,
-   `numeric(p,s)`), no PostgreSQL-specific syntax (`jsonb`/`uuid`/`timestamptz`/`serial`, `DO $$ … $$`,
-   `::` casts, `RETURNING`). **Idempotency is not required, and `IF NOT EXISTS` should be avoided** —
-   the CodeFirst-created `SchemaMigration` tracking table already guarantees each filename runs at
-   most once, and `IF NOT EXISTS` is not supported on SQL Server. Forward-only — no automatic
-   down-migration; a rollback is a new compensating script, not an edit to this one. See
-   `db/migrations/README.md` §5 for the full prefer/avoid tables.
-4. Use a time-zone-aware type (not bare `timestamp`) for any new column or table storing an
-   instant, and store UTC. This is a convention rather than something you can read off an
-   existing script: the template ships no migration files at all. If the column is also modeled
-   as an entity property, mark it `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
-   (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) rather than a PostgreSQL-only
-   `timestamptz` literal, so CodeFirst resolves the matching type per backend and a freshly
-   created table agrees with what this migration adds to an existing one. Hand-writing the DDL
-   directly instead (a column no entity property backs)? `ColumnTypeMap.cs`
-   (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) centralizes the per-backend literal
-   to copy in — see `db/migrations/README.md` §5 for the full mapping. Either way, check the
-   target table's actual current column type (the entity declaration in `src/`, or the live
-   schema) rather than assuming one. Do not retroactively convert an existing bare-`timestamp`
-   column while you're at it unless that specific column is the subject of this migration
-   (re-anchoring already-stored values against a session time zone is a silent data shift).
-5. **Never edit a filename that may already be recorded as applied anywhere** — `MigrationRunner`
-   tracks applied migrations by filename only, in the CodeFirst-created `SchemaMigration` table, with
-   no checksum, so an edited file with an already-applied filename is silently never re-run — the rule
-   and the by-filename-only tracking it follows from are `db/migrations/README.md` §4. Ship a new file
-   instead.
-6. **Make sure the runner is actually enabled where the script has to run.** `Database:MigrationsPath`
-   ships empty, and empty means the runner is skipped entirely (`src/Struo.Api/appsettings.json`) — a
-   migration in `db/migrations/` does nothing until the key points at that directory in the environment
-   you are deploying to, not just in the one you verified against.
-7. **Tests to add**: this is SQL, not C# — there is no unit test for a migration script itself. Verify
-   it directly (see the live-database step below). If the migration backs a new collection, that
-   collection's own tests (Playbook 1) are the regression coverage.
-8. **Gate**: `dotnet build && dotnet test` first — `MigrationRunner` runs on any configured backend,
-   including the SQLite test suite, so this exercises the runner itself (though not your specific SQL,
-   which SQLite may accept or reject differently than your actual target backend). **The migration
-   itself can only be verified by applying it**: point `Database:MigrationsPath` at `db/migrations/` (an
-   absolute path) against a disposable instance of the backend you are actually configured for, and
-   confirm the script applies cleanly and is recorded in the tracking table (`struo_schema_migrations`
-   on a default install). PostgreSQL is this
-   repository's only verified live target; on any other backend, that backend needs its own equivalent
-   live check — a green SQLite (or PostgreSQL) run does not transfer.
+1. Write a new class in your content project's migrations directory:
+   `dotnet run --project src/Struo.Api -- make:migration <Name> --output <dir> [--namespace <Ns>]`
+   writes the skeleton with a version of the form `yyyyMMddHHmm` that does not collide with a file
+   already in `<dir>`. The class derives from `StruoMigration`. One logical change per migration.
+2. Express the change with FluentMigrator's portable calls (`Create.Table`, `Alter.Table`,
+   `Create.Index`, `Insert.IntoTable`, …) and the type helpers: `AsString`, `AsGuid`, `AsInt64`, …,
+   plus `AsShape(shape, Db)`, `AsJson(Db)` and `AsLongText(Db)` for the types that differ per backend. Branch on
+   `StruoMigration.Db` only where a backend genuinely needs its own form. Do not write SQL strings, and
+   do not reference entity classes from a migration: a migration is a frozen snapshot of the schema at
+   the time it was written.
+3. Resolve a framework table's physical name through `FrameworkTable("<logical>")` (it applies
+   `Database:TablePrefix`); a fork's own tables carry no prefix. Use
+   `AsShape(ColumnShape.TimestampWithTimeZone, Db)` for any column that stores an instant, and store UTC.
+4. **Never edit a migration that may already be applied anywhere.** Applied versions are recorded in
+   `{TablePrefix}schema_versions` by version number, so an edited file is silently not re-run. Add a
+   new migration instead. Migrations are forward-only; a rollback is a further migration.
+5. Preview with `migrate:preview` (prints the pending DDL), apply with `migrate`, and inspect with
+   `migrate:status`. `migrate:check` then compares the live schema with the entity metadata and exits 1
+   on any error, so a migration that drifted from the entity is caught.
+6. **Tests to add**: a migration is code, so apply it in a test against SQLite the way the shipped
+   suite does (`tests/Struo.Tests/Migrations/`), and call `SchemaChecker.Check` from your own tests
+   and assert it reports no errors.
+7. **Gate**: `dotnet build && dotnet test` first. The SQLite suite may accept or reject your DDL
+   differently from the backend you actually run, so also apply the migration with `migrate` to a
+   disposable instance of that backend and run `migrate:check` against it. A green SQLite or
+   PostgreSQL run does not transfer to another backend.
 
 ## Playbook 5: Change the admin SPA
 

@@ -788,7 +788,7 @@ public sealed partial class PostgresIntegrationTests : IDisposable
 
     // 這條測試證明：在真 PostgreSQL 上，未過濾的 InitTables 會 DROP 被移除的欄位；SQLite 不驗證宣告
     // 型別、其 dialect 的結構同步能力也與 PG 不同，所以這個主張在這個儲存庫裡只有在這裡才證得出來。
-    // 完整說明：docs/ai/decisions/codefirst-creates-missing-tables-only.md。
+    // 完整說明：docs/ai/decisions/migrations-are-the-only-schema-source.md。
     [Fact]
     public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
     {
