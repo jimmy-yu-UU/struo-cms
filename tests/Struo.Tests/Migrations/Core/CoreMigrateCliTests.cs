@@ -66,6 +66,22 @@ public sealed class CoreMigrateCliTests : IDisposable
         db.Queryable<Permission>().Count().Should().Be(1);
     }
 
+    [Fact]
+    public async Task Status_needs_neither_a_password_hasher_nor_configuration()
+    {
+        using var sp = new ServiceCollection()
+            .AddSingleton(Options.Create(new DatabaseOptions
+                { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = _prefix }))
+            .AddSingleton(new ScannedAssemblies([typeof(StruoMigration).Assembly]))
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .BuildServiceProvider();
+
+        var status = await Run(sp, "migrate:status");
+
+        status.Code.Should().Be(MigrationCli.Success, status.Err);
+        status.Out.Should().Contain("2 pending");
+    }
+
     private string[] Tables() => new SqlSugarClient(new ConnectionConfig
         { DbType = DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true })
         .DbMaintenance.GetTableInfoList(false).Select(t => t.Name.ToLowerInvariant()).ToArray();

@@ -82,7 +82,7 @@ public static class MigrationCli
                 OptionsOverride(new MigrationHostOptions(
                     db.DbType, db.ConnectionString, db.TablePrefix,
                     services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)
-                    { Seed = CoreSeedData.FromServices(services) }),
+                    { Seed = command is "migrate" or "migrate:preview" ? CoreSeedData.FromServices(services) : null }),
                 services.GetRequiredService<ILoggerFactory>());
             switch (command)
             {
