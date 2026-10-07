@@ -79,6 +79,20 @@ public sealed class StartupMigrationGateTests : IDisposable
     }
 
     [Fact]
+    public async Task MigrateOnStartup_on_a_database_with_core_tables_and_no_history_fails_with_the_baseline_hint_and_changes_nothing()
+    {
+        var db = _harness.Db();
+        db.CodeFirst.InitTables(FrameworkEntityTypes.All.ToArray());
+        var before = TableNames(db);
+
+        var act = () => Run(migrateOnStartup: true, isDevelopment: false);
+
+        var ex = (await act.Should().ThrowAsync<MigrationBaselineRefusedException>()).Which;
+        ex.Message.Should().Contain("'migrate:baseline'").And.NotContain("\n");
+        TableNames(db).Should().Equal(before);
+    }
+
+    [Fact]
     public async Task MigrateOnStartup_applies_the_pending_migrations_then_passes()
     {
         await Run(migrateOnStartup: true, isDevelopment: true);

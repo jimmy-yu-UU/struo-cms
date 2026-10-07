@@ -24,6 +24,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         ct.ThrowIfCancellationRequested();
         var logger = loggerFactory.CreateLogger<MigrationHost>();
         await using var gate = await AcquireLockAsync(logger, ct);
+        RefuseUnrecordedSchema();
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
         try
@@ -58,7 +59,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             var loader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
             loader.LoadVersionInfo();
             var known = scope.ServiceProvider.GetRequiredService<IMigrationInformationLoader>().LoadMigrations();
-            RecordAll(scope.ServiceProvider.GetRequiredService<IMigrationProcessor>(), loader, known);
+            RecordAll(scope.ServiceProvider.GetRequiredService<IMigrationProcessor>(), loader, known, logger);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -69,7 +70,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
 
     // The version loader writes through the scope's processor, so one transaction makes the rows all-or-nothing.
     private static void RecordAll(
-        IMigrationProcessor processor, IVersionLoader loader, IDictionary<long, IMigrationInfo> known)
+        IMigrationProcessor processor, IVersionLoader loader, IDictionary<long, IMigrationInfo> known, ILogger logger)
     {
         processor.BeginTransaction();
         try
@@ -80,8 +81,39 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         }
         catch
         {
-            processor.RollbackTransaction();
+            TryRollback(processor, logger);
             throw;
+        }
+    }
+
+    // A failed rollback must not mask the failure that caused it.
+    private static void TryRollback(IMigrationProcessor processor, ILogger logger)
+    {
+        try
+        {
+            processor.RollbackTransaction();
+        }
+        catch (Exception rollbackFailure)
+        {
+            logger.LogError(rollbackFailure, "Rolling back the baseline records failed.");
+        }
+    }
+
+    /// <summary>A database with the core tables but no version table was built by an earlier schema source;
+    /// running the migrations on it would fail on the existing tables, so it must be baselined first.</summary>
+    private void RefuseUnrecordedSchema()
+    {
+        try
+        {
+            using var db = OpenClient();
+            var versionTable = StruoVersionTableMetaData.TableNameFor(options.TablePrefix);
+            if (!db.DbMaintenance.IsAnyTable(versionTable, false) && CoreTables.Exist(db, options.TablePrefix))
+                throw new MigrationBaselineRefusedException(
+                    "the database has the framework tables but no migration history; run the 'migrate:baseline' command once.");
+        }
+        catch (Exception ex) when (ex is not (MigrationBaselineRefusedException or OperationCanceledException))
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
         }
     }
 

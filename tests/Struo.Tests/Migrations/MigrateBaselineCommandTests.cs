@@ -121,6 +121,23 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         await AssertBaselineJoinsDatabase(StruoDbType.Sqlite, _file.ConnectionString, NewPrefix());
 
     [Fact]
+    public async Task Migrate_on_a_v08_database_points_at_baseline_in_one_line_and_changes_nothing()
+    {
+        var prefix = NewPrefix();
+        var db = Client(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+        await SimulateV08(db);
+        var tables = db.DbMaintenance.GetTableInfoList(false).Select(t => t.Name).Order().ToArray();
+        using var sp = Services(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+
+        var result = await Run(sp, "migrate");
+
+        result.Code.Should().Be(MigrationCli.Failure);
+        result.Out.Should().BeEmpty();
+        result.Err.TrimEnd().Split('\n').Should().ContainSingle().Which.Should().Contain("migrate:baseline");
+        db.DbMaintenance.GetTableInfoList(false).Select(t => t.Name).Order().Should().Equal(tables);
+    }
+
+    [Fact]
     public async Task A_second_baseline_is_refused_in_one_line_and_changes_nothing()
     {
         var prefix = NewPrefix();
