@@ -30,6 +30,9 @@ public sealed class MigrationCliTests : IDisposable
         new ServiceCollection()
             .AddSingleton(Options.Create(new DatabaseOptions
                 { DbType = db, ConnectionString = conn ?? _file.ConnectionString }))
+            .AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
+            .AddSingleton(Options.Create(new LocalizationOptions()))
+            .AddSingleton<Struo.Application.Security.IPasswordHasher, Struo.Infrastructure.Identity.Argon2idPasswordHasher>()
             .AddSingleton(new ScannedAssemblies([typeof(MigrationCliTests).Assembly]))
             .AddSingleton<Microsoft.Extensions.Logging.ILoggerFactory>(NullLoggerFactory.Instance)
             .BuildServiceProvider();
@@ -143,6 +146,9 @@ public sealed class MigrationCliTests : IDisposable
             })
             .Services
             .AddSingleton<IValidateOptions<DatabaseOptions>, DataAnnotationsValidateOptions<DatabaseOptions>>()
+            .AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
+            .AddSingleton(Options.Create(new LocalizationOptions()))
+            .AddSingleton<Struo.Application.Security.IPasswordHasher, Struo.Infrastructure.Identity.Argon2idPasswordHasher>()
             .AddSingleton(new ScannedAssemblies([typeof(MigrationCliTests).Assembly]))
             .AddSingleton<Microsoft.Extensions.Logging.ILoggerFactory>(NullLoggerFactory.Instance)
             .BuildServiceProvider();

@@ -13,6 +13,9 @@ public abstract class StruoMigration : Migration
 
     protected StruoDbType Db => Struo.DbType;
 
+    /// <summary>The core seed inputs; null when the host was built without them.</summary>
+    protected CoreSeedData? Seed => Struo.Seed;
+
     /// <summary>The prefixed name of a framework table.</summary>
     protected string FrameworkTable(string name) => TableNaming.Apply(Struo.TablePrefix, name);
 

@@ -135,7 +135,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
                   .AsGlobalPreview(preview)
                   .ScanIn(options.Assemblies.ToArray()).For.Migrations();
             })
-            .AddSingleton(new StruoMigrationContext(options.DbType, options.TablePrefix))
+            .AddSingleton(new StruoMigrationContext(options.DbType, options.TablePrefix, options.Seed))
             .Configure<TypeFilterOptions>(f => { f.Namespace = options.NamespaceFilter; f.NestedNamespaces = true; })
             .AddLogging();
         services.Replace(ServiceDescriptor.Singleton(logging));

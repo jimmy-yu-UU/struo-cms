@@ -81,7 +81,8 @@ public static class MigrationCli
             var host = new MigrationHost(
                 OptionsOverride(new MigrationHostOptions(
                     db.DbType, db.ConnectionString, db.TablePrefix,
-                    services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)),
+                    services.GetRequiredService<ScannedAssemblies>().All, db.MigrationLockTimeoutSeconds)
+                    { Seed = CoreSeedData.FromServices(services) }),
                 services.GetRequiredService<ILoggerFactory>());
             switch (command)
             {
