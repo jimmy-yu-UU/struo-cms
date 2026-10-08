@@ -15,7 +15,7 @@ public class FileDownloadTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<string> Upload(System.Net.Http.HttpClient c, string body = "data")
+    private static async Task<string> Upload(System.Net.Http.HttpClient c, string body = "data")
     {
         var content = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
         content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
@@ -151,14 +151,13 @@ public class FileDownloadTests(ApiFactory factory)
         // an unhandled I/O exception bubbling up as a 500.
         // The shared ApiFactory's FilesRoot accumulates blobs from every other test in this
         // collection, so isolate this upload's own blob via a before/after diff rather than
-        // assuming it is the only file on disk.
-        var before = Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories).ToHashSet();
+        // assuming it is the only file on disk. FilesRoot exists only once some upload has written to it.
+        var before = BlobsOnDisk().ToHashSet();
         var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await Upload(c, "payload");
         await Publish(c, id);
 
-        var blobPath = Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories)
-            .Except(before).Single();
+        var blobPath = BlobsOnDisk().Except(before).Single();
         System.IO.File.Delete(blobPath);
 
         var resp = await c.GetAsync($"/api/files/{id}/content");
@@ -166,4 +165,9 @@ public class FileDownloadTests(ApiFactory factory)
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
             .Should().Be("NOT_FOUND");
     }
+
+    private string[] BlobsOnDisk() =>
+        Directory.Exists(_factory.FilesRoot)
+            ? Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories)
+            : [];
 }
