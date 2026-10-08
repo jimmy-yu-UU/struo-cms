@@ -57,7 +57,10 @@ public static class SqlSugarClientFactory
                     if (TableNaming.IsFrameworkTable(type))
                         entity.DbTableName = TableNaming.Apply(options.TablePrefix, entity.DbTableName);
                 },
-                EntityService = (property, column) => ApplyColumnConventions(property, column, dbType, policy)
+                EntityService = (property, column) => ApplyColumnConventions(property, column, dbType, policy),
+                // Entity info carries this provider's column types, and row binders this provider's
+                // reader types; both caches are process-wide, so their keys are scoped per provider.
+                ReflectionInoCacheService = new ProviderScopedReflectionCache(dbType)
             }
         };
 
