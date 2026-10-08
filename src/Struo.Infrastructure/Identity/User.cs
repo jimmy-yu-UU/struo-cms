@@ -14,7 +14,7 @@ namespace Struo.Infrastructure.Identity;
 /// </summary>
 [SugarTable("users")]
 [SugarIndex("ux_{table}_email", nameof(Email), OrderByType.Asc, true)]
-[SugarIndex("ux_{table}_accesstoken", nameof(AccessToken), OrderByType.Asc, true)]
+[SugarIndex("ix_{table}_accesstoken", nameof(AccessToken), OrderByType.Asc, false)]
 [CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email), AdminOnly = true)]
 public sealed class User : AuditableEntity
 {

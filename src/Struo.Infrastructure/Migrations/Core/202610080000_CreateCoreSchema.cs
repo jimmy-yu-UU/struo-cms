@@ -103,9 +103,8 @@ public sealed class CreateCoreSchema : StruoMigration
             .OnColumn("email").Ascending()
             .WithOptions().Unique();
 
-        Create.Index($"ux_{FrameworkTable(Users)}_accesstoken").OnTable(FrameworkTable(Users))
-            .OnColumn("accesstoken").Ascending()
-            .WithOptions().Unique();
+        Create.Index($"ix_{FrameworkTable(Users)}_accesstoken").OnTable(FrameworkTable(Users))
+            .OnColumn("accesstoken").Ascending();
 
         Create.Table(FrameworkTable(Roles))
             .WithColumn("id").AsGuid().PrimaryKey()
