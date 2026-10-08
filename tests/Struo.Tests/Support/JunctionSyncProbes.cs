@@ -6,7 +6,7 @@ namespace Struo.Tests.Support;
 /// Junction-table probe for the diff-and-patch M2M sync (<c>SyncManyToManyAsync</c> /
 /// <c>ManyToManySync</c>) on real PostgreSQL. Mirrors ManyToManySyncTests.MmsLink (SQLite) — same
 /// shape, including the renamed <see cref="Alias"/> column — but lives here so
-/// PostgresIntegrationTests does not depend on another test class's nested type. Named distinctly
+/// LiveRepositoryTests does not depend on another test class's nested type. Named distinctly
 /// from any other probe table in this suite.
 /// </summary>
 [SugarTable("junction_sync_probe")]

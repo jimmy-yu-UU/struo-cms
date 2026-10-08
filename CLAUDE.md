@@ -18,8 +18,9 @@ downstream forks.
 - **Database behavior is verified against live databases, not just the SQLite test suite.** A change
   to this template itself is verified against every backend available locally: PostgreSQL, SQL Server,
   MySQL, MariaDB and SQLite, plus Oracle when an instance exists. A project built on this template
-  verifies only against the database(s) it actually uses. Beyond the migration tests and a SqlSugar
-  smoke check on SQL Server, MySQL and MariaDB, only PostgreSQL has a live suite.
+  verifies only against the database(s) it actually uses. The repository live suite and the migration
+  tests run on each backend whose test connection is configured; `STRUO_TEST_BACKEND` also moves the
+  API test hosts to a live backend.
   See `AGENTS.md`, "Verification", for the per-backend rule, the documented divergences,
   and how to configure a test connection.
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.

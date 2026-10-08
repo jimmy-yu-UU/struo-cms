@@ -1,4 +1,4 @@
-// tests/Struo.Tests/Query/PostgresIntegrationTests.Facets.cs
+// tests/Struo.Tests/Query/LiveRepositoryTests.Facets.cs
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public sealed partial class PostgresIntegrationTests
+public sealed partial class LiveRepositoryTests
 {
     // Same wiring as BuildRepoWithGraph(), but the entity set is the article/category/tag/tags
     // relation graph these facet/aggregate tests need, plus ArticleTag registered directly so
@@ -25,12 +25,7 @@ public sealed partial class PostgresIntegrationTests
     // collections absent from `collections`, so that extra entry is inert there.
     private (IItemRepository Repo, RelationshipGraph Graph, IMetadataProvider Md) BuildFacetRepo()
     {
-        GuardDisposableDatabase();
-
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
-            new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
-        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         _db.CodeFirst.InitTables<Category>();
         _db.CodeFirst.InitTables<Article>();
         _db.CodeFirst.InitTables<Tag>();
@@ -65,10 +60,10 @@ public sealed partial class PostgresIntegrationTests
         return (repo, graph, provider);
     }
 
-    [Fact]
-    public async Task Facet_by_uuid_fk_groups_nulls_and_orders_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Facet_by_uuid_fk_groups_nulls_and_orders(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
         var cat = new Category { Id = Guid.NewGuid(), Name = "Tech" };
         await repo.CreateAsync("category", cat);
@@ -83,10 +78,10 @@ public sealed partial class PostgresIntegrationTests
         b[1].Should().Be(new FacetBucket(null, 1));
     }
 
-    [Fact]
-    public async Task Many_to_many_leaf_facet_counts_distinct_uuid_roots_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Many_to_many_leaf_facet_counts_distinct_uuid_roots(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
         var a1 = new Article { Id = Guid.NewGuid(), Status = "published" };
         var a2 = new Article { Id = Guid.NewGuid(), Status = "published" };
@@ -105,10 +100,10 @@ public sealed partial class PostgresIntegrationTests
         b.Select(x => (x.Value, x.Count)).Should().Equal(("Guide", 2), ("Misc", 1));
     }
 
-    [Fact]
-    public async Task Translatable_leaf_facet_reads_the_sidecar_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Translatable_leaf_facet_reads_the_sidecar(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
         var cat = new Category { Id = Guid.NewGuid(), Name = "C" };
         await repo.CreateAsync("category", cat);
@@ -123,10 +118,10 @@ public sealed partial class PostgresIntegrationTests
         en.Should().Equal(new FacetBucket(null, 1));
     }
 
-    [Fact]
-    public async Task Aggregates_normalise_postgres_numeric_and_timestamp_types()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Aggregates_normalise_numeric_and_timestamp_types(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, _, _) = BuildFacetRepo();
         var a = new Article { Id = Guid.NewGuid(), Status = "published" };
         await repo.CreateAsync("article", a);

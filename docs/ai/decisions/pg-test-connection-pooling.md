@@ -2,8 +2,10 @@
 
 ## Decision
 
-`PostgresIntegrationTests` disables Npgsql connection pooling via `PgTestConnectionString.DisablePooling`,
-so each test gets its own physical connection instead of reusing one from the process-wide pool. An
+The live PostgreSQL tests disable Npgsql connection pooling via `PgTestConnectionString.DisablePooling`,
+so each test gets its own physical connection instead of reusing one from the process-wide pool. This
+holds for every live PostgreSQL connection the tests use, including the API test hosts under
+`STRUO_TEST_BACKEND=PostgreSQL`. An
 explicit `Pooling=` setting already present in the caller's connection string is left alone and wins.
 
 ## Why
@@ -15,7 +17,7 @@ text ("the I/O operation has been aborted because of either a thread exit or an 
 
 If pooling is re-enabled, that abort returns: the suite goes red on one test, not stably the same one
 from run to run. The expected casualty is `Resolved_connection_disables_pooling`
-(`tests/Struo.Tests/Query/PostgresIntegrationTests.cs`), which asserts the resolved connection string
+(`tests/Struo.Tests/Query/PostgresOnlyTests.cs`), which asserts the resolved connection string
 carries `Pooling=false`.
 
 Taking the pool out is test isolation aimed at the one variable proven to control the failure — the same
@@ -58,8 +60,7 @@ Measured 2026-08-05: `Struo.Api` booted as Production against real PostgreSQL wi
 22,023 item-API requests with 0 aborts.
 
 Measured 2026-08-05: adding a second Npgsql pool to the bare probe — a second connection string differing
-only in `Database=`, the shape `PostgresIntegrationTests`' repo/raw-client builders create by calling
-`DbMaintenance.CreateDatabase()` — took its failure rate from 2 of 15 to 15 of 15.
+only in `Database=` — took its failure rate from 2 of 15 to 15 of 15.
 
 Measured 2026-08-05: an extra pooled open/close on the same database, with no second pool, went 0 of 12.
 
