@@ -125,12 +125,17 @@ public class FacetSqlShapeTests : IDisposable
     public void Average_is_exact_over_int_long_decimal_and_nullable_columns() => AvgProbeAssertions.SeedAndAssert(_db);
 
     [Fact]
+    public void Average_with_a_repeating_mean_is_within_a_ten_thousandth() => AvgProbeAssertions.SeedRepeatingMeanAndAssert(_db);
+
+    [Fact]
     public void SqlServer_average_casts_integral_operands_to_float_and_leaves_other_ops_alone()
     {
         using var ms = new SqlSugarClient(new ConnectionConfig { DbType = DbType.SqlServer, ConnectionString = "Server=unused;Database=unused", IsAutoCloseConnection = true });
         var sql = AvgProbeAssertions.Query(ms, floatAverageOfIntegers: true).ToSql().Key;
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[IntValue\] AS FLOAT\)\s*\)\s+AS\s+\[V0\]");
+        sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[LongValue\] AS FLOAT\)\s*\)\s+AS\s+\[V1\]");
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[NullableInt\] AS FLOAT\)\s*\)\s+AS\s+\[V3\]");
+        sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[BigLong\] AS FLOAT\)\s*\)\s+AS\s+\[V8\]");
         sql.Should().MatchRegex(@"AVG\(\[DecimalValue\]\)\s+AS\s+\[V2\]");
         sql.Should().MatchRegex(@"SUM\(\[IntValue\]\)\s+AS\s+\[V4\]");
     }

@@ -2,12 +2,9 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Configuration;
-using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Identity;
-using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Schema;
-using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -38,7 +35,7 @@ public sealed class CoreUserAccessTokenTests
         if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
-        var db = Client(dbType, conn, prefix);
+        var db = CoreMigrationHarness.Client(dbType, conn, prefix);
         try
         {
             await new MigrationHost(
@@ -57,14 +54,14 @@ public sealed class CoreUserAccessTokenTests
 
     private static async Task AssertTokenBehaviour(ISqlSugarClient db, StruoDbType dbType)
     {
-        var table = db.EntityMaintenance.GetTableName<User>();
-        IndexCatalog.Read(db, dbType, table).Should().ContainSingle(i => i.Columns.SequenceEqual(TokenColumn))
-            .Which.IsUnique.Should().BeFalse();
-
         var first = Guid.CreateVersion7();
         var second = Guid.CreateVersion7();
         await db.Insertable(new User { Id = first, Email = "a@corp.test", Password = "x", IsActive = true }).ExecuteCommandAsync();
         await db.Insertable(new User { Id = second, Email = "b@corp.test", Password = "x", IsActive = true }).ExecuteCommandAsync();
+
+        var table = db.EntityMaintenance.GetTableName<User>();
+        IndexCatalog.Read(db, dbType, table).Should().ContainSingle(i => i.Columns.SequenceEqual(TokenColumn))
+            .Which.IsUnique.Should().BeFalse();
 
         var external = new SqlSugarExternalUserStore(db);
         var jitOne = await external.CreateExternalUserAsync("jit1@corp.test", "One");
@@ -79,16 +76,5 @@ public sealed class CoreUserAccessTokenTests
         found!.Id.Should().Be(second);
         (await new SqlSugarUserCredentialStore(db).FindByAccessTokenAsync("missing")).Should().BeNull();
         (await db.Queryable<User>().Where(u => u.Email.EndsWith("@corp.test")).CountAsync()).Should().Be(4);
-    }
-
-    private static ISqlSugarClient Client(StruoDbType dbType, string conn, string prefix)
-    {
-        var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
-        {
-            [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
-        });
-        return SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = dbType, ConnectionString = conn, TablePrefix = prefix },
-            new TestCurrentUserAccessor(Guid.Empty), policy);
     }
 }

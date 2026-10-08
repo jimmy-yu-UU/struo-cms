@@ -62,4 +62,25 @@ internal static class AvgProbeAssertions
         values[7].Should().BeOfType<long>().Which.Should().Be(2L);
         values[8].Should().BeOfType<double>().Which.Should().Be(10_000_000_000_000.5);
     }
+
+    private static readonly int[] RepeatingMeanValues = [1, 2, 2];
+
+    // 1, 2, 2 has the mean 1.666…, which MySQL/MariaDB round to div_precision_increment (default 4) decimals.
+    public static void SeedRepeatingMeanAndAssert(ISqlSugarClient db)
+    {
+        db.CodeFirst.InitTables<AvgProbe>();
+        db.Deleteable<AvgProbe>().Where(x => true).ExecuteCommand();
+        db.Insertable(RepeatingMeanValues.Select(v => new AvgProbe
+        {
+            Id = Guid.NewGuid(), IntValue = v, LongValue = v, BigLong = v, DecimalValue = v, NullableInt = v,
+        }).ToArray()).ExecuteCommand();
+
+        var row = Query(db, db.CurrentConnectionConfig.DbType == DbType.SqlServer).First()!;
+        var averages = new[] { (0, row.V0), (1, row.V1), (2, row.V2), (3, row.V3), (8, row.V8) };
+        foreach (var (slot, raw) in averages)
+        {
+            AggregateValueNormalizer.Normalize(AggregateOp.Avg, ColumnSelectorFactory.PropertyType(typeof(AvgProbe), Slots[slot].Property), raw)
+                .Should().BeOfType<double>().Which.Should().BeApproximately(5.0 / 3, 1e-4, Slots[slot].Property);
+        }
+    }
 }

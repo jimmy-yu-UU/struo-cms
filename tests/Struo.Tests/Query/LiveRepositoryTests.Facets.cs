@@ -155,4 +155,12 @@ public sealed partial class LiveRepositoryTests
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         AvgProbeAssertions.SeedAndAssert(_db);
     }
+
+    [Theory, MemberData(nameof(Backends))]
+    public void Average_with_a_repeating_mean_is_within_a_ten_thousandth(string backend)
+    {
+        if (!Use(backend)) return;
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        AvgProbeAssertions.SeedRepeatingMeanAndAssert(_db);
+    }
 }
