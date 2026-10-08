@@ -8,19 +8,28 @@ namespace Struo.Tests.Support;
 /// </summary>
 internal static class LiveDatabases
 {
+    public const string PostgresEnvVar = "STRUO_TEST_PG_CONNECTION";
+    public const string PostgresConfigKey = "Testing:PostgresConnection";
+    public const string SqlServerEnvVar = "STRUO_TEST_SQLSERVER_CONNECTION";
+    public const string SqlServerConfigKey = "Testing:SqlServerConnection";
+    public const string MySqlEnvVar = "STRUO_TEST_MYSQL_CONNECTION";
+    public const string MySqlConfigKey = "Testing:MySqlConnection";
+    public const string MariaDbEnvVar = "STRUO_TEST_MARIADB_CONNECTION";
+    public const string MariaDbConfigKey = "Testing:MariaDbConnection";
+
     public static string? Postgres { get; } =
-        Resolve("STRUO_TEST_PG_CONNECTION", "Testing:PostgresConnection") is { } raw
+        Resolve(PostgresEnvVar, PostgresConfigKey) is { } raw
             ? PgTestConnectionString.DisablePooling(raw)
             : null;
 
     public static string? SqlServer { get; } =
-        Resolve("STRUO_TEST_SQLSERVER_CONNECTION", "Testing:SqlServerConnection");
+        Resolve(SqlServerEnvVar, SqlServerConfigKey);
 
     public static string? MySql { get; } =
-        Resolve("STRUO_TEST_MYSQL_CONNECTION", "Testing:MySqlConnection");
+        Resolve(MySqlEnvVar, MySqlConfigKey);
 
     public static string? MariaDb { get; } =
-        Resolve("STRUO_TEST_MARIADB_CONNECTION", "Testing:MariaDbConnection");
+        Resolve(MariaDbEnvVar, MariaDbConfigKey);
 
     /// <summary>Throws unless the connection's database name contains "test".</summary>
     public static void GuardDisposable(string connectionString)
