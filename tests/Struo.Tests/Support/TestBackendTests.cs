@@ -108,6 +108,26 @@ public sealed class TestBackendTests
         act.Should().Throw<ArgumentException>();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("nothex12")]
+    [InlineData("0123ABCD")]
+    [InlineData("0123abc")]
+    [InlineData("0123abcde")]
+    public void DatabaseNameFor_rejects_a_run_id_that_is_not_8_lowercase_hex(string runId)
+    {
+        var act = () => TestBackend.DatabaseNameFor("struo-cms-test", "api", 1, runId);
+
+        act.Should().Throw<ArgumentException>().Which.ParamName.Should().Be("runId");
+    }
+
+    [Theory]
+    [InlineData("struo_cms_test_api_0_0123abcd")]
+    [InlineData("struo_cms_test_api_007_0123abcd")]
+    [InlineData("struo_cms_test_api_12345678901_0123abcd")]
+    public void IsLeftoverName_rejects_sequences_the_mechanism_never_produces(string name) =>
+        TestBackend.IsLeftoverName("struo-cms-test", name).Should().BeFalse();
+
     [Fact]
     public void CreateLiveDatabase_rejects_an_empty_purpose_before_touching_a_server()
     {

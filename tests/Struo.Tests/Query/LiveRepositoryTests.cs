@@ -747,6 +747,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
                 db.DbMaintenance.DropTable(sidecar);
             db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
 
+            db.DbMaintenance.GetIndexList(sidecar)
+                .Should().Contain(n => n.Equals($"Index_{sidecar}_FileId_Locale_Unique", StringComparison.OrdinalIgnoreCase),
+                    "SqlSugar names the derived unique index after the table and its key columns");
+
             if (IsPostgres)
             {
                 var indexDefs = db.Ado.SqlQuery<string>($"SELECT indexdef FROM pg_indexes WHERE tablename = '{sidecar}'");

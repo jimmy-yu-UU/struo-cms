@@ -12,12 +12,22 @@ namespace Struo.Tests.Support;
 /// </summary>
 internal static partial class LiveDatabaseDdl
 {
-    public static string DatabaseOf(string connectionString) => WithDatabase(connectionString, kind: null, name: null);
+    /// <summary>The database a connection string names, read with the provider's own builder.</summary>
+    public static string DatabaseOf(TestBackendKind kind, string connectionString) => kind switch
+    {
+        TestBackendKind.PostgreSQL => new NpgsqlConnectionStringBuilder(connectionString).Database ?? "",
+        TestBackendKind.SqlServer => new SqlConnectionStringBuilder(connectionString).InitialCatalog,
+        TestBackendKind.MySql or TestBackendKind.MariaDb => new MySqlConnectionStringBuilder(connectionString).Database,
+        _ => throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind)),
+    };
 
     /// <summary>Creates <paramref name="name"/> next to the configured test database.</summary>
     public static LiveTestDatabase Create(TestBackendKind kind, string name, string configuredConnection)
     {
         ValidateName(name);
+        if (Exists(kind, name, configuredConnection))
+            throw new InvalidOperationException(
+                $"{kind}: database '{name}' already exists; refusing to adopt a database this run did not create.");
         var connection = WithDatabase(configuredConnection, kind, name);
         using (var client = OpenClient(kind, connection))
         {
@@ -39,11 +49,17 @@ internal static partial class LiveDatabaseDdl
         Create(kind, name, TestBackend.ConfiguredConnection(kind));
 
     public static bool Exists(TestBackendKind kind, string name) =>
-        List(kind).Contains(name, StringComparer.OrdinalIgnoreCase);
+        Exists(kind, name, TestBackend.ConfiguredConnection(kind));
 
-    public static IReadOnlyList<string> List(TestBackendKind kind)
+    public static IReadOnlyList<string> List(TestBackendKind kind) =>
+        List(kind, TestBackend.ConfiguredConnection(kind));
+
+    private static bool Exists(TestBackendKind kind, string name, string configuredConnection) =>
+        List(kind, configuredConnection).Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    private static List<string> List(TestBackendKind kind, string configuredConnection)
     {
-        using var client = OpenClient(kind, TestBackend.ConfiguredConnection(kind));
+        using var client = OpenClient(kind, configuredConnection);
         return client.DbMaintenance.GetDataBaseList(client);
     }
 
@@ -53,8 +69,9 @@ internal static partial class LiveDatabaseDdl
         try
         {
             ValidateName(name);
-            ClearPools(kind);
-            using var client = OpenClient(kind, TestBackend.ConfiguredConnection(kind));
+            var configured = TestBackend.ConfiguredConnection(kind);
+            ClearPool(kind, WithDatabase(configured, kind, name));
+            using var client = OpenClient(kind, configured);
             client.Ado.ExecuteCommand(DropStatement(kind, name));
         }
         catch (Exception ex)
@@ -95,46 +112,43 @@ internal static partial class LiveDatabaseDdl
         _ => throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind)),
     };
 
-    private static void ClearPools(TestBackendKind kind)
+    // Clears only the pool of the connection being dropped. Never throws.
+    private static void ClearPool(TestBackendKind kind, string connectionString)
     {
-        switch (kind)
+        try
         {
-            case TestBackendKind.PostgreSQL: NpgsqlConnection.ClearAllPools(); break;
-            case TestBackendKind.SqlServer: SqlConnection.ClearAllPools(); break;
-            default: MySqlConnection.ClearAllPools(); break;
+            switch (kind)
+            {
+                case TestBackendKind.PostgreSQL:
+                    using (var pg = new NpgsqlConnection(connectionString)) NpgsqlConnection.ClearPool(pg);
+                    break;
+                case TestBackendKind.SqlServer:
+                    using (var mssql = new SqlConnection(connectionString)) SqlConnection.ClearPool(mssql);
+                    break;
+                default:
+                    using (var mysql = new MySqlConnection(connectionString)) MySqlConnection.ClearPool(mysql);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"WARNING: could not clear the connection pool on {kind}: {ex.Message}");
         }
     }
 
-    // With kind and name null, only reads the database name back.
-    private static string WithDatabase(string connectionString, TestBackendKind? kind, string? name)
+    private static string WithDatabase(string connectionString, TestBackendKind kind, string name)
     {
         switch (kind)
         {
             case TestBackendKind.PostgreSQL:
-                return Rewrite(new NpgsqlConnectionStringBuilder(connectionString), b => b.Database, (b, v) => b.Database = v, name);
+                return new NpgsqlConnectionStringBuilder(connectionString) { Database = name }.ConnectionString;
             case TestBackendKind.SqlServer:
-                return Rewrite(new SqlConnectionStringBuilder(connectionString), b => b.InitialCatalog, (b, v) => b.InitialCatalog = v, name);
+                return new SqlConnectionStringBuilder(connectionString) { InitialCatalog = name }.ConnectionString;
             case TestBackendKind.MySql or TestBackendKind.MariaDb:
-                return Rewrite(new MySqlConnectionStringBuilder(connectionString), b => b.Database, (b, v) => b.Database = v, name);
+                return new MySqlConnectionStringBuilder(connectionString) { Database = name }.ConnectionString;
             default:
-                return ReadDatabase(connectionString);
+                throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind));
         }
-    }
-
-    private static string Rewrite<T>(T builder, Func<T, string?> get, Action<T, string> set, string? name)
-        where T : System.Data.Common.DbConnectionStringBuilder
-    {
-        if (name is null) return get(builder) ?? "";
-        set(builder, name);
-        return builder.ConnectionString;
-    }
-
-    private static string ReadDatabase(string connectionString)
-    {
-        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
-        foreach (var key in new[] { "Database", "Initial Catalog" })
-            if (builder.TryGetValue(key, out var value)) return value?.ToString() ?? "";
-        throw new InvalidOperationException("The test connection string names no database.");
     }
 
     [GeneratedRegex("^[a-z0-9_]+$")]

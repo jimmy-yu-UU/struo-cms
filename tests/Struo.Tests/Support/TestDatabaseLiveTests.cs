@@ -35,7 +35,7 @@ public sealed class TestDatabaseLiveTests
     {
         if (!TryResolve(backend, out var kind)) return;
         using var kept = TestBackend.CreateLiveDatabase(kind, "twin");
-        var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
+        using var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
         kept.Name.Should().NotBe(dropped.Name);
 
         dropped.Dispose();
@@ -80,7 +80,7 @@ public sealed class TestDatabaseLiveTests
         if (!TryResolve(backend, out var kind)) return;
         var runId = Guid.NewGuid().ToString("N")[..8];
         var configured = TestBackend.ConfiguredDatabaseName(kind);
-        var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", 1, "nothex");
+        var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", 1, "0123abcd")[..^8] + "nothex12";
         using var own = TestBackend.CreateLiveDatabase(kind, "inuse");
         using var leftover = TestBackend.CreateLiveDatabase(kind, "leftover", runId);
         using var decoy = LiveDatabaseDdl.CreateNamed(kind, decoyName);
@@ -94,6 +94,20 @@ public sealed class TestDatabaseLiveTests
         LiveDatabaseDdl.Exists(kind, own.Name).Should().BeTrue();
         LiveDatabaseDdl.Exists(kind, decoyName).Should().BeTrue();
         LiveDatabaseDdl.Exists(kind, configured).Should().BeTrue();
+    }
+
+    [Theory, MemberData(nameof(Backends))]
+    public void Creating_a_database_whose_name_exists_throws_and_keeps_the_existing_one(string backend)
+    {
+        if (!TryResolve(backend, out var kind)) return;
+        var configured = TestBackend.ConfiguredDatabaseName(kind);
+        var name = TestBackend.DatabaseNameFor(configured, "clash", 1, Guid.NewGuid().ToString("N")[..8]);
+        using var first = LiveDatabaseDdl.CreateNamed(kind, name);
+
+        var act = () => LiveDatabaseDdl.CreateNamed(kind, name);
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain(name);
+        LiveDatabaseDdl.Exists(kind, name).Should().BeTrue();
     }
 
     /// <summary>

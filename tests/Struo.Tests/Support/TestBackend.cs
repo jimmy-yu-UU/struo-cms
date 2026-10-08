@@ -67,7 +67,7 @@ internal static partial class TestBackend
         var configured = ConfiguredConnection(kind);
         LiveDatabases.GuardDisposable(configured);
         var sequence = Interlocked.Increment(ref _sequence);
-        var name = DatabaseNameFor(LiveDatabaseDdl.DatabaseOf(configured), purpose, sequence, runId);
+        var name = DatabaseNameFor(LiveDatabaseDdl.DatabaseOf(kind, configured), purpose, sequence, runId);
         return LiveDatabaseDdl.Create(kind, name, configured);
     }
 
@@ -89,7 +89,7 @@ internal static partial class TestBackend
     }
 
     public static string ConfiguredDatabaseName(TestBackendKind kind) =>
-        LiveDatabaseDdl.DatabaseOf(ConfiguredConnection(kind));
+        LiveDatabaseDdl.DatabaseOf(kind, ConfiguredConnection(kind));
 
     /// <summary>
     /// <c>&lt;stem&gt;_&lt;purpose&gt;_&lt;sequence&gt;_&lt;runId&gt;</c>. The sequence is process-unique, so two
@@ -98,6 +98,9 @@ internal static partial class TestBackend
     /// </summary>
     public static string DatabaseNameFor(string configuredName, string purpose, int sequence, string runId)
     {
+        if (!RunIdShape().IsMatch(runId))
+            throw new ArgumentException(
+                $"Run id '{runId}' must be {RunIdLength} lowercase hex characters.", nameof(runId));
         var stem = Stem(configuredName);
         var combined = $"{stem}_{RequirePurpose(purpose)}";
         var tail = $"_{sequence}_{runId}";
@@ -135,11 +138,15 @@ internal static partial class TestBackend
             .Order(StringComparer.Ordinal)
             .ToList();
 
-    public static IReadOnlyList<string> FindLeftovers(TestBackendKind kind, string? runId = null) =>
-        SelectLeftovers(ConfiguredDatabaseName(kind), LiveDatabaseDdl.List(kind), runId);
+    public static IReadOnlyList<string> FindLeftovers(TestBackendKind kind, string? runId = null)
+    {
+        LiveDatabases.GuardDisposable(ConfiguredConnection(kind));
+        return SelectLeftovers(ConfiguredDatabaseName(kind), LiveDatabaseDdl.List(kind), runId);
+    }
 
     public static void DropLeftovers(TestBackendKind kind, string? runId = null)
     {
+        LiveDatabases.GuardDisposable(ConfiguredConnection(kind));
         foreach (var name in FindLeftovers(kind, runId)) LiveDatabaseDdl.Drop(kind, name);
     }
 
@@ -173,6 +180,9 @@ internal static partial class TestBackend
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NonNameChars();
 
-    [GeneratedRegex("^(?<stem>[a-z0-9_]+)_[0-9]+_[0-9a-f]{8}$")]
+    [GeneratedRegex("^[0-9a-f]{8}$")]
+    private static partial Regex RunIdShape();
+
+    [GeneratedRegex("^(?<stem>[a-z0-9_]+)_[1-9][0-9]{0,9}_[0-9a-f]{8}$")]
     private static partial Regex LeftoverShape();
 }
