@@ -14,7 +14,7 @@ namespace Struo.Tests.Query;
 /// dotnet test --filter FullyQualifiedName~PostgresOnlyTests
 /// </summary>
 [Collection("LiveRepository")]
-public sealed class PostgresOnlyTests : IClassFixture<PostgresOnlyDatabases>
+public sealed partial class PostgresOnlyTests : IClassFixture<PostgresOnlyDatabases>
 {
     private readonly PostgresOnlyDatabases _databases;
 
@@ -31,7 +31,7 @@ public sealed class PostgresOnlyTests : IClassFixture<PostgresOnlyDatabases>
     {
         if (string.IsNullOrWhiteSpace(Conn)) return;
         Conn.Should().MatchRegex(
-            new Regex(@"Pooling\s*=\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+            PoolingDisabled(),
             "LiveDatabases must route the PostgreSQL connection through " +
             "PgTestConnectionString.DisablePooling. If you set Pooling yourself to re-investigate the " +
             "abort recorded in AGENTS.md, this test is the expected casualty of that choice; " +
@@ -55,12 +55,12 @@ public sealed class PostgresOnlyTests : IClassFixture<PostgresOnlyDatabases>
             if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
                 db.DbMaintenance.DropTable("destructive_init_probe");
 
-            db.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
+            db.CodeFirst.InitTables<DestructiveInitProbeWide>();
             db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
               .Select(c => c.DbColumnName.ToLowerInvariant())
               .Should().Contain("doomed", "前置條件：探針表必須先帶有這一欄");
 
-            db.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
+            db.CodeFirst.InitTables<DestructiveInitProbeNarrow>();
 
             var columnsAfter = db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
               .Select(c => c.DbColumnName.ToLowerInvariant())
@@ -80,4 +80,7 @@ public sealed class PostgresOnlyTests : IClassFixture<PostgresOnlyDatabases>
             catch { /* best-effort cleanup; don't mask the real failure */ }
         }
     }
+
+    [GeneratedRegex(@"Pooling\s*=\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PoolingDisabled();
 }
