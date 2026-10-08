@@ -51,7 +51,40 @@ public sealed class TestBackendTests
 
         name.Length.Should().BeLessThanOrEqualTo(63);
         name.Should().EndWith("_a1b2c3d4");
-        name.Should().MatchRegex("^[a-z0-9_]+$");
+        name.Should().MatchRegex("^[a-z0-9_]+$").And.Contain("test");
+    }
+
+    [Theory]
+    [InlineData(100, "api")]
+    [InlineData(60, "api")]
+    [InlineData(54, "x")]
+    [InlineData(10, "a-very-long-purpose-name-that-pushes-the-name-over-the-limit-xx")]
+    public void DatabaseNameFor_keeps_test_when_the_configured_test_token_is_past_the_limit(int prefixLength, string purpose)
+    {
+        var configured = new string('x', prefixLength) + "-test";
+
+        var name = TestBackend.DatabaseNameFor(configured, purpose, "a1b2c3d4");
+
+        name.Length.Should().BeLessThanOrEqualTo(63);
+        name.Should().Contain("test").And.EndWith("_a1b2c3d4").And.MatchRegex("^[a-z0-9_]+$");
+        TestBackend.IsLeftoverName(configured, name).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsLeftoverName_rejects_truncated_lookalikes()
+    {
+        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "yyyyyyyy_test_a1b2c3d4").Should().BeFalse();
+        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "x_test_a1b2c3d4").Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectLeftovers_never_includes_the_current_runs_databases()
+    {
+        var other = TestBackend.DatabaseNameFor("struo-cms-test", "api", "0123abcd");
+        var own = TestBackend.DatabaseNameFor("struo-cms-test", "api", TestBackend.RunId);
+
+        TestBackend.SelectLeftovers("struo-cms-test", [own, other, "struo-cms-test"]).Should().Equal(other);
+        TestBackend.SelectLeftovers("struo-cms-test", [own, other], TestBackend.RunId).Should().BeEmpty();
     }
 
     [Fact]

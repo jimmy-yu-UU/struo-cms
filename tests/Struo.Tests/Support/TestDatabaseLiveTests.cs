@@ -61,18 +61,20 @@ public sealed class TestDatabaseLiveTests
     public void Leftover_cleanup_finds_and_drops_only_databases_the_mechanism_created(string backend)
     {
         if (!TryResolve(backend, out var kind)) return;
-        const string runId = "deadbeef";
-        var leftover = TestBackend.CreateLiveDatabase(kind, "leftover", runId);
+        var runId = Guid.NewGuid().ToString("N")[..8];
         var configured = TestBackend.ConfiguredDatabaseName(kind);
         var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", "nothex");
+        using var own = TestBackend.CreateLiveDatabase(kind, "inuse");
+        using var leftover = TestBackend.CreateLiveDatabase(kind, "leftover", runId);
         using var decoy = LiveDatabaseDdl.CreateNamed(kind, decoyName);
 
         TestBackend.FindLeftovers(kind, runId).Should().ContainSingle().Which.Should().Be(leftover.Name);
-        TestBackend.FindLeftovers(kind).Should().NotContain(decoyName);
+        TestBackend.FindLeftovers(kind).Should().Contain(leftover.Name).And.NotContain([decoyName, own.Name]);
 
         TestBackend.DropLeftovers(kind, runId);
 
         LiveDatabaseDdl.Exists(kind, leftover.Name).Should().BeFalse();
+        LiveDatabaseDdl.Exists(kind, own.Name).Should().BeTrue();
         LiveDatabaseDdl.Exists(kind, decoyName).Should().BeTrue();
         LiveDatabaseDdl.Exists(kind, configured).Should().BeTrue();
     }

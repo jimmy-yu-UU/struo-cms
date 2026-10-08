@@ -15,11 +15,12 @@ internal static partial class TestBackend
 
     private const int MaxNameLength = 63;
     private const int RunIdLength = 8;
+    private const string TestMarker = "_test";
 
     private static readonly Lazy<TestBackendKind> CurrentKind = new(
         () => Parse(Environment.GetEnvironmentVariable(EnvVar)));
 
-    private static readonly string RunId = Guid.NewGuid().ToString("N")[..RunIdLength];
+    public static readonly string RunId = Guid.NewGuid().ToString("N")[..RunIdLength];
 
     public static TestBackendKind Current => CurrentKind.Value;
 
@@ -92,7 +93,7 @@ internal static partial class TestBackend
         var purposePart = Sanitize(purpose);
         var combined = purposePart.Length == 0 ? stem : $"{stem}_{purposePart}";
         var room = MaxNameLength - 1 - runId.Length;
-        if (combined.Length > room) combined = combined[..room].TrimEnd('_');
+        if (combined.Length > room) combined = $"{combined[..(room - TestMarker.Length)].TrimEnd('_')}{TestMarker}";
         return $"{combined}_{runId}";
     }
 
@@ -101,21 +102,31 @@ internal static partial class TestBackend
     {
         var match = LeftoverShape().Match(name);
         if (!match.Success) return false;
+        var stemPart = match.Groups["stem"].Value;
         var prefix = Stem(configuredName) + "_";
-        var room = MaxNameLength - 1 - RunIdLength;
-        if (prefix.Length > room) prefix = prefix[..room];
-        return match.Groups["stem"].Value.StartsWith(prefix, StringComparison.Ordinal);
+        if (stemPart.StartsWith(prefix, StringComparison.Ordinal)) return true;
+
+        // Truncated form: a prefix of "<stem>_<purpose>" followed by the test marker.
+        var room = MaxNameLength - 1 - RunIdLength - TestMarker.Length;
+        if (!stemPart.EndsWith(TestMarker, StringComparison.Ordinal)) return false;
+        var head = stemPart[..^TestMarker.Length];
+        return head.Length >= room - 1 && head.Length <= room &&
+               (prefix.StartsWith(head, StringComparison.Ordinal) ||
+                head.StartsWith(prefix, StringComparison.Ordinal));
     }
 
-    public static IReadOnlyList<string> FindLeftovers(TestBackendKind kind, string? runId = null)
-    {
-        var configured = ConfiguredDatabaseName(kind);
-        return LiveDatabaseDdl.List(kind)
-            .Where(n => IsLeftoverName(configured, n) &&
+    /// <summary>Leftover names among <paramref name="names"/>, never including the current run's databases.</summary>
+    public static IReadOnlyList<string> SelectLeftovers(
+        string configuredName, IEnumerable<string> names, string? runId = null) =>
+        names
+            .Where(n => IsLeftoverName(configuredName, n) &&
+                        !n.EndsWith($"_{RunId}", StringComparison.Ordinal) &&
                         (runId is null || n.EndsWith($"_{runId}", StringComparison.Ordinal)))
             .Order(StringComparer.Ordinal)
             .ToList();
-    }
+
+    public static IReadOnlyList<string> FindLeftovers(TestBackendKind kind, string? runId = null) =>
+        SelectLeftovers(ConfiguredDatabaseName(kind), LiveDatabaseDdl.List(kind), runId);
 
     public static void DropLeftovers(TestBackendKind kind, string? runId = null)
     {
