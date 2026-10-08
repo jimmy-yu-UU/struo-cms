@@ -56,7 +56,7 @@ internal static class ColumnSelectorFactory
 
     // x => new AggregateRow { V0 = (object)SqlFunc.AggregateSum(x.P0), V1 = ... } — one SqlFunc.Aggregate*
     // call per requested (op, property) slot, boxed into AggregateRow's object? properties.
-    public static LambdaExpression AggregateProjection(Type entityType, IReadOnlyList<(AggregateOp Op, string Property)> slots)
+    public static LambdaExpression AggregateProjection(Type entityType, IReadOnlyList<(AggregateOp Op, string Property)> slots, bool floatAverageOfIntegers)
     {
         if (slots.Count > AggregateRow.SlotCount)
             throw new ArgumentOutOfRangeException(nameof(slots), $"At most {AggregateRow.SlotCount} aggregate slots per projection.");
@@ -64,29 +64,29 @@ internal static class ColumnSelectorFactory
         var bindings = slots.Select((s, i) =>
         {
             var prop = Property(entityType, s.Property);
-            var call = AggregateCall(s.Op, p, prop);
+            var call = AggregateCall(s.Op, p, prop, floatAverageOfIntegers);
             return (MemberBinding)Expression.Bind(typeof(AggregateRow).GetProperty("V" + i)!, Expression.Convert(call, typeof(object)));
         });
         var body = Expression.MemberInit(Expression.New(typeof(AggregateRow)), bindings);
         return Expression.Lambda(typeof(Func<,>).MakeGenericType(entityType, typeof(AggregateRow)), body, p);
     }
 
-    // AVG averages a decimal-cast integral operand: SQL Server divides integers as integers.
-    // Decimal and floating-point operands are already averaged exactly.
-    private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop)
+    // SQL Server divides integers as integers in AVG, so integral operands are cast to FLOAT there
+    // (floatAverageOfIntegers); every other backend averages them exactly without a cast.
+    private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop, bool floatAverageOfIntegers)
     {
         Expression operand = Expression.Property(p, prop);
         var type = prop.PropertyType;
-        if (op == AggregateOp.Avg && IsIntegral(Nullable.GetUnderlyingType(type) ?? type))
+        if (op == AggregateOp.Avg && floatAverageOfIntegers && IsIntegral(Nullable.GetUnderlyingType(type) ?? type))
         {
-            type = typeof(decimal);
-            operand = Expression.Call(typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDecimal), [typeof(object)])!, Expression.Convert(operand, typeof(object)));
+            type = typeof(double);
+            operand = Expression.Call(typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDouble), [typeof(object)])!, Expression.Convert(operand, typeof(object)));
         }
         return Expression.Call(Aggregate(AggregateMethodName(op), type), operand);
     }
 
     private static bool IsIntegral(Type t) =>
-        Type.GetTypeCode(t) is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16
+        !t.IsEnum && Type.GetTypeCode(t) is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16
             or TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64;
 
     private static MethodCallExpression CountCall(ParameterExpression p, PropertyInfo prop, bool distinct) =>

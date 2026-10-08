@@ -107,13 +107,13 @@ public class FacetSqlShapeTests : IDisposable
             new ArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 4, Note = null },
         }).ExecuteCommand();
         var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
-            [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")]);
+            [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")], false);
         var q = _db.Queryable<ArticleTag>().Select(proj);
         var sql = q.ToSql().Key;
         sql.Should().MatchRegex(@"SUM\(`Sort`\)\s+AS\s+`V0`");
         sql.Should().MatchRegex(@"MIN\(`Sort`\)\s+AS\s+`V1`");
         sql.Should().MatchRegex(@"MAX\(`Sort`\)\s+AS\s+`V2`");
-        sql.Should().MatchRegex(@"AVG\(\s*CAST\(`Sort` AS DECIMAL\(\d+,\d+\)\)\s*\)\s+AS\s+`V3`");
+        sql.Should().MatchRegex(@"AVG\(`Sort`\)\s+AS\s+`V3`");
         sql.Should().MatchRegex(@"COUNT\(`Note`\)\s+AS\s+`V4`");
         var r = q.First()!;
         Convert.ToInt64(r.V0).Should().Be(5);
@@ -125,10 +125,21 @@ public class FacetSqlShapeTests : IDisposable
     public void Average_is_exact_over_int_long_decimal_and_nullable_columns() => AvgProbeAssertions.SeedAndAssert(_db);
 
     [Fact]
+    public void SqlServer_average_casts_integral_operands_to_float_and_leaves_other_ops_alone()
+    {
+        using var ms = new SqlSugarClient(new ConnectionConfig { DbType = DbType.SqlServer, ConnectionString = "Server=unused;Database=unused", IsAutoCloseConnection = true });
+        var sql = AvgProbeAssertions.Query(ms, floatAverageOfIntegers: true).ToSql().Key;
+        sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[IntValue\] AS FLOAT\)\s*\)\s+AS\s+\[V0\]");
+        sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[NullableInt\] AS FLOAT\)\s*\)\s+AS\s+\[V3\]");
+        sql.Should().MatchRegex(@"AVG\(\[DecimalValue\]\)\s+AS\s+\[V2\]");
+        sql.Should().MatchRegex(@"SUM\(\[IntValue\]\)\s+AS\s+\[V4\]");
+    }
+
+    [Fact]
     public void Aggregate_over_an_empty_set_returns_nulls_and_zero_count()
     {
         var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
-            [(AggregateOp.Sum, "Sort"), (AggregateOp.Count, "Note")]);
+            [(AggregateOp.Sum, "Sort"), (AggregateOp.Count, "Note")], false);
         var r = _db.Queryable<ArticleTag>().Select(proj).First()!;
         r.V0.Should().BeNull();
         Convert.ToInt64(r.V1).Should().Be(0);
@@ -138,7 +149,7 @@ public class FacetSqlShapeTests : IDisposable
     public void Aggregate_projection_rejects_more_than_ten_slots()
     {
         var slots = Enumerable.Range(0, 11).Select(_ => (AggregateOp.Count, "Sort")).ToList();
-        var act = () => ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag), slots);
+        var act = () => ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag), slots, false);
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 

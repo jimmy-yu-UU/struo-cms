@@ -28,7 +28,8 @@ internal sealed class AggregateQueries(ISqlSugarClient db, IEntityRegistry regis
         var values = new Dictionary<AggregateOp, Dictionary<string, object?>>();
         foreach (var chunk in slots.Chunk(AggregateRow.SlotCount))
         {
-            var projection = ColumnSelectorFactory.AggregateProjection(d.EntityType, chunk.Select(s => (s.Op, s.Property)).ToList());
+            var projection = ColumnSelectorFactory.AggregateProjection(
+                d.EntityType, chunk.Select(s => (s.Op, s.Property)).ToList(), db.CurrentConnectionConfig.DbType == DbType.SqlServer);
             var row = await RunDispatcher.For(d.EntityType)(this, conds, deleted, projection, ct);
             for (var i = 0; i < chunk.Length; i++) Collect(values, d, chunk[i], row?.Slot(i));
         }
