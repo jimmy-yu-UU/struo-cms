@@ -38,7 +38,7 @@ public sealed class CrossProviderStartupGateLiveTests
         await RunGate(firstDb, prefix);
         await RunGate(secondDb, prefix);
 
-        var db = SqlSugarClientFactory.Create(
+        using var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = secondDb.DbType, ConnectionString = secondDb.ConnectionString, TablePrefix = prefix },
             new TestCurrentUserAccessor(Guid.Empty));
         db.Queryable<Struo.Infrastructure.Localization.Language>().Count().Should().Be(2);
@@ -50,18 +50,18 @@ public sealed class CrossProviderStartupGateLiveTests
     private static ITestDatabase Create(TestBackendKind kind) =>
         kind == TestBackendKind.Sqlite ? TestBackend.CreateSqliteDatabase() : TestBackend.CreateLiveDatabase(kind, "xgate");
 
-    private static Task RunGate(ITestDatabase database, string prefix)
+    private static async Task RunGate(ITestDatabase database, string prefix)
     {
         var options = new DatabaseOptions
         {
             DbType = database.DbType, ConnectionString = database.ConnectionString, TablePrefix = prefix, MigrateOnStartup = true,
         };
-        var db = SqlSugarClientFactory.Create(options, new TestCurrentUserAccessor(Guid.Empty));
+        using var db = SqlSugarClientFactory.Create(options, new TestCurrentUserAccessor(Guid.Empty));
         var host = new MigrationHost(
             new MigrationHostOptions(database.DbType, database.ConnectionString, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 60)
             { NamespaceFilter = "Struo.Infrastructure.Migrations.Core", Seed = CoreMigrationHarness.Seed() },
             NullLoggerFactory.Instance);
-        return StartupMigrationGate.RunAsync(
+        await StartupMigrationGate.RunAsync(
             db, host, options, isDevelopment: true, FrameworkEntityTypes.All, NullLogger.Instance, default);
     }
 }

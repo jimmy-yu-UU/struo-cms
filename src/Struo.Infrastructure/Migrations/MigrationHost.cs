@@ -135,12 +135,24 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         }
     }
 
-    private SqlSugarClient OpenClient() => new(new ConnectionConfig
+    private SqlSugarClient OpenClient() => OpenClient(options.DbType, options.ConnectionString);
+
+    // The version-table read maps SchemaVersionRow, so the reflection cache is scoped per provider
+    // the same way SqlSugarClientFactory scopes it.
+    internal static SqlSugarClient OpenClient(StruoDbType dbType, string connectionString)
     {
-        DbType = DbTypeMapper.Map(options.DbType),
-        ConnectionString = options.ConnectionString,
-        IsAutoCloseConnection = true,
-    });
+        var sugarDbType = DbTypeMapper.Map(dbType);
+        return new SqlSugarClient(new ConnectionConfig
+        {
+            DbType = sugarDbType,
+            ConnectionString = connectionString,
+            IsAutoCloseConnection = true,
+            ConfigureExternalServices = new ConfigureExternalServices
+            {
+                ReflectionInoCacheService = new ProviderScopedReflectionCache(sugarDbType),
+            },
+        });
+    }
 
     private async Task<IAsyncDisposable> AcquireLockAsync(ILogger logger, CancellationToken ct)
     {
