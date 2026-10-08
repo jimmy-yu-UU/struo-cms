@@ -35,10 +35,15 @@ public sealed class TestDatabaseLiveTests
     {
         if (!TryResolve(backend, out var kind)) return;
         using var kept = TestBackend.CreateLiveDatabase(kind, "twin");
-        using var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
-        kept.Name.Should().NotBe(dropped.Name);
-
-        dropped.Dispose();
+        var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
+        try
+        {
+            kept.Name.Should().NotBe(dropped.Name);
+        }
+        finally
+        {
+            dropped.Dispose();
+        }
 
         LiveDatabaseDdl.Exists(kind, dropped.Name).Should().BeFalse();
         LiveDatabaseDdl.Exists(kind, kept.Name).Should().BeTrue();
@@ -80,7 +85,9 @@ public sealed class TestDatabaseLiveTests
         if (!TryResolve(backend, out var kind)) return;
         var runId = Guid.NewGuid().ToString("N")[..8];
         var configured = TestBackend.ConfiguredDatabaseName(kind);
-        var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", 1, "0123abcd")[..^8] + "nothex12";
+        var nonHexSuffix = Guid.NewGuid().ToString("N")[..7] + "z";
+        var hexName = TestBackend.DatabaseNameFor(configured, "decoy", 1, "0123abcd");
+        var decoyName = hexName[..^8] + nonHexSuffix;
         using var own = TestBackend.CreateLiveDatabase(kind, "inuse");
         using var leftover = TestBackend.CreateLiveDatabase(kind, "leftover", runId);
         using var decoy = LiveDatabaseDdl.CreateNamed(kind, decoyName);

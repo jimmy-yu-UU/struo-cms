@@ -52,8 +52,9 @@ public sealed class LiveDatabaseSetTests
 
         set.ConnectionFor(Backend).Should().Be(database.ConnectionString);
         set.ConnectionFor(Backend).Should().Be(database.ConnectionString);
-        set.Dispose();
-        set.Dispose();
+        IDisposable disposable = set;
+        disposable.Dispose();
+        disposable.Dispose();
 
         creates.Should().Be(1);
         database.Disposed.Should().Be(1);
