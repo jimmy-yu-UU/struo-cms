@@ -2,8 +2,10 @@
 
 ## Decision
 
-`LiveRepositoryTests` disables Npgsql connection pooling via `PgTestConnectionString.DisablePooling`,
-so each test gets its own physical connection instead of reusing one from the process-wide pool. An
+The live PostgreSQL tests disable Npgsql connection pooling via `PgTestConnectionString.DisablePooling`,
+so each test gets its own physical connection instead of reusing one from the process-wide pool. This
+holds for every live PostgreSQL connection the tests use, including the API test hosts under
+`STRUO_TEST_BACKEND=PostgreSQL`. An
 explicit `Pooling=` setting already present in the caller's connection string is left alone and wins.
 
 ## Why

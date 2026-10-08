@@ -277,7 +277,8 @@ passes silently on SQLite, whose loose typing accepts the comparison without com
 tests write into it directly, and the other live suites use its server and login to create their own
 databases and its name as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION`
 environment variable first, falling back to the `Testing:PostgresConnection` key in
-`src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
+`src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
+directly against a real PostgreSQL instance. The migration
 subsystem's live tests (`CoreMigrationsLiveTests` applies the core migrations, runs `SchemaChecker` over
 the result and compares it with what CodeFirst builds) also run on SQL Server, MySQL and MariaDB
 (MariaDB on the `MySql` dialect). They
@@ -315,10 +316,11 @@ It skips the current run's databases and force-drops every other run's, so do no
 another suite uses the same server. It matches names derived from the configured test database
 name, so a longer configured name that starts with the same stem can match too.
 
-**`LiveRepositoryTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
-connection across a connection-close boundary made this suite go red locally with a
+**The live tests disable Npgsql pooling, deliberately.** Reuse of a pooled physical
+connection across a connection-close boundary made the repository suite go red locally with a
 `WSA_OPERATION_ABORTED` socket abort; `PgTestConnectionString.DisablePooling` gives each test its own
-physical connection. That is test isolation, not tolerance — no retry, no swallowed exception, no
+physical connection. Pooling is off for every live PostgreSQL connection the tests use, including
+the API test hosts under `STRUO_TEST_BACKEND=PostgreSQL`. That is test isolation, not tolerance — no retry, no swallowed exception, no
 relaxed assertion, and every test still runs real DDL and DML against a real PostgreSQL. Two things
 worth knowing before you touch it:
 

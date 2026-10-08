@@ -4,7 +4,8 @@ namespace Struo.Tests.Support;
 
 /// <summary>
 /// Connection strings for the opt-in live-database tests. Each resolves from an environment variable
-/// first, then from <c>Testing:*</c> in the API project's appsettings; null means the test returns early.
+/// first, then from <c>Testing:*</c> in the API project's appsettings. Null makes live tests return
+/// early, and makes the API hosts fail when that backend is selected via <c>STRUO_TEST_BACKEND</c>.
 /// </summary>
 internal static class LiveDatabases
 {
