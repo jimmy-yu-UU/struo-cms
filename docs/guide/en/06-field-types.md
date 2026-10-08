@@ -24,8 +24,8 @@ The tables below use a few shorthand terms under Database column:
 - CLR default: numbers, `bool`, `DateTime`, `Guid` keep SqlSugar's ordinary mapping; nothing widens
   the length.
 - `ColumnShape` has three members, `LongText`, `TimestampWithTimeZone` and `Timestamp` — there's no
-  numeric shape. `Timestamp` keeps microseconds on MySQL/MariaDB and is the default `DateTime` type
-  elsewhere.
+  numeric shape. `Timestamp` keeps microseconds on MySQL/MariaDB and keeps the default `DateTime`
+  type elsewhere.
 
 ### Text
 

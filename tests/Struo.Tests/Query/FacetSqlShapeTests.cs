@@ -122,7 +122,7 @@ public class FacetSqlShapeTests : IDisposable
     }
 
     [Fact]
-    public void Average_is_exact_over_int_long_decimal_and_nullable_columns() => AvgProbeAssertions.SeedAndAssert(_db);
+    public void Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns() => AvgProbeAssertions.SeedAndAssert(_db);
 
     [Fact]
     public void Average_with_a_repeating_mean_is_within_a_ten_thousandth() => AvgProbeAssertions.SeedRepeatingMeanAndAssert(_db);

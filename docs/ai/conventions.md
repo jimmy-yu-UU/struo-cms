@@ -318,13 +318,12 @@ literal inside `SqlSugarClientFactory`'s `EntityService` hook (`Timestamp` sets 
 MySQL/MariaDB only and keeps SqlSugar's default `DateTime` type elsewhere), so the same property is
 *designed* to work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the
 PostgreSQL and SQLite literals and the MySQL/MariaDB `Timestamp` literal are exercised by a live
-instance; the other MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are not
-claimed to be verified against a live instance of those three
-(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail,
-including a source-read-only conclusion about a parenthesised-literal edge case on SQL
-Server/MySQL). A fork that only ever runs one backend is free to write
-`[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too,
-just at lower precedence.
+instance; the other MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are
+not claimed to be verified against a live instance of those three
+(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail, including
+a source-read-only conclusion about a parenthesised-literal edge case on SQL Server/MySQL). A fork
+that only ever runs one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly
+instead — that convention is respected too, just at lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted

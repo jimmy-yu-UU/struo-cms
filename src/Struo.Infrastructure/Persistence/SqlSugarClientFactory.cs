@@ -232,11 +232,10 @@ public static class SqlSugarClientFactory
         return true;
     }
 
-    // ColumnShape.Timestamp, explicit or implicit: datetime(6) on MySQL/MariaDB, SqlSugar's default DateTime type elsewhere.
-    private static void ApplyTimestamp(EntityColumnInfo column, DbType dbType)
-    {
-        if (dbType == SqlSugar.DbType.MySql) column.DataType = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
-    }
+    // ColumnShape.Timestamp, explicit or implicit: datetime(6) on MySQL/MariaDB, SqlSugar's default DateTime
+    // type elsewhere, also over an explicit ColumnDataType.
+    private static void ApplyTimestamp(EntityColumnInfo column, DbType dbType) =>
+        column.DataType = dbType == SqlSugar.DbType.MySql ? ColumnTypeMap.For(ColumnShape.Timestamp, dbType) : null;
 
     /// <summary>True for a zone-less timestamp property: the hook maps it to <see cref="ColumnShape.Timestamp"/> on MySQL.</summary>
     internal static bool TakesZoneLessTimestamp(PropertyInfo property) =>

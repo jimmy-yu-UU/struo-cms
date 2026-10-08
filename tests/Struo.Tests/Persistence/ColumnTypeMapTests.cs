@@ -121,7 +121,7 @@ public class ColumnTypeMapTests
             .EntityMaintenance.GetEntityInfo<ShapedTimestampProbe>()
             .Columns;
 
-        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt) })
+        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt), nameof(ShapedTimestampProbe.Declared) })
         {
             var dataType = columns.Single(c => c.PropertyName == name).DataType;
             if (dbType == DbType.MySql) dataType.Should().Be("datetime(6)");

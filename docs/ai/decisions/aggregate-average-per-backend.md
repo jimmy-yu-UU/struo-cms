@@ -29,9 +29,11 @@ The SQL Server cast has a cost: `FLOAT` holds integers exactly only up to 2^53. 
 
 - `FacetSqlShapeTests.SqlServer_average_casts_integral_operands_to_float_and_leaves_other_ops_alone`
   pins the rendered SQL without a server.
-- `LiveRepositoryTests.Average_is_exact_over_int_long_decimal_and_nullable_columns` runs the same
-  average over `int`, `long`, `decimal` and `int?` columns on every configured live backend;
-  `FacetSqlShapeTests.Average_is_exact_over_int_long_decimal_and_nullable_columns` runs it on SQLite.
+- `LiveRepositoryTests.Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns`
+  runs the same average over `int`, `long`, `decimal` and `int?` columns on every configured live
+  backend;
+  `FacetSqlShapeTests.Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns`
+  runs it on SQLite.
 - `LiveRepositoryTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` averages 1, 2 and 2
   on every configured live backend and accepts 5/3 to within 1e-4;
   `FacetSqlShapeTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` runs it on SQLite.

@@ -149,7 +149,7 @@ public sealed partial class LiveRepositoryTests
     }
 
     [Theory, MemberData(nameof(Backends))]
-    public void Average_is_exact_over_int_long_decimal_and_nullable_columns(string backend)
+    public void Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns(string backend)
     {
         if (!Use(backend)) return;
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));

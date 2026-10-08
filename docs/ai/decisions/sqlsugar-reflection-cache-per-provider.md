@@ -5,9 +5,9 @@
 Every SqlSugar client that maps entities gets a `ProviderScopedReflectionCache` as its
 `ConfigureExternalServices.ReflectionInoCacheService`. There are two construction sites:
 `SqlSugarClientFactory.Create` and `MigrationHost`, which builds the client that reads the version
-table. The cache prefixes every key with `"<DbType>:"` and stores the entry in SqlSugar's own process-wide
-`ReflectionInoCacheService`. `MigrationLock` runs only Ado calls and keeps SqlSugar's default
-cache.
+table. The cache prefixes every key with `"<DbType>:"` and stores the entry in SqlSugar's own
+process-wide `ReflectionInoCacheService`. `MigrationLock` runs only Ado calls and keeps SqlSugar's
+default cache.
 
 ## Why
 
