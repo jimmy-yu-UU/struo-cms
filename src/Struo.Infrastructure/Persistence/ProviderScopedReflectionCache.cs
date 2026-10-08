@@ -8,6 +8,7 @@ namespace Struo.Infrastructure.Persistence;
 /// prefix of each column's CLR type name, so without the scope a client for a second provider
 /// reuses the first provider's resolved column types and binders (SQL Server's int COUNT read
 /// through a bigint binder built on MySQL fails to bind).
+/// Full write-up: docs/ai/decisions/sqlsugar-reflection-cache-per-provider.md
 /// </summary>
 internal sealed class ProviderScopedReflectionCache : ICacheService
 {
