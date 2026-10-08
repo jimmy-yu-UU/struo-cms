@@ -72,7 +72,8 @@ internal static class ColumnSelectorFactory
     }
 
     // SQL Server divides integers as integers in AVG, so integral operands are cast to FLOAT there
-    // (floatAverageOfIntegers); every other backend averages them exactly without a cast.
+    // (floatAverageOfIntegers); every other backend averages them exactly without a cast. FLOAT is exact
+    // only up to 2^53. See docs/ai/decisions/aggregate-average-per-backend.md
     private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop, bool floatAverageOfIntegers)
     {
         Expression operand = Expression.Property(p, prop);
