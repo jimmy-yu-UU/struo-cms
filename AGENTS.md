@@ -273,20 +273,21 @@ reason `UserSession.CreatedAt`/`ExpiresAt` carry that shape explicitly — while
 column types to show the difference; and a SqlSugar `ConditionalType.Equal` filter that binds a text
 value against a `uuid`/`bigint` column throws `42883` on PostgreSQL ("operator does not exist") but
 passes silently on SQLite, whose loose typing accepts the comparison without complaint. Configure
-`Testing:PostgresConnection` to a connection on a disposable server or login, with a database name
-that contains `test`; the live suites use it as the server and login for the databases they create,
-and as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
-`Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
-if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
+`Testing:PostgresConnection` to a disposable database whose name contains `test`: the migration
+tests write into it directly, and the other live suites use its server and login to create their own
+databases and its name as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION`
+environment variable first, falling back to the `Testing:PostgresConnection` key in
+`src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
 subsystem's live tests (`CoreMigrationsLiveTests` applies the core migrations, runs `SchemaChecker` over
 the result and compares it with what CodeFirst builds) also run on SQL Server, MySQL and MariaDB
 (MariaDB on the `MySql` dialect). They
 resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
 `STRUO_TEST_MYSQL_CONNECTION` / `Testing:MySqlConnection` and `STRUO_TEST_MARIADB_CONNECTION` /
 `Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
-about a millisecond) when a connection is unset, so judge them by per-test duration. For the
-migration tests the configured database must exist beforehand: SqlSugar's `CreateDatabase` cannot
-create a SQL Server database whose name contains a hyphen.
+about a millisecond) when a connection is unset, so judge them by per-test duration. The
+configured database must exist beforehand, for every live suite: the migration tests run in it, and
+the other suites connect to it to list and drop the databases they create. SqlSugar's
+`CreateDatabase` cannot create a SQL Server database whose name contains a hyphen.
 
 `LiveRepositoryTests` runs on every backend whose test connection is configured, independent of
 `STRUO_TEST_BACKEND`; `PostgresOnlyTests` holds the PostgreSQL-specific ones. Each class creates a
