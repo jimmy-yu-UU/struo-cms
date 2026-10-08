@@ -9,15 +9,19 @@ backend:
   Oracle `clob`.
 - `ColumnShape.TimestampWithTimeZone` → PostgreSQL/SQLite `timestamptz`, MySQL `datetime(6)`,
   SqlServer `datetimeoffset`, Oracle `timestamp with time zone`.
-- `ColumnShape.Timestamp` (zone-less) → PostgreSQL `timestamp`, MySQL `datetime(6)`, SqlServer and
-  SQLite `datetime`, Oracle `timestamp`.
+- `ColumnShape.Timestamp` (zone-less) → MySQL `datetime(6)`, which MariaDB shares. It has no
+  literal for any other backend.
 
-`ColumnShape.Timestamp` is applied without an attribute: the `EntityService` hook in
-`SqlSugarClientFactory` gives it to every `DateTime`/`DateTime?` property that has neither
-`[ColumnShape]` nor its own `[SugarColumn(ColumnDataType = ...)]`, and the migrations write those
-columns with `AsTimestamp(Db)`. `DateTimeOffset` keeps SqlSugar's own mapping. Because both timestamp
-shapes resolve to `datetime(6)` on MySQL, `EntitySchemaReader` takes a zone-less column's category from
-the property (`SqlSugarClientFactory.TakesZoneLessTimestamp`), not from the literal.
+`ColumnShape.Timestamp` exists for MySQL and MariaDB only and is applied without an attribute. On a
+MySQL client, the `EntityService` hook in `SqlSugarClientFactory` gives it to every
+`DateTime`/`DateTime?` property that has neither `[ColumnShape]` nor its own
+`[SugarColumn(ColumnDataType = ...)]`. The migrations write those columns with `AsTimestamp(Db)`,
+which is `AsShape(ColumnShape.Timestamp, Db)` on MySQL and FluentMigrator's `AsDateTime()` on every
+other backend. Those backends keep SqlSugar's default `DateTime` mapping in CodeFirst and
+`AsDateTime()` in the migrations. `DateTimeOffset` keeps SqlSugar's own mapping everywhere. Because
+both timestamp shapes resolve to `datetime(6)` on MySQL, `EntitySchemaReader` takes a zone-less
+column's category from the property (`SqlSugarClientFactory.TakesZoneLessTimestamp`), not from the
+literal.
 
 Three of these are deliberate, non-obvious choices rather than the first vendor synonym that comes to
 mind: MySQL uses `longtext`, not `text`; MySQL uses `datetime(6)`, not `timestamp`; SqlServer uses
@@ -25,8 +29,7 @@ mind: MySQL uses `longtext`, not `text`; MySQL uses `datetime(6)`, not `timestam
 target (`AGENTS.md`). The MySQL/SqlServer/Oracle literals of `LongText` and `TimestampWithTimeZone`
 are chosen to be syntactically valid so that CodeFirst table creation succeeds on those backends;
 they are not claimed to be verified against a live instance of any of the three. The `Timestamp`
-literals were measured on live PostgreSQL, SQL Server, MySQL and MariaDB instances and on SQLite
-(Evidence); its Oracle literal was not.
+literal was measured on live MySQL and MariaDB instances (Evidence).
 
 `ColumnTypeMap.For` is not the only site in `src/` that writes a vendor type literal directly:
 `SqlSugarClientFactory.ApplySqliteIdentityColumnRewrite` sets `DataType` to `"INTEGER"` on a SQLite
@@ -45,9 +48,9 @@ choice for an instant with no such ceiling, which is why `TimestampWithTimeZone`
 
 MySQL's and MariaDB's plain `DATETIME` keeps whole seconds. Two writes within one second then store
 the same `UpdatedAt`, and the audit timestamp cannot order them. `Timestamp` maps to `datetime(6)`
-there for that reason. On PostgreSQL, SQL Server and SQLite it maps to exactly the type SqlSugar's
-CodeFirst and FluentMigrator's `AsDateTime()` both create, so those backends keep their column types.
-SQL Server's `datetime` has a precision of about 3 ms.
+there for that reason. The other backends have no such gap that a test shows, so they keep the types
+SqlSugar's CodeFirst and FluentMigrator's `AsDateTime()` create. SQL Server's `datetime` has a
+precision of about 3 ms.
 
 Both `nvarchar(max)` (SqlServer) and `datetime(6)` (MySQL) are already parenthesised literals.
 Whether SqlSugar appends a further length suffix to a `DbColumnInfo.DataType` that already contains
@@ -60,7 +63,8 @@ answer, established by reading the upstream source below, is no.
 Zone-less timestamp types, as SqlSugar's `GetColumnInfosByTableName` reports them (type / `Length` /
 `DecimalDigits`), measured on 2026-10-08 against PostgreSQL 13.2, SQL Server 2025, MySQL 8.4.11,
 MariaDB 11.8.9 and SQLite. FluentMigrator `AsDateTime()` and SqlSugar CodeFirst `DateTime`/`DateTime?`
-with no shape reported the same type on every backend:
+with no shape reported the same type on every backend. Outside MySQL and MariaDB these are the types
+the backends keep:
 
 | Backend | `AsDateTime()` and CodeFirst `DateTime` | `datetime(6)` |
 |---|---|---|
@@ -70,9 +74,11 @@ with no shape reported the same type on every backend:
 | MariaDB | `datetime` / 0 / 0 | `datetime` / 6 / 0 |
 | SQLite | `DATETIME` (FluentMigrator), `datetime` (CodeFirst) / 0 / 0 | — |
 
-SqlSugar's own default type name for `DateTime` (`Ado.DbBind.GetDbTypeName("DateTime")`) is `date` on
-Oracle. `StruoMigrationTypeTests.Shapes_resolve_to_the_live_backend_literals` pins the `Timestamp`
-column per live backend, and `CoreMigrationsLiveTests` compares the migrated and CodeFirst core
+On Oracle, SqlSugar's default type name for `DateTime` (`Ado.DbBind.GetDbTypeName("DateTime")`) is
+`date`, and FluentMigrator's `OracleTypeMap` gives `AsDateTime()` as `TIMESTAMP(4)`; both were read
+in code, not measured on a live instance. `StruoMigrationTypeTests.Shapes_resolve_to_the_live_backend_literals`
+pins the `AsTimestamp(Db)` column per live backend, `ColumnTypeExtensionsTests` pins that it equals
+`AsDateTime()` outside MySQL, and `CoreMigrationsLiveTests` compares the migrated and CodeFirst core
 schemas, `DecimalDigits` and `Length` included, on each of them.
 
 The rest of this section covers the parenthesised `LongText` and `TimestampWithTimeZone` literals.
@@ -148,8 +154,12 @@ is covered by the same no-op finding as the shaped properties above.
 
 ## Unknowns
 
-The Oracle `Timestamp` literal (`timestamp`, six fractional digits by default) is unverified against a
-live instance. It is not SqlSugar's Oracle default for `DateTime` (`date`, whole seconds).
+On Oracle the two paths create different zone-less timestamp types: `DATE` (whole seconds) from
+CodeFirst and `TIMESTAMP(4)` from the migrations. Neither was measured on a live instance.
+
+A `DateTime` primary key skips the `EntityService` hook, so CodeFirst keeps SqlSugar's default type for
+it, while `make:migration` emits `AsTimestamp(Db)`. On MySQL that is `datetime` against
+`datetime(6)`. No entity has a `DateTime` primary key.
 
 Whether the parenthesised-literal reasoning in Evidence holds against a live SQL Server or MySQL
 instance is unverified — it rests on reading the source, not on running it.
