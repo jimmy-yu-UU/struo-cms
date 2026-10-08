@@ -610,7 +610,7 @@ destructive actions, the user is left with a blocked action and no working way t
 
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite
   temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on dispose). An opt-in
-  live-PostgreSQL suite (`PostgresIntegrationTests`) exists specifically to catch "SQLite-green ≠
+  live-PostgreSQL suite (`LiveRepositoryTests`) exists specifically to catch "SQLite-green ≠
   Postgres-correct" bugs; it is otherwise a no-op pass when `Testing:PostgresConnection` isn't
   configured, and refuses to run against any database whose name doesn't contain `test` — see
   `AGENTS.md`, "Verification", for the connection-resolution order. Integration-style tests for the HTTP

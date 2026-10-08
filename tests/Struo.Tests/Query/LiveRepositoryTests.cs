@@ -20,99 +20,63 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Opt-in PostgreSQL integration tests. These run against a REAL Postgres only when a
-/// connection is configured — via the <c>STRUO_TEST_PG_CONNECTION</c> env var, or the Struo.Api
-/// <c>Testing:PostgresConnection</c> appsettings key (Development overrides base); otherwise every
-/// test is a no-op pass. The point is to catch the "SQLite-green ≠ Postgres-correct" class of bug
-/// (uuid vs text casts, bigint, the optimistic-concurrency compare-and-swap) BEFORE it reaches a live deploy — the
-/// project's live-gate discipline, automated as a suite you can run locally before merging.
+/// The repository-level live suite, run on every configured live backend (PostgreSQL, SQL Server, MySQL,
+/// MariaDB) in one run. Each backend gets one fresh database for this class, created on first use and
+/// dropped at class teardown; a backend without a configured connection (env var or the Struo.Api
+/// <c>Testing:*Connection</c> keys, see <see cref="LiveDatabases"/>) is a no-op pass for that case. The point is to catch the
+/// "SQLite-green != backend-correct" class of bug (uuid vs text casts, bigint, the optimistic-concurrency
+/// compare-and-swap) before it reaches a live deploy.
 ///
-/// Configure once in appsettings.Development.json (same place as the dev DB):
-///   "Testing": { "PostgresConnection": "Host=localhost;Port=5432;Database=web-struo-cms-test-db;Username=postgres;Password=..." }
-/// then: dotnet test --filter FullyQualifiedName~PostgresIntegrationTests
-///
-/// NOTE: this suite creates and CLEARS sample tables. It refuses to run unless the target database
-/// name contains "test" — point it at a disposable database, never the dev/prod DB.
+/// Run: dotnet test --filter FullyQualifiedName~LiveRepositoryTests
 /// </summary>
-[CollectionDefinition("Postgres", DisableParallelization = true)]
-public sealed class PostgresCollectionDefinition { }
+[CollectionDefinition("LiveRepository", DisableParallelization = true)]
+public sealed class LiveRepositoryCollectionDefinition { }
 
-[Collection("Postgres")]
-public sealed partial class PostgresIntegrationTests : IDisposable
+[Collection("LiveRepository")]
+public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDatabases>, IDisposable
 {
     // Source-generated regexes (SYSLIB1045): the "sqN_" nesting-prefix SubQueryConditional
-    // allocates per Wrap() call (see Two_nesting_levels_compose_through_Wrap_on_postgres below).
+    // allocates per Wrap() call (see Two_nesting_levels_compose_through_Wrap below).
     [GeneratedRegex(@"sq(\d+)_")]
     private static partial Regex SqPrefixWithGroupRegex();
 
     [GeneratedRegex(@"sq\d+_")]
     private static partial Regex SqPrefixRegex();
 
-    private const string ConnEnv = "STRUO_TEST_PG_CONNECTION";
-    private static readonly string? Conn = ResolveConnection();
+    public static TheoryData<string> Backends => LiveBackend.Names();
+
+    private readonly RepositoryDatabases _databases;
+    private LiveBackend _backend = LiveBackend.All[0];
+    private string _conn = "";
     private ISqlSugarClient? _db;
 
-    // xunit 2.x has no runtime Assert.Skip; when PG isn't configured the tests early-return as a
-    // trivial pass (a no-op). They only exercise Postgres when a connection is configured.
-    private bool PgConfigured => !string.IsNullOrWhiteSpace(Conn);
+    public LiveRepositoryTests(RepositoryDatabases databases) => _databases = databases;
 
-    // Connection resolution (in order): the STRUO_TEST_PG_CONNECTION env var (CI / one-off), else the
-    // Struo.Api appsettings key Testing:PostgresConnection (appsettings.Development.json overrides
-    // appsettings.json) — so it's configured in the same place as the dev DB. Empty/absent -> skip.
-    //
-    // Whichever source wins, the resolved string goes through PgTestConnectionString.DisablePooling:
-    // each test here builds and disposes its own client, but Npgsql's pool is process-wide and
-    // outlives them, and reuse of a pooled physical connection across a connection-close boundary
-    // (between tests, or between commands within one test) is what made one test in this suite abort
-    // mid-read. See that class for the full diagnosis and why this is isolation rather than tolerance.
-    //
-    // The raw string is resolved FIRST and both sources share a SINGLE exit through DisablePooling.
-    // That is deliberate: with one call site there is only one thing to drop instead of two, and
-    // Resolved_connection_disables_pooling below covers the wiring for both sources at once rather
-    // than only for whichever branch happened to run in a given process.
-    private static string? ResolveConnection()
+    // xunit 2.x has no runtime Assert.Skip; when a backend isn't configured the case early-returns as a
+    // trivial pass (a no-op). It exercises the backend only when a connection is configured.
+    private bool Use(string backend)
     {
-        var raw = Environment.GetEnvironmentVariable(ConnEnv);
-
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            var apiDir = FindApiDir();
-            if (apiDir is null) return null;
-            var config = new ConfigurationBuilder()
-                .AddJsonFile(Path.Combine(apiDir, "appsettings.json"), optional: true)
-                .AddJsonFile(Path.Combine(apiDir, "appsettings.Development.json"), optional: true)
-                .Build();
-            raw = config["Testing:PostgresConnection"];
-        }
-
-        return string.IsNullOrWhiteSpace(raw) ? null : PgTestConnectionString.DisablePooling(raw);
+        _backend = LiveBackend.Get(backend);
+        if (string.IsNullOrWhiteSpace(_backend.Connection)) return false;
+        _conn = _databases.ConnectionFor(_backend);
+        return true;
     }
 
-    private static string? FindApiDir()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, "src", "Struo.Api");
-            if (Directory.Exists(candidate)) return candidate;
-        }
-        return null;
-    }
+    private bool IsPostgres => _backend.Name == "PostgreSQL";
+
+    private ISqlSugarClient CreateClient(Guid actor, TranslationSidecarIndexPolicy? policy = null) =>
+        SqlSugarClientFactory.Create(
+            new DatabaseOptions { DbType = _backend.Db, ConnectionString = _conn },
+            new TestCurrentUserAccessor(actor), policy);
 
     private IItemRepository BuildRepo() => BuildRepoWithGraph().Repo;
 
     // Same wiring as BuildRepo(), but also returns the RelationshipGraph/options needed to drive
-    // RelationExpander directly (self-relation N+1 check on real PG).
+    // RelationExpander directly (self-relation N+1 check on the live backend).
     private (IItemRepository Repo, RelationshipGraph Graph, StruoQueryOptions Options)
         BuildRepoWithGraph()
     {
-        GuardDisposableDatabase();
-
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
-            new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
-        // Self-provision the disposable test DB when absent. Ignore failures (e.g. it already exists,
-        // or the provider can't create it) — InitTables/queries below surface a real connection problem.
-        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         _db.CodeFirst.InitTables<Category>();
         _db.Deleteable<Category>().Where(x => true).ExecuteCommand(); // deterministic start
 
@@ -138,12 +102,8 @@ public sealed partial class PostgresIntegrationTests : IDisposable
 
     // Wires an ItemDeserializer against the SAME repo/graph BuildRepoWithGraph() just built, so the
     // create-binding allowlist tests below drive ItemDeserializer.Deserialize ->
-    // SqlSugarItemRepository.CreateAsync — the exact pair ItemService.CreateAsync calls in
-    // production — without pulling in the full ItemService (translations/M2M/revisions/permissions),
-    // which this suite has no other use for and which ItemServiceCreateBindingTests (SQLite) already
-    // covers at that layer. Chose a small dedicated helper over widening BuildRepoWithGraph()'s return
-    // tuple: that tuple already has four call sites above, and every one of them would have to
-    // destructure (and discard) a fifth member it doesn't need.
+    // SqlSugarItemRepository.CreateAsync, the pair ItemService.CreateAsync calls in production,
+    // without the full ItemService.
     private (IItemRepository Repo, ItemDeserializer Deserializer, IMetadataProvider Provider)
         BuildRepoWithDeserializer()
     {
@@ -155,61 +115,20 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         return (repo, deserializer, provider);
     }
 
-    // 安全守衛：這些測試會 DELETE 資料列、DROP 探針表。除非目標 DB 名稱含 "test" 一律拒跑，
-    // 這樣一條誤指向 dev/prod 的連線永遠不可能清掉它。
-    private void GuardDisposableDatabase()
-    {
-        var dbName = Conn!
-            .Split(';')
-            .Select(p => p.Trim())
-            .FirstOrDefault(p => p.StartsWith("Database=", StringComparison.OrdinalIgnoreCase))
-            ?.Split('=', 2)[1] ?? "";
-        if (!dbName.Contains("test", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException(
-                $"Refusing destructive PG tests against database '{dbName}': its name must contain 'test'. " +
-                "Point Testing:PostgresConnection (or STRUO_TEST_PG_CONNECTION) at a disposable database, " +
-                "e.g. Database=web-struo-cms-test-db.");
-    }
-
-    // schema 層級的探測不需要 repository/metadata wiring，只要一個連上可丟棄測試 DB 的 client。
+    // Schema-level probes need no repository/metadata wiring, only a client on this backend's database.
     private ISqlSugarClient BuildRawClient()
     {
-        GuardDisposableDatabase();
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
-            new TestCurrentUserAccessor(Guid.Empty));
-        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        _db = CreateClient(Guid.Empty);
         return _db;
     }
 
     public void Dispose() => _db?.Dispose();
 
-    // Guards the pooling fix against silent removal. PgTestConnectionString's own unit tests only
-    // exercise DisablePooling in isolation, so without this a future edit could drop the call in
-    // ResolveConnection and bring the abort documented in AGENTS.md back with nothing failing.
-    // Asserts the wiring, not the helper's logic.
-    //
-    // Matched case- and whitespace-insensitively, matching DisablePooling's own IgnoreCase detection:
-    // a maintainer who configures `pooling=false` or `Pooling = false` themselves has done exactly the
-    // right thing, and a literal Contain("Pooling=false") would fail them with a message claiming the
-    // fix was dropped.
-    [Fact]
-    public void Resolved_connection_disables_pooling()
-    {
-        if (!PgConfigured) return;
-        Conn.Should().MatchRegex(
-            new Regex(@"Pooling\s*=\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
-            "ResolveConnection must route both of its sources through " +
-            "PgTestConnectionString.DisablePooling. If you set Pooling yourself to re-investigate the " +
-            "abort recorded in AGENTS.md, this test is the expected casualty of that choice; " +
-            "otherwise the pooling fix has been dropped and the flake is back.");
-    }
-
     // On real Postgres: non-page-aligned offset returns the exact window.
-    [Fact]
-    public async Task Offset_window_is_exact_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Offset_window_is_exact(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         for (var i = 0; i < 5; i++)
             await repo.CreateAsync("category", new Category { Name = $"C{i}" });
@@ -221,10 +140,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     }
 
     // On real Postgres: compare-and-swap (WHERE id AND version=expected) rejects a stale update.
-    [Fact]
-    public async Task Stale_version_update_conflicts_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Stale_version_update_conflicts(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         var created = (Category)await repo.CreateAsync("category", new Category { Name = "A" });
         var id = created.Id.ToString();
@@ -242,10 +161,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     }
 
     // uuid filter on real Postgres: filtering by the Guid PK must bind as uuid, not text (42883).
-    [Fact]
-    public async Task Uuid_id_filter_round_trips_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Uuid_id_filter_round_trips(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         var created = (Category)await repo.CreateAsync("category", new Category { Name = "Findme" });
         var rows = await repo.QueryWhereInAsync("category", "id", [created.Id]);
@@ -262,12 +181,12 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // REAL Postgres — mirrors DeepNestingBatchingTests' SQLite batching invariant (one WhereIn
     // query per level, linear in depth) but drives SqlSugarItemRepository against Postgres, where
     // the Guid FK (uuid column) binding is the PG-specific risk (same concern as
-    // Uuid_id_filter_round_trips_on_postgres above). Also asserts the expansion resolves the
+    // Uuid_id_filter_round_trips above). Also asserts the expansion resolves the
     // correct ancestor 6 hops up the chain, not just the query count.
-    [Fact]
-    public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, graph, options) = BuildRepoWithGraph();
 
         // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
@@ -315,10 +234,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
 
     // U3 primitive probe on real Postgres: the wrapped IN (SELECT …) conditional at the top level of a
     // Where list, a typed one-column projection (quoted column, uuid), and an apostrophe literal.
-    [Fact]
-    public async Task Subquery_conditional_primitive_works_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Subquery_conditional_primitive_works(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, _, _) = BuildRepoWithGraph();
         _db!.CodeFirst.InitTables<Article>();
 
@@ -345,10 +264,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // The premise is enforced, not just commented: the outer leaf's own generated parameter name,
     // built standalone exactly as it will be built inside the real combined list below, is asserted
     // equal to the inner subquery's pre-rename parameter name. Categories only — no Article needed.
-    [Fact]
-    public async Task Subquery_conditional_parameters_do_not_collide_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Subquery_conditional_parameters_do_not_collide(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
         var tech = new Category { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
@@ -386,14 +305,14 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         (await qNegative.ToListAsync()).Should().BeEmpty();
     }
 
-    // Mirrors Two_nesting_levels_compose_through_Wrap on real Postgres, categories only: an outer
+    // Mirrors Two_nesting_levels_compose_through_Wrap on a live backend, categories only: an outer
     // Category.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
     // is ALSO Category.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
     // composition through Wrap works at nesting depth 2 with two distinct parameter prefixes, on PG.
-    [Fact]
-    public async Task Two_nesting_levels_compose_through_Wrap_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Two_nesting_levels_compose_through_Wrap(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
         var x = new Category { Id = Guid.NewGuid(), Name = "PgNest X" };
@@ -444,15 +363,11 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // against PostgreSQL (uuid FK typing, lowercase quoted identifiers, no N' national-string prefix).
     // Uses SubqueryPushdownHarness's fixture types directly, InitTables'd here and DropTable'd at the
     // end (GuardDisposableDatabase refuses a non-"test" database first).
-    [Fact]
-    public async Task Pushdown_some_none_and_junction_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Pushdown_some_none_and_junction(string backend)
     {
-        if (!PgConfigured) return;
-        GuardDisposableDatabase();
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
-            new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
-        try { _db.DbMaintenance.CreateDatabase(); } catch { /* already exists / not permitted */ }
+        if (!Use(backend)) return;
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         foreach (var t in SubqueryPushdownHarness.Types) _db.CodeFirst.InitTables(t);
         // Deterministic start (FK-safe order), in case a previous run was interrupted before DropTable.
         _db.Deleteable<SqProductLabel>().Where(x => true).ExecuteCommand();
@@ -605,10 +520,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // deliberately wide sibling set at the walk-back hop is answered as a correlated
     // SQL subquery (IN (SELECT …)) on real Postgres, and querying with those conditionals returns
     // exactly the matching children.
-    [Fact]
-    public async Task Wide_dotted_filter_is_answered_in_sql_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Wide_dotted_filter_is_answered_in_sql(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, graph, options) = BuildRepoWithGraph();
 
         var stamp = "PgCapWide" + Guid.NewGuid().ToString("N")[..8];
@@ -637,13 +552,13 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // Task 6, live PG: the translation-sidecar subquery's own shape — article_translations has a
     // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
     // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination
-    // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips_on_postgres above): a
+    // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips above): a
     // long-keyed sidecar table projecting a uuid column into an outer IN (SELECT …) must still bind
     // that column as uuid, not text, on real Postgres.
-    [Fact]
-    public async Task Translatable_leaf_subquery_binds_uuid_fk_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Translatable_leaf_subquery_binds_uuid_fk(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, _, _) = BuildRepoWithGraph();
         _db!.CodeFirst.InitTables<Article>();
         _db.CodeFirst.InitTables<ArticleTranslation>();
@@ -686,10 +601,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // read alone. If minting silently failed to run on Postgres, the first create would insert the
     // literal zero uuid and the second would collide on the primary key and throw, never reaching the
     // final assertion below.
-    [Fact]
-    public async Task Create_binding_allowlist_mints_distinct_ids_for_a_repeated_client_supplied_id_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Create_binding_allowlist_mints_distinct_ids_for_a_repeated_client_supplied_id(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
         var meta = provider.GetCollection("category")!;
         var clientId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -709,14 +624,14 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // Companion to the id-minting test above: a declared ManyToOne FK (Category.ParentId, a uuid
     // column on Postgres) must still bind through the create allowlist and persist. Guid/uuid FK
     // binding is this suite's own catalogued PG-specific risk class — see
-    // Uuid_id_filter_round_trips_on_postgres and
-    // Six_level_selfrelation_parent_chain_is_linear_and_correct_on_postgres above — and the same risk
+    // Uuid_id_filter_round_trips and
+    // Six_level_selfrelation_parent_chain_is_linear_and_correct above — and the same risk
     // ItemServiceCreateBindingTests.Create_still_sets_a_declared_many_to_one_foreign_key already flags
     // (on SQLite) as the reason that regression guard exists.
-    [Fact]
-    public async Task Create_binding_allowlist_still_persists_a_declared_manytoone_fk_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Create_binding_allowlist_still_persists_a_declared_manytoone_fk(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
         var meta = provider.GetCollection("category")!;
 
@@ -739,10 +654,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // parameter is sent to Npgsql as text, which PG rejects against uuid/varchar columns (42804) —
     // exactly the divergence SQLite hides, since it ignores the distinction. This asserts all three
     // mutators round-trip on PG, including the null cases.
-    [Fact]
-    public async Task User_credential_writes_stamp_audit_and_bump_version_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task User_credential_writes_stamp_audit_and_bump_version(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         BuildRepoWithGraph();                       // establishes _db against the disposable test DB
         _db!.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
 
@@ -786,50 +701,11 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         _db.Deleteable<Struo.Infrastructure.Identity.User>().Where(u => u.Id == id).ExecuteCommand();
     }
 
-    // 這條測試證明：在真 PostgreSQL 上，未過濾的 InitTables 會 DROP 被移除的欄位；SQLite 不驗證宣告
-    // 型別、其 dialect 的結構同步能力也與 PG 不同，所以這個主張在這個儲存庫裡只有在這裡才證得出來。
-    // 完整說明：docs/ai/decisions/migrations-are-the-only-schema-source.md。
-    [Fact]
-    public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
+    // A5: 只標 IsJson、無 [CmsField]/[ColumnShape]/ColumnDataType 的欄位，必須能容納整個清單（PG 上是 text 而非 varchar(1)）。
+    [Theory, MemberData(nameof(Backends))]
+    public void Bare_IsJson_column_holds_a_list_and_round_trips(string backend)
     {
-        if (!PgConfigured) return;
-        var db = BuildRawClient();
-        try
-        {
-            if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
-                db.DbMaintenance.DropTable("destructive_init_probe");
-
-            db.CodeFirst.InitTables(typeof(DestructiveInitProbeWide));
-            db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
-              .Select(c => c.DbColumnName.ToLowerInvariant())
-              .Should().Contain("doomed", "前置條件：探針表必須先帶有這一欄");
-
-            db.CodeFirst.InitTables(typeof(DestructiveInitProbeNarrow));
-
-            var columnsAfter = db.DbMaintenance.GetColumnInfosByTableName("destructive_init_probe", false)
-              .Select(c => c.DbColumnName.ToLowerInvariant())
-              .ToList();
-            columnsAfter.Should().Contain("id", "同一次 rebuild 不應連帶丟失其他欄位");
-            columnsAfter.Should().Contain("keep", "同一次 rebuild 不應連帶丟失其他欄位");
-            columnsAfter.Should().NotContain("doomed",
-                "entity 移除屬性後，未過濾的 InitTables 在 PostgreSQL 上 DROP COLUMN");
-        }
-        finally
-        {
-            try
-            {
-                if (db.DbMaintenance.IsAnyTable("destructive_init_probe", false))
-                    db.DbMaintenance.DropTable("destructive_init_probe");
-            }
-            catch { /* best-effort cleanup; don't mask the real failure */ }
-        }
-    }
-
-    // A5: 只標 IsJson、無 [CmsField]/[ColumnShape]/ColumnDataType 的欄位，在真 PG 上必須是 text 而非 varchar(1)。
-    [Fact]
-    public void Bare_IsJson_column_is_text_on_postgres_and_round_trips()
-    {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var db = BuildRawClient();
         try
         {
@@ -837,9 +713,13 @@ public sealed partial class PostgresIntegrationTests : IDisposable
                 db.DbMaintenance.DropTable("ddl_closeout_isjson_probe");
             db.CodeFirst.InitTables<DdlCloseoutIsJsonProbe>();
 
-            var dataType = db.Ado.GetString(
-                "SELECT data_type FROM information_schema.columns WHERE table_name = 'ddl_closeout_isjson_probe' AND column_name = 'tags'");
-            dataType.Should().Be("text");
+            // Backend-specific catalog check; the round trip below runs everywhere (varchar(1) cannot hold it).
+            if (IsPostgres)
+            {
+                var dataType = db.Ado.GetString(
+                    "SELECT data_type FROM information_schema.columns WHERE table_name = 'ddl_closeout_isjson_probe' AND column_name = 'tags'");
+                dataType.Should().Be("text");
+            }
 
             db.Insertable(new DdlCloseoutIsJsonProbe { Tags = ["alpha", "beta", "gamma"] }).ExecuteCommand();
             db.Queryable<DdlCloseoutIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta", "gamma");
@@ -851,17 +731,14 @@ public sealed partial class PostgresIntegrationTests : IDisposable
         }
     }
 
-    // A6: FileTranslation 不再手寫 UniqueGroupNameList；帶 policy 的 client 建表後，PG 必須有覆蓋 (fileid, locale) 的 UNIQUE。
-    [Fact]
-    public void Sidecar_unique_index_is_derived_on_postgres_without_hand_written_attributes()
+    // A6: FileTranslation 不再手寫 UniqueGroupNameList；帶 policy 的 client 建表後，必須有覆蓋 (fileid, locale) 的 UNIQUE。
+    [Theory, MemberData(nameof(Backends))]
+    public void Sidecar_unique_index_is_derived_without_hand_written_attributes(string backend)
     {
-        if (!PgConfigured) return;
-        GuardDisposableDatabase();
+        if (!Use(backend)) return;
         var policy = TranslationSidecarIndexPolicy.FromMetadata(
             MetadataScanner.ScanTypes([typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)]));
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = Conn! },
-            new TestCurrentUserAccessor(Guid.Empty), policy);
+        _db = CreateClient(Guid.Empty, policy);
         var db = _db;
         try
         {
@@ -870,16 +747,20 @@ public sealed partial class PostgresIntegrationTests : IDisposable
                 db.DbMaintenance.DropTable(sidecar);
             db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
 
-            var indexDefs = db.Ado.SqlQuery<string>($"SELECT indexdef FROM pg_indexes WHERE tablename = '{sidecar}'");
-            indexDefs.Should().Contain(d =>
-                d.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
-                && d.Contains("fileid", StringComparison.OrdinalIgnoreCase)
-                && d.Contains("locale", StringComparison.OrdinalIgnoreCase));
+            if (IsPostgres)
+            {
+                var indexDefs = db.Ado.SqlQuery<string>($"SELECT indexdef FROM pg_indexes WHERE tablename = '{sidecar}'");
+                indexDefs.Should().Contain(d =>
+                    d.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                    && d.Contains("fileid", StringComparison.OrdinalIgnoreCase)
+                    && d.Contains("locale", StringComparison.OrdinalIgnoreCase));
+            }
 
             var fileId = Guid.NewGuid();
             db.Insertable(new Struo.Infrastructure.Files.FileTranslation { FileId = fileId, Locale = "en", Title = "a" }).ExecuteCommand();
             var dup = () => db.Insertable(new Struo.Infrastructure.Files.FileTranslation { FileId = fileId, Locale = "en", Title = "b" }).ExecuteCommand();
-            dup.Should().Throw<Exception>().Which.Message.Should().Contain("23505");
+            var thrown = dup.Should().Throw<Exception>().Which;
+            if (IsPostgres) thrown.Message.Should().Contain("23505");
         }
         finally
         {
@@ -895,10 +776,10 @@ public sealed partial class PostgresIntegrationTests : IDisposable
     // Alias round-tripping through its renamed column, a typed NULL succeeding (the 42804 trap this
     // whole suite exists to catch), and the duplicate-row repair keeping the lowest PK without
     // throwing.
-    [Fact]
-    public async Task Junction_payload_sync_preserves_keys_and_patches_columns_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Junction_payload_sync_preserves_keys_and_patches_columns(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var db = BuildRawClient();
         try
         {

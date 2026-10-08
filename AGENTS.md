@@ -255,7 +255,7 @@ MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
 - **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
   recommended for every DB-behavior change, since it is the one backend with an existing suite
-  (`PostgresIntegrationTests`) and the one whose divergences are already catalogued. This is a
+  (`LiveRepositoryTests`) and the one whose divergences are already catalogued. This is a
   robustness recommendation, not a CI gate — CI deliberately runs the SQLite suite only, because
   mandating a specific engine in CI would privilege one backend over the replaceability the ORM
   abstraction exists to preserve.
@@ -288,7 +288,7 @@ about a millisecond) when a connection is unset, so judge them by per-test durat
 must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
 contains a hyphen. Beyond the migration tests and a SqlSugar smoke check, only PostgreSQL has a live suite.
 
-**`PostgresIntegrationTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
+**`LiveRepositoryTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a
 `WSA_OPERATION_ABORTED` socket abort; `PgTestConnectionString.DisablePooling` gives each test its own
 physical connection. That is test isolation, not tolerance — no retry, no swallowed exception, no
