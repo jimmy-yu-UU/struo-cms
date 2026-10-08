@@ -217,7 +217,8 @@ public static class SqlSugarClientFactory
                 "applies the LongText shape, and it also sets IsJson, which [ColumnShape] alone does not.");
         }
 
-        column.DataType = ColumnTypeMap.For(shape.Value, dbType);
+        if (shape == ColumnShape.Timestamp) ApplyTimestamp(column, dbType);
+        else column.DataType = ColumnTypeMap.For(shape.Value, dbType);
         return true;
     }
 
@@ -227,8 +228,14 @@ public static class SqlSugarClientFactory
     private static bool ApplyZoneLessTimestamp(PropertyInfo property, EntityColumnInfo column, DbType dbType)
     {
         if (dbType != SqlSugar.DbType.MySql || !TakesZoneLessTimestamp(property)) return false;
-        column.DataType = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+        ApplyTimestamp(column, dbType);
         return true;
+    }
+
+    // ColumnShape.Timestamp, explicit or implicit: datetime(6) on MySQL/MariaDB, SqlSugar's default DateTime type elsewhere.
+    private static void ApplyTimestamp(EntityColumnInfo column, DbType dbType)
+    {
+        if (dbType == SqlSugar.DbType.MySql) column.DataType = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
     }
 
     /// <summary>True for a zone-less timestamp property: the hook maps it to <see cref="ColumnShape.Timestamp"/> on MySQL.</summary>
@@ -236,6 +243,11 @@ public static class SqlSugarClientFactory
         (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == typeof(DateTime)
         && property.GetCustomAttribute<ColumnShapeAttribute>() is null
         && string.IsNullOrEmpty(property.GetCustomAttribute<SugarColumn>()?.ColumnDataType);
+
+    /// <summary>True for a property that takes <see cref="ColumnShape.Timestamp"/>, declared or by convention.</summary>
+    internal static bool IsTimestampShaped(PropertyInfo property) =>
+        property.GetCustomAttribute<ColumnShapeAttribute>()?.Shape == ColumnShape.Timestamp
+        || TakesZoneLessTimestamp(property);
 
     // A property that carries only a bare [SugarColumn(IsJson = true)] — no
     // [CmsField] interface in JsonColumnInterfaces above, no [ColumnShape] — still

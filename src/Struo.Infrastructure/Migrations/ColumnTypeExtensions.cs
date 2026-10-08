@@ -12,9 +12,12 @@ namespace Struo.Infrastructure.Migrations;
 /// </summary>
 public static class ColumnTypeExtensions
 {
+    /// <summary><see cref="ColumnShape.Timestamp"/> resolves through <see cref="AsTimestamp{TNext}"/>.</summary>
     public static TNext AsShape<TNext>(this IColumnTypeSyntax<TNext> syntax, ColumnShape shape, StruoDbType db)
         where TNext : IFluentSyntax =>
-        syntax.AsCustom(ColumnTypeMap.For(shape, DbTypeMapper.Map(db)));
+        shape == ColumnShape.Timestamp
+            ? syntax.AsTimestamp(db)
+            : syntax.AsCustom(ColumnTypeMap.For(shape, DbTypeMapper.Map(db)));
 
     public static TNext AsLongText<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)
         where TNext : IFluentSyntax => syntax.AsShape(ColumnShape.LongText, db);
@@ -25,7 +28,9 @@ public static class ColumnTypeExtensions
     /// </summary>
     public static TNext AsTimestamp<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)
         where TNext : IFluentSyntax =>
-        db == StruoDbType.MySql ? syntax.AsShape(ColumnShape.Timestamp, db) : syntax.AsDateTime();
+        db == StruoDbType.MySql
+            ? syntax.AsCustom(ColumnTypeMap.For(ColumnShape.Timestamp, DbTypeMapper.Map(db)))
+            : syntax.AsDateTime();
 
     /// <summary>JSON columns are stored as long text, matching the CodeFirst JSON-column convention.</summary>
     public static TNext AsJson<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)

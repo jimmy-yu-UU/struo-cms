@@ -150,6 +150,26 @@ public class EntitySchemaReaderTests
             .Should().Be(ColumnCategory.DateTimeWithTimeZone);
     }
 
+    [Theory]
+    [InlineData(StruoDbType.MySql)]
+    [InlineData(StruoDbType.PostgreSQL)]
+    public void An_explicit_Timestamp_shape_reads_as_a_zone_less_timestamp(StruoDbType dbType)
+    {
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions
+            {
+                DbType = dbType,
+                ConnectionString = "Data Source=unused",
+                TablePrefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_"
+            },
+            new TestCurrentUserAccessor(Guid.Empty));
+
+        var table = EntitySchemaReader.Read(client, typeof(ShapedTimestampProbe));
+
+        Col(table, "at").Category.Should().Be(ColumnCategory.DateTime);
+        Col(table, "maybeat").Category.Should().Be(ColumnCategory.DateTime);
+    }
+
     [Fact]
     public void SugarIndex_attributes_resolve_the_table_token_and_keep_declaration_order()
     {

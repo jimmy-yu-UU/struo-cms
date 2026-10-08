@@ -36,6 +36,14 @@ public sealed class ExplicitTypeProbe
     [SugarColumn(Length = 10, DecimalDigits = 0)] public decimal Whole { get; set; }
 }
 
+[SugarTable("shaped_timestamp_probe")]
+public sealed class ShapedTimestampProbe
+{
+    [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+    [ColumnShape(ColumnShape.Timestamp)] public DateTime At { get; set; }
+    [ColumnShape(ColumnShape.Timestamp)] public DateTime? MaybeAt { get; set; }
+}
+
 [SugarTable("group_a_probe")]
 public sealed class GroupAProbe
 {

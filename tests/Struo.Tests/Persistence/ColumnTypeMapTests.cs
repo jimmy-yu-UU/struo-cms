@@ -9,6 +9,7 @@ using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Settings;
+using Struo.Tests.Migrations.Schema;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -105,6 +106,29 @@ public class ColumnTypeMapTests
         TimestampProbeColumn(dbType, nameof(TimestampProbe.Offset)).DataType.Should().BeNullOrEmpty();
     }
 
+    [Theory]
+    [MemberData(nameof(CodeFirstBackends))]
+    public void An_explicit_Timestamp_shape_gets_datetime_6_on_MySql_and_SqlSugars_default_elsewhere(DbType dbType)
+    {
+        var columns = SqlSugarClientFactory.Create(
+                new DatabaseOptions
+                {
+                    DbType = Enum.Parse<StruoDbType>(dbType.ToString()),
+                    ConnectionString = "Data Source=unused",
+                    TablePrefix = "st" + Guid.NewGuid().ToString("N")[..8] + "_",
+                },
+                new TestCurrentUserAccessor(null))
+            .EntityMaintenance.GetEntityInfo<ShapedTimestampProbe>()
+            .Columns;
+
+        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt) })
+        {
+            var dataType = columns.Single(c => c.PropertyName == name).DataType;
+            if (dbType == DbType.MySql) dataType.Should().Be("datetime(6)");
+            else dataType.Should().BeNullOrEmpty();
+        }
+    }
+
     [SugarTable("timestamp_probe")]
     public sealed class TimestampProbe
     {
@@ -116,14 +140,14 @@ public class ColumnTypeMapTests
         public DateTimeOffset Offset { get; set; }
     }
 
-    public static IEnumerable<object[]> TimestampWithTimeZoneProperties()
+    public static TheoryData<Type, string> TimestampWithTimeZoneProperties() => new()
     {
-        yield return [typeof(MediaFolder), nameof(MediaFolder.CreatedAt)];
-        yield return [typeof(MediaFolder), nameof(MediaFolder.UpdatedAt)];
-        yield return [typeof(SiteSettings), nameof(SiteSettings.UpdatedAt)];
-        yield return [typeof(UserSession), nameof(UserSession.CreatedAt)];
-        yield return [typeof(UserSession), nameof(UserSession.ExpiresAt)];
-    }
+        { typeof(MediaFolder), nameof(MediaFolder.CreatedAt) },
+        { typeof(MediaFolder), nameof(MediaFolder.UpdatedAt) },
+        { typeof(SiteSettings), nameof(SiteSettings.UpdatedAt) },
+        { typeof(UserSession), nameof(UserSession.CreatedAt) },
+        { typeof(UserSession), nameof(UserSession.ExpiresAt) },
+    };
 
     [Theory]
     [MemberData(nameof(TimestampWithTimeZoneProperties))]
@@ -143,11 +167,11 @@ public class ColumnTypeMapTests
         columnDataType.Should().BeNullOrEmpty();
     }
 
-    public static IEnumerable<object[]> LongTextProperties()
+    public static TheoryData<Type, string> LongTextProperties() => new()
     {
-        yield return [typeof(SiteSettings), nameof(SiteSettings.BrandName)];
-        yield return [typeof(Revision), nameof(Revision.Snapshot)];
-    }
+        { typeof(SiteSettings), nameof(SiteSettings.BrandName) },
+        { typeof(Revision), nameof(Revision.Snapshot) },
+    };
 
     [Theory]
     [MemberData(nameof(LongTextProperties))]

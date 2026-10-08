@@ -27,10 +27,10 @@ public enum ColumnShape
     TimestampWithTimeZone,
 
     /// <summary>
-    /// Zone-less timestamp with microseconds, MySQL and MariaDB only. Every <see cref="DateTime"/>
+    /// Zone-less timestamp with microseconds on MySQL and MariaDB. Every <see cref="DateTime"/>
     /// property without an explicit shape or <c>ColumnDataType</c> gets it there, so two writes within
     /// one second stay ordered; their plain <c>datetime</c> keeps whole seconds. Other backends keep
-    /// SqlSugar's default <see cref="DateTime"/> mapping.
+    /// SqlSugar's default <see cref="DateTime"/> mapping, also when the shape is declared explicitly.
     /// </summary>
     Timestamp,
 }
