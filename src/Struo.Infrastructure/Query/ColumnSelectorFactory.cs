@@ -64,12 +64,30 @@ internal static class ColumnSelectorFactory
         var bindings = slots.Select((s, i) =>
         {
             var prop = Property(entityType, s.Property);
-            var call = Expression.Call(Aggregate(AggregateMethodName(s.Op), prop.PropertyType), Expression.Property(p, prop));
+            var call = AggregateCall(s.Op, p, prop);
             return (MemberBinding)Expression.Bind(typeof(AggregateRow).GetProperty("V" + i)!, Expression.Convert(call, typeof(object)));
         });
         var body = Expression.MemberInit(Expression.New(typeof(AggregateRow)), bindings);
         return Expression.Lambda(typeof(Func<,>).MakeGenericType(entityType, typeof(AggregateRow)), body, p);
     }
+
+    // AVG averages a decimal-cast integral operand: SQL Server divides integers as integers.
+    // Decimal and floating-point operands are already averaged exactly.
+    private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop)
+    {
+        Expression operand = Expression.Property(p, prop);
+        var type = prop.PropertyType;
+        if (op == AggregateOp.Avg && IsIntegral(Nullable.GetUnderlyingType(type) ?? type))
+        {
+            type = typeof(decimal);
+            operand = Expression.Call(typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDecimal), [typeof(object)])!, Expression.Convert(operand, typeof(object)));
+        }
+        return Expression.Call(Aggregate(AggregateMethodName(op), type), operand);
+    }
+
+    private static bool IsIntegral(Type t) =>
+        Type.GetTypeCode(t) is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16
+            or TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64;
 
     private static MethodCallExpression CountCall(ParameterExpression p, PropertyInfo prop, bool distinct) =>
         Expression.Call(Aggregate(distinct ? nameof(SqlFunc.AggregateDistinctCount) : nameof(SqlFunc.AggregateCount), prop.PropertyType),

@@ -113,13 +113,16 @@ public class FacetSqlShapeTests : IDisposable
         sql.Should().MatchRegex(@"SUM\(`Sort`\)\s+AS\s+`V0`");
         sql.Should().MatchRegex(@"MIN\(`Sort`\)\s+AS\s+`V1`");
         sql.Should().MatchRegex(@"MAX\(`Sort`\)\s+AS\s+`V2`");
-        sql.Should().MatchRegex(@"AVG\(`Sort`\)\s+AS\s+`V3`");
+        sql.Should().MatchRegex(@"AVG\(\s*CAST\(`Sort` AS DECIMAL\(\d+,\d+\)\)\s*\)\s+AS\s+`V3`");
         sql.Should().MatchRegex(@"COUNT\(`Note`\)\s+AS\s+`V4`");
         var r = q.First()!;
         Convert.ToInt64(r.V0).Should().Be(5);
         Convert.ToInt64(r.V4).Should().Be(1);
         Convert.ToDouble(r.V3).Should().Be(2.5);
     }
+
+    [Fact]
+    public void Average_is_exact_over_int_long_decimal_and_nullable_columns() => AvgProbeAssertions.SeedAndAssert(_db);
 
     [Fact]
     public void Aggregate_over_an_empty_set_returns_nulls_and_zero_count()

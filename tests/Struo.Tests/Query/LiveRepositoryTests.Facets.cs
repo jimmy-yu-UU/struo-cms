@@ -147,4 +147,12 @@ public sealed partial class LiveRepositoryTests
         var ar = await repo.AggregateAsync("article", new QueryModel(null, null, [], 100, 0, null), articleSpec, [], null, DeletedFilter.Exclude);
         ar.Values[AggregateOp.Max]["createdAt"].Should().BeOfType<DateTime>();
     }
+
+    [Theory, MemberData(nameof(Backends))]
+    public void Average_is_exact_over_int_long_decimal_and_nullable_columns(string backend)
+    {
+        if (!Use(backend)) return;
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        AvgProbeAssertions.SeedAndAssert(_db);
+    }
 }
