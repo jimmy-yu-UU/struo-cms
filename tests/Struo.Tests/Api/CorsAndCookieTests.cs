@@ -23,16 +23,16 @@ public class CorsAndCookieTests
     private const string Origin = "https://admin.example.test";
 
     // A factory variant that enables cross-origin mode via config.
-    private sealed class CorsApiFactory : WebApplicationFactory<Program>
+    internal sealed class CorsApiFactory : WebApplicationFactory<Program>
     {
-        private readonly SqliteTestDatabase _db = new();
+        private readonly ITestDatabase _db = TestBackend.CreateDatabase("cors");
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Database:DbType"] = "Sqlite",
+                    ["Database:DbType"] = _db.DbType.ToString(),
                     ["Database:ConnectionString"] = _db.ConnectionString,
                     ["Database:MigrateOnStartup"] = "true",
                     // Struo:ContentAssemblies cannot be set here - it is read before Build(). See Support/ContentAssemblyEnvBootstrap.cs.

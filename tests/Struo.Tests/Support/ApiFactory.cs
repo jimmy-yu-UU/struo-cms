@@ -13,7 +13,7 @@ namespace Struo.Tests.Support;
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteTestDatabase _db = new();
+    private readonly ITestDatabase _db = TestBackend.CreateDatabase("api");
 
     public string FilesRoot { get; } =
         Path.Combine(Path.GetTempPath(), "struo-files-it-" + Guid.NewGuid().ToString("N"));
@@ -34,7 +34,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:DbType"] = "Sqlite",
+                ["Database:DbType"] = _db.DbType.ToString(),
                 ["Database:ConnectionString"] = _db.ConnectionString,
                 // The host builds its schema and seed data from the migrations; the startup gate then
                 // checks the result against the entity model (Development).
@@ -161,7 +161,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// Seeds a non-super role with the given read/write grants, a fresh editor user, and the
     /// user-role link, and returns the credentials + user id — WITHOUT logging in. Split out of
     /// <see cref="CreateEditorClientAsync"/> so a derived host (e.g. via <c>WithWebHostBuilder</c>)
-    /// can seed through this base factory (both hosts share the one <see cref="SqliteTestDatabase"/>)
+    /// can seed through this base factory (both hosts share the one test database)
     /// and then log the same user in against its OWN <c>HttpClient</c>/cookie jar.
     /// </summary>
     public async Task<(string email, string password, Guid userId)> SeedEditorAsync(
