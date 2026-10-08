@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public sealed partial class PostgresIntegrationTests
+public sealed partial class LiveRepositoryTests
 {
     // U5: the candidate-id branch renders `id IN ('uuid', …)` as LITERALS, so these
     // three pin the uuid-column binding, the always-false empty form and the 1000-id statement on a
@@ -24,10 +24,10 @@ public sealed partial class PostgresIntegrationTests
     private static QueryModel WithCandidates(IReadOnlyList<object> ids, string search = "ignored-by-the-candidate-branch") =>
         new QueryModel(null, null, [], 100, 0, search) { SearchCandidates = ids };
 
-    [Fact]
-    public async Task Search_candidates_bind_uuid_ids_in_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Search_candidates_bind_uuid_ids_in(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         var (a, b, _) = SeedThreeCategories();
         var r = await repo.QueryAsync("category", WithCandidates([a, b]), ["name"], null);
@@ -35,10 +35,10 @@ public sealed partial class PostgresIntegrationTests
         r.Rows.Cast<Category>().Select(x => x.Id).Should().BeEquivalentTo([a, b]);
     }
 
-    [Fact]
-    public async Task Empty_search_candidates_match_nothing_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Empty_search_candidates_match_nothing(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         SeedThreeCategories();
         // "u5-" collides via LIKE '%u5-%' with all four seeded names, so if a regression ever treated
@@ -50,10 +50,10 @@ public sealed partial class PostgresIntegrationTests
         r.Rows.Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task A_thousand_search_candidates_run_in_one_statement_on_postgres()
+    [Theory, MemberData(nameof(Backends))]
+    public async Task A_thousand_search_candidates_run_in_one_statement(string backend)
     {
-        if (!PgConfigured) return;
+        if (!Use(backend)) return;
         var repo = BuildRepo();
         var (a, b, c) = SeedThreeCategories();
         var ids = Enumerable.Range(0, 997).Select(_ => (object)Guid.NewGuid()).Append(a).Append(b).Append(c).ToList();

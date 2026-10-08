@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Connection-string shaping for the opt-in PostgreSQL suite (<c>PostgresIntegrationTests</c>): disables
+/// Connection-string shaping for the PostgreSQL leg of the live suites (<c>PostgresOnlyTests, LiveRepositoryTests</c>): disables
 /// Npgsql connection pooling so each test gets its own physical connection instead of reusing one from
 /// the process-wide pool.
 ///
@@ -17,12 +17,12 @@ namespace Struo.Tests.Support;
 ///
 /// Full write-up: docs/ai/decisions/pg-test-connection-pooling.md
 /// </summary>
-internal static class PgTestConnectionString
+internal static partial class PgTestConnectionString
 {
     // Whole-key match: `Pooling` as a key at the start of the string or after a `;`, up to its `=`.
     // Substring matches (e.g. an "Application Name=Pooling-probe" value) must not count as the key.
-    private static readonly Regex PoolingKey = new(
-        @"(^|;)\s*Pooling\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    [GeneratedRegex(@"(^|;)\s*Pooling\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PoolingKey();
 
     /// <summary>
     /// Returns <paramref name="connectionString"/> with Npgsql pooling disabled. An empty/whitespace
@@ -33,7 +33,7 @@ internal static class PgTestConnectionString
     public static string DisablePooling(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
-        if (PoolingKey.IsMatch(connectionString)) return connectionString;
+        if (PoolingKey().IsMatch(connectionString)) return connectionString;
 
         var separator = connectionString.TrimEnd().EndsWith(';') ? "" : ";";
         return $"{connectionString.TrimEnd()}{separator}Pooling=false";

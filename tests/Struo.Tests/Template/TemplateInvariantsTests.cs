@@ -55,8 +55,8 @@ public sealed class TemplateInvariantsTests
             "in via a ProjectReference would re-couple the shipped framework to business content).");
     }
 
-    // Same walk-up-from-BaseDirectory approach as PostgresIntegrationTests.FindApiDir - see
-    // tests/Struo.Tests/Query/PostgresIntegrationTests.cs.
+    // Same walk-up-from-BaseDirectory approach as LiveDatabases.FindApiDir - see
+    // tests/Struo.Tests/Support/LiveDatabases.cs.
     private static string? FindApiDir()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)

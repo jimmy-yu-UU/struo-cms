@@ -24,7 +24,7 @@ disagree, the parity test fails and the migration is the side to trust.
 
 ## Evidence
 
-`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres` shows the DROP on
+`PostgresOnlyTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres` shows the DROP on
 real PostgreSQL: an unfiltered `InitTables` over a narrowed probe entity, run against a table created
 from the probe's wide entity, drops the column the narrow entity lacks. It is opt-in and needs a live
 PostgreSQL connection.
@@ -44,4 +44,4 @@ has no connection, so the parity claim is unmeasured there.
 ## Referenced from
 
 - `AGENTS.md` ("Migrations are the only schema source")
-- `tests/Struo.Tests/Query/PostgresIntegrationTests.cs`
+- `tests/Struo.Tests/Query/PostgresOnlyTests.cs`

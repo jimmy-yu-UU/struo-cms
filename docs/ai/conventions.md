@@ -610,13 +610,15 @@ destructive actions, the user is left with a blocked action and no working way t
 
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite
   temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on dispose). An opt-in
-  live-PostgreSQL suite (`PostgresIntegrationTests`) exists specifically to catch "SQLite-green ≠
-  Postgres-correct" bugs; it is otherwise a no-op pass when `Testing:PostgresConnection` isn't
-  configured, and refuses to run against any database whose name doesn't contain `test` — see
-  `AGENTS.md`, "Verification", for the connection-resolution order. Integration-style tests for the HTTP
-  surface live under `tests/Struo.Tests/Api/` using a `WebApplicationFactory`-based fixture
-  (`Support/ApiFactory.cs`). `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite
-  that guards template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped
+  live repository suite (`LiveRepositoryTests`) exists specifically to catch "SQLite-green ≠
+  backend-correct" bugs; it runs on each backend whose test connection is configured; an
+  unconfigured backend's rows pass without running, so judge by per-test duration. It refuses to run
+  against any database whose name doesn't contain `test` — see `AGENTS.md`, "Verification", for the
+  connection-resolution order and the `STRUO_TEST_BACKEND` switch that moves the API test hosts to
+  a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
+  using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`).
+  `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite that guards
+  template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped
   `ContentAssemblies`) rather than exercising `AddStruoMetadata` at runtime.
 - **Frontend unit** (`pnpm test`, Vitest, `jsdom` environment): `*.test.ts` files sit next to the
   source file they cover (e.g. `frontend/src/lib/buildItemPayload.ts` /
