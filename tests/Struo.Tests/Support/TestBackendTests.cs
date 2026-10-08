@@ -40,17 +40,17 @@ public sealed class TestBackendTests
     [Fact]
     public void DatabaseNameFor_builds_a_lowercase_name_that_keeps_the_run_id()
     {
-        TestBackend.DatabaseNameFor("web-struo-cms-test-db", "api", "a1b2c3d4")
-            .Should().Be("web_struo_cms_test_db_api_a1b2c3d4");
+        TestBackend.DatabaseNameFor("web-struo-cms-test-db", "api", 1, "a1b2c3d4")
+            .Should().Be("web_struo_cms_test_db_api_1_a1b2c3d4");
     }
 
     [Fact]
     public void DatabaseNameFor_truncates_the_configured_part_never_the_run_id()
     {
-        var name = TestBackend.DatabaseNameFor(new string('x', 100) + "-test", "api", "a1b2c3d4");
+        var name = TestBackend.DatabaseNameFor(new string('x', 100) + "-test", "api", 1, "a1b2c3d4");
 
         name.Length.Should().BeLessThanOrEqualTo(63);
-        name.Should().EndWith("_a1b2c3d4");
+        name.Should().EndWith("_1_a1b2c3d4");
         name.Should().MatchRegex("^[a-z0-9_]+$").And.Contain("test");
     }
 
@@ -63,25 +63,71 @@ public sealed class TestBackendTests
     {
         var configured = new string('x', prefixLength) + "-test";
 
-        var name = TestBackend.DatabaseNameFor(configured, purpose, "a1b2c3d4");
+        var name = TestBackend.DatabaseNameFor(configured, purpose, 1, "a1b2c3d4");
 
         name.Length.Should().BeLessThanOrEqualTo(63);
-        name.Should().Contain("test").And.EndWith("_a1b2c3d4").And.MatchRegex("^[a-z0-9_]+$");
+        name.Should().Contain("test").And.EndWith("_1_a1b2c3d4").And.MatchRegex("^[a-z0-9_]+$");
         TestBackend.IsLeftoverName(configured, name).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DatabaseNameFor_gives_the_same_purpose_a_distinct_name_per_sequence()
+    {
+        var first = TestBackend.DatabaseNameFor("struo-cms-test", "api", 1, "a1b2c3d4");
+        var second = TestBackend.DatabaseNameFor("struo-cms-test", "api", 2, "a1b2c3d4");
+
+        first.Should().NotBe(second);
+        TestBackend.IsLeftoverName("struo-cms-test", second).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(100, 1)]
+    [InlineData(100, 12345)]
+    [InlineData(60, 7)]
+    public void DatabaseNameFor_stays_distinct_and_recognised_when_the_stem_is_truncated(int prefixLength, int sequence)
+    {
+        var configured = new string('x', prefixLength) + "-test";
+
+        var first = TestBackend.DatabaseNameFor(configured, "api", sequence, "a1b2c3d4");
+        var second = TestBackend.DatabaseNameFor(configured, "api", sequence + 1, "a1b2c3d4");
+
+        first.Should().NotBe(second);
+        first.Length.Should().BeLessThanOrEqualTo(63);
+        TestBackend.IsLeftoverName(configured, first).Should().BeTrue();
+        TestBackend.IsLeftoverName(configured, second).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("-_-")]
+    public void DatabaseNameFor_rejects_an_empty_or_symbol_only_purpose(string purpose)
+    {
+        var act = () => TestBackend.DatabaseNameFor("struo-cms-test", purpose, 1, "a1b2c3d4");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void CreateLiveDatabase_rejects_an_empty_purpose_before_touching_a_server()
+    {
+        var act = () => TestBackend.CreateLiveDatabase(TestBackendKind.PostgreSQL, "--");
+
+        act.Should().Throw<ArgumentException>().Which.ParamName.Should().Be("purpose");
     }
 
     [Fact]
     public void IsLeftoverName_rejects_truncated_lookalikes()
     {
-        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "yyyyyyyy_test_a1b2c3d4").Should().BeFalse();
-        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "x_test_a1b2c3d4").Should().BeFalse();
+        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "yyyyyyyy_test_1_a1b2c3d4").Should().BeFalse();
+        TestBackend.IsLeftoverName(new string('x', 100) + "-test", "x_test_1_a1b2c3d4").Should().BeFalse();
     }
 
     [Fact]
     public void SelectLeftovers_never_includes_the_current_runs_databases()
     {
-        var other = TestBackend.DatabaseNameFor("struo-cms-test", "api", "0123abcd");
-        var own = TestBackend.DatabaseNameFor("struo-cms-test", "api", TestBackend.RunId);
+        var other = TestBackend.DatabaseNameFor("struo-cms-test", "api", 1, "0123abcd");
+        var own = TestBackend.DatabaseNameFor("struo-cms-test", "api", 1, TestBackend.RunId);
 
         TestBackend.SelectLeftovers("struo-cms-test", [own, other, "struo-cms-test"]).Should().Equal(other);
         TestBackend.SelectLeftovers("struo-cms-test", [own, other], TestBackend.RunId).Should().BeEmpty();
@@ -90,7 +136,7 @@ public sealed class TestBackendTests
     [Fact]
     public void DatabaseNameFor_always_contains_test()
     {
-        TestBackend.DatabaseNameFor("Struo CMS", "Api Host", "a1b2c3d4")
+        TestBackend.DatabaseNameFor("Struo CMS", "Api Host", 1, "a1b2c3d4")
             .Should().Contain("test").And.MatchRegex("^[a-z0-9_]+$").And.NotContain("__");
     }
 
@@ -100,7 +146,7 @@ public sealed class TestBackendTests
     [InlineData("struo-cms-test", "a-very-long-purpose-name-that-pushes-the-name-over-the-limit-xx")]
     public void IsLeftoverName_matches_names_the_mechanism_produces(string configured, string purpose)
     {
-        var name = TestBackend.DatabaseNameFor(configured, purpose, "0123abcd");
+        var name = TestBackend.DatabaseNameFor(configured, purpose, 1, "0123abcd");
 
         TestBackend.IsLeftoverName(configured, name).Should().BeTrue();
     }
@@ -109,9 +155,10 @@ public sealed class TestBackendTests
     [InlineData("struo-cms-test")]
     [InlineData("struo_cms_test")]
     [InlineData("struo_cms_test_api")]
-    [InlineData("struo_cms_test_api_0123ABCD")]
-    [InlineData("struo_cms_test_api_0123abc")]
-    [InlineData("other_test_api_0123abcd")]
+    [InlineData("struo_cms_test_api_1_0123ABCD")]
+    [InlineData("struo_cms_test_api_1_0123abc")]
+    [InlineData("struo_cms_test_api_0123abcd")]
+    [InlineData("other_test_api_1_0123abcd")]
     [InlineData("master")]
     public void IsLeftoverName_never_matches_the_configured_database_or_foreign_names(string name) =>
         TestBackend.IsLeftoverName("struo-cms-test", name).Should().BeFalse();

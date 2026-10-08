@@ -20,6 +20,8 @@ internal static partial class TestBackend
     private static readonly Lazy<TestBackendKind> CurrentKind = new(
         () => Parse(Environment.GetEnvironmentVariable(EnvVar)));
 
+    private static int _sequence;
+
     public static readonly string RunId = Guid.NewGuid().ToString("N")[..RunIdLength];
 
     public static TestBackendKind Current => CurrentKind.Value;
@@ -61,9 +63,11 @@ internal static partial class TestBackend
 
     public static ITestDatabase CreateLiveDatabase(TestBackendKind kind, string purpose, string runId)
     {
+        RequirePurpose(purpose);
         var configured = ConfiguredConnection(kind);
         LiveDatabases.GuardDisposable(configured);
-        var name = DatabaseNameFor(LiveDatabaseDdl.DatabaseOf(configured), purpose, runId);
+        var sequence = Interlocked.Increment(ref _sequence);
+        var name = DatabaseNameFor(LiveDatabaseDdl.DatabaseOf(configured), purpose, sequence, runId);
         return LiveDatabaseDdl.Create(kind, name, configured);
     }
 
@@ -87,14 +91,19 @@ internal static partial class TestBackend
     public static string ConfiguredDatabaseName(TestBackendKind kind) =>
         LiveDatabaseDdl.DatabaseOf(ConfiguredConnection(kind));
 
-    public static string DatabaseNameFor(string configuredName, string purpose, string runId)
+    /// <summary>
+    /// <c>&lt;stem&gt;_&lt;purpose&gt;_&lt;sequence&gt;_&lt;runId&gt;</c>. The sequence is process-unique, so two
+    /// databases with the same purpose never share a name; the stem and purpose are truncated before
+    /// the sequence and run id are.
+    /// </summary>
+    public static string DatabaseNameFor(string configuredName, string purpose, int sequence, string runId)
     {
         var stem = Stem(configuredName);
-        var purposePart = Sanitize(purpose);
-        var combined = purposePart.Length == 0 ? stem : $"{stem}_{purposePart}";
-        var room = MaxNameLength - 1 - runId.Length;
+        var combined = $"{stem}_{RequirePurpose(purpose)}";
+        var tail = $"_{sequence}_{runId}";
+        var room = MaxNameLength - tail.Length;
         if (combined.Length > room) combined = $"{combined[..(room - TestMarker.Length)].TrimEnd('_')}{TestMarker}";
-        return $"{combined}_{runId}";
+        return combined + tail;
     }
 
     /// <summary>True for names <see cref="DatabaseNameFor"/> can produce for this configured database.</summary>
@@ -107,7 +116,8 @@ internal static partial class TestBackend
         if (stemPart.StartsWith(prefix, StringComparison.Ordinal)) return true;
 
         // Truncated form: a prefix of "<stem>_<purpose>" followed by the test marker.
-        var room = MaxNameLength - 1 - RunIdLength - TestMarker.Length;
+        var tailLength = name.Length - stemPart.Length;
+        var room = MaxNameLength - tailLength - TestMarker.Length;
         if (!stemPart.EndsWith(TestMarker, StringComparison.Ordinal)) return false;
         var head = stemPart[..^TestMarker.Length];
         return head.Length >= room - 1 && head.Length <= room &&
@@ -148,12 +158,21 @@ internal static partial class TestBackend
         return stem.Contains("test", StringComparison.Ordinal) ? stem : $"{stem}_test";
     }
 
+    private static string RequirePurpose(string purpose)
+    {
+        var sanitized = Sanitize(purpose);
+        if (sanitized.Length == 0)
+            throw new ArgumentException(
+                $"Test database purpose '{purpose}' must contain at least one letter or digit.", nameof(purpose));
+        return sanitized;
+    }
+
     private static string Sanitize(string value) =>
         NonNameChars().Replace(value.ToLowerInvariant(), "_").Trim('_');
 
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NonNameChars();
 
-    [GeneratedRegex("^(?<stem>[a-z0-9_]+)_[0-9a-f]{8}$")]
+    [GeneratedRegex("^(?<stem>[a-z0-9_]+)_[0-9]+_[0-9a-f]{8}$")]
     private static partial Regex LeftoverShape();
 }

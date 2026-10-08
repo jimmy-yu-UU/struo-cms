@@ -31,6 +31,23 @@ public sealed class TestDatabaseLiveTests
     }
 
     [Theory, MemberData(nameof(Backends))]
+    public void Same_purpose_databases_are_independent_and_disposing_one_leaves_the_other(string backend)
+    {
+        if (!TryResolve(backend, out var kind)) return;
+        using var kept = TestBackend.CreateLiveDatabase(kind, "twin");
+        var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
+        kept.Name.Should().NotBe(dropped.Name);
+
+        dropped.Dispose();
+
+        LiveDatabaseDdl.Exists(kind, dropped.Name).Should().BeFalse();
+        LiveDatabaseDdl.Exists(kind, kept.Name).Should().BeTrue();
+        using var client = LiveDatabaseDdl.OpenClient(kind, kept.ConnectionString);
+        client.CodeFirst.InitTables<ProbeRow>();
+        client.Queryable<ProbeRow>().Count().Should().Be(0);
+    }
+
+    [Theory, MemberData(nameof(Backends))]
     public void Disposing_drops_the_database(string backend)
     {
         if (!TryResolve(backend, out var kind)) return;
@@ -63,7 +80,7 @@ public sealed class TestDatabaseLiveTests
         if (!TryResolve(backend, out var kind)) return;
         var runId = Guid.NewGuid().ToString("N")[..8];
         var configured = TestBackend.ConfiguredDatabaseName(kind);
-        var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", "nothex");
+        var decoyName = TestBackend.DatabaseNameFor(configured, "decoy", 1, "nothex");
         using var own = TestBackend.CreateLiveDatabase(kind, "inuse");
         using var leftover = TestBackend.CreateLiveDatabase(kind, "leftover", runId);
         using var decoy = LiveDatabaseDdl.CreateNamed(kind, decoyName);
