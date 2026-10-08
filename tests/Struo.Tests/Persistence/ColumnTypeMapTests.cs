@@ -50,13 +50,19 @@ public class ColumnTypeMapTests
     }
 
     [Fact]
-    public void Timestamp_maps_to_the_expected_literal_per_backend()
-    {
-        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.PostgreSQL).Should().Be("timestamp");
+    public void Timestamp_maps_to_datetime_6_on_MySql() =>
         ColumnTypeMap.For(ColumnShape.Timestamp, DbType.MySql).Should().Be("datetime(6)");
-        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.SqlServer).Should().Be("datetime");
-        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.Sqlite).Should().Be("datetime");
-        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.Oracle).Should().Be("timestamp");
+
+    [Theory]
+    [InlineData(DbType.PostgreSQL)]
+    [InlineData(DbType.SqlServer)]
+    [InlineData(DbType.Sqlite)]
+    [InlineData(DbType.Oracle)]
+    public void Timestamp_is_unmapped_outside_MySql(DbType dbType)
+    {
+        var act = () => ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     public static TheoryData<DbType> CodeFirstBackends =>
@@ -75,19 +81,28 @@ public class ColumnTypeMapTests
             .EntityMaintenance.GetEntityInfo<TimestampProbe>()
             .Columns.Single(c => c.PropertyName == property);
 
+    // SqlSugar leaves DataType empty for a DateTime property and picks the backend's default type at DDL time.
     [Theory]
     [MemberData(nameof(CodeFirstBackends))]
-    public void An_unshaped_DateTime_property_gets_the_Timestamp_literal(DbType dbType)
+    public void An_unshaped_DateTime_property_gets_datetime_6_on_MySql_and_SqlSugars_default_elsewhere(DbType dbType)
     {
-        var expected = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+        var at = TimestampProbeColumn(dbType, nameof(TimestampProbe.At)).DataType;
+        var maybeAt = TimestampProbeColumn(dbType, nameof(TimestampProbe.MaybeAt)).DataType;
+        if (dbType == DbType.MySql)
+        {
+            at.Should().Be("datetime(6)");
+            maybeAt.Should().Be("datetime(6)");
+        }
+        else
+        {
+            at.Should().BeNullOrEmpty();
+            maybeAt.Should().BeNullOrEmpty();
+        }
 
-        TimestampProbeColumn(dbType, nameof(TimestampProbe.At)).DataType.Should().Be(expected);
-        TimestampProbeColumn(dbType, nameof(TimestampProbe.MaybeAt)).DataType.Should().Be(expected);
         TimestampProbeColumn(dbType, nameof(TimestampProbe.Zoned)).DataType
             .Should().Be(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
         TimestampProbeColumn(dbType, nameof(TimestampProbe.Declared)).DataType.Should().Be("timestamp(3)");
-        TimestampProbeColumn(dbType, nameof(TimestampProbe.Offset)).DataType
-            .Should().NotBe(expected).And.NotBe(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Offset)).DataType.Should().BeNullOrEmpty();
     }
 
     [SugarTable("timestamp_probe")]

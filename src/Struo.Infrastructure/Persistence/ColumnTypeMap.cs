@@ -40,14 +40,11 @@ internal static class ColumnTypeMap
             DbType.Sqlite => "timestamptz",
             _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unmapped DbType for ColumnShape.TimestampWithTimeZone."),
         },
-        // PostgreSQL, SQL Server and SQLite get the type SqlSugar's CodeFirst and FluentMigrator's
-        // AsDateTime() both create; MySQL's plain datetime keeps whole seconds. Oracle is unverified.
+        // MySQL/MariaDB only: their plain datetime keeps whole seconds. Every other backend keeps
+        // FluentMigrator's AsDateTime() and SqlSugar's default DateTime mapping, so nothing resolves it there.
         ColumnShape.Timestamp => dbType switch
         {
-            DbType.PostgreSQL => "timestamp",
             DbType.MySql => "datetime(6)",
-            DbType.SqlServer or DbType.Sqlite => "datetime",
-            DbType.Oracle => "timestamp",
             _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unmapped DbType for ColumnShape.Timestamp."),
         },
         _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "Unmapped ColumnShape."),

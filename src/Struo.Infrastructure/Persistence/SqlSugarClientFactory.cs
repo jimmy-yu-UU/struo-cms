@@ -221,16 +221,17 @@ public static class SqlSugarClientFactory
         return true;
     }
 
-    // An unshaped DateTime/DateTime? property takes ColumnShape.Timestamp, unless its own
-    // [SugarColumn(ColumnDataType = ...)] names a type. DateTimeOffset keeps SqlSugar's mapping.
+    // MySQL/MariaDB only: an unshaped DateTime/DateTime? property takes ColumnShape.Timestamp, unless its
+    // own [SugarColumn(ColumnDataType = ...)] names a type. Other providers and DateTimeOffset keep
+    // SqlSugar's mapping.
     private static bool ApplyZoneLessTimestamp(PropertyInfo property, EntityColumnInfo column, DbType dbType)
     {
-        if (!TakesZoneLessTimestamp(property)) return false;
+        if (dbType != SqlSugar.DbType.MySql || !TakesZoneLessTimestamp(property)) return false;
         column.DataType = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
         return true;
     }
 
-    /// <summary>True for a property the EntityService hook maps to <see cref="ColumnShape.Timestamp"/>.</summary>
+    /// <summary>True for a zone-less timestamp property: the hook maps it to <see cref="ColumnShape.Timestamp"/> on MySQL.</summary>
     internal static bool TakesZoneLessTimestamp(PropertyInfo property) =>
         (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == typeof(DateTime)
         && property.GetCustomAttribute<ColumnShapeAttribute>() is null
