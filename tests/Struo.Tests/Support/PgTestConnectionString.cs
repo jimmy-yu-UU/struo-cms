@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Connection-string shaping for the opt-in PostgreSQL suite (<c>PostgresOnlyTests, LiveRepositoryTests</c>): disables
+/// Connection-string shaping for the PostgreSQL leg of the live suites (<c>PostgresOnlyTests, LiveRepositoryTests</c>): disables
 /// Npgsql connection pooling so each test gets its own physical connection instead of reusing one from
 /// the process-wide pool.
 ///

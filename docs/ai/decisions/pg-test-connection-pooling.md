@@ -58,7 +58,7 @@ Measured 2026-08-05: `Struo.Api` booted as Production against real PostgreSQL wi
 22,023 item-API requests with 0 aborts.
 
 Measured 2026-08-05: adding a second Npgsql pool to the bare probe — a second connection string differing
-only in `Database=`, the shape a second database on the same server gives the live suite — took its failure rate from 2 of 15 to 15 of 15.
+only in `Database=` — took its failure rate from 2 of 15 to 15 of 15.
 
 Measured 2026-08-05: an extra pooled open/close on the same database, with no second pool, went 0 of 12.
 

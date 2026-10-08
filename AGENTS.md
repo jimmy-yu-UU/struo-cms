@@ -254,8 +254,8 @@ template project itself is verified against every backend available locally (Pos
 MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
 - **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
-  recommended for every DB-behavior change, since it is the one backend with an existing suite
-  (`LiveRepositoryTests`) and the one whose divergences are already catalogued. This is a
+  recommended for every DB-behavior change, since its divergences are already catalogued and
+  `PostgresOnlyTests` holds the checks specific to it. This is a
   robustness recommendation, not a CI gate — CI deliberately runs the SQLite suite only, because
   mandating a specific engine in CI would privilege one backend over the replaceability the ORM
   abstraction exists to preserve.
@@ -286,7 +286,28 @@ resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
 `Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
 about a millisecond) when a connection is unset, so judge them by per-test duration. The database
 must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
-contains a hyphen. Beyond the migration tests and a SqlSugar smoke check, only PostgreSQL has a live suite.
+contains a hyphen.
+
+`LiveRepositoryTests` runs on every backend whose test connection is configured, independent of
+`STRUO_TEST_BACKEND`; `PostgresOnlyTests` holds the PostgreSQL-specific ones.
+
+**`STRUO_TEST_BACKEND`** selects the backend the API test hosts (`ApiFactory` and the CORS host) run
+on: `Sqlite` (the default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`, case-insensitive. An
+invalid value, or a live backend without its test connection, fails the run with a message naming
+what to set. Each host instance gets its own database, named from the configured test database, the
+host's purpose, a sequence number and a run id, and creates and drops it itself. The test login
+therefore needs create and drop database rights, and every generated name contains `test`.
+Unit-level harnesses stay on SQLite whatever the switch says.
+
+A crashed run can leave databases behind. This drops them on the selected backend:
+
+```
+STRUO_TEST_BACKEND=<backend> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "FullyQualifiedName~Drop_leftover_databases_on_request"
+```
+
+It skips the current run's databases and force-drops every other run's, so do not run it while
+another suite uses the same server. It matches names derived from the configured test database
+name, so a longer configured name that starts with the same stem can match too.
 
 **`LiveRepositoryTests` disables Npgsql pooling, deliberately.** Reuse of a pooled physical
 connection across a connection-close boundary made this suite go red locally with a
