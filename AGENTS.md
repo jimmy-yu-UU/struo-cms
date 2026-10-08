@@ -320,9 +320,9 @@ name, so a longer configured name that starts with the same stem can match too.
 connection across a connection-close boundary made the repository suite go red locally with a
 `WSA_OPERATION_ABORTED` socket abort; `PgTestConnectionString.DisablePooling` gives each test its own
 physical connection. Pooling is off for every live PostgreSQL connection the tests use, including
-the API test hosts under `STRUO_TEST_BACKEND=PostgreSQL`. That is test isolation, not tolerance — no retry, no swallowed exception, no
-relaxed assertion, and every test still runs real DDL and DML against a real PostgreSQL. Two things
-worth knowing before you touch it:
+the API test hosts under `STRUO_TEST_BACKEND=PostgreSQL`. That is test isolation, not tolerance — no
+retry, no swallowed exception, no relaxed assertion, and every test still runs real DDL and DML
+against a real PostgreSQL. Two things worth knowing before you touch it:
 
 - **If this suite turns red, check whether pooling was re-enabled before assuming you caused it.** The
   abort is not branch-specific and which test goes red is not stable. Setting `Pooling=true` in
