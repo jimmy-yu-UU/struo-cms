@@ -312,7 +312,7 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
 When a property needs a DDL column type other than SqlSugar's default C#-type mapping, prefer
 `[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) over a literal
 `[SugarColumn(ColumnDataType = "...")]`: the shape is a dialect-neutral enum member (`LongText`,
-`TimestampWithTimeZone`) that `ColumnTypeMap.For`
+`TimestampWithTimeZone`, `Timestamp`) that `ColumnTypeMap.For`
 (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) resolves to the correct per-backend
 literal inside `SqlSugarClientFactory`'s `EntityService` hook, so the same property is *designed* to
 work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the PostgreSQL and

@@ -23,10 +23,10 @@ public sealed class CreateBlogSchema : StruoMigration
     {
         Create.Table(Articles)
             .WithColumn("id").AsGuid().PrimaryKey()
-            .WithColumn("deletedat").AsDateTime().Nullable()
+            .WithColumn("deletedat").AsTimestamp(Db).Nullable()
             .WithColumn("deletedby").AsGuid().Nullable()
             .WithColumn("status").AsString(255).NotNullable()
-            .WithColumn("publishedat").AsDateTime().Nullable()
+            .WithColumn("publishedat").AsTimestamp(Db).Nullable()
             .WithColumn("heroimageid").AsGuid().Nullable()
             .WithColumn("regions").AsJson(Db).NotNullable()
             .WithColumn("audiences").AsJson(Db).NotNullable()
@@ -37,9 +37,9 @@ public sealed class CreateBlogSchema : StruoMigration
             .WithColumn("faqs").AsJson(Db).NotNullable()
             .WithColumn("internalnote").AsString(255).Nullable()
             .WithColumn("categoryid").AsGuid().Nullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -63,13 +63,13 @@ public sealed class CreateBlogSchema : StruoMigration
 
         Create.Table(Categories)
             .WithColumn("id").AsGuid().PrimaryKey()
-            .WithColumn("deletedat").AsDateTime().Nullable()
+            .WithColumn("deletedat").AsTimestamp(Db).Nullable()
             .WithColumn("deletedby").AsGuid().Nullable()
             .WithColumn("name").AsString(255).NotNullable()
             .WithColumn("parentid").AsGuid().Nullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -80,9 +80,9 @@ public sealed class CreateBlogSchema : StruoMigration
         Create.Table("tags")
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn("name").AsString(255).NotNullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 

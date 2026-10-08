@@ -115,7 +115,7 @@ public static class MigrationGenerator
         ColumnCategory.Double => (".AsDouble()", false),
         ColumnCategory.Boolean => (".AsBoolean()", false),
         ColumnCategory.Guid => (".AsGuid()", false),
-        ColumnCategory.DateTime => (".AsDateTime()", false),
+        ColumnCategory.DateTime => (".AsTimestamp(Db)", false),
         ColumnCategory.Binary => (".AsBinary(int.MaxValue)", false),
         _ => throw new NotSupportedException($"Column '{c.Name}' has no portable mapping")
     };

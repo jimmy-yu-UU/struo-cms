@@ -49,6 +49,58 @@ public class ColumnTypeMapTests
         ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, DbType.Sqlite).Should().Be("timestamptz");
     }
 
+    [Fact]
+    public void Timestamp_maps_to_the_expected_literal_per_backend()
+    {
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.PostgreSQL).Should().Be("timestamp");
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.MySql).Should().Be("datetime(6)");
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.SqlServer).Should().Be("datetime");
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.Sqlite).Should().Be("datetime");
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.Oracle).Should().Be("timestamp");
+    }
+
+    public static TheoryData<DbType> CodeFirstBackends =>
+        new(DbType.PostgreSQL, DbType.MySql, DbType.SqlServer, DbType.Sqlite, DbType.Oracle);
+
+    // Entity info is resolved without opening a connection, so no server is needed.
+    private static EntityColumnInfo TimestampProbeColumn(DbType dbType, string property) =>
+        SqlSugarClientFactory.Create(
+                new DatabaseOptions
+                {
+                    DbType = Enum.Parse<StruoDbType>(dbType.ToString()),
+                    ConnectionString = "Data Source=unused",
+                    TablePrefix = "ts" + Guid.NewGuid().ToString("N")[..8] + "_",
+                },
+                new TestCurrentUserAccessor(null))
+            .EntityMaintenance.GetEntityInfo<TimestampProbe>()
+            .Columns.Single(c => c.PropertyName == property);
+
+    [Theory]
+    [MemberData(nameof(CodeFirstBackends))]
+    public void An_unshaped_DateTime_property_gets_the_Timestamp_literal(DbType dbType)
+    {
+        var expected = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.At)).DataType.Should().Be(expected);
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.MaybeAt)).DataType.Should().Be(expected);
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Zoned)).DataType
+            .Should().Be(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Declared)).DataType.Should().Be("timestamp(3)");
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Offset)).DataType
+            .Should().NotBe(expected).And.NotBe(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
+    }
+
+    [SugarTable("timestamp_probe")]
+    public sealed class TimestampProbe
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public DateTime At { get; set; }
+        public DateTime? MaybeAt { get; set; }
+        [ColumnShape(ColumnShape.TimestampWithTimeZone)] public DateTime Zoned { get; set; }
+        [SugarColumn(ColumnDataType = "timestamp(3)")] public DateTime Declared { get; set; }
+        public DateTimeOffset Offset { get; set; }
+    }
+
     public static IEnumerable<object[]> TimestampWithTimeZoneProperties()
     {
         yield return [typeof(MediaFolder), nameof(MediaFolder.CreatedAt)];

@@ -126,6 +126,30 @@ public class EntitySchemaReaderTests
         Col(table, "blob").Category.Should().Be(ColumnCategory.Binary);
     }
 
+    // MySQL resolves both timestamp shapes to datetime(6), so the category comes from the shape, not the literal.
+    [Theory]
+    [InlineData(StruoDbType.MySql)]
+    [InlineData(StruoDbType.PostgreSQL)]
+    [InlineData(StruoDbType.SqlServer)]
+    [InlineData(StruoDbType.Sqlite)]
+    public void Zone_less_and_zoned_timestamps_keep_their_categories_on_every_backend(StruoDbType dbType)
+    {
+        var client = SqlSugarClientFactory.Create(
+            new DatabaseOptions
+            {
+                DbType = dbType,
+                ConnectionString = "Data Source=unused",
+                TablePrefix = "r" + Guid.NewGuid().ToString("N")[..8] + "_"
+            },
+            new TestCurrentUserAccessor(Guid.Empty));
+
+        Col(EntitySchemaReader.Read(client, typeof(Revision)), "createdat").Category.Should().Be(ColumnCategory.DateTime);
+        Col(EntitySchemaReader.Read(client, typeof(MediaFolder)), "createdat").Category
+            .Should().Be(ColumnCategory.DateTimeWithTimeZone);
+        Col(EntitySchemaReader.Read(client, typeof(SchemaProbe)), "stamp").Category
+            .Should().Be(ColumnCategory.DateTimeWithTimeZone);
+    }
+
     [Fact]
     public void SugarIndex_attributes_resolve_the_table_token_and_keep_declaration_order()
     {

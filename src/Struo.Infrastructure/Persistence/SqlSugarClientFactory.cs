@@ -112,6 +112,7 @@ public static class SqlSugarClientFactory
         ApplyNullabilityInference(property, column);
 
         if (ApplyColumnShape(property, column, dbType)) return;
+        if (ApplyZoneLessTimestamp(property, column, dbType)) return;
 
         ApplyBareIsJsonWidening(property, column, dbType);
 
@@ -219,6 +220,21 @@ public static class SqlSugarClientFactory
         column.DataType = ColumnTypeMap.For(shape.Value, dbType);
         return true;
     }
+
+    // An unshaped DateTime/DateTime? property takes ColumnShape.Timestamp, unless its own
+    // [SugarColumn(ColumnDataType = ...)] names a type. DateTimeOffset keeps SqlSugar's mapping.
+    private static bool ApplyZoneLessTimestamp(PropertyInfo property, EntityColumnInfo column, DbType dbType)
+    {
+        if (!TakesZoneLessTimestamp(property)) return false;
+        column.DataType = ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+        return true;
+    }
+
+    /// <summary>True for a property the EntityService hook maps to <see cref="ColumnShape.Timestamp"/>.</summary>
+    internal static bool TakesZoneLessTimestamp(PropertyInfo property) =>
+        (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == typeof(DateTime)
+        && property.GetCustomAttribute<ColumnShapeAttribute>() is null
+        && string.IsNullOrEmpty(property.GetCustomAttribute<SugarColumn>()?.ColumnDataType);
 
     // A property that carries only a bare [SugarColumn(IsJson = true)] — no
     // [CmsField] interface in JsonColumnInterfaces above, no [ColumnShape] — still

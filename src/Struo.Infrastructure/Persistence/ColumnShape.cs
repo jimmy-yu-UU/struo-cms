@@ -21,11 +21,17 @@ public enum ColumnShape
     LongText,
 
     /// <summary>
-    /// Timestamp that carries a time-zone/UTC-instant semantic. Used by framework tables added
-    /// after the convention was adopted; the older baseline <c>AuditableEntity</c> tables
-    /// deliberately keep SqlSugar's default (zone-less) mapping.
+    /// Timestamp that carries a time-zone/UTC-instant semantic. Declared explicitly on the
+    /// properties that need it (media folders, site settings, user sessions).
     /// </summary>
     TimestampWithTimeZone,
+
+    /// <summary>
+    /// Zone-less timestamp with sub-second precision. Every <see cref="DateTime"/> property without an
+    /// explicit shape or <c>ColumnDataType</c> gets it, so two writes within one second stay ordered on
+    /// MySQL and MariaDB, whose plain <c>datetime</c> keeps whole seconds.
+    /// </summary>
+    Timestamp,
 }
 
 /// <summary>

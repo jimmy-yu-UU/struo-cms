@@ -16,7 +16,7 @@ public sealed class CreateRevisions : StruoMigration
             .WithColumn("operation").AsString(255).NotNullable()
             .WithColumn("sourcerevisionnumber").AsInt64().Nullable()
             .WithColumn("snapshot").AsLongText(Db).NotNullable()
-            .WithColumn("createdat").AsDateTime().NotNullable()
+            .WithColumn("createdat").AsTimestamp(Db).NotNullable()
             .WithColumn("createdby").AsGuid().Nullable();
 
         Create.Index($"ux_{FrameworkTable("revisions")}_item_no").OnTable(FrameworkTable("revisions"))

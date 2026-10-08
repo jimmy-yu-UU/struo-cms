@@ -11,6 +11,7 @@ namespace Struo.Tests.Migrations.Probes.Types
             Create.Table(FrameworkTable("typeprobe"))
                 .WithColumn("id").AsInt32().PrimaryKey()
                 .WithColumn("at").AsShape(ColumnShape.TimestampWithTimeZone, Db).Nullable()
+                .WithColumn("ts").AsTimestamp(Db).Nullable()
                 .WithColumn("body").AsLongText(Db).Nullable()
                 .WithColumn("data").AsJson(Db).Nullable();
         public override void Down() { }

@@ -19,6 +19,10 @@ public static class ColumnTypeExtensions
     public static TNext AsLongText<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)
         where TNext : IFluentSyntax => syntax.AsShape(ColumnShape.LongText, db);
 
+    /// <summary>Zone-less timestamp, matching the CodeFirst convention for <see cref="DateTime"/> properties.</summary>
+    public static TNext AsTimestamp<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)
+        where TNext : IFluentSyntax => syntax.AsShape(ColumnShape.Timestamp, db);
+
     /// <summary>JSON columns are stored as long text, matching the CodeFirst JSON-column convention.</summary>
     public static TNext AsJson<TNext>(this IColumnTypeSyntax<TNext> syntax, StruoDbType db)
         where TNext : IFluentSyntax => syntax.AsShape(ColumnShape.LongText, db);

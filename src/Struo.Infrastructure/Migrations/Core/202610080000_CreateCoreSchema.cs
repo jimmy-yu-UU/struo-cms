@@ -36,9 +36,9 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("isdefault").AsBoolean().NotNullable()
             .WithColumn("enabled").AsBoolean().NotNullable()
             .WithColumn("sort").AsInt32().NotNullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable();
 
         Create.Table(FrameworkTable(Files))
@@ -51,11 +51,11 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("height").AsInt32().Nullable()
             .WithColumn("status").AsString(255).NotNullable()
             .WithColumn("folderid").AsGuid().Nullable()
-            .WithColumn("deletedat").AsDateTime().Nullable()
+            .WithColumn("deletedat").AsTimestamp(Db).Nullable()
             .WithColumn("deletedby").AsGuid().Nullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -91,11 +91,11 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("name").AsString(255).Nullable()
             .WithColumn("isactive").AsBoolean().NotNullable()
             .WithColumn("accesstoken").AsString(255).Nullable()
-            .WithColumn("accesstokencreatedat").AsDateTime().Nullable()
-            .WithColumn("accesstokenlastusedat").AsDateTime().Nullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn("accesstokencreatedat").AsTimestamp(Db).Nullable()
+            .WithColumn("accesstokenlastusedat").AsTimestamp(Db).Nullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -111,9 +111,9 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("name").AsString(255).NotNullable()
             .WithColumn("issuperadmin").AsBoolean().NotNullable()
             .WithColumn("description").AsString(255).Nullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -128,9 +128,9 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("canread").AsBoolean().NotNullable()
             .WithColumn("canwrite").AsBoolean().NotNullable()
             .WithColumn("candelete").AsBoolean().NotNullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -146,9 +146,9 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("id").AsGuid().PrimaryKey()
             .WithColumn(UserId).AsGuid().NotNullable()
             .WithColumn(RoleId).AsGuid().NotNullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable()
-            .WithColumn(UpdatedAt).AsDateTime().NotNullable()
+            .WithColumn(UpdatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(UpdatedBy).AsGuid().Nullable()
             .WithColumn(RowVersion).AsInt64().NotNullable();
 
@@ -171,7 +171,7 @@ public sealed class CreateCoreSchema : StruoMigration
             .WithColumn("operation").AsString(255).NotNullable()
             .WithColumn("sourcerevisionnumber").AsInt64().Nullable()
             .WithColumn("snapshot").AsLongText(Db).NotNullable()
-            .WithColumn(CreatedAt).AsDateTime().NotNullable()
+            .WithColumn(CreatedAt).AsTimestamp(Db).NotNullable()
             .WithColumn(CreatedBy).AsGuid().Nullable();
 
         Create.Index($"ux_{FrameworkTable(Revisions)}_item_no").OnTable(FrameworkTable(Revisions))

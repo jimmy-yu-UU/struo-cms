@@ -216,8 +216,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
 4. **Add a migration** — a new FluentMigrator class in the fork's migrations directory, versioned
    `yyyyMMddHHmm` and deriving from `StruoMigration`; `make:migration <Name> --output <dir>` writes the
-   skeleton. Use portable calls (`Create`/`Alter` with `AsString`, `AsGuid`, …; `AsJson(Db)` and
-   `AsLongText(Db)` for the types that differ), and branch on `StruoMigration.Db` only where a backend
+   skeleton. Use portable calls (`Create`/`Alter` with `AsString`, `AsGuid`, …; `AsJson(Db)`,
+   `AsLongText(Db)` and `AsTimestamp(Db)` for the types that differ), and branch on `StruoMigration.Db` only where a backend
    needs its own form. Forward-only: never edit a migration that may already be applied anywhere —
    add another. Apply it with `migrate`; `migrate:preview` prints the pending DDL first. Gate:
    `dotnet build && dotnet test`, plus `migrate` and `migrate:check` against a disposable database of
