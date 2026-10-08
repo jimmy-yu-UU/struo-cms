@@ -12,16 +12,18 @@ backend:
 - `ColumnShape.Timestamp` (zone-less) → MySQL `datetime(6)`, which MariaDB shares. It has no
   literal for any other backend.
 
-`ColumnShape.Timestamp` exists for MySQL and MariaDB only and is applied without an attribute. On a
+`ColumnShape.Timestamp` changes the column on MySQL and MariaDB only, and needs no attribute. On a
 MySQL client, the `EntityService` hook in `SqlSugarClientFactory` gives it to every
 `DateTime`/`DateTime?` property that has neither `[ColumnShape]` nor its own
-`[SugarColumn(ColumnDataType = ...)]`. The migrations write those columns with `AsTimestamp(Db)`,
-which is `AsShape(ColumnShape.Timestamp, Db)` on MySQL and FluentMigrator's `AsDateTime()` on every
-other backend. Those backends keep SqlSugar's default `DateTime` mapping in CodeFirst and
-`AsDateTime()` in the migrations. `DateTimeOffset` keeps SqlSugar's own mapping everywhere. Because
-both timestamp shapes resolve to `datetime(6)` on MySQL, `EntitySchemaReader` takes a zone-less
-column's category from the property (`SqlSugarClientFactory.TakesZoneLessTimestamp`), not from the
-literal.
+`[SugarColumn(ColumnDataType = ...)]`. An explicit `[ColumnShape(ColumnShape.Timestamp)]` is
+accepted on every backend and behaves the same way. The migrations write those columns with
+`AsTimestamp(Db)`, which `AsShape(ColumnShape.Timestamp, Db)` delegates to: `datetime(6)` on MySQL
+and FluentMigrator's `AsDateTime()` on every other backend. Those backends keep SqlSugar's default
+`DateTime` mapping in CodeFirst and `AsDateTime()` in the migrations, so nothing calls
+`ColumnTypeMap.For(ColumnShape.Timestamp, ...)` there. `DateTimeOffset` keeps SqlSugar's own mapping
+everywhere. Because both timestamp shapes resolve to `datetime(6)` on MySQL, `EntitySchemaReader`
+takes a zone-less column's category from the property (`SqlSugarClientFactory.IsTimestampShaped`),
+not from the literal.
 
 Three of these are deliberate, non-obvious choices rather than the first vendor synonym that comes to
 mind: MySQL uses `longtext`, not `text`; MySQL uses `datetime(6)`, not `timestamp`; SqlServer uses

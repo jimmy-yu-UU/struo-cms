@@ -17,7 +17,8 @@
 - 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
 - JSON：長文字加上 `IsJson = true`，整個 CLR 集合由 SqlSugar 直接序列化與還原。
 - CLR 預設：數值、`bool`、`DateTime`、`Guid` 照 SqlSugar 原本的對應，長度不會被動到。
-- `ColumnShape` 只有兩個成員：`LongText` 與 `TimestampWithTimeZone`，沒有數值形狀。
+- `ColumnShape` 有三個成員：`LongText`、`TimestampWithTimeZone` 與 `Timestamp`，沒有數值形狀。
+  `Timestamp` 在 MySQL/MariaDB 上保留到微秒，其他後端則是預設的 `DateTime` 型別。
 
 ### 文字
 

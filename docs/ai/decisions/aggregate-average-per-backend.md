@@ -11,13 +11,19 @@ column as declared. `AggregateValueNormalizer` returns every average as a `doubl
 ## Why
 
 SQL Server's `AVG` over an integer column returns an integer: the mean of 2 and 3 comes back as 2,
-not 2.5. PostgreSQL, MySQL, MariaDB and SQLite return the exact mean for the same column, so the cast
-is limited to SQL Server.
+not 2.5. PostgreSQL, MySQL, MariaDB and SQLite do not divide integers as integers in `AVG`, so the
+cast is limited to SQL Server. No backend truncates an average to an integer.
 
-The cast has a cost: `FLOAT` holds integers exactly only up to 2^53. On SQL Server, a `long` value
-above 2^53 is rounded before it is summed, so the average of such values loses precision. On the
-other backends the database computes the mean exactly and the rounding happens once, when the result
-is converted to `double`.
+The precision of the mean follows each backend:
+
+- MySQL and MariaDB return `DECIMAL` with `div_precision_increment` extra decimals (default 4), so
+  the mean of 1, 2 and 2 comes back as 1.6667.
+- PostgreSQL returns `numeric`, SQL Server `FLOAT` (after the cast) and SQLite `REAL`.
+
+`AggregateValueNormalizer` then converts the result to `double`.
+
+The SQL Server cast has a cost: `FLOAT` holds integers exactly only up to 2^53. A `long` value above
+2^53 is rounded before it is summed, so the average of such values loses precision.
 
 ## Evidence
 
@@ -26,6 +32,9 @@ is converted to `double`.
 - `LiveRepositoryTests.Average_is_exact_over_int_long_decimal_and_nullable_columns` runs the same
   average over `int`, `long`, `decimal` and `int?` columns on every configured live backend;
   `FacetSqlShapeTests.Average_is_exact_over_int_long_decimal_and_nullable_columns` runs it on SQLite.
+- `LiveRepositoryTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` averages 1, 2 and 2
+  on every configured live backend and accepts 5/3 to within 1e-4;
+  `FacetSqlShapeTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` runs it on SQLite.
 
 ## Unknowns
 

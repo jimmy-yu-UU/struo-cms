@@ -71,9 +71,12 @@ internal static class ColumnSelectorFactory
         return Expression.Lambda(typeof(Func<,>).MakeGenericType(entityType, typeof(AggregateRow)), body, p);
     }
 
+    private static readonly MethodInfo ToDoubleMethod = typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDouble), [typeof(object)])!;
+
     // SQL Server divides integers as integers in AVG, so integral operands are cast to FLOAT there
-    // (floatAverageOfIntegers); every other backend averages them exactly without a cast. FLOAT is exact
-    // only up to 2^53. See docs/ai/decisions/aggregate-average-per-backend.md
+    // (floatAverageOfIntegers); every other backend averages them without a cast and keeps its own
+    // precision (MySQL/MariaDB: 4 extra decimals by default). FLOAT is exact only up to 2^53.
+    // See docs/ai/decisions/aggregate-average-per-backend.md
     private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop, bool floatAverageOfIntegers)
     {
         Expression operand = Expression.Property(p, prop);
@@ -81,7 +84,7 @@ internal static class ColumnSelectorFactory
         if (op == AggregateOp.Avg && floatAverageOfIntegers && IsIntegral(Nullable.GetUnderlyingType(type) ?? type))
         {
             type = typeof(double);
-            operand = Expression.Call(typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDouble), [typeof(object)])!, Expression.Convert(operand, typeof(object)));
+            operand = Expression.Call(ToDoubleMethod, Expression.Convert(operand, typeof(object)));
         }
         return Expression.Call(Aggregate(AggregateMethodName(op), type), operand);
     }
