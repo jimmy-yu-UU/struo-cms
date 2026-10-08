@@ -255,10 +255,9 @@ MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
 - **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
   recommended for every DB-behavior change, since its divergences are already catalogued and
-  `PostgresOnlyTests` holds the checks specific to it. This is a
-  robustness recommendation, not a CI gate — CI deliberately runs the SQLite suite only, because
-  mandating a specific engine in CI would privilege one backend over the replaceability the ORM
-  abstraction exists to preserve.
+  `PostgresOnlyTests` holds the checks specific to it. This is a robustness recommendation, not a
+  CI gate — CI deliberately runs the SQLite suite only, because mandating a specific engine in CI
+  would privilege one backend over the replaceability the ORM abstraction exists to preserve.
 - **Configured for any other backend** (`MySql`/`SqlServer`/`Oracle`): that backend needs its own
   equivalent live check before you rely on the change. Do not treat a green PostgreSQL run as
   transferable evidence — the divergences below are type/column-semantics issues, exactly the class
@@ -274,8 +273,9 @@ reason `UserSession.CreatedAt`/`ExpiresAt` carry that shape explicitly — while
 column types to show the difference; and a SqlSugar `ConditionalType.Equal` filter that binds a text
 value against a `uuid`/`bigint` column throws `42883` on PostgreSQL ("operator does not exist") but
 passes silently on SQLite, whose loose typing accepts the comparison without complaint. Configure
-`Testing:PostgresConnection` to a disposable database whose name contains `test` — the test resolves
-it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
+`Testing:PostgresConnection` to a connection on a disposable server or login, with a database name
+that contains `test`; the live suites use it as the server and login for the databases they create,
+and as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION` environment variable first, falling back to the
 `Testing:PostgresConnection` key in `src/Struo.Api/appsettings.json`/`appsettings.Development.json`
 if the env var is unset — or verify directly against a real PostgreSQL instance. The migration
 subsystem's live tests (`CoreMigrationsLiveTests` applies the core migrations, runs `SchemaChecker` over
@@ -284,12 +284,15 @@ the result and compares it with what CodeFirst builds) also run on SQL Server, M
 resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
 `STRUO_TEST_MYSQL_CONNECTION` / `Testing:MySqlConnection` and `STRUO_TEST_MARIADB_CONNECTION` /
 `Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
-about a millisecond) when a connection is unset, so judge them by per-test duration. The database
-must exist beforehand: SqlSugar's `CreateDatabase` cannot create a SQL Server database whose name
-contains a hyphen.
+about a millisecond) when a connection is unset, so judge them by per-test duration. For the
+migration tests the configured database must exist beforehand: SqlSugar's `CreateDatabase` cannot
+create a SQL Server database whose name contains a hyphen.
 
 `LiveRepositoryTests` runs on every backend whose test connection is configured, independent of
-`STRUO_TEST_BACKEND`; `PostgresOnlyTests` holds the PostgreSQL-specific ones.
+`STRUO_TEST_BACKEND`; `PostgresOnlyTests` holds the PostgreSQL-specific ones. Each class creates a
+fresh database per configured backend and drops it at class teardown, named and guarded the same way
+as the API host databases below, so the login needs the same create and drop rights. The leftover
+cleanup below covers these databases too.
 
 **`STRUO_TEST_BACKEND`** selects the backend the API test hosts (`ApiFactory` and the CORS host) run
 on: `Sqlite` (the default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`, case-insensitive. An
@@ -297,7 +300,9 @@ invalid value, or a live backend without its test connection, fails the run with
 what to set. Each host instance gets its own database, named from the configured test database, the
 host's purpose, a sequence number and a run id, and creates and drops it itself. The test login
 therefore needs create and drop database rights, and every generated name contains `test`.
-Unit-level harnesses stay on SQLite whatever the switch says.
+Unit-level harnesses stay on SQLite whatever the switch says, and `[SqliteOnlyFact]` /
+`[SqliteOnlyTheory]` tests are skipped with a reason starting "SQLite-only:" when a live backend is
+selected.
 
 A crashed run can leave databases behind. This drops them on the selected backend:
 
