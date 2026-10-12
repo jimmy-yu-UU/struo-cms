@@ -37,7 +37,7 @@ public class FacetSqlShapeTests : IDisposable
         Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationTableName(_db.EntityMaintenance.GetTableName<T>()));
 
     // The repository casts integral AVG operands to float on SQL Server (AggregateQueries); the projection here does the same.
-    private bool FloatAverageOfIntegers => _db.CurrentConnectionConfig.DbType == DbType.SqlServer;
+    private bool SqlServerIntegerAggregates => _db.CurrentConnectionConfig.DbType == DbType.SqlServer;
 
     private string Quoted<T>(string name) where T : class, new() =>
         Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationColumnName(name));
@@ -124,14 +124,15 @@ public class FacetSqlShapeTests : IDisposable
         }).ExecuteCommand();
         var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
             [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")],
-            FloatAverageOfIntegers);
+            SqlServerIntegerAggregates);
         var q = _db.Queryable<ArticleTag>().Select(proj);
         var sql = q.ToSql().Key;
         var sort = Col<ArticleTag>("Sort");
-        sql.Should().MatchRegex($@"SUM\({sort}\)\s+AS\s+{Alias("V0")}");
+        var summed = SqlServerIntegerAggregates ? $@"\s*CAST\({sort} AS BIGINT\)\s*" : sort;
+        sql.Should().MatchRegex($@"SUM\({summed}\)\s+AS\s+{Alias("V0")}");
         sql.Should().MatchRegex($@"MIN\({sort}\)\s+AS\s+{Alias("V1")}");
         sql.Should().MatchRegex($@"MAX\({sort}\)\s+AS\s+{Alias("V2")}");
-        var averaged = FloatAverageOfIntegers ? $@"\s*CAST\({sort} AS FLOAT\)\s*" : sort;
+        var averaged = SqlServerIntegerAggregates ? $@"\s*CAST\({sort} AS FLOAT\)\s*" : sort;
         sql.Should().MatchRegex($@"AVG\({averaged}\)\s+AS\s+{Alias("V3")}");
         sql.Should().MatchRegex($@"COUNT\({Col<ArticleTag>("Note")}\)\s+AS\s+{Alias("V4")}");
         var r = q.First()!;
@@ -150,13 +151,26 @@ public class FacetSqlShapeTests : IDisposable
     public void SqlServer_average_casts_integral_operands_to_float_and_leaves_other_ops_alone()
     {
         using var ms = new SqlSugarClient(new ConnectionConfig { DbType = DbType.SqlServer, ConnectionString = "Server=unused;Database=unused", IsAutoCloseConnection = true });
-        var sql = AvgProbeAssertions.Query(ms, floatAverageOfIntegers: true).ToSql().Key;
+        var sql = AvgProbeAssertions.Query(ms, sqlServerIntegerAggregates: true).ToSql().Key;
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[IntValue\] AS FLOAT\)\s*\)\s+AS\s+\[V0\]");
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[LongValue\] AS FLOAT\)\s*\)\s+AS\s+\[V1\]");
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[NullableInt\] AS FLOAT\)\s*\)\s+AS\s+\[V3\]");
         sql.Should().MatchRegex(@"AVG\(\s*CAST\(\[BigLong\] AS FLOAT\)\s*\)\s+AS\s+\[V8\]");
         sql.Should().MatchRegex(@"AVG\(\[DecimalValue\]\)\s+AS\s+\[V2\]");
-        sql.Should().MatchRegex(@"SUM\(\[IntValue\]\)\s+AS\s+\[V4\]");
+        sql.Should().MatchRegex(@"SUM\(\s*CAST\(\[IntValue\] AS BIGINT\)\s*\)\s+AS\s+\[V4\]");
+        sql.Should().MatchRegex(@"SUM\(\s*CAST\(\[WideSumInt\] AS BIGINT\)\s*\)\s+AS\s+\[V9\]");
+        sql.Should().MatchRegex(@"MIN\(\[IntValue\]\)\s+AS\s+\[V5\]");
+        sql.Should().MatchRegex(@"MAX\(\[IntValue\]\)\s+AS\s+\[V6\]");
+    }
+
+    [Theory]
+    [InlineData(DbType.PostgreSQL)]
+    [InlineData(DbType.MySql)]
+    public void Other_backends_sum_and_average_integral_operands_without_a_cast(DbType dbType)
+    {
+        using var other = new SqlSugarClient(new ConnectionConfig { DbType = dbType, ConnectionString = "Server=unused;Database=unused", IsAutoCloseConnection = true });
+        var sql = AvgProbeAssertions.Query(other, sqlServerIntegerAggregates: false).ToSql().Key;
+        sql.Should().NotContainEquivalentOf("CAST(").And.NotContainEquivalentOf("BIGINT");
     }
 
     [Fact]

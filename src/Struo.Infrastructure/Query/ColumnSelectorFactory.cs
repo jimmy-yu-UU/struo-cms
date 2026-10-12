@@ -56,7 +56,7 @@ internal static class ColumnSelectorFactory
 
     // x => new AggregateRow { V0 = (object)SqlFunc.AggregateSum(x.P0), V1 = ... } — one SqlFunc.Aggregate*
     // call per requested (op, property) slot, boxed into AggregateRow's object? properties.
-    public static LambdaExpression AggregateProjection(Type entityType, IReadOnlyList<(AggregateOp Op, string Property)> slots, bool floatAverageOfIntegers)
+    public static LambdaExpression AggregateProjection(Type entityType, IReadOnlyList<(AggregateOp Op, string Property)> slots, bool sqlServerIntegerAggregates)
     {
         if (slots.Count > AggregateRow.SlotCount)
             throw new ArgumentOutOfRangeException(nameof(slots), $"At most {AggregateRow.SlotCount} aggregate slots per projection.");
@@ -64,7 +64,7 @@ internal static class ColumnSelectorFactory
         var bindings = slots.Select((s, i) =>
         {
             var prop = Property(entityType, s.Property);
-            var call = AggregateCall(s.Op, p, prop, floatAverageOfIntegers);
+            var call = AggregateCall(s.Op, p, prop, sqlServerIntegerAggregates);
             return (MemberBinding)Expression.Bind(typeof(AggregateRow).GetProperty("V" + i)!, Expression.Convert(call, typeof(object)));
         });
         var body = Expression.MemberInit(Expression.New(typeof(AggregateRow)), bindings);
@@ -72,19 +72,27 @@ internal static class ColumnSelectorFactory
     }
 
     private static readonly MethodInfo ToDoubleMethod = typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToDouble), [typeof(object)])!;
+    private static readonly MethodInfo ToInt64Method = typeof(SqlFunc).GetMethod(nameof(SqlFunc.ToInt64), [typeof(object)])!;
 
-    // SQL Server divides integers as integers in AVG, so integral operands are cast to FLOAT there
-    // (floatAverageOfIntegers); every other backend averages them without a cast and keeps its own
-    // precision (MySQL/MariaDB: 4 extra decimals by default). FLOAT is exact only up to 2^53.
+    // SQL Server (sqlServerIntegerAggregates) averages integers as integers and sums an integral type
+    // narrower than 64 bits in its own width, so AVG casts integral operands to FLOAT (exact only up to
+    // 2^53) and SUM casts them to BIGINT. Every other backend aggregates the column as declared; MySQL
+    // and MariaDB average with 4 extra decimals by default.
     // See docs/ai/decisions/aggregate-average-per-backend.md
-    private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop, bool floatAverageOfIntegers)
+    private static MethodCallExpression AggregateCall(AggregateOp op, ParameterExpression p, PropertyInfo prop, bool sqlServerIntegerAggregates)
     {
         Expression operand = Expression.Property(p, prop);
         var type = prop.PropertyType;
-        if (op == AggregateOp.Avg && floatAverageOfIntegers && IsIntegral(Nullable.GetUnderlyingType(type) ?? type))
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        if (sqlServerIntegerAggregates && op == AggregateOp.Avg && IsIntegral(underlying))
         {
             type = typeof(double);
             operand = Expression.Call(ToDoubleMethod, Expression.Convert(operand, typeof(object)));
+        }
+        else if (sqlServerIntegerAggregates && op == AggregateOp.Sum && IsIntegral(underlying) && underlying != typeof(long) && underlying != typeof(ulong))
+        {
+            type = typeof(long);
+            operand = Expression.Call(ToInt64Method, Expression.Convert(operand, typeof(object)));
         }
         return Expression.Call(Aggregate(AggregateMethodName(op), type), operand);
     }

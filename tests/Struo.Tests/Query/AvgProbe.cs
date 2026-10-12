@@ -16,6 +16,7 @@ public sealed class AvgProbe
     public long BigLong { get; set; }
     [SugarColumn(Length = 18, DecimalDigits = 4)] public decimal DecimalValue { get; set; }
     public int? NullableInt { get; set; }
+    public int WideSumInt { get; set; }
 }
 
 internal static class AvgProbeAssertions
@@ -26,12 +27,12 @@ internal static class AvgProbeAssertions
         (AggregateOp.Avg, nameof(AvgProbe.DecimalValue)), (AggregateOp.Avg, nameof(AvgProbe.NullableInt)),
         (AggregateOp.Sum, nameof(AvgProbe.IntValue)), (AggregateOp.Min, nameof(AvgProbe.IntValue)),
         (AggregateOp.Max, nameof(AvgProbe.IntValue)), (AggregateOp.Count, nameof(AvgProbe.NullableInt)),
-        (AggregateOp.Avg, nameof(AvgProbe.BigLong)),
+        (AggregateOp.Avg, nameof(AvgProbe.BigLong)), (AggregateOp.Sum, nameof(AvgProbe.WideSumInt)),
     ];
 
-    public static ISugarQueryable<AggregateRow> Query(ISqlSugarClient db, bool floatAverageOfIntegers)
+    public static ISugarQueryable<AggregateRow> Query(ISqlSugarClient db, bool sqlServerIntegerAggregates)
     {
-        var proj = (Expression<Func<AvgProbe, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(AvgProbe), Slots, floatAverageOfIntegers);
+        var proj = (Expression<Func<AvgProbe, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(AvgProbe), Slots, sqlServerIntegerAggregates);
         return db.Queryable<AvgProbe>().Select(proj);
     }
 
@@ -41,14 +42,14 @@ internal static class AvgProbeAssertions
         db.Deleteable<AvgProbe>().Where(x => true).ExecuteCommand();
         db.Insertable(new[]
         {
-            new AvgProbe { Id = Guid.NewGuid(), IntValue = 2, LongValue = 2, BigLong = 10_000_000_000_000, DecimalValue = 1.25m, NullableInt = 2 },
-            new AvgProbe { Id = Guid.NewGuid(), IntValue = 3, LongValue = 3, BigLong = 10_000_000_000_001, DecimalValue = 2.5m, NullableInt = 3 },
+            new AvgProbe { Id = Guid.NewGuid(), IntValue = 2, LongValue = 2, BigLong = 10_000_000_000_000, DecimalValue = 1.25m, NullableInt = 2, WideSumInt = int.MaxValue },
+            new AvgProbe { Id = Guid.NewGuid(), IntValue = 3, LongValue = 3, BigLong = 10_000_000_000_001, DecimalValue = 2.5m, NullableInt = 3, WideSumInt = int.MaxValue },
             new AvgProbe { Id = Guid.NewGuid(), IntValue = 2, LongValue = 2, BigLong = 10_000_000_000_000, DecimalValue = 1.25m, NullableInt = null },
             new AvgProbe { Id = Guid.NewGuid(), IntValue = 3, LongValue = 3, BigLong = 10_000_000_000_001, DecimalValue = 2.5m, NullableInt = null },
         }).ExecuteCommand();
 
         var row = Query(db, db.CurrentConnectionConfig.DbType == DbType.SqlServer).First()!;
-        var raws = new[] { row.V0, row.V1, row.V2, row.V3, row.V4, row.V5, row.V6, row.V7, row.V8 };
+        var raws = new[] { row.V0, row.V1, row.V2, row.V3, row.V4, row.V5, row.V6, row.V7, row.V8, row.V9 };
         var values = Slots.Select((s, i) => AggregateValueNormalizer.Normalize(
             s.Op, ColumnSelectorFactory.PropertyType(typeof(AvgProbe), s.Property), raws[i])).ToArray();
 
@@ -61,6 +62,7 @@ internal static class AvgProbeAssertions
         values[6].Should().BeOfType<int>().Which.Should().Be(3);
         values[7].Should().BeOfType<long>().Which.Should().Be(2L);
         values[8].Should().BeOfType<double>().Which.Should().Be(10_000_000_000_000.5);
+        values[9].Should().BeOfType<long>().Which.Should().Be(2L * int.MaxValue);
     }
 
     private static readonly int[] RepeatingMeanValues = [1, 2, 2];
