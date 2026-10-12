@@ -12,6 +12,9 @@ namespace Struo.Tests.Support;
 /// </summary>
 internal static partial class LiveDatabaseDdl
 {
+    // Bounds a drop that waits on a lock the server cannot sever (MySQL and MariaDB metadata locks).
+    private const int DropCommandTimeoutSeconds = 30;
+
     /// <summary>The database a connection string names, read with the provider's own builder.</summary>
     public static string DatabaseOf(TestBackendKind kind, string connectionString) => kind switch
     {
@@ -72,6 +75,7 @@ internal static partial class LiveDatabaseDdl
             var configured = TestBackend.ConfiguredConnection(kind);
             ClearPool(kind, WithDatabase(configured, kind, name));
             using var client = OpenClient(kind, configured);
+            client.Ado.CommandTimeOut = DropCommandTimeoutSeconds;
             client.Ado.ExecuteCommand(DropStatement(kind, name));
         }
         catch (Exception ex)

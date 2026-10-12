@@ -58,6 +58,13 @@ internal static partial class TestBackend
 
     public static ITestDatabase CreateSqliteDatabase() => new SqliteTempTestDatabase();
 
+    /// <summary>
+    /// The database a unit test harness runs on: a SQLite temp file when the switch is unset, otherwise
+    /// an empty database leased lazily from the selected backend's <see cref="LiveDatabasePool"/>.
+    /// </summary>
+    public static ITestDatabase CreateUnitDatabase() =>
+        IsLive ? LiveDatabasePool.For(Current).Lease() : CreateSqliteDatabase();
+
     public static ITestDatabase CreateLiveDatabase(TestBackendKind kind, string purpose) =>
         CreateLiveDatabase(kind, purpose, RunId);
 

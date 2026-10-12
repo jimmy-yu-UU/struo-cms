@@ -233,6 +233,91 @@ public sealed class TestBackendTests
 
         File.Exists(path).Should().BeFalse();
     }
+
+    [SqliteOnlyFact("with the switch unset the unit database is a SQLite temp file")]
+    public void CreateUnitDatabase_is_a_sqlite_temp_file_when_the_switch_is_unset()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+
+        db.DbType.Should().Be(StruoDbType.Sqlite);
+        db.ConnectionString.Should().StartWith("Data Source=" + Path.GetTempPath());
+    }
+
+    [Fact]
+    public void CreateUnitDatabase_reports_the_selected_backend_without_leasing()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+
+        db.DbType.Should().Be(TestBackend.DbType);
+    }
+
+    [Fact]
+    public void Pool_wrapper_leases_only_when_its_connection_is_read()
+    {
+        var pool = new LiveDatabasePool(TestBackendKind.MySql);
+        var db = pool.Lease();
+
+        db.DbType.Should().Be(StruoDbType.MySql);
+        db.Dispose();
+        db.Dispose();
+
+        pool.CreatedCount.Should().Be(0);
+        pool.IdleCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Pool_rejects_Sqlite()
+    {
+        var act = () => new LiveDatabasePool(TestBackendKind.Sqlite);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(StruoDbType.PostgreSQL)]
+    [InlineData(StruoDbType.SqlServer)]
+    [InlineData(StruoDbType.MySql)]
+    [InlineData(StruoDbType.Sqlite)]
+    public void Options_maps_the_database_and_keeps_the_default_prefix(StruoDbType dbType)
+    {
+        var options = new FakeDatabase(dbType, "conn-" + dbType).Options();
+
+        options.DbType.Should().Be(dbType);
+        options.ConnectionString.Should().Be("conn-" + dbType);
+        options.TablePrefix.Should().Be(new DatabaseOptions().TablePrefix);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("cms_")]
+    public void Options_applies_a_given_prefix(string prefix) =>
+        new FakeDatabase(StruoDbType.Sqlite, "conn").Options(prefix).TablePrefix.Should().Be(prefix);
+
+    [Theory]
+    [InlineData(StruoDbType.PostgreSQL, SqlSugar.DbType.PostgreSQL)]
+    [InlineData(StruoDbType.SqlServer, SqlSugar.DbType.SqlServer)]
+    [InlineData(StruoDbType.MySql, SqlSugar.DbType.MySql)]
+    [InlineData(StruoDbType.Sqlite, SqlSugar.DbType.Sqlite)]
+    public void RawConfig_maps_the_database_and_sets_nvarchar_only_for_SqlServer(
+        StruoDbType dbType, SqlSugar.DbType expected)
+    {
+        var config = new FakeDatabase(dbType, "conn-" + dbType).RawConfig();
+
+        config.DbType.Should().Be(expected);
+        config.ConnectionString.Should().Be("conn-" + dbType);
+        config.IsAutoCloseConnection.Should().BeTrue();
+        config.MoreSettings.SqlServerCodeFirstNvarchar.Should().Be(dbType == StruoDbType.SqlServer);
+    }
+
+    private sealed record FakeDatabase(StruoDbType DbType, string ConnectionString) : ITestDatabase
+    {
+        public string Name => "fake";
+
+        public void Dispose()
+        {
+            // Nothing to release.
+        }
+    }
 }
 
 public sealed class SqliteOnlyAttributeTests
