@@ -138,13 +138,15 @@ public sealed class TranslationSidecarIndexPolicyTests
         HasProbeUnique(client, db.DbType).Should().BeFalse();
     }
 
-    [SugarTable("policy_probe_legacy_translations")]
+    // Short table names: CodeFirst names these indexes `Index_{table}_{columns}_Unique`, which must
+    // stay within the identifier limit (docs/ai/decisions/migrations-are-the-only-schema-source.md).
+    [SugarTable("pp_legacy_translations")]
     private sealed class LegacyAttributedTranslation
     {
         [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-        [SugarColumn(UniqueGroupNameList = ["ux_policy_probe_legacy_translations_fk_locale"])]
+        [SugarColumn(UniqueGroupNameList = ["ux_pp_legacy_translations_fk_locale"])]
         public Guid LegacyProbeId { get; set; }
-        [SugarColumn(UniqueGroupNameList = ["ux_policy_probe_legacy_translations_fk_locale"])]
+        [SugarColumn(UniqueGroupNameList = ["ux_pp_legacy_translations_fk_locale"])]
         public string Locale { get; set; } = "";
     }
 
@@ -163,7 +165,7 @@ public sealed class TranslationSidecarIndexPolicyTests
         UniqueSecondaryIndexes<LegacyAttributedTranslation>(client, db.DbType).Should().ContainSingle();
     }
 
-    [SugarTable("policy_probe_foreign_translations")]
+    [SugarTable("pp_fork_translations")]
     private sealed class ForkOwnedAttributedTranslation
     {
         [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
@@ -183,7 +185,7 @@ public sealed class TranslationSidecarIndexPolicyTests
 
     // Discriminates the union guard from mere name-matching: the attribute's group name
     // ("uq_fork_owned_key") deliberately differs from what TranslationSidecarIndexPolicy.KeyFor
-    // derives for this table ("ux_policy_probe_foreign_translations_fk_locale"), so a hook that
+    // derives for this table ("ux_pp_fork_translations_fk_locale"), so a hook that
     // OVERWRITES column.UIndexGroupNameList instead of unioning into it would silently drop the
     // fork-owned group, leaving only 1 unique index instead of 2.
     [Fact]
