@@ -94,6 +94,7 @@ public static class SqlSugarClientFactory
             db.QueryFilter.AddTableFilter<ISoftDeletable>(e => e.DeletedAt == null);
 
             AuditAop.Register(db, currentUser);
+            CancellationAop.Register(db);
         });
 
         return client;
