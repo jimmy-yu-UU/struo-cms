@@ -12,22 +12,16 @@ namespace Struo.Tests.Migrations.Schema;
 
 public sealed class SchemaCheckerTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     // SqlSugar caches entity info per ConfigId (derived from the prefix), so each test uses its own.
     private ISqlSugarClient Client(string prefix) => SqlSugarClientFactory.Create(
-        new DatabaseOptions
-        {
-            DbType = StruoDbType.Sqlite,
-            ConnectionString = _file.ConnectionString,
-            TablePrefix = prefix
-        },
-        new TestCurrentUserAccessor(Guid.Empty));
+        _database.Options(prefix), new TestCurrentUserAccessor(Guid.Empty));
 
-    private static SchemaCheckReport Check(ISqlSugarClient db, params Type[] types) =>
-        SchemaChecker.Check(db, StruoDbType.Sqlite, types);
+    private SchemaCheckReport Check(ISqlSugarClient db, params Type[] types) =>
+        SchemaChecker.Check(db, _database.DbType, types);
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     [Fact]
     public void A_codefirst_framework_schema_has_no_errors()
@@ -35,7 +29,7 @@ public sealed class SchemaCheckerTests : IDisposable
         var db = Client("chka_");
         db.CodeFirst.InitTables(FrameworkEntityTypes.All.ToArray());
 
-        var report = SchemaChecker.Check(db, StruoDbType.Sqlite, FrameworkEntityTypes.All);
+        var report = Check(db, FrameworkEntityTypes.All.ToArray());
 
         report.HasErrors.Should().BeFalse(report.ToString());
     }
@@ -45,7 +39,7 @@ public sealed class SchemaCheckerTests : IDisposable
     {
         var db = Client("chkb_");
 
-        var report = SchemaChecker.Check(db, StruoDbType.Sqlite, FrameworkEntityTypes.All);
+        var report = Check(db, FrameworkEntityTypes.All.ToArray());
 
         report.Errors.Should().HaveCount(FrameworkEntityTypes.All.Count);
         report.Errors.Should().OnlyContain(f => f.Kind == FindingKind.MissingTable && f.Column == null);
@@ -94,7 +88,9 @@ public sealed class SchemaCheckerTests : IDisposable
         var report = Check(db, typeof(CheckProbe));
 
         report.HasErrors.Should().BeFalse(report.ToString());
-        report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn && f.Column == "Extra");
+        // The finding names the column as the database reports it; PostgreSQL folds it to lower case.
+        report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn
+            && string.Equals(f.Column, "Extra", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

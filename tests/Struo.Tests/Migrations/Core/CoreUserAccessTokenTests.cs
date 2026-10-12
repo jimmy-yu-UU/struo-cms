@@ -20,12 +20,12 @@ public sealed class CoreUserAccessTokenTests
     private static string NewPrefix() => "t" + Guid.NewGuid().ToString("N")[..8] + "_";
 
     [Fact]
-    public async Task Sqlite_migrated_users_without_a_token_coexist_and_the_token_index_is_not_unique()
+    public async Task Migrated_users_without_a_token_coexist_and_the_token_index_is_not_unique()
     {
         using var harness = new CoreMigrationHarness();
         await harness.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        await AssertTokenBehaviour(harness.Db(), StruoDbType.Sqlite);
+        await AssertTokenBehaviour(harness.Db(), harness.Database.DbType);
     }
 
     [Theory, MemberData(nameof(Backends))]

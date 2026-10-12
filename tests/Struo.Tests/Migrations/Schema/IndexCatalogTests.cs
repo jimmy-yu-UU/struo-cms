@@ -9,12 +9,8 @@ using Xunit;
 
 namespace Struo.Tests.Migrations.Schema;
 
-public sealed class IndexCatalogTests : IDisposable
+public sealed class IndexCatalogTests
 {
-    private readonly SqliteTestDatabase _file = new();
-
-    public void Dispose() => _file.Dispose();
-
     [Fact]
     public void Oracle_is_unsupported()
     {
@@ -33,28 +29,24 @@ public sealed class IndexCatalogTests : IDisposable
         IndexCatalog.Sql(db).Should().Contain("@table").And.Contain("column_name");
     }
 
-    [Fact]
+    [SqliteOnlyFact("SQLite twin of IndexCatalogLiveTests.Catalog_reports_unique_key_order_non_unique_and_primary_key_indexes")]
     public async Task Sqlite_reports_unique_key_order_non_unique_and_primary_key_indexes()
     {
+        using var file = TestBackend.CreateSqliteDatabase();
         var table = "t_idxprobe";
-        await IndexCatalogLiveTests.Host(StruoDbType.Sqlite, _file.ConnectionString, "t_").ApplyAsync(default);
-        var client = new SqlSugarClient(new ConnectionConfig
-            { DbType = SqlSugar.DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true });
+        await IndexCatalogLiveTests.Host(StruoDbType.Sqlite, file.ConnectionString, "t_").ApplyAsync(default);
+        var client = new SqlSugarClient(file.RawConfig());
 
         var indexes = IndexCatalog.Read(client, StruoDbType.Sqlite, table);
 
         IndexCatalogLiveTests.AssertProbeIndexes(indexes, table);
     }
 
-    [Fact]
+    [SqliteOnlyFact("SQLite rowid primary key")]
     public void Sqlite_rowid_primary_key_is_reported_as_a_unique_index()
     {
-        var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions
-            {
-                DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = "rw_",
-            },
-            new TestCurrentUserAccessor(Guid.NewGuid()));
+        using var file = TestBackend.CreateSqliteDatabase();
+        var client = SqlSugarClientFactory.Create(file.Options("rw_"), new TestCurrentUserAccessor(Guid.NewGuid()));
         client.CodeFirst.InitTables<Language>();
 
         var indexes = IndexCatalog.Read(client, StruoDbType.Sqlite, "rw_languages");
@@ -62,11 +54,11 @@ public sealed class IndexCatalogTests : IDisposable
         indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(new[] { "id" }));
     }
 
-    [Fact]
+    [SqliteOnlyFact("SQLite expression and partial index DDL")]
     public void Sqlite_expression_and_partial_indexes_are_skipped()
     {
-        var client = new SqlSugarClient(new ConnectionConfig
-            { DbType = SqlSugar.DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true });
+        using var file = TestBackend.CreateSqliteDatabase();
+        var client = new SqlSugarClient(file.RawConfig());
         client.Ado.ExecuteCommand("CREATE TABLE ex (id TEXT PRIMARY KEY, a TEXT, b TEXT)");
         client.Ado.ExecuteCommand("CREATE UNIQUE INDEX ex_expr ON ex (lower(a))");
         client.Ado.ExecuteCommand("CREATE UNIQUE INDEX ex_part ON ex (b) WHERE a IS NOT NULL");

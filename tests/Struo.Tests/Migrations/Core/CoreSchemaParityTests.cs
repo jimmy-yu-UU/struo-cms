@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Struo.Application.Configuration;
 using Struo.Infrastructure.Metadata;
 using Xunit;
 
@@ -15,7 +14,7 @@ public sealed class CoreSchemaParityTests
         await migrated.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
         codeFirst.Db().CodeFirst.InitTables(FrameworkEntityTypes.All.ToArray());
 
-        var diffs = CoreSchemaParity.Differences(codeFirst.Db(), migrated.Db(), StruoDbType.Sqlite);
+        var diffs = CoreSchemaParity.Differences(codeFirst.Db(), migrated.Db(), migrated.Database.DbType);
 
         diffs.Should().BeEmpty(string.Join(Environment.NewLine, diffs));
     }

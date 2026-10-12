@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Struo.Application.Configuration;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations.Core;
 using Struo.Infrastructure.Migrations.Schema;
@@ -39,7 +38,7 @@ public sealed class CoreSchemaMigrationTests : IDisposable
     {
         await _h.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        var report = SchemaChecker.Check(_h.Db(), StruoDbType.Sqlite, FrameworkEntityTypes.All);
+        var report = SchemaChecker.Check(_h.Db(), _h.Database.DbType, FrameworkEntityTypes.All);
 
         report.HasErrors.Should().BeFalse(report.ToString());
     }

@@ -15,13 +15,13 @@ namespace Struo.Tests.Migrations;
 [Collection("MigrationCli")]
 public sealed class MigrateCheckCommandTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     private readonly List<ServiceProvider> _providers = [];
 
     public void Dispose()
     {
         foreach (var sp in _providers) sp.Dispose();
-        _file.Dispose();
+        _database.Dispose();
     }
 
     private sealed class StubCollector(IReadOnlyList<Type> types) : IEntityTypeCollector
@@ -29,13 +29,14 @@ public sealed class MigrateCheckCommandTests : IDisposable
         public IReadOnlyList<Type> CollectForInitTables() => types;
     }
 
-    // A unique prefix per test: SqlSugar caches entity info per prefix for the whole process.
-    private ServiceProvider Services(string prefix, StruoDbType db = StruoDbType.Sqlite, string? conn = null)
+    // A unique prefix per test: SqlSugar caches entity info per prefix for the whole process. The options
+    // are resolved on first use, so a command that never opens the database leases none.
+    private ServiceProvider Services(string prefix, StruoDbType? db = null, string? conn = null)
     {
         var sp = new ServiceCollection()
             .AddSingleton<IEntityTypeCollector>(new StubCollector(FrameworkEntityTypes.All))
-            .AddSingleton(Options.Create(new DatabaseOptions
-                { DbType = db, ConnectionString = conn ?? _file.ConnectionString, TablePrefix = prefix }))
+            .AddSingleton(_ => Options.Create(new DatabaseOptions
+                { DbType = db ?? _database.DbType, ConnectionString = conn ?? _database.ConnectionString, TablePrefix = prefix }))
             .AddScoped<ISqlSugarClient>(p => SqlSugarClientFactory.Create(
                 p.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
             .BuildServiceProvider();

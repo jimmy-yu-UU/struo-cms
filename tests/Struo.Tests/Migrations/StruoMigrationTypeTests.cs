@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Migrations;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
@@ -27,13 +28,13 @@ public sealed class StruoMigrationTypeTests
     private static Dictionary<string, string> ColumnTypes(StruoDbType db, string conn, string table) =>
         Columns(db, conn, table).ToDictionary(c => c.Key, c => c.Value.DataType.ToLowerInvariant());
 
-    [Fact]
+    [SqliteOnlyFact("SQLite twin of Shapes_resolve_to_the_live_backend_literals")]
     public async Task Shapes_resolve_to_the_sqlite_literals()
     {
-        using var file = new SqliteTestDatabase();
-        await Host(StruoDbType.Sqlite, file.ConnectionString, "struo_", "Types").ApplyAsync(default);
+        using var file = TestBackend.CreateSqliteDatabase();
+        await Host(file.DbType, file.ConnectionString, "struo_", "Types").ApplyAsync(default);
 
-        var types = ColumnTypes(StruoDbType.Sqlite, file.ConnectionString, "struo_typeprobe");
+        var types = ColumnTypes(file.DbType, file.ConnectionString, "struo_typeprobe");
         types["at"].Should().Be("timestamptz");
         types["ts"].Should().Be("datetime");
         types["body"].Should().Be("text");
@@ -82,13 +83,13 @@ public sealed class StruoMigrationTypeTests
     [Fact]
     public async Task Translation_unique_index_uses_the_policy_name()
     {
-        using var file = new SqliteTestDatabase();
-        await Host(StruoDbType.Sqlite, file.ConnectionString, "struo_", "Sidecar").ApplyAsync(default);
+        using var database = TestBackend.CreateUnitDatabase();
+        await Host(database.DbType, database.ConnectionString, "struo_", "Sidecar").ApplyAsync(default);
 
-        var client = new SqlSugarClient(new ConnectionConfig
-            { DbType = DbType.Sqlite, ConnectionString = file.ConnectionString, IsAutoCloseConnection = true });
-        var ddl = client.Ado.SqlQuerySingle<string>(
-            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'ux_probe_translations_fk_locale'");
-        ddl.Should().ContainEquivalentOf("unique").And.Contain("probeid").And.Contain("locale");
+        var indexes = IndexCatalog.Read(new SqlSugarClient(database.RawConfig()), database.DbType, "probe_translations");
+        var index = indexes.Should().ContainSingle(i =>
+            string.Equals(i.Name, "ux_probe_translations_fk_locale", StringComparison.OrdinalIgnoreCase)).Which;
+        index.IsUnique.Should().BeTrue();
+        index.Columns.Should().Equal("probeid", "locale");
     }
 }
