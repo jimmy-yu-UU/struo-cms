@@ -17,11 +17,12 @@ Migration 放在三個地方：
   `Rbac:PublicReadCollections` 列出的公開讀取權限。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
-- **你的 fork**：放在自己的內容專案裡。這個專案要列在 `Struo:ContentAssemblies`，並參照
-  `Struo.Infrastructure`。
+- **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
+  `Struo.Infrastructure` 的內容專案裡。
 
-命令會掃描 `Struo.Infrastructure` 加上 `Struo:ContentAssemblies` 列出的每一個組件，依版本號由
-小到大執行。植入資料也是 migration 的一部分，所以只在 `migrate` 或 `MigrateOnStartup` 時發生。
+命令會掃描 `Struo.Infrastructure`、API 專案，以及 `Struo:ContentAssemblies` 列出的每一個組件，
+依版本號由小到大執行。植入資料也是 migration 的一部分，所以只在 `migrate` 或
+`MigrateOnStartup` 時發生。
 
 ## 六個命令
 

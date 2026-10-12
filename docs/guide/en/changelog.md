@@ -19,9 +19,9 @@
 - Seeding runs in the core seed migration, during `migrate` or `MigrateOnStartup`. It reads
   `Auth:BootstrapAdmin:*`, `Localization` and `Rbac:PublicReadCollections`; the environment that runs
   `migrate` must have them.
-- Removed public types: `DatabaseInitializer`, `MigrationRunner`, `SchemaMigration`, `SchemaGuard`,
-  `DataSeeder`, `LanguageSeeder`, `AdminUserSeeder`, `RbacSeeder` (the last three survive only as
-  helpers in the test project). Remove fork code that calls them.
+- Removed public types: `DatabaseInitializer`, `MigrationRunner`, `SchemaMigration`, `SchemaGuard`
+  (with its `TranslationSidecarDescriptor`), `DataSeeder`, `LanguageSeeder`, `AdminUserSeeder`,
+  `RbacSeeder` (the last three survive only as helpers in the test project). Remove fork code that calls them.
 - In Development, startup runs `SchemaChecker` against the entity model and aborts on any error
   (it replaces `SchemaGuard`, with broader checks). Use `migrate:check` for the findings.
 - Compose services have no fixed `container_name` any more (`struo-postgres` becomes
@@ -50,6 +50,13 @@
   (port 8080); variables `STRUO_ADMIN_PORT`, `STRUO_API_PORT`, `STRUO_ADMIN_EMAIL`,
   `STRUO_ADMIN_PASSWORD`.
 - New dependency `FluentMigrator.Runner.*` 8.0.1 (Core, Postgres, SqlServer, MySql, SQLite, Oracle).
+- Test connection keys `Testing:SqlServerConnection`, `Testing:MySqlConnection` and
+  `Testing:MariaDbConnection`, overridden only by `STRUO_TEST_SQLSERVER_CONNECTION`,
+  `STRUO_TEST_MYSQL_CONNECTION` and `STRUO_TEST_MARIADB_CONNECTION`; `STRUO_TEST_BACKEND` moves the
+  whole test suite to a live backend. See chapter 22.
+- `migrate` and `MigrateOnStartup` do not write the SQL they execute to the log, because the seed's
+  `INSERT` carries the bootstrap admin's password hash. `migrate:preview` prints that SQL, so treat
+  its output as a secret.
 
 ### Changed
 
@@ -59,10 +66,11 @@
   `varchar`/`char`/`text` columns.
 - On MySQL/MariaDB a `DateTime` without a shape is `datetime(6)` (microseconds); other backends are
   unchanged.
-- The executed seed SQL, which contains the bootstrap admin's password hash, is not written to the log;
-  `migrate:preview` still prints the SQL.
 - The API image no longer contains `db/migrations`. CI's docker job runs `migrate` before the smoke
   test and also smoke-tests the Compose stack.
+- `docker compose up -d` also builds and starts the API and the admin SPA. To start only the
+  dependencies for development, run `docker compose up -d postgres redis`; with MinIO,
+  `docker compose --profile s3 up -d postgres redis minio createbuckets`.
 - Backend packages: `AWSSDK.S3` 4.0.104.1, `NetVips.Native` 8.18.7, `Scalar.AspNetCore` 2.17.13,
   `coverlet.collector` 10.1.0.
 - Frontend packages: the 11 `@tiptap/*` packages 3.31.4, `@lucide/vue` 1.49.0, `@tanstack/vue-table`
@@ -77,7 +85,7 @@
 - SQL Server: a cancelled request surfaces as a cancellation, not as a `SqlSugarException`.
 - MySQL/MariaDB: two writes within one second stay ordered (microsecond timestamps). Fresh databases
   only.
-- Uploads with a file name over 255 characters no longer fail: the name is shortened to the column width,
+- Uploads with a file name over 255 UTF-16 units no longer fail: the name is shortened to the column width,
   keeping the extension; neither the name cut nor the title cut splits a surrogate pair.
 - A process that uses more than one database backend no longer mixes column types or row binders between
   them (`ProviderScopedReflectionCache`).

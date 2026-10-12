@@ -2,8 +2,8 @@
 
 想幫 StruoCMS 加一個新的內容型別，這一章示範一個 C# 類別要寫成什麼樣子，才能同時變成資料表、
 REST／GraphQL 端點與後台表單。新增集合不會動到任何框架程式碼，只在你自己的內容專案裡加一個類
-別，外加一支建表的 migration：API 啟動時不會自己建表，`make:migration` 從類別產生這支
-migration，`migrate` 套用它。
+別，外加建表的 migration：API 不會照類別自己建表，`make:migration` 從類別產生 migration，
+`migrate` 套用它們。
 
 ## 最小集合
 

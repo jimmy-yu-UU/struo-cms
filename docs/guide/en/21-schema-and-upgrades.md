@@ -17,12 +17,12 @@ Migrations live in three places:
   and the public read grants listed in `Rbac:PublicReadCollections`.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
-- **Your fork**: in your own content project. That project must be listed in
-  `Struo:ContentAssemblies` and reference `Struo.Infrastructure`.
+- **Your fork**: in the API host project itself, or in a content project that is listed in
+  `Struo:ContentAssemblies` and references `Struo.Infrastructure`.
 
-The commands scan `Struo.Infrastructure` plus every assembly listed in `Struo:ContentAssemblies` and
-run migrations in version order. Seeding is a migration too, so it happens only through `migrate` or
-`MigrateOnStartup`.
+The commands scan `Struo.Infrastructure`, the API host project and every assembly listed in
+`Struo:ContentAssemblies`, and run migrations in version order. Seeding is a migration too, so it
+happens only through `migrate` or `MigrateOnStartup`.
 
 ## The six commands
 

@@ -22,7 +22,9 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
 
    沒有東西會執行 `.sql` 腳本；它們已經做到資料庫裡的改動留著，確認 entity 類別有描述它們。
 4. **在 baseline 之前，替 fork 自己已經存在的表寫 migration。** 每個集合、翻譯 sidecar 與
-   junction，只要表已經存在，就跑一次 `make:migration`（`Acme.Content` 代表 fork 的內容專案）：
+   junction，只要表已經存在，就跑一次 `make:migration`。下面的紀錄來自一次演練，演練的內容專案
+   放在 `samples/Acme.Content`；`--output` 要指向你自己內容專案的 migration 資料夾，`--namespace`
+   用它的命名空間：
 
    ```
    $ dotnet run --project src/Struo.Api -- make:migration CreateNotes --entity Note --output ../../samples/Acme.Content/Migrations --namespace Acme.Content.Migrations

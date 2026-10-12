@@ -25,8 +25,9 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    Nothing runs `.sql` scripts. The changes they already made to the database stay; make sure the
    entity classes describe them.
 4. **Before baselining, write migrations for your fork's own existing tables.** Run `make:migration`
-   once for every collection, translation sidecar and junction whose table already exists
-   (`Acme.Content` stands for the fork's content project):
+   once for every collection, translation sidecar and junction whose table already exists. The run
+   below comes from a rehearsal whose content project sat at `samples/Acme.Content`; point
+   `--output` at your own content project's migrations folder, and `--namespace` at its namespace:
 
    ```
    $ dotnet run --project src/Struo.Api -- make:migration CreateNotes --entity Note --output ../../samples/Acme.Content/Migrations --namespace Acme.Content.Migrations

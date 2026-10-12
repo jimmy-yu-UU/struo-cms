@@ -35,7 +35,7 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 | `status` | Select `draft`／`published` | 是 |
 
 `fileName` 是上傳當下記下的原始檔名，也是這個集合唯一自己宣告 `Searchable` 的欄位。超過 255
-個 UTF-16 字元的檔名會縮短到欄寬，保留副檔名，也不會切開一個代理對（surrogate pair）。
+個 UTF-16 編碼單位的檔名會縮短到欄寬，保留副檔名，也不會切開一個代理對（surrogate pair）。
 `contentType` 是驗證過的 MIME 類型；`size` 是實際存下的位元組數。`width`／`height` 只有在標
 頭讀得出尺寸時才會填上，其餘上傳不管是不是圖片，兩者都留白。`status` 是唯一可寫的自有欄
 位，也是決定誰讀得到這一列與它的位元組的關鍵，下一節細講。
@@ -48,7 +48,8 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 可翻譯的 `title` 與 `alt` 存在 sidecar 實體 `FileTranslation`（資料表 `struo_file_translations`，
 在 `(fileid, locale)` 上唯一），跟[第 7 章：多語內容](07-i18n.md)講的 `[CmsTranslations]` 機
 制完全一樣。上傳時，預設 locale 的 `title` 會用檔名去掉副檔名自動填上；去掉副檔名後變成空字
-串（檔名只剩副檔名時）就退回完整檔名，結果一律截到 255 字元，同樣不會切開代理對。
+串（檔名只剩副檔名時）就退回完整檔名，結果一律截到 255 個 UTF-16
+編碼單位，同樣不會切開代理對。
 
 `alt` 不會被自動填，其他 locale 也不會拿到任何自動產生的紀錄，除非有人自己寫一筆。
 `FileTranslation.Title` 也是 `Searchable`，所以對 `file` 下 `search=` 同時比對檔名與各

@@ -61,7 +61,7 @@ described in [Chapter 7: Multilingual Content](07-i18n.md).
 On upload, the default locale's `title` is auto-filled from the filename with its extension
 stripped; when stripping the extension leaves an empty string (a filename that's nothing but an
 extension), it falls back to the full filename, and the result is always truncated to 255
-characters, again without splitting a surrogate pair.
+UTF-16 units, again without splitting a surrogate pair.
 
 `alt` is never auto-filled, and no other locale gets an automatically generated row either, unless
 someone writes one by hand. `FileTranslation.Title` is also `Searchable`, so `search=` on `file`

@@ -2,9 +2,9 @@
 
 Adding a new content type to StruoCMS means writing a C# class in a particular shape — one that
 becomes a database table, REST and GraphQL endpoints, and an admin form all at once. Adding a
-collection touches no framework code; it adds a class to your own content project, plus one
-migration that creates its table. The API does not create tables at startup: `make:migration`
-generates the migration from the class, and `migrate` applies it.
+collection touches no framework code; it adds a class to your own content project, plus the
+migrations that create its tables. The API never builds a table from the class: `make:migration`
+generates each migration from the class, and `migrate` applies them.
 
 ## A minimal collection
 

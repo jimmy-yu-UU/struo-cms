@@ -54,8 +54,8 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 - `schema/`：schema gate 用來比對前後端契約的快照。
 
 框架資料表由 `Struo.Infrastructure` 裡的核心 migration 建立：`CreateCoreSchema` 建表，
-`SeedCoreData` 植入初始資料，兩支都由 `migrate` 套用。API 啟動時不會自己建表。fork 為自己的
-集合寫的 migration 屬於那個 fork。
+`SeedCoreData` 植入初始資料，兩支都由 `migrate` 或 `Database:MigrateOnStartup` 套用。API 不會照
+entity 類別自己建表。fork 為自己的集合寫的 migration 屬於那個 fork。
 
 框架程式碼不會參照 `samples/` 底下的任何東西，這條邊界有測試守著。
 

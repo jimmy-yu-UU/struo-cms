@@ -16,7 +16,8 @@
   `{prefix}schema_migrations` 表不再使用，版本記在 `{prefix}schema_versions`。
 - 種子資料改由核心的種子 migration 寫入，在 `migrate` 或 `MigrateOnStartup` 期間執行，讀
   `Auth:BootstrapAdmin:*`、`Localization` 與 `Rbac:PublicReadCollections`；跑 `migrate` 的環境要有這些設定。
-- 移除的公開型別：`DatabaseInitializer`、`MigrationRunner`、`SchemaMigration`、`SchemaGuard`、
+- 移除的公開型別：`DatabaseInitializer`、`MigrationRunner`、`SchemaMigration`、`SchemaGuard`
+  （連同 `TranslationSidecarDescriptor`）、
   `DataSeeder`、`LanguageSeeder`、`AdminUserSeeder`、`RbacSeeder`（後三者只留在測試專案當輔助類別）。
   呼叫它們的 fork 程式碼要移除。
 - Development 環境啟動時以 `SchemaChecker` 比對資料庫與 entity，任何錯誤都中止啟動（取代 `SchemaGuard`，
@@ -44,6 +45,12 @@
 - `docker compose up -d --build` 起整套環境：postgres、redis、`api`（埠 8081）與 `admin`（埠 8080）；
   變數 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、`STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD`。
 - 新依賴 `FluentMigrator.Runner.*` 8.0.1（Core、Postgres、SqlServer、MySql、SQLite、Oracle）。
+- 測試連線設定鍵 `Testing:SqlServerConnection`、`Testing:MySqlConnection`、
+  `Testing:MariaDbConnection`，只認 `STRUO_TEST_SQLSERVER_CONNECTION`、
+  `STRUO_TEST_MYSQL_CONNECTION`、`STRUO_TEST_MARIADB_CONNECTION` 覆寫；`STRUO_TEST_BACKEND`
+  把整套測試搬到實際後端。見第 22 章。
+- `migrate` 與 `MigrateOnStartup` 不把執行的 SQL 寫進記錄，因為種子的 `INSERT` 含預設管理員的
+  密碼雜湊。`migrate:preview` 會印出這段 SQL，輸出要當機密處理。
 
 ### 變更
 
@@ -52,8 +59,10 @@
 - SQL Server 的字串欄位用 `nvarchar`；`migrate:check` 對 `varchar`／`char`／`text` 欄位發出
   `NonUnicodeString` 警告。
 - MySQL／MariaDB 上沒有指定形狀的 `DateTime` 是 `datetime(6)`（微秒）；其他後端不變。
-- 執行中的種子 SQL（含預設管理員的密碼雜湊）不寫進記錄；`migrate:preview` 仍會印出 SQL。
 - API 映像不再含 `db/migrations`。CI 的 docker job 在 smoke test 前先跑 `migrate`，並加測 Compose 環境。
+- `docker compose up -d` 會一併建置並啟動 API 與後台。開發時只要依賴服務，改用
+  `docker compose up -d postgres redis`；要加 MinIO，用
+  `docker compose --profile s3 up -d postgres redis minio createbuckets`。
 - 後端套件升級：`AWSSDK.S3` 4.0.104.1、`NetVips.Native` 8.18.7、`Scalar.AspNetCore` 2.17.13、
   `coverlet.collector` 10.1.0。
 - 前端套件升級：11 個 `@tiptap/*` 套件 3.31.4、`@lucide/vue` 1.49.0、`@tanstack/vue-table` 9.2.6、
@@ -67,7 +76,7 @@
 - SQL Server：`int` 欄位的 `aggregate[sum]` 超過 2^31 不再溢位。
 - SQL Server：取消的請求以取消例外呈現，不再是 `SqlSugarException`。
 - MySQL／MariaDB：一秒內的兩次寫入維持順序（微秒時間戳）。只影響新建的資料庫。
-- 檔名超過 255 字元的上傳不再失敗：檔名截到欄位寬度並保留副檔名；檔名與標題的截斷都不會切開代理對。
+- 檔名超過 255 個 UTF-16 編碼單位的上傳不再失敗：檔名截到欄位寬度並保留副檔名；檔名與標題的截斷都不會切開代理對。
 - 同一個行程使用多個資料庫後端時，欄位型別與資料列繫結不再互相混用（`ProviderScopedReflectionCache`）。
 
 ## 0.8.2 — 2026-10-01
