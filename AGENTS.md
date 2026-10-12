@@ -261,9 +261,9 @@ The verified backends, and how long the whole suite takes on each with
 |---|---|---|
 | SQLite (switch unset) | — | ≈ 3 min |
 | MySQL | 8.4.11 | ≈ 4 min |
-| MariaDB | 11.8.9 | ≈ 4.5 min |
-| SQL Server | 2025 (17.0, CU6) | ≈ 6 min |
-| PostgreSQL | 13.2 | ≈ 15 min |
+| MariaDB | 11.8.9 | ≈ 3.5 min |
+| SQL Server | 2025 (17.0, CU6) | ≈ 5 min |
+| PostgreSQL | 13.2 | ≈ 12 min |
 
 - **A live run is strongly recommended for every DB-behavior change**, on each verified backend
   you have. It is a local responsibility, not a CI gate — CI deliberately runs the SQLite suite

@@ -36,7 +36,7 @@ public class FacetSqlShapeTests : IDisposable
     private string Table<T>() where T : class, new() =>
         Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationTableName(_db.EntityMaintenance.GetTableName<T>()));
 
-    // The repository casts integral AVG operands to float on SQL Server (AggregateQueries); the projection here does the same.
+    // The repository widens integral AVG (FLOAT) and SUM (BIGINT) operands on SQL Server (AggregateQueries); the projection here does the same.
     private bool SqlServerIntegerAggregates => _db.CurrentConnectionConfig.DbType == DbType.SqlServer;
 
     private string Quoted<T>(string name) where T : class, new() =>

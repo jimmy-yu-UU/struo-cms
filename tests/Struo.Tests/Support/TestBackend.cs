@@ -7,7 +7,8 @@ public enum TestBackendKind { Sqlite, PostgreSQL, SqlServer, MySql, MariaDb }
 
 /// <summary>
 /// The backend API test hosts run on, chosen by <c>STRUO_TEST_BACKEND</c> (default SQLite). A live
-/// backend gets one fresh, uniquely named database per host, dropped on dispose.
+/// backend gets one fresh, uniquely named database per host, dropped on dispose. Unit harnesses get
+/// theirs from <see cref="CreateUnitDatabase"/>, which leases from a pool of emptied databases.
 /// </summary>
 internal static partial class TestBackend
 {

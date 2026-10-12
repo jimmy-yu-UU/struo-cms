@@ -41,15 +41,15 @@ The SQL Server cast has a cost: `FLOAT` holds integers exactly only up to 2^53. 
   runs the same average over `int`, `long`, `decimal` and `int?` columns on every configured live
   backend;
   `FacetSqlShapeTests.Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns`
-  runs it on SQLite.
+  runs it on the unit database (SQLite unless `STRUO_TEST_BACKEND` selects another backend).
 - `LiveRepositoryTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` averages 1, 2 and 2
   on every configured live backend and accepts 5/3 to within 1e-4;
-  `FacetSqlShapeTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth` runs it on SQLite.
-
+  `FacetSqlShapeTests.Average_with_a_repeating_mean_is_within_a_ten_thousandth`
+  runs it on the unit database (SQLite unless `STRUO_TEST_BACKEND` selects another backend).
 - `AvgProbe` sums an `int` column holding `int.MaxValue` on two rows. The assertion that the sum is the
   `long` `2 * int.MaxValue` runs in `LiveRepositoryTests.Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns`
   on every configured live backend (SQL Server fails with the overflow without the cast) and in the
-  SQLite twin.
+  `FacetSqlShapeTests` on the unit database.
 - `FacetSqlShapeTests.SqlServer_average_casts_integral_operands_to_float_and_leaves_other_ops_alone`
   pins `SUM(CAST(... AS BIGINT))` and uncast `MIN`/`MAX`;
   `FacetSqlShapeTests.Other_backends_sum_and_average_integral_operands_without_a_cast` pins that
