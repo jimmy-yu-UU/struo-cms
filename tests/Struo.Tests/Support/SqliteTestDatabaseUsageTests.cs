@@ -6,12 +6,13 @@ namespace Struo.Tests.Support;
 
 /// <summary>
 /// Tests outside <c>Support/</c> get their database from <see cref="TestBackend"/>, so they run on the
-/// backend <c>STRUO_TEST_BACKEND</c> selects. Using <see cref="SqliteTestDatabase"/> directly pins a test
-/// to SQLite; a SQLite-only test says so with <see cref="SqliteOnlyFactAttribute"/> instead.
+/// backend <c>STRUO_TEST_BACKEND</c> selects. Using <see cref="SqliteTestDatabase"/> or
+/// <see cref="SqliteTempTestDatabase"/> directly pins a test to SQLite; a SQLite-only test says so with
+/// <see cref="SqliteOnlyFactAttribute"/> instead.
 /// </summary>
 public sealed partial class SqliteTestDatabaseUsageTests
 {
-    [GeneratedRegex(@"\bSqliteTestDatabase\b")]
+    [GeneratedRegex(@"\bSqlite(Temp)?TestDatabase\b")]
     private static partial Regex DirectUse();
 
     [Fact]

@@ -10,7 +10,7 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// Covers the SqlSugarClientFactory EntityService convention that widens content-bearing
-/// [CmsField] interfaces (RichText/Textarea/Markdown/Code/Json) to a `text` column, so a
+/// [CmsField] interfaces (RichText/Textarea/Markdown/Code/Json) to a LongText column, so a
 /// realistic body (tables, styled spans, multiple paragraphs) never hits Postgres's default
 /// varchar(255) CodeFirst mapping (live-PostgreSQL gate: Npgsql 22001 "value too long").
 /// </summary>
@@ -34,7 +34,7 @@ public class ContentColumnMappingTests
     }
 
     [Fact]
-    public void RichText_interface_column_is_text_plain_text_interface_keeps_default()
+    public void RichText_interface_column_is_LongText_plain_text_interface_keeps_default()
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));

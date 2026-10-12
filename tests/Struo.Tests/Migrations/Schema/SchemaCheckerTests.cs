@@ -18,6 +18,11 @@ public sealed class SchemaCheckerTests : IDisposable
     private ISqlSugarClient Client(string prefix) => SqlSugarClientFactory.Create(
         _database.Options(prefix), new TestCurrentUserAccessor(Guid.Empty));
 
+    // For tests that only read entity metadata: reading DbType does not lease a live database.
+    private ISqlSugarClient OfflineClient(string prefix) => SqlSugarClientFactory.Create(
+        new DatabaseOptions { DbType = _database.DbType, ConnectionString = "unused", TablePrefix = prefix },
+        new TestCurrentUserAccessor(Guid.Empty));
+
     private SchemaCheckReport Check(ISqlSugarClient db, params Type[] types) =>
         SchemaChecker.Check(db, _database.DbType, types);
 
@@ -88,7 +93,8 @@ public sealed class SchemaCheckerTests : IDisposable
         var report = Check(db, typeof(CheckProbe));
 
         report.HasErrors.Should().BeFalse(report.ToString());
-        // The finding names the column as the database reports it; PostgreSQL folds it to lower case.
+        // The finding names the column as the database reports it. On PostgreSQL the column is created
+        // and reported as `extra`.
         report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn
             && string.Equals(f.Column, "Extra", StringComparison.OrdinalIgnoreCase));
     }
@@ -170,7 +176,7 @@ public sealed class SchemaCheckerTests : IDisposable
     [Fact]
     public void Oracle_reports_one_unsupported_index_warning_and_no_index_errors()
     {
-        var db = Client("chko_");
+        var db = OfflineClient("chko_");
         var tables = EntitySchemaReader.ReadAll(db, [typeof(Revision), typeof(CheckProbe)]);
 
         var oracle = SchemaTableComparer.UnsupportedIndexWarnings(StruoDbType.Oracle, tables);
@@ -182,7 +188,7 @@ public sealed class SchemaCheckerTests : IDisposable
     [Fact]
     public void Oracle_compares_columns_but_skips_type_and_length_with_one_warning()
     {
-        var db = Client("chkp_");
+        var db = OfflineClient("chkp_");
         var table = EntitySchemaReader.Read(db, typeof(CheckProbe));
         var title = table.Columns.Single(c => c.Name == "title");
         var wrongType = new DbColumnInfo { DbColumnName = "TITLE", DataType = "NUMBER", Length = 3, IsNullable = false };
