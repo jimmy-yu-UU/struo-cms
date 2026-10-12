@@ -89,12 +89,12 @@ public class ItemServicePermissionTests : IDisposable
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
 
     private ItemService BuildService(IPermissionService permissions)
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -228,7 +228,7 @@ public class ItemServicePermissionTests : IDisposable
     }
 
     // Seeds one category and one article pointing at it, using a super-admin service. Both services
-    // built by BuildService share the same SQLite file, so a narrower caller can read the result back.
+    // built by BuildService share the same database, so a narrower caller can read the result back.
     private async Task<string> SeedArticleWithCategoryAsync()
     {
         var admin = BuildService(new SuperAdminPermissions());
@@ -245,7 +245,7 @@ public class ItemServicePermissionTests : IDisposable
     private Guid SeedFileRow()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
         var row = new Struo.Infrastructure.Files.File

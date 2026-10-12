@@ -45,13 +45,13 @@ public sealed class ItemServiceUpdateRequiredSemanticsTests : IDisposable
         public string? Note { get; set; }
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
     public ItemServiceUpdateRequiredSemanticsTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<RequiredThing>();
         db.CodeFirst.InitTables<UserRole>();

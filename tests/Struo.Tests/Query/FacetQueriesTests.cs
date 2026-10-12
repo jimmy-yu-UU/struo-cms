@@ -227,7 +227,7 @@ public class FacetQueriesTests : IDisposable
 // from Category) must resolve per-locale sidecar values rather than the target row's own scalar field.
 public class TranslatableLeafFacetTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly SqlSugarItemRepository _repo;
     private readonly CachedMetadataProvider _md;
@@ -236,7 +236,7 @@ public class TranslatableLeafFacetTests : IDisposable
     public TranslatableLeafFacetTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Category>(); _db.CodeFirst.InitTables<Article>(); _db.CodeFirst.InitTables<ArticleTranslation>();
         var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };

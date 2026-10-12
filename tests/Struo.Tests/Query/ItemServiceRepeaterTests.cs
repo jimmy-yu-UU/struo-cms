@@ -47,13 +47,13 @@ public class ItemServiceRepeaterTests : IDisposable
         public List<Faq> RequiredFaqs { get; set; } = new();
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
     public ItemServiceRepeaterTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<RepeaterThing>();
         db.CodeFirst.InitTables<Language>();

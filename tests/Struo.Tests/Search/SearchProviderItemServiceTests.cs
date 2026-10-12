@@ -18,10 +18,10 @@ using Xunit;
 
 namespace Struo.Tests.Search;
 
-/// <summary>Spec §3.6 R1–R5 and R8 through the real ItemService on SQLite with a scripted provider.</summary>
+/// <summary>Spec §3.6 R1–R5 and R8 through the real ItemService on the selected backend with a scripted provider.</summary>
 public sealed class SearchProviderItemServiceTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly List<string> _sql = [];
     private readonly LanguageProvider _languages;
@@ -34,7 +34,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     public SearchProviderItemServiceTests()
     {
         var db = _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -76,8 +76,8 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         return (string)_svc.CreateAsync("category", body.RootElement).GetAwaiter().GetResult()["id"]!.ToString()!;
     }
 
-    // Dispose the SqlSugarClient's own connection before deleting the underlying SQLite file —
-    // an undisposed connection can hold the file locked on Windows, making the file cleanup flaky.
+    // Dispose the SqlSugarClient's own connection before releasing the database; on SQLite
+    // an undisposed connection can hold the file locked on Windows, making the cleanup flaky.
     public void Dispose()
     {
         _db.Dispose();
