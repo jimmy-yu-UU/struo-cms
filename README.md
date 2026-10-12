@@ -41,14 +41,30 @@ touches.
 
 ## Quick start
 
-Prerequisites: .NET SDK 10.0.x, Node.js 24, pnpm 10.x, Docker (with Compose).
+The simplest way to start the services for development and testing is Docker Compose, which needs
+only Docker (with Compose):
 
-The API and the admin SPA can also run as containers — the repo has a Dockerfile for each; the
-full steps are covered in a later chapter dedicated to deployment.
+```bash
+docker compose up -d --build
+docker compose ps   # wait until postgres, redis and api show (healthy)
+```
+
+Open `http://localhost:8080` and log in with the default account: `admin@admin.com` / `admin`. The
+API is at `http://localhost:8081`. The first start migrates the database and seeds that account;
+to use a different one, set `STRUO_ADMIN_EMAIL` / `STRUO_ADMIN_PASSWORD` in `.env` before it.
+
+- Ports: copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`, `STRUO_API_PORT`,
+  `STRUO_PG_PORT` or `STRUO_REDIS_PORT` when one is taken.
+- The stack runs as Production, so the session cookie is Secure: login works on
+  `http://localhost`, but any other host name needs HTTPS in front.
+- `docker compose down` keeps the data; `docker compose down -v` wipes it.
+
+For development work or special needs, start only the services you need and run the rest yourself.
+Prerequisites: .NET SDK 10.0.x, Node.js 24, pnpm 10.x, Docker (with Compose).
 
 ```bash
 # 1. Start PostgreSQL and Redis
-docker compose up -d
+docker compose up -d postgres redis
 
 # 2. Configure the API (gitignored local settings file)
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json

@@ -145,9 +145,10 @@ effect too.
 ### Build
 
 Two Dockerfiles each produce an independent image: the root `Dockerfile` builds the API,
-`frontend/Dockerfile` builds the admin SPA; there's no production `docker compose` file. A local
-build and CI's `docker` job run the same two commands, except a local build conventionally tags
-`:local` while CI tags `:ci`:
+`frontend/Dockerfile` builds the admin SPA. The root `docker-compose.yml` uses both Dockerfiles to
+start a full development and testing stack, not a production deployment recipe — see "The local
+Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
+commands, except a local build conventionally tags `:local` while CI tags `:ci`:
 
 ```
 docker build --tag struo-api:local .
@@ -337,7 +338,27 @@ that's genuinely missing turns into an error, rather than an endless reload.
   environment variables or a secret manager are ordinary source or deployment-pipeline artifacts;
   back them up along with the rest of the deployment.
 
-## An S3-compatible store for local development
+## The local Compose stack
+
+`docker compose up -d --build` uses the two Dockerfiles above to start four services: `postgres`,
+`redis`, `api` and `admin`; [Chapter 3: Getting Started](03-getting-started.md) covers starting it
+and logging in. It's a development and testing stack: the credentials are fixed dev values, and
+`api` runs as Production and applies migrations itself on every start
+(`Database__MigrateOnStartup`). For production, assemble your own deployment along the checklist
+earlier in this chapter.
+
+The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
+`http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only
+`/api/*`, so `/health/...` on the admin port returns the SPA page. Compose gives `api` its own
+health check every 5 seconds, so `docker compose up --wait` doesn't wait out the image's default
+30-second interval.
+
+The DataProtection keys live in the `struo-dpkeys` volume and survive rebuilding the container, but
+in plain text: the first start logs a `No XML encryptor configured` warning. That's fine for
+development and testing; in production, protect the keys yourself as the "DataProtection keys"
+section above describes.
+
+### An S3-compatible store
 
 The `minio` and `createbuckets` services in `docker-compose.yml` both sit under `profiles: ["s3"]`;
 a plain `docker compose up -d` neither pulls these two images nor waits on their health checks.

@@ -1,9 +1,13 @@
 # 3. Getting Started
 
-Follow these five steps and you'll have the API and admin SPA running within ten minutes, then log
-in once with the default account.
+This chapter gets the API and admin SPA running and logs in once with the default account — either
+with a single Docker Compose command that starts the whole stack, or by starting only the services
+you need and running the rest yourself.
 
 ## Prerequisites
+
+Starting the whole stack with Docker Compose needs only Docker plus Compose; the other tools below
+are for running the API and admin SPA yourself.
 
 You'll need:
 
@@ -14,10 +18,59 @@ You'll need:
 - Docker plus Compose — or your own PostgreSQL and Redis, in which case swap the next step's
   connection string for your own values.
 
-## 1. Start PostgreSQL and Redis
+## Start the whole stack with Docker Compose
+
+This is the simplest way to start the services for development and testing:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+```
+
+It builds the API and admin images and starts four services: `postgres`, `redis`, `api` and
+`admin`. On the first start the API runs the database migrations and seeds the default admin
+account.
+
+Wait for them to come up:
+
+```bash
+docker compose ps
+```
+
+`postgres`, `redis` and `api` must read `healthy`; `admin` has no health check, so `Up` is enough.
+You can also run `docker compose up -d --build --wait`, which returns only once everything is ready.
+
+Open `http://localhost:8080` and log in with the default account: `admin@admin.com` / `admin`. The
+API itself is at `http://localhost:8081`.
+
+The host ports default to 8080 for the admin, 8081 for the API, 5432 for PostgreSQL and 6379 for
+Redis. If any is taken, copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`,
+`STRUO_API_PORT`, `STRUO_PG_PORT` or `STRUO_REDIS_PORT`. Only the host side changes; the services
+still reach each other by service name.
+
+The `api` service runs as Production, so the session cookie is `Secure`. Browsers treat
+`http://localhost` as a secure context, so logging in locally works; reaching the admin under any
+other host name needs HTTPS in front.
+
+The default account is seeded only on the first start, while the database is still empty. To use a
+different email and password, set `STRUO_ADMIN_EMAIL`/`STRUO_ADMIN_PASSWORD` in `.env` before that
+first start. This account and the database and Redis credentials are for local development only;
+while the password is still the default, the log records a warning.
+
+`docker compose down` removes the containers but keeps the database and uploaded files in their
+volumes; `docker compose down -v` deletes the volumes too, so the next start begins with an empty
+database. Redis has no volume and sessions go with it, so after `down` and `up` you log in again;
+restarting only the API (`docker compose restart api`) keeps you logged in.
+
+## Start the services you need
+
+For development work or special needs, start only the services you need and run the rest yourself.
+The five steps below use Compose only for PostgreSQL and Redis, and run the API and admin SPA on
+your machine.
+
+### 1. Start PostgreSQL and Redis
+
+```bash
+docker compose up -d postgres redis
 ```
 
 This starts two services, `postgres` and `redis`. Confirm both pass their health
@@ -37,7 +90,7 @@ already uses those ports, copy `.env.example` to `.env` and override them with `
 `STRUO_REDIS_PORT`. If you change `STRUO_PG_PORT`, update `Port=` in the next step's connection
 string too.
 
-## 2. Configure the API
+### 2. Configure the API
 
 ```bash
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
@@ -51,7 +104,7 @@ You can override any config key with an environment variable: replace `:` with `
 `Database__ConnectionString`. The one exception is `Testing:PostgresConnection`, which only honors
 `STRUO_TEST_PG_CONNECTION`.
 
-## 3. Run the API
+### 3. Run the API
 
 ```bash
 dotnet run --project src/Struo.Api
@@ -86,7 +139,7 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 HTTP_STATUS:200
 ```
 
-## 4. Run the admin SPA
+### 4. Run the admin SPA
 
 Back in the terminal where you ran `curl`:
 
@@ -109,7 +162,7 @@ same server.
 The dev server forwards `/api` to `http://localhost:5221`, so the browser sees the admin SPA and the
 API as the same origin — the development environment needs no separate CORS configuration.
 
-## 5. First login
+### 5. First login
 
 Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`.
 

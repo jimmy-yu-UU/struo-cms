@@ -112,8 +112,9 @@ sink，按日期滾動、允許同時被多個行程共享讀寫，檔名長成 
 ### 建置
 
 兩份 Dockerfile 各自產生一個獨立映像：根目錄的 `Dockerfile` 建 API，`frontend/Dockerfile` 建
-後台 SPA；沒有正式環境用的 `docker compose` 檔。本機建置跟 CI 的 `docker` job 跑的是同樣兩道
-指令，只是本機習慣打 `:local` 標籤，CI 打的是 `:ci`：
+後台 SPA。根目錄的 `docker-compose.yml` 用這兩份 Dockerfile 起一整套開發與測試環境，不是正式
+環境的部署範本，見本章最後的「本機的 Compose 環境」。本機建置跟 CI 的 `docker` job 跑的是同樣
+兩道指令，只是本機習慣打 `:local` 標籤，CI 打的是 `:ci`：
 
 ```
 docker build --tag struo-api:local .
@@ -276,7 +277,23 @@ Healthy
 - **腳本與設定**——`db/migrations/`、`appsettings.*`、環境變數或密鑰管理系統裡的值，是一般
   的原始碼或部署管線產物，跟其餘部署一起備份即可。
 
-## 本機的 S3 相容儲存
+## 本機的 Compose 環境
+
+`docker compose up -d --build` 用上面兩份 Dockerfile 起 `postgres`、`redis`、`api`、`admin` 四個
+服務，怎麼啟動、怎麼登入見[第 3 章：快速開始](03-getting-started.md)。它是開發與測試用的環境：
+帳密都是固定的開發值，`api` 以 Production 執行，每次啟動先自己跑 migration
+（`Database__MigrateOnStartup`）。上正式環境，照本章前面的檢查清單自己組部署。
+
+健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
+`http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，
+從後台的埠打 `/health/...` 拿到的是 SPA 頁面。Compose 替 `api` 另外設了每 5 秒一次的健康檢查，
+`docker compose up --wait` 不必等映像預設的 30 秒間隔。
+
+DataProtection 金鑰掛在 volume `struo-dpkeys`，容器重建也撐得住，但是明文存放：第一次啟動的
+log 會出現一筆 `No XML encryptor configured` 警告。開發與測試這樣就夠了；正式環境要照上面
+「DataProtection 金鑰」一節，自己保護金鑰。
+
+### S3 相容儲存
 
 `docker-compose.yml` 的 `minio`、`createbuckets` 兩個服務都掛在 `profiles: ["s3"]` 底下，
 預設的 `docker compose up -d` 既不會拉這兩個映像，也不會等它們的健康檢查；要啟用，

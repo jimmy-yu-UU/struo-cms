@@ -1,8 +1,12 @@
 # 3. 快速開始
 
-跟著以下五個步驟，十分鐘內就能把 API 與管理後台跑起來，並用預設帳號登入一次。
+這一章把 API 與管理後台跑起來，並用預設帳號登入一次：可以用一道 Docker Compose 指令起整套服務，
+也可以只起需要的服務，其餘在本機自己跑。
 
 ## 先決條件
+
+用 Docker Compose 起整套服務，只需要 Docker 加上 Compose；下面其餘的工具，是在本機自己跑 API
+與後台時才用得到。
 
 需要準備好這些工具：
 
@@ -11,10 +15,53 @@
 - pnpm 10.x，由 corepack 依 `packageManager` 欄位自動套用，不用自己指定版本。
 - Docker 加上 Compose，或自己架 PostgreSQL 與 Redis；自架的話，下一步的連線字串要換成對應的值。
 
-## 1. 啟動 PostgreSQL 與 Redis
+## 用 Docker Compose 起整套服務
+
+這是最簡單的啟動服務進行開發及測試的方式：
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+```
+
+這會建置 API 與後台兩個映像，起 `postgres`、`redis`、`api`、`admin` 四個服務。第一次啟動時，
+API 會跑完資料庫 migration，並植入預設管理員帳號。
+
+等它們都起來：
+
+```bash
+docker compose ps
+```
+
+`postgres`、`redis`、`api` 的狀態要是 `healthy`；`admin` 沒有健康檢查，顯示 `Up` 就好。也可以
+改用 `docker compose up -d --build --wait`，全部就緒才回到命令列。
+
+打開 `http://localhost:8080`，用預設帳號登入：`admin@admin.com` / `admin`。API 本身在
+`http://localhost:8081`。
+
+對外的埠預設是後台 8080、API 8081、PostgreSQL 5432、Redis 6379。被佔用的話，複製
+`.env.example` 成 `.env`，用 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、`STRUO_PG_PORT`、
+`STRUO_REDIS_PORT` 覆寫；改的只是主機這一側，服務之間照樣用服務名稱互連。
+
+`api` 以 Production 環境執行，session cookie 帶 `Secure`。瀏覽器把 `http://localhost` 當成安全
+來源，所以本機登入沒問題；用其他主機名稱連進來，前面要先架一層 HTTPS。
+
+預設帳號只在第一次啟動、資料庫還是空的時候植入。要換成別的帳號密碼，第一次啟動前在 `.env`
+設 `STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。這組帳密與資料庫、Redis 的帳密都只給本機開發
+用；密碼還是預設值時，log 會留一筆警告。
+
+`docker compose down` 會移除容器，資料庫與上傳的檔案留在 volume 裡；`docker compose down -v`
+連 volume 一起刪，下次從空資料庫開始。Redis 沒有掛 volume，session 跟著消失，所以 `down` 再
+`up` 之後要重新登入；只重啟 API（`docker compose restart api`），登入狀態還在。
+
+## 自己起需要的服務
+
+做開發或有特殊需求時，只起你需要的服務，其餘自己跑。下面五個步驟只用 Compose 起 PostgreSQL
+與 Redis，API 與管理後台在本機執行。
+
+### 1. 啟動 PostgreSQL 與 Redis
+
+```bash
+docker compose up -d postgres redis
 ```
 
 會起 `postgres` 與 `redis` 兩個服務。確認它們都通過健康檢查：
@@ -31,7 +78,7 @@ docker compose ps
 `.env.example` 成 `.env`，用 `STRUO_PG_PORT`、`STRUO_REDIS_PORT` 覆寫即可。改了
 `STRUO_PG_PORT` 的話，下一步連線字串裡的 `Port=` 也要跟著改。
 
-## 2. 設定 API
+### 2. 設定 API
 
 ```bash
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
@@ -43,7 +90,7 @@ cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.
 任何一個設定鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯
 一的例外是 `Testing:PostgresConnection`，它只認 `STRUO_TEST_PG_CONNECTION`。
 
-## 3. 執行 API
+### 3. 執行 API
 
 ```bash
 dotnet run --project src/Struo.Api
@@ -77,7 +124,7 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 HTTP_STATUS:200
 ```
 
-## 4. 執行管理後台
+### 4. 執行管理後台
 
 回到剛才跑 `curl` 的那個終端機：
 
@@ -99,7 +146,7 @@ pnpm dev
 開發伺服器把 `/api` 轉發到 `http://localhost:5221`，後台與 API 在瀏覽器眼裡是同一個來源，開
 發環境不需要另外設定 CORS。
 
-## 5. 第一次登入
+### 5. 第一次登入
 
 打開 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。
 
