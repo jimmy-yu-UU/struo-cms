@@ -57,7 +57,10 @@ public static class SqlSugarClientFactory
                     if (TableNaming.IsFrameworkTable(type))
                         entity.DbTableName = TableNaming.Apply(options.TablePrefix, entity.DbTableName);
                 },
-                EntityService = (property, column) => ApplyColumnConventions(property, column, dbType, policy)
+                EntityService = (property, column) => ApplyColumnConventions(property, column, dbType, policy),
+                // Entity info carries this provider's column types, and row binders this provider's
+                // reader types; both caches are process-wide, so their keys are scoped per provider.
+                ReflectionInoCacheService = new ProviderScopedReflectionCache(dbType)
             }
         };
 
@@ -109,6 +112,7 @@ public static class SqlSugarClientFactory
         ApplyNullabilityInference(property, column);
 
         if (ApplyColumnShape(property, column, dbType)) return;
+        if (ApplyZoneLessTimestamp(property, column, dbType)) return;
 
         ApplyBareIsJsonWidening(property, column, dbType);
 
@@ -213,9 +217,36 @@ public static class SqlSugarClientFactory
                 "applies the LongText shape, and it also sets IsJson, which [ColumnShape] alone does not.");
         }
 
-        column.DataType = ColumnTypeMap.For(shape.Value, dbType);
+        if (shape == ColumnShape.Timestamp) ApplyTimestamp(column, dbType);
+        else column.DataType = ColumnTypeMap.For(shape.Value, dbType);
         return true;
     }
+
+    // MySQL/MariaDB only: an unshaped DateTime/DateTime? property takes ColumnShape.Timestamp, unless its
+    // own [SugarColumn(ColumnDataType = ...)] names a type. Other providers and DateTimeOffset keep
+    // SqlSugar's mapping.
+    private static bool ApplyZoneLessTimestamp(PropertyInfo property, EntityColumnInfo column, DbType dbType)
+    {
+        if (dbType != SqlSugar.DbType.MySql || !TakesZoneLessTimestamp(property)) return false;
+        ApplyTimestamp(column, dbType);
+        return true;
+    }
+
+    // ColumnShape.Timestamp, explicit or implicit: datetime(6) on MySQL/MariaDB, SqlSugar's default DateTime
+    // type elsewhere, also over an explicit ColumnDataType.
+    private static void ApplyTimestamp(EntityColumnInfo column, DbType dbType) =>
+        column.DataType = dbType == SqlSugar.DbType.MySql ? ColumnTypeMap.For(ColumnShape.Timestamp, dbType) : null;
+
+    /// <summary>True for a zone-less timestamp property: the hook maps it to <see cref="ColumnShape.Timestamp"/> on MySQL.</summary>
+    internal static bool TakesZoneLessTimestamp(PropertyInfo property) =>
+        (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == typeof(DateTime)
+        && property.GetCustomAttribute<ColumnShapeAttribute>() is null
+        && string.IsNullOrEmpty(property.GetCustomAttribute<SugarColumn>()?.ColumnDataType);
+
+    /// <summary>True for a property that takes <see cref="ColumnShape.Timestamp"/>, declared or by convention.</summary>
+    internal static bool IsTimestampShaped(PropertyInfo property) =>
+        property.GetCustomAttribute<ColumnShapeAttribute>()?.Shape == ColumnShape.Timestamp
+        || TakesZoneLessTimestamp(property);
 
     // A property that carries only a bare [SugarColumn(IsJson = true)] — no
     // [CmsField] interface in JsonColumnInterfaces above, no [ColumnShape] — still

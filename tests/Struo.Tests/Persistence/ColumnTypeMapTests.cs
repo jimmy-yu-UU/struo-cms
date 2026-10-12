@@ -9,6 +9,7 @@ using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Settings;
+using Struo.Tests.Migrations.Schema;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -49,14 +50,104 @@ public class ColumnTypeMapTests
         ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, DbType.Sqlite).Should().Be("timestamptz");
     }
 
-    public static IEnumerable<object[]> TimestampWithTimeZoneProperties()
+    [Fact]
+    public void Timestamp_maps_to_datetime_6_on_MySql() =>
+        ColumnTypeMap.For(ColumnShape.Timestamp, DbType.MySql).Should().Be("datetime(6)");
+
+    [Theory]
+    [InlineData(DbType.PostgreSQL)]
+    [InlineData(DbType.SqlServer)]
+    [InlineData(DbType.Sqlite)]
+    [InlineData(DbType.Oracle)]
+    public void Timestamp_is_unmapped_outside_MySql(DbType dbType)
     {
-        yield return [typeof(MediaFolder), nameof(MediaFolder.CreatedAt)];
-        yield return [typeof(MediaFolder), nameof(MediaFolder.UpdatedAt)];
-        yield return [typeof(SiteSettings), nameof(SiteSettings.UpdatedAt)];
-        yield return [typeof(UserSession), nameof(UserSession.CreatedAt)];
-        yield return [typeof(UserSession), nameof(UserSession.ExpiresAt)];
+        var act = () => ColumnTypeMap.For(ColumnShape.Timestamp, dbType);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    public static TheoryData<DbType> CodeFirstBackends =>
+        new(DbType.PostgreSQL, DbType.MySql, DbType.SqlServer, DbType.Sqlite, DbType.Oracle);
+
+    // Entity info is resolved without opening a connection, so no server is needed.
+    private static EntityColumnInfo TimestampProbeColumn(DbType dbType, string property) =>
+        SqlSugarClientFactory.Create(
+                new DatabaseOptions
+                {
+                    DbType = Enum.Parse<StruoDbType>(dbType.ToString()),
+                    ConnectionString = "Data Source=unused",
+                    TablePrefix = "ts" + Guid.NewGuid().ToString("N")[..8] + "_",
+                },
+                new TestCurrentUserAccessor(null))
+            .EntityMaintenance.GetEntityInfo<TimestampProbe>()
+            .Columns.Single(c => c.PropertyName == property);
+
+    // SqlSugar leaves DataType empty for a DateTime property and picks the backend's default type at DDL time.
+    [Theory]
+    [MemberData(nameof(CodeFirstBackends))]
+    public void An_unshaped_DateTime_property_gets_datetime_6_on_MySql_and_SqlSugars_default_elsewhere(DbType dbType)
+    {
+        var at = TimestampProbeColumn(dbType, nameof(TimestampProbe.At)).DataType;
+        var maybeAt = TimestampProbeColumn(dbType, nameof(TimestampProbe.MaybeAt)).DataType;
+        if (dbType == DbType.MySql)
+        {
+            at.Should().Be("datetime(6)");
+            maybeAt.Should().Be("datetime(6)");
+        }
+        else
+        {
+            at.Should().BeNullOrEmpty();
+            maybeAt.Should().BeNullOrEmpty();
+        }
+
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Zoned)).DataType
+            .Should().Be(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType));
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Declared)).DataType.Should().Be("timestamp(3)");
+        TimestampProbeColumn(dbType, nameof(TimestampProbe.Offset)).DataType.Should().BeNullOrEmpty();
+    }
+
+    [Theory]
+    [MemberData(nameof(CodeFirstBackends))]
+    public void An_explicit_Timestamp_shape_gets_datetime_6_on_MySql_and_SqlSugars_default_elsewhere(DbType dbType)
+    {
+        var columns = SqlSugarClientFactory.Create(
+                new DatabaseOptions
+                {
+                    DbType = Enum.Parse<StruoDbType>(dbType.ToString()),
+                    ConnectionString = "Data Source=unused",
+                    TablePrefix = "st" + Guid.NewGuid().ToString("N")[..8] + "_",
+                },
+                new TestCurrentUserAccessor(null))
+            .EntityMaintenance.GetEntityInfo<ShapedTimestampProbe>()
+            .Columns;
+
+        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt), nameof(ShapedTimestampProbe.Declared) })
+        {
+            var dataType = columns.Single(c => c.PropertyName == name).DataType;
+            if (dbType == DbType.MySql) dataType.Should().Be("datetime(6)");
+            else dataType.Should().BeNullOrEmpty();
+        }
+    }
+
+    [SugarTable("timestamp_probe")]
+    public sealed class TimestampProbe
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public DateTime At { get; set; }
+        public DateTime? MaybeAt { get; set; }
+        [ColumnShape(ColumnShape.TimestampWithTimeZone)] public DateTime Zoned { get; set; }
+        [SugarColumn(ColumnDataType = "timestamp(3)")] public DateTime Declared { get; set; }
+        public DateTimeOffset Offset { get; set; }
+    }
+
+    public static TheoryData<Type, string> TimestampWithTimeZoneProperties() => new()
+    {
+        { typeof(MediaFolder), nameof(MediaFolder.CreatedAt) },
+        { typeof(MediaFolder), nameof(MediaFolder.UpdatedAt) },
+        { typeof(SiteSettings), nameof(SiteSettings.UpdatedAt) },
+        { typeof(UserSession), nameof(UserSession.CreatedAt) },
+        { typeof(UserSession), nameof(UserSession.ExpiresAt) },
+    };
 
     [Theory]
     [MemberData(nameof(TimestampWithTimeZoneProperties))]
@@ -76,11 +167,11 @@ public class ColumnTypeMapTests
         columnDataType.Should().BeNullOrEmpty();
     }
 
-    public static IEnumerable<object[]> LongTextProperties()
+    public static TheoryData<Type, string> LongTextProperties() => new()
     {
-        yield return [typeof(SiteSettings), nameof(SiteSettings.BrandName)];
-        yield return [typeof(Revision), nameof(Revision.Snapshot)];
-    }
+        { typeof(SiteSettings), nameof(SiteSettings.BrandName) },
+        { typeof(Revision), nameof(Revision.Snapshot) },
+    };
 
     [Theory]
     [MemberData(nameof(LongTextProperties))]

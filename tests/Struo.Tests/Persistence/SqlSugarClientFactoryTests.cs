@@ -69,6 +69,33 @@ public class SqlSugarClientFactoryTests
         Assert.Equal("aa_users", a.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
     }
 
+    // One process can hold clients for several providers with the same prefix: each resolves the
+    // [ColumnShape] column types of its own provider, whichever client reads the entity first.
+    [Theory]
+    [InlineData(StruoDbType.Sqlite, StruoDbType.SqlServer)]
+    [InlineData(StruoDbType.SqlServer, StruoDbType.Sqlite)]
+    [InlineData(StruoDbType.PostgreSQL, StruoDbType.MySql)]
+    [InlineData(StruoDbType.MySql, StruoDbType.PostgreSQL)]
+    public void Clients_for_two_providers_with_one_prefix_resolve_their_own_column_types(StruoDbType first, StruoDbType second)
+    {
+        var prefix = "x" + Guid.NewGuid().ToString("N")[..8] + "_";
+
+        var firstType = ShapedColumnType(first, prefix);
+        var secondType = ShapedColumnType(second, prefix);
+
+        Assert.Equal(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, DbTypeMapper.Map(first)), firstType);
+        Assert.Equal(ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, DbTypeMapper.Map(second)), secondType);
+    }
+
+    // Entity info is resolved without opening a connection, so no server is needed.
+    private static string ShapedColumnType(StruoDbType dbType, string prefix) =>
+        SqlSugarClientFactory.Create(
+                new DatabaseOptions { DbType = dbType, ConnectionString = "Data Source=unused", TablePrefix = prefix },
+                new TestCurrentUserAccessor(null))
+            .EntityMaintenance.GetEntityInfo<Struo.Infrastructure.Files.MediaFolder>()
+            .Columns.Single(c => c.PropertyName == nameof(Struo.Infrastructure.Files.MediaFolder.CreatedAt))
+            .DataType;
+
     [Fact]
     public void InitTables_creates_the_prefixed_table_and_queries_hit_it()
     {

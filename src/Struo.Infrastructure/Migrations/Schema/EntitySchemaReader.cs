@@ -77,6 +77,9 @@ public static class EntitySchemaReader
     private static ColumnCategory CategoryOf(EntityColumnInfo column, SqlSugar.DbType dbType)
     {
         var dataType = column.DataType;
+        // On MySQL both timestamp shapes resolve to datetime(6), so the zone-less one is told apart by its property.
+        if (column.PropertyInfo is { } property && SqlSugarClientFactory.IsTimestampShaped(property))
+            return ColumnCategory.DateTime;
         if (column.IsJson || Matches(dataType, ColumnTypeMap.For(ColumnShape.LongText, dbType)))
             return ColumnCategory.LongText;
         if (Matches(dataType, ColumnTypeMap.For(ColumnShape.TimestampWithTimeZone, dbType)))

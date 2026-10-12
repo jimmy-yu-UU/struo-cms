@@ -18,11 +18,14 @@ public sealed class StruoMigrationTypeTests
         { NamespaceFilter = "Struo.Tests.Migrations.Probes." + ns },
         NullLoggerFactory.Instance);
 
-    private static Dictionary<string, string> ColumnTypes(StruoDbType db, string conn, string table) =>
+    private static Dictionary<string, DbColumnInfo> Columns(StruoDbType db, string conn, string table) =>
         new SqlSugarClient(new ConnectionConfig
             { DbType = DbTypeMapper.Map(db), ConnectionString = conn, IsAutoCloseConnection = true })
         .DbMaintenance.GetColumnInfosByTableName(table, false)
-        .ToDictionary(c => c.DbColumnName.ToLowerInvariant(), c => c.DataType.ToLowerInvariant());
+        .ToDictionary(c => c.DbColumnName.ToLowerInvariant());
+
+    private static Dictionary<string, string> ColumnTypes(StruoDbType db, string conn, string table) =>
+        Columns(db, conn, table).ToDictionary(c => c.Key, c => c.Value.DataType.ToLowerInvariant());
 
     [Fact]
     public async Task Shapes_resolve_to_the_sqlite_literals()
@@ -32,23 +35,26 @@ public sealed class StruoMigrationTypeTests
 
         var types = ColumnTypes(StruoDbType.Sqlite, file.ConnectionString, "struo_typeprobe");
         types["at"].Should().Be("timestamptz");
+        types["ts"].Should().Be("datetime");
         types["body"].Should().Be("text");
         types["data"].Should().Be("text");
     }
 
-    private static readonly Dictionary<string, (string Tz, string LongText)> LiveLiterals = new()
+    // Timestamp is the type and the fractional-second digits SqlSugar reports (in Length on MySQL/MariaDB,
+    // in DecimalDigits on SQL Server).
+    private static readonly Dictionary<string, (string Tz, string LongText, (string Type, int Length, int Scale) Timestamp)> LiveLiterals = new()
     {
-        ["PostgreSQL"] = ("timestamptz", "text"),
-        ["SqlServer"] = ("datetimeoffset", "nvarchar"),
-        ["MySql"] = ("datetime", "longtext"),
-        ["MariaDb"] = ("datetime", "longtext"),
+        ["PostgreSQL"] = ("timestamptz", "text", ("timestamp", 0, 0)),
+        ["SqlServer"] = ("datetimeoffset", "nvarchar", ("datetime", 23, 3)),
+        ["MySql"] = ("datetime", "longtext", ("datetime", 6, 0)),
+        ["MariaDb"] = ("datetime", "longtext", ("datetime", 6, 0)),
     };
 
     [Theory, MemberData(nameof(LiveBackends))]
     public async Task Shapes_resolve_to_the_live_backend_literals(string backend)
     {
         var (_, db, connection) = LiveBackend.Get(backend);
-        var (tz, longText) = LiveLiterals[backend];
+        var (tz, longText, timestamp) = LiveLiterals[backend];
         if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
@@ -59,8 +65,10 @@ public sealed class StruoMigrationTypeTests
         {
             await Host(db, conn, prefix, "Types").ApplyAsync(default);
 
-            var types = ColumnTypes(db, conn, prefix + "typeprobe");
+            var columns = Columns(db, conn, prefix + "typeprobe");
+            var types = columns.ToDictionary(c => c.Key, c => c.Value.DataType.ToLowerInvariant());
             types["at"].Should().Be(tz);
+            (types["ts"], columns["ts"].Length, columns["ts"].DecimalDigits).Should().Be(timestamp);
             types["body"].Should().Be(longText);
             types["data"].Should().Be(longText);
         }

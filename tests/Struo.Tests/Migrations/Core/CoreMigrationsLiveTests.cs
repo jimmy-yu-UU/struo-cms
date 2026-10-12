@@ -2,11 +2,9 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Configuration;
-using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Schema;
-using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -17,17 +15,6 @@ public sealed class CoreMigrationsLiveTests
     public static TheoryData<string> Backends => LiveBackend.Names();
 
     private static string NewPrefix() => "t" + Guid.NewGuid().ToString("N")[..8] + "_";
-
-    private static ISqlSugarClient Client(StruoDbType dbType, string conn, string prefix)
-    {
-        var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
-        {
-            [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
-        });
-        return SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = dbType, ConnectionString = conn, TablePrefix = prefix },
-            new TestCurrentUserAccessor(Guid.Empty), policy);
-    }
 
     private static Task<IReadOnlyList<MigrationInfo>> ApplyCore(StruoDbType dbType, string conn, string prefix) => new MigrationHost(
         new MigrationHostOptions(dbType, conn, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 30)
@@ -47,7 +34,7 @@ public sealed class CoreMigrationsLiveTests
         if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
-        var db = Client(dbType, conn, prefix);
+        var db = CoreMigrationHarness.Client(dbType, conn, prefix);
         try
         {
             await ApplyCore(dbType, conn, prefix);
@@ -66,8 +53,8 @@ public sealed class CoreMigrationsLiveTests
         LiveDatabases.GuardDisposable(conn);
         var codeFirstPrefix = NewPrefix();
         var migratedPrefix = NewPrefix();
-        var codeFirst = Client(dbType, conn, codeFirstPrefix);
-        var migrated = Client(dbType, conn, migratedPrefix);
+        var codeFirst = CoreMigrationHarness.Client(dbType, conn, codeFirstPrefix);
+        var migrated = CoreMigrationHarness.Client(dbType, conn, migratedPrefix);
         try
         {
             codeFirst.CodeFirst.InitTables(FrameworkEntityTypes.All.ToArray());

@@ -1,4 +1,4 @@
-# ColumnTypeMap picks per-backend column literals verified only on PostgreSQL and SQLite
+# ColumnTypeMap picks one column literal per backend for each ColumnShape
 
 ## Decision
 
@@ -9,13 +9,29 @@ backend:
   Oracle `clob`.
 - `ColumnShape.TimestampWithTimeZone` → PostgreSQL/SQLite `timestamptz`, MySQL `datetime(6)`,
   SqlServer `datetimeoffset`, Oracle `timestamp with time zone`.
+- `ColumnShape.Timestamp` (zone-less) → MySQL `datetime(6)`, which MariaDB shares. It has no
+  literal for any other backend.
+
+`ColumnShape.Timestamp` changes the column on MySQL and MariaDB only, and needs no attribute. On a
+MySQL client, the `EntityService` hook in `SqlSugarClientFactory` gives it to every
+`DateTime`/`DateTime?` property that has neither `[ColumnShape]` nor its own
+`[SugarColumn(ColumnDataType = ...)]`. An explicit `[ColumnShape(ColumnShape.Timestamp)]` is
+accepted on every backend and behaves the same way. The migrations write those columns with
+`AsTimestamp(Db)`, which `AsShape(ColumnShape.Timestamp, Db)` delegates to: `datetime(6)` on MySQL
+and FluentMigrator's `AsDateTime()` on every other backend. Those backends keep SqlSugar's default
+`DateTime` mapping in CodeFirst and `AsDateTime()` in the migrations, so nothing calls
+`ColumnTypeMap.For(ColumnShape.Timestamp, ...)` there. `DateTimeOffset` keeps SqlSugar's own mapping
+everywhere. Because both timestamp shapes resolve to `datetime(6)` on MySQL, `EntitySchemaReader`
+takes a zone-less column's category from the property (`SqlSugarClientFactory.IsTimestampShaped`),
+not from the literal.
 
 Three of these are deliberate, non-obvious choices rather than the first vendor synonym that comes to
 mind: MySQL uses `longtext`, not `text`; MySQL uses `datetime(6)`, not `timestamp`; SqlServer uses
 `nvarchar(max)`. PostgreSQL is this repository's verified runtime target and SQLite is the test
-target (`AGENTS.md`). The MySQL/SqlServer/Oracle literals are chosen to be syntactically valid so that
-CodeFirst table creation succeeds on those backends; they are not claimed to be verified against a
-live instance of any of the three.
+target (`AGENTS.md`). The MySQL/SqlServer/Oracle literals of `LongText` and `TimestampWithTimeZone`
+are chosen to be syntactically valid so that CodeFirst table creation succeeds on those backends;
+they are not claimed to be verified against a live instance of any of the three. The `Timestamp`
+literal was measured on live MySQL and MariaDB instances (Evidence).
 
 `ColumnTypeMap.For` is not the only site in `src/` that writes a vendor type literal directly:
 `SqlSugarClientFactory.ApplySqliteIdentityColumnRewrite` sets `DataType` to `"INTEGER"` on a SQLite
@@ -32,6 +48,12 @@ MySQL's `TIMESTAMP` is range-limited to 1970-2038; `DATETIME(6)` storing UTC is 
 choice for an instant with no such ceiling, which is why `TimestampWithTimeZone` maps to
 `datetime(6)`, not `timestamp`, on MySQL.
 
+MySQL's and MariaDB's plain `DATETIME` keeps whole seconds. Two writes within one second then store
+the same `UpdatedAt`, and the audit timestamp cannot order them. `Timestamp` maps to `datetime(6)`
+there for that reason. The other backends have no such gap that a test shows, so they keep the types
+SqlSugar's CodeFirst and FluentMigrator's `AsDateTime()` create. SQL Server's `datetime` has a
+precision of about 3 ms.
+
 Both `nvarchar(max)` (SqlServer) and `datetime(6)` (MySQL) are already parenthesised literals.
 Whether SqlSugar appends a further length suffix to a `DbColumnInfo.DataType` that already contains
 parentheses — which would emit malformed DDL such as `nvarchar(max)(4000)` — is the question this
@@ -39,6 +61,29 @@ decision turns on: if the answer were yes, these two literals would need a diffe
 answer, established by reading the upstream source below, is no.
 
 ## Evidence
+
+Zone-less timestamp types, as SqlSugar's `GetColumnInfosByTableName` reports them (type / `Length` /
+`DecimalDigits`), measured on 2026-10-08 against PostgreSQL 13.2, SQL Server 2025, MySQL 8.4.11,
+MariaDB 11.8.9 and SQLite. FluentMigrator `AsDateTime()` and SqlSugar CodeFirst `DateTime`/`DateTime?`
+with no shape reported the same type on every backend. Outside MySQL and MariaDB these are the types
+the backends keep:
+
+| Backend | `AsDateTime()` and CodeFirst `DateTime` | `datetime(6)` |
+|---|---|---|
+| PostgreSQL | `timestamp` / 0 / 0 | — |
+| SQL Server | `datetime` / 23 / 3 | — |
+| MySQL | `datetime` / 0 / 0 | `datetime` / 6 / 0 |
+| MariaDB | `datetime` / 0 / 0 | `datetime` / 6 / 0 |
+| SQLite | `DATETIME` (FluentMigrator), `datetime` (CodeFirst) / 0 / 0 | — |
+
+On Oracle, SqlSugar's default type name for `DateTime` (`Ado.DbBind.GetDbTypeName("DateTime")`) is
+`date`, and FluentMigrator's `OracleTypeMap` gives `AsDateTime()` as `TIMESTAMP(4)`; both were read
+in code, not measured on a live instance. `StruoMigrationTypeTests.Shapes_resolve_to_the_live_backend_literals`
+pins the `AsTimestamp(Db)` column per live backend, `ColumnTypeExtensionsTests` pins that it equals
+`AsDateTime()` outside MySQL, and `CoreMigrationsLiveTests` compares the migrated and CodeFirst core
+schemas, `DecimalDigits` and `Length` included, on each of them.
+
+The rest of this section covers the parenthesised `LongText` and `TimestampWithTimeZone` literals.
 
 Read directly from the upstream SqlSugar source at `https://github.com/DotNetNext/SqlSugar` (the
 `donet5/SqlSugar` slug this package is still sometimes referenced by is a 301 redirect to the same
@@ -110,6 +155,13 @@ about the JSON route changes the zero-length conclusion. A fork relying on JSON 
 is covered by the same no-op finding as the shaped properties above.
 
 ## Unknowns
+
+On Oracle the two paths create different zone-less timestamp types: `DATE` (whole seconds) from
+CodeFirst and `TIMESTAMP(4)` from the migrations. Neither was measured on a live instance.
+
+A `DateTime` primary key skips the `EntityService` hook, so CodeFirst keeps SqlSugar's default type for
+it, while `make:migration` emits `AsTimestamp(Db)`. On MySQL that is `datetime` against
+`datetime(6)`. No entity has a `DateTime` primary key.
 
 Whether the parenthesised-literal reasoning in Evidence holds against a live SQL Server or MySQL
 instance is unverified — it rests on reading the source, not on running it.

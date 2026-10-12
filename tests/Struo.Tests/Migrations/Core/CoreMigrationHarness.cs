@@ -38,14 +38,17 @@ internal sealed class CoreMigrationHarness : IDisposable
 
     public MigrationHost Host(CoreSeedData? seed) => new(HostOptions(seed), NullLoggerFactory.Instance);
 
-    public ISqlSugarClient Db()
+    public ISqlSugarClient Db() => Client(StruoDbType.Sqlite, _file.ConnectionString, Prefix);
+
+    /// <summary>A client with the file-translation sidecar policy, on any backend and prefix.</summary>
+    public static ISqlSugarClient Client(StruoDbType dbType, string connectionString, string prefix)
     {
         var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
         {
             [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
         });
         return SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = Prefix },
+            new DatabaseOptions { DbType = dbType, ConnectionString = connectionString, TablePrefix = prefix },
             new TestCurrentUserAccessor(Guid.Empty),
             policy);
     }

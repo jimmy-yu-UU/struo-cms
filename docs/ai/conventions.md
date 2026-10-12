@@ -312,17 +312,18 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
 When a property needs a DDL column type other than SqlSugar's default C#-type mapping, prefer
 `[ColumnShape]` (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) over a literal
 `[SugarColumn(ColumnDataType = "...")]`: the shape is a dialect-neutral enum member (`LongText`,
-`TimestampWithTimeZone`) that `ColumnTypeMap.For`
+`TimestampWithTimeZone`, `Timestamp`) that `ColumnTypeMap.For`
 (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) resolves to the correct per-backend
-literal inside `SqlSugarClientFactory`'s `EntityService` hook, so the same property is *designed* to
-work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the PostgreSQL and
-SQLite literals are exercised by a live instance; the MySQL/SQL Server/Oracle literals are chosen to
-be syntactically valid and are not claimed to be verified against a live instance of those three
-(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail,
-including a source-read-only conclusion about a parenthesised-literal edge case on SQL
-Server/MySQL). A fork that only ever runs one backend is free to write
-`[SugarColumn(ColumnDataType = "...")]` directly instead — that convention is respected too,
-just at lower precedence.
+literal inside `SqlSugarClientFactory`'s `EntityService` hook (`Timestamp` sets a literal on
+MySQL/MariaDB only and keeps SqlSugar's default `DateTime` type elsewhere), so the same property is
+*designed* to work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the
+PostgreSQL and SQLite literals and the MySQL/MariaDB `Timestamp` literal are exercised by a live
+instance; the other MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are
+not claimed to be verified against a live instance of those three
+(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail, including
+a source-read-only conclusion about a parenthesised-literal edge case on SQL Server/MySQL). A fork
+that only ever runs one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly
+instead — that convention is respected too, just at lower precedence.
 
 **Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
 shape and returns before the explicit `ColumnDataType` is ever consulted

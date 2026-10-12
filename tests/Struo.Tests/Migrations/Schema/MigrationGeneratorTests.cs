@@ -119,6 +119,15 @@ public class MigrationGeneratorTests
     }
 
     [Fact]
+    public void A_zone_less_DateTime_emits_the_Timestamp_shape()
+    {
+        var source = MigrationGenerator.Generate(new MigrationSpec("CreateRevisions", 1, null, RevisionTable()));
+
+        source.Should().Contain(".WithColumn(\"createdat\").AsTimestamp(Db).NotNullable()");
+        source.Should().NotContain(".AsDateTime()");
+    }
+
+    [Fact]
     public void FileName_is_version_and_class_name() =>
         MigrationGenerator.FileName(new MigrationSpec("AddNothing", 202610070900, null, null))
             .Should().Be("202610070900_AddNothing.cs");

@@ -147,4 +147,20 @@ public sealed partial class LiveRepositoryTests
         var ar = await repo.AggregateAsync("article", new QueryModel(null, null, [], 100, 0, null), articleSpec, [], null, DeletedFilter.Exclude);
         ar.Values[AggregateOp.Max]["createdAt"].Should().BeOfType<DateTime>();
     }
+
+    [Theory, MemberData(nameof(Backends))]
+    public void Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns(string backend)
+    {
+        if (!Use(backend)) return;
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        AvgProbeAssertions.SeedAndAssert(_db);
+    }
+
+    [Theory, MemberData(nameof(Backends))]
+    public void Average_with_a_repeating_mean_is_within_a_ten_thousandth(string backend)
+    {
+        if (!Use(backend)) return;
+        _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        AvgProbeAssertions.SeedRepeatingMeanAndAssert(_db);
+    }
 }

@@ -242,14 +242,15 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `A
    already in `<dir>`. The class derives from `StruoMigration`. One logical change per migration.
 2. Express the change with FluentMigrator's portable calls (`Create.Table`, `Alter.Table`,
    `Create.Index`, `Insert.IntoTable`, …) and the type helpers: `AsString`, `AsGuid`, `AsInt64`, …,
-   plus `AsShape(shape, Db)`, `AsJson(Db)` and `AsLongText(Db)` for the types that differ per backend.
-   Branch on `StruoMigration.Db` only where a backend genuinely needs its own form. Do not write SQL strings, and
-   do not reference entity classes from a migration: a migration is a frozen snapshot of the schema at
-   the time it was written.
+   plus `AsShape(shape, Db)`, `AsJson(Db)`, `AsLongText(Db)` and `AsTimestamp(Db)` for the types that
+   differ per backend. Branch on `StruoMigration.Db` only where a backend genuinely needs its own form.
+   Do not write SQL strings, and do not reference entity classes from a migration: a migration is a
+   frozen snapshot of the schema at the time it was written.
 3. Resolve a framework table's physical name through `FrameworkTable("<logical>")` (it applies
    `Database:TablePrefix`); a fork's own tables carry no prefix. Use
    `AsShape(ColumnShape.TimestampWithTimeZone, Db)` only for a property declared
-   `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`; a plain `DateTime` property uses `AsDateTime()`. Store UTC.
+   `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`; a plain `DateTime` property uses
+   `AsTimestamp(Db)`. Store UTC.
 4. **Never edit a migration that may already be applied anywhere.** Applied versions are recorded in
    `{TablePrefix}schema_versions` by version number, so an edited file is silently not re-run. Add a
    new migration instead. Migrations are forward-only; a rollback is a further migration.
