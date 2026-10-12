@@ -244,7 +244,7 @@ public sealed class TestBackendTests
     }
 
     [Fact]
-    public void CreateUnitDatabase_reports_the_selected_backend_without_leasing()
+    public void CreateUnitDatabase_reports_the_selected_backend()
     {
         using var db = TestBackend.CreateUnitDatabase();
 
@@ -252,7 +252,7 @@ public sealed class TestBackendTests
     }
 
     [Fact]
-    public void Pool_wrapper_leases_only_when_its_connection_is_read()
+    public void Pool_wrapper_never_read_creates_nothing_and_disposes_twice()
     {
         var pool = new LiveDatabasePool(TestBackendKind.MySql);
         var db = pool.Lease();
@@ -263,6 +263,17 @@ public sealed class TestBackendTests
 
         pool.CreatedCount.Should().Be(0);
         pool.IdleCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Pool_wrapper_throws_when_read_after_dispose()
+    {
+        var db = new LiveDatabasePool(TestBackendKind.MySql).Lease();
+        db.Dispose();
+
+        var act = () => db.ConnectionString;
+
+        act.Should().Throw<ObjectDisposedException>();
     }
 
     [Fact]
@@ -278,6 +289,7 @@ public sealed class TestBackendTests
     [InlineData(StruoDbType.SqlServer)]
     [InlineData(StruoDbType.MySql)]
     [InlineData(StruoDbType.Sqlite)]
+    [InlineData(StruoDbType.Oracle)]
     public void Options_maps_the_database_and_keeps_the_default_prefix(StruoDbType dbType)
     {
         var options = new FakeDatabase(dbType, "conn-" + dbType).Options();
@@ -298,6 +310,7 @@ public sealed class TestBackendTests
     [InlineData(StruoDbType.SqlServer, SqlSugar.DbType.SqlServer)]
     [InlineData(StruoDbType.MySql, SqlSugar.DbType.MySql)]
     [InlineData(StruoDbType.Sqlite, SqlSugar.DbType.Sqlite)]
+    [InlineData(StruoDbType.Oracle, SqlSugar.DbType.Oracle)]
     public void RawConfig_maps_the_database_and_sets_nvarchar_only_for_SqlServer(
         StruoDbType dbType, SqlSugar.DbType expected)
     {

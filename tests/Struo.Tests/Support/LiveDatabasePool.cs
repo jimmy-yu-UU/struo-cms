@@ -71,17 +71,14 @@ internal sealed class LiveDatabasePool
     /// <summary>Empties <paramref name="db"/> and makes it idle, or drops it. Never throws.</summary>
     internal void Return(ITestDatabase db)
     {
-        if (!_owned.ContainsKey(db.Name))
-        {
-            // Already dropped by DropAll.
-            db.Dispose();
-            return;
-        }
+        // Already dropped by DropAll.
+        if (!_owned.ContainsKey(db.Name)) return;
         try
         {
             if (TryEmpty(db))
             {
                 _idle.Add(db);
+                if (!_owned.ContainsKey(db.Name)) PruneIdle();
                 return;
             }
             Console.Error.WriteLine($"WARNING: pooled test database '{db.Name}' on {Kind} could not be emptied; dropping it.");
@@ -90,8 +87,33 @@ internal sealed class LiveDatabasePool
         {
             Console.Error.WriteLine($"WARNING: resetting pooled test database '{db.Name}' on {Kind} failed; dropping it: {ex.Message}");
         }
-        // Stays owned, so DropAll retries a drop that failed here.
         db.Dispose();
+        // Stays owned only when the drop failed, so DropAll retries just those.
+        if (!StillExists(db.Name)) _owned.TryRemove(db.Name, out _);
+    }
+
+    private bool StillExists(string name)
+    {
+        try
+        {
+            return LiveDatabaseDdl.Exists(Kind, name);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"WARNING: could not check pooled test database '{name}' on {Kind}: {ex.Message}");
+            return true;
+        }
+    }
+
+    // Removes idle entries DropAll has already dropped.
+    private void PruneIdle()
+    {
+        var kept = new List<ITestDatabase>();
+        while (_idle.TryTake(out var idle))
+        {
+            if (_owned.ContainsKey(idle.Name)) kept.Add(idle);
+        }
+        foreach (var idle in kept) _idle.Add(idle);
     }
 
     private bool TryEmpty(ITestDatabase db)
