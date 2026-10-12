@@ -11,6 +11,7 @@ namespace Struo.Tests.Support;
 public sealed class TestDatabaseLiveTests
 {
     public static TheoryData<string> Backends => LiveBackend.Names();
+    public static TheoryData<string> MySqlFamily => LiveBackend.Names("MySql", "MariaDb");
 
     private const string DropLeftoversSwitch = "STRUO_TEST_DROP_LEFTOVERS";
 
@@ -28,6 +29,21 @@ public sealed class TestDatabaseLiveTests
         var id = Guid.NewGuid();
         client.Insertable(new ProbeRow { Id = id, Name = "probe" }).ExecuteCommand();
         client.Queryable<ProbeRow>().First(r => r.Id == id).Name.Should().Be("probe");
+    }
+
+    [Theory, MemberData(nameof(MySqlFamily))]
+    public void Created_database_stores_four_byte_characters(string backend)
+    {
+        if (!TryResolve(backend, out var kind)) return;
+        const string emoji = "😀";
+
+        using var database = TestBackend.CreateLiveDatabase(kind, "charset");
+        using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString);
+        client.CodeFirst.InitTables<ProbeRow>();
+        var id = Guid.NewGuid();
+        client.Insertable(new ProbeRow { Id = id, Name = emoji }).ExecuteCommand();
+
+        client.Queryable<ProbeRow>().First(r => r.Id == id).Name.Should().Be(emoji);
     }
 
     [Theory, MemberData(nameof(Backends))]

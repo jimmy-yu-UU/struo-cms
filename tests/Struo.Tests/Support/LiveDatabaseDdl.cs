@@ -149,7 +149,10 @@ internal static partial class LiveDatabaseDdl
             case TestBackendKind.SqlServer:
                 return new SqlConnectionStringBuilder(connectionString) { InitialCatalog = name }.ConnectionString;
             case TestBackendKind.MySql or TestBackendKind.MariaDb:
-                return new MySqlConnectionStringBuilder(connectionString) { Database = name }.ConnectionString;
+                // SqlSugar creates a utf8mb4 database only when the connection string names utf8mb4;
+                // otherwise it issues CHARACTER SET utf8 (utf8mb3), which loses 4-byte characters.
+                return new MySqlConnectionStringBuilder(connectionString) { Database = name, CharacterSet = "utf8mb4" }
+                    .ConnectionString;
             default:
                 throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind));
         }
