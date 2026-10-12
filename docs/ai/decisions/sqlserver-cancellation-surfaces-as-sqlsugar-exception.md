@@ -67,3 +67,4 @@ not covered.
 ## Referenced from
 
 - `src/Struo.Infrastructure/Persistence/CancellationAop.cs`
+- `AGENTS.md` ("Verification")

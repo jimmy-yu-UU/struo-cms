@@ -20,7 +20,7 @@ downstream forks.
   MySQL, MariaDB and SQLite, plus Oracle when an instance exists. A project built on this template
   verifies only against the database(s) it actually uses. The repository live suite and the migration
   tests run on each backend whose test connection is configured; `STRUO_TEST_BACKEND` also moves the
-  API test hosts to a live backend.
+  API test hosts and the unit harnesses to a live backend.
   See `AGENTS.md`, "Verification", for the per-backend rule, the documented divergences,
   and how to configure a test connection.
 - **Stay inside the requested scope.** Don't expand a task beyond what was asked.

@@ -12,9 +12,9 @@ change only when that change touches `docs/guide/**` or the docs project itself,
 every playbook below.
 
 **Live-database verification** is a separate, additional step for any change to DB behavior —
-`AGENTS.md`, "Verification", has the per-backend rule, the documented SQLite/PostgreSQL divergences,
-and how to configure the PostgreSQL test connection. SQLite passing is not evidence of correctness on
-another backend.
+`AGENTS.md`, "Verification", has the per-backend rule, the verified backends, the documented
+divergences, and how to configure each backend's test connection. SQLite passing is not evidence of
+correctness on another backend.
 
 ## Playbook 1: Add a collection
 
@@ -169,8 +169,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
    touched `SqlSugarClientFactory`'s column mapping — column mapping is precisely where backends
    diverge: a missing `[ColumnShape]` yields `timestamp without time zone` on PostgreSQL, and a
    text-bound `ConditionalType.Equal` against a `uuid`/`bigint` column throws `42883` there; neither
-   reproduces on SQLite at all. On PostgreSQL that means the live-PG check (strongly recommended here);
-   on another backend, its own equivalent.
+   reproduces on SQLite at all. That means a `STRUO_TEST_BACKEND` run on each backend you verify
+   against (strongly recommended here).
 
 **2c. Add a new `RelationInterface` value** — the same shape as 2b on a smaller surface: add the
 member to `src/Struo.Domain/Metadata/Enums/RelationInterface.cs`, give it an entry in

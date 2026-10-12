@@ -57,3 +57,4 @@ has no connection, so the parity claim is unmeasured there.
 - `AGENTS.md` ("Migrations are the only schema source")
 - `tests/Struo.Tests/Query/PostgresOnlyTests.cs`
 - `tests/Struo.Tests/Persistence/TranslationSidecarIndexPolicyTests.cs`
+- `AGENTS.md` ("Verification")

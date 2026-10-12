@@ -63,3 +63,4 @@ Oracle is not covered.
 ## Referenced from
 
 - `src/Struo.Infrastructure/Query/ColumnSelectorFactory.cs`
+- `AGENTS.md` ("Verification")

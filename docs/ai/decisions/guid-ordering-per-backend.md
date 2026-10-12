@@ -44,3 +44,4 @@ order of that column, which this record does not measure.
 ## Referenced from
 
 - `tests/Struo.Tests/Query/DefaultOrderingTests.cs`
+- `AGENTS.md` ("Verification")

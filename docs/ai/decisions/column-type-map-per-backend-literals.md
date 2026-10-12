@@ -27,11 +27,11 @@ not from the literal.
 
 Three of these are deliberate, non-obvious choices rather than the first vendor synonym that comes to
 mind: MySQL uses `longtext`, not `text`; MySQL uses `datetime(6)`, not `timestamp`; SqlServer uses
-`nvarchar(max)`. PostgreSQL is this repository's verified runtime target and SQLite is the test
-target (`AGENTS.md`). The MySQL/SqlServer/Oracle literals of `LongText` and `TimestampWithTimeZone`
-are chosen to be syntactically valid so that CodeFirst table creation succeeds on those backends;
-they are not claimed to be verified against a live instance of any of the three. The `Timestamp`
-literal was measured on live MySQL and MariaDB instances (Evidence).
+`nvarchar(max)`. PostgreSQL, SQL Server, MySQL and MariaDB are verified backends and SQLite is the
+test target (`AGENTS.md`). On the four verified backends the `LongText`, `TimestampWithTimeZone` and
+`Timestamp` literals are read back from live instances (Evidence). The Oracle literals are chosen to
+be syntactically valid so that CodeFirst table creation succeeds there; they are not verified against
+a live instance.
 
 `ColumnTypeMap.For` is not the only site in `src/` that writes a vendor type literal directly:
 `SqlSugarClientFactory.ApplySqliteIdentityColumnRewrite` sets `DataType` to `"INTEGER"` on a SQLite
@@ -93,8 +93,11 @@ itself tagged upstream. The tag series stops at `5.1.4.197`, with a dozen-plus u
 releases sitting strictly between it and the pin (`.212`/`.213` only ever shipped as prerelease
 builds). The endpoints were bounded, not every commit in between: the relevant methods below were
 byte-identical between the `5.1.4.197` tag and `master` when diffed, so the divergence risk is low but
-not zero. This is a source-reading conclusion, not a result verified against a live SQL Server or
-MySQL instance.
+not zero. The live suite confirms the conclusion for the pinned version: on SQL Server 2025, MySQL
+8.4.11 and MariaDB 11.8.9 `ShapedColumnAssertions.ShouldHaveShape` reads `nvarchar(max)` back as
+`nvarchar` with `Length` -1 and `datetime(6)` as `datetime` with `Length` 6, for columns built by
+CodeFirst (`ContentColumnMappingTests`, `ColumnTypeMapTests`) and by the migrations
+(`StruoMigrationTypeTests.Shapes_resolve_to_the_live_backend_literals`).
 
 Both `SqlServerDbMaintenance` and `MySqlDbMaintenance` resolve the length suffix through a
 `GetSize(DbColumnInfo item)` method that reads only `item.Length`/`item.DecimalDigits` — it never
@@ -163,13 +166,6 @@ A `DateTime` primary key skips the `EntityService` hook, so CodeFirst keeps SqlS
 it, while `make:migration` emits `AsTimestamp(Db)`. On MySQL that is `datetime` against
 `datetime(6)`. No entity has a `DateTime` primary key.
 
-Whether the parenthesised-literal reasoning in Evidence holds against a live SQL Server or MySQL
-instance is unverified — it rests on reading the source, not on running it.
-
-Whether that reasoning holds unchanged across the dozen-plus untagged `SqlSugarCore` releases between
-the closest published tag and the pinned version is unverified; Evidence bounds the risk as low but
-not zero.
-
 The Oracle mapping (`clob` for `LongText`, `timestamp with time zone` for `TimestampWithTimeZone`) is
 unverified against a live Oracle instance and was not part of the source-reading investigation at all
 (that investigation covers only the already-parenthesised SqlServer/MySQL literals).
@@ -180,3 +176,4 @@ unverified against a live Oracle instance and was not part of the source-reading
 - `AGENTS.md` ("Hard constraints")
 - `docs/ai/conventions.md` ("Citing code from docs and comments")
 - `docs/ai/conventions.md` ("Column type mapping")
+- `AGENTS.md` ("Verification")
