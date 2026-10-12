@@ -77,6 +77,7 @@ internal sealed class LiveDatabasePool
         {
             if (TryEmpty(db))
             {
+                ReleaseIdleConnections(db);
                 _idle.Add(db);
                 if (!_owned.ContainsKey(db.Name)) PruneIdle();
                 return;
@@ -90,6 +91,15 @@ internal sealed class LiveDatabasePool
         db.Dispose();
         // Stays owned only when the drop failed, so DropAll retries just those.
         if (!StillExists(db.Name)) _owned.TryRemove(db.Name, out _);
+    }
+
+    // MySqlConnector keeps one pool per connection string, so idle connections of every pooled
+    // database would add up past the server's max_connections. SQL Server keeps its pools warm,
+    // because a new login is slow; PostgreSQL test connections are not pooled.
+    private void ReleaseIdleConnections(ITestDatabase db)
+    {
+        if (Kind is TestBackendKind.MySql or TestBackendKind.MariaDb)
+            LiveDatabaseDdl.ClearPool(Kind, db.ConnectionString);
     }
 
     private bool StillExists(string name)

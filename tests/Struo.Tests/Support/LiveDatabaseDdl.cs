@@ -116,8 +116,8 @@ internal static partial class LiveDatabaseDdl
         _ => throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind)),
     };
 
-    // Clears only the pool of the connection being dropped. Never throws.
-    private static void ClearPool(TestBackendKind kind, string connectionString)
+    // Clears the client pool of exactly this connection string. Never throws.
+    internal static void ClearPool(TestBackendKind kind, string connectionString)
     {
         try
         {
