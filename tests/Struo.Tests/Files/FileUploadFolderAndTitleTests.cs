@@ -189,6 +189,21 @@ public class FileUploadFolderAndTitleTests : IDisposable
     }
 
     [Fact]
+    public async Task Upload_file_name_cut_does_not_split_a_surrogate_pair()
+    {
+        var longName = new string('a', 250) + "😀" + new string('a', 10) + ".bin";
+
+        var file = await _svc.UploadAsync(
+            new MemoryStream([1]), longName, "application/octet-stream", length: 1);
+
+        var stored = await _db.Queryable<File>().InSingleAsync(file.Id);
+        file.FileName.Length.Should().BeLessThanOrEqualTo(255);
+        char.IsHighSurrogate(file.FileName[^5]).Should().BeFalse();
+        stored.FileName.Should().NotContain("�");
+        stored.FileName.Should().Be(new string('a', 250) + ".bin");
+    }
+
+    [Fact]
     public void Clamped_file_name_does_not_split_a_surrogate_pair()
     {
         var longName = new string('a', 250) + "😀" + new string('a', 10) + ".bin";
