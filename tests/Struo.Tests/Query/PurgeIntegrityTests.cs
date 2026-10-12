@@ -76,7 +76,7 @@ internal sealed class CascadeNodeTranslation
 /// <summary>
 /// A plain M2O-to-Category relation declared OnDelete.Restrict — the sample domain has none (both
 /// of its M2O relations are SetNull), so this fixture is the only way to exercise the Restrict
-/// purge-guard against a real SQLite-backed pipeline.
+/// purge-guard against a real database-backed pipeline.
 /// </summary>
 [SugarTable("test_restrict_refs")]
 [CmsCollection("RestrictRef")]
@@ -105,16 +105,19 @@ internal sealed class RestrictRef
 /// </summary>
 internal sealed class PurgeIntegrityHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
 
-    /// <summary>The SQLite connection string backing this harness's DB file — lets a test open a
-    /// genuinely separate <c>ISqlSugarClient</c> on the same file (e.g. to prove a listener runs
-    /// post-commit: only a second connection can discriminate "row visible" from "same-connection
-    /// read", since the latter would see an uncommitted row too).</summary>
-    public string ConnectionString => _file.ConnectionString;
+    /// <summary>The database backing this harness — lets a test open a genuinely separate
+    /// <c>ISqlSugarClient</c> on the same database (e.g. to prove a listener runs post-commit:
+    /// only a second connection can discriminate "row visible" from "same-connection read",
+    /// since the latter would see an uncommitted row too).</summary>
+    public ITestDatabase Database => _database;
+
+    /// <summary>The connection string of <see cref="Database"/>.</summary>
+    public string ConnectionString => _database.ConnectionString;
 
     /// <summary>The real revision store — always DB-backed, even when <see cref="Service"/> itself
     /// was wired with a throwing wrapper around it (rollback-atomicity test).</summary>
@@ -123,7 +126,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     private PurgeIntegrityHarness(bool failDeleteRevision, IItemChangeNotifier? notifier)
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -175,7 +178,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     public static PurgeIntegrityHarness Create(bool failDeleteRevision = false, IItemChangeNotifier? notifier = null) =>
         new(failDeleteRevision, notifier);
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     // ── body / create helpers ───────────────────────────────────────────────
 
@@ -279,7 +282,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 /// <summary>
 /// Purging an item must not orphan its junction/translation/revision rows, and
 /// must honour OnDelete.SetNull/Cascade,
-/// all inside one rollback-safe transaction. Real SQLite-backed <see cref="ItemService"/>, no stubs.
+/// all inside one rollback-safe transaction. Real database-backed <see cref="ItemService"/>, no stubs.
 /// </summary>
 public sealed class PurgeIntegrityTests
 {

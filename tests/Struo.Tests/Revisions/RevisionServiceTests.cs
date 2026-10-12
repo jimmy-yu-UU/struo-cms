@@ -32,7 +32,7 @@ namespace Struo.Tests.Revisions;
 /// </summary>
 public sealed class RevisionServiceHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
@@ -45,7 +45,7 @@ public sealed class RevisionServiceHarness : IDisposable
     private RevisionServiceHarness(bool failCapture, bool canRead)
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -94,7 +94,7 @@ public sealed class RevisionServiceHarness : IDisposable
     public static RevisionServiceHarness Create(bool failCapture = false, bool canRead = true) =>
         new(failCapture, canRead);
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     private static JsonElement BodyOf(object obj)
     {

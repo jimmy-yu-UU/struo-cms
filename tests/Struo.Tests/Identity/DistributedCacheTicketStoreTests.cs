@@ -10,6 +10,7 @@ using System.Security.Claims;
 using Struo.Api.Auth;
 using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
+using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -29,7 +30,7 @@ public class DistributedCacheTicketStoreTests
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     /// <summary>
-    /// A real ServiceProvider whose scopes each resolve a fresh (but shared-SQLite-backed)
+    /// A real ServiceProvider whose scopes each resolve a fresh (but shared-database-backed)
     /// IUserSessionStore, mirroring how the real app resolves it via IServiceScopeFactory from
     /// DistributedCacheTicketStore (a singleton) per store/renew/remove call. Also owns the
     /// IDistributedCache and ILogger so a test can seed the cache directly (simulating a session that
@@ -37,8 +38,8 @@ public class DistributedCacheTicketStoreTests
     /// </summary>
     private sealed class Harness : IDisposable
     {
-        public readonly SqliteTestDatabase Db = new();
-        public readonly SqlSugarClient Client;
+        public readonly ITestDatabase Db = TestBackend.CreateUnitDatabase();
+        public readonly ISqlSugarClient Client;
         public readonly IServiceScopeFactory ScopeFactory;
         public readonly IDistributedCache Cache = MemoryCache();
         public readonly ListLogger<DistributedCacheTicketStore> Logger = new();
@@ -46,12 +47,8 @@ public class DistributedCacheTicketStoreTests
 
         public Harness()
         {
-            Client = new SqlSugarClient(new ConnectionConfig
-            {
-                ConnectionString = Db.ConnectionString,
-                DbType = DbType.Sqlite,
-                IsAutoCloseConnection = true,
-            });
+            // Empty prefix keeps the unprefixed table name; the factory applies the per-backend column shapes.
+            Client = SqlSugarClientFactory.Create(Db.Options(tablePrefix: ""), new TestCurrentUserAccessor(Guid.Empty));
             Client.CodeFirst.InitTables<UserSession>();
 
             var services = new ServiceCollection();

@@ -108,7 +108,7 @@ public sealed class SqProductSoftLabel
 
 public sealed class SubqueryPushdownHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     public ISqlSugarClient Db { get; }
     public SqlSugarItemRepository Repo { get; }
     public RelationshipGraph Graph { get; }
@@ -126,7 +126,7 @@ public sealed class SubqueryPushdownHarness : IDisposable
     public SubqueryPushdownHarness()
     {
         Db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         foreach (var t in Types) Db.CodeFirst.InitTables(t);
         var collections = MetadataScanner.ScanTypes(Types);
@@ -215,5 +215,5 @@ public sealed class SubqueryPushdownHarness : IDisposable
         string collection, AggregateSpec spec, FilterNode? filter = null, DeletedFilter deleted = DeletedFilter.Exclude, string? search = null) =>
         Repo.AggregateAsync(collection, new QueryModel(null, filter, [], 100, 0, search), spec, search is null ? [] : ["name"], null, deleted);
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 }

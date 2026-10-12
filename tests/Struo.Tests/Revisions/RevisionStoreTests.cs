@@ -9,13 +9,13 @@ using Xunit;
 
 namespace Struo.Tests.Revisions;
 
-/// <summary>Wires a SqlSugarRevisionStore over a throwaway SQLite file, mirroring
+/// <summary>Wires a SqlSugarRevisionStore over a throwaway unit database, mirroring
 /// SqlSugarItemRepositoryTests' client-construction pattern.</summary>
 public sealed class RevisionStoreHarness : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public ISqlSugarClient Db { get; }
     public IRevisionStore Store { get; }
@@ -23,7 +23,7 @@ public sealed class RevisionStoreHarness : IDisposable
     private RevisionStoreHarness()
     {
         Db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Tester));
         Db.CodeFirst.InitTables(typeof(Revision));
         Store = new SqlSugarRevisionStore(Db, new TestCurrentUserAccessor(Tester));
@@ -31,7 +31,7 @@ public sealed class RevisionStoreHarness : IDisposable
 
     public static RevisionStoreHarness Create() => new();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 }
 
 public sealed class RevisionStoreTests

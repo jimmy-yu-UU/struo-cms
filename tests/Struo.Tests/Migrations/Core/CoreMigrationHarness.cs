@@ -10,35 +10,36 @@ using Struo.Tests.Support;
 
 namespace Struo.Tests.Migrations.Core;
 
-/// <summary>Applies the core migrations to a fresh SQLite file under a unique table prefix.</summary>
+/// <summary>Applies the core migrations to a fresh unit database under a unique table prefix.</summary>
 internal sealed class CoreMigrationHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file;
-    private readonly bool _ownsFile;
+    private readonly bool _ownsDatabase;
 
-    public CoreMigrationHarness() : this(new SqliteTestDatabase(), $"t{Guid.NewGuid():N}"[..9] + "_", true) { }
+    public CoreMigrationHarness() : this(TestBackend.CreateUnitDatabase(), $"t{Guid.NewGuid():N}"[..9] + "_", true) { }
 
-    private CoreMigrationHarness(SqliteTestDatabase file, string prefix, bool ownsFile) =>
-        (_file, Prefix, _ownsFile) = (file, prefix, ownsFile);
+    private CoreMigrationHarness(ITestDatabase database, string prefix, bool ownsDatabase) =>
+        (Database, Prefix, _ownsDatabase) = (database, prefix, ownsDatabase);
+
+    public ITestDatabase Database { get; }
 
     public string Prefix { get; }
 
-    /// <summary>A harness over the same database file under another prefix; it does not delete the file.</summary>
-    public CoreMigrationHarness WithPrefix(string prefix) => new(_file, prefix, false);
+    /// <summary>A harness over the same database under another prefix; it does not dispose the database.</summary>
+    public CoreMigrationHarness WithPrefix(string prefix) => new(Database, prefix, false);
 
     public void Dispose()
     {
-        if (_ownsFile) _file.Dispose();
+        if (_ownsDatabase) Database.Dispose();
     }
 
     public MigrationHostOptions HostOptions(CoreSeedData? seed) =>
-        new(StruoDbType.Sqlite, _file.ConnectionString, Prefix,
+        new(Database.DbType, Database.ConnectionString, Prefix,
             [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 5)
         { NamespaceFilter = "Struo.Infrastructure.Migrations.Core", Seed = seed };
 
     public MigrationHost Host(CoreSeedData? seed) => new(HostOptions(seed), NullLoggerFactory.Instance);
 
-    public ISqlSugarClient Db() => Client(StruoDbType.Sqlite, _file.ConnectionString, Prefix);
+    public ISqlSugarClient Db() => Client(Database.DbType, Database.ConnectionString, Prefix);
 
     /// <summary>A client with the file-translation sidecar policy, on any backend and prefix.</summary>
     public static ISqlSugarClient Client(StruoDbType dbType, string connectionString, string prefix)

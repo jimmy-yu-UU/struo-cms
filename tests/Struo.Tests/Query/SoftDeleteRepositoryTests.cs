@@ -320,16 +320,16 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    private readonly SqliteTestDatabase _file;
+    private readonly ITestDatabase _database;
     private readonly ISqlSugarClient _db;
 
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
 
     private SoftDeleteRepositoryHarness(
-        SqliteTestDatabase file, ISqlSugarClient db, IItemRepository repo, ItemService service)
+        ITestDatabase database, ISqlSugarClient db, IItemRepository repo, ItemService service)
     {
-        _file = file;
+        _database = database;
         _db = db;
         Repository = repo;
         Service = service;
@@ -337,10 +337,10 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
 
     public static SoftDeleteRepositoryHarness Create(Guid? currentUserId = null)
     {
-        var file = new SqliteTestDatabase();
+        var database = TestBackend.CreateUnitDatabase();
         var currentUser = new TestCurrentUserAccessor(currentUserId ?? Tester);
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            database.Options(),
             currentUser);
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -375,7 +375,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
             graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
             currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
 
-        return new SoftDeleteRepositoryHarness(file, db, repo, service);
+        return new SoftDeleteRepositoryHarness(database, db, repo, service);
     }
 
     public async Task<Guid> InsertArticleAsync(string status)
@@ -405,5 +405,5 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
 
     public Guid IdOf(object row) => (Guid)row.GetType().GetProperty("Id")!.GetValue(row)!;
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 }

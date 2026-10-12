@@ -24,7 +24,7 @@ namespace Struo.Tests.Query;
 /// Trashing (soft-delete) and restoring an item must (a) increment the optimistic-lock
 /// <see cref="AuditableEntity.Version"/> in the SAME UPDATE — so a stale client 409s after a
 /// restore — and (b) capture a revision (operation "delete"/"restore") when the collection has
-/// <c>Revisions=true</c>, all inside one rollback-safe transaction. Real SQLite-backed
+/// <c>Revisions=true</c>, all inside one rollback-safe transaction. Real database-backed
 /// <see cref="ItemService"/>, no stubs — mirrors <c>PurgeIntegrityHarness</c>'s construction, with a
 /// throwing-on-capture revision-store variant for the rollback-atomicity case.
 /// </summary>
@@ -206,7 +206,7 @@ public sealed class TrashRevisionTests
 /// </summary>
 internal sealed class TrashRevisionHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
@@ -219,7 +219,7 @@ internal sealed class TrashRevisionHarness : IDisposable
     {
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             currentUser);
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -266,7 +266,7 @@ internal sealed class TrashRevisionHarness : IDisposable
 
     public static TrashRevisionHarness Create(bool failCaptureRevision = false) => new(failCaptureRevision);
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     private static JsonElement BodyOf(object obj)
     {

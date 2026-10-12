@@ -175,7 +175,7 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
             OnCall = async changes =>
             {
                 using var db = SqlSugarClientFactory.Create(
-                    new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = h.ConnectionString },
+                    h.Database.Options(),
                     new TestCurrentUserAccessor(Guid.Empty));
                 seen = await db.Queryable<Category>().In(Guid.Parse(changes[0].Id)).FirstAsync();
             },
