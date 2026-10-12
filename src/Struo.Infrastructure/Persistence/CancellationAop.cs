@@ -16,8 +16,17 @@ internal static class CancellationAop
         // OnError runs inside the catch of every Ado command; throwing here replaces the rethrow.
         client.Aop.OnError = error =>
         {
-            if (client.Ado.CancellationToken is { IsCancellationRequested: true } token)
-                throw new OperationCanceledException(error.Message, error, token);
+            if (Translate(error, client.Ado.CancellationToken) is { } cancelled) throw cancelled;
         };
+    }
+
+    // The cancellation to throw in place of `error`, or null when the error is an ordinary failure.
+    internal static OperationCanceledException? Translate(Exception error, CancellationToken? token)
+    {
+        if (token is { IsCancellationRequested: true } cancelled)
+            return new OperationCanceledException(error.Message, error, cancelled);
+        if (error.InnerException is OperationCanceledException inner)
+            return new OperationCanceledException(error.Message, error, inner.CancellationToken);
+        return null;
     }
 }
