@@ -28,7 +28,10 @@ WORKDIR /app
 COPY --from=build /app/publish ./
 # /app/logs is where Serilog's File sink (logs/struo-.log, relative to the content root) writes;
 # without a writable directory here it silently drops file logging under the non-root user below.
-RUN mkdir -p /app/App_Data /app/logs && chown -R app:app /app/App_Data /app/logs
+# The DataProtection key ring (cookie encryption keys) lives under the app user's home; owning the
+# directory here lets a named volume mounted on it start writable, so sessions survive a restart.
+RUN mkdir -p /app/App_Data /app/logs /home/app/.aspnet/DataProtection-Keys \
+    && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet
 USER app
 EXPOSE 8080
 VOLUME ["/app/App_Data"]

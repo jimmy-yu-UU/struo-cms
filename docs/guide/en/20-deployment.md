@@ -71,6 +71,9 @@ back with `Set-Cookie`), but the browser never attaches the cookie again afterwa
 ends up stuck in a "logged in, yet asked to log in again" loop. How the security policy decides
 this, and what extra rules apply once CORS is enabled, are in [Chapter 16](16-authentication.md).
 
+The one exception is `http://localhost`: browsers treat it as a secure context and send the cookie
+back, which is how the local Compose stack at the end of this chapter logs in without TLS.
+
 ### Scalar/OpenAPI are off in Production
 
 `GET /scalar` and `/openapi/v1.json` are only registered outside Production; at Production
@@ -145,9 +148,10 @@ effect too.
 ### Build
 
 Two Dockerfiles each produce an independent image: the root `Dockerfile` builds the API,
-`frontend/Dockerfile` builds the admin SPA; there's no production `docker compose` file. A local
-build and CI's `docker` job run the same two commands, except a local build conventionally tags
-`:local` while CI tags `:ci`:
+`frontend/Dockerfile` builds the admin SPA. The root `docker-compose.yml` uses both Dockerfiles to
+start a full development and testing stack, not a production deployment recipe — see "The local
+Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
+commands, except a local build conventionally tags `:local` while CI tags `:ci`:
 
 ```
 docker build --tag struo-api:local .
@@ -165,10 +169,13 @@ The image listens on `8080` and runs as the non-root user `app`. `db/migrations`
 into the image at `/app/db/migrations`; `Database:MigrationsPath` is left empty by default in this
 image, and getting migration scripts running here means setting it to this absolute path.
 
-`app` can write to two directories: `/app/App_Data` (uploaded content and the image-transform
-cache for the local files backend) and `/app/logs` (Serilog's File sink); only `/app/App_Data` is
-additionally declared as a `VOLUME`, so even a `docker run` with no `--mount`/`-v` at all still
-gets an anonymous volume here.
+`app` owns three directories: `/app/App_Data` (uploaded content and the image-transform cache for
+the local files backend), `/app/logs` (Serilog's File sink) and
+`/home/app/.aspnet/DataProtection-Keys` (the key ring, see "DataProtection keys" below). A named
+volume mounted on any of them starts writable.
+
+Only `/app/App_Data` is also declared as a `VOLUME`, so even a `docker run` with no
+`--mount`/`-v` at all still gets an anonymous volume here.
 
 `HEALTHCHECK` hits `http://localhost:8080/health/live` every 30 seconds (5-second timeout, a
 30-second start period, 3 retries) — that's liveness, not `/health/ready`. The health status
@@ -266,7 +273,8 @@ The image is only responsible for getting the application running. Terminating T
 ### Verifying both images together
 
 The three commands below create a user-defined network and start two containers that can see each
-other; this is a verification step, not a recommended production topology:
+other; this is a verification step, not a recommended production topology. The local Compose stack
+at the end of this chapter starts both images together with PostgreSQL and Redis:
 
 ```
 docker network create struo-verify
@@ -337,11 +345,40 @@ that's genuinely missing turns into an error, rather than an endless reload.
   environment variables or a secret manager are ordinary source or deployment-pipeline artifacts;
   back them up along with the rest of the deployment.
 
-## An S3-compatible store for local development
+## The local Compose stack
+
+`docker compose up -d --build` uses the two Dockerfiles above to start four services: `postgres`,
+`redis`, `api` and `admin`; [Chapter 3: Getting Started](03-getting-started.md) covers starting it
+and logging in. It's a development and testing stack: `api` runs as Production and applies
+migrations itself on every start (`Database__MigrateOnStartup`). For production, assemble your own
+deployment along the checklist earlier in this chapter.
+
+The PostgreSQL password is a fixed dev value and Redis has no password. Every port is published on
+all of the host's network interfaces, so other machines on your network can reach the database,
+Redis, the API and the admin. Run the stack only on a network you trust.
+
+The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
+`http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only
+`/api/*`, so `/health/...` on the admin port returns the SPA page. Compose gives `api` its own
+health check every 5 seconds, so `docker compose up --wait` doesn't wait out the image's default
+30-second interval.
+
+The DataProtection keys live in the `struo-dpkeys` volume and survive rebuilding the container, but
+in plain text: the first start logs a `No XML encryptor configured` warning. That's fine for
+development and testing; in production, protect the keys yourself as the "DataProtection keys"
+section above describes.
+
+### An S3-compatible store
 
 The `minio` and `createbuckets` services in `docker-compose.yml` both sit under `profiles: ["s3"]`;
 a plain `docker compose up -d` neither pulls these two images nor waits on their health checks.
-Enabling them takes `docker compose --profile s3 up -d`.
+
+The `api` service Compose starts keeps the `local` files backend, so MinIO is for an API you run
+yourself with `Struo:Files:Backend` set to `s3`. Start it next to the dependencies with:
+
+```
+docker compose --profile s3 up -d postgres redis minio createbuckets
+```
 
 `createbuckets` is one-shot: it creates the bucket `struo-media` at startup and then exits, with
 exit code `0`. `docker compose ps` filters it out by default; `docker compose ps -a` is what shows

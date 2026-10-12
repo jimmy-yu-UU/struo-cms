@@ -32,13 +32,29 @@ StruoCMS 仍在開發與測試階段，版本之間可能出現 breaking change�
 
 ## 快速開始
 
-先決條件：.NET SDK 10.0.x、Node.js 24、pnpm 10.x、Docker 加上 Compose。
+最簡單的啟動服務進行開發及測試的方式是 Docker Compose，只需要 Docker 加上 Compose：
 
-API 與管理後台也可以用容器跑，兩個 Dockerfile 都在 repo 裡；完整步驟留到之後專門介紹部署的章節。
+```bash
+docker compose up -d --build
+docker compose ps   # 等 postgres、redis、api 都顯示 (healthy)
+```
+
+開啟 `http://localhost:8080`，用預設帳號登入：`admin@admin.com` / `admin`。API 在 `http://localhost:8081`。
+第一次啟動會建立資料表並植入這組帳密；要換帳密，第一次啟動前在 `.env` 設
+`STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。
+
+- 埠號：被佔用時，複製 `.env.example` 成 `.env`，覆寫 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、
+  `STRUO_PG_PORT` 或 `STRUO_REDIS_PORT`。
+- 這套服務以 Production 執行，session cookie 帶 Secure：在 `http://localhost` 能登入，用其他主機名稱
+  連進來，前面要先架 HTTPS。
+- `docker compose down` 保留資料；`docker compose down -v` 連資料一起刪。
+
+做開發或有特殊需求時，只起你需要的服務，其餘自己跑。先決條件：.NET SDK 10.0.x、Node.js 24、pnpm 10.x、
+Docker 加上 Compose。
 
 ```bash
 # 1. 啟動 PostgreSQL 與 Redis
-docker compose up -d
+docker compose up -d postgres redis
 
 # 2. 設定 API（gitignore 排除的本機設定檔）
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json

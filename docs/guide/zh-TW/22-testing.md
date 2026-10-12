@@ -152,13 +152,20 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 
 `docker`：建置兩個容器映像並各自跑一次 smoke test，映像標成 `struo-api:ci`／
 `struo-admin:ci`（跟你在[第 20 章：部署](20-deployment.md)裡建置時用的 `:local` 不是同一
-個標籤）。
+個標籤），接著起整套 Compose 環境再測一次。
 
 API 映像用 `Database__DbType=Sqlite`、
 `Database__ConnectionString=Data Source=/tmp/struo-ci.db` 啟動，輪詢 `/health/ready` 直到
 健康；SPA 映像啟動後，輪詢首頁並確認回應裡有 `assets/index-` 這個片段，證明建置出來的資源
-真的能透過 nginx 拿到。這個 job 不需要任何 secret，一個 fork 送來的 pull request 或
-Dependabot 的更新一樣能完整跑完。
+真的能透過 nginx 拿到。
+
+Compose 那一段跑 `docker compose up --wait`，映像由同樣兩份 Dockerfile 另外建置；接著檢查
+8081 埠上 API 的 `/health/ready`、8080 埠上後台首頁有沒有同一個 `assets/index-` 片段，再透過
+nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --volumes`，有檢查失敗就先
+印出 `docker compose logs`。
+
+這個 job 不需要任何 secret，一個 fork 送來的 pull request 或 Dependabot 的更新一樣能完整
+跑完。
 
 `sonar-backend`、`sonar-frontend` 把分析結果送到 SonarQube Cloud，兩個 job 都要
 `SONAR_TOKEN`：Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個

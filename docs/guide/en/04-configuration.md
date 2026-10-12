@@ -47,15 +47,21 @@ following environment-specific behavior:
 - Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
   unchanged default admin password.
 
-These four are host-facing ports in `docker-compose.yml`; they never reach the API's own
+These six are host-facing ports in `docker-compose.yml`; they never reach the API's own
 configuration:
 
 - `STRUO_PG_PORT`
 - `STRUO_REDIS_PORT`
+- `STRUO_ADMIN_PORT`
+- `STRUO_API_PORT`
 - `STRUO_MINIO_PORT`
 - `STRUO_MINIO_CONSOLE_PORT`
 
 If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to match.
+
+`STRUO_ADMIN_EMAIL` and `STRUO_ADMIN_PASSWORD` are different: Compose passes them to its `api`
+service as `Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password`. They only affect the
+API that Compose starts, not one you run yourself.
 
 ## Database
 

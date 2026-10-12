@@ -1,7 +1,23 @@
-# Local development dependencies for StruoCMS.
-#   docker compose up -d                    # PostgreSQL + Redis (all the default setup needs)
-#   docker compose --profile s3 up -d       # ...plus MinIO, only if Struo:Files:Backend is "s3"
-# These credentials are for local development only — never reuse them anywhere else.
+# StruoCMS on Docker Compose.
+#   docker compose up -d --build            # PostgreSQL + Redis + API + admin SPA, ready to log in
+#   docker compose up -d postgres redis     # only the dependencies, for development
+#   docker compose --profile s3 up -d postgres redis minio createbuckets
+#                                           # dependencies plus MinIO, for an API you run
+#                                           # yourself with Struo:Files:Backend "s3"
+# `up -d --build` is the simplest way to start the services for development and testing. For
+# development work or special needs, start only the services you need and run the rest yourself,
+# e.g. `docker compose up -d postgres redis` followed by `dotnet run` and the frontend dev server.
+#
+# By default the admin SPA is at http://localhost:8080 and the API at http://localhost:8081
+# (STRUO_ADMIN_PORT / STRUO_API_PORT). Container and volume names carry the Compose project name
+# (the checkout's folder name), so stacks from different checkouts can run side by side as long
+# as their host ports differ. The first start migrates the database and seeds an admin account:
+# admin@admin.com / admin by default, overridable with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD.
+# The api service runs as Production, so the session cookie is Secure: login works on
+# http://localhost (browsers treat it as a secure context) but any other host name needs HTTPS
+# in front of the admin.
+# The database and MinIO credentials and the default admin account are for local development
+# only — never reuse them anywhere else.
 #
 # Ports below default to the conventional values a clean machine expects. If any of them is
 # already bound on your machine, override the host side without editing this tracked file:
@@ -9,11 +25,11 @@
 # your shell, e.g.:
 #   STRUO_PG_PORT=55432 docker compose up -d
 # Variables: STRUO_PG_PORT (postgres, default 5432), STRUO_REDIS_PORT (redis, default 6379),
+# STRUO_ADMIN_PORT (admin SPA, default 8080), STRUO_API_PORT (API, default 8081),
 # STRUO_MINIO_PORT / STRUO_MINIO_CONSOLE_PORT (minio API/console, default 9000/9001).
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: struo-postgres
     environment:
       POSTGRES_DB: struo
       POSTGRES_USER: struo
@@ -30,7 +46,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: struo-redis
     ports:
       - "${STRUO_REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -38,6 +53,45 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__DbType: PostgreSQL
+      Database__ConnectionString: Host=postgres;Port=5432;Database=struo;Username=struo;Password=struo
+      Database__MigrateOnStartup: "true"
+      Redis__ConnectionString: redis:6379
+      Auth__BootstrapAdmin__Email: ${STRUO_ADMIN_EMAIL:-admin@admin.com}
+      Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${STRUO_API_PORT:-8081}:8080"
+    # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the
+    # API is live; start_period leaves room for the first start's migrations.
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - struo-appdata:/app/App_Data
+      - struo-dpkeys:/home/app/.aspnet/DataProtection-Keys
+
+  admin:
+    build: frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: http://api:8080
+    ports:
+      - "${STRUO_ADMIN_PORT:-8080}:80"
 
   # S3-compatible object storage. Only needed when Struo:Files:Backend is "s3";
   # the default "local" backend writes to App_Data/uploads and needs no container. Behind the
@@ -48,7 +102,6 @@ services:
   # tag ever disappears from the registry, substitute your own object-storage image.
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: struo-minio
     profiles: ["s3"]
     command: server /data --console-address ":9001"
     environment:
@@ -69,7 +122,6 @@ services:
   # it as Exited (0) once done — that is success; plain `docker compose ps` omits it entirely.
   createbuckets:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    container_name: struo-createbuckets
     profiles: ["s3"]
     depends_on:
       minio:
@@ -83,4 +135,6 @@ services:
 
 volumes:
   struo-pgdata:
+  struo-appdata:
+  struo-dpkeys:
   struo-miniodata:
