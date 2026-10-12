@@ -179,7 +179,7 @@ migration: a deployment that baselines later records it as applied without ever 
 A utf8mb3 or latin1 database in strict mode rejects 4-byte characters such as emoji, and the API
 answers `INTERNAL_SERVER_ERROR`. Change the database default first, so tables created by later
 migrations inherit it; then print a conversion statement for every table not yet utf8mb4, review, and
-run them. These statements were run on MySQL 8.4 only; MariaDB is not verified:
+run them. These statements were run on MySQL 8.4 and MariaDB 11.8:
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;

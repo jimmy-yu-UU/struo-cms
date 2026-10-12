@@ -11,21 +11,31 @@ Each item below is a setting that's easy to get wrong, with a consequence that i
 full meaning of each key is in [Chapter 4: Configuration Reference](04-configuration.md); this
 section covers only the deployment consequence.
 
-### `Database:MigrationsPath` must be absolute
+### Run `migrate` before the new API goes live
 
-`MigrationRunner.ApplyAsync` passes the configured value straight to `Directory.Exists`, without
-first resolving it against the application's own folder.
+`Database:MigrateOnStartup` defaults to `false`: while the database has pending migrations, the API
+refuses to start (see "What fails fast at startup" below). The deployment therefore runs `migrate`
+once before the new API starts — as a one-off job, an init container, or
+`docker run --rm … <image> migrate`. Alternatively, set `Database__MigrateOnStartup=true` and the
+API applies them itself before it starts serving.
 
-A relative path therefore resolves against the process's working directory at startup, not the
-application's own folder — systemd's `WorkingDirectory`, a container's `WORKDIR`, or any launcher
-that changes directory before starting the process can all disagree with it, and a directory that
-doesn't exist makes startup fail outright (see "What fails fast at startup" below).
+When several replicas all have `MigrateOnStartup` set, they queue on the migration lock and only one
+applies; a replica that waits longer than `Database:MigrationLockTimeoutSeconds` fails to start.
+Oracle takes no lock, so make sure `migrate` runs in one place only.
 
-### Change the bootstrap password before the first start
+Migrations only go forward and there is no rollback command, so back up the database first.
+Production does not run the schema check at startup; run `migrate:check` yourself after `migrate`.
+The commands and the lock are covered in
+[Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
 
-`Auth:BootstrapAdmin:Password` is read exactly once, the moment the `struo_users` table is first
-created; restarting the process after changing this value has no effect on the account that
-already exists. Starting in Production with the default value only logs a Warning naming this
+### Change the bootstrap password before the first `migrate`
+
+`Auth:BootstrapAdmin:Password` is read exactly once, the first time the core seed migration runs;
+changing this value afterward has no effect on the account that already exists. When `migrate` runs
+as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
+environment plays no part in seeding.
+
+Starting in Production with the default value only logs a Warning naming this
 setting key — it doesn't block startup.
 
 That warning compares against the value currently in configuration, not the hash actually stored
@@ -115,16 +125,17 @@ bound with `ValidateOnStart`: a missing `Database:ConnectionString`, `Oidc:Enabl
 `ClientId`, or a `Query:MaxLimit` outside its range all throw an `OptionsValidationException` and
 fail startup before the application ever starts accepting requests.
 
-`Database:MigrationsPath` pointing at a directory that doesn't exist is another example of this
-same fail-fast mechanism:
+A database with pending migrations while `MigrateOnStartup` is `false` is another example of this
+same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[11:24:56 FTL] StruoCMS host terminated unexpectedly
-System.IO.DirectoryNotFoundException: MigrationRunner: migrations directory not found: 'D:/does-not-exist/migrations'. Check the Database:MigrationsPath configuration value.
+[10:35:35 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
 ```
 
-The process then exits with code `1`, followed by a stack trace (omitted here); the message itself
-names the setting key at fault.
+The process then exits with code `1`; the stack trace that follows is omitted here. The message
+itself names the command to run and the setting key.
 
 One more thing that has nothing to do with configuration, but is decided just as early at the top
 of startup: the process pins its whole default culture to invariant from the start, so the
@@ -165,9 +176,9 @@ can reach, plus the root `Directory.Build.props`/`Directory.Packages.props`. The
 
 ### The API image
 
-The image listens on `8080` and runs as the non-root user `app`. `db/migrations` is already copied
-into the image at `/app/db/migrations`; `Database:MigrationsPath` is left empty by default in this
-image, and getting migration scripts running here means setting it to this absolute path.
+The image listens on `8080` and runs as the non-root user `app`. It applies no migrations when it
+starts: the entry point is `dotnet Struo.Api.dll`, so `docker run --rm … struo-api:local migrate`
+runs `migrate` against the database. Otherwise, set `Database__MigrateOnStartup=true`.
 
 `app` owns three directories: `/app/App_Data` (uploaded content and the image-transform cache for
 the local files backend), `/app/logs` (Serilog's File sink) and
@@ -191,8 +202,8 @@ it has; the full meaning of every other setting key is in [Chapter 4](04-configu
   `Oracle`).
 - `Database__ConnectionString` — required; the image's default value is a PostgreSQL connection
   string with a `REPLACE_ME` placeholder, and it can't be used as-is.
-- `Database__MigrationsPath` (optional) — leave empty to disable migration scripts; to turn them
-  on, set it to this image's absolute path, `/app/db/migrations`.
+- `Database__MigrateOnStartup` (optional) — unset means `false`, and the deployment runs
+  `migrate` separately; set to `true`, the API applies migrations itself when it starts.
 - `Redis__ConnectionString` — leaving it empty means a single replica with an in-process cache
   that doesn't survive a restart.
 - `Struo__Files__Backend` — defaults to `local`, writing into `/app/App_Data` (inside the
@@ -272,15 +283,22 @@ The image is only responsible for getting the application running. Terminating T
 
 ### Verifying both images together
 
-The three commands below create a user-defined network and start two containers that can see each
-other; this is a verification step, not a recommended production topology. The local Compose stack
-at the end of this chapter starts both images together with PostgreSQL and Redis:
+The five commands below create a user-defined network and a volume, run `migrate` against a SQLite
+database in that volume, and then start two containers that can see each other; this is a
+verification step, not a recommended production topology. The local Compose stack at the end of
+this chapter starts both images together with PostgreSQL and Redis:
 
 ```
 docker network create struo-verify
-docker run --detach --name api --network struo-verify --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
+docker volume create struo-verify-data
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
 ```
+
+The third command ends by printing `Applied 202610080000  CreateCoreSchema` and
+`Applied 202610080001  SeedCoreData`. Without it, the `api` container exits with the message shown
+in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit
 on this same user-defined network, and the API container is named `api`. If the API container
@@ -330,9 +348,10 @@ that's genuinely missing turns into an error, rather than an endless reload.
 
 ## Backups
 
-- **Database** — apart from uploaded files, PostgreSQL is the authoritative source for every
-  other piece of data; back it up with ordinary PostgreSQL tools: `pg_dump`, `pg_basebackup`, or a
-  managed service's own snapshots and PITR. StruoCMS provides no backup mechanism of its own.
+- **Database** — apart from uploaded files, the database is the authoritative source for every
+  other piece of data; back it up with your backend's own tools, such as PostgreSQL's `pg_dump`, or
+  a managed service's snapshots and PITR. StruoCMS provides no backup mechanism of its own.
+  Migrations have no rollback command, so back up before every `migrate`.
 - **Uploaded files** — stored outside the database; where to back them up depends on
   `Struo:Files:Backend`: `local` mode means backing up the `Local:RootPath` directory, `s3` mode
   relies on the S3-compatible bucket's own versioning or replication; backing up only the database
@@ -341,9 +360,9 @@ that's genuinely missing turns into an error, rather than an endless reload.
   ticket behind a cookie session, account login-failure counters, and session revocation records.
   Losing it only forces every logged-in user to log in again and resets the login counters; it
   isn't an authoritative source and needs no separate backup.
-- **Scripts and configuration** — `db/migrations/`, `appsettings.*`, and the values in
-  environment variables or a secret manager are ordinary source or deployment-pipeline artifacts;
-  back them up along with the rest of the deployment.
+- **Migrations and configuration** — the fork's own migration classes, `appsettings.*`, and the
+  values in environment variables or a secret manager are ordinary source or deployment-pipeline
+  artifacts; back them up along with the rest of the deployment.
 
 ## The local Compose stack
 
@@ -390,5 +409,6 @@ updating `Struo:Files:S3:Endpoint` in `appsettings.Development.json` to match.
 
 ## What's next
 
-That's deployment covered; how the database schema is layered and how to upgrade the core across a
-fork is in [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
+That's deployment covered; how migrations create and change the database schema, and how the core's
+schema changes reach your fork, is in
+[Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).

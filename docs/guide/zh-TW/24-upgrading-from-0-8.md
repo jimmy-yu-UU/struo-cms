@@ -165,7 +165,7 @@ ORDER BY TABLE_NAME;
 
 utf8mb3 或 latin1 的資料庫在嚴格模式下會拒絕 emoji 這類 4 位元組字元，API 回
 `INTERNAL_SERVER_ERROR`。先改資料庫預設值，之後 migration 建的表才會沿用；再印出每張還不是
-utf8mb4 的表的轉換語句，檢查後執行。這組語句只在 MySQL 8.4 上實際跑過，MariaDB 還沒有驗證：
+utf8mb4 的表的轉換語句，檢查後執行。這組語句在 MySQL 8.4 與 MariaDB 11.8 上實際跑過：
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;
