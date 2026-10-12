@@ -9,22 +9,12 @@ using Xunit;
 namespace Struo.Tests.Search;
 
 /// <summary>
-/// The candidate branch of FilterTranslator, observed through the repository on the SQLite pushdown
+/// The candidate branch of FilterTranslator, observed through the repository on the pushdown
 /// harness: SQL shape (typed `id IN` literals / `IS NULL`, never LIKE) and the three call sites
 /// (list, facet, aggregate) all honouring the same candidate set.
 /// </summary>
-public sealed partial class SearchCandidateSqlShapeTests : IDisposable
+public sealed class SearchCandidateSqlShapeTests : IDisposable
 {
-    // Source-generated regexes (SYSLIB1045) for the two constant patterns pinning the candidate
-    // branch's typed `id` shapes — mirrors FilterTranslatorSqlShapeTests.SqPrefixRegex. The
-    // interpolated-Guid patterns elsewhere in this file stay dynamic (a literal id per test run) and
-    // so cannot be source-generated.
-    [GeneratedRegex(@"`Id`\s+IS\s+NULL")]
-    private static partial Regex IdIsNullRegex();
-
-    [GeneratedRegex(@"`Id`\s+IN\s+\(([^)]*)\)")]
-    private static partial Regex IdInRegex();
-
     private readonly SubqueryPushdownHarness _h = new();
     private readonly List<string> _sql = [];
     private readonly Guid _alpha1 = Guid.NewGuid(), _alpha2 = Guid.NewGuid(), _beta = Guid.NewGuid();
@@ -42,6 +32,10 @@ public sealed partial class SearchCandidateSqlShapeTests : IDisposable
     }
 
     public void Dispose() => _h.Dispose();
+
+    // The `Id` column quoted the way the selected backend's SQL builder quotes it, as a regex fragment.
+    private string IdColumn => Regex.Escape(_h.Db.Queryable<SqProduct>().QueryBuilder.Builder
+        .GetTranslationColumnName(_h.Db.EntityMaintenance.GetDbColumnName<SqProduct>(nameof(SqProduct.Id))));
 
     private static QueryModel Q(string? search, IReadOnlyList<object>? candidates, FilterNode? filter = null) =>
         new QueryModel(null, filter, [], 100, 0, search) { SearchCandidates = candidates };
@@ -70,7 +64,7 @@ public sealed partial class SearchCandidateSqlShapeTests : IDisposable
         // cover this case); either rendering is a typed, unparameterized literal comparing `Id`
         // against exactly `_beta`, so both are accepted here.
         _sql.Should().OnlyContain(s => Regex.IsMatch(
-            s, @"`Id`\s+(=\s*'" + _beta + @"'|IN\s+\('" + _beta + @"'\))"));
+            s, IdColumn + @"\s+(=\s*'" + _beta + @"'|IN\s+\('" + _beta + @"'\))"));
     }
 
     [Fact]
@@ -79,7 +73,8 @@ public sealed partial class SearchCandidateSqlShapeTests : IDisposable
         var r = await ListAsync(Q("alpha", []));
         r.Total.Should().Be(0);
         r.Rows.Should().BeEmpty();
-        _sql.Should().OnlyContain(s => IdIsNullRegex().IsMatch(s));
+        var idIsNull = new Regex(IdColumn + @"\s+IS\s+NULL");
+        _sql.Should().OnlyContain(s => idIsNull.IsMatch(s));
         _sql.Should().NotContain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -103,9 +98,10 @@ public sealed partial class SearchCandidateSqlShapeTests : IDisposable
         // with every id present as a quoted literal (order unconstrained — SqlSugar's own), and
         // never as an `@`-parameterized placeholder in that clause.
         var expected = new[] { _alpha1, _beta, _alpha2 }.Select(g => g.ToString()).ToHashSet();
+        var idIn = new Regex(IdColumn + @"\s+IN\s+\(([^)]*)\)");
         foreach (var s in _sql)
         {
-            var match = IdInRegex().Match(s);
+            var match = idIn.Match(s);
             match.Success.Should().BeTrue($"expected a typed `Id` IN (...) clause in: {s}");
             match.Groups[1].Value.Should().NotContain("@");
             match.Groups[1].Value.Split(',').Select(v => v.Trim().Trim('\'')).ToHashSet()

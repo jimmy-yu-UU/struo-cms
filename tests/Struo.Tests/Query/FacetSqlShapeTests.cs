@@ -1,5 +1,6 @@
 // tests/Struo.Tests/Query/FacetSqlShapeTests.cs
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
@@ -14,19 +15,32 @@ namespace Struo.Tests.Query;
 
 public class FacetSqlShapeTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
 
     public FacetSqlShapeTests()
     {
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
+        _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Category>();
         _db.CodeFirst.InitTables<ArticleTag>();
     }
 
     public void Dispose() { _file.Dispose(); GC.SuppressFinalize(this); }
+
+    // Regex fragments for identifiers quoted the way the selected backend's SQL builder quotes them.
+    private string Col<T>(string property) where T : class, new() =>
+        Quoted<T>(_db.EntityMaintenance.GetDbColumnName<T>(property));
+
+    private string Alias(string name) => Quoted<Category>(name);
+
+    private string Table<T>() where T : class, new() =>
+        Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationTableName(_db.EntityMaintenance.GetTableName<T>()));
+
+    // The repository casts integral AVG operands to float on SQL Server (AggregateQueries); the projection here does the same.
+    private bool FloatAverageOfIntegers => _db.CurrentConnectionConfig.DbType == DbType.SqlServer;
+
+    private string Quoted<T>(string name) where T : class, new() =>
+        Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationColumnName(name));
 
     private static ISugarQueryable<FacetRow<TValue>> Facet<T, TValue>(ISugarQueryable<T> q, string valueProp, string countProp, bool distinct, int take) where T : class, new()
     {
@@ -48,9 +62,11 @@ public class FacetSqlShapeTests : IDisposable
 
         var q = Facet<Category, Guid?>(_db.Queryable<Category>(), "ParentId", "Id", distinct: false, take: 10);
         var sql = q.ToSql().Key;
-        sql.Should().MatchRegex(@"GROUP BY\s+`ParentId`");
-        sql.Should().MatchRegex(@"COUNT\(`Id`\)\s+AS\s+`Count`");
-        sql.Should().MatchRegex(@"ORDER BY\s+COUNT\(`Id`\)\s+DESC,\s*`ParentId`\s+ASC");
+        var parentId = Col<Category>("ParentId");
+        var id = Col<Category>("Id");
+        sql.Should().MatchRegex($@"GROUP BY\s+{parentId}");
+        sql.Should().MatchRegex($@"COUNT\({id}\)\s+AS\s+{Alias("Count")}");
+        sql.Should().MatchRegex($@"ORDER BY\s+COUNT\({id}\)\s+DESC,\s*{parentId}\s+ASC");
         sql.Should().NotContain("SqlSugar.");
         var rows = q.ToList();
         rows.Should().HaveCount(2);
@@ -70,7 +86,7 @@ public class FacetSqlShapeTests : IDisposable
         }).ExecuteCommand();
 
         var q = Facet<ArticleTag, Guid>(_db.Queryable<ArticleTag>(), "TagId", "ArticleId", distinct: true, take: 10);
-        q.ToSql().Key.Should().MatchRegex(@"COUNT\(DISTINCT\s+`ArticleId`\s*\)\s+AS\s+`Count`");
+        q.ToSql().Key.Should().MatchRegex($@"COUNT\(DISTINCT\s+{Col<ArticleTag>("ArticleId")}\s*\)\s+AS\s+{Alias("Count")}");
         var rows = q.ToList();
         rows[0].Value.Should().Be(t1); rows[0].Count.Should().Be(2);
         rows[1].Value.Should().Be(t2); rows[1].Count.Should().Be(1);
@@ -94,7 +110,7 @@ public class FacetSqlShapeTests : IDisposable
             .Select((Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id")).ToSql();
         var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, _db.EntityMaintenance.GetDbColumnName<Category>("ParentId"), sub);
         var q = Facet<Category, string>(_db.Queryable<Category>().Where(new List<IConditionalModel> { wrapped }), "Name", "Id", false, 10);
-        q.ToSql().Key.Should().MatchRegex(@"IN \(SELECT `Id` FROM `categories`");
+        q.ToSql().Key.Should().MatchRegex($@"IN \(SELECT {Col<Category>("Id")} FROM {Table<Category>()}");
         q.ToList().Select(r => r.Value).Should().Equal("B");
     }
 
@@ -107,14 +123,17 @@ public class FacetSqlShapeTests : IDisposable
             new ArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 4, Note = null },
         }).ExecuteCommand();
         var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
-            [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")], false);
+            [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")],
+            FloatAverageOfIntegers);
         var q = _db.Queryable<ArticleTag>().Select(proj);
         var sql = q.ToSql().Key;
-        sql.Should().MatchRegex(@"SUM\(`Sort`\)\s+AS\s+`V0`");
-        sql.Should().MatchRegex(@"MIN\(`Sort`\)\s+AS\s+`V1`");
-        sql.Should().MatchRegex(@"MAX\(`Sort`\)\s+AS\s+`V2`");
-        sql.Should().MatchRegex(@"AVG\(`Sort`\)\s+AS\s+`V3`");
-        sql.Should().MatchRegex(@"COUNT\(`Note`\)\s+AS\s+`V4`");
+        var sort = Col<ArticleTag>("Sort");
+        sql.Should().MatchRegex($@"SUM\({sort}\)\s+AS\s+{Alias("V0")}");
+        sql.Should().MatchRegex($@"MIN\({sort}\)\s+AS\s+{Alias("V1")}");
+        sql.Should().MatchRegex($@"MAX\({sort}\)\s+AS\s+{Alias("V2")}");
+        var averaged = FloatAverageOfIntegers ? $@"\s*CAST\({sort} AS FLOAT\)\s*" : sort;
+        sql.Should().MatchRegex($@"AVG\({averaged}\)\s+AS\s+{Alias("V3")}");
+        sql.Should().MatchRegex($@"COUNT\({Col<ArticleTag>("Note")}\)\s+AS\s+{Alias("V4")}");
         var r = q.First()!;
         Convert.ToInt64(r.V0).Should().Be(5);
         Convert.ToInt64(r.V4).Should().Be(1);
@@ -170,9 +189,10 @@ public class FacetSqlShapeTests : IDisposable
         var exclude = DeletedScope.Root<Category>(_db, [], DeletedFilter.Exclude).ToSql().Key;
         var with = DeletedScope.Root<Category>(_db, [], DeletedFilter.With).ToSql().Key;
         var only = DeletedScope.Root<Category>(_db, [], DeletedFilter.Only).ToSql().Key;
-        exclude.Should().MatchRegex(@"`DeletedAt`\s+IS\s+NULL");
-        with.Should().NotMatchRegex(@"`DeletedAt`\s+IS\s+(NOT\s+)?NULL");
-        only.Should().MatchRegex(@"`DeletedAt`\s+IS\s+NOT\s+NULL");
-        only.Should().NotMatchRegex(@"`DeletedAt`\s+IS\s+NULL\b(?!\s*OR)");
+        var deletedAt = Col<Category>("DeletedAt");
+        exclude.Should().MatchRegex($@"{deletedAt}\s+IS\s+NULL");
+        with.Should().NotMatchRegex($@"{deletedAt}\s+IS\s+(NOT\s+)?NULL");
+        only.Should().MatchRegex($@"{deletedAt}\s+IS\s+NOT\s+NULL");
+        only.Should().NotMatchRegex($@"{deletedAt}\s+IS\s+NULL\b(?!\s*OR)");
     }
 }
