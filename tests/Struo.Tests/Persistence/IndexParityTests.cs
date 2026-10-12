@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Metadata;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
@@ -22,12 +23,10 @@ namespace Struo.Tests.Persistence;
 /// </summary>
 public sealed class IndexParityTests
 {
-    private static (SqliteTestDatabase, ISqlSugarClient) NewClient()
+    private static (ITestDatabase, ISqlSugarClient) NewClient()
     {
-        var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
+        var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
         return (db, client);
     }
 
@@ -47,9 +46,9 @@ public sealed class IndexParityTests
         return data;
     }
 
-    private static List<(string Name, bool Unique)> Indexes(ISqlSugarClient client) =>
-        client.Ado.SqlQuery<dynamic>("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
-            .Select(r => ((string)r.name, ((string)r.sql).Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)))
+    private static List<(string Name, bool Unique)> Indexes(ISqlSugarClient client, StruoDbType dbType, params Type[] types) =>
+        types.SelectMany(t => IndexCatalog.Read(client, dbType, client.EntityMaintenance.GetTableName(t)))
+            .Select(i => (i.Name, i.IsUnique))
             .ToList();
 
     [Theory]
@@ -64,7 +63,7 @@ public sealed class IndexParityTests
             var declaredUnique = type.GetCustomAttributes<SugarIndexAttribute>()
                 .Single(a => a.IndexName == declaredName).IsUnique;
 
-            var emitted = Indexes(client);
+            var emitted = Indexes(client, db.DbType, type);
             emitted.Select(i => i.Name).Should().Contain(expected);
             emitted.Single(i => i.Name == expected).Unique.Should().Be(declaredUnique);
         }
@@ -79,11 +78,11 @@ public sealed class IndexParityTests
             var types = CoreIndexedEntities.ToArray();
 
             client.CodeFirst.InitTables(types);
-            var firstPass = Indexes(client);
+            var firstPass = Indexes(client, db.DbType, types);
 
             var act = () => client.CodeFirst.InitTables(types);
             act.Should().NotThrow();
-            var secondPass = Indexes(client);
+            var secondPass = Indexes(client, db.DbType, types);
 
             // A regression here (e.g. {table} left unresolved on the second pass) would surface as either
             // a duplicate-name error from SqlSugar's "does the index exist" check or a second, differently

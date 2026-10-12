@@ -66,7 +66,7 @@ public sealed class TranslationSidecarIndexPolicyTests
         public string Locale { get; set; } = "";
     }
 
-    // ── Hook end-to-end on SQLite. The index catalog read is name-agnostic (uniqueness + column
+    // ── Hook end-to-end. The index catalog read is name-agnostic (uniqueness + column
     //    coverage), so a unique index over (fk, locale) is the acceptance criterion, not a proxy.
 
     [SugarTable("policy_probe_translations")]
@@ -84,22 +84,29 @@ public sealed class TranslationSidecarIndexPolicyTests
             typeof(PolicyProbeTranslation), nameof(PolicyProbeTranslation.PolicyProbeId), nameof(PolicyProbeTranslation.Locale)),
     });
 
-    private static ISqlSugarClient NewSqliteClient(SqliteTestDatabase db, TranslationSidecarIndexPolicy? policy) =>
+    private static ISqlSugarClient NewClient(ITestDatabase db, TranslationSidecarIndexPolicy? policy) =>
         policy is null
-            ? SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty))
-            : SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty), policy);
+            ? SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty))
+            : SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty), policy);
 
-    private static bool HasUniqueIndexOn(ISqlSugarClient client, string table, params string[] columns) =>
-        IndexCatalog.Read(client, StruoDbType.Sqlite, table).Any(i => i.IsUnique
+    private static bool HasUniqueIndexOn(ISqlSugarClient client, StruoDbType dbType, string table, params string[] columns) =>
+        IndexCatalog.Read(client, dbType, table).Any(i => i.IsUnique
             && i.Columns.Order(StringComparer.OrdinalIgnoreCase)
                 .SequenceEqual(columns.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase));
 
-    private static bool HasProbeUnique(ISqlSugarClient client) => HasUniqueIndexOn(
+    // Unique indexes other than the primary key: the catalog also reports the key's own index.
+    private static List<DbIndex> UniqueSecondaryIndexes<T>(ISqlSugarClient client, StruoDbType dbType)
+    {
+        var key = client.EntityMaintenance.GetEntityInfo<T>().Columns.Where(c => c.IsPrimarykey)
+            .Select(c => c.DbColumnName).ToList();
+        return IndexCatalog.Read(client, dbType, client.EntityMaintenance.GetTableName<T>())
+            .Where(i => i.IsUnique && !i.Columns.SequenceEqual(key, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static bool HasProbeUnique(ISqlSugarClient client, StruoDbType dbType) => HasUniqueIndexOn(
         client,
+        dbType,
         client.EntityMaintenance.GetTableName<PolicyProbeTranslation>(),
         client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.PolicyProbeId)),
         client.EntityMaintenance.GetDbColumnName<PolicyProbeTranslation>(nameof(PolicyProbeTranslation.Locale)));
@@ -107,26 +114,28 @@ public sealed class TranslationSidecarIndexPolicyTests
     [Fact]
     public void With_policy_InitTables_emits_the_composite_unique_index()
     {
-        using var db = new SqliteTestDatabase();
-        var client = NewSqliteClient(db, ProbePolicy());
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = NewClient(db, ProbePolicy());
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(PolicyProbeTranslation));
 
-        HasProbeUnique(client).Should().BeTrue();
+        HasProbeUnique(client, db.DbType).Should().BeTrue();
 
         var pid = Guid.NewGuid();
         client.Insertable(new PolicyProbeTranslation { PolicyProbeId = pid, Locale = "en", Title = "a" }).ExecuteCommand();
         var dup = () => client.Insertable(new PolicyProbeTranslation { PolicyProbeId = pid, Locale = "en", Title = "b" }).ExecuteCommand();
-        dup.Should().Throw<Exception>().Which.Message.Should().Contain("UNIQUE");
+        dup.Should().Throw<Exception>("the (fk, locale) unique index must reject a second row for the same pair");
+        client.Queryable<PolicyProbeTranslation>().Where(t => t.PolicyProbeId == pid).Select(t => t.Title).ToList()
+            .Should().Equal("a");
     }
 
     [Fact]
     public void Without_policy_the_same_sidecar_gets_no_unique_index()
     {
-        using var db = new SqliteTestDatabase();
-        var client = NewSqliteClient(db, policy: null);
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = NewClient(db, policy: null);
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(PolicyProbeTranslation));
 
-        HasProbeUnique(client).Should().BeFalse();
+        HasProbeUnique(client, db.DbType).Should().BeFalse();
     }
 
     [SugarTable("policy_probe_legacy_translations")]
@@ -142,18 +151,16 @@ public sealed class TranslationSidecarIndexPolicyTests
     [Fact]
     public void Hand_written_group_with_the_same_name_dedupes_to_a_single_unique_index()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
         {
             [typeof(LegacyAttributedTranslation)] = TranslationSidecarIndexPolicy.KeyFor(
                 typeof(LegacyAttributedTranslation), nameof(LegacyAttributedTranslation.LegacyProbeId), nameof(LegacyAttributedTranslation.Locale)),
         });
-        var client = NewSqliteClient(db, policy);
+        var client = NewClient(db, policy);
         client.CodeFirst.InitTables<LegacyAttributedTranslation>();
 
-        var uniqueIndexCount = client.Ado.GetInt(
-            "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_legacy_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
-        uniqueIndexCount.Should().Be(1);
+        UniqueSecondaryIndexes<LegacyAttributedTranslation>(client, db.DbType).Should().ContainSingle();
     }
 
     [SugarTable("policy_probe_foreign_translations")]
@@ -182,25 +189,24 @@ public sealed class TranslationSidecarIndexPolicyTests
     [Fact]
     public void Hand_written_group_with_a_different_name_is_kept_alongside_the_derived_one()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var policy = new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>
         {
             [typeof(ForkOwnedAttributedTranslation)] = TranslationSidecarIndexPolicy.KeyFor(
                 typeof(ForkOwnedAttributedTranslation), nameof(ForkOwnedAttributedTranslation.ForkProbeId), nameof(ForkOwnedAttributedTranslation.Locale)),
         });
-        var client = NewSqliteClient(db, policy);
+        var client = NewClient(db, policy);
         client.CodeFirst.InitTables<ForkOwnedAttributedTranslation>();
 
         var fkColumn = client.EntityMaintenance.GetDbColumnName<ForkOwnedAttributedTranslation>(nameof(ForkOwnedAttributedTranslation.ForkProbeId));
         var localeColumn = client.EntityMaintenance.GetDbColumnName<ForkOwnedAttributedTranslation>(nameof(ForkOwnedAttributedTranslation.Locale));
 
-        var indexSqlStatements = client.Ado.SqlQuery<string>(
-            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='policy_probe_foreign_translations' AND sql LIKE 'CREATE UNIQUE INDEX%'");
+        var uniqueIndexes = UniqueSecondaryIndexes<ForkOwnedAttributedTranslation>(client, db.DbType);
 
-        indexSqlStatements.Should().HaveCount(2);
-        indexSqlStatements.Should().OnlyContain(sql =>
-            sql.Contains(fkColumn, StringComparison.OrdinalIgnoreCase) &&
-            sql.Contains(localeColumn, StringComparison.OrdinalIgnoreCase));
+        uniqueIndexes.Should().HaveCount(2);
+        uniqueIndexes.Should().OnlyContain(i =>
+            i.Columns.Contains(fkColumn, StringComparer.OrdinalIgnoreCase) &&
+            i.Columns.Contains(localeColumn, StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -213,14 +219,15 @@ public sealed class TranslationSidecarIndexPolicyTests
         typeof(ArticleTranslation).GetCustomAttributes(typeof(SugarIndexAttribute), inherit: false)
             .Should().BeEmpty("the (fk, locale) unique index already serves the lookup; the plain btree was redundant");
 
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var policy = TranslationSidecarIndexPolicy.FromMetadata(
             MetadataScanner.ScanTypes([typeof(Article), typeof(Category), typeof(Tag)]));
-        var client = NewSqliteClient(db, policy);
+        var client = NewClient(db, policy);
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(ArticleTranslation));
 
         HasUniqueIndexOn(
             client,
+            db.DbType,
             client.EntityMaintenance.GetTableName<ArticleTranslation>(),
             client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.ArticleId)),
             client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.Locale)))
