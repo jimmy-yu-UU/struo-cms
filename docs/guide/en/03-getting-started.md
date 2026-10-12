@@ -15,8 +15,8 @@ You'll need:
 - Node.js 24 (the version CI uses).
 - pnpm 10.x, applied automatically by corepack from the `packageManager` field — no need to pin a
   version yourself.
-- Docker plus Compose — or your own PostgreSQL and Redis, in which case swap the next step's
-  connection string for your own values.
+- Docker plus Compose — or your own PostgreSQL and Redis, in which case swap step 2's connection
+  string for your own values.
 
 ## Start the whole stack with Docker Compose
 
@@ -53,13 +53,13 @@ other host name needs HTTPS in front.
 
 The default account is seeded only on the first start, while the database is still empty. To use a
 different email and password, set `STRUO_ADMIN_EMAIL`/`STRUO_ADMIN_PASSWORD` in `.env` before that
-first start. This account and the database and Redis credentials are for local development only;
-while the password is still the default, the log records a warning.
+first start. This account and the database credentials are for local development only; while
+`STRUO_ADMIN_PASSWORD` is still the default, every start logs a warning.
 
 `docker compose down` removes the containers but keeps the database and uploaded files in their
 volumes; `docker compose down -v` deletes the volumes too, so the next start begins with an empty
-database. Redis has no volume and sessions go with it, so after `down` and `up` you log in again;
-restarting only the API (`docker compose restart api`) keeps you logged in.
+database. Compose gives Redis no named volume and sessions go with it, so after `down` and `up` you
+log in again; restarting only the API (`docker compose restart api`) keeps you logged in.
 
 ## Start the services you need
 
@@ -73,8 +73,7 @@ your machine.
 docker compose up -d postgres redis
 ```
 
-This starts two services, `postgres` and `redis`. Confirm both pass their health
-check:
+This starts two services, `postgres` and `redis`. Confirm both pass their health check:
 
 ```bash
 docker compose ps
@@ -180,8 +179,11 @@ first start; after that first start, the only way to change them is to log in to
 After logging in, the sidebar shows only the System group, with no content collections — this is
 the expected state; [Chapter 1: What StruoCMS Is](01-what-is-struocms.md) explains why.
 
-You can also call `/health/live` (returns 200 as long as the process is alive, running no checks)
-and `/health/ready` (returns 200 only when both the database and the cache pass).
+You can also call the API's `/health/live` (returns 200 as long as the process is alive, running
+no checks) and `/health/ready` (returns 200 only when both the database and the cache pass).
+Both sit on the API's own port: `http://localhost:5221` when you run it yourself,
+`http://localhost:8081` under Compose. On the admin port (8080) these paths return the SPA page
+instead.
 
 `/health/ready` has one caveat: when `Redis:ConnectionString` isn't configured, the cache check
 falls back to an in-memory cache and still passes — so a green result here is not proof that Redis

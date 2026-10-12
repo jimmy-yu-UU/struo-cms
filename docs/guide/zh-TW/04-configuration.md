@@ -37,14 +37,20 @@
 - 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
 - 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`、預設管理員密碼未改的警告。
 
-以下四個是 `docker-compose.yml` 的 host 對外埠，不會傳進 API 的設定：
+以下六個是 `docker-compose.yml` 的 host 對外埠，不會傳進 API 的設定：
 
 - `STRUO_PG_PORT`
 - `STRUO_REDIS_PORT`
+- `STRUO_ADMIN_PORT`
+- `STRUO_API_PORT`
 - `STRUO_MINIO_PORT`
 - `STRUO_MINIO_CONSOLE_PORT`
 
 改了 `STRUO_MINIO_PORT`，`Struo:Files:S3:Endpoint` 要自己跟著改。
+
+`STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD` 不一樣：Compose 會把它們當成
+`Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password` 傳給 `api` 服務，只影響 Compose
+起的那個 API，自己跑的 API 不受影響。
 
 ## Database
 

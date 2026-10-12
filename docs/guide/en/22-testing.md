@@ -184,12 +184,19 @@ TypeScript types are checked at this step.
 
 `docker`: builds both container images and runs one smoke test against each, tagging the images
 `struo-api:ci`/`struo-admin:ci` (not the same tag as the `:local` you'd use building them
-yourself in [Chapter 20: Deployment](20-deployment.md)).
+yourself in [Chapter 20: Deployment](20-deployment.md)), then starts the whole Compose stack and
+smoke-tests that too.
 
 The API image starts with `Database__DbType=Sqlite`,
 `Database__ConnectionString=Data Source=/tmp/struo-ci.db`, and is polled at `/health/ready` until
 healthy; the admin SPA image, once started, is polled at its home page for an `assets/index-`
 fragment in the response, proving the built assets are actually reachable through nginx.
+
+The Compose step runs `docker compose up --wait`, which builds its own images from the same two
+Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port
+8080 for the same `assets/index-` fragment, and an anonymous `/api/config` call through nginx. It
+always ends with `docker compose down --volumes`, and prints `docker compose logs` first if any
+check failed.
 
 This job needs no secret, so a pull request from a fork or a Dependabot update can run it through
 to completion just the same.

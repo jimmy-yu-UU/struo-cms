@@ -50,6 +50,9 @@ Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回
 在「登入了卻又要登入」的迴圈。安全政策怎麼判斷、CORS 開了之後多出哪些規則，見
 [第 16 章](16-authentication.md)。
 
+唯一的例外是 `http://localhost`：瀏覽器把它當成安全來源，照樣送回 cookie。本章最後的本機
+Compose 環境就是靠這點，不架 TLS 也能登入。
+
 ### Scalar／OpenAPI 在 Production 關閉
 
 `GET /scalar` 與 `/openapi/v1.json` 只在非 Production 環境註冊，Production 啟動時這兩個路由
@@ -132,9 +135,12 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 `/app/db/migrations`；`Database:MigrationsPath` 在這個映像裡預設留空，要讓 migration 腳本在
 這裡動起來，把它設成這個絕對路徑。
 
-`app` 能寫兩個目錄：`/app/App_Data`（本機檔案後端的上傳內容與圖片轉檔快取）跟 `/app/logs`（Serilog
-的 File sink）；只有 `/app/App_Data` 額外宣告成 `VOLUME`，就算 `docker run` 完全不帶
-`--mount`／`-v`，這裡也會拿到一個匿名 volume。
+`app` 擁有三個目錄：`/app/App_Data`（本機檔案後端的上傳內容與圖片轉檔快取）、`/app/logs`
+（Serilog 的 File sink）跟 `/home/app/.aspnet/DataProtection-Keys`（金鑰圈，見下面
+「DataProtection 金鑰」）。具名 volume 掛在其中任何一個上，一開始就能寫。
+
+只有 `/app/App_Data` 另外宣告成 `VOLUME`，就算 `docker run` 完全不帶 `--mount`／`-v`，這裡也
+會拿到一個匿名 volume。
 
 `HEALTHCHECK` 每 30 秒打一次 `http://localhost:8080/health/live`（5 秒逾時、30 秒啟動寬
 限、3 次重試），打的是 liveness，不是 `/health/ready`。`docker ps`／`docker inspect` 看到的
@@ -213,7 +219,7 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 ### 兩個映像一起驗證
 
 下面三道指令建一個使用者自訂的 network，起兩個容器讓彼此看得到對方；這是驗證步驟，不是建議
-的正式環境拓樸：
+的正式環境拓樸。本章最後的本機 Compose 環境會把兩個映像連同 PostgreSQL、Redis 一起起來：
 
 ```
 docker network create struo-verify
@@ -281,8 +287,11 @@ Healthy
 
 `docker compose up -d --build` 用上面兩份 Dockerfile 起 `postgres`、`redis`、`api`、`admin` 四個
 服務，怎麼啟動、怎麼登入見[第 3 章：快速開始](03-getting-started.md)。它是開發與測試用的環境：
-帳密都是固定的開發值，`api` 以 Production 執行，每次啟動先自己跑 migration
-（`Database__MigrateOnStartup`）。上正式環境，照本章前面的檢查清單自己組部署。
+`api` 以 Production 執行，每次啟動先自己跑 migration（`Database__MigrateOnStartup`）。上正式
+環境，照本章前面的檢查清單自己組部署。
+
+PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠都開在 host 的所有網路介面上，同一個
+網路裡的其他機器連得到資料庫、Redis、API 跟後台。只在信得過的網路上跑這套環境。
 
 健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
 `http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，
@@ -296,8 +305,14 @@ log 會出現一筆 `No XML encryptor configured` 警告。開發與測試這樣
 ### S3 相容儲存
 
 `docker-compose.yml` 的 `minio`、`createbuckets` 兩個服務都掛在 `profiles: ["s3"]` 底下，
-預設的 `docker compose up -d` 既不會拉這兩個映像，也不會等它們的健康檢查；要啟用，
-`docker compose --profile s3 up -d`。
+預設的 `docker compose up -d` 既不會拉這兩個映像，也不會等它們的健康檢查。
+
+Compose 起的 `api` 服務用的是 `local` 檔案後端，MinIO 是給自己跑、`Struo:Files:Backend` 設成
+`s3` 的 API 用的。要跟相依服務一起起：
+
+```
+docker compose --profile s3 up -d postgres redis minio createbuckets
+```
 
 `createbuckets` 是一次性的：啟動時建好 bucket `struo-media` 就結束，結束代碼 `0`。
 `docker compose ps` 預設會把它濾掉，要 `docker compose ps -a` 才看得到它顯示 `Exited (0)`。

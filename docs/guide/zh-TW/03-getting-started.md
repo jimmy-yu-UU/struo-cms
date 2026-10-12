@@ -13,7 +13,7 @@
 - .NET SDK 10.0.x。
 - Node.js 24（CI 用的版本）。
 - pnpm 10.x，由 corepack 依 `packageManager` 欄位自動套用，不用自己指定版本。
-- Docker 加上 Compose，或自己架 PostgreSQL 與 Redis；自架的話，下一步的連線字串要換成對應的值。
+- Docker 加上 Compose，或自己架 PostgreSQL 與 Redis；自架的話，第 2 步的連線字串要換成對應的值。
 
 ## 用 Docker Compose 起整套服務
 
@@ -46,12 +46,12 @@ docker compose ps
 來源，所以本機登入沒問題；用其他主機名稱連進來，前面要先架一層 HTTPS。
 
 預設帳號只在第一次啟動、資料庫還是空的時候植入。要換成別的帳號密碼，第一次啟動前在 `.env`
-設 `STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。這組帳密與資料庫、Redis 的帳密都只給本機開發
-用；密碼還是預設值時，log 會留一筆警告。
+設 `STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。這組帳密與資料庫的帳密都只給本機開發用；
+`STRUO_ADMIN_PASSWORD` 還是預設值時，每次啟動 log 都會留一筆警告。
 
 `docker compose down` 會移除容器，資料庫與上傳的檔案留在 volume 裡；`docker compose down -v`
-連 volume 一起刪，下次從空資料庫開始。Redis 沒有掛 volume，session 跟著消失，所以 `down` 再
-`up` 之後要重新登入；只重啟 API（`docker compose restart api`），登入狀態還在。
+連 volume 一起刪，下次從空資料庫開始。Compose 沒有替 Redis 掛具名 volume，session 跟著消失，
+所以 `down` 再 `up` 之後要重新登入；只重啟 API（`docker compose restart api`），登入狀態還在。
 
 ## 自己起需要的服務
 
@@ -164,8 +164,11 @@ pnpm dev
 登入後側欄只有 System 群組，沒有任何內容集合——這是預期中的狀態，原因在[第 1 章：StruoCMS
 是什麼](01-what-is-struocms.md)說過了。
 
-同樣可以打 `/health/live`（行程活著就回 200，不跑任何檢查）與 `/health/ready`（資料庫與快取
-都通過才回 200）。`/health/ready` 有一個要注意的地方：快取檢查在沒設定
+同樣可以打 API 的 `/health/live`（行程活著就回 200，不跑任何檢查）與 `/health/ready`（資料庫
+與快取都通過才回 200）。這兩個端點在 API 自己的埠上：自己跑是 `http://localhost:5221`，用
+Compose 是 `http://localhost:8081`；從後台的埠（8080）打，拿到的是 SPA 頁面。
+
+`/health/ready` 有一個要注意的地方：快取檢查在沒設定
 `Redis:ConnectionString` 時，會改用記憶體內的暫存，一樣會通過，所以這個綠燈不能當成 Redis
 真的連得上的證明。
 
