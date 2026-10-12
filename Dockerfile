@@ -30,7 +30,8 @@ COPY --from=build /app/publish ./
 # without a writable directory here it silently drops file logging under the non-root user below.
 # The DataProtection key ring (cookie encryption keys) lives under the app user's home; owning the
 # directory here lets a named volume mounted on it start writable, so sessions survive a restart.
-RUN mkdir -p /app/App_Data /app/logs /home/app/.aspnet/DataProtection-Keys     && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet
+RUN mkdir -p /app/App_Data /app/logs /home/app/.aspnet/DataProtection-Keys \
+    && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet
 USER app
 EXPOSE 8080
 VOLUME ["/app/App_Data"]
