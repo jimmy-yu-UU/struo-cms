@@ -3,7 +3,7 @@
 ## Decision
 
 `ColumnSelectorFactory.AggregateProjection` builds `SqlFunc.AggregateAvg(x.P)` for an `Avg` slot.
-When `AggregateQueries` runs on SQL Server it passes `floatAverageOfIntegers: true`, and an integral
+When `AggregateQueries` runs on SQL Server it passes `sqlServerIntegerAggregates: true`, and an integral
 operand (`int`, `long`, their nullable forms and the other integer widths) is wrapped in
 `SqlFunc.ToDouble`, which renders `AVG(CAST([col] AS FLOAT))`. A `Sum` slot over an integral operand
 narrower than 64 bits (`sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, and their nullable forms) is

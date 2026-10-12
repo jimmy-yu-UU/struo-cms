@@ -31,6 +31,10 @@ and no inner exception. On SQL Server, `SqlConnection.OpenAsync` with a cancelle
 . A task was canceled"). A caller that tells cancellation apart from failure by catching
 `OperationCanceledException` then sees a client abort as a database failure.
 
+`CheckConnectionAsync` wraps any exception thrown by `OpenAsync(token)` on every backend. PostgreSQL,
+MySQL and MariaDB pass without the hook because their drivers do not throw on an already-cancelled
+token at open time; the cancellation surfaces later from the command, where `throw;` keeps its type.
+
 `OnError` is the one SqlSugar extension point that runs for every command and can replace the
 exception it rethrows. The condition reads the token state rather than the exception, because the
 wrapper keeps only the message text.

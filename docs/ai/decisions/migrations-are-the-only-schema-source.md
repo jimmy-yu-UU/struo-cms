@@ -43,7 +43,7 @@ SQLite run cannot show the drop.
 
 Measured 2026-10-12: CodeFirst over a unique group on `policy_probe_legacy_translations` failed on
 MySQL and MariaDB with `Identifier name 'Index_policy_probe_legacy_translations_LegacyProbeId_Locale_Unique'
-is too long` (65 characters); `TranslationSidecarIndexPolicyTests` uses shorter table names for that
+is too long` (66 characters); `TranslationSidecarIndexPolicyTests` uses shorter table names for that
 reason.
 
 ## Unknowns
