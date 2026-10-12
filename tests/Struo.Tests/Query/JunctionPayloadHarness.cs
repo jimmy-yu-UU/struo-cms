@@ -122,12 +122,12 @@ public sealed class JpAdminLink
 
 // ── harness ───────────────────────────────────────────────────────────────────
 
-/// <summary>Real ItemService over SQLite with a payload junction (JpLink) and a plain one (JpPlainLink),
+/// <summary>Real ItemService over the selected test backend with a payload junction (JpLink) and a plain one (JpPlainLink),
 /// modelled on M2MRevertHarness. Permissions are pluggable so RBAC omission/refusal can be tested.
 /// Shared by Tasks 3 (write side), 4 and 5.</summary>
 public sealed class JunctionPayloadHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     public ISqlSugarClient Db { get; }
     public ItemService Service { get; }
     public IItemRepository Repository { get; }
@@ -140,7 +140,7 @@ public sealed class JunctionPayloadHarness : IDisposable
     {
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         Db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString }, currentUser);
+            _database.Options(), currentUser);
         Db.CodeFirst.InitTables<Language>();
         Db.CodeFirst.InitTables<Revision>();
         Db.CodeFirst.InitTables<JpParent>();
@@ -201,5 +201,5 @@ public sealed class JunctionPayloadHarness : IDisposable
     public List<JpAdminLink> AdminLinks(Guid parentId) =>
         Db.Queryable<JpAdminLink>().Where(l => l.JpParentId == parentId).ToList();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 }

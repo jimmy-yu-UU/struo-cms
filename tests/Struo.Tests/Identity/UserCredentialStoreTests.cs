@@ -8,23 +8,19 @@ namespace Struo.Tests.Identity;
 
 public class UserCredentialStoreTests
 {
-    private static ISqlSugarClient NewDb(SqliteTestDatabase db)
+    private static ISqlSugarClient NewDb(ITestDatabase db)
     {
-        var client = new SqlSugarClient(new ConnectionConfig
+        var config = db.RawConfig();
+        config.ConfigureExternalServices = new ConfigureExternalServices
         {
-            ConnectionString = db.ConnectionString,
-            DbType = DbType.Sqlite,
-            IsAutoCloseConnection = true,
-            ConfigureExternalServices = new ConfigureExternalServices
+            EntityService = (property, column) =>
             {
-                EntityService = (property, column) =>
-                {
-                    if (column.IsPrimarykey || column.IsIgnore) return;
-                    if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
-                        column.IsNullable = true;
-                }
+                if (column.IsPrimarykey || column.IsIgnore) return;
+                if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+                    column.IsNullable = true;
             }
-        });
+        };
+        var client = new SqlSugarClient(config);
         client.CodeFirst.InitTables(typeof(User));
         return client;
     }
@@ -32,7 +28,7 @@ public class UserCredentialStoreTests
     [Fact]
     public async Task FindByEmail_returns_credential_or_null()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var client = NewDb(db);
         var hasher = new Argon2idPasswordHasher();
         await client.Insertable(new User

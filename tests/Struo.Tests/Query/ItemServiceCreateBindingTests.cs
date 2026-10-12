@@ -68,14 +68,14 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
         public string InternalSecret { get; set; } = "server-default";
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly SqlSugarItemRepository _repo;
     private readonly ItemService _svc;
 
     public ItemServiceCreateBindingTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Widget>();
         db.CodeFirst.InitTables<WidgetCategory>();
@@ -187,13 +187,13 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
 /// </summary>
 public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
     public ItemServiceCreateBindingHappyPathTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();

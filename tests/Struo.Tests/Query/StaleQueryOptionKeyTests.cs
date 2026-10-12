@@ -23,7 +23,7 @@ namespace Struo.Tests.Query;
 // NOTE: WithWebHostBuilder returns a WebApplicationFactory<Program> (an internal
 // DelegatedWebApplicationFactory under the hood, NOT an ApiFactory) — casting it back to ApiFactory
 // compiles but throws at runtime (see PasswordChangeRateLimitTests). Both hosts share the ONE
-// SqliteTestDatabase owned by the base ApiFactory, so the admin row is seeded through the base
+// test database owned by the base ApiFactory, so the admin row is seeded through the base
 // factory and logged in against the DERIVED host's own HttpClient/cookie jar.
 [Collection("ApiIntegration")]
 public class StaleQueryOptionKeyTests(ApiFactory factory)

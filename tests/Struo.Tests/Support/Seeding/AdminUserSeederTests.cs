@@ -8,23 +8,19 @@ namespace Struo.Tests.Support.Seeding;
 
 public class AdminUserSeederTests
 {
-    private static ISqlSugarClient NewDb(SqliteTestDatabase db)
+    private static ISqlSugarClient NewDb(ITestDatabase db)
     {
-        var c = new SqlSugarClient(new ConnectionConfig
+        var config = db.RawConfig();
+        config.ConfigureExternalServices = new ConfigureExternalServices
         {
-            ConnectionString = db.ConnectionString,
-            DbType = DbType.Sqlite,
-            IsAutoCloseConnection = true,
-            ConfigureExternalServices = new ConfigureExternalServices
+            EntityService = (property, column) =>
             {
-                EntityService = (property, column) =>
-                {
-                    if (column.IsPrimarykey || column.IsIgnore) return;
-                    if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
-                        column.IsNullable = true;
-                }
+                if (column.IsPrimarykey || column.IsIgnore) return;
+                if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+                    column.IsNullable = true;
             }
-        });
+        };
+        var c = new SqlSugarClient(config);
         c.CodeFirst.InitTables(typeof(User));
         return c;
     }
@@ -32,7 +28,7 @@ public class AdminUserSeederTests
     [Fact]
     public async Task Seeds_admin_when_no_users_and_is_idempotent()
     {
-        using var dbf = new SqliteTestDatabase();
+        using var dbf = TestBackend.CreateUnitDatabase();
         var db = NewDb(dbf);
         var hasher = new Argon2idPasswordHasher();
 
@@ -46,7 +42,7 @@ public class AdminUserSeederTests
     [Fact]
     public async Task Does_nothing_when_config_missing()
     {
-        using var dbf = new SqliteTestDatabase();
+        using var dbf = TestBackend.CreateUnitDatabase();
         var db = NewDb(dbf);
         await AdminUserSeeder.SeedAsync(db, new Argon2idPasswordHasher(), null, null);
         (await db.Queryable<User>().CountAsync()).Should().Be(0);

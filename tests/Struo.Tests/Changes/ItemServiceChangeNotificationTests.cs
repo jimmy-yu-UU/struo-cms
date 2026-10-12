@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Struo.Tests.Changes;
 
-/// <summary>Spec §3.4 R1–R7 through the real ItemService on SQLite (PurgeIntegrityHarness fixtures: cascadeNode = Cascade, category.parent = SetNull).</summary>
+/// <summary>Spec §3.4 R1–R7 through the real ItemService (PurgeIntegrityHarness fixtures: cascadeNode = Cascade, category.parent = SetNull).</summary>
 public sealed class ItemServiceChangeNotificationTests : IDisposable
 {
     private readonly RecordingItemChangeListener _listener = new();
@@ -134,7 +134,7 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Purge_raises_Updated_for_live_parents_that_lose_an_inbound_M2M_link()
     {
-        // Fix round 1 (spec R4 extension): purging a Tag deletes the INBOUND article_tags junction
+        // Spec R4 extension: purging a Tag deletes the INBOUND article_tags junction
         // rows (Article declares the M2M, Tag does not), so every LIVE article that carried the tag
         // must itself get an Updated. a3 is linked too but trashed before the purge — mirroring
         // CollectSetNullUpdatesAsync's live-only semantics, a trashed parent must NOT be raised.
@@ -162,12 +162,11 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Listener_runs_after_commit_and_can_read_the_new_row()
     {
-        // Fix round 1: reads through a SECOND ISqlSugarClient opened on the same SQLite file, not
-        // through the harness's own repository/connection. A same-connection read is not a real
-        // discriminator — SQLite's own connection would see its own uncommitted row too, so that
-        // would "pass" even if NotifyAsync ran BEFORE the commit. A genuinely separate connection can
-        // only see the row once the write has actually committed, which is the property this test
-        // means to prove.
+        // Reads through a SECOND ISqlSugarClient opened on the same database, not through the harness's
+        // own repository/connection. A same-connection read is not a real discriminator: that
+        // connection would see its own uncommitted row too, so it would "pass" even if NotifyAsync
+        // ran BEFORE the commit. A separate connection only sees the row once the write has
+        // committed, which is the property this test proves.
         Category? seen = null;
         PurgeIntegrityHarness h = null!;
         var probe = new RecordingItemChangeListener
@@ -175,7 +174,7 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
             OnCall = async changes =>
             {
                 using var db = SqlSugarClientFactory.Create(
-                    new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = h.ConnectionString },
+                    h.Database.Options(),
                     new TestCurrentUserAccessor(Guid.Empty));
                 seen = await db.Queryable<Category>().In(Guid.Parse(changes[0].Id)).FirstAsync();
             },

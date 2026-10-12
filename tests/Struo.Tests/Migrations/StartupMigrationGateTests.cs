@@ -20,7 +20,7 @@ public sealed class StartupMigrationGateTests : IDisposable
 
     private DatabaseOptions Options(bool migrateOnStartup) => new()
     {
-        DbType = StruoDbType.Sqlite, TablePrefix = _harness.Prefix, MigrateOnStartup = migrateOnStartup,
+        DbType = _harness.Database.DbType, TablePrefix = _harness.Prefix, MigrateOnStartup = migrateOnStartup,
     };
 
     private Task Run(bool migrateOnStartup, bool isDevelopment, ILogger? logger = null, bool withSeed = true) =>

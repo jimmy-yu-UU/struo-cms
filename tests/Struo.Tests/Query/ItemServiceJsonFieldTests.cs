@@ -34,13 +34,13 @@ public class ItemServiceJsonFieldTests : IDisposable
         public string? RequiredData { get; set; }
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
     public ItemServiceJsonFieldTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<JsonThing>();
         db.CodeFirst.InitTables<Language>();

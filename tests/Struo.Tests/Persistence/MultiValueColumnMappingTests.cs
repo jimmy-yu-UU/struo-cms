@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using SqlSugar;
-using Struo.Application.Configuration;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -12,11 +11,10 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// The SqlSugarClientFactory convention maps multi-value [CmsField] interfaces
-/// (MultiSelect/CheckboxGroup/Tags) to an `IsJson` + `text` column so a List&lt;string&gt; /
-/// List&lt;TagItem&gt; round-trips. Verified cross-db via an actual insert+read. The column type
-/// MUST be widened to `text`: `IsJson` alone leaves the length unset and Postgres defaults it to
-/// `varchar(1)`, truncating any real JSON payload — confirmed against a live Postgres database. SQLite ignores
-/// declared length, so the type assertion is what pins this on the SQLite-only test run.
+/// (MultiSelect/CheckboxGroup/Tags) to an `IsJson` + LongText column so a List&lt;string&gt; /
+/// List&lt;TagItem&gt; round-trips. The column type MUST be widened: `IsJson` alone leaves the length
+/// unset and Postgres defaults it to `varchar(1)`, truncating any real JSON payload. SQLite ignores
+/// declared length, so the type assertion is what pins this on a SQLite run.
 /// </summary>
 public class MultiValueColumnMappingTests
 {
@@ -34,36 +32,34 @@ public class MultiValueColumnMappingTests
     }
 
     [Fact]
+    public void Multi_value_columns_are_widened_to_LongText()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<MvColTestEntity>();
+
+        var columns = client.DbMaintenance.GetColumnInfosByTableName("multivalue_col_test_entity", false);
+        foreach (var col in new[] { "Regions", "Keywords" })
+            columns.Single(c => c.DbColumnName.Equals(col, StringComparison.OrdinalIgnoreCase))
+                .ShouldHaveShape(ColumnShape.LongText, db.DbType);
+    }
+
+    [Fact]
     public void Multi_value_lists_round_trip_through_a_json_column()
     {
-        var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
-        using (db)
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<MvColTestEntity>();
+
+        var row = new MvColTestEntity
         {
-            client.CodeFirst.InitTables<MvColTestEntity>();
+            Regions = ["apac", "emea"],
+            Keywords = [new TagItem("tech"), new TagItem("ai", "人工智慧")],
+        };
+        client.Insertable(row).ExecuteCommand();
 
-            // The multi-value columns must be widened to `text`, not left at CodeFirst's default
-            // (which is varchar(1) on Postgres and would truncate the serialized JSON). SQLite
-            // reports the declared type, so this pins the DataType="text" convention here.
-            var columns = client.DbMaintenance.GetColumnInfosByTableName("multivalue_col_test_entity", false);
-            foreach (var col in new[] { "Regions", "Keywords" })
-            {
-                var info = columns.Single(c => c.DbColumnName.Equals(col, StringComparison.OrdinalIgnoreCase));
-                info.DataType.Should().ContainEquivalentOf("text");
-            }
-
-            var row = new MvColTestEntity
-            {
-                Regions = ["apac", "emea"],
-                Keywords = [new TagItem("tech"), new TagItem("ai", "人工智慧")],
-            };
-            client.Insertable(row).ExecuteCommand();
-
-            var read = client.Queryable<MvColTestEntity>().First();
-            read.Regions.Should().Equal("apac", "emea");
-            read.Keywords.Should().Equal(new TagItem("tech"), new TagItem("ai", "人工智慧"));
-        }
+        var read = client.Queryable<MvColTestEntity>().First();
+        read.Regions.Should().Equal("apac", "emea");
+        read.Keywords.Should().Equal(new TagItem("tech"), new TagItem("ai", "人工智慧"));
     }
 }

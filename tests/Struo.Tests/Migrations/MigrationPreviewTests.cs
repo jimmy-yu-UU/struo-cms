@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
-using Struo.Application.Configuration;
 using Struo.Infrastructure.Migrations;
 using Struo.Tests.Support;
 using Xunit;
@@ -10,17 +9,16 @@ namespace Struo.Tests.Migrations;
 
 public sealed class MigrationPreviewTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
-    public void Dispose() => _file.Dispose();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
+    public void Dispose() => _database.Dispose();
 
     private MigrationHost Host(string ns) => new(
-        new MigrationHostOptions(StruoDbType.Sqlite, _file.ConnectionString, "struo_",
+        new MigrationHostOptions(_database.DbType, _database.ConnectionString, "struo_",
             [typeof(MigrationPreviewTests).Assembly], 5)
         { NamespaceFilter = "Struo.Tests.Migrations.Probes." + ns },
         NullLoggerFactory.Instance);
 
-    private string[] Tables() => new SqlSugarClient(new ConnectionConfig
-        { DbType = DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true })
+    private string[] Tables() => new SqlSugarClient(_database.RawConfig())
         .DbMaintenance.GetTableInfoList(false).Select(t => t.Name.ToLowerInvariant()).ToArray();
 
     [Fact]

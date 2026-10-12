@@ -39,7 +39,7 @@ public sealed class ManyToManySyncTests : IDisposable
         [SugarColumn(IsNullable = true)] public int? Sort { get; set; }
     }
 
-    private readonly SqliteTestDatabase _db = new();
+    private readonly ITestDatabase _db = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _client;
     private readonly ListLogger<SqlSugarItemRepository> _log = new();
     private readonly SqlSugarItemRepository _repo;
@@ -49,9 +49,7 @@ public sealed class ManyToManySyncTests : IDisposable
 
     public ManyToManySyncTests()
     {
-        _client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _db.ConnectionString },
-            new TestCurrentUserAccessor(Actor));
+        _client = SqlSugarClientFactory.Create(_db.Options(), new TestCurrentUserAccessor(Actor));
         _client.CodeFirst.InitTables<MmsLink>();
         _client.CodeFirst.InitTables<MmsAuditLink>();
         // The repository needs registry/graph/provider only for other members; pass empty ones.
@@ -208,8 +206,8 @@ public sealed class ManyToManySyncTests : IDisposable
 
         after.UpdatedAt.Should().BeAfter(before.UpdatedAt, "the batched Updateable(...) call must still trigger AuditAop's UpdatedAt stamp");
         after.UpdatedBy.Should().Be(Actor);
-        // A full-row update round-trips CreatedAt through SQLite's datetime storage too, which
-        // truncates sub-millisecond precision — the value is logically untouched (AuditAop's
+        // A full-row update writes CreatedAt back through the column's datetime storage, whose
+        // precision depends on the backend. The value is logically untouched (AuditAop's
         // DataExecuting only overwrites Updated*, never Created*), so compare with a millisecond
         // tolerance rather than exact equality.
         after.CreatedAt.Should().BeCloseTo(before.CreatedAt, TimeSpan.FromMilliseconds(2),

@@ -15,11 +15,11 @@ namespace Struo.Tests.Query;
 
 public class ConditionalModelTranslatorTests
 {
-    private static (ISqlSugarClient db, EntityDescriptor d, SqliteTestDatabase file) Setup()
+    private static (ISqlSugarClient db, EntityDescriptor d, ITestDatabase file) Setup()
     {
-        var file = new SqliteTestDatabase();
+        var file = TestBackend.CreateUnitDatabase();
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         // title moved to the translation sidecar; use own-collection fields (status/publishedAt).
@@ -222,11 +222,11 @@ public class ConditionalModelTranslatorTests
         public DateTime OccurredAt { get; set; }
     }
 
-    private static (ISqlSugarClient db, EntityDescriptor d, SqliteTestDatabase file) SetupCultureProbe()
+    private static (ISqlSugarClient db, EntityDescriptor d, ITestDatabase file) SetupCultureProbe()
     {
-        var file = new SqliteTestDatabase();
+        var file = TestBackend.CreateUnitDatabase();
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<CultureProbeRow>();
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

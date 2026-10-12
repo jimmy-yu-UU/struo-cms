@@ -24,14 +24,14 @@ namespace Struo.Tests.Query;
 // collection's code-format guard (Site 3) can be exercised directly.
 internal sealed class MalformedBodyHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public ItemService Service { get; }
 
     private MalformedBodyHarness()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<Article>();
         db.CodeFirst.InitTables<ArticleTranslation>();
@@ -74,7 +74,7 @@ internal sealed class MalformedBodyHarness : IDisposable
 
     public static MalformedBodyHarness Create() => new();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     public static JsonElement BodyOf(string json)
     {
@@ -100,7 +100,7 @@ internal sealed class MalformedBodyHarness : IDisposable
 /// Non-object top-level request bodies (array / scalar) must 400 (<see cref="QueryException"/>),
 /// not 500, on both Create and Update, including for the "language" collection, whose code-format
 /// guard runs only after this non-object check, never touching a malformed body. Real
-/// SQLite-backed <see cref="ItemService"/>, no stubs.
+/// database-backed <see cref="ItemService"/>, no stubs.
 /// </summary>
 public sealed class ItemServiceMalformedBodyTests
 {

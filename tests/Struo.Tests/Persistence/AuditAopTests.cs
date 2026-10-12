@@ -12,17 +12,11 @@ public class AuditAopTests
     private static readonly Guid Alice = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Bob   = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
-    private static DatabaseOptions Options(SqliteTestDatabase db) => new()
-    {
-        DbType = StruoDbType.Sqlite,
-        ConnectionString = db.ConnectionString
-    };
-
     [Fact]
     public void Insert_stamps_created_and_updated_audit_fields()
     {
-        using var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor(Alice));
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Alice));
         client.CodeFirst.InitTables<Article>();
 
         var article = new Article { Id = Guid.CreateVersion7(), Status = "draft" };
@@ -38,14 +32,14 @@ public class AuditAopTests
     [Fact]
     public void Update_restamps_only_updated_audit_fields()
     {
-        using var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor(Alice));
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Alice));
         client.CodeFirst.InitTables<Article>();
         var article = new Article { Id = Guid.CreateVersion7(), Status = "draft" };
         client.Insertable(article).ExecuteCommand();
         var original = client.Queryable<Article>().InSingle(article.Id);
 
-        var updateClient = SqlSugarClientFactory.Create(Options(db), new TestCurrentUserAccessor(Bob));
+        var updateClient = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Bob));
         var toUpdate = updateClient.Queryable<Article>().InSingle(article.Id);
         toUpdate.Status = "published";
         updateClient.Updateable(toUpdate).ExecuteCommand();

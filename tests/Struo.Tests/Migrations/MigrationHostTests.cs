@@ -11,17 +11,16 @@ namespace Struo.Tests.Migrations;
 public sealed class MigrationHostTests : IDisposable
 {
     private const string Probes = "Struo.Tests.Migrations.Probes";
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     private MigrationHost Host(string ns, string prefix = "struo_") => new(
-        new MigrationHostOptions(StruoDbType.Sqlite, _file.ConnectionString, prefix,
+        new MigrationHostOptions(_database.DbType, _database.ConnectionString, prefix,
             [typeof(MigrationHostTests).Assembly], LockTimeoutSeconds: 5) { NamespaceFilter = $"{Probes}.{ns}" },
         NullLoggerFactory.Instance);
 
-    private string[] Tables() => new SqlSugarClient(new ConnectionConfig
-        { DbType = SqlSugar.DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true })
+    private string[] Tables() => new SqlSugarClient(_database.RawConfig())
         .DbMaintenance.GetTableInfoList(false).Select(t => t.Name.ToLowerInvariant()).ToArray();
 
     [Fact]
@@ -95,7 +94,7 @@ public sealed class MigrationHostTests : IDisposable
         Tables().Should().Contain("acme_ctxprobe");
     }
 
-    [Fact]
+    [SqliteOnlyFact("unreachable database simulated by a SQLite file in a missing directory")]
     public void GetStatus_wraps_an_unreachable_database_in_MigrationFailedException()
     {
         var missingDir = Path.Combine(Path.GetTempPath(), $"struo_missing_{Guid.NewGuid():N}", "x.db");

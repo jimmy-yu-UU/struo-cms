@@ -21,8 +21,8 @@ namespace Struo.Tests.Api;
 //
 // NOTE: WithWebHostBuilder returns a WebApplicationFactory<Program> (an internal
 // DelegatedWebApplicationFactory under the hood, NOT an ApiFactory) — casting it back to ApiFactory
-// compiles but throws at runtime. Both hosts share the ONE SqliteTestDatabase owned by the base
-// ApiFactory (its connection string is layered into every derived host's configuration), so tests
+// compiles but throws at runtime. Both hosts share the ONE ITestDatabase (on the selected backend)
+// owned by the base ApiFactory (its connection string is layered into every derived host's configuration), so tests
 // here seed users through the base factory's ApiFactory.SeedEditorAsync and then log in against the
 // DERIVED host's own HttpClient/cookie jar.
 [Collection("ApiIntegration")]

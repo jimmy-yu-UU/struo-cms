@@ -1,9 +1,9 @@
 # StruoCMS
 
 StruoCMS is a headless CMS template you fork directly, built on .NET 10 and SqlSugar, with
-PostgreSQL as the verified database and a Vue 3 single-page application as the admin UI. After you
-fork it, you declare content collections in your own project, and StruoCMS turns them into database
-tables, APIs, and admin screens.
+PostgreSQL, SQL Server, MySQL and MariaDB as the verified databases and a Vue 3 single-page
+application as the admin UI. After you fork it, you declare content collections in your own project,
+and StruoCMS turns them into database tables, APIs, and admin screens.
 
 The content model starts with you: a fresh install has zero content collections, and Article, Tag,
 and Category are all yours to declare. `samples/Struo.Sample.Blog` is an optional demo project that

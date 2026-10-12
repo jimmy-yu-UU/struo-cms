@@ -19,14 +19,14 @@ namespace Struo.Tests.Localization;
 // value (immutability rule).
 public class LanguageProviderCacheTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly LanguageProvider _provider;
 
     public LanguageProviderCacheTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Language>();
         LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();

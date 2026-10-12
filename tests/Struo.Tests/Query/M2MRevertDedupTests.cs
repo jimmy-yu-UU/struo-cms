@@ -73,7 +73,7 @@ internal sealed class DocLabel
 /// types the metadata/registry expects), mirroring <c>PurgeIntegrityHarness</c>.</summary>
 internal sealed class M2MRevertHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public IItemRepository Repository { get; }
     public ItemService Service { get; }
@@ -83,7 +83,7 @@ internal sealed class M2MRevertHarness : IDisposable
     {
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             currentUser);
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
@@ -117,7 +117,7 @@ internal sealed class M2MRevertHarness : IDisposable
 
     public static M2MRevertHarness Create() => new();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     private static JsonElement BodyOf(object obj)
     {
@@ -150,7 +150,7 @@ internal sealed class M2MRevertHarness : IDisposable
 /// (1) M2M target-id arrays are de-duplicated before validation and junction sync
 /// (<c>labels:[l1,l1]</c> == <c>labels:[l1]</c>); (2) a REVERT tolerates a snapshot that references a
 /// now-trashed target (it was legal when captured), while a NORMAL write still rejects a trashed target
-/// (asymmetry preserved). Real SQLite-backed <see cref="ItemService"/>, no stubs.
+/// (asymmetry preserved). Real database-backed <see cref="ItemService"/>, no stubs.
 /// </summary>
 public sealed class M2MRevertDedupTests
 {

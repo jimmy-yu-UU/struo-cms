@@ -48,13 +48,13 @@ public class ItemServiceMultiValueTests : IDisposable
         public List<TagItem> Keywords { get; set; } = [];
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
     public ItemServiceMultiValueTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<MvThing>();
         db.CodeFirst.InitTables<Language>();

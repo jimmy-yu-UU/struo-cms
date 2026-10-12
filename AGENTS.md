@@ -64,17 +64,18 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   layer compiles against, and nothing fails until a fork tries to swap that package out.
 - **Target framework**: .NET 10 (`net10.0`, `Directory.Build.props`). **Database support**: SqlSugar
   is configured for five backends (`Database:DbType`: `PostgreSQL`/`MySql`/`SqlServer`/`Sqlite`/
-  `Oracle`), but only **PostgreSQL is the verified runtime target**; `Sqlite` is used for the test suite
-  only; `MySql`/`SqlServer`/`Oracle` are type-mapped in code but unverified/experimental. Schema
-  creation (the core migrations, and CodeFirst in unit harnesses) is designed and mapped to run on all
-  five backends, via a dialect-neutral `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type literals in `ColumnTypeMap.cs` —
-  with one gated exception, `SqlSugarClientFactory`'s SQLite identity-column rewrite
-  (`ApplySqliteIdentityColumnRewrite`), which hardcodes `INTEGER` for a SQLite identity primary
-  key — but that mapping is exercised live only for the core schema (the migration live tests run on
-  SQL Server, MySQL and MariaDB; nothing runs on Oracle), and the query layer is unverified there: some
-  ORDER-BY and literal-coercion code paths are written against PostgreSQL/SQLite behavior specifically. The per-backend type decisions behind that layer,
-  and what is and is not verified about each, are recorded in
-  `docs/ai/decisions/column-type-map-per-backend-literals.md`.
+  `Oracle`). **PostgreSQL, SQL Server, MySQL and MariaDB** (MariaDB on the `MySql` dialect) are
+  verified: the whole test suite runs green on each of them (versions under "Verification").
+  `Sqlite` is used for the test suite only — CI and a plain `dotnet test` run on it. `Oracle` is
+  type-mapped in code but has no instance here, so it is unverified.
+  Schema creation (the core migrations, and CodeFirst in unit harnesses) is mapped to run on all
+  five backends, via a dialect-neutral `[ColumnShape]`/`ColumnTypeMap` layer that keeps vendor type
+  literals in `ColumnTypeMap.cs` — with one gated exception, `SqlSugarClientFactory`'s SQLite
+  identity-column rewrite (`ApplySqliteIdentityColumnRewrite`), which hardcodes `INTEGER` for a
+  SQLite identity primary key. The per-backend type decisions behind that layer, and what is and is
+  not verified about each, are recorded in
+  `docs/ai/decisions/column-type-map-per-backend-literals.md`; the behavioral divergences between
+  the verified backends are listed under "Verification".
 
 ## Invariants
 
@@ -209,8 +210,8 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    an entry in `frontend/src/lib/relationInputKind.ts`, or the relation renders read-only at
    runtime — `pnpm test`'s schema-contract test (`frontend/tests/schemaContract.test.ts`) is what
    catches the missing entry first. Gate: four of the five standing gates — see
-   `docs/ai/task-playbooks.md` Playbook 2b for when the fifth applies; live-PostgreSQL check if
-   you touched column mapping.
+   `docs/ai/task-playbooks.md` Playbook 2b for when the fifth applies; a live run on each backend
+   you verify against if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
    be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
@@ -253,15 +254,24 @@ built on this template verifies against the database(s) it actually uses; a chan
 template project itself is verified against every backend available locally (PostgreSQL, SQL Server,
 MySQL, MariaDB, SQLite, and Oracle when an instance exists).
 
-- **Configured for PostgreSQL** (the verified target): run the live-PostgreSQL check. It is strongly
-  recommended for every DB-behavior change, since its divergences are already catalogued and
-  `PostgresOnlyTests` holds the checks specific to it. This is a robustness recommendation, not a
-  CI gate — CI deliberately runs the SQLite suite only, because mandating a specific engine in CI
-  would privilege one backend over the replaceability the ORM abstraction exists to preserve.
-- **Configured for any other backend** (`MySql`/`SqlServer`/`Oracle`): that backend needs its own
-  equivalent live check before you rely on the change. Do not treat a green PostgreSQL run as
-  transferable evidence — the divergences below are type/column-semantics issues, exactly the class
-  the ORM does *not* abstract away.
+The verified backends, and how long the whole suite takes on each with
+`STRUO_TEST_BACKEND=<backend> dotnet test` (maintainer's machine, warm build):
+
+| Backend | Verified version | Full suite |
+|---|---|---|
+| SQLite (switch unset) | — | ≈ 3 min |
+| MySQL | 8.4.11 | ≈ 4 min |
+| MariaDB | 11.8.9 | ≈ 3.5 min |
+| SQL Server | 2025 (17.0, CU6) | ≈ 5 min |
+| PostgreSQL | 13.2 | ≈ 12 min |
+
+- **A live run is strongly recommended for every DB-behavior change**, on each verified backend
+  you have. It is a local responsibility, not a CI gate — CI deliberately runs the SQLite suite
+  only, because mandating a specific engine in CI would privilege one backend over the
+  replaceability the ORM abstraction exists to preserve.
+- **A green run on one backend is not evidence for another.** The divergences below are
+  type/column-semantics issues, exactly the class the ORM does *not* abstract away. Oracle has no
+  verified run at all; a fork on Oracle needs its own live check before relying on a change.
 
 The portability rule that governs application code is
 "all DB access through SqlSugar, zero vendor SQL" (see Invariants). That rule keeps *query and
@@ -272,8 +282,18 @@ than per-codebase. This codebase has documented, specific divergences: a `DateTi
 reason `UserSession.CreatedAt`/`ExpiresAt` carry that shape explicitly — while SQLite has no real
 column types to show the difference; and a SqlSugar `ConditionalType.Equal` filter that binds a text
 value against a `uuid`/`bigint` column throws `42883` on PostgreSQL ("operator does not exist") but
-passes silently on SQLite, whose loose typing accepts the comparison without complaint. Configure
-`Testing:PostgresConnection` to a disposable database whose name contains `test`: the migration
+passes silently on SQLite, whose loose typing accepts the comparison without complaint. The other
+documented divergences each have a decision file:
+
+- integer `AVG`/`SUM` on SQL Server — `docs/ai/decisions/aggregate-average-per-backend.md`;
+- `Guid` ordering on SQL Server — `docs/ai/decisions/guid-ordering-per-backend.md`;
+- cancellation on SQL Server —
+  `docs/ai/decisions/sqlserver-cancellation-surfaces-as-sqlsugar-exception.md`;
+- CodeFirst index-name length limits —
+  `docs/ai/decisions/migrations-are-the-only-schema-source.md`;
+- per-backend column literals — `docs/ai/decisions/column-type-map-per-backend-literals.md`.
+
+Configure `Testing:PostgresConnection` to a disposable database whose name contains `test`: the migration
 tests write into it directly, and the other live suites use its server and login to create their own
 databases and its name as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION`
 environment variable first, falling back to the `Testing:PostgresConnection` key in
@@ -296,17 +316,36 @@ fresh database per configured backend and drops it at class teardown, named and 
 as the API host databases below, so the login needs the same create and drop rights. The leftover
 cleanup below covers these databases too.
 
-**`STRUO_TEST_BACKEND`** selects the backend the API test hosts (`ApiFactory` and the CORS host) run
-on: `Sqlite` (the default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`, case-insensitive. An
-invalid value, or a live backend without its test connection, fails the run with a message naming
-what to set. Each host instance gets its own database, named from the configured test database, the
-host's purpose, a sequence number and a run id, and creates and drops it itself. The test login
-therefore needs create and drop database rights, and every generated name contains `test`.
-Unit-level harnesses stay on SQLite whatever the switch says, and `[SqliteOnlyFact]` /
-`[SqliteOnlyTheory]` tests are skipped with a reason starting "SQLite-only:" when a live backend is
-selected.
+**`STRUO_TEST_BACKEND`** selects the backend the tests run on: `Sqlite` (the default),
+`PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`, case-insensitive. An invalid value, or a live
+backend without its test connection, fails the run with a message naming what to set. The switch
+moves both kinds of test database:
 
-A crashed run can leave databases behind. This drops them on the selected backend:
+- **API test hosts** (`ApiFactory` and the CORS host): each instance gets its own database, named
+  from the configured test database, the host's purpose, a sequence number and a run id, and
+  creates and drops it itself.
+- **Unit harnesses** take their database from `TestBackend.CreateUnitDatabase()`. With the switch
+  unset that is a SQLite temp file. On a live backend it is a database leased from a per-backend
+  pool on the first read of its `ConnectionString` or `Name`, so a test that never opens it creates
+  nothing. Every lease is empty; disposing drops all its tables and returns it. A database that
+  cannot be emptied (an open transaction holding locks, a view, leftover tables) is dropped; the pool
+  creates a new one on a later lease. Pool databases are named `<stem>_unit_<seq>_<runId>`.
+
+The test login therefore needs create and drop database rights, and every generated name contains
+`test`. MySQL and MariaDB test databases are created as utf8mb4, because SqlSugar's
+`CreateDatabase` uses utf8mb3 unless the connection string names utf8mb4. Run MySQL with the
+server's default strict `sql_mode`: non-strict mode silently truncates or replaces values, which
+hides length and charset bugs.
+
+A test that only means something on SQLite carries `[SqliteOnlyFact("reason")]` or
+`[SqliteOnlyTheory("reason")]` and is skipped on a live backend with a reason starting
+"SQLite-only:"; a live run skips 17 of them. `SqliteTestDatabaseUsageTests` fails when a test
+outside `tests/Struo.Tests/Support/` uses `SqliteTestDatabase` or `SqliteTempTestDatabase`
+directly, so every other test follows the switch.
+
+Pool databases are dropped at process exit, best effort. On MySQL and MariaDB a discarded database
+whose holder connection stays open survives until that connection closes, and a crashed run can
+leave databases behind on any backend. After a live run, this drops them on the selected backend:
 
 ```
 STRUO_TEST_BACKEND=<backend> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "FullyQualifiedName~Drop_leftover_databases_on_request"

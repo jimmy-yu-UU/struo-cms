@@ -23,18 +23,18 @@ namespace Struo.Tests.Files;
 /// <summary>
 /// Media folders: MediaFolder core entity — self-referencing tree, Hidden
 /// collection routed as <c>mediafolder</c>; File.FolderId nullable organisational FK. Fixture wiring
-/// mirrors <c>ItemServiceTests</c>'s hand-wired-services pattern (SQLite in-memory + InitTables).
+/// mirrors <c>ItemServiceTests</c>'s hand-wired-services pattern (unit test database + InitTables).
 /// </summary>
 public sealed class MediaFolderTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
     private readonly IMetadataProvider _metadata;
 
     public MediaFolderTests()
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<MediaFolder>();
         db.CodeFirst.InitTables<File>();
@@ -119,7 +119,7 @@ public sealed class MediaFolderTests : IDisposable
         var aId = (Guid)a["id"]!;
 
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
 
         var inFolder = new File
@@ -163,7 +163,7 @@ public sealed class MediaFolderTests : IDisposable
         var aId = (Guid)a["id"]!;
 
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         var fileInFolder = new File
         {

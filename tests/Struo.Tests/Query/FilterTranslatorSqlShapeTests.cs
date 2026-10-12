@@ -22,13 +22,13 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [GeneratedRegex(@"sq(\d+)_")]
     private static partial Regex SqPrefixRegex();
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
 
     public FilterTranslatorSqlShapeTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Category>();
         _db.CodeFirst.InitTables<Article>();

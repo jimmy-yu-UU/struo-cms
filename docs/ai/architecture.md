@@ -61,8 +61,9 @@ See `docs/guide/en/02-architecture.md` for the conceptual introduction to this l
 
 "Database-replaceable" in this template means the SqlSugar *provider*, not the ORM.
 `Database:DbType` maps 1:1 onto `SqlSugar.DbType` in `DbTypeMapper.Map`
-(`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`) across five backends; only PostgreSQL is
-verified (`AGENTS.md`'s "Hard constraints" has the full backend list and verification status). The
+(`src/Struo.Infrastructure/Persistence/DbTypeMapper.cs`) across five backends; PostgreSQL, SQL Server,
+MySQL and MariaDB are verified and Oracle is not (`AGENTS.md`'s "Hard constraints" has the full
+backend list and verification status). The
 ORM itself is not swappable at the content-project level — every content entity (`using SqlSugar;`,
 e.g. `samples/Struo.Sample.Blog/Article.cs`) carries SqlSugar's own
 `[SugarTable]`/`[SugarColumn]`/`[SugarIndex]`/`[Navigate]` attributes directly alongside StruoCMS's

@@ -10,6 +10,12 @@ run. The core migrations live in `src/Struo.Infrastructure/Migrations/Core/`.
 Unit-level test harnesses may still build tables with `db.CodeFirst.InitTables(...)`. App-level test
 hosts (`ApiFactory`) run the migrations instead.
 
+CodeFirst names a `UniqueGroupNameList` unique index `Index_{table}_{columns}_Unique` and ignores the
+group name. The migrations name indexes by policy, so this only reaches unit harnesses, and there
+the generated name must fit the identifier limit of every backend: MySQL and MariaDB refuse a name
+over 64 characters, PostgreSQL truncates one over 63, and SQL Server allows 128. Unit-harness entities
+keep `Index_{table}_{columns}_Unique` within 63 characters.
+
 ## Why
 
 SqlSugar's default CodeFirst mode is a destructive diff on an existing table: it adds columns,
@@ -35,6 +41,11 @@ tag 5.1.4.197, the closest tag to the pinned `SqlSugarCore` 5.1.4.221; `column-t
 `SqlServerCodeFirstNvarchar` (true on SQL Server), never `SqliteCodeFirstEnableDropColumn`, so a
 SQLite run cannot show the drop.
 
+Measured 2026-10-12: CodeFirst over a unique group on `policy_probe_legacy_translations` failed on
+MySQL and MariaDB with `Identifier name 'Index_policy_probe_legacy_translations_LegacyProbeId_Locale_Unique'
+is too long` (66 characters); `TranslationSidecarIndexPolicyTests` uses shorter table names for that
+reason.
+
 ## Unknowns
 
 What SQLite does with `SqliteCodeFirstEnableDropColumn` turned on is not measured in this repository;
@@ -45,3 +56,5 @@ has no connection, so the parity claim is unmeasured there.
 
 - `AGENTS.md` ("Migrations are the only schema source")
 - `tests/Struo.Tests/Query/PostgresOnlyTests.cs`
+- `tests/Struo.Tests/Persistence/TranslationSidecarIndexPolicyTests.cs`
+- `AGENTS.md` ("Verification")

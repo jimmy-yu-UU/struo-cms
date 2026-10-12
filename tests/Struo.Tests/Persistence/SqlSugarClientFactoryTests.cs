@@ -18,27 +18,23 @@ public class SqlSugarClientFactoryTests
     [Fact]
     public void Create_returns_a_thread_safe_SqlSugarScope_not_a_bare_SqlSugarClient()
     {
-        using var db = new SqliteTestDatabase();
-        var options = new DatabaseOptions
-        {
-            DbType = StruoDbType.Sqlite,
-            ConnectionString = db.ConnectionString
-        };
+        using var db = TestBackend.CreateUnitDatabase();
+        var options = db.Options();
 
         var client = SqlSugarClientFactory.Create(options, new TestCurrentUserAccessor(null));
 
         Assert.IsType<SqlSugarScope>(client);
     }
 
-    private static ISqlSugarClient NewClient(SqliteTestDatabase db, string prefix) =>
+    private static ISqlSugarClient NewClient(ITestDatabase db, string prefix) =>
         SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString, TablePrefix = prefix },
+            db.Options(prefix),
             new TestCurrentUserAccessor(null));
 
     [Fact]
     public void Default_prefix_applies_to_framework_tables_only()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var client = NewClient(db, "struo_");
 
         Assert.Equal("struo_users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
@@ -48,7 +44,7 @@ public class SqlSugarClientFactoryTests
     [Fact]
     public void Empty_prefix_yields_the_attribute_names()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var client = NewClient(db, "");
 
         Assert.Equal("users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
@@ -59,8 +55,8 @@ public class SqlSugarClientFactoryTests
     [Fact]
     public void Two_clients_with_different_prefixes_resolve_independently_in_one_process()
     {
-        using var dbA = new SqliteTestDatabase();
-        using var dbB = new SqliteTestDatabase();
+        using var dbA = TestBackend.CreateUnitDatabase();
+        using var dbB = TestBackend.CreateUnitDatabase();
         var a = NewClient(dbA, "aa_");
         var b = NewClient(dbB, "bb_");
 
@@ -99,7 +95,7 @@ public class SqlSugarClientFactoryTests
     [Fact]
     public void InitTables_creates_the_prefixed_table_and_queries_hit_it()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var client = NewClient(db, "struo_");
 
         client.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();

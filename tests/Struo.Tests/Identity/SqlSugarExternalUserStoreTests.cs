@@ -11,10 +11,10 @@ namespace Struo.Tests.Identity;
 
 public class SqlSugarExternalUserStoreTests
 {
-    private static ISqlSugarClient NewDb(SqliteTestDatabase file)
+    private static ISqlSugarClient NewDb(ITestDatabase file)
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables(typeof(User));
         return db;
@@ -23,7 +23,7 @@ public class SqlSugarExternalUserStoreTests
     [Fact]
     public async Task FindByEmail_is_case_insensitive_and_returns_active_flag()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var id = Guid.CreateVersion7();
         await db.Insertable(new User { Id = id, Email = "Alice@Corp.com", Password = "x", IsActive = false }).ExecuteCommandAsync();
@@ -39,7 +39,7 @@ public class SqlSugarExternalUserStoreTests
     [Fact]
     public async Task FindByEmail_returns_null_when_absent()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var store = new SqlSugarExternalUserStore(db);
         (await store.FindByEmailAsync("nobody@corp.com")).Should().BeNull();
@@ -48,7 +48,7 @@ public class SqlSugarExternalUserStoreTests
     [Fact]
     public async Task CreateExternalUser_persists_active_roleless_passwordless_user()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var store = new SqlSugarExternalUserStore(db);
 

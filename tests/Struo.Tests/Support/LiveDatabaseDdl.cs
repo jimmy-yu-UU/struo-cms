@@ -12,6 +12,9 @@ namespace Struo.Tests.Support;
 /// </summary>
 internal static partial class LiveDatabaseDdl
 {
+    // Bounds a drop that waits on a lock the server cannot sever (MySQL and MariaDB metadata locks).
+    private const int DropCommandTimeoutSeconds = 30;
+
     /// <summary>The database a connection string names, read with the provider's own builder.</summary>
     public static string DatabaseOf(TestBackendKind kind, string connectionString) => kind switch
     {
@@ -72,6 +75,7 @@ internal static partial class LiveDatabaseDdl
             var configured = TestBackend.ConfiguredConnection(kind);
             ClearPool(kind, WithDatabase(configured, kind, name));
             using var client = OpenClient(kind, configured);
+            client.Ado.CommandTimeOut = DropCommandTimeoutSeconds;
             client.Ado.ExecuteCommand(DropStatement(kind, name));
         }
         catch (Exception ex)
@@ -112,8 +116,8 @@ internal static partial class LiveDatabaseDdl
         _ => throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind)),
     };
 
-    // Clears only the pool of the connection being dropped. Never throws.
-    private static void ClearPool(TestBackendKind kind, string connectionString)
+    // Clears the client pool of exactly this connection string. Never throws.
+    internal static void ClearPool(TestBackendKind kind, string connectionString)
     {
         try
         {
@@ -145,7 +149,10 @@ internal static partial class LiveDatabaseDdl
             case TestBackendKind.SqlServer:
                 return new SqlConnectionStringBuilder(connectionString) { InitialCatalog = name }.ConnectionString;
             case TestBackendKind.MySql or TestBackendKind.MariaDb:
-                return new MySqlConnectionStringBuilder(connectionString) { Database = name }.ConnectionString;
+                // SqlSugar creates a utf8mb4 database only when the connection string names utf8mb4;
+                // otherwise it issues CHARACTER SET utf8 (utf8mb3), which loses 4-byte characters.
+                return new MySqlConnectionStringBuilder(connectionString) { Database = name, CharacterSet = "utf8mb4" }
+                    .ConnectionString;
             default:
                 throw new ArgumentException("SQLite databases are files, not server databases.", nameof(kind));
         }

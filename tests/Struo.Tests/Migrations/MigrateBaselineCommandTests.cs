@@ -31,7 +31,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     private const string AdminPassword = "s3cret-pw";
     private static readonly string[] PublicRead = ["article", "page"];
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public MigrateBaselineCommandTests() =>
         MigrationCli.OptionsOverride = o => o with { NamespaceFilter = "Struo.Infrastructure.Migrations.Core" };
@@ -39,7 +39,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     public void Dispose()
     {
         MigrationCli.OptionsOverride = o => o;
-        _file.Dispose();
+        _database.Dispose();
     }
 
     private static string NewPrefix() => "t" + Guid.NewGuid().ToString("N")[..8] + "_";
@@ -54,8 +54,14 @@ public sealed class MigrateBaselineCommandTests : IDisposable
             }));
 
     private static ServiceProvider Services(StruoDbType dbType, string conn, string prefix) =>
+        Services(() => new DatabaseOptions { DbType = dbType, ConnectionString = conn, TablePrefix = prefix });
+
+    // Resolved on first use, so a command that never opens the database leases none.
+    private ServiceProvider Services(string prefix) => Services(() => _database.Options(prefix));
+
+    private static ServiceProvider Services(Func<DatabaseOptions> options) =>
         new ServiceCollection()
-            .AddSingleton(Options.Create(new DatabaseOptions { DbType = dbType, ConnectionString = conn, TablePrefix = prefix }))
+            .AddSingleton(_ => Options.Create(options()))
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Auth:BootstrapAdmin:Email"] = AdminEmail,
@@ -126,16 +132,16 @@ public sealed class MigrateBaselineCommandTests : IDisposable
 
     [Fact]
     public async Task Baseline_records_every_migration_of_a_v08_database_without_touching_its_data() =>
-        await AssertBaselineJoinsDatabase(StruoDbType.Sqlite, _file.ConnectionString, NewPrefix());
+        await AssertBaselineJoinsDatabase(_database.DbType, _database.ConnectionString, NewPrefix());
 
     [Fact]
     public async Task Migrate_on_a_v08_database_points_at_baseline_in_one_line_and_changes_nothing()
     {
         var prefix = NewPrefix();
-        var db = Client(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+        var db = Client(_database.DbType, _database.ConnectionString, prefix);
         await SimulateV08(db);
         var tables = db.DbMaintenance.GetTableInfoList(false).Select(t => t.Name).Order().ToArray();
-        using var sp = Services(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+        using var sp = Services(prefix);
 
         var result = await Run(sp, "migrate");
 
@@ -149,8 +155,8 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     public async Task A_second_baseline_is_refused_in_one_line_and_changes_nothing()
     {
         var prefix = NewPrefix();
-        await SimulateV08(Client(StruoDbType.Sqlite, _file.ConnectionString, prefix));
-        using var sp = Services(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+        await SimulateV08(Client(_database.DbType, _database.ConnectionString, prefix));
+        using var sp = Services(prefix);
         (await Run(sp, "migrate:baseline")).Code.Should().Be(MigrationCli.Success);
 
         var second = await Run(sp, "migrate:baseline");
@@ -164,21 +170,20 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     public async Task Baseline_on_an_empty_database_points_at_migrate_and_creates_nothing()
     {
         var prefix = NewPrefix();
-        using var sp = Services(StruoDbType.Sqlite, _file.ConnectionString, prefix);
+        using var sp = Services(prefix);
 
         var result = await Run(sp, "migrate:baseline");
 
         result.Code.Should().Be(MigrationCli.Failure);
         result.Err.TrimEnd().Split('\n').Should().ContainSingle().Which.Should().Contain("migrate");
-        new SqlSugarClient(new ConnectionConfig
-            { DbType = DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true })
+        new SqlSugarClient(_database.RawConfig())
             .DbMaintenance.GetTableInfoList(false).Should().BeEmpty();
     }
 
     [Fact]
     public async Task Baseline_with_an_extra_argument_is_a_usage_error()
     {
-        using var sp = Services(StruoDbType.Sqlite, _file.ConnectionString, NewPrefix());
+        using var sp = Services(NewPrefix());
 
         var result = await Run(sp, "migrate:baseline", "extra");
 
@@ -189,10 +194,9 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     public async Task Baseline_records_content_assembly_migrations_alongside_the_core_ones()
     {
         var prefix = NewPrefix();
-        await SimulateV08(Client(StruoDbType.Sqlite, _file.ConnectionString, prefix));
+        await SimulateV08(Client(_database.DbType, _database.ConnectionString, prefix));
         using var sp = new ServiceCollection()
-            .AddSingleton(Options.Create(new DatabaseOptions
-                { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = prefix }))
+            .AddSingleton(Options.Create(_database.Options(prefix)))
             .AddSingleton(new ScannedAssemblies([typeof(StruoMigration).Assembly, typeof(MigrateBaselineCommandTests).Assembly]))
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .BuildServiceProvider();
@@ -208,7 +212,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     public async Task A_failure_while_recording_leaves_no_version_rows_so_baseline_can_be_retried()
     {
         var prefix = NewPrefix();
-        await SimulateV08(Client(StruoDbType.Sqlite, _file.ConnectionString, prefix));
+        await SimulateV08(Client(_database.DbType, _database.ConnectionString, prefix));
         var failing = new MigrationHost(HostOptions(prefix, failOnSecondRecord: true), NullLoggerFactory.Instance);
 
         var act = () => failing.BaselineAsync(default);
@@ -220,7 +224,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
     }
 
     private MigrationHostOptions HostOptions(string prefix, bool failOnSecondRecord = false) =>
-        new(StruoDbType.Sqlite, _file.ConnectionString, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 5)
+        new(_database.DbType, _database.ConnectionString, prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 5)
         {
             NamespaceFilter = "Struo.Infrastructure.Migrations.Core",
             ConfigureRunnerServices = failOnSecondRecord

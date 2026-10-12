@@ -189,52 +189,41 @@ public class ColumnTypeMapTests
     }
 
     [Fact]
-    public void InitTables_builds_the_framework_tables_with_the_shaped_columns_declared_correctly_on_Sqlite()
+    public void InitTables_builds_the_framework_tables_with_the_shaped_columns_declared_correctly()
     {
-        var db = new SqliteTestDatabase();
-        using (db)
-        {
-            var client = SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty));
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
 
-            client.CodeFirst.InitTables<MediaFolder>();
-            client.CodeFirst.InitTables<SiteSettings>();
-            client.CodeFirst.InitTables<Revision>();
+        client.CodeFirst.InitTables<MediaFolder>();
+        client.CodeFirst.InitTables<SiteSettings>();
+        client.CodeFirst.InitTables<Revision>();
 
-            // This pins the actual wiring end-to-end: marker attribute -> EntityService hook ->
-            // ColumnTypeMap -> declared DDL type. SQLite records the declared type name verbatim
-            // (it only derives a storage *affinity* from it, it does not normalize/discard it), so
-            // this fails if the hook's [ColumnShape] branch is ever removed or bypassed — unlike a
-            // bare column-name-presence check, which would stay green even if every shaped column
-            // silently reverted to SqlSugar's default varchar(255)/timestamp mapping.
-            var mediaFolderColumns = client.DbMaintenance.GetColumnInfosByTableName(
-                client.EntityMaintenance.GetTableName<MediaFolder>(), false);
-            var mediaFolderNames = mediaFolderColumns.Select(c => c.DbColumnName).ToList();
-            mediaFolderNames.Should().Contain("Id");
-            mediaFolderNames.Should().Contain("Name");
-            var createdAt = mediaFolderColumns.Single(c => c.DbColumnName.Equals("CreatedAt", StringComparison.OrdinalIgnoreCase));
-            var mediaUpdatedAt = mediaFolderColumns.Single(c => c.DbColumnName.Equals("UpdatedAt", StringComparison.OrdinalIgnoreCase));
-            createdAt.DataType.Should().ContainEquivalentOf("timestamptz");
-            mediaUpdatedAt.DataType.Should().ContainEquivalentOf("timestamptz");
+        // This pins the actual wiring end-to-end: marker attribute -> EntityService hook ->
+        // ColumnTypeMap -> declared DDL type, read back from the catalog. It fails if the hook's
+        // [ColumnShape] branch is ever removed or bypassed, unlike a bare column-name-presence check,
+        // which would stay green even if every shaped column silently reverted to SqlSugar's default
+        // varchar(255)/timestamp mapping.
+        var mediaFolderColumns = client.DbMaintenance.GetColumnInfosByTableName(
+            client.EntityMaintenance.GetTableName<MediaFolder>(), false);
+        mediaFolderColumns.Should().ContainSingle(c => c.DbColumnName.Equals("Id", StringComparison.OrdinalIgnoreCase));
+        mediaFolderColumns.Should().ContainSingle(c => c.DbColumnName.Equals("Name", StringComparison.OrdinalIgnoreCase));
+        Column(mediaFolderColumns, "CreatedAt").ShouldHaveShape(ColumnShape.TimestampWithTimeZone, db.DbType);
+        Column(mediaFolderColumns, "UpdatedAt").ShouldHaveShape(ColumnShape.TimestampWithTimeZone, db.DbType);
 
-            var siteSettingsColumns = client.DbMaintenance.GetColumnInfosByTableName(
-                client.EntityMaintenance.GetTableName<SiteSettings>(), false);
-            var siteSettingsNames = siteSettingsColumns.Select(c => c.DbColumnName).ToList();
-            siteSettingsNames.Should().Contain("Id");
-            var brandName = siteSettingsColumns.Single(c => c.DbColumnName.Equals("BrandName", StringComparison.OrdinalIgnoreCase));
-            var siteUpdatedAt = siteSettingsColumns.Single(c => c.DbColumnName.Equals("UpdatedAt", StringComparison.OrdinalIgnoreCase));
-            brandName.DataType.Should().ContainEquivalentOf("text");
-            siteUpdatedAt.DataType.Should().ContainEquivalentOf("timestamptz");
+        var siteSettingsColumns = client.DbMaintenance.GetColumnInfosByTableName(
+            client.EntityMaintenance.GetTableName<SiteSettings>(), false);
+        siteSettingsColumns.Should().ContainSingle(c => c.DbColumnName.Equals("Id", StringComparison.OrdinalIgnoreCase));
+        Column(siteSettingsColumns, "BrandName").ShouldHaveShape(ColumnShape.LongText, db.DbType);
+        Column(siteSettingsColumns, "UpdatedAt").ShouldHaveShape(ColumnShape.TimestampWithTimeZone, db.DbType);
 
-            var revisionColumns = client.DbMaintenance.GetColumnInfosByTableName(
-                client.EntityMaintenance.GetTableName<Revision>(), false);
-            var revisionNames = revisionColumns.Select(c => c.DbColumnName).ToList();
-            revisionNames.Should().Contain("Id");
-            var snapshot = revisionColumns.Single(c => c.DbColumnName.Equals("Snapshot", StringComparison.OrdinalIgnoreCase));
-            snapshot.DataType.Should().ContainEquivalentOf("text");
-        }
+        var revisionColumns = client.DbMaintenance.GetColumnInfosByTableName(
+            client.EntityMaintenance.GetTableName<Revision>(), false);
+        revisionColumns.Should().ContainSingle(c => c.DbColumnName.Equals("Id", StringComparison.OrdinalIgnoreCase));
+        Column(revisionColumns, "Snapshot").ShouldHaveShape(ColumnShape.LongText, db.DbType);
     }
+
+    private static DbColumnInfo Column(IEnumerable<DbColumnInfo> columns, string name) =>
+        columns.Single(c => c.DbColumnName.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     [SugarTable("column_shape_nullable_test_entity")]
     private sealed class ColumnShapeNullableTestEntity
@@ -259,20 +248,18 @@ public class ColumnTypeMapTests
     [Fact]
     public void ColumnShape_on_a_nullable_property_gets_the_shaped_type_and_stays_nullable()
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateUnitDatabase();
         using (db)
         {
-            var client = SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty));
+            var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
 
             client.CodeFirst.InitTables<ColumnShapeNullableTestEntity>();
 
             var columns = client.DbMaintenance.GetColumnInfosByTableName("column_shape_nullable_test_entity", false);
             var deletedAt = columns.Single(c => c.DbColumnName.Equals("DeletedAt", StringComparison.OrdinalIgnoreCase));
             var notes = columns.Single(c => c.DbColumnName.Equals("Notes", StringComparison.OrdinalIgnoreCase));
-            deletedAt.DataType.Should().ContainEquivalentOf("timestamptz");
-            notes.DataType.Should().ContainEquivalentOf("text");
+            deletedAt.ShouldHaveShape(ColumnShape.TimestampWithTimeZone, db.DbType);
+            notes.ShouldHaveShape(ColumnShape.LongText, db.DbType);
 
             // Explicit assertion of the fact "the column is nullable" itself. The insert-null below is
             // a behavioral guard (the DB genuinely accepts null) — a different layer, both stay.
@@ -311,12 +298,10 @@ public class ColumnTypeMapTests
     [Fact]
     public void ColumnShape_wins_over_an_explicitly_declared_ColumnDataType()
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateUnitDatabase();
         using (db)
         {
-            var client = SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty));
+            var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
 
             client.CodeFirst.InitTables<ColumnShapePrecedenceTestEntity>();
 
@@ -324,9 +309,9 @@ public class ColumnTypeMapTests
                 .GetColumnInfosByTableName("column_shape_precedence_test_entity", false)
                 .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
 
-            // SQLite 逐字記錄宣告型別（只從中推導 storage affinity），所以這條斷言在 SQLite 上有效。
-            body.DataType.Should().ContainEquivalentOf("text");
-            body.DataType.Should().NotContainEquivalentOf("varchar");
+            // ShouldHaveShape 同時比對型別名與長度，所以 SQL Server 的 nvarchar(max) 也與 varchar(7) 分得開。
+            body.ShouldHaveShape(ColumnShape.LongText, db.DbType);
+            body.Length.Should().NotBe(7);
         }
     }
 
@@ -353,12 +338,10 @@ public class ColumnTypeMapTests
     [Fact]
     public void ColumnShape_combined_with_a_JSON_column_CmsField_is_refused()
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateUnitDatabase();
         using (db)
         {
-            var client = SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty));
+            var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
 
             var act = () => client.CodeFirst.InitTables<ColumnShapeJsonConflictTestEntity>();
 
@@ -397,12 +380,10 @@ public class ColumnTypeMapTests
     [Fact]
     public void ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed()
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateUnitDatabase();
         using (db)
         {
-            var client = SqlSugarClientFactory.Create(
-                new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-                new TestCurrentUserAccessor(Guid.Empty));
+            var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
 
             client.CodeFirst.InitTables<ColumnShapeContentFieldTestEntity>();
 
@@ -410,7 +391,7 @@ public class ColumnTypeMapTests
                 .GetColumnInfosByTableName("column_shape_content_field_test_entity", false)
                 .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
 
-            body.DataType.Should().ContainEquivalentOf("text");
+            body.ShouldHaveShape(ColumnShape.LongText, db.DbType);
         }
     }
 
@@ -419,37 +400,46 @@ public class ColumnTypeMapTests
     {
         [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
         [SugarColumn(IsJson = true)] public List<string> Tags { get; set; } = [];
+    }
+
+    [SugarTable("explicit_isjson_probe")]
+    private sealed class ExplicitIsJsonProbe
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
         [SugarColumn(IsJson = true, ColumnDataType = "clob")] public List<string> Pinned { get; set; } = [];
     }
 
     [Fact]
-    public void Bare_IsJson_without_CmsField_or_shape_is_widened_to_LongText_on_Sqlite()
+    public void Bare_IsJson_without_CmsField_or_shape_is_widened_to_LongText()
     {
-        using var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
         client.CodeFirst.InitTables<BareIsJsonProbe>();
 
         var columns = client.DbMaintenance.GetColumnInfosByTableName("bare_isjson_probe", false);
-        columns.Single(c => c.DbColumnName.Equals("Tags", StringComparison.OrdinalIgnoreCase))
-            .DataType.Should().ContainEquivalentOf(ColumnTypeMap.For(ColumnShape.LongText, DbType.Sqlite));
+        Column(columns, "Tags").ShouldHaveShape(ColumnShape.LongText, db.DbType);
+    }
+
+    [Fact]
+    public void Bare_IsJson_list_round_trips()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<BareIsJsonProbe>();
 
         client.Insertable(new BareIsJsonProbe { Tags = ["alpha", "beta"] }).ExecuteCommand();
         client.Queryable<BareIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta");
     }
 
-    [Fact]
+    [SqliteOnlyFact("explicit 'clob' column type is only valid on SQLite/Oracle")]
     public void Explicit_ColumnDataType_on_an_IsJson_property_is_respected()
     {
-        using var db = new SqliteTestDatabase();
-        var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
-            new TestCurrentUserAccessor(Guid.Empty));
-        client.CodeFirst.InitTables<BareIsJsonProbe>();
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<ExplicitIsJsonProbe>();
 
-        var columns = client.DbMaintenance.GetColumnInfosByTableName("bare_isjson_probe", false);
-        columns.Single(c => c.DbColumnName.Equals("Pinned", StringComparison.OrdinalIgnoreCase))
+        var columns = client.DbMaintenance.GetColumnInfosByTableName("explicit_isjson_probe", false);
+        Column(columns, "Pinned")
             .DataType.Should().ContainEquivalentOf("clob", "a fork's own literal must win over the convention");
     }
 }

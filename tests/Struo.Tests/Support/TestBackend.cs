@@ -7,7 +7,8 @@ public enum TestBackendKind { Sqlite, PostgreSQL, SqlServer, MySql, MariaDb }
 
 /// <summary>
 /// The backend API test hosts run on, chosen by <c>STRUO_TEST_BACKEND</c> (default SQLite). A live
-/// backend gets one fresh, uniquely named database per host, dropped on dispose.
+/// backend gets one fresh, uniquely named database per host, dropped on dispose. Unit harnesses get
+/// theirs from <see cref="CreateUnitDatabase"/>, which leases from a pool of emptied databases.
 /// </summary>
 internal static partial class TestBackend
 {
@@ -57,6 +58,13 @@ internal static partial class TestBackend
         IsLive ? CreateLiveDatabase(Current, purpose) : CreateSqliteDatabase();
 
     public static ITestDatabase CreateSqliteDatabase() => new SqliteTempTestDatabase();
+
+    /// <summary>
+    /// The database a unit test harness runs on: a SQLite temp file when the switch is unset, otherwise
+    /// an empty database leased lazily from the selected backend's <see cref="LiveDatabasePool"/>.
+    /// </summary>
+    public static ITestDatabase CreateUnitDatabase() =>
+        IsLive ? LiveDatabasePool.For(Current).Lease() : CreateSqliteDatabase();
 
     public static ITestDatabase CreateLiveDatabase(TestBackendKind kind, string purpose) =>
         CreateLiveDatabase(kind, purpose, RunId);

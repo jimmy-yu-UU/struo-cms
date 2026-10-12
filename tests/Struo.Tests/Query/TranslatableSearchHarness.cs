@@ -45,7 +45,7 @@ public sealed class TsItemTranslation
 
 public sealed class TranslatableSearchHarness : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     public ISqlSugarClient Db { get; }
     internal FilterTranslator Translator { get; }
 
@@ -54,7 +54,7 @@ public sealed class TranslatableSearchHarness : IDisposable
     public TranslatableSearchHarness()
     {
         Db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         foreach (var t in Types) Db.CodeFirst.InitTables(t);
         var collections = MetadataScanner.ScanTypes(Types);
@@ -67,5 +67,5 @@ public sealed class TranslatableSearchHarness : IDisposable
         Translator = new FilterTranslator(Db, graph, metadata, registry, new StruoQueryOptions());
     }
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 }

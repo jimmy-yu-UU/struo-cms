@@ -15,7 +15,7 @@ namespace Struo.Tests.Migrations;
 [Collection("MigrationCli")] // OptionsOverride is static; keep these tests serial
 public sealed class MigrationCliTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
     public MigrationCliTests() =>
         MigrationCli.OptionsOverride = o => o with { NamespaceFilter = "Struo.Tests.Migrations.Probes.Upgrade.V1" };
@@ -23,13 +23,14 @@ public sealed class MigrationCliTests : IDisposable
     public void Dispose()
     {
         MigrationCli.OptionsOverride = o => o;
-        _file.Dispose();
+        _database.Dispose();
     }
 
-    private ServiceProvider Services(StruoDbType db = StruoDbType.Sqlite, string? conn = null) =>
+    // The options are resolved on first use, so a command that never opens the database leases none.
+    private ServiceProvider Services(StruoDbType? db = null, string? conn = null) =>
         new ServiceCollection()
-            .AddSingleton(Options.Create(new DatabaseOptions
-                { DbType = db, ConnectionString = conn ?? _file.ConnectionString }))
+            .AddSingleton(_ => Options.Create(new DatabaseOptions
+                { DbType = db ?? _database.DbType, ConnectionString = conn ?? _database.ConnectionString }))
             .AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
             .AddSingleton(Options.Create(new LocalizationOptions()))
             .AddSingleton<Struo.Application.Security.IPasswordHasher, Struo.Infrastructure.Identity.Argon2idPasswordHasher>()
@@ -140,8 +141,8 @@ public sealed class MigrationCliTests : IDisposable
             .AddOptions<DatabaseOptions>()
             .Configure(o =>
             {
-                o.DbType = StruoDbType.Sqlite;
-                o.ConnectionString = _file.ConnectionString;
+                o.DbType = _database.DbType;
+                o.ConnectionString = "unused: validation fails before any connection";
                 o.MigrationLockTimeoutSeconds = 0;
             })
             .Services

@@ -20,7 +20,7 @@ namespace Struo.Tests.Migrations.Core;
 [Collection("MigrationCli")] // OptionsOverride is static; keep these tests serial
 public sealed class CoreMigrateCliTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _db = TestBackend.CreateUnitDatabase();
     private readonly string _prefix = $"t{Guid.NewGuid():N}"[..9] + "_";
 
     public CoreMigrateCliTests() =>
@@ -29,7 +29,7 @@ public sealed class CoreMigrateCliTests : IDisposable
     public void Dispose()
     {
         MigrationCli.OptionsOverride = o => o;
-        _file.Dispose();
+        _db.Dispose();
     }
 
     [Fact]
@@ -42,8 +42,7 @@ public sealed class CoreMigrateCliTests : IDisposable
             ["Rbac:PublicReadCollections:0"] = "article",
         }).Build();
         using var sp = new ServiceCollection()
-            .AddSingleton(Options.Create(new DatabaseOptions
-                { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = _prefix }))
+            .AddSingleton(Options.Create(_db.Options(_prefix)))
             .AddSingleton<IConfiguration>(config)
             .AddSingleton(Options.Create(new LocalizationOptions()))
             .AddSingleton<IPasswordHasher, Argon2idPasswordHasher>()
@@ -59,7 +58,7 @@ public sealed class CoreMigrateCliTests : IDisposable
         var migrate = await Run(sp, "migrate");
         migrate.Code.Should().Be(MigrationCli.Success, migrate.Err);
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = _prefix },
+            _db.Options(_prefix),
             new TestCurrentUserAccessor(Guid.Empty),
             new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>()));
         db.Queryable<User>().Count().Should().Be(1);
@@ -70,8 +69,7 @@ public sealed class CoreMigrateCliTests : IDisposable
     public async Task Status_needs_neither_a_password_hasher_nor_configuration()
     {
         using var sp = new ServiceCollection()
-            .AddSingleton(Options.Create(new DatabaseOptions
-                { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = _prefix }))
+            .AddSingleton(Options.Create(_db.Options(_prefix)))
             .AddSingleton(new ScannedAssemblies([typeof(StruoMigration).Assembly]))
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .BuildServiceProvider();
@@ -82,8 +80,7 @@ public sealed class CoreMigrateCliTests : IDisposable
         status.Out.Should().Contain("2 pending");
     }
 
-    private string[] Tables() => new SqlSugarClient(new ConnectionConfig
-        { DbType = DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true })
+    private string[] Tables() => new SqlSugarClient(_db.RawConfig())
         .DbMaintenance.GetTableInfoList(false).Select(t => t.Name.ToLowerInvariant()).ToArray();
 
     private static async Task<(int Code, string Out, string Err)> Run(IServiceProvider sp, params string[] args)

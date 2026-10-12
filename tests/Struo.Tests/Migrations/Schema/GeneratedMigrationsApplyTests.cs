@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
-using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Schema;
@@ -12,12 +11,12 @@ using Xunit;
 
 namespace Struo.Tests.Migrations.Schema;
 
-/// <summary>Applies the checked-in generated migrations to SQLite: the generated sources must run, not just compile.</summary>
+/// <summary>Applies the checked-in generated migrations to a unit database: the generated sources must run, not just compile.</summary>
 public sealed class GeneratedMigrationsApplyTests : IDisposable
 {
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
 
-    public void Dispose() => _file.Dispose();
+    public void Dispose() => _database.Dispose();
 
     [Fact]
     public async Task Generated_migrations_create_their_tables_and_indexes()
@@ -45,17 +44,17 @@ public sealed class GeneratedMigrationsApplyTests : IDisposable
             [typeof(FileTranslation)] = TranslationSidecarIndexPolicy.KeyFor(typeof(FileTranslation), "FileId", "Locale")
         });
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString, TablePrefix = "gen_" },
+            _database.Options("gen_"),
             new TestCurrentUserAccessor(Guid.Empty),
             policy);
 
-        var report = SchemaChecker.Check(db, StruoDbType.Sqlite, [typeof(SchemaProbe), typeof(Revision), typeof(FileTranslation)]);
+        var report = SchemaChecker.Check(db, _database.DbType, [typeof(SchemaProbe), typeof(Revision), typeof(FileTranslation)]);
 
         report.HasErrors.Should().BeFalse(report.ToString());
     }
 
     private Task<IReadOnlyList<MigrationInfo>> ApplyAsync() => new MigrationHost(
-        new MigrationHostOptions(StruoDbType.Sqlite, _file.ConnectionString, "gen_",
+        new MigrationHostOptions(_database.DbType, _database.ConnectionString, "gen_",
             [typeof(GeneratedMigrationsApplyTests).Assembly], LockTimeoutSeconds: 5)
         { NamespaceFilter = "Struo.Tests.Migrations.Schema.Generated" },
         NullLoggerFactory.Instance).ApplyAsync(default);
@@ -97,6 +96,5 @@ public sealed class GeneratedMigrationsApplyTests : IDisposable
         ["locale"] = locale
     };
 
-    private SqlSugarClient Open() => new(new ConnectionConfig
-        { DbType = SqlSugar.DbType.Sqlite, ConnectionString = _file.ConnectionString, IsAutoCloseConnection = true });
+    private SqlSugarClient Open() => new(_database.RawConfig());
 }

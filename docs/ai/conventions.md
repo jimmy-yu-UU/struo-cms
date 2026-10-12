@@ -316,12 +316,11 @@ When a property needs a DDL column type other than SqlSugar's default C#-type ma
 (`src/Struo.Infrastructure/Persistence/ColumnTypeMap.cs`) resolves to the correct per-backend
 literal inside `SqlSugarClientFactory`'s `EntityService` hook (`Timestamp` sets a literal on
 MySQL/MariaDB only and keeps SqlSugar's default `DateTime` type elsewhere), so the same property is
-*designed* to work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite — but only the
-PostgreSQL and SQLite literals and the MySQL/MariaDB `Timestamp` literal are exercised by a live
-instance; the other MySQL/SQL Server/Oracle literals are chosen to be syntactically valid and are
-not claimed to be verified against a live instance of those three
-(`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence trail, including
-a source-read-only conclusion about a parenthesised-literal edge case on SQL Server/MySQL). A fork
+*designed* to work unchanged on PostgreSQL, MySQL, SQL Server, Oracle, and SQLite. The literals
+are read back from a live instance whenever the suite runs on PostgreSQL, SQL Server, MySQL or
+MariaDB; the Oracle literals are chosen to be syntactically valid and are not verified against a
+live instance (`docs/ai/decisions/column-type-map-per-backend-literals.md` has the full evidence
+trail, including the parenthesised-literal edge case on SQL Server/MySQL). A fork
 that only ever runs one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly
 instead — that convention is respected too, just at lower precedence.
 
@@ -609,14 +608,16 @@ destructive actions, the user is left with a blocked action and no working way t
 
 ## Tests per layer
 
-- **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests build a fresh SQLite
-  temp-file database per test (`Support/SqliteTestDatabase.cs`, deleted on dispose). An opt-in
+- **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests take a fresh database
+  per test from `TestBackend.CreateUnitDatabase()` (`tests/Struo.Tests/Support/TestBackend.cs`): a
+  SQLite temp file deleted on dispose by default, or a pooled empty database on the backend
+  `STRUO_TEST_BACKEND` selects. An opt-in
   live repository suite (`LiveRepositoryTests`) exists specifically to catch "SQLite-green ≠
   backend-correct" bugs; it runs on each backend whose test connection is configured; an
   unconfigured backend's rows pass without running, so judge by per-test duration. It refuses to run
   against any database whose name doesn't contain `test` — see `AGENTS.md`, "Verification", for the
-  connection-resolution order and the `STRUO_TEST_BACKEND` switch that moves the API test hosts to
-  a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
+  connection-resolution order and the `STRUO_TEST_BACKEND` switch that moves the API test hosts and
+  the unit harnesses to a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
   using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`).
   `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite that guards
   template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped

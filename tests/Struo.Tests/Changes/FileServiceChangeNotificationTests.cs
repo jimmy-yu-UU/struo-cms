@@ -51,7 +51,7 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
 
     private static readonly Guid Tester = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd");
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly CountingStorage _storage = new();
     private readonly IItemRepository _repo;
@@ -61,7 +61,7 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
     public FileServiceChangeNotificationTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<File>();
         _db.CodeFirst.InitTables<FileTranslation>();
