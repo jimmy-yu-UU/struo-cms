@@ -9,7 +9,7 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 internal static class CancellationAop
 {
-    public static void Register(SqlSugarClient client)
+    public static void Register(ISqlSugarClient client)
     {
         if (client.CurrentConnectionConfig.DbType != DbType.SqlServer) return;
 
