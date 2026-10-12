@@ -28,6 +28,9 @@ public sealed class FileService(
     private readonly IImageDimensionReader imageReader = storage.Images;
     private readonly FileStorageOptions fileOptions = storage.Options;
 
+    // Width of the `filename` and `title` varchar columns (core migration `AsString(255)`).
+    private const int NameColumnWidth = 255;
+
     // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
     private Task NotifyAsync(Guid id, ItemChangeKind kind)
     {
@@ -102,6 +105,16 @@ public sealed class FileService(
         }
     }
 
+    // Shortens the stem so the name fits the column and keeps its extension; an extension that
+    // alone fills the column is cut with the rest of the name.
+    private static string ClampFileName(string fileName)
+    {
+        if (fileName.Length <= NameColumnWidth) return fileName;
+        var ext = Path.GetExtension(fileName);
+        if (ext.Length >= NameColumnWidth) return fileName[..NameColumnWidth];
+        return fileName[..(NameColumnWidth - ext.Length)] + ext;
+    }
+
     private async Task<File> SaveAsync(
         Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
         Guid? folderId, CancellationToken ct)
@@ -121,7 +134,7 @@ public sealed class FileService(
         {
             Id = Guid.NewGuid(),
             StorageKey = key,
-            FileName = fileName,
+            FileName = ClampFileName(fileName),
             ContentType = contentType,
             // `length` is the client-declared Content-Length, which a lying client can
             // understate; `buffer` has already been fully drained (see UploadAsync) so its Length
@@ -136,11 +149,11 @@ public sealed class FileService(
 
         // Seed the default-locale Title from the filename (extension stripped) so an upload is
         // immediately human-readable everywhere. Dotfiles ("." prefix strips to empty) fall back to
-        // the full name; clamp to the column width (varchar 255). Same transaction as the file row —
+        // the full name; clamp to the column width. Same transaction as the file row —
         // a seed failure must not leave a title-less file (repository join-if-active).
         var title = Path.GetFileNameWithoutExtension(fileName);
         if (string.IsNullOrWhiteSpace(title)) title = fileName;
-        if (title.Length > 255) title = title[..255];
+        if (title.Length > NameColumnWidth) title = title[..NameColumnWidth];
         var translation = new FileTranslation
         {
             FileId = entity.Id, Locale = languages.DefaultCode(), Title = title,

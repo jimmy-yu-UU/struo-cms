@@ -148,7 +148,7 @@ public class FileUploadFolderAndTitleTests : IDisposable
     }
 
     [Fact]
-    public async Task Upload_title_longer_than_255_is_truncated()
+    public async Task Upload_name_longer_than_255_is_truncated_in_title_and_file_name()
     {
         var longName = new string('a', 300) + ".bin";
 
@@ -157,5 +157,10 @@ public class FileUploadFolderAndTitleTests : IDisposable
 
         var row = await _db.Queryable<FileTranslation>().Where(t => t.FileId == file.Id).FirstAsync();
         row!.Title!.Length.Should().Be(255);
+
+        var stored = await _db.Queryable<File>().InSingleAsync(file.Id);
+        stored.FileName.Length.Should().Be(255);
+        stored.FileName.Should().EndWith(".bin");
+        stored.FileName.Should().Be(new string('a', 251) + ".bin");
     }
 }
