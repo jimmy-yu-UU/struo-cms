@@ -32,6 +32,9 @@ The databases do not agree on that order:
   backend, read back from the column catalog.
 - Measured 2026-10-12 (scratch probe, not committed): on SQL Server, 200 mixed v4/v7 ids sorted by
   the database did not match their .NET order; on the other four they did.
+- Measured 2026-10-12 on MySQL 8.4 (`utf8mb4_0900_ai_ci`) and MariaDB 11.8 (`utf8mb4_uca1400_ai_ci`),
+  the default collations of a test database: 300 mixed v4/v7 ids in a `varchar(36)` primary key,
+  sorted by the database, matched both `Guid.CompareTo` order and ordinal string order.
 
 ## Unknowns
 

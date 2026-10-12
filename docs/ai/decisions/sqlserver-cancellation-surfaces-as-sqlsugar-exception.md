@@ -4,9 +4,11 @@
 
 A cancelled `CancellationToken` surfaces as `OperationCanceledException` on every backend. On SQL
 Server, `CancellationAop` (registered by `SqlSugarClientFactory` on every inner client of the
-`SqlSugarScope`) sets SqlSugar's `Aop.OnError`: when a command fails while the token on the client's
-`Ado` is cancelled, it throws `OperationCanceledException` carrying that token, with the SqlSugar
-error as the inner exception. Other backends do not register the hook.
+`SqlSugarScope`) sets SqlSugar's `Aop.OnError`. When a command fails and either the token on the
+client's `Ado` is cancelled or the error's inner exception is an `OperationCanceledException`, it
+throws `OperationCanceledException` with the SqlSugar error as the inner exception, carrying the
+`Ado` token in the first case and the inner exception's token in the second. Other backends do not
+register the hook.
 
 Covered: every Ado command a factory-built client runs — queryables, insertables, updateables,
 deleteables and the `Ado` query methods — because SqlSugar invokes `OnError` from the catch block of
@@ -36,8 +38,9 @@ MySQL and MariaDB pass without the hook because their drivers do not throw on an
 token at open time; the cancellation surfaces later from the command, where `throw;` keeps its type.
 
 `OnError` is the one SqlSugar extension point that runs for every command and can replace the
-exception it rethrows. The condition reads the token state rather than the exception, because the
-wrapper keeps only the message text.
+exception it rethrows. The condition reads the token state first, because the connection-open
+wrapper keeps only the message text and no inner exception; an inner `OperationCanceledException`
+is translated too, so a cancellation that SqlSugar did wrap keeps its type.
 
 SqlSugar keeps the last token on the client's `Ado` until another call sets one. A later call on
 the same client without its own token runs under that stale token: an async call fails on it anyway,
