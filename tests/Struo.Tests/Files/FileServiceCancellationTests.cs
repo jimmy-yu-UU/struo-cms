@@ -28,14 +28,14 @@ public class FileServiceCancellationTests : IDisposable
         public (int Width, int Height)? TryRead(Stream seekable, string contentType) => null;
     }
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly FileService _svc;
 
     public FileServiceCancellationTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
         _db.CodeFirst.InitTables<File>();
         _svc = new FileService(_db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), null!, null!, null!);

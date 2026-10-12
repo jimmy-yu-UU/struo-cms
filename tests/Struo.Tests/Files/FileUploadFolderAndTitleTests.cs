@@ -46,7 +46,7 @@ public class FileUploadFolderAndTitleTests : IDisposable
 
     private static readonly Guid Tester = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly ILanguageProvider _languages = new StubLanguages();
     private readonly FileService _svc;
@@ -54,7 +54,7 @@ public class FileUploadFolderAndTitleTests : IDisposable
     public FileUploadFolderAndTitleTests()
     {
         _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
+            _file.Options(),
             new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<File>();
         _db.CodeFirst.InitTables<FileTranslation>();

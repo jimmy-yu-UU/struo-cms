@@ -29,7 +29,7 @@ public sealed class OptionsValidationTests
 {
     private static async Task<Exception?> StartupErrorAsync(Action<Dictionary<string, string?>>? mutate = null)
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateSqliteDatabase();
         var filesRoot = Path.Combine(Path.GetTempPath(), "struo-optval-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -71,14 +71,14 @@ public sealed class OptionsValidationTests
         }
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Host_starts_with_full_valid_configuration()
     {
         var error = await StartupErrorAsync();
         error.Should().BeNull("a fully-configured host must start cleanly");
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Missing_database_connection_string_fails_startup()
     {
         var error = await StartupErrorAsync(s => s["Database:ConnectionString"] = "");
@@ -87,7 +87,7 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("ConnectionString");
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Query_max_limit_zero_fails_startup()
     {
         var error = await StartupErrorAsync(s => s["Query:MaxLimit"] = "0");
@@ -96,7 +96,7 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("MaxLimit");
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Oidc_enabled_without_client_id_fails_startup()
     {
         var error = await StartupErrorAsync(s =>
@@ -145,7 +145,7 @@ public sealed class OptionsValidationTests
         properties.Should().NotContain(["AutoSyncSchema", "MigrationsPath"]);
     }
 
-    [Theory]
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
     [InlineData("Struo_")]          // upper-case letter
     [InlineData("1struo_")]         // must start with a letter
     [InlineData("struo-")]          // hyphen not allowed
@@ -159,7 +159,7 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("TablePrefix");
     }
 
-    [Theory]
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
     [InlineData("")]
     [InlineData("struo_")]
     [InlineData("acme")]
@@ -195,7 +195,7 @@ public sealed class OptionsValidationTests
         options.MigrateOnStartup.Should().BeFalse("出貨預設必須是安全側");
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Localization_default_language_outside_the_list_fails_startup()
     {
         var error = await StartupErrorAsync(s =>
@@ -209,7 +209,7 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("DefaultLanguage");
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Localization_single_language_configuration_starts()
     {
         var error = await StartupErrorAsync(s =>
@@ -221,7 +221,7 @@ public sealed class OptionsValidationTests
         error.Should().BeNull();
     }
 
-    [Fact]
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task AdminUi_default_locale_outside_the_list_fails_startup()
     {
         var error = await StartupErrorAsync(s =>

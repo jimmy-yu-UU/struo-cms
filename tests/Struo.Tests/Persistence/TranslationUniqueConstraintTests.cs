@@ -26,11 +26,11 @@ public sealed class TranslationUniqueConstraintTests
             typeof(Struo.Infrastructure.Files.File), typeof(MediaFolder),
         ]));
 
-    private static (SqliteTestDatabase, ISqlSugarClient) NewClient()
+    private static (ITestDatabase, ISqlSugarClient) NewClient()
     {
-        var db = new SqliteTestDatabase();
+        var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            db.Options(),
             new TestCurrentUserAccessor(Guid.Empty), Policy);
         return (db, client);
     }

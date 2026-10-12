@@ -11,10 +11,10 @@ namespace Struo.Tests.Identity;
 
 public class SqlSugarRolePermissionStoreTests
 {
-    private static ISqlSugarClient NewDb(SqliteTestDatabase file)
+    private static ISqlSugarClient NewDb(ITestDatabase file)
     {
         var db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = file.ConnectionString },
+            file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables(typeof(User), typeof(Role), typeof(Permission), typeof(UserRole));
         return db;
@@ -23,7 +23,7 @@ public class SqlSugarRolePermissionStoreTests
     [Fact]
     public async Task Anonymous_loads_public_role_permissions()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
         await db.Insertable(pub).ExecuteCommandAsync();
@@ -42,7 +42,7 @@ public class SqlSugarRolePermissionStoreTests
     [Fact]
     public async Task User_with_roles_unions_the_public_floor_with_their_own_roles()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var userId = Guid.CreateVersion7();
         var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
@@ -67,7 +67,7 @@ public class SqlSugarRolePermissionStoreTests
     [Fact]
     public async Task Hypothetical_role_preview_also_unions_the_public_floor()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
         var editor = new Role { Id = Guid.CreateVersion7(), Name = "editor" };
@@ -85,7 +85,7 @@ public class SqlSugarRolePermissionStoreTests
     [Fact]
     public async Task Public_role_rows_are_not_duplicated_when_the_user_is_assigned_the_public_role()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var userId = Guid.CreateVersion7();
         var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
@@ -103,7 +103,7 @@ public class SqlSugarRolePermissionStoreTests
     [Fact]
     public async Task Authenticated_user_with_no_roles_falls_back_to_public()
     {
-        using var file = new SqliteTestDatabase();
+        using var file = TestBackend.CreateUnitDatabase();
         var db = NewDb(file);
         var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
         await db.Insertable(pub).ExecuteCommandAsync();

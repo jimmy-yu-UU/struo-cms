@@ -40,11 +40,11 @@ public class InfrastructureRegistrationTests
     [Fact]
     public void Container_built_client_derives_the_file_translations_unique_index()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:DbType"] = "Sqlite",
+                ["Database:DbType"] = db.DbType.ToString(),
                 ["Database:ConnectionString"] = db.ConnectionString
             })
             .Build();
@@ -60,7 +60,7 @@ public class InfrastructureRegistrationTests
         client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(FileTranslation));
 
         var table = client.EntityMaintenance.GetTableName<FileTranslation>();
-        IndexCatalog.Read(client, StruoDbType.Sqlite, table).Should().Contain(i => i.IsUnique
+        IndexCatalog.Read(client, db.DbType, table).Should().Contain(i => i.IsUnique
             && i.Columns.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(new[]
             {
                 client.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId)),

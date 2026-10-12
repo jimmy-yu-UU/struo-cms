@@ -14,9 +14,9 @@ public class DbReadinessCheckTests
     [Fact]
     public async Task Reports_healthy_when_database_reachable()
     {
-        using var db = new SqliteTestDatabase();
+        using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = db.ConnectionString },
+            db.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         client.CodeFirst.InitTables<Article>();
 
@@ -26,7 +26,7 @@ public class DbReadinessCheckTests
         result.Status.Should().Be(HealthStatus.Healthy);
     }
 
-    [Fact]
+    [SqliteOnlyFact("unreachable database simulated by a read-only SQLite path in a missing directory")]
     public async Task Reports_unhealthy_when_database_unreachable()
     {
         var client = SqlSugarClientFactory.Create(
