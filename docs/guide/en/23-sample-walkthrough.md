@@ -273,4 +273,5 @@ cd frontend && pnpm test && pnpm build && pnpm e2e
 
 That's the sample walkthrough. To build a collection of your own, go back to
 [Chapter 5: Defining Collections](05-collections.md); if you're just getting started with the
-project, begin at [Chapter 3: Getting Started](03-getting-started.md).
+project, begin at [Chapter 3: Getting Started](03-getting-started.md). If your database was built by
+v0.8.x, see [Chapter 24: Joining a Database Built by v0.8.x](24-upgrading-from-0-8.md).

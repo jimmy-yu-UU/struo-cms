@@ -1,216 +1,219 @@
 # 21. Schema Management and Upgrades
 
-How tables get created, when an existing table gets changed, and how a change to core's own
-schema reaches your fork — this chapter covers all three.
+Where tables come from, how to change them, and how a change to core's own schema reaches your fork
+— this chapter covers all three. If your database was built by v0.8.x CodeFirst, first join it to
+the migrations with [Chapter 24: Joining a Database Built by v0.8.x](24-upgrading-from-0-8.md).
 
-## Three layers, three responsibilities
+## Migrations are the only schema source
 
-Schema changes split into three layers, each with its own responsibility, its own switch, and
-its own environments: table creation, which never touches existing data; schema sync, the layer
-most likely to put data at risk; and migration scripts, the most conservative layer and the only
-one production should use.
+Every table, column and index comes from a FluentMigrator migration. The API never creates or alters
+a table itself. Applied migrations are recorded in the version table `{prefix}schema_versions`, where
+the prefix is `Database:TablePrefix` (default `struo_`).
 
-Table creation (CodeFirst): whenever an entity class's table doesn't exist yet, startup creates
-it automatically — on every backend, in every environment. It's always on and can't be turned
-off.
+Migrations live in three places:
 
-Schema sync: automatically adds, alters, or even drops columns based on the difference between
-an entity class and the existing table. It only takes effect in Development, defaults to off,
-and its key and type are in [Chapter 4: Configuration Reference](04-configuration.md). It's also
-the only layer that can silently touch existing data — "Where schema sync is dangerous" below
-walks through each way that happens.
+- **Core**: `src/Struo.Infrastructure/Migrations/Core/`. `CreateCoreSchema` creates the framework
+  tables; `SeedCoreData` seeds the languages, roles and permissions, and the bootstrap admin.
+- **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
+  the sample is listed in `Struo:ContentAssemblies`.
+- **Your fork**: in your own content project. That project must be listed in
+  `Struo:ContentAssemblies` and reference `Struo.Infrastructure`.
 
-Migration scripts: apply `.sql` files you write and review yourself. They run against every
-backend, not just PostgreSQL, and default to off the same way — leaving `Database:MigrationsPath`
-empty disables the runner. This is the only path an existing table should take in production.
+The commands scan `Struo.Infrastructure` plus every assembly listed in `Struo:ContentAssemblies` and
+run migrations in version order. Seeding is a migration too, so it happens only through `migrate` or
+`MigrateOnStartup`.
 
-Add a property to an existing collection and, by default, nothing happens: the table already
-exists, so table creation leaves it alone, and schema sync is off, so the column doesn't grow on
-its own. In Development, to make it appear, turn on `Database:AutoSyncSchema` and restart — safe
-only against a database that doesn't hold data you actually care about yet.
+## The six commands
 
-Production doesn't have that option: the same change needs an `ALTER` script you write yourself,
-placed in the migration directory above, deployed with the new version, and applied by the
-migration runner at startup. Adding a whole new collection is a different case — that's a table
-that doesn't exist yet, so both environments create it on their own and no script is needed.
+Each command is the first argument to `Struo.Api`:
 
-## Startup order
+| Command | What it does |
+|---|---|
+| `migrate` | Applies every pending migration |
+| `migrate:status` | Lists the state of every migration |
+| `migrate:preview` | Prints the SQL of pending migrations, runs nothing |
+| `migrate:check` | Compares the database with the entities, read-only |
+| `migrate:baseline` | Records every migration as applied, runs nothing |
+| `make:migration` | Writes a new migration file |
 
-At startup, six steps always run in the same order:
+In the repository, use `dotnet run --project src/Struo.Api -- <command>`. That applies the `http`
+launch profile, so the environment is Development and your `appsettings.Development.json` is read.
+A published build uses `dotnet Struo.Api.dll <command>`; that is the API image's entrypoint, so
+`docker run --rm … <image> <command>` works too.
 
-1. Take a snapshot of the existing tables — needed to recognize which tables this startup creates
-   for the first time.
-2. Table creation — CodeFirst, always runs.
-3. Schema sync — only in Development, and only when it's turned on.
-4. Apply migration scripts — only when a migrations directory is configured.
-5. Schema guard — only in Development.
-6. Seed data.
+The commands read the same configuration as the API: appsettings plus `Section__Key` environment
+variables, and configuration keys may also follow the command, e.g. `--Database:ConnectionString=…`.
+Exit code `0` is success, `1` failure, `2` a usage error.
 
-The order isn't arbitrary. Table creation runs first because migration scripts assume the table
-they alter already exists — there'd be nothing for `ALTER` to change; schema sync likewise needs a
-table to compare against before it can even compute a difference with the entity class.
+`migrate` first prints FluentMigrator's log line for every step, then one `Applied <version>  <name>`
+line per migration it applied; with nothing pending it prints only `Nothing to migrate.`.
+`migrate:status` prints one line per migration:
 
-Schema guard and seeding run last because both depend on the table's final shape: the indexes
-schema guard checks for aren't guaranteed to exist until every step that might create or alter a
-table has finished, and seeding only fills the tables this startup created for the first time —
-running it any earlier would miss columns a migration or schema sync had just added.
+```
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
+202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
+202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
+3 applied, 0 pending, 0 orphaned
+```
 
-If the migration-scripts step fails partway through, the script that was being applied rolls back
-along with its tracking entry, right where it stopped — except on MySQL and Oracle, whose DDL
-commits implicitly, so whatever already ran can't be undone. Files that had already applied
-successfully are not undone and still count. Startup aborts entirely either way; it never carries
-on with a script left half-applied.
+`Pending` means not applied yet. `Orphaned` means the version table has a record but no scanned
+assembly holds that migration, for example after the sample is removed from
+`Struo:ContentAssemblies`. Orphaned records do not block startup.
 
-Only one kind of misconfiguration in the three layers doesn't fail startup: schema sync turned on
-outside Development. The whole step is skipped, leaving only a warning that names the current
-environment, and startup continues as normal.
+`migrate:preview` prints the SQL the pending migrations would run and writes nothing; its last line
+is `-- <n> migration(s) pending`.
 
-## What always happens, and what never happens on its own
+> On a new database the preview includes `SeedCoreData`'s `INSERT` with the bootstrap admin's email
+> and password hash. Treat that output as a secret; don't paste it into an issue or a public CI log.
 
-The whole mechanism comes down to two guarantees, and neither has an exception across any of the
-five backends or any environment.
+`migrate:check` compares the live tables with the schema the entities declare. It takes no lock and
+writes nothing; a clean run prints only `0 error(s), 0 warning(s)`. Errors are a missing table or
+column, a nullability, type-category or string-length difference, and a missing required unique
+index; any error makes it exit `1`. Warnings are a column the database has but no entity declares,
+and a non-Unicode string column on SQL Server.
 
-The first guarantee: whenever an entity class's table doesn't exist, startup always creates it,
-and only a table created this way gets seeded. This guarantee describes the code path, not
-verified evidence — PostgreSQL is the only backend actually verified against a live database; the
-others are supported by design in the type mapping only.
+`make:migration` is covered in "Writing a migration" below, `migrate:baseline` in Chapter 24.
 
-The second guarantee runs the other way: the only two ways an existing table is ever changed
-automatically are schema sync explicitly turned on (Development only), or a reviewed script
-applied by the migration runner; both are a deliberate choice, and there's no third path that
-changes an existing table without anyone knowing.
+## What startup checks
 
-## Where schema sync is dangerous
+Before the API serves, `StartupMigrationGate` looks at the database. `Database:MigrateOnStartup`
+defaults to `false` in every environment, and then the API refuses to start while any migration is
+pending, exiting with code `1`:
 
-> Schema sync only compares the difference between the entity class and the existing table's
-> structure — it has no idea what you meant to do. A rename and "drop one column, add another"
-> look identical to it. Any schema change that touches existing data has to go through a
-> migration.
+```
+[17:57:36 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
 
-Every scenario below is what that blindness to intent looks like in practice.
+So a deployment runs `migrate` as a step of its own, before the new API version goes live. Set to
+`true`, the API takes the migration lock, applies pending migrations, and then starts serving; the
+local Compose stack runs this way.
 
-1. **Renaming a column** — sync reads this as "the old property vanished, a new one appeared":
-   it issues `DROP COLUMN` on the old column and `ADD COLUMN` on the new one, and the data is
-   gone for good. Write a `RENAME COLUMN` migration first, and only change the entity class
-   afterward.
-2. **Removing a property** — a straight `DROP COLUMN`, and the data goes with it; once you've
-   confirmed the column truly serves no further purpose, drop it in production with an explicit
-   migration.
-3. **Narrowing a column's type** — depending on the backend, this either fails outright or
-   silently truncates data; the correct approach is three steps — add the new column, backfill
-   and verify it, and only then switch over and drop the old one.
-4. **Adding `NOT NULL` to a table that already has rows** — the `ALTER` fails outright and
-   startup aborts; the three-step migration is add the column nullable, backfill it, and only
-   then add the `NOT NULL` constraint.
-5. **Adding `UNIQUE` to a column with duplicate values** — the `ALTER` fails the same way and
-   startup aborts; the migration deduplicates first (a data operation in its own right), then
-   adds the constraint.
-6. **Splitting or merging columns** — a structural diff can't express this kind of intent at
-   all; the result is always lost data or an empty column. This kind of change is always
-   migration-only.
-7. **Dropping a column on SQLite** — SQLite's drop-column path is actually implemented; it's
-   gated behind SqlSugar's `SqliteCodeFirstEnableDropColumn`, which `SqlSugarClientFactory`
-   never turns on. Turned on, an ordinary column gets dropped silently, while a column tied to
-   a primary key, an index, a `CHECK`, or a foreign key makes `ALTER TABLE` fail and startup
-   abort.
-8. **Multiple replicas starting at once** — each replica computes and applies its own diff, so
-   several replicas can race to alter the same table at the same time; the same fix as the
-   migration runner's lack of locking, covered in "Writing a migration" below.
-9. **No way to see the DDL before it runs** — sync computes it live at startup from whatever the
-   code looks like at that moment, so there's nothing to preview beforehand. This is the core
-   reason schema sync should never be turned on in production.
+When the framework tables exist but there is no version table, both settings refuse to start, and
+the message says to run `migrate:baseline` once — see [Chapter 24](24-upgrading-from-0-8.md).
 
-Items 2 and 7 are each backed by a test:
-`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres` confirms that
-a removed column really is dropped on PostgreSQL, and
-`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite` confirms the same
-change leaves the column untouched on SQLite.
+In Development, startup also runs the same comparison as `migrate:check` and refuses to start on any
+error. Production skips that step, so run `migrate:check` yourself.
 
-The general rule: whether a backend natively supports some DDL says nothing about whether schema
-sync will actually do it on that backend — each backend has to be verified on its own; none of
-them can be inferred from another.
+## Version table, lock and transactions
+
+The version table `{prefix}schema_versions` has three columns, `version`, `appliedon` and
+`description`, with a unique index on `version`. Whether a migration has been applied is decided by
+its version number alone.
+
+`migrate`, `migrate:baseline` and `MigrateOnStartup` first take an advisory lock named after the
+table prefix: `pg_try_advisory_lock` on PostgreSQL, `GET_LOCK` on MySQL/MariaDB, `sp_getapplock` on
+SQL Server. When several replicas start at once, one applies; the others wait for it to finish and
+then find nothing pending. The wait is capped by `Database:MigrationLockTimeoutSeconds` (default 60,
+range 1 to 3600), after which the command fails. SQLite and Oracle take no lock; Oracle logs a
+warning, and running `migrate` concurrently there is unsupported.
+
+Each migration runs in its own transaction. On failure that migration rolls back, the message names
+the lowest unapplied version, and migrations already applied stay applied. MySQL, MariaDB and Oracle
+commit DDL implicitly, so a failed migration there can be left half-done. Migrations only move
+forward and there is no rollback command, so back up the database before deploying.
 
 ## Writing a migration
 
-How to name a file, which SQL to use, why it doesn't need to be idempotent, how applied files are
-tracked, and how to write timestamps — `db/migrations/README.md` is the one authoritative version
-of all of that, and the full comparison of the three layers is there too. This section covers
-only the two things deployment most often trips over.
+`make:migration` writes a migration file. It reads entity metadata only, never touches the database,
+and never overwrites an existing file:
 
-First, there's no mutual-exclusion lock: several replicas starting at once against the same
-migrations directory can all try to apply the same not-yet-applied file simultaneously; table
-creation and schema sync carry the same risk. For a staged rollout, let one replica finish
-applying first, or run a separate one-off job, before the rest come online.
+```
+make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]
+```
 
-Second, the directory itself has to exist: `db/migrations/` holds only a `README.md`, no `.sql`
-files, so a deployment process that just copies whatever's there won't necessarily carry this
-directory into your own build output, though this project's API image does copy it explicitly.
-Setting `Database:MigrationsPath` to a directory that doesn't exist fails startup outright; the
-message and exit code are in [Chapter 20: Deployment](20-deployment.md).
+- The version is the UTC time to the minute (`yyyyMMddHHmm`), moved forward a minute when a file in
+  the directory already has it.
+- `--entity` takes the type name of a collection, translation sidecar or junction and writes a
+  `Create.Table` built from its metadata; without it you get an empty skeleton.
+- The `--output` directory must already exist. A relative path resolves against the process's
+  working directory, which under `dotnet run --project src/Struo.Api` is `src/Struo.Api` — so write
+  `../../<your project>/Migrations`, or an absolute path.
 
-## The development-time schema guard
+For the sample's `Tag` it writes this (later columns and `Down()` omitted):
 
-`SchemaGuard` runs only in Development, after table creation, schema sync, and migration
-scripts. It verifies two things actually exist:
+```csharp
+[Migration(202610120958, "CreateTags")]
+public sealed class CreateTags : StruoMigration
+{
+    public override void Up()
+    {
+        Create.Table("tags")
+            .WithColumn("id").AsGuid().PrimaryKey()
+            .WithColumn("name").AsString(255).NotNullable()
+            .WithColumn("createdat").AsTimestamp(Db).NotNullable()
+…
+```
 
-- A composite unique index over `(collectionname, itemid, revisionnumber)` on the `struo_revisions`
-  table.
-- For every collection with a translation sidecar table, a unique index over `(fk, locale)` on
-  that sidecar (the sidecar itself may not exist, but if it does, the index has to).
+Rules for writing one:
 
-Missing either one throws an `InvalidOperationException` that says exactly what's missing, naming
-the table and the kind of index.
+- Derive from `StruoMigration` and use FluentMigrator's portable calls (`Create.Table`,
+  `Alter.Table`, `Create.Index`, `Insert.IntoTable`). For the column types that differ per backend use
+  `AsTimestamp(Db)`, `AsJson(Db)`, `AsLongText(Db)`, or `AsShape(ColumnShape.<shape>, Db)`.
+- Name a framework table with `FrameworkTable("users")`, which applies the table prefix; your own
+  tables carry no prefix.
+- Branch only where a backend really needs its own form, and branch on a constant:
+  `if (Db == StruoDbType.MySql)`. Don't use FluentMigrator's `IfDatabase("…")`: it takes a free
+  string, a misspelt one silently does nothing, and the migration is still recorded as applied.
+- Write no SQL strings and reference no entity classes: a migration is a snapshot of the schema as it
+  was when you wrote it.
+- Never edit a migration that may already be applied somewhere; add another.
 
-A missing index usually means the table was created before the index was added to the code — an
-index is emitted when its table is created. The error message says how to fix it: add a reviewed
-migration that creates the index, or, in Development on a schema you don't mind losing, recreate
-the schema so table creation emits it again.
+An automatic diff cannot see intent, so a change that touches existing data takes several steps:
 
-It only recognizes PostgreSQL and SQLite; MySQL, SQL Server, and Oracle are skipped entirely, with
-nothing verified. It's a development-time fail-fast check for "this change is missing an index
-it should have" — not a production safety net, since production never runs it at all.
+1. **Renaming a column**: write a `Rename.Column` migration, then change the entity; "drop one
+   column, add another" loses the data.
+2. **Removing a property**: once you're sure the column is unused, drop it with a `Delete.Column`
+   migration.
+3. **Narrowing a type**: add the new column, backfill and verify, then switch over and drop the old
+   one; narrowing in place fails or truncates.
+4. **Adding `NOT NULL` to a table with rows**: add the column nullable, backfill, then add `NOT NULL`.
+5. **Adding a unique index over duplicate values**: deduplicate first, then create the index.
+6. **Splitting or merging columns**: always a migration that moves the data.
+
+Afterwards, read the SQL with `migrate:preview`, then run `migrate` and `migrate:check` against a
+disposable database of the backend you actually use; DDL that SQLite accepts may not be accepted
+elsewhere. Your fork's own tests can call `SchemaChecker.Check` and assert there are no errors.
 
 ## The four raw-SQL exceptions in core
 
-The migration scripts this chapter covers are themselves one of the exceptions to the invariant
-that all database access goes through SqlSugar, covered in
-[Chapter 2: Architecture](02-architecture.md). Here's why each of the four exceptions exists:
+The invariant that all database access goes through SqlSugar (see
+[Chapter 2: Architecture](02-architecture.md)) has four deliberate exceptions, none of which touches
+request input:
 
-- `db/migrations/*.sql` scripts — migrations are exactly where a fork is meant to write its own
-  SQL; this layer isn't bound by the rule at all.
-- `SchemaGuard`'s read-only catalog queries — an index can't be found by name (different
-  backends and different creation paths name them differently), so it has to query a system
-  catalog like `pg_indexes`/`sqlite_master` directly; it only runs in Development, and only
-  reads, never writes.
-- The relation-filter pushdown's subquery wrapper — four assembled string forms, the part of
-  translating "filter by a subcollection" query semantics into a SQL subquery that an expression
-  tree can't express.
-- `OrderByExpressionBuilder`'s `ORDER BY` text — three per-field assembled forms, the same kind
-  of sort semantics an expression tree can't express.
+- **The relation-filter subquery wrapper**: four fixed forms assembled around SQL that SqlSugar
+  generated.
+- **`OrderByExpressionBuilder`'s `ORDER BY` text**: three sort forms — column, relation path and
+  translated field.
+- **The migration lock, `MigrationLockSql`**: one parameterised acquire and release statement per
+  backend.
+- **`IndexCatalog`'s index queries**: the read-only catalog queries `migrate:check` uses to read
+  indexes; Oracle has none, so the index check is skipped with a warning.
 
-Apart from the first, the other three exceptions only assemble strings used in queries — they
-never change a table's shape. The first exception is exactly the third layer covered earlier in
-this chapter: migration scripts exist precisely to change an existing table's structure.
+## Upgrading core
 
-## Upgrading core across a fork
+Core's schema changes ship as core migrations inside `Struo.Infrastructure`, so they reach your fork
+when you merge a newer core; the [changelog](changelog.md) names every new core migration. After the
+merge, `migrate:status` lists them as `Pending`. Read their SQL with `migrate:preview`, run `migrate`
+on a backed-up database, then run `migrate:check`.
 
-Core carries no `.sql` scripts at all, and table creation only ever fills in tables that are
-missing — it never compares against, or changes, a table that already exists. So a schema change
-in core has no way to reach a deployment automatically: a release that changes core's own tables
-gives your fork no mechanism that alters your existing tables to match.
+## Backend differences
 
-Core's schema changes are written up in the [changelog](changelog.md); read its Breaking
-entries before merging a newer core. Acting on them means writing your own `ALTER` script for
-whichever backend you actually run, going through the migration path described earlier. Place the
-script in the same migration directory and deploy it with the new core version: startup creates
-tables first, then applies your script, in the same order as "Startup order" above.
-
-Turning on schema sync and running it once against a copy of a production database lets you treat
-the diff it computes as a hint at roughly which columns this upgrade needs to touch — but only as
-a hint, never as a plan to execute directly: every dangerous scenario above still applies to that
-diff. The full procedure is in `db/migrations/README.md`.
+- **MySQL/MariaDB**: migrations set no character set, so tables take the database default. Create the
+  database with `CHARACTER SET utf8mb4`; tooling such as SqlSugar's `CreateDatabase` can create
+  utf8mb3, which cannot store emoji. Run with the server's default strict `sql_mode`; non-strict mode
+  silently truncates or replaces values.
+- **SQL Server**: `migrate:check` warns about `varchar` columns; characters outside the collation's
+  code page are stored as `?`.
+- **Oracle**: type-mapped only, never verified. No lock, and `migrate:check` skips the type, length and
+  index checks with warnings.
+- **Unit tests that build tables with CodeFirst** get unique group indexes named
+  `Index_{table}_{columns}_Unique`. Keep that within 63 characters: MySQL/MariaDB reject a name over
+  64, and PostgreSQL truncates one over 63.
 
 ## What's next
 
-That covers schema management; the next step is what test layers this system has and what CI
-runs, in [Chapter 22: Testing and CI](22-testing.md).
+That covers schema management; the next step is what test layers this system has and what CI runs,
+in [Chapter 22: Testing and CI](22-testing.md).

@@ -249,4 +249,5 @@ cd frontend && pnpm test && pnpm build && pnpm e2e
 
 範例導覽到這裡。想動手做一個你自己的集合，回頭看
 [第 5 章：定義集合](05-collections.md)；才剛開始摸這個專案的話，從
-[第 3 章：快速開始](03-getting-started.md)開始。
+[第 3 章：快速開始](03-getting-started.md)開始。資料庫是 v0.8.x 建出來的話，見
+[第 24 章：接上 v0.8.x 的資料庫](24-upgrading-from-0-8.md)。
