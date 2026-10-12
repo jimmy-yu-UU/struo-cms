@@ -1,7 +1,18 @@
-# Local development dependencies for StruoCMS.
-#   docker compose up -d                    # PostgreSQL + Redis (all the default setup needs)
+# StruoCMS on Docker Compose.
+#   docker compose up -d --build            # PostgreSQL + Redis + API + admin SPA, ready to log in
+#   docker compose up -d postgres redis     # only the dependencies, for development
 #   docker compose --profile s3 up -d       # ...plus MinIO, only if Struo:Files:Backend is "s3"
-# These credentials are for local development only — never reuse them anywhere else.
+# `up -d --build` is the simplest way to start the services for development and testing. For
+# development work or special needs, start only the services you need and run the rest yourself,
+# e.g. `docker compose up -d postgres redis` followed by `dotnet run` and the frontend dev server.
+#
+# The admin SPA is at http://localhost:8080 and the API at http://localhost:8081. The first start
+# migrates the database and seeds an admin account: admin@admin.com / admin by default, overridable
+# with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD. The api service runs as Production, so the session
+# cookie is Secure: login works on http://localhost (browsers treat it as a secure context) but any
+# other host name needs HTTPS in front of the admin.
+# The database, Redis and MinIO credentials and the default admin account are for local development
+# only — never reuse them anywhere else.
 #
 # Ports below default to the conventional values a clean machine expects. If any of them is
 # already bound on your machine, override the host side without editing this tracked file:
@@ -9,6 +20,7 @@
 # your shell, e.g.:
 #   STRUO_PG_PORT=55432 docker compose up -d
 # Variables: STRUO_PG_PORT (postgres, default 5432), STRUO_REDIS_PORT (redis, default 6379),
+# STRUO_ADMIN_PORT (admin SPA, default 8080), STRUO_API_PORT (API, default 8081),
 # STRUO_MINIO_PORT / STRUO_MINIO_CONSOLE_PORT (minio API/console, default 9000/9001).
 services:
   postgres:
@@ -38,6 +50,39 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build: .
+    container_name: struo-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__DbType: PostgreSQL
+      Database__ConnectionString: Host=postgres;Port=5432;Database=struo;Username=struo;Password=struo
+      Database__MigrateOnStartup: "true"
+      Redis__ConnectionString: redis:6379
+      Auth__BootstrapAdmin__Email: ${STRUO_ADMIN_EMAIL:-admin@admin.com}
+      Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${STRUO_API_PORT:-8081}:8080"
+    volumes:
+      - struo-appdata:/app/App_Data
+      - struo-dpkeys:/home/app/.aspnet/DataProtection-Keys
+
+  admin:
+    build: frontend
+    container_name: struo-admin
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: http://api:8080
+    ports:
+      - "${STRUO_ADMIN_PORT:-8080}:80"
 
   # S3-compatible object storage. Only needed when Struo:Files:Backend is "s3";
   # the default "local" backend writes to App_Data/uploads and needs no container. Behind the
@@ -83,4 +128,6 @@ services:
 
 volumes:
   struo-pgdata:
+  struo-appdata:
+  struo-dpkeys:
   struo-miniodata:
