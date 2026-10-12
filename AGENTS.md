@@ -328,8 +328,8 @@ moves both kinds of test database:
   unset that is a SQLite temp file. On a live backend it is a database leased from a per-backend
   pool on the first read of its `ConnectionString` or `Name`, so a test that never opens it creates
   nothing. Every lease is empty; disposing drops all its tables and returns it. A database that
-  cannot be emptied (an open transaction holding locks, a view, leftover tables) is dropped and
-  replaced. Pool databases are named `<stem>_unit_<seq>_<runId>`.
+  cannot be emptied (an open transaction holding locks, a view, leftover tables) is dropped; the pool
+  creates a new one on a later lease. Pool databases are named `<stem>_unit_<seq>_<runId>`.
 
 The test login therefore needs create and drop database rights, and every generated name contains
 `test`. MySQL and MariaDB test databases are created as utf8mb4, because SqlSugar's

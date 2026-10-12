@@ -88,16 +88,15 @@ The rest of this section covers the parenthesised `LongText` and `TimestampWithT
 Read directly from the upstream SqlSugar source at `https://github.com/DotNetNext/SqlSugar` (the
 `donet5/SqlSugar` slug this package is still sometimes referenced by is a 301 redirect to the same
 repository, confirmed by reading the HTTP response), tag `5.1.4.197` — the closest published git tag
-to the version pinned in `Directory.Packages.props`, which pins `SqlSugarCore` `5.1.4.220` and is not
+to the version pinned in `Directory.Packages.props`, which pins `SqlSugarCore` `5.1.4.221` and is not
 itself tagged upstream. The tag series stops at `5.1.4.197`, with a dozen-plus untagged stable NuGet
 releases sitting strictly between it and the pin (`.212`/`.213` only ever shipped as prerelease
 builds). The endpoints were bounded, not every commit in between: the relevant methods below were
 byte-identical between the `5.1.4.197` tag and `master` when diffed, so the divergence risk is low but
-not zero. The live suite confirms the conclusion for the pinned version: on SQL Server 2025, MySQL
-8.4.11 and MariaDB 11.8.9 `ShapedColumnAssertions.ShouldHaveShape` reads `nvarchar(max)` back as
-`nvarchar` with `Length` -1 and `datetime(6)` as `datetime` with `Length` 6, for columns built by
-CodeFirst (`ContentColumnMappingTests`, `ColumnTypeMapTests`) and by the migrations
-(`StruoMigrationTypeTests.Shapes_resolve_to_the_live_backend_literals`).
+not zero. For the pinned version, the live suite confirms the CREATE TABLE path: on SQL Server 2025
+`ShapedColumnAssertions.ShouldHaveShape` reads `nvarchar(max)` back as `nvarchar` with `Length` -1,
+and on MySQL 8.4.11 and MariaDB 11.8.9 it reads `datetime(6)` back as `datetime` with `Length` 6, for
+columns CodeFirst builds in a fresh unit database (`ContentColumnMappingTests`, `ColumnTypeMapTests`).
 
 Both `SqlServerDbMaintenance` and `MySqlDbMaintenance` resolve the length suffix through a
 `GetSize(DbColumnInfo item)` method that reads only `item.Length`/`item.DecimalDigits` — it never
@@ -165,6 +164,9 @@ CodeFirst and `TIMESTAMP(4)` from the migrations. Neither was measured on a live
 A `DateTime` primary key skips the `EntityService` hook, so CodeFirst keeps SqlSugar's default type for
 it, while `make:migration` emits `AsTimestamp(Db)`. On MySQL that is `datetime` against
 `datetime(6)`. No entity has a `DateTime` primary key.
+
+The ALTER TABLE ADD COLUMN and `UpdateColumn` paths in Evidence rest on reading the source at tag
+`5.1.4.197`, not the pinned version; the live suite exercises only CREATE TABLE.
 
 The Oracle mapping (`clob` for `LongText`, `timestamp with time zone` for `TimestampWithTimeZone`) is
 unverified against a live Oracle instance and was not part of the source-reading investigation at all
