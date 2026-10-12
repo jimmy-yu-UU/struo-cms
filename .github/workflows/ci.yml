@@ -78,9 +78,10 @@ jobs:
       - run: pnpm build
 
   # Builds the two container images (root Dockerfile for the API, frontend/Dockerfile
-  # for the admin SPA) and smoke-tests each one. It is deliberately not a sixth
-  # standing gate: contributors do not need Docker installed locally to work on
-  # this repo, so this job only confirms the images build and boot in CI.
+  # for the admin SPA) and smoke-tests each one, then smoke-tests the Compose stack
+  # built from the same Dockerfiles. It is deliberately not a sixth standing gate:
+  # contributors do not need Docker installed locally to work on this repo, so this
+  # job only confirms the images build and boot in CI.
   #
   # Unlike the sonar-* jobs below, it needs no secret, so it runs the same way
   # for pull requests from forks and for Dependabot as it does for a normal push.
@@ -107,7 +108,8 @@ jobs:
       # user can write the SQLite file in both containers.
       - name: Smoke-test the API image against SQLite
         run: |
-          trap 'docker rm --force api; docker volume rm struo-ci-data' EXIT
+          # A failed volume cleanup on the throwaway runner must not turn a passing smoke test red.
+          trap 'docker rm --force api; docker volume rm struo-ci-data || true' EXIT
           db_env=(--env Database__DbType=Sqlite
                   --env 'Database__ConnectionString=Data Source=/app/App_Data/struo-ci.db')
           docker volume create struo-ci-data
