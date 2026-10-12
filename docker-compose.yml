@@ -6,7 +6,9 @@
 # development work or special needs, start only the services you need and run the rest yourself,
 # e.g. `docker compose up -d postgres redis` followed by `dotnet run` and the frontend dev server.
 #
-# The admin SPA is at http://localhost:8080 and the API at http://localhost:8081. The first start
+# By default the admin SPA is at http://localhost:8080 and the API at http://localhost:8081
+# (STRUO_ADMIN_PORT / STRUO_API_PORT). Services reach each other by service name, so stacks from
+# different checkouts can run side by side with different host ports. The first start
 # migrates the database and seeds an admin account: admin@admin.com / admin by default, overridable
 # with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD. The api service runs as Production, so the session
 # cookie is Secure: login works on http://localhost (browsers treat it as a secure context) but any
@@ -25,7 +27,6 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: struo-postgres
     environment:
       POSTGRES_DB: struo
       POSTGRES_USER: struo
@@ -42,7 +43,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: struo-redis
     ports:
       - "${STRUO_REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -53,7 +53,6 @@ services:
 
   api:
     build: .
-    container_name: struo-api
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,13 +68,20 @@ services:
       Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-admin}
     ports:
       - "${STRUO_API_PORT:-8081}:8080"
+    # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the
+    # API is live; start_period leaves room for the first start's migrations.
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     volumes:
       - struo-appdata:/app/App_Data
       - struo-dpkeys:/home/app/.aspnet/DataProtection-Keys
 
   admin:
     build: frontend
-    container_name: struo-admin
     depends_on:
       api:
         condition: service_healthy
@@ -93,7 +99,6 @@ services:
   # tag ever disappears from the registry, substitute your own object-storage image.
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: struo-minio
     profiles: ["s3"]
     command: server /data --console-address ":9001"
     environment:
@@ -114,7 +119,6 @@ services:
   # it as Exited (0) once done — that is success; plain `docker compose ps` omits it entirely.
   createbuckets:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    container_name: struo-createbuckets
     profiles: ["s3"]
     depends_on:
       minio:

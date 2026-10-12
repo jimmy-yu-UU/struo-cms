@@ -20,7 +20,7 @@ You'll need:
 docker compose up -d
 ```
 
-This starts two containers, `struo-postgres` and `struo-redis`. Confirm both pass their health
+This starts two services, `postgres` and `redis`. Confirm both pass their health
 check:
 
 ```bash

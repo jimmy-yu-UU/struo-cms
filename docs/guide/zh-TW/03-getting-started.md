@@ -17,7 +17,7 @@
 docker compose up -d
 ```
 
-會起 `struo-postgres` 與 `struo-redis` 兩個容器。確認它們都通過健康檢查：
+會起 `postgres` 與 `redis` 兩個服務。確認它們都通過健康檢查：
 
 ```bash
 docker compose ps
