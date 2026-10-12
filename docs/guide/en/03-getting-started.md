@@ -64,7 +64,7 @@ log in again; restarting only the API (`docker compose restart api`) keeps you l
 ## Start the services you need
 
 For development work or special needs, start only the services you need and run the rest yourself.
-The five steps below use Compose only for PostgreSQL and Redis, and run the API and admin SPA on
+The six steps below use Compose only for PostgreSQL and Redis, and run the API and admin SPA on
 your machine.
 
 ### 1. Start PostgreSQL and Redis
@@ -100,10 +100,42 @@ previous step's container defaults. `appsettings.Development.json` is listed in 
 is never committed.
 
 You can override any config key with an environment variable: replace `:` with `__` — for example,
-`Database__ConnectionString`. The one exception is `Testing:PostgresConnection`, which only honors
-`STRUO_TEST_PG_CONNECTION`.
+`Database__ConnectionString`. The exceptions are the four test-only `Testing:*Connection` keys, each
+of which honors only its own `STRUO_TEST_*_CONNECTION` environment variable; see the last section of
+[Chapter 4](04-configuration.md).
 
-### 3. Run the API
+### 3. Create the tables and seed data
+
+```bash
+dotnet run --project src/Struo.Api -- migrate
+```
+
+`migrate` applies the migrations in order: first the framework tables, then the seed of languages,
+the `admin` and `public` roles, and the default admin account. The output starts with
+FluentMigrator's log of each step and ends with one `Applied` line per migration; the exit code is
+`0`:
+
+```text
+$ dotnet run --project src/Struo.Api -- migrate
+[18:30:29 INF] Beginning Transaction
+[18:30:29 INF] Rolling back transaction
+[18:30:29 INF] VersionMigration migrating
+…
+[18:30:29 INF] 202610080001: SeedCoreData migrated
+[18:30:29 INF] => 0.0086777s
+Applied 202610080000  CreateCoreSchema
+Applied 202610080001  SeedCoreData
+```
+
+This step is required: the copied settings file sets `Database:MigrateOnStartup` to `false`, and
+the API refuses to start while the database has pending migrations. You can set it to `true`
+instead, and the API applies them itself on every start; the six commands and the startup check are
+in [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
+
+If the Compose stack above already built the database (both use the same PostgreSQL volume),
+`migrate` prints only `Nothing to migrate.`.
+
+### 4. Run the API
 
 ```bash
 dotnet run --project src/Struo.Api
@@ -115,17 +147,24 @@ By default this uses the `http` profile: it listens on `http://localhost:5221`, 
 A successful start shows:
 
 ```text
-[11:38:30 INF] Now listening on: http://localhost:5221
-[11:38:30 INF] Application started. Press Ctrl+C to shut down.
-[11:38:30 INF] Hosting environment: Development
+[18:30:38 INF] Now listening on: http://localhost:5221
+[18:30:38 INF] Application started. Press Ctrl+C to shut down.
+[18:30:38 INF] Hosting environment: Development
+…
 ```
 
-These three lines are the tail of the output. When the tables already exist, a
-`DatabaseInitializer` line above them reports that the schema is up to date, followed by three
-`DataSeeder: skip …` lines. On the very first start against an empty database, those lines instead
-record table creation and seeding.
+With `MigrateOnStartup` set to `false`, nothing about the database is logged before these lines;
+with `true`, they come after FluentMigrator's log and one `Applied migration …` line per migration
+applied.
 
-If startup fails, the log prints a single Fatal entry and the process exits with code 1.
+If startup fails, the log prints a single Fatal entry and the process exits with code 1. Skipping
+the previous step looks like this (stack trace omitted):
+
+```text
+[18:30:49 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
 
 In another terminal, confirm the API responds:
 
@@ -134,11 +173,11 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 ```
 
 ```text
-{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-09-10T03:39:30.3332812Z"}}
+{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-10-12T10:30:38.9562717Z"}}
 HTTP_STATUS:200
 ```
 
-### 4. Run the admin SPA
+### 5. Run the admin SPA
 
 Back in the terminal where you ran `curl`:
 
@@ -151,7 +190,9 @@ pnpm dev
 A successful start shows:
 
 ```text
-  VITE v8.2.0  ready in 276 ms
+…
+  VITE v8.3.2  ready in 299 ms
+
   ➜  Local:   http://127.0.0.1:5173/
 ```
 
@@ -161,7 +202,7 @@ same server.
 The dev server forwards `/api` to `http://localhost:5221`, so the browser sees the admin SPA and the
 API as the same origin — the development environment needs no separate CORS configuration.
 
-### 5. First login
+### 6. First login
 
 Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`.
 
@@ -170,9 +211,9 @@ Change the password right after logging in.
 If you start in the Production environment while the password is still the default, the log records
 only a warning naming `Auth__BootstrapAdmin__Password` — it does not block startup.
 
-This account is seeded only the first time the `struo_users` table is created. To start with a different
-email and password, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before the
-first start; after that first start, the only way to change them is to log in to the admin UI.
+Step 3's `migrate` seeds this account, once, on an empty database. To start with a different email
+and password, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before running
+`migrate`; once it is seeded, the only way to change them is to log in to the admin UI.
 
 ## What you'll see
 

@@ -55,7 +55,7 @@ docker compose ps
 
 ## 自己起需要的服務
 
-做開發或有特殊需求時，只起你需要的服務，其餘自己跑。下面五個步驟只用 Compose 起 PostgreSQL
+做開發或有特殊需求時，只起你需要的服務，其餘自己跑。下面六個步驟只用 Compose 起 PostgreSQL
 與 Redis，API 與管理後台在本機執行。
 
 ### 1. 啟動 PostgreSQL 與 Redis
@@ -87,10 +87,40 @@ cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.
 複製過來就能直接用：連線字串與 `Redis:ConnectionString` 都對上上一步容器的預設值。
 `appsettings.Development.json` 有列進 `.gitignore`，不會被提交。
 
-任何一個設定鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯
-一的例外是 `Testing:PostgresConnection`，它只認 `STRUO_TEST_PG_CONNECTION`。
+任何一個設定鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；例
+外是測試用的四個 `Testing:*Connection` 鍵，各自只認一個 `STRUO_TEST_*_CONNECTION` 環境變數，見
+[第 4 章](04-configuration.md)最後一節。
 
-### 3. 執行 API
+### 3. 建立資料表與初始資料
+
+```bash
+dotnet run --project src/Struo.Api -- migrate
+```
+
+`migrate` 依序套用 migration：先建框架資料表，再植入語言、`admin` 與 `public` 兩個角色，以及預設
+管理員帳號。輸出前段是 FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied`，結束代碼
+`0`：
+
+```text
+$ dotnet run --project src/Struo.Api -- migrate
+[18:30:29 INF] Beginning Transaction
+[18:30:29 INF] Rolling back transaction
+[18:30:29 INF] VersionMigration migrating
+…
+[18:30:29 INF] 202610080001: SeedCoreData migrated
+[18:30:29 INF] => 0.0086777s
+Applied 202610080000  CreateCoreSchema
+Applied 202610080001  SeedCoreData
+```
+
+這一步不能省：複製過來的設定檔把 `Database:MigrateOnStartup` 設成 `false`，資料庫還有待套用的
+migration 時，API 會拒絕啟動。也可以把它改成 `true`，讓 API 每次啟動時自己套用；六個命令與啟動
+時的檢查見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
+
+資料庫已經被前面的 Compose 整套服務建好時（兩者共用同一個 PostgreSQL volume），`migrate` 只印
+`Nothing to migrate.`。
+
+### 4. 執行 API
 
 ```bash
 dotnet run --project src/Struo.Api
@@ -102,16 +132,22 @@ dotnet run --project src/Struo.Api
 啟動成功會看到：
 
 ```text
-[11:38:30 INF] Now listening on: http://localhost:5221
-[11:38:30 INF] Application started. Press Ctrl+C to shut down.
-[11:38:30 INF] Hosting environment: Development
+[18:30:38 INF] Now listening on: http://localhost:5221
+[18:30:38 INF] Application started. Press Ctrl+C to shut down.
+[18:30:38 INF] Hosting environment: Development
+…
 ```
 
-這三行是輸出的尾段：資料表已經存在時，前面還有一行 `DatabaseInitializer` 說 schema 已經是最
-新的，加上三行 `DataSeeder: skip …`。針對空白資料庫第一次啟動，前面則是建立資料表與植入資料
-的紀錄。
+`MigrateOnStartup` 是 `false` 時，這幾行前面沒有任何資料庫的紀錄；設成 `true` 時，前面是
+FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied migration …`。
 
-啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。
+啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。漏了上一步，訊息是這樣（堆疊追蹤省略）：
+
+```text
+[18:30:49 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
 
 另開一個終端機確認 API 有回應：
 
@@ -120,11 +156,11 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 ```
 
 ```text
-{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-09-10T03:39:30.3332812Z"}}
+{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-10-12T10:30:38.9562717Z"}}
 HTTP_STATUS:200
 ```
 
-### 4. 執行管理後台
+### 5. 執行管理後台
 
 回到剛才跑 `curl` 的那個終端機：
 
@@ -137,7 +173,9 @@ pnpm dev
 啟動成功會看到：
 
 ```text
-  VITE v8.2.0  ready in 276 ms
+…
+  VITE v8.3.2  ready in 299 ms
+
   ➜  Local:   http://127.0.0.1:5173/
 ```
 
@@ -146,7 +184,7 @@ pnpm dev
 開發伺服器把 `/api` 轉發到 `http://localhost:5221`，後台與 API 在瀏覽器眼裡是同一個來源，開
 發環境不需要另外設定 CORS。
 
-### 5. 第一次登入
+### 6. 第一次登入
 
 打開 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。
 
@@ -155,9 +193,9 @@ pnpm dev
 如果用 Production 環境啟動、密碼還是預設值，log 只會留下一筆警告，指名
 `Auth__BootstrapAdmin__Password`，不會擋下啟動。
 
-這組帳密只在 `struo_users` 資料表第一次建立時植入；要用別的帳號密碼開站，在第一次啟動前先設
-`Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`，第一次啟動之後，只能登入
-後台改。
+這組帳密由第 3 步的 `migrate` 植入，只在空資料庫上植入一次。要用別的帳號密碼開站，在跑
+`migrate` 之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`；植入之後，
+只能登入後台改。
 
 ## 你會看到什麼
 

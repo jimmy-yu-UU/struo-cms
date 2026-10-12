@@ -223,13 +223,17 @@ HTTP_STATUS:400
 
 `sort=category.name` 這種多對一路徑則正常回應 200。
 
-`NULL` 排在哪裡交給資料庫決定，程式不會送 `NULLS FIRST`／`NULLS LAST`：SQLite 遞增排序時 `NULL`
-排最前，PostgreSQL 排最後。
+`NULL` 排在哪裡交給資料庫決定，程式不會送 `NULLS FIRST`／`NULLS LAST`：SQLite、SQL Server 與
+MySQL／MariaDB 遞增排序時 `NULL` 排最前，PostgreSQL 排最後。
 
 **預設順序。** 沒有 `sort=` 時，順序是 `createdAt DESC, id ASC`，沒有 `CreatedAt` 的集合退化成單獨
 的 `id ASC`；這是刻意的——PostgreSQL 的堆積順序在更新後不穩定，不這樣做的話一筆被編輯過的列會憑空
 跳位置。主鍵一律被加在每個客戶端排序的最後一段當遞增的平手判定，除非呼叫端已經自己排 `id`，這樣一
 來就算排序欄不是唯一值，翻頁也不會重複或漏掉列。
+
+`id ASC` 是資料庫自己對 id 欄的順序。PostgreSQL、MySQL／MariaDB 與 SQLite 上，它和 id 的字串順序
+一致；SQL Server 的 `uniqueidentifier` 先比較最後 6 個位元組，所以 UUIDv7 的 id 在那裡不照建立時間
+排。翻頁照樣穩定，只是不能拿 id 的順序當建立的先後。
 
 排序一個可翻譯欄位會對翻譯 sidecar 開一條 locale-scoped 的關聯子查詢；某個 locale 沒有翻譯列的那一
 列排序值當成 `NULL`。排序鍵用的白名單跟篩選欄位是同一份，細節見本章最後一節。

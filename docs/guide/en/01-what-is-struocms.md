@@ -2,8 +2,8 @@
 
 Every time you build a content management system from scratch, you redo the same infrastructure:
 users and permissions, file storage, multilingual content, REST and GraphQL APIs. StruoCMS is a
-headless CMS template you fork directly, built on .NET 10 and SqlSugar, with PostgreSQL as the
-verified database. The admin UI is a Vue 3 single-page application.
+headless CMS template you fork directly, built on .NET 10 and SqlSugar, verified on PostgreSQL,
+SQL Server, MySQL and MariaDB. The admin UI is a Vue 3 single-page application.
 
 After you fork it, you declare content collections in your own project. StruoCMS turns them into
 database tables, APIs, and admin screens, so that infrastructure work is not yours to redo.
@@ -38,8 +38,9 @@ database tables, APIs, and admin screens, so that infrastructure work is not you
 The content model starts with you. A freshly installed StruoCMS has zero collections — Article,
 Tag, and Category are all things you declare yourself. After forking, put your collection classes
 in the assembly named by `Struo:ContentAssemblies`. StruoCMS scans that assembly together with the
-API host project's own assembly and turns your classes into tables, REST endpoints, and GraphQL
-schema automatically.
+API host project's own assembly and turns your classes into REST endpoints and GraphQL schema
+automatically. The tables come from migrations, which `make:migration` generates from the same
+classes.
 
 Three things stay on you:
 
@@ -61,8 +62,8 @@ covered in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 
 A StruoCMS install with no collections added yet looks like this:
 
-- The database has exactly eleven framework tables. If you set `Database:MigrationsPath`, startup
-  creates a twelfth table, `struo_schema_migrations`, to track which migrations have run.
+- After `migrate`, the database has exactly twelve tables: the eleven framework tables plus the
+  version table `struo_schema_versions`, which records the applied migrations.
 - The admin sidebar has no content groups, only System. For a super-admin, System holds Language,
   Role, and User — nothing else, because the framework collections File, MediaFolder, Permission,
   and UserRole all declare `Hidden = true`. That is a display-layer flag, not a permission.
@@ -76,15 +77,25 @@ it waits for your collections to fill it in.
 
 `Database:DbType` accepts five values: PostgreSQL, MySql, SqlServer, Sqlite, Oracle.
 
-| Database | Status |
+| `DbType` | Status |
 |---|---|
-| PostgreSQL | only verified runtime target |
-| Sqlite | test suite only |
-| MySql, SqlServer, Oracle | type mappings exist, unverified |
+| `PostgreSQL` | verified: PostgreSQL 13.2 |
+| `SqlServer` | verified: SQL Server 2025 |
+| `MySql` | verified: MySQL 8.4, MariaDB 11.8 |
+| `Sqlite` | test suite only |
+| `Oracle` | type mappings exist, unverified |
 
-Some ordering and literal-conversion logic in queries handles PostgreSQL and SQLite behavior
-specifically. Anything other than PostgreSQL is unsupported today — verify it yourself before you
-rely on it in production.
+Verified means the whole test suite passes on that backend. MariaDB uses the `MySql` value. On every
+backend, the framework tables are created by the same core migrations.
+
+The backends still differ in a few behaviors:
+
+- The order of ids on SQL Server: see [Chapter 10](10-query-basics.md).
+- The precision of averages: see [Chapter 11](11-query-advanced.md).
+- The MySQL/MariaDB character set and `sql_mode`, and Oracle's limits: see
+  [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
+
+Oracle has never been verified; verify it yourself before you rely on it in production.
 
 ## What's next
 

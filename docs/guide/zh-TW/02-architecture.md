@@ -48,15 +48,14 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 `User`、`Role`、`Permission`、`UserRole`。另外四種——`FileTranslation`、`Revision`、
 `SiteSettings`、`UserSession`——是框架資料表，但不是集合。
 
-核心還有兩個不在 `src/Struo.*` 底下的資料夾，加上 `db/migrations/README.md`，fork 時都要留
-著：
+核心還有兩個不在 `src/Struo.*` 底下的資料夾，fork 時都要留著：
 
 - `frontend/`：管理後台。
 - `schema/`：schema gate 用來比對前後端契約的快照。
 
-`db/migrations/` 裡屬於核心的只有一份說明機制的 `README.md`：CodeFirst 在任何環境、任何一
-種設定好的資料庫上都會自己建出框架資料表，核心不需要開機用的 SQL 腳本；fork 自己加進去的腳
-本屬於那個 fork。
+框架資料表由 `Struo.Infrastructure` 裡的核心 migration 建立：`CreateCoreSchema` 建表，
+`SeedCoreData` 植入初始資料，兩支都由 `migrate` 或 `Database:MigrateOnStartup` 套用。API 不會照
+entity 類別自己建表。fork 為自己的集合寫的 migration 屬於那個 fork。
 
 框架程式碼不會參照 `samples/` 底下的任何東西，這條邊界有測試守著。
 
@@ -77,9 +76,9 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 可以換的部分：
 
 - **資料庫引擎**：`Database:DbType` 的五個值，一對一對應到 SqlSugar 自己的 `DbType`，換的
-  是 SqlSugar 底下的 provider，不是 SqlSugar 本身。CodeFirst 靠不分廠牌的
-  `[ColumnShape]`／`ColumnTypeMap` 對應，五種引擎共用同一份建表邏輯；哪幾種驗證過，第 1
-  章已列。
+  是 SqlSugar 底下的 provider，不是 SqlSugar 本身。Migration 透過 `AsShape`、`AsJson`、
+  `AsLongText`、`AsTimestamp` 這組欄位型別輔助方法，經由不分廠牌的 `[ColumnShape]`／
+  `ColumnTypeMap` 對應，五種引擎共用同一份 migration；哪幾種驗證過，第 1 章已列。
 - **檔案後端**：`IFileStorage` 是核心讓出去的介面，本機硬碟與 S3 相容儲存都是它的實作。
 - **搜尋提供者**：`ISearchProvider` 是同一種讓出去的介面，核心只內建一個
   `NullSearchProvider`（用 `TryAddScoped` 註冊，永遠不處理搜尋），fork 沒註冊自己的實作之
@@ -98,6 +97,9 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 性，fork 寫的每一個 entity 都繼承這層語意；`IItemRepository` 也只有一個實作
 `SqlSugarItemRepository`，不是一層可以拿掉重寫的 ORM 抽象層。
 
+FluentMigrator 同樣不能換：每支 migration 都是繼承 `StruoMigration` 的 FluentMigrator 類別，
+`migrate` 這組命令也建在它上面。
+
 SqlSugar 大版本升級，或是 `[SugarIndex]` 這類屬性的語意變動，會直接衝擊 fork 的每一個
 entity 類別，核心無法幫忙吸收——升級前，先比對 `Directory.Packages.props` 裡 `SqlSugarCore`
 的版本，讀過那個版本的 changelog 再動手。
@@ -107,9 +109,10 @@ sidecar的唯一索引由 `TranslationSidecarIndexPolicy` 算出、由同一個 
 的過濾條件，也是同一個 factory 註冊的查詢過濾器（`db.QueryFilter.AddTableFilter<ISoftDeletable>`），
 fork 不需要自己重算或重新註冊。
 
-所有資料庫存取都得經過 SqlSugar，只有四個刻意留下的例外會組字串 SQL：`db/migrations/` 的腳
-本、`SchemaGuard` 只在開發環境下用的唯讀查詢、關聯篩選子查詢組出來的四種字串形式，以及
-ORDER BY 用的字串。
+所有資料庫存取都得經過 SqlSugar，結構變更與初始資料則是 FluentMigrator migration。只有四個刻
+意留下的例外會組字串 SQL：關聯篩選的子查詢包裝、`OrderByExpressionBuilder` 組出的 ORDER BY 文
+字、migration 鎖 `MigrationLockSql`，以及 `IndexCatalog` 讀索引用的唯讀系統目錄查詢。細節見
+[第 21 章](21-schema-and-upgrades.md#核心的四個-raw-sql-例外)。
 
 ## 技術堆疊
 
@@ -119,10 +122,10 @@ ORDER BY 用的字串。
 | 後端建置設定 | `net10.0`、nullable 開啟、警告視為錯誤 | `Directory.Build.props` |
 | 開發用資料庫容器 | PostgreSQL `17-alpine` | `docker-compose.yml` |
 | 開發用快取容器 | Redis `7-alpine` | `docker-compose.yml` |
-| 前端框架 | Vue 3.5.x、Vite 8.2.0、TypeScript 6.0.x | `frontend/package.json`／lockfile |
+| 前端框架 | Vue 3.5.x、Vite 8.3.2、TypeScript 6.0.x | `frontend/package.json`／lockfile |
 | 前端樣式與元件 | Tailwind CSS 4.3.x、shadcn-vue（reka-ui 2.10.x） | `frontend/package.json`／lockfile |
-| 前端編輯器與狀態 | TipTap 3.30.x、Pinia 4.x、vue-router 5.x、vue-i18n 11.x | `frontend/package.json`／lockfile |
-| 前端測試 | Playwright 1.62.x、Vitest 4.1.x | `frontend/package.json`／lockfile |
+| 前端編輯器與狀態 | TipTap 3.31.x、Pinia 4.x、vue-router 5.x、vue-i18n 11.x | `frontend/package.json`／lockfile |
+| 前端測試 | Playwright 1.63.x、Vitest 4.1.x | `frontend/package.json`／lockfile |
 | CI 版本釘選 | Node 24、pnpm 10、.NET SDK `10.0.x` | `.github/workflows/ci.yml` |
 
 `Directory.Build.props` 的設定對整個 solution 生效，fork 新增的專案不用再設定一次就會照樣
@@ -130,7 +133,8 @@ ORDER BY 用的字串。
 版本釘選，不是同一件事。
 
 兩個外圍專案的套件清單直接看各自的 `.csproj`：`Struo.Api` 那邊是 GraphQL、OpenAPI 與
-Serilog 這一組，`Struo.Infrastructure` 那邊是 SqlSugarCore、S3、密碼雜湊與影像處理。
+Serilog 這一組，`Struo.Infrastructure` 那邊是 SqlSugarCore、FluentMigrator、S3、密碼雜湊與
+影像處理。
 
 API 文件用 Scalar，套用 Mars 主題，預設客戶端是 JavaScript／Axios。
 

@@ -7,6 +7,7 @@ import { createI18n } from 'vue-i18n'
 import en from '@/locales/en'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import TheSidebar from './TheSidebar.vue'
+import sidebarSource from './TheSidebar.vue?raw'
 import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
 import { useAppConfigStore } from '@/stores/appConfigStore'
@@ -175,6 +176,6 @@ describe('TheSidebar', () => {
   it('footer shows the package version, not a literal', () => {
     const wrapper = mountSidebar()
     expect(wrapper.text()).toContain(`v${packageVersion}`)
-    expect(wrapper.text()).not.toContain('v0.9.0')
+    expect(sidebarSource).not.toMatch(/\bv\d+\.\d+\.\d+\b/)
   })
 })

@@ -8,19 +8,29 @@
 以下每一項都是一個容易送錯、後果卻不明顯的設定；鍵名的完整語義見
 [第 4 章：設定參考](04-configuration.md)，這裡只講部署時的後果。
 
-### `Database:MigrationsPath` 要是絕對路徑
+### 新版 API 上線前先跑 `migrate`
 
-`MigrationRunner.ApplyAsync` 把設定值原封不動丟給 `Directory.Exists`，不會先解析成應用程式
-資料夾底下的路徑。相對路徑因此解析到的是「行程啟動當下的工作目錄」，不是應用程式自己的資料
-夾——systemd 的 `WorkingDirectory`、容器的 `WORKDIR`，或任何先切換目錄才啟動的啟動器，都可
-能跟它不一樣，指到的目錄不存在就會讓啟動直接失敗（見下方〈啟動時會快速失敗的事〉）。
+`Database:MigrateOnStartup` 預設是 `false`：資料庫還有待套用的 migration，API 就拒絕啟動（見下方
+〈啟動時會快速失敗的事〉）。部署流程因此要在新版 API 啟動之前跑一次 `migrate`，可以是一次性的
+job、init container，或 `docker run --rm … <映像> migrate`。也可以設
+`Database__MigrateOnStartup=true`，讓 API 自己在開始服務前套用。
 
-### 第一次啟動前就換掉 bootstrap 密碼
+好幾個副本都設了 `MigrateOnStartup` 時，它們在 migration 鎖上排隊，只有一個在套用；等超過
+`Database:MigrationLockTimeoutSeconds` 的副本啟動失敗。SQLite 與 Oracle 都不拿鎖，要確定只有一
+處在跑 `migrate`。
 
-`Auth:BootstrapAdmin:Password` 只在 `struo_users` 資料表第一次建立時被讀一次，之後重開行程再怎麼
-改這個值，都不會影響已經存在的帳號。用預設值在 Production 啟動只會在 Warning 等級記一筆，點
-名這個設定鍵，不會擋下啟動。這道警告比對的是目前設定裡的值，不是資料庫裡實際存的雜湊：先用
-預設值種子、之後才改設定，警告會消失，帳號的密碼卻還是預設值那一組。
+Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
+自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
+
+### 第一次 `migrate` 前就換掉 bootstrap 密碼
+
+`Auth:BootstrapAdmin:Password` 只在核心的 seed migration 第一次執行時被讀一次，之後再怎麼改這個
+值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
+那個 job 的環境裡，API 自己的環境跟植入無關。
+
+用預設值在 Production 啟動只會在 Warning 等級記一筆，點名這個設定鍵，不會擋下啟動。這道警告
+比對的是目前設定裡的值，不是資料庫裡實際存的雜湊：先用預設值植入、之後才改設定，警告會消失，
+帳號的密碼卻還是預設值那一組。
 
 ### 登入速率限制：帳號層開、IP 層看拓樸
 
@@ -88,14 +98,16 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 或 `Query:MaxLimit` 超出範圍，都會在應用程式真正開始接受請求之前，就丟出
 `OptionsValidationException` 讓啟動失敗。
 
-`Database:MigrationsPath` 指到一個不存在的目錄，是同一套快速失敗機制的另一個例子：
+資料庫還有待套用的 migration、`MigrateOnStartup` 又是 `false`，是同一套快速失敗機制的另一個例
+子。下面是 API 映像對一個空的 SQLite 資料庫啟動：
 
 ```
-[11:24:56 FTL] StruoCMS host terminated unexpectedly
-System.IO.DirectoryNotFoundException: MigrationRunner: migrations directory not found: 'D:/does-not-exist/migrations'. Check the Database:MigrationsPath configuration value.
+[10:35:35 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
 ```
 
-行程隨後以代碼 `1` 結束，後面接著一段堆疊追蹤（此處省略）；訊息本身點名了出錯的設定鍵。
+行程隨後以代碼 `1` 結束，後面的堆疊追蹤此處省略；訊息本身點名了要跑的命令與設定鍵。
 
 另一件跟設定無關、但同樣在啟動最上層就決定好的事：程序一開始就把整個行程的預設文化特性釘死成
 invariant，操作者不需要另外釘 `LANG` 或 `DOTNET_SYSTEM_GLOBALIZATION_*`。SqlSugar 重新解析
@@ -131,9 +143,9 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 
 ### API 映像
 
-監聽 `8080`，以非 root 使用者 `app` 執行。`db/migrations` 已經複製進映像的
-`/app/db/migrations`；`Database:MigrationsPath` 在這個映像裡預設留空，要讓 migration 腳本在
-這裡動起來，把它設成這個絕對路徑。
+監聽 `8080`，以非 root 使用者 `app` 執行。映像啟動時不套用 migration：進入點是
+`dotnet Struo.Api.dll`，所以 `docker run --rm … struo-api:local migrate` 就是對資料庫跑
+`migrate`；不然就設 `Database__MigrateOnStartup=true`。
 
 `app` 擁有三個目錄：`/app/App_Data`（本機檔案後端的上傳內容與圖片轉檔快取）、`/app/logs`
 （Serilog 的 File sink）跟 `/home/app/.aspnet/DataProtection-Keys`（金鑰圈，見下面
@@ -155,8 +167,8 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
   `Oracle`）。
 - `Database__ConnectionString`——必須設定，映像裡預設帶的是含 `REPLACE_ME` 佔位字串的
   PostgreSQL 連線字串，不能直接拿去用。
-- `Database__MigrationsPath`（選填）——留空停用 migration 腳本；要打開，填這個映像裡的絕對
-  路徑 `/app/db/migrations`。
+- `Database__MigrateOnStartup`（選填）——留空就是 `false`，部署時要另外跑 `migrate`；設成
+  `true`，API 啟動時自己套用 migration。
 - `Redis__ConnectionString`——留空就是單副本、不撐重啟的行程內快取。
 - `Struo__Files__Backend`——預設 `local`，寫進 `/app/App_Data`（落在宣告的 volume 裡）；要
   用 `s3`，還得配上對應的四個 `Struo__Files__S3__*` 鍵。
@@ -218,14 +230,20 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 
 ### 兩個映像一起驗證
 
-下面三道指令建一個使用者自訂的 network，起兩個容器讓彼此看得到對方；這是驗證步驟，不是建議
-的正式環境拓樸。本章最後的本機 Compose 環境會把兩個映像連同 PostgreSQL、Redis 一起起來：
+下面五道指令建一個使用者自訂的 network 與一個 volume，先對 volume 裡的 SQLite 資料庫跑
+`migrate`，再起兩個容器讓彼此看得到對方；這是驗證步驟，不是建議的正式環境拓樸。本章最後的本機
+Compose 環境會把兩個映像連同 PostgreSQL、Redis 一起起來：
 
 ```
 docker network create struo-verify
-docker run --detach --name api --network struo-verify --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
+docker volume create struo-verify-data
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
 ```
+
+第三道指令最後印出 `Applied 202610080000  CreateCoreSchema` 與 `Applied 202610080001  SeedCoreData`。
+少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用
 者自訂的 network 上，而 API 容器就叫 `api`。API 容器如果要連到 Docker host 上的資料庫，用
@@ -271,17 +289,17 @@ Healthy
 
 ## 備份
 
-- **資料庫**——除了上傳檔案之外，所有資料的權威來源都在 PostgreSQL，用一般的 PostgreSQL
-  工具備份：`pg_dump`、`pg_basebackup`，或託管服務自己的快照與 PITR；StruoCMS 沒有另外提
-  供備份機制。
+- **資料庫**——除了上傳檔案之外，所有資料的權威來源都在資料庫裡，用你那個後端自己的工具
+  備份，例如 PostgreSQL 的 `pg_dump`，或託管服務的快照與 PITR；StruoCMS 沒有另外提供備份機制。
+  Migration 沒有回滾命令，每次 `migrate` 之前都先備份。
 - **上傳檔案**——存在資料庫之外，備份哪裡看 `Struo:Files:Backend` 設成什麼：`local` 模式備
   份 `Local:RootPath` 那個目錄，`s3` 模式靠 S3 相容儲存桶自己的版本控制或複寫；只備份資料
   庫，會悄悄漏掉每一個上傳過的檔案。
 - **Redis 不需要**——Redis（或行程內的替代品）裡只有短命狀態：cookie 工作階段的 ticket、帳
   號登入失敗計數、工作階段撤銷紀錄。丟了它只會逼每個已登入的使用者重新登入，並把登入計數歸
   零，它不是權威來源，不需要另外備份。
-- **腳本與設定**——`db/migrations/`、`appsettings.*`、環境變數或密鑰管理系統裡的值，是一般
-  的原始碼或部署管線產物，跟其餘部署一起備份即可。
+- **Migration 與設定**——fork 自己的 migration 類別、`appsettings.*`、環境變數或密鑰管理系統
+  裡的值，是一般的原始碼或部署管線產物，跟其餘部署一起備份即可。
 
 ## 本機的 Compose 環境
 
@@ -323,5 +341,5 @@ docker compose --profile s3 up -d postgres redis minio createbuckets
 
 ## 接下來
 
-部署就談到這裡；資料庫的結構怎麼分層管理、跨 fork 怎麼升級核心，見
+部署就談到這裡；資料庫結構怎麼由 migration 建立與修改、核心的結構變動怎麼進到你的 fork，見
 [第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。

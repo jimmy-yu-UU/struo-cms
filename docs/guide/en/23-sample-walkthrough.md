@@ -23,7 +23,8 @@ type — one instance of each:
 `[CmsCollection]`/`[CmsField]` attributes) and takes both paths to SqlSugar at once: it
 references the `SqlSugarCore` package directly, and it also references `Struo.Infrastructure`
 (which brings SqlSugar in transitively too) — [Chapter 5](05-collections.md) covers the direct
-reference as the minimum a collection library needs.
+reference as the minimum for a library that only declares entities. The sample's own migration
+derives from `Struo.Infrastructure`'s `StruoMigration`, so it needs the second reference as well.
 
 The only project that references it is the test project, `tests/Struo.Tests`, and it does so
 deeply — "Removing the sample completely" below lists every file that has to change.
@@ -59,9 +60,27 @@ If you only want to take a look, reverting both edits afterward is enough; the s
 in place and affects nothing else. To remove it from a fork entirely, see "Removing the sample
 completely" below.
 
-With both edits done and the process restarted, CodeFirst creates `articles`,
-`article_translations`, `tags`, `article_tags`, and `categories` — five tables, the same way it
-creates a table for any other collection. `GET /api/schema` now lists eleven collections: the
+The sample carries its own migration, `Migrations/202610080100_CreateBlogSchema.cs`. With both
+edits done, that migration is not applied yet; with `Database:MigrateOnStartup` set to `false`, the
+restarted API refuses to start and exits with code `1`:
+
+```
+[18:00:42 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
+
+Run `migrate` once to create the five tables `articles`, `article_translations`, `tags`,
+`article_tags` and `categories`:
+
+```
+$ dotnet run --project src/Struo.Api -- migrate
+…
+Applied 202610080100  CreateBlogSchema
+```
+
+With `MigrateOnStartup` set to `true`, the API applies it itself on start. Once the API is running
+again, `GET /api/schema` lists eleven collections: the
 sample's four (`article`, `articleTag`, `category`, `tag`) alongside the seven framework
 collections; `ArticleTranslation` is a sidecar, not a collection of its own. `articleTag` is
 `Hidden` in the admin sidebar, but `/api/schema` still lists it.
@@ -74,7 +93,7 @@ list below.
 
 ## File by file
 
-Six `.cs` files; the lead collection comes first.
+Seven `.cs` files; the lead collection comes first and the sample's migration last.
 
 ### `Article.cs`
 
@@ -143,12 +162,6 @@ The full mechanics of a junction collection are in [Chapter 8](08-relations.md).
 doesn't apply when payload is written through the `Article.Tags` relation array; the difference
 between the two write paths is in [Chapter 8](08-relations.md).
 
-If the sample is enabled against an existing database whose `article_tags` table predates the
-`note`/`sort` columns, they arrive only through Development's `Database:AutoSyncSchema=true` (see
-[Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md)) or a fork-authored
-migration script — `db/migrations` holds only the fork's own scripts, never the sample collection's
-schema.
-
 `ArticleTag` carries no unique index blocking a duplicate `(ArticleId, TagId)` pair — writing to
 `articleTag` directly can produce a duplicate pairing; the next time the owning `Article` is saved
 it's cleaned up (the row with the smallest primary key stays, the rest are deleted, and a warning
@@ -190,6 +203,17 @@ public sealed class FaqItem
 }
 ```
 
+### `Migrations/202610080100_CreateBlogSchema.cs`
+
+`CreateBlogSchema` derives from `StruoMigration` and creates the sample's five tables in one
+migration: every column, `ArticleTranslation`'s unique `(articleid, locale)` index, and four plain
+indexes on `articles`, `categories` and `article_tags`. `Down()` drops the five tables in reverse
+order.
+
+Its `Up()` matches what `make:migration --entity` generates for those five types, so it serves as a
+complete example of that command; the command and the authoring rules are in the "Writing a
+migration" section of [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
+
 ## Running the sample's end-to-end tests
 
 `frontend/e2e/sample/` has 8 spec files (`collections`, `items`, `relations`, `revisions`,
@@ -221,13 +245,25 @@ uses the sample's collections as a fixture. Work through the list below in order
    that sets `Struo__ContentAssemblies__0=Struo.Sample.Blog` into the process environment before
    any test runs; without it, the test host `ApiFactory` builds never see the sample's collections.
 
-4. Find every test file that directly `using`s the sample's types, and delete them one by one:
+4. Find the test files that still mention the sample:
 
    ```
-   grep -rl "using Struo.Sample.Blog;" tests/Struo.Tests
+   grep -rl "Struo.Sample.Blog" tests/Struo.Tests --include=*.cs
    ```
 
-   This lists 36 files; see [Chapter 22](22-testing.md) for how they're distributed.
+   After step 3 it lists 45 files. Handle them by kind:
+
+   - The 36 files with `using Struo.Sample.Blog;` (see [Chapter 22](22-testing.md) for how they're
+     distributed), plus `Migrations/SampleBlogMigrationTests.cs` and
+     `Query/NestedListArgsExpansionTests.cs`, which name the sample's types fully qualified: delete
+     them whole.
+   - `Persistence/SqlSugarClientFactoryTests.cs` and `Persistence/TableNamingTests.cs`: delete only
+     the one assertion and the two `InlineData` lines that name a `Struo.Sample.Blog.` type; the
+     rest of their tests stay.
+   - `Metadata/ConventionMetadataDiscoveryTests.cs`: step 6 handles it.
+   - `GraphQl/FakeMetadataFixtures.cs`, `GraphQl/GraphQlExecutionTests.cs` and
+     `Query/TranslatableSearchHarness.cs` mention the sample only in comments, which step 8 handles;
+     `Documentation/NarrativeScanScopeTests.cs` uses the sample's path as test data and stays.
 
 5. Run `dotnet build` to confirm the build is clean — nothing under `src/Struo.*` references the
    sample. `dotnet test` is still red at this point; the next two steps handle it.
@@ -243,10 +279,10 @@ uses the sample's collections as a fixture. Work through the list below in order
    `404`/`KeyNotFoundException` failures under `Api/`, `Query/`, `GraphQl/`, `Localization/`,
    and `Identity/`.
 
-8. Clean up the four stale comments still mentioning the sample: `ApiFactory.cs` and
-   `CorsAndCookieTests.cs` reference the now-deleted `ContentAssemblyEnvBootstrap.cs`;
-   `FakeMetadataFixtures.cs` and `GraphQlExecutionTests.cs` have comments still pointing at the
-   sample's paths and types.
+8. Clean up the six comments that mention the sample: `ApiFactory.cs`, `CorsAndCookieTests.cs` and
+   `CoreSchemaSnapshotTests.cs` reference `ContentAssemblyEnvBootstrap.cs`, which step 3 deleted;
+   the comments in `FakeMetadataFixtures.cs`, `GraphQlExecutionTests.cs` and
+   `TranslatableSearchHarness.cs` point at the sample's paths and types.
 
 9. In `frontend/`: delete `frontend/e2e/sample/` (8 spec files); remove the `"sample"`
    project and the now-unneeded `testIgnore: '**/e2e/sample/**'` for `core` from
@@ -254,12 +290,28 @@ uses the sample's collections as a fixture. Work through the list below in order
    `frontend/package.json`, keeping only `"e2e"`; trim the sample's section out of
    `frontend/e2e/README.md`.
 
-10. Clean up the five tables left behind in any database the sample has run against — CodeFirst
-    creates them, but nothing drops them along with the code:
+10. Clean up the five tables in any database the sample has run against, and the sample migration's
+    row in the version table. The tables the sample migration created don't go away with the code;
+    left in place, the row shows up as `Orphaned` in `migrate:status` — it doesn't block startup,
+    but it stays there:
 
     ```
-    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags CASCADE;
+    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
+    DELETE FROM struo_schema_versions WHERE version = 202610080100;
     ```
+
+    Replace `struo_` with your `Database:TablePrefix`. The sample's tables have no foreign keys
+    between them, so no `CASCADE` is needed. Both statements were run on PostgreSQL, SQL Server,
+    MySQL and MariaDB; SQLite's `DROP TABLE` takes one table at a time, so split it into five.
+
+After step 10, `migrate:status` lists only the two core migrations:
+
+```
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-12 10:34:10Z  CreateCoreSchema
+202610080001   Applied   2026-10-12 10:34:10Z  SeedCoreData
+2 applied, 0 pending, 0 orphaned
+```
 
 After removal, run these three commands, in order, to confirm it's clean:
 
@@ -273,4 +325,5 @@ cd frontend && pnpm test && pnpm build && pnpm e2e
 
 That's the sample walkthrough. To build a collection of your own, go back to
 [Chapter 5: Defining Collections](05-collections.md); if you're just getting started with the
-project, begin at [Chapter 3: Getting Started](03-getting-started.md).
+project, begin at [Chapter 3: Getting Started](03-getting-started.md). If your database was built by
+v0.8.x, see [Chapter 24: Joining a Database Built by v0.8.x](24-upgrading-from-0-8.md).

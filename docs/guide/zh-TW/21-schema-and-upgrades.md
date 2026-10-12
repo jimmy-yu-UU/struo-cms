@@ -1,173 +1,194 @@
 # 21. 資料庫結構管理與升級
 
-資料表怎麼被建立、既有資料表什麼時候會被改，以及核心自己的結構變動要怎麼進到你的
-fork——這一章講這三件事。
+資料表從哪裡來、要怎麼改，以及核心的結構變動怎麼進到你的 fork——這一章講這三件事。資料庫是
+v0.8.x 用 CodeFirst 建出來的話，先照[第 24 章：接上 v0.8.x 的資料庫](24-upgrading-from-0-8.md)
+把它接上 migration。
 
-## 三層職責
+## Migration 是唯一的結構來源
 
-資料表結構的變動分成三層，各自的職責、開關與適用環境都不一樣：不會動到既有資料的建
-表、最容易讓資料出問題的結構同步，以及最保守、也是正式環境唯一該走的 migration 腳本。
+每一張表、每一個欄位與索引，都來自一支 FluentMigrator migration。API 不會照 entity 自己建表或改表；
+套用過的 migration 記在版本表 `{前綴}schema_versions` 裡，前綴就是 `Database:TablePrefix`，
+預設 `struo_`。
 
-CodeFirst 建表：只要一個 entity 類別對應的資料表還不存在，不管哪一種後端、哪一種環境，
-開機就會自動建出來，永遠開著，不能關。
+Migration 放在三個地方：
 
-結構同步：依 entity 類別跟既有資料表的結構差異，自動新增、修改甚至刪除欄位；只在
-Development 生效，預設關閉，鍵名與型別見[第 4 章：設定參考](04-configuration.md)。它也
-是唯一可能悄悄動到既有資料的一層，後面〈結構同步的危險情境〉會逐一說明。
+- **核心**：`src/Struo.Infrastructure/Migrations/Core/`。`CreateCoreSchema` 建框架資料表，
+  `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
+  `Rbac:PublicReadCollections` 列出的公開讀取權限。
+- **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
+  `Struo:ContentAssemblies` 裡時才會被掃到。
+- **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
+  `Struo.Infrastructure` 的內容專案裡。
 
-migration 腳本：套用你自己寫好、審查過的 `.sql` 檔案；每一種後端都會執行，不是只有
-PostgreSQL，同樣預設關閉——`Database:MigrationsPath` 留空就不啟用。這是既有資料表在正
-式環境唯一該走的改動路徑。
+命令會掃描 `Struo.Infrastructure`、API 專案，以及 `Struo:ContentAssemblies` 列出的每一個組件，
+依版本號由小到大執行。植入資料也是 migration 的一部分，所以只在 `migrate` 或
+`MigrateOnStartup` 時發生。
 
-你在既有集合上加一個屬性，預設什麼都不會發生：表已經存在，建表不會碰它，結構同步又是
-關的，那一欄不會自己長出來。Development 想讓它長出來，把 `Database:AutoSyncSchema` 打
-開再重開一次；只有在那份資料庫還沒有真正在意的資料時，這麼做才安全。
+## 六個命令
 
-正式環境沒有這個選項：同一個改動要自己寫一支 `ALTER` 腳本，放進上面那個 migration 目
-錄，跟新版一起部署，開機時由 migration runner 套用。新增一整個集合是另一回事——那是一
-張還不存在的表，兩個環境都會自己建出來，不必寫腳本。
+六個命令都是 `Struo.Api` 的第一個參數：
 
-## 啟動順序
+| 命令 | 做什麼 |
+|---|---|
+| `migrate` | 套用所有待套用的 migration |
+| `migrate:status` | 列出每支 migration 的狀態 |
+| `migrate:preview` | 印出待套用 migration 的 SQL，不執行 |
+| `migrate:check` | 比對資料庫與 entity，唯讀 |
+| `migrate:baseline` | 把每支 migration 記成已套用，不執行 |
+| `make:migration` | 產生一個新的 migration 檔 |
 
-開機時，六個步驟固定按同一個順序跑：
+在儲存庫裡用 `dotnet run --project src/Struo.Api -- <命令>`。這會套用 `http` 啟動設定檔，環境是
+Development，讀你的 `appsettings.Development.json`。發佈出去的成品用 `dotnet Struo.Api.dll <命令>`；
+API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>` 也行。
 
-1. 替既有資料表拍一張快照——用來認出哪些表是這次開機才新建的。
-2. 建表——CodeFirst，永遠執行。
-3. 結構同步——僅 Development 且開啟時。
-4. 套用 migration 腳本——僅設定了 migration 目錄時。
-5. schema guard——僅 Development。
-6. 植入資料。
+命令讀的設定跟 API 一樣：appsettings 加上 `Section__Key` 環境變數，設定鍵也可以接在命令後面，
+例如 `--Database:ConnectionString=…`。結束代碼 `0` 是成功，`1` 是失敗，`2` 是用法錯誤。
 
-順序不是隨機排的。建表排第一，是因為 migration 腳本假設要改的資料表已經存在——
-`ALTER` 沒有東西可以改；結構同步同樣要先有表可比對，才談得上跟 entity 類別的差異。
-schema guard 跟植入資料排在最後，兩者都得看最終的資料表形狀：schema guard 要驗證的索
-引，得等前面所有可能建表、改表的步驟都跑完才確定存在；植入資料只植入這次開機新建出來
-的表，太早跑會漏掉 migration 或同步剛加出來的欄位。
+`migrate` 先印出 FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied <版本>  <名稱>`；
+沒有東西要套用時只印 `Nothing to migrate.`。`migrate:status` 每支 migration 一行：
 
-如果 migration 腳本這一步半路失敗，正在套用的那一支腳本連同它的追蹤紀錄一起回滾，執行
-到那裡為止——MySQL 與 Oracle 例外，這兩種後端的 DDL 會隱含提交，已經跑掉的部分回不
-來；已經套用成功的檔案不會被撤銷，仍然算數。啟動照樣整個中止，不會帶著套用到一半的腳
-本繼續跑下去。
+```
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
+202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
+202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
+3 applied, 0 pending, 0 orphaned
+```
 
-三層裡只有一種設定錯誤不會讓啟動失敗：結構同步在 Development 以外的環境被打開時，它整
-段被忽略、只留下一筆點名當前環境的警告，啟動照常繼續。
+`Pending` 是還沒套用，`Orphaned` 是版本表裡有紀錄、但掃描到的組件裡已經找不到那支
+migration，例如把範例從 `Struo:ContentAssemblies` 拿掉之後。孤兒紀錄不會擋住啟動。
 
-## 一定成立的保證與一定不會發生的事
+`migrate:preview` 印出待套用 migration 會執行的 SQL，什麼都不寫，最後一行是
+`-- <n> migration(s) pending`。
 
-整個機制只有兩個保證，五種後端、任何環境都不例外。
+> 在新資料庫上，預覽裡有 `SeedCoreData` 的 `INSERT`，其中包含 bootstrap 管理員的 email 與密碼
+> 雜湊。把這份輸出當成機密處理，不要貼進 issue 或公開的 CI 紀錄。
 
-第一個保證：只要一個 entity 類別對應的資料表還不存在，開機一定會建出來，這次新建的表也
-才會被植入初始資料。這個保證講的是程式碼路徑，不是驗證證據——PostgreSQL 是唯一真的拿
-實際資料庫驗證過的後端，其餘後端只是型別對應設計上支援。
+`migrate:check` 比對實際資料表與 entity 宣告的結構，不拿鎖、不寫入，乾淨時只印
+`0 error(s), 0 warning(s)`。錯誤包括缺表、缺欄、可否為 null 不同、型別類別不同、字串長度不同，
+以及缺了該有的唯一索引；有任何錯誤就以代碼 `1` 結束。警告包括資料庫裡有、但沒有 entity 宣告的
+欄位，以及 SQL Server 上的非 Unicode 字串欄位。
 
-第二個保證，反過來看：一張已經存在的資料表，唯一會被自動改動的兩種方式，是明確打開的
-結構同步（僅 Development），或是一支經過審查、由 migration runner 套用的腳本；兩者都
-是主動選擇，不會有第三種路徑讓既有資料表在不知情的狀況下被改掉。
+`make:migration` 在〈撰寫 migration〉一節，`migrate:baseline` 在第 24 章。
 
-## 結構同步的危險情境
+## 啟動時的檢查
 
-> 結構同步只比較 entity 類別和既有資料表兩個結構的差異，看不出你的意圖——改名跟「砍一
-> 欄、加一欄」在它眼裡是同一件事；凡是會動到既有資料的結構改動，一律得走 migration。
+API 開始服務之前，`StartupMigrationGate` 先看資料庫。`Database:MigrateOnStartup` 在每個環境的
+預設都是 `false`：這時只要還有待套用的 migration，API 就拒絕啟動，以代碼 `1` 結束：
 
-下面每一種情境，都是這種「看不出意圖」在實際場景裡的樣子。
+```
+[17:57:36 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
 
-1. **改欄位名稱** — 同步讀成「舊屬性消失、新屬性出現」，對舊欄位下 `DROP COLUMN`、對新
-   欄位下 `ADD COLUMN`，資料永久遺失；正確做法是先寫一支 `RENAME COLUMN` 的 migration，
-   之後才改 entity 類別。
-2. **移除屬性** — 直接 `DROP COLUMN`，資料跟著消失；確認這欄真的用不到之後，用一支明
-   確的 migration 在正式環境執行。
-3. **欄位型別限縮** — 依後端而定：直接失敗，或悄悄截斷資料；正確做法分三步——加新欄
-   位、回填並驗證、最後才切換到新欄位並砍掉舊的。
-4. **對已有資料的表加 `NOT NULL`** — `ALTER` 直接失敗，啟動中止；三步式 migration：先
-   加可為 null 的欄位、回填、最後才補上 `NOT NULL`。
-5. **對有重複值的欄位加 `UNIQUE`** — `ALTER` 一樣失敗，啟動中止；migration 先去重（這
-   是一次資料操作），再補上限制。
-6. **拆分或合併欄位** — 結構化的差異表達不出這種意圖，結果永遠是資料遺失或欄位空著；這
-   種改動永遠只能靠 migration。
-7. **SQLite 上刪欄位** — SQLite 的刪欄位路徑其實實作了，只是被 SqlSugar 的
-   `SqliteCodeFirstEnableDropColumn` 擋住，`SqlSugarClientFactory` 從未打開它；打開後普通欄位
-   會被悄悄刪掉，有主鍵、索引、`CHECK` 或外鍵綁著的欄位則讓 `ALTER TABLE` 失敗、啟動中止。
-8. **多副本同時啟動** — 每個副本各自算出、各自執行自己的結構差異，好幾個副本同時搶著改
-   一張表；做法跟 migration runner 的無鎖問題一樣，見〈撰寫 migration〉。
-9. **看不到將要跑的 DDL** — 同步是啟動當下依照那一刻的程式碼即時算出來的，沒辦法事先
-   預覽；這正是結構同步從來不該在正式環境開啟的核心原因。
+所以部署流程要把 `migrate` 當成獨立的一步，在新版 API 上線之前跑完。設成 `true` 時，API 會先
+拿 migration 鎖、套用待套用的 migration，再開始服務；本機的 Compose 環境就是這樣跑的。
 
-第 2 項與第 7 項各有一個測試撐著：
-`PostgresIntegrationTests.Unfiltered_InitTables_drops_a_removed_column_on_postgres`
-證實 PostgreSQL 上拿掉的欄位真的會被砍掉，
-`DatabaseInitializerTests.Unfiltered_InitTables_does_not_drop_columns_on_Sqlite`
-證實 SQLite 上同一種改動不會動到欄位。
+框架資料表已經存在、卻沒有版本表時，兩種設定都拒絕啟動，訊息要你先跑一次
+`migrate:baseline`，見[第 24 章](24-upgrading-from-0-8.md)。
 
-通則是：一個後端原生支不支援某種 DDL，不代表結構同步在那個後端上就會這麼做——每一種
-後端都得自己驗一次，不能拿其中一個推論另一個。
+在 Development，啟動還會跑一次跟 `migrate:check` 相同的比對，有錯誤就拒絕啟動。其他環境不跑
+這一步，要自己跑 `migrate:check`。
+
+## 版本表、鎖與交易
+
+版本表 `{前綴}schema_versions` 有 `version`、`appliedon`、`description` 三欄，`version` 上有
+唯一索引。一支 migration 有沒有套用過，只看版本號。
+
+`migrate`、`migrate:baseline` 與 `MigrateOnStartup` 都會先拿一把以表前綴命名的 advisory lock：
+PostgreSQL 用 `pg_try_advisory_lock`，MySQL／MariaDB 用 `GET_LOCK`，SQL Server 用
+`sp_getapplock`。好幾個副本同時啟動時，只有一個在套用，其他的等它做完，再發現沒有東西要套用。
+等待上限是 `Database:MigrationLockTimeoutSeconds`（預設 60，範圍 1 到 3600），逾時就失敗。
+SQLite 與 Oracle 不拿鎖；Oracle 會記一筆警告，不支援同時跑 `migrate`。
+
+每支 migration 在自己的交易裡執行。失敗時回滾那一支，訊息點名最小的未套用版本，已經套用的
+保持套用。MySQL、MariaDB 與 Oracle 的 DDL 會隱含提交，失敗的那一支可能只做了一半。Migration
+只往前走，沒有回滾命令，部署前先備份資料庫。
 
 ## 撰寫 migration
 
-檔案怎麼命名、哪些 SQL 該用、為什麼不必做到冪等、套用紀錄怎麼追蹤、時區怎麼寫，
-`db/migrations/README.md` 是唯一的權威版本；三層的完整對照也在那裡。這一節只講部署時
-最常踩到的兩件事。
+`make:migration` 產生 migration 檔，只讀 entity 的 metadata，不碰資料庫，也從不覆寫已經存在的
+檔案：
 
-第一，沒有互斥鎖：好幾個副本同時針對同一個 migration 目錄啟動，可能同時嘗試套用同一個
-還沒套用過的檔案；建表跟結構同步也有同樣的風險。分階段部署時，先讓一個副本套用完，或
-另外開一個一次性的 job 來跑，其餘副本再上線。
+```
+make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]
+```
 
-第二，目錄本身要存在：`db/migrations/` 底下只放一份 `README.md`，不附任何 `.sql` 檔
-案；如果部署流程只是「有什麼就複製什麼」，這個目錄不一定會出現在你自己打包出去的成品
-裡——不過這個專案的 API 映像有明確複製它。設了 `Database:MigrationsPath` 卻找不到目
-錄，啟動會直接失敗，訊息與結束代碼見[第 20 章：部署](20-deployment.md)。
+- 版本號取 UTC 時間到分鐘（`yyyyMMddHHmm`），撞到目錄裡已有的檔案就往後推一分鐘。
+- `--entity` 接一個集合、翻譯 sidecar 或 junction 的型別名稱，產生一支照它的 metadata 建表的
+  `Create.Table`；省略時產生空的骨架。
+- `--output` 的目錄必須已經存在。相對路徑從行程的工作目錄算起，用
+  `dotnet run --project src/Struo.Api` 時那是 `src/Struo.Api`，所以要寫
+  `../../<你的專案>/Migrations`，或直接寫絕對路徑。
 
-## 開發期的結構防護
+範例的 `Tag` 產生出來是這樣（開頭的 using 與 namespace、後面的欄位與 `Down()` 省略）：
 
-`SchemaGuard` 只在 Development 執行，跑在建表、結構同步、migration 腳本之後：它驗證兩
-件事真的存在——
+```csharp
+[Migration(202610120958, "CreateTags")]
+public sealed class CreateTags : StruoMigration
+{
+    public override void Up()
+    {
+        Create.Table("tags")
+            .WithColumn("id").AsGuid().PrimaryKey()
+            .WithColumn("name").AsString(255).NotNullable()
+            .WithColumn("createdat").AsTimestamp(Db).NotNullable()
+…
+```
 
-- `struo_revisions` 資料表上 `(collectionname, itemid, revisionnumber)` 的複合唯一索引。
-- 每一個有翻譯 sidecar 的集合，其 sidecar 上 `(fk, locale)` 的唯一索引（sidecar 本身可以
-  不存在，但如果存在，索引就得存在）。
+寫 migration 時的規則：
 
-缺了任何一個，就丟出一個講清楚缺什麼的 `InvalidOperationException`，訊息裡直接點名是
-哪一張表、哪一種索引不見了。
+- 繼承 `StruoMigration`，用 FluentMigrator 的可攜呼叫（`Create.Table`、`Alter.Table`、
+  `Create.Index`、`Insert.IntoTable`）。各後端型別不同的欄位用 `AsTimestamp(Db)`、`AsJson(Db)`、
+  `AsLongText(Db)`，或 `AsShape(ColumnShape.<形狀>, Db)`。
+- 框架資料表的名稱用 `FrameworkTable("users")`，它會套上表前綴；你自己的表沒有前綴。
+- 只有某個後端真的需要不同寫法時才分支，而且用常數：`if (Db == StruoDbType.MySql)`。不要用
+  FluentMigrator 的 `IfDatabase("…")`：它吃一個自由字串，拼錯就什麼都不做，migration 照樣記成
+  已套用。
+- 不寫 SQL 字串，也不引用 entity 類別：migration 是寫下那一刻的結構快照。
+- 一支 migration 可能已經在某處套用過，就不要再改它，另外加一支。
 
-缺索引通常是因為那張表在索引加進來之前就建好了：索引是在建表那一刻一起建出來的。錯誤訊息會直接
-說怎麼補：寫一支建索引的 migration，或者在 Development、那份結構丟掉也沒關係的前提下，重建結構讓
-建表再送一次索引。
+自動比對看不出意圖，碰到既有資料的改動要拆成幾步：
 
-它只認 PostgreSQL 跟 SQLite；MySQL、SQL Server、Oracle 直接跳過，什麼都不驗證。它是開
-發期的快速失敗機制，抓的是「這次改動漏了該有的索引」，不是正式環境的安全網——正式環境
-根本不會執行它。
+1. **改欄位名稱**：寫一支 `Rename.Column` 的 migration，再改 entity；「砍一欄、加一欄」會丟資料。
+2. **移除屬性**：確定那一欄真的不用了，再用一支 `Delete.Column` 拿掉。
+3. **限縮型別**：加新欄位、回填並驗證、再切換並刪掉舊欄位；直接限縮會失敗或截斷資料。
+4. **對已有資料的表加 `NOT NULL`**：先加可為 null 的欄位、回填，最後才補 `NOT NULL`。
+5. **對有重複值的欄位加唯一索引**：先去重，再建索引。
+6. **拆分或合併欄位**：一定要寫一支搬資料的 migration。
+
+寫完先用 `migrate:preview` 看 SQL，再對一份你實際用的後端的拋棄式資料庫跑 `migrate` 與
+`migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以呼叫
+`SchemaChecker.Check`，斷言沒有錯誤。
 
 ## 核心的四個 raw SQL 例外
 
-這一章談的 migration 腳本，正是「所有資料庫存取都走 SqlSugar」這條不變式的例外之一，見
-[第 2 章：系統架構](02-architecture.md)。四個例外各自為什麼存在：
+「所有資料庫存取都走 SqlSugar」這條不變式（見[第 2 章：系統架構](02-architecture.md)）有四個
+刻意的例外：
 
-- `db/migrations/*.sql` 腳本——migration 本來就是給 fork 自己寫 SQL 的地方，這一層不
-  受這條規則約束。
-- `SchemaGuard` 的唯讀 catalog 查詢——索引沒辦法靠名稱找（不同後端、不同建立路徑取的名
-  字不一樣），只能直接查 `pg_indexes`／`sqlite_master` 這類系統目錄，而且只在
-  Development 執行、只讀不寫。
-- 關聯篩選下推用的子查詢包裝——四種組好的字串形式，是把「篩選子集合」這種查詢語意轉成
-  SQL 子查詢時，運算式樹表達不出來的部分。
-- `OrderByExpressionBuilder` 的 `ORDER BY` 文字——三種按欄位組出來的形式，同樣是運算式
-  樹表達不出的排序語意。
+- **關聯篩選的子查詢包裝**：在 SqlSugar 產生的 SQL 外面組四種固定形式。
+- **`OrderByExpressionBuilder` 的 `ORDER BY` 文字**：欄位、關聯路徑與翻譯欄位三種排序形式。
+- **Migration 鎖 `MigrationLockSql`**：每個後端一組取得與釋放鎖的參數化語句。
+- **`IndexCatalog` 的索引查詢**：`migrate:check` 讀索引用的唯讀系統目錄查詢；Oracle 沒有這支
+  查詢，索引檢查以警告跳過。
 
-除了第一個，其餘三個例外都只組查詢用的字串，不會改變資料表的形狀；第一個例外就是本章
-前面講的第三層，migration 腳本本來就是拿來改既有資料表結構的。
+## 升級核心
 
-## 跨 fork 升級核心
+核心的結構變動以核心 migration 的形式放在 `Struo.Infrastructure` 裡，合併新版核心就一起進到你的
+fork；[版本紀錄](changelog.md)會點名每一支新的核心 migration。合併之後，`migrate:status` 把它們
+列成 `Pending`。先用 `migrate:preview` 看要執行的 SQL，在備份過的資料庫上跑 `migrate`，再跑
+`migrate:check`。
 
-核心不附任何 `.sql` 腳本，建表又只做「補齊缺的表」這一件事，不會去比對、也不會去改動已
-經存在的資料表，所以核心的結構變動沒有辦法自動送到部署裡：一次 release 改了核心的資料
-表結構，不會有任何機制幫你的 fork 把既有資料表跟著改掉。
+## 各後端的差異
 
-核心的結構變動寫在[版本紀錄](changelog.md)裡，合併新版核心之前先讀它的「破壞性變更」條
-目；照著改的，是你自己針對實際跑的後端寫一支 `ALTER` 腳本，走前面說的 migration 這條路。腳本放進
-同一個 migration 目錄，跟新版核心一起部署：開機時先建表、再套用你的腳本，順序就是前面〈啟動順
-序〉那一節。
-
-打開結構同步，對著一份正式環境資料庫的副本跑一次，可以把它算出來的差異當作「這次升級
-大概要改哪些欄位」的提示——但只能當提示，不能當成直接拿去執行的計畫：上面那些危險情
-境，在這份差異上一樣成立。完整程序見 `db/migrations/README.md`。
+- **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值。建資料庫時明確指定
+  `CHARACTER SET utf8mb4`；SqlSugar 的 `CreateDatabase` 這類工具可能建出 utf8mb3，存不了 emoji。
+  用伺服器預設的嚴格 `sql_mode`，非嚴格模式會悄悄截斷或替換值。
+- **SQL Server**：`migrate:check` 對 `varchar` 欄位發警告；超出定序字碼頁的字元存進去會變成 `?`。
+- **Oracle**：只有型別對應，沒有實測過。不拿鎖，`migrate:check` 跳過型別、長度與索引檢查並發警告。
+- **單元測試用 CodeFirst 建表時**，唯一群組索引叫 `Index_{表}_{欄位}_Unique`，要控制在 63 個字元
+  以內：MySQL／MariaDB 拒絕超過 64 個字元的名稱，PostgreSQL 會截斷超過 63 個字元的名稱。
 
 ## 接下來
 

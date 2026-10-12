@@ -1,5 +1,84 @@
 # 版本紀錄
 
+## 0.9.0 — 2026-10-12
+
+::: danger 破壞性變更
+- 資料表只由 FluentMigrator migration 建立；啟動時 CodeFirst 不再建表。還有 migration 沒套用時，API 拒絕啟動。
+  把 `migrate`（`dotnet run --project src/Struo.Api -- migrate`，映像內是 `dotnet Struo.Api.dll migrate`）
+  放進部署步驟，或設 `Database:MigrateOnStartup=true`。
+- 集合、翻譯 sidecar 與 junction 的表要有 migration：每個都用
+  `make:migration <名稱> --entity <型別> --output <目錄>` 產生，再用 `migrate` 套用。
+- v0.8.x 建出來的既有資料庫，啟動、`migrate` 與 `MigrateOnStartup` 都會拒絕並要求 `migrate:baseline`。
+  先替 fork 自己已存在的表產生 migration，再跑一次 `migrate:baseline`，之後才用 `migrate`。
+  完整步驟見[第 24 章](24-upgrading-from-0-8.md)。
+- `Database:MigrationsPath`、`Database:AutoSyncSchema` 與 `db/migrations/` 移除，`.sql` 腳本不再執行；
+  設定鍵還在時啟動會記警告。之後的結構變更寫成繼承 `StruoMigration` 的 FluentMigrator migration。
+  `{prefix}schema_migrations` 表不再使用，版本記在 `{prefix}schema_versions`。
+- 種子資料改由核心的種子 migration 寫入，在 `migrate` 或 `MigrateOnStartup` 期間執行，讀
+  `Auth:BootstrapAdmin:*`、`Localization` 與 `Rbac:PublicReadCollections`；跑 `migrate` 的環境要有這些設定。
+- 移除的公開型別：`DatabaseInitializer`、`MigrationRunner`、`SchemaMigration`、`SchemaGuard`
+  （連同 `TranslationSidecarDescriptor`）、
+  `DataSeeder`、`LanguageSeeder`、`AdminUserSeeder`、`RbacSeeder`（後三者只留在測試專案當輔助類別）。
+  呼叫它們的 fork 程式碼要移除。
+- Development 環境啟動時以 `SchemaChecker` 比對資料庫與 entity，任何錯誤都中止啟動（取代 `SchemaGuard`，
+  檢查範圍更廣）。用 `migrate:check` 看明細。
+- Compose 服務不再有固定的 `container_name`（`struo-postgres` 變成 `<專案名>-postgres-1`）；
+  用 `docker exec struo-postgres` 的腳本要改。具名 volume 名稱不變，資料照舊。
+- 從 v0.8.x 升上來的資料庫還要做各後端的後續處理（SQL Server 的 access token 索引與
+  `varchar` → `nvarchar`；MySQL／MariaDB 的 `datetime(6)` 與 utf8mb4），見第 24 章。
+:::
+
+### 新增
+
+- `Struo.Api` 的 migration 指令（第一個引數）：`migrate`、`migrate:status`、`migrate:preview`、
+  `migrate:baseline`、`migrate:check`、`make:migration`。結束碼：0 成功、1 失敗、2 用法錯誤。
+- 設定鍵 `Database:MigrateOnStartup`（預設 `false`）與 `Database:MigrationLockTimeoutSeconds`
+  （預設 60，範圍 1–3600）。
+- `migrate` 會取得 advisory lock，並行執行時每支 migration 只套用一次：PostgreSQL、MySQL／MariaDB
+  與 SQL Server 有鎖；SQLite 與 Oracle 沒有，Oracle 會記警告。
+- `StruoMigration` 基底類別：`Db`、`FrameworkTable(...)`、`CreateTranslationUniqueIndex(...)`，以及
+  欄位輔助方法 `AsJson(Db)`、`AsLongText(Db)`、`AsTimestamp(Db)`、`AsShape(shape, Db)`。
+- `SchemaChecker.Check(db, dbType, entityTypes)`：fork 的測試可斷言 `HasErrors` 為 false。
+- `ColumnShape.Timestamp`。
+- 核心 migration `202610080000_CreateCoreSchema` 與 `202610080001_SeedCoreData`；範例 Blog 附
+  `202610080100_CreateBlogSchema`。
+- `docker compose up -d --build` 起整套環境：postgres、redis、`api`（埠 8081）與 `admin`（埠 8080）；
+  變數 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、`STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD`。
+- 新依賴 `FluentMigrator.Runner.*` 8.0.1（Core、Postgres、SqlServer、MySql、SQLite、Oracle）。
+- 測試連線設定鍵 `Testing:SqlServerConnection`、`Testing:MySqlConnection`、
+  `Testing:MariaDbConnection`，只認 `STRUO_TEST_SQLSERVER_CONNECTION`、
+  `STRUO_TEST_MYSQL_CONNECTION`、`STRUO_TEST_MARIADB_CONNECTION` 覆寫；`STRUO_TEST_BACKEND`
+  把整套測試搬到實際後端。見第 22 章。
+- `migrate` 與 `MigrateOnStartup` 不把執行的 SQL 寫進記錄，因為種子的 `INSERT` 含預設管理員的
+  密碼雜湊。`migrate:preview` 會印出這段 SQL，輸出要當機密處理。
+
+### 變更
+
+- SQL Server 2025、MySQL 8.4 與 MariaDB 11.8 列為已驗證的後端，與 PostgreSQL 並列；Oracle 仍未驗證。
+  版本表見 `AGENTS.md` 的「Verification」。
+- SQL Server 的字串欄位用 `nvarchar`；`migrate:check` 對 `varchar`／`char`／`text` 欄位發出
+  `NonUnicodeString` 警告。
+- MySQL／MariaDB 上沒有指定形狀的 `DateTime` 是 `datetime(6)`（微秒）；其他後端不變。
+- API 映像不再含 `db/migrations`。CI 的 docker job 在 smoke test 前先跑 `migrate`，並加測 Compose 環境。
+- `docker compose up -d` 會一併建置並啟動 API 與後台。開發時只要依賴服務，改用
+  `docker compose up -d postgres redis`；要加 MinIO，用
+  `docker compose --profile s3 up -d postgres redis minio createbuckets`。
+- 後端套件升級：`AWSSDK.S3` 4.0.104.1、`NetVips.Native` 8.18.7、`Scalar.AspNetCore` 2.17.13、
+  `coverlet.collector` 10.1.0。
+- 前端套件升級：11 個 `@tiptap/*` 套件 3.31.4、`@lucide/vue` 1.49.0、`@tanstack/vue-table` 9.2.6、
+  `vue-i18n` 11.4.13、`vite` 8.3.2、`@types/node` 26.6.4、`jsdom` 30.1.2、`vue-tsc` 3.3.12。
+
+### 修正
+
+- SQL Server：沒有 access token 的使用者可以並存；`accesstoken` 索引改為非唯一（舊的唯一索引只容許
+  一筆 NULL）。只影響新建的資料庫，升級的資料庫見第 24 章。
+- SQL Server：整數欄位的 `aggregate[avg]` 不再用整數除法。
+- SQL Server：`int` 欄位的 `aggregate[sum]` 超過 2^31 不再溢位。
+- SQL Server：取消的請求以取消例外呈現，不再是 `SqlSugarException`。
+- MySQL／MariaDB：一秒內的兩次寫入維持順序（微秒時間戳）。只影響新建的資料庫。
+- 檔名超過 255 個 UTF-16 編碼單位的上傳不再失敗：檔名截到欄位寬度並保留副檔名；檔名與標題的截斷都不會切開代理對。
+- 同一個行程使用多個資料庫後端時，欄位型別與資料列繫結不再互相混用（`ProviderScopedReflectionCache`）。
+
 ## 0.8.2 — 2026-10-01
 
 ### 變更

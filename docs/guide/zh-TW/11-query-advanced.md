@@ -214,6 +214,13 @@ to-many 的形態依目標 id 分組，用 `COUNT(DISTINCT ...)` 算：一個根
 `[CmsField]`，驗證器退回 `Uuid` 介面，不落在數字或時間任何一邊，這是刻意的，因為一個外鍵求和或
 求平均沒有意義。
 
+`avg` 的精度跟著資料庫走。MySQL／MariaDB 的平均值只比欄位多出 `div_precision_increment` 位小數
+（預設 4 位），1、2、2 的平均回傳 1.6667；PostgreSQL、SQL Server 與 SQLite 沒有這個四位小數的截斷。
+
+SQL Server 上，整數欄位的 `avg` 先轉成 `FLOAT` 再平均，`sum` 先轉成 `BIGINT` 再加總，所以不會整
+數相除，加總超過 2^31 也不會溢位。`FLOAT` 只能精確表示 2^53 以內的整數，超過的 `long` 值平均起
+來會失去精度。
+
 彙總永遠不會被剪枝，不管同一個請求裡還要求了哪些 facet——它一律針對請求完整、未剪枝的 `filter`
 執行：
 

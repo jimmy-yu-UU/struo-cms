@@ -52,16 +52,16 @@ Seven of the eleven are themselves collections — they declare `[CmsCollection]
 `MediaFolder`, `User`, `Role`, `Permission`, `UserRole`. The other four — `FileTranslation`,
 `Revision`, `SiteSettings`, `UserSession` — are framework tables, but not collections.
 
-The core also has two folders outside `src/Struo.*`, plus `db/migrations/README.md`, that a fork
-keeps:
+The core also has two folders outside `src/Struo.*` that a fork keeps:
 
 - `frontend/`: the admin SPA.
 - `schema/`: the snapshots the schema gate uses to compare the admin SPA's contract against the
   backend's.
 
-The only core-owned file under `db/migrations/` is a `README.md` documenting the mechanism:
-CodeFirst creates the framework tables itself on any environment, on any configured database, so the
-core needs no startup SQL script; scripts a fork adds of its own belong to that fork.
+The framework tables come from the core migrations in `Struo.Infrastructure`: `CreateCoreSchema`
+creates the tables and `SeedCoreData` seeds the initial data, both applied by `migrate` or by
+`Database:MigrateOnStartup`. The API never builds a table from the entity classes. The migrations a
+fork writes for its own collections belong to that fork.
 
 Framework code never references anything under `samples/`; a test enforces that boundary.
 
@@ -82,9 +82,10 @@ provider and never rescanned per request.
 Swappable parts:
 
 - **Database engine**: `Database:DbType`'s five values map one-to-one to SqlSugar's own `DbType`;
-  what changes is the provider underneath SqlSugar, not SqlSugar itself. CodeFirst relies on
-  vendor-neutral `[ColumnShape]`/`ColumnTypeMap` mapping, so all five engines share one
-  table-creation path; chapter 1 lists which engines are verified.
+  what changes is the provider underneath SqlSugar, not SqlSugar itself. Migrations resolve column
+  types through the `AsShape`, `AsJson`, `AsLongText` and `AsTimestamp` helpers, which go through
+  the vendor-neutral `[ColumnShape]`/`ColumnTypeMap` mapping, so all five engines share one set of
+  migrations; chapter 1 lists which engines are verified.
 - **File backend**: `IFileStorage` is an interface the core hands to a fork; local disk and
   S3-compatible storage are both implementations of it.
 - **Search provider**: `ISearchProvider` is another interface the core hands to a fork. The core's
@@ -106,6 +107,9 @@ SqlSugar's attributes directly, so every entity a fork writes inherits that laye
 `IItemRepository` likewise has only one implementation, `SqlSugarItemRepository` — not a removable
 ORM abstraction layer.
 
+FluentMigrator is not swappable either: every migration is a FluentMigrator class deriving
+`StruoMigration`, and the `migrate` commands are built on it.
+
 A SqlSugar major-version upgrade, or a semantic change to an attribute like `[SugarIndex]`, hits
 every entity class a fork has written. Before upgrading, check the `SqlSugarCore` version in
 `Directory.Packages.props` and read that version's changelog.
@@ -116,9 +120,11 @@ by that same factory. The soft-delete filter condition is registered by the same
 query filter (`db.QueryFilter.AddTableFilter<ISoftDeletable>`); a fork does not need to recompute
 or re-register any of them.
 
-Every database access goes through SqlSugar. Only four deliberate exceptions assemble string SQL:
-the scripts under `db/migrations/`, `SchemaGuard`'s read-only queries used only in development, the
-four string forms assembled for relation-filter subqueries, and the strings used for ORDER BY.
+Every database access goes through SqlSugar; schema changes and seed data are FluentMigrator
+migrations. Only four deliberate exceptions assemble string SQL: the relation-filter subquery
+wrapper, the ORDER BY text `OrderByExpressionBuilder` assembles, the migration lock
+`MigrationLockSql`, and `IndexCatalog`'s read-only catalog queries for indexes. See
+[Chapter 21](21-schema-and-upgrades.md#the-four-raw-sql-exceptions-in-core) for details.
 
 ## Technology stack
 
@@ -128,10 +134,10 @@ four string forms assembled for relation-filter subqueries, and the strings used
 | Backend build settings | `net10.0`, nullable enabled, warnings as errors | `Directory.Build.props` |
 | Dev database container | PostgreSQL `17-alpine` | `docker-compose.yml` |
 | Dev cache container | Redis `7-alpine` | `docker-compose.yml` |
-| Frontend framework | Vue 3.5.x, Vite 8.2.0, TypeScript 6.0.x | `frontend/package.json`/lockfile |
+| Frontend framework | Vue 3.5.x, Vite 8.3.2, TypeScript 6.0.x | `frontend/package.json`/lockfile |
 | Frontend styling and components | Tailwind CSS 4.3.x, shadcn-vue (reka-ui 2.10.x) | `frontend/package.json`/lockfile |
-| Frontend editor and state | TipTap 3.30.x, Pinia 4.x, vue-router 5.x, vue-i18n 11.x | `frontend/package.json`/lockfile |
-| Frontend testing | Playwright 1.62.x, Vitest 4.1.x | `frontend/package.json`/lockfile |
+| Frontend editor and state | TipTap 3.31.x, Pinia 4.x, vue-router 5.x, vue-i18n 11.x | `frontend/package.json`/lockfile |
+| Frontend testing | Playwright 1.63.x, Vitest 4.1.x | `frontend/package.json`/lockfile |
 | CI version pins | Node 24, pnpm 10, .NET SDK `10.0.x` | `.github/workflows/ci.yml` |
 
 `Directory.Build.props` settings apply to the whole solution; a project a fork adds inherits them
@@ -139,8 +145,8 @@ without setting them up again. `global.json`'s pinned `10.0.0` plus `latestMinor
 `10.0.x` are two separate pins, not the same thing.
 
 Read the two outer projects' package lists straight from their own `.csproj`: `Struo.Api` carries
-GraphQL, OpenAPI, and Serilog; `Struo.Infrastructure` carries `SqlSugarCore`, S3, password hashing,
-and image processing.
+GraphQL, OpenAPI, and Serilog; `Struo.Infrastructure` carries `SqlSugarCore`, FluentMigrator, S3,
+password hashing, and image processing.
 
 API documentation uses Scalar, with the Mars theme, and JavaScript/Axios as the default client.
 

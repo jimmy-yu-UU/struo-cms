@@ -18,8 +18,9 @@
 
 `Struo.Sample.Blog.csproj` 是一個普通類別庫，參照 `Struo.Domain`（拿到 `[CmsCollection]`／
 `[CmsField]` 這些 attribute），並且兩條路都走：自己直接引用 `SqlSugarCore` 套件，也參照
-`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章](05-collections.md)說的最低限度
-就是前者。
+`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章](05-collections.md)說的、只宣告
+entity 時的最低限度就是前者。範例自己的 migration 繼承 `Struo.Infrastructure` 的
+`StruoMigration`，所以後者也少不了。
 
 參照它的只有測試專案 `tests/Struo.Tests`，而且用得很深，〈完全移除範例〉列出全部要動的
 檔案。`src/Struo.Api/Struo.Api.csproj` 沒有指到它的 `ProjectReference`，
@@ -51,8 +52,26 @@
 只是想看一看，之後把這兩處編輯還原回去就好，範例的程式碼留著不影響任何東西；要從 fork
 裡徹底拿掉，見〈完全移除範例〉。
 
-兩處都做完、重啟之後，CodeFirst 會像建立任何其他集合的資料表一樣，建出 `articles`、
-`article_translations`、`tags`、`article_tags`、`categories` 五張表。`GET /api/schema` 這時
+範例帶著自己的 migration `Migrations/202610080100_CreateBlogSchema.cs`。兩處都做完之後，這支
+migration 還沒套用；`Database:MigrateOnStartup` 是 `false` 時，重啟的 API 會拒絕啟動，以代碼 `1`
+結束：
+
+```
+[18:00:42 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+```
+
+跑一次 `migrate`，建出 `articles`、`article_translations`、`tags`、`article_tags`、`categories`
+五張表：
+
+```
+$ dotnet run --project src/Struo.Api -- migrate
+…
+Applied 202610080100  CreateBlogSchema
+```
+
+`MigrateOnStartup` 設成 `true` 的話，API 啟動時會自己套用它。再啟動之後，`GET /api/schema`
 會列出十一個集合：範例加的四個集合（`article`、`articleTag`、`category`、`tag`）會跟七個框架
 集合一起出現；`ArticleTranslation` 是 sidecar，不是獨立集合。`articleTag` 雖然在後台側欄裡被
 `Hidden` 藏起來，`/api/schema` 仍然會列出它。
@@ -64,7 +83,7 @@
 
 ## 逐檔導覽
 
-六個 `.cs` 檔，從主角開始看。
+七個 `.cs` 檔，從主角開始看，最後是範例的 migration。
 
 ### `Article.cs`
 
@@ -129,11 +148,6 @@ junction collection 這個機制的完整說明在[第 8 章](08-relations.md)�
 `Article.Tags` 這個關聯陣列寫入 payload 時這條規則不生效；兩條寫入路徑的差別見
 [第 8 章](08-relations.md)。
 
-如果是對著一個 `article_tags` 已經建好、但還沒有 `note`／`sort` 兩欄的舊資料庫開啟，這兩欄要
-靠 Development 的 `Database:AutoSyncSchema=true`（見
-[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)），或是自己寫一支 migration 才會
-補上——`db/migrations` 收的是 fork 自己寫的腳本，從來不含範例集合的結構。
-
 `ArticleTag` 沒有唯一索引擋 `(ArticleId, TagId)` 這一對重複，直接對 `articleTag` 寫入可以造
 出重複的配對；下一次儲存擁有它的 `Article` 會把它修好（留下 PK 最小的一筆，其餘刪除並記一筆
 警告），見[第 8 章](08-relations.md)。
@@ -174,6 +188,15 @@ public sealed class FaqItem
 }
 ```
 
+### `Migrations/202610080100_CreateBlogSchema.cs`
+
+`CreateBlogSchema` 繼承 `StruoMigration`，在一支 migration 裡建出範例的五張表：每個欄位、
+`ArticleTranslation` 的 `(articleid, locale)` 唯一索引，以及 `articles`、`categories`、
+`article_tags` 上的四個一般索引。`Down()` 依相反順序刪掉五張表。
+
+它的 `Up()` 跟 `make:migration --entity` 對這五個型別產生的內容一致，可以當成那個命令的完整範例；
+命令與撰寫規則見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)〈撰寫 migration〉一節。
+
 ## 執行範例的端到端測試
 
 `frontend/e2e/sample/` 底下有 8 個 spec 檔（`collections`、`items`、`relations`、
@@ -204,13 +227,23 @@ fixture，照下面的清單逐步走完。
    前，就把 `Struo__ContentAssemblies__0=Struo.Sample.Blog` 設進行程環境變數的
    `[ModuleInitializer]`；少了它，`ApiFactory` 起的測試主機看不到範例的集合。
 
-4. 用下面這道指令找出直接 `using` 範例型別的測試檔，逐一刪除：
+4. 用下面這道指令找出還提到範例的測試檔：
 
    ```
-   grep -rl "using Struo.Sample.Blog;" tests/Struo.Tests
+   grep -rl "Struo.Sample.Blog" tests/Struo.Tests --include=*.cs
    ```
 
-   這道指令會列出 36 個檔案；分布見[第 22 章](22-testing.md)。
+   第 3 步做完之後，它列出 45 個檔案，依情況處理：
+
+   - 有 `using Struo.Sample.Blog;` 的 36 個檔案（分布見[第 22 章](22-testing.md)），加上用完整名稱
+     引用範例型別的 `Migrations/SampleBlogMigrationTests.cs` 與
+     `Query/NestedListArgsExpansionTests.cs`：整個刪掉。
+   - `Persistence/SqlSugarClientFactoryTests.cs` 與 `Persistence/TableNamingTests.cs`：只刪掉寫著
+     `Struo.Sample.Blog.` 型別的那一行斷言與那兩筆 `InlineData`，其餘測試留著。
+   - `Metadata/ConventionMetadataDiscoveryTests.cs`：第 6 步處理。
+   - `GraphQl/FakeMetadataFixtures.cs`、`GraphQl/GraphQlExecutionTests.cs`、
+     `Query/TranslatableSearchHarness.cs` 只在註解裡提到範例，第 8 步處理；
+     `Documentation/NarrativeScanScopeTests.cs` 把範例的路徑當成測試資料，留著。
 
 5. 跑一次 `dotnet build` 確認編譯已經乾淨——`src/Struo.*` 底下沒有程式碼參照範例。
    `dotnet test` 這時還是紅的，接下來兩步處理它。
@@ -223,19 +256,36 @@ fixture，照下面的清單逐步走完。
    全靠第 3 步的 module initializer，編譯期抓不到，跑一次 `dotnet test` 看哪些回 `404`／
    `KeyNotFoundException`，分布在 `Api/`、`Query/`、`GraphQl/`、`Localization/`、`Identity/`。
 
-8. 順手清掉四處提到範例的過期註解：`ApiFactory.cs` 與 `CorsAndCookieTests.cs` 引用已經刪
-   掉的 `ContentAssemblyEnvBootstrap.cs`，`FakeMetadataFixtures.cs` 與
-   `GraphQlExecutionTests.cs` 的註解還指著範例的路徑與型別。
+8. 順手清掉六處提到範例的註解：`ApiFactory.cs`、`CorsAndCookieTests.cs` 與
+   `CoreSchemaSnapshotTests.cs` 引用第 3 步刪掉的 `ContentAssemblyEnvBootstrap.cs`，
+   `FakeMetadataFixtures.cs`、`GraphQlExecutionTests.cs` 與 `TranslatableSearchHarness.cs` 的註解
+   指著範例的路徑與型別。
 
 9. 前端這邊：刪掉 `frontend/e2e/sample/`（8 個 spec 檔）；`frontend/playwright.config.ts` 移
    除 `"sample"` 專案與 `core` 用不到的 `testIgnore: '**/e2e/sample/**'`；`frontend/package.json`
    移除 `"e2e:sample"`、`"e2e:all"`，只留 `"e2e"`；修剪 `frontend/e2e/README.md` 談範例的段落。
 
-10. 清掉任何跑過範例的資料庫裡留下的五張表——CodeFirst 建的表不會跟著程式碼一起消失：
+10. 清掉任何跑過範例的資料庫裡的五張表，以及版本表裡範例 migration 的紀錄。範例 migration 建的
+    表不會跟著程式碼一起消失；紀錄不刪的話，`migrate:status` 會把它列成 `Orphaned`，不擋啟動，
+    但會一直留著：
 
     ```
-    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags CASCADE;
+    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
+    DELETE FROM struo_schema_versions WHERE version = 202610080100;
     ```
+
+    `struo_` 換成你的 `Database:TablePrefix`。範例的表之間沒有外鍵，不需要 `CASCADE`。這兩道語句
+    在 PostgreSQL、SQL Server、MySQL 與 MariaDB 上實際跑過；SQLite 的 `DROP TABLE` 一次只接受一
+    張表，要拆成五道。
+
+第 10 步做完，`migrate:status` 只剩核心的兩支：
+
+```
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-12 10:34:10Z  CreateCoreSchema
+202610080001   Applied   2026-10-12 10:34:10Z  SeedCoreData
+2 applied, 0 pending, 0 orphaned
+```
 
 移除完，依序跑這三道指令，確認乾淨：
 
@@ -249,4 +299,5 @@ cd frontend && pnpm test && pnpm build && pnpm e2e
 
 範例導覽到這裡。想動手做一個你自己的集合，回頭看
 [第 5 章：定義集合](05-collections.md)；才剛開始摸這個專案的話，從
-[第 3 章：快速開始](03-getting-started.md)開始。
+[第 3 章：快速開始](03-getting-started.md)開始。資料庫是 v0.8.x 建出來的話，見
+[第 24 章：接上 v0.8.x 的資料庫](24-upgrading-from-0-8.md)。

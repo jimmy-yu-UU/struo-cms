@@ -70,14 +70,10 @@ The table that holds revisions is a plain framework table, not a `[CmsCollection
 never browsable through the generic item API. It is only ever written, never updated, and it does
 not implement the audit interface — it has no updated-at or updated-by.
 
-The table carries a composite unique index over collection name, item id and version number, the
-last line of defense against a concurrent race for the same number; a Development startup check
-verifies it separately.
-
-The table-creation process creates that index only while the table itself does not yet exist — it
-is not retrofitted onto a table that already exists, with the same exception as a translation
-sidecar's index: a Development environment with `Database:AutoSyncSchema` enabled tries to add it
-during its full sync.
+The table carries a composite unique index over collection name, item id and version number,
+`ux_<prefix>revisions_item_no`, the last line of defense against a concurrent race for the same
+number. The core migration `CreateCoreSchema` creates it together with the table; the Development
+startup schema check and `migrate:check` verify separately that it exists.
 
 Revisions are kept forever: the list endpoint returns every revision for the item, unpaginated,
 with no retention period and no cleanup schedule. The only action that ever removes a revision is
@@ -214,10 +210,10 @@ occupies its unique value, and a new, live row wanting the same value is blocked
 is purged for good. Neither the framework nor the sample declares a unique index on a soft-deletable
 entity today, so this only bites a project that adds one.
 
-The framework's only inputs for producing an index are the field list, whether it is unique, the
+`make:migration`'s only inputs for producing an index are the field list, whether it is unique, the
 unique group name, and `IndexName` — there is no concept of a conditional or filtered index at all,
-so a partial unique index that excludes deleted rows cannot be expressed through the table-creation
-process; it needs a database migration script of your own.
+so it cannot generate a partial unique index that excludes deleted rows; write one into your own
+migration by hand if you need it.
 
 ## `DELETE`, `?purge`, and restore
 

@@ -17,15 +17,18 @@ Which interfaces can't be made translatable is covered in
 
 The tables below use a few shorthand terms under Database column:
 
-- `varchar(255)`: SqlSugar CodeFirst's default width for `string`.
+- `varchar(255)`: a `string` with no length, which `make:migration` writes as `AsString(255)`; on
+  SQL Server it is `nvarchar(255)`.
 - Long text: the result of applying `ColumnShape.LongText`; each backend maps it to its own type.
 - JSON: long text plus `IsJson = true` — SqlSugar serializes and restores the whole CLR collection
   directly.
-- CLR default: numbers, `bool`, `DateTime`, `Guid` keep SqlSugar's ordinary mapping; nothing widens
-  the length.
+- CLR default: numbers, `bool`, `Guid` keep FluentMigrator's and SqlSugar's ordinary mapping;
+  nothing widens the length. For `DateTime` on each backend, see "Date and time".
 - `ColumnShape` has three members, `LongText`, `TimestampWithTimeZone` and `Timestamp` — there's no
-  numeric shape. `Timestamp` keeps microseconds on MySQL/MariaDB and keeps the default `DateTime`
-  type elsewhere.
+  numeric shape.
+
+On MySQL/MariaDB, text columns use the database's default character set, so create the database as
+utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
 
 ### Text
 
@@ -76,6 +79,21 @@ admin SPA. `Checkbox` reuses `Boolean`'s editor.
 All three share the same editor; the difference is only whether it shows the date, the time, or
 both. A field that needs a time zone adds `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` to
 the property as well.
+
+The column type of a `DateTime` property on each backend:
+
+| Backend | `DateTime` | With `TimestampWithTimeZone` |
+|---|---|---|
+| PostgreSQL | `timestamp` | `timestamptz` |
+| SQL Server | `datetime` | `datetimeoffset` |
+| MySQL/MariaDB | `datetime(6)` | `datetime(6)` |
+| SQLite | `datetime` | `timestamptz` |
+| Oracle | FluentMigrator's default, unverified | `timestamp with time zone` |
+
+On MySQL/MariaDB, a `DateTime` with no shape is `ColumnShape.Timestamp`, which keeps microseconds,
+so two writes within one second stay ordered; plain `datetime` there keeps whole seconds. On the
+other backends, declaring `Timestamp` explicitly does not change the type. SQLite does not check
+type names, so it takes `timestamptz` literally.
 
 ### Choice
 
@@ -267,19 +285,21 @@ editor's link dialog or any other allowlist. The same sanitizer also normalizes 
 ## Common pitfalls
 
 **Writing long text fails on PostgreSQL with `22001 value too long`.** A `string` property with no
-explicit column type, whose interface isn't one of the five long-text ones, keeps SqlSugar
-CodeFirst's default `varchar(255)`; writing a value over 255 characters fails on PostgreSQL with
+explicit column type, whose interface isn't one of the five long-text ones, is written by
+`make:migration` as `AsString(255)`; writing a value over 255 characters fails on PostgreSQL with
 `22001 value too long for type character varying(255)`.
 
 The fix is switching to one of those five interfaces, or writing
 `[ColumnShape(ColumnShape.LongText)]` explicitly — not `[SugarColumn(ColumnDataType = "text")]`
-directly: `ColumnShape` works on every backend.
+directly: `ColumnShape` works on every backend. If the table already exists, also write an
+`Alter.Column` migration that widens the column; `migrate:check` reports the mismatch as an error.
 
 **Adding `[ColumnShape]` on a JSON-interface field is rejected.** When a property's `[CmsField]`
 interface is one of the six JSON interfaces, also carrying `[ColumnShape]` throws an
-`InvalidOperationException` at startup naming the property and interface; a type inside
-`InitTables`'s collection fails right at startup, while one outside it fails only the first time
-that table is used.
+`InvalidOperationException` naming the property and interface. For collections and framework
+entities it fails at the Development startup schema check, and in `make:migration` and
+`migrate:check` too; in Production it fails the first time that table is used. An entity that is
+not a collection fails on first use in every environment.
 
 The fix is removing `[ColumnShape]`: the JSON mapping already widens to long text and sets
 `IsJson` on its own, and the shape alone gets neither. `[ColumnShape]` combined with the five
@@ -299,8 +319,8 @@ independent value that's safe to hold onto.
 
 **A hand-declared `List<>` property needs `IsJson` written by hand.** A `List<>` property whose
 `[CmsField]` interface falls outside `MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/
-`Repeater` gets no JSON mapping from the CodeFirst hook — SqlSugar can't map a list on its own, so
-it needs `[SugarColumn(IsJson = true)]` written explicitly.
+`Repeater` gets no JSON mapping from `SqlSugarClientFactory`'s column-mapping hook — SqlSugar can't
+map a list on its own, so it needs `[SugarColumn(IsJson = true)]` written explicitly.
 
 Once that's set, the bare-`IsJson` widening logic takes over and supplies the column type; when
 `ColumnDataType` is also written explicitly (a PostgreSQL-native `jsonb`, say), the widening logic

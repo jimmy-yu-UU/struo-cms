@@ -99,14 +99,15 @@ would otherwise be allowed to write.
 
 ## Public read
 
-The first time the `struo_roles` table is created, the `admin` and `public` roles are created along with
-it, and the first administrator is added to `admin`. `public`'s grants are every caller's floor —
-how they're unioned in is covered above under "How effective permissions are computed". What
-`public` is granted to read is decided by the `Rbac:PublicReadCollections` configuration key.
+The core seed migration `SeedCoreData` creates the `admin` and `public` roles on the first `migrate`
+(or `MigrateOnStartup`); when a bootstrap admin is configured, it is added to `admin`. `public`'s
+grants are every caller's floor — how they're unioned in is covered above under "How effective
+permissions are computed". What `public` is granted to read is decided by the
+`Rbac:PublicReadCollections` configuration key.
 
 Each collection name in that list becomes one `canRead = true` grant row on `public`. This key
-only applies the first time the `struo_roles` table is created; changing it and restarting has no
-retroactive effect on an existing database. The key name and this limit are in
+applies once, when the seed migration runs; changing it and restarting, or running `migrate` again,
+has no retroactive effect on an existing database. The key name and this limit are in
 [Chapter 4: Configuration Reference](04-configuration.md).
 
 ## `Hidden` fields and permissions

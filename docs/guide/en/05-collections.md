@@ -2,9 +2,9 @@
 
 Adding a new content type to StruoCMS means writing a C# class in a particular shape — one that
 becomes a database table, REST and GraphQL endpoints, and an admin form all at once. Adding a
-collection touches no framework code; it only adds a class to your own content project, and its
-table needs no migration script either — CodeFirst creates any missing table automatically, on any
-backend, in any environment.
+collection touches no framework code; it adds a class to your own content project, plus the
+migrations that create its tables. The API never builds a table from the class: `make:migration`
+generates each migration from the class, and `migrate` applies them.
 
 ## A minimal collection
 
@@ -50,9 +50,13 @@ public sealed class Announcement : AuditableEntity
 }
 ```
 
-After restarting the API, this class becomes an `announcements` table, an Announcement entry under
-the Content sidebar group, a set of REST and GraphQL endpoints, and an admin form with four inputs.
-A freshly declared collection has no RBAC grants yet, so only a super-admin can see it at first.
+Once its migration is generated and applied (see "Creating the tables" below) and the API
+restarted, this class becomes an `announcements` table, an Announcement entry under the Content
+sidebar group, a set of REST and GraphQL endpoints, and an admin form with four inputs. A freshly
+declared collection has no RBAC grants yet, so only a super-admin can see it at first.
+
+In Development, a collection whose table does not exist yet fails the startup schema check, which
+reports the missing table and refuses to start.
 
 `AuditableEntity` declares `Id` as `abstract`, so forgetting to override it is a compile error; the
 override must carry `[SugarColumn(IsPrimaryKey = true)]`, because the inherited `Id` carries no
@@ -73,7 +77,8 @@ Base table names follow one convention: lower-case, plural, snake_case, written 
 follow SqlSugar's lower-casing of the CLR property name.
 
 A nullable property (`DateTime?`, `Guid?`, `int?`, `string?`) maps to a nullable column
-automatically — CodeFirst infers it, so `[SugarColumn(IsNullable = true)]` is redundant. Only the
+automatically: the entity metadata records it, `make:migration` writes `.Nullable()` from it, and
+`migrate:check` compares against it, so `[SugarColumn(IsNullable = true)]` is redundant. Only the
 reverse, forcing a column to be non-nullable, needs an explicit `[SugarColumn(IsNullable = false)]`.
 
 ## `[CmsCollection]` options
@@ -199,25 +204,39 @@ sitting alongside the host doesn't get loaded.
 Either way works; where the classes live is your choice. An entry that fails to resolve fails
 startup with a message naming it (see [Chapter 4: Configuration Reference](04-configuration.md)).
 
-A content project is an ordinary class library. At minimum it needs a reference to `Struo.Domain`
-(for the attributes and enums) and the `SqlSugarCore` package (so `[SugarTable]`/`[SugarColumn]`
-work). The scan runs only once, at startup, so adding a new content project needs a restart to take
+A content project is an ordinary class library. If it only declares entities, the minimum is a
+reference to `Struo.Domain` (for the attributes and enums) and the `SqlSugarCore` package (so
+`[SugarTable]`/`[SugarColumn]` work). If it also holds its own migrations, it needs
+`Struo.Infrastructure` too, because a migration derives from its `StruoMigration`; the sample
+project is set up that way.
+
+The scan runs only once, at startup, so adding a new content project needs a restart to take
 effect; and even when a type fails to load from some assembly, the scan just keeps the types that
 did load rather than aborting entirely.
 
 ## Creating the tables
 
-CodeFirst creates a collection's own table, its translation sidecar's table, and any many-to-many
-junction table it declares — the same on all five backends, in Development and Production alike.
-The framework's own tables are created alongside your collections, whichever ones are missing.
-Table creation only touches tables that don't exist yet — an existing table is never touched at
-all.
+Every table comes from a migration. A collection can need several tables: its own, its translation
+sidecar's, and one for each many-to-many junction it declares. Run `make:migration` once per table,
+passing that table's entity type name to `--entity`:
 
-Changing a table that already holds data goes through migration instead: `Database:MigrationsPath`
-points to your own reviewed SQL scripts, and `Database:AutoSyncSchema` — Development-only — lets
-CodeFirst alter an existing table directly; setting it in any other environment has no effect. The
-full semantics and defaults of both keys are in
-[Chapter 4: Configuration Reference](04-configuration.md).
+```bash
+dotnet run --project src/Struo.Api -- make:migration CreateAnnouncements --entity Announcement --output <dir>
+```
+
+The `--output` directory must already exist, and a relative path starts from `src/Struo.Api`. The
+migration must live in a scanned assembly: the API host project itself, or a class library listed
+in `Struo:ContentAssemblies`.
+
+Review the generated file, read the SQL it will run with `migrate:preview`, then run `migrate`:
+
+```bash
+dotnet run --project src/Struo.Api -- migrate
+```
+
+To change a table that already holds data, write a new migration; never edit one that has already
+been applied. The rules, and how to split a change into steps, are in
+[Chapter 21, "Writing a migration"](21-schema-and-upgrades.md#writing-a-migration).
 
 ## Checklist
 
@@ -234,8 +253,10 @@ Adding a collection, in order:
    [Chapter 8: Relations](08-relations.md)).
 6. Add the project reference, and add the assembly to `Struo:ContentAssemblies` (only for a
    separate class library).
-7. Restart the process so the scan picks up the new collection.
-8. Grant RBAC permissions, or only a super-admin can use it.
+7. Run `make:migration --entity` once per new table, review the generated files, then run
+   `migrate`.
+8. Restart the process so the scan picks up the new collection.
+9. Grant RBAC permissions, or only a super-admin can use it.
 
 ## What's next
 

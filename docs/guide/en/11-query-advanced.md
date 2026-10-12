@@ -259,6 +259,15 @@ field's type. A many-to-one foreign key only supports `count`: it has no `[CmsFi
 validator falls back to the `Uuid` interface, which lands on neither the numeric nor the date side —
 deliberately, since summing or averaging a foreign key means nothing.
 
+The precision of `avg` follows the database. MySQL/MariaDB return an average with only
+`div_precision_increment` more decimals than the field (4 by default), so the average of 1, 2 and 2
+comes back as 1.6667; PostgreSQL, SQL Server and SQLite have no such four-decimal cut.
+
+On SQL Server, `avg` over an integer field is cast to `FLOAT` before averaging, and `sum` to
+`BIGINT` before adding up, so there is no integer division and a total past 2^31 does not overflow.
+`FLOAT` holds integers exactly only up to 2^53, so an average of `long` values above that loses
+precision.
+
 An aggregate is never pruned, no matter what facets the same request also asks for — it always runs
 against the request's complete, unpruned `filter`:
 

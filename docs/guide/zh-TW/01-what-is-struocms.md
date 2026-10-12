@@ -2,7 +2,8 @@
 
 每次要自己做一套內容管理系統，都得重新處理同一批基礎建設：使用者與權限、檔案儲存、多語內容、
 REST 與 GraphQL API。StruoCMS 是一個可以直接 fork 的 headless CMS template，建構在 .NET 10 與
-SqlSugar 之上，實際驗證過的資料庫是 PostgreSQL，管理後台是一個 Vue 3 單頁應用程式。
+SqlSugar 之上，實際驗證過的資料庫有 PostgreSQL、SQL Server、MySQL 與 MariaDB，管理後台是一個
+Vue 3 單頁應用程式。
 
 fork 之後，你在自己的專案裡宣告內容集合，StruoCMS 把它們變成資料表、API 與後台介面，基礎建設的
 部分不用你再重做一次。
@@ -31,7 +32,8 @@ fork 之後，你在自己的專案裡宣告內容集合，StruoCMS 把它們變
 
 內容模型從你這邊開始：剛裝好的 StruoCMS，集合數量是零，Article、Tag、Category 這些集合都由你
 自己宣告。fork 之後，把你的集合類別放進 `Struo:ContentAssemblies` 指定的組件，StruoCMS 會連同
-API 專案（`Struo.Api`）的組件一起掃描，自動變成資料表、REST 端點與 GraphQL schema。
+API 專案（`Struo.Api`）的組件一起掃描，自動變成 REST 端點與 GraphQL schema。資料表則由
+migration 建立，`make:migration` 從同一個類別產生它。
 
 你也需要處理三件事：
 
@@ -51,8 +53,8 @@ build 失敗；完整的移除步驟見[第 23 章：範例專案導覽](23-samp
 
 剛裝好、還沒加入任何集合的 StruoCMS，長這樣：
 
-- 資料庫裡剛好十一張框架資料表；如果你設定了 `Database:MigrationsPath`，啟動時會多建立第十二
-  張 `struo_schema_migrations`，用來追蹤跑過的 migration。
+- 跑過 `migrate` 之後，資料庫裡剛好十二張表：十一張框架資料表，加上記錄已套用 migration 的版
+  本表 `struo_schema_versions`。
 - 後台側欄沒有內容群組，只有 System：對 super-admin 來說，裡面是 Language、Role、User。System
   只列出這三項，是因為 File、MediaFolder、Permission、UserRole 這四個框架集合宣告了
   `Hidden = true`——這是顯示層的旗標，不是權限。
@@ -65,14 +67,25 @@ build 失敗；完整的移除步驟見[第 23 章：範例專案導覽](23-samp
 
 `Database:DbType` 可以設成五種值：PostgreSQL、MySql、SqlServer、Sqlite、Oracle。
 
-| 資料庫 | 狀態 |
+| `DbType` | 狀態 |
 |---|---|
-| PostgreSQL | 唯一驗證過的執行目標 |
-| Sqlite | 只用在測試套件 |
-| MySql、SqlServer、Oracle | 有型別對應，未經驗證 |
+| `PostgreSQL` | 驗證過：PostgreSQL 13.2 |
+| `SqlServer` | 驗證過：SQL Server 2025 |
+| `MySql` | 驗證過：MySQL 8.4、MariaDB 11.8 |
+| `Sqlite` | 只用在測試套件 |
+| `Oracle` | 有型別對應，未經驗證 |
 
-查詢裡有些排序與常值轉換的寫法，是針對 PostgreSQL 與 SQLite 的行為專門處理的。選擇 PostgreSQL
-之外的資料庫，目前沒有支援保證，自己上線前要先做好驗證。
+驗證過的意思是整套測試在那個後端上全數通過。MariaDB 用 `MySql` 這個值。框架資料表在每個後端上
+都由同一組核心 migration 建立。
+
+後端之間還是有幾處行為差異：
+
+- SQL Server 上 id 的排序順序，見[第 10 章](10-query-basics.md)。
+- 平均值的精度，見[第 11 章](11-query-advanced.md)。
+- MySQL／MariaDB 的字元集與 `sql_mode`，以及 Oracle 的限制，見
+  [第 21 章的〈各後端的差異〉](21-schema-and-upgrades.md#各後端的差異)。
+
+Oracle 沒有實測過，上線前要自己先驗證。
 
 ## 接下來
 

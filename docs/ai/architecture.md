@@ -151,7 +151,7 @@ container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
 (`MetadataServiceCollectionExtensions.cs`). Consumed by `Program.cs`, which hands it to
 `StartupMigrationGate` for the Development schema check, and by `make:migration`/`migrate:check` — the
 "Migrations are the only schema source" invariant in `AGENTS.md`'s "Invariants" section has the full
-rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Three layers, three responsibilities", the
+rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Migrations are the only schema source", the
 concepts.
 
 ### `IRelationshipGraph`

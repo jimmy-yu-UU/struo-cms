@@ -13,12 +13,16 @@
 
 下面表格的「資料庫欄位」欄用幾種說法：
 
-- `varchar(255)`：SqlSugar CodeFirst 對 `string` 的預設寬度。
+- `varchar(255)`：沒有指定長度的 `string`，`make:migration` 寫出 `AsString(255)`；SQL Server 上
+  是 `nvarchar(255)`。
 - 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
 - JSON：長文字加上 `IsJson = true`，整個 CLR 集合由 SqlSugar 直接序列化與還原。
-- CLR 預設：數值、`bool`、`DateTime`、`Guid` 照 SqlSugar 原本的對應，長度不會被動到。
+- CLR 預設：數值、`bool`、`Guid` 照 FluentMigrator 與 SqlSugar 原本的對應，長度不會被動到；
+  `DateTime` 各後端的型別見〈日期時間〉。
 - `ColumnShape` 有三個成員：`LongText`、`TimestampWithTimeZone` 與 `Timestamp`，沒有數值形狀。
-  `Timestamp` 在 MySQL/MariaDB 上保留到微秒，其他後端則是預設的 `DateTime` 型別。
+
+MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資料庫時要指定 utf8mb4，見
+[第 21 章〈各後端的差異〉](21-schema-and-upgrades.md#各後端的差異)。
 
 ### 文字
 
@@ -65,6 +69,20 @@
 
 三者共用同一個編輯器，差別只在只顯示日期、只顯示時間、或兩者都顯示。要有時區的欄位，屬性另
 外掛 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`。
+
+`DateTime` 屬性在各後端的欄位型別：
+
+| 後端 | `DateTime` | 加上 `TimestampWithTimeZone` |
+|---|---|---|
+| PostgreSQL | `timestamp` | `timestamptz` |
+| SQL Server | `datetime` | `datetimeoffset` |
+| MySQL／MariaDB | `datetime(6)` | `datetime(6)` |
+| SQLite | `datetime` | `timestamptz` |
+| Oracle | FluentMigrator 預設，未驗證 | `timestamp with time zone` |
+
+MySQL／MariaDB 上沒有形狀的 `DateTime` 就是 `ColumnShape.Timestamp`，保留到微秒，同一秒內的
+兩次寫入才分得出先後；那裡的 `datetime` 只到整秒。其他後端明寫 `Timestamp` 也不會改變型別。
+SQLite 不檢查型別名稱，`timestamptz` 照字面收下。
 
 ### 選擇
 
@@ -231,16 +249,20 @@
 ## 常見陷阱
 
 **寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在前
-面那五個之列的 `string` 屬性，保留 SqlSugar CodeFirst 的預設 `varchar(255)`；寫入超過 255
-字元的值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗。
+面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`；寫入超過 255 字元的
+值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗。
 修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
-`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。
+`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。表已經建好的話，還要
+另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤。
 
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
-外掛 `[ColumnShape]` 會在啟動時丟出 `InvalidOperationException`，訊息點名屬性與介面；`InitTables` 集
-合裡的型別在啟動時就失敗，集合外的則要等到第一次用到那張表才失敗。修法是移除 `[ColumnShape]`：JSON
-對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不到。`[ColumnShape]` 跟長內容的五個介
-面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用合法、不受影響。
+外掛 `[ColumnShape]` 會丟出 `InvalidOperationException`，訊息點名屬性與介面。集合與框架 entity 在
+Development 啟動時的結構檢查就失敗，`make:migration` 與 `migrate:check` 讀到它也一樣；正式環境要等
+到第一次用到那張表才失敗。不是集合的 entity，在任何環境都是第一次用到才失敗。
+
+修法是移除 `[ColumnShape]`：JSON 對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不
+到。`[ColumnShape]` 跟長內容的五個介面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用
+合法、不受影響。
 
 同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
 而且不會有任何警告。
@@ -252,8 +274,9 @@ JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.Ro
 `using`，拿到的是一個可以安全持有的獨立值。
 
 **手動宣告的 `List<>` 屬性要自己標 `IsJson`。** `[CmsField]` 介面落在 `MultiSelect`／
-`CheckboxGroup`／`Tags`／`KeyValue`／`Files`／`Repeater` 以外的 `List<>` 屬性，CodeFirst hook
-不會替它套用 JSON 對映——SqlSugar 無法直接映射 list，得自己寫 `[SugarColumn(IsJson = true)]`。
+`CheckboxGroup`／`Tags`／`KeyValue`／`Files`／`Repeater` 以外的 `List<>` 屬性，
+`SqlSugarClientFactory` 的欄位對映 hook 不會替它套用 JSON 對映——SqlSugar 無法直接映射 list，得
+自己寫 `[SugarColumn(IsJson = true)]`。
 寫了之後，單獨 `IsJson` 的加寬邏輯會接手補上欄位型別；若另外明寫 `ColumnDataType`（例如
 PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它——但這條路徑沒有測試涵蓋，效果不保證。
 

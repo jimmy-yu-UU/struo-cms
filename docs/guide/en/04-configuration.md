@@ -12,8 +12,8 @@ default `appsettings.json`. Not having a block to edit for these doesn't mean th
 you just have to add the section yourself.
 
 Any key can be overridden with an environment variable by replacing `:` with `__` — for example,
-`Database__ConnectionString`. The one exception is `Testing:PostgresConnection`, covered in the last
-section of this chapter.
+`Database__ConnectionString`. The exceptions are the four test connection keys in the `Testing`
+section, covered in the last section of this chapter.
 
 Changing any key requires restarting the process to take effect. Where a paragraph below a table
 says a key has "no validation rule", a correctly typed value is never checked further. A type
@@ -41,8 +41,8 @@ runs as Development.
 `ASPNETCORE_ENVIRONMENT` decides which `appsettings.{Environment}.json` is read, and also gates the
 following environment-specific behavior:
 
-- Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE,
-  `Database:AutoSyncSchema`, the schema guard.
+- Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE, and the startup schema
+  check (the same comparison as `migrate:check`; startup is refused when it finds an error).
 - Non-Production only: `/scalar` and `/openapi/v1.json`.
 - Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
   unchanged default admin password.
@@ -70,42 +70,52 @@ API that Compose starts, not one you run yourself.
 | `Database:DbType` | enum | `PostgreSQL` |
 | `Database:ConnectionString` | string | see below |
 | `Database:TablePrefix` | string (may be empty) | `struo_` |
-| `Database:MigrationsPath` | string (may be empty) | `""` |
-| `Database:AutoSyncSchema` | bool | `false` |
+| `Database:MigrateOnStartup` | bool | `false` |
+| `Database:MigrationLockTimeoutSeconds` | integer (seconds) | `60` |
 
 This is the actual value, not the nested form used in `appsettings.json`:
 ```text
 Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME
 ```
 
-Leaving `ConnectionString` empty or omitted fails startup, not the first query. The framework's own
-tables are always created automatically and need no configuration.
+Leaving `ConnectionString` empty or omitted fails startup, not the first query. The API never
+creates tables itself: the `migrate` command creates them, or startup does when `MigrateOnStartup`
+is `true` — see [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
 
 `TablePrefix` is prepended to the base name of the framework's 12 tables (the 11 entities in
-`FrameworkEntityTypes.All` plus `schema_migrations`). Lower-case letters, digits and underscores only,
-first character a letter, at most 16 characters; the empty string means no prefix. Sample and fork
-collections are unaffected. Changing it against a database that already holds framework tables makes
-startup create a fresh, empty set under the new names and seed them; the existing tables are not
-read. To change the prefix, rename the existing tables first, then restart. With `MigrationsPath`
-set, the tracking table `struo_schema_migrations` is likewise a fresh, empty table and every
-migration runs again; rename it together with the other tables before changing the prefix.
+`FrameworkEntityTypes.All` plus the version table, `schema_versions`). Lower-case letters, digits and
+underscores only, first character a letter, at most 16 characters; the empty string means no
+prefix. Sample and fork collections are unaffected.
 
-`MigrationsPath` is only for applying migration scripts you prepare yourself; leaving it empty
-disables it. It runs on every backend, without checking which backend a script was written for; one
-written for the wrong backend fails outright when it's applied. The migration runner takes no
-mutual-exclusion lock, so multiple replicas starting together can try to apply the same file at
-once.
+Changing it against a database that already holds framework tables leaves no tables and no
+migration history under the new names: `migrate` builds a fresh, empty set of framework tables under
+them and seeds it, and the existing tables are not read; with `MigrateOnStartup` set to `false`,
+startup refuses with "migrations pending" instead. To change the prefix, rename the existing tables
+(the version table included) first.
 
-The startup order is: snapshot the existing tables → create any missing tables → (Development)
-structural sync → (when `MigrationsPath` is set) apply SQL scripts → (Development) schema guard →
-seed data; seeding only touches tables created during this startup. CodeFirst creates tables first
-and scripts run after, so your own migrations should only `ALTER` existing tables.
+With `MigrateOnStartup` set to `false` (the default in every environment), the API refuses to start
+while the database has pending migrations, so the deployment runs `migrate` first. Set to `true`,
+the API applies pending migrations before it starts serving.
 
-`AutoSyncSchema=true` syncs existing tables to match the entity classes' structure. It adds,
-modifies, and even drops columns. It only takes effect in Development; in any other environment it's
-ignored and logs a warning. Against a table that already holds data, that column-drop behavior can
-make data disappear outright, and whether columns are dropped depends on the backend: PostgreSQL
-really drops them, SQLite doesn't.
+`MigrationLockTimeoutSeconds` caps how many seconds `migrate`, `migrate:baseline` and
+`MigrateOnStartup` wait for the migration lock before failing; the range is 1 to 3600, and a value
+outside it fails startup.
+
+The API does not use the keys `Database:MigrationsPath` and `Database:AutoSyncSchema`: left in the
+configuration they have no effect, and startup logs a warning for each, for example:
+
+```text
+[17:42:58 WRN] The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command.
+```
+
+The database part of startup runs in this order:
+
+1. Log a warning for each of those two unused keys present in the configuration.
+2. With `MigrateOnStartup` set to `true`, take the lock and apply the migrations; with `false`,
+   check the database and refuse to start if the framework tables exist without a version table,
+   or if migrations are pending.
+3. In Development, run the schema check and refuse to start on errors.
+4. In Production, log a warning if the default admin password is unchanged.
 
 ## Struo:ContentAssemblies
 
@@ -247,11 +257,13 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 
-The pair is applied only when the `struo_users` table is first created and is never backfilled onto an
-existing database, but it is read again on every start — the Production default-password warning
-compares against it. These two keys have no options class; `Program.cs` reads them straight from
-configuration as strings. The seeder doesn't enforce the password policy, so whatever you put here
-is accepted as-is. The default `admin` is only five characters, shorter than `MinLength`'s 8.
+The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
+never backfilled onto an existing database, but it is read again on every start — the Production
+default-password warning compares against it. These two keys have no options class; the seed
+migration and the warning each read them straight from configuration as strings, so the
+environment that runs `migrate` needs them. The seed migration doesn't enforce the password policy,
+so whatever you put here is accepted as-is. The default `admin` is only five characters, shorter
+than `MinLength`'s 8.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.
@@ -265,9 +277,9 @@ Setting them backwards fails startup. Only `MinLength` is returned to the admin 
 |---|---|---|
 | `Rbac:PublicReadCollections` | string array | `[]` |
 
-This key is applied only when the `struo_roles` table is first created; changing it and restarting won't
+This key is applied only once, when the core seed migration runs; changing it and restarting won't
 retroactively grant public read access on an existing database. Either set it before the first
-startup, or grant the access afterward directly through the admin UI or the API.
+`migrate`, or grant the access afterward directly through the admin UI or the API.
 
 ## GraphQl
 
@@ -347,10 +359,11 @@ has been taken down).
 | `Localization:Languages` | array of `Code`, `Name` | `en`, `zh-TW` |
 | `Localization:DefaultLanguage` | string | `en` |
 
-This section is only the **seed source** for the `struo_languages` table: when that table is created
-during a startup, each entry becomes a row in list order (`sort` ascending, `enabled` true,
-`isDefault` on the row whose code is `DefaultLanguage`). An existing table is never touched; from then
-on languages are edited in the admin UI under System › Language. Validated at startup: at least one
+This section is only the **seed source** for the `struo_languages` table: when the core seed
+migration runs (`migrate` or `MigrateOnStartup`), each entry becomes a row in list order (`sort`
+ascending, `enabled` true, `isDefault` on the row whose code is `DefaultLanguage`). The seed
+migration runs once, and a database joined with `migrate:baseline` is not seeded; languages are
+edited in the admin UI under System › Language. Validated at startup: at least one
 language, every `Code` matching `[A-Za-z0-9_-]{1,35}` and unique case-insensitively, `Name` not
 blank, `DefaultLanguage` present in the list — any failure stops the host. Environment variables and
 `appsettings.{Environment}.json` merge arrays by index: they can change an entry or append one
@@ -437,16 +450,31 @@ only.
 
 ## Testing
 
-| Key | Type | Default |
-|---|---|---|
-| `Testing:PostgresConnection` | string | `""` |
+| Key | Overriding environment variable |
+|---|---|
+| `Testing:PostgresConnection` | `STRUO_TEST_PG_CONNECTION` |
+| `Testing:SqlServerConnection` | `STRUO_TEST_SQLSERVER_CONNECTION` |
+| `Testing:MySqlConnection` | `STRUO_TEST_MYSQL_CONNECTION` |
+| `Testing:MariaDbConnection` | `STRUO_TEST_MARIADB_CONNECTION` |
 
-The running API never reads this section at all; only the test project's own `ConfigurationBuilder`
-does. It's also the one key in the entire configuration surface where the environment-variable
-override convention doesn't apply. Only `STRUO_TEST_PG_CONNECTION` is honored (checked first), with
-this key itself as the fallback. Leaving it empty means the opt-in PostgreSQL integration tests
-never connect — each one passes outright rather than being skipped. The SQLite database tests are
-unaffected and still run. The connection string's database name must include the word `test`.
+All four keys default to `""`. The running API never reads this section; only the test project's
+own `ConfigurationBuilder` does: it checks the environment variable in the table first, then the key
+in `appsettings.json` and `appsettings.Development.json`. These are the only keys in the whole
+configuration surface where the `__` override convention doesn't apply; a variable such as
+`Testing__PostgresConnection` has no effect.
+
+Each connection turns on that backend's live tests: the migration tests, `LiveRepositoryTests` and
+`TestDatabaseLiveTests`, plus `PostgresOnlyTests` on PostgreSQL. The database it names must contain
+the word `test` and must already exist, and the login needs rights to create and drop databases.
+
+Left empty, that backend's live tests return early and pass, so judge from each test's duration
+whether it really connected. The SQLite database tests are unaffected and still run.
+
+The environment variable `STRUO_TEST_BACKEND` selects the backend the tests run on: `Sqlite` (the
+default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`. A live backend also moves the API test
+hosts' and the unit tests' databases onto it; if that backend's connection isn't configured, the
+whole run fails instead of passing quietly. The test layers are in
+[Chapter 22: Testing and CI](22-testing.md).
 
 ## What's next
 

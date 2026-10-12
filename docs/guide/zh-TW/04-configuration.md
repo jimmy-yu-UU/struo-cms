@@ -9,8 +9,8 @@
 區段沒有出現在預設的 `appsettings.json` 裡。設定檔裡沒有這一段可以改，不代表這些鍵不存在，只是
 要自己補上一段。
 
-任何一個鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；唯一的例
-外是 `Testing:PostgresConnection`，見本章最後一節。
+任何一個鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；例外是
+`Testing` 區段的四個測試連線鍵，見本章最後一節。
 
 改任何一個鍵都要重啟行程才生效。表格下面寫『沒有驗證規則』的鍵，指的是型別正確的值不會被檢
 查；型別對不上（例如 `Database:DbType` 拼錯、數字欄位填了文字）在用 `ValidateOnStart` 綁定
@@ -32,8 +32,8 @@
 `ASPNETCORE_ENVIRONMENT` 決定讀哪個 `appsettings.{Environment}.json`，也決定下面這些依環境
 切換的行為：
 
-- 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、`Database:AutoSyncSchema`、
-  schema guard。
+- 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、啟動時的結構檢查（跟
+  `migrate:check` 相同的比對，有錯誤就拒絕啟動）。
 - 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
 - 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`、預設管理員密碼未改的警告。
 
@@ -59,36 +59,46 @@
 | `Database:DbType` | 列舉 | `PostgreSQL` |
 | `Database:ConnectionString` | 字串 | 見下文 |
 | `Database:TablePrefix` | 字串（可留空） | `struo_` |
-| `Database:MigrationsPath` | 字串（可留空） | `""` |
-| `Database:AutoSyncSchema` | 布林 | `false` |
+| `Database:MigrateOnStartup` | 布林 | `false` |
+| `Database:MigrationLockTimeoutSeconds` | 整數（秒） | `60` |
 
 以下是實際值，不是 `appsettings.json` 的巢狀寫法：
 ```text
 Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REPLACE_ME;Password=REPLACE_ME
 ```
 
-`ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。框架自帶的資料表永遠自動
-建立，不需要設定。
+`ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。API 自己不建表：資料表由
+`migrate` 命令建立，或在 `MigrateOnStartup` 為 `true` 時由啟動建立，見
+[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
 
 `TablePrefix` 接在框架自帶 12 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 11 個 entity 加上
-`schema_migrations`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是不加前
-綴。範例專案與你自己的集合不受影響。對一個已經有框架資料表的資料庫改這個值，啟動時會在新名稱下
-建出一整組空的框架資料表並植入初始資料，舊表不會被讀取；要換前綴，先把既有的表改成新名稱再重開。
-有設定 `MigrationsPath` 時，追蹤表 `struo_schema_migrations` 同樣是新建的空表，migration 會全部重
-跑；換前綴前先把它一併改名。
+版本表 `schema_versions`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是
+不加前綴。範例專案與你自己的集合不受影響。
 
-`MigrationsPath` 只用來套用你自己準備的 migration 指令碼，留空就停用；它在每一種後端都會執
-行，不會檢查指令碼是不是寫給這個後端，寫錯後端會在套用時直接失敗。migration runner 沒有互斥
-鎖，多個副本一起啟動時可能同時嘗試套用同一個檔案。
+對一個已經有框架資料表的資料庫改這個值，新名稱下沒有任何表，也沒有版本紀錄：`migrate` 會在新
+名稱下建出一整組空的框架資料表並植入初始資料，既有的表不會被讀取；`MigrateOnStartup` 為 `false` 時，
+啟動則以「migration 待套用」拒絕。要換前綴，先把既有的表（連同版本表）改成新名稱。
 
-啟動時的順序是：快照既有資料表 → 建立缺少的資料表 →（Development）結構同步 →（設了
-`MigrationsPath`）套用 SQL 指令碼 →（Development）schema guard → 植入資料；植入只針對這次啟
-動剛建立的資料表。CodeFirst 先建表、指令碼後跑，所以你自己的 migration 只該 `ALTER` 既有資料
-表。
+`MigrateOnStartup` 為 `false`（每個環境的預設）時，資料庫還有待套用的 migration，API 就拒絕啟動，
+部署流程要先跑 `migrate`。設成 `true`，API 在開始服務之前先套用待套用的 migration。
 
-`AutoSyncSchema=true` 會依 entity 類別的結構同步既有資料表——新增、修改甚至刪除欄位；只在
-Development 生效，其他環境會被忽略並記一筆警告。對已經有資料的資料表，這個刪除欄位的行為可能
-直接讓資料消失，而且刪不刪還依後端而定：PostgreSQL 會真的刪掉欄位，SQLite 不會。
+`MigrationLockTimeoutSeconds` 是 `migrate`、`migrate:baseline` 與 `MigrateOnStartup` 等待
+migration 鎖的秒數上限，逾時就失敗；範圍 1 到 3600，設在範圍外會讓啟動失敗。
+
+API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個鍵：留在設定裡沒有作
+用，啟動時各記一筆警告，例如：
+
+```text
+[17:42:58 WRN] The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command.
+```
+
+啟動時資料庫這一段的順序是：
+
+1. 設定裡有上面這兩個不使用的鍵時，各記一筆警告。
+2. `MigrateOnStartup` 為 `true` 就拿鎖、套用 migration；為 `false` 就檢查資料庫，框架資料表存在
+   卻沒有版本表，或還有待套用的 migration，都拒絕啟動。
+3. 在 Development，跑一次結構檢查，有錯誤就拒絕啟動。
+4. Production 下預設管理員密碼未改時，記一筆警告。
 
 ## Struo:ContentAssemblies
 
@@ -217,10 +227,11 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 
-這組帳密只在 `struo_users` 資料表第一次建立時套用，不會補到已經存在的資料庫上；但每次啟動都會重新
-讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項類別，是在 `Program.cs`
-裡直接從設定讀成字串。seeder 不套用密碼原則，這裡填什麼都會被接受——預設的 `admin` 只有五個
-字元，比 `MinLength` 的 8 還短。
+這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
+庫上；但每次啟動都會重新讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項
+類別，seed migration 與那筆警告各自直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
+seed migration 不套用密碼原則，這裡填什麼都會被接受——預設的 `admin` 只有五個字元，比
+`MinLength` 的 8 還短。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
@@ -233,8 +244,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 |---|---|---|
 | `Rbac:PublicReadCollections` | 字串陣列 | `[]` |
 
-這個鍵只在 `struo_roles` 資料表第一次建立時套用；改了鍵值再重開，不會回頭幫既有資料庫加上公開讀取權
-限——要嘛在第一次啟動前先設好，要嘛之後直接在後台或 API 補授權。
+這個鍵只在核心的 seed migration 執行時套用一次；改了鍵值再重開，不會回頭幫既有資料庫加上公開讀取
+權限——要嘛在第一次跑 `migrate` 前先設好，要嘛之後直接在後台或 API 補授權。
 
 ## GraphQl
 
@@ -303,9 +314,10 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 | `Localization:Languages` | 陣列（`Code`、`Name`） | `en`／`zh-TW` |
 | `Localization:DefaultLanguage` | 字串 | `en` |
 
-這一節只是 `struo_languages` 資料表的**種子來源**：表在這次啟動才建立時，依清單順序種入每一列
-（`sort` 依序、`enabled` 皆為真、`isDefault` 標在 `DefaultLanguage` 那一列）。表已經存在就完全
-不碰，之後在後台 System › Language 編輯。啟動時驗證：至少一個語言、每個 `Code` 符合
+這一節只是 `struo_languages` 資料表的**種子來源**：核心的 seed migration 執行時（`migrate` 或
+`MigrateOnStartup`），依清單順序種入每一列（`sort` 依序、`enabled` 皆為真、`isDefault` 標在
+`DefaultLanguage` 那一列）。seed migration 只執行一次，用 `migrate:baseline` 接上的資料庫不會
+植入；語言在後台 System › Language 編輯。啟動時驗證：至少一個語言、每個 `Code` 符合
 `[A-Za-z0-9_-]{1,35}` 且不分大小寫唯一、`Name` 非空白、`DefaultLanguage` 在清單內；任一不符啟
 動就失敗。環境變數與 `appsettings.{Environment}.json` 對陣列都是依索引合併：
 可以改某一項或往後新增（`Localization__Languages__2__Code=ja`），
@@ -382,14 +394,28 @@ OIDC，這三個鍵都該明確設定，不要依賴預設值。
 
 ## Testing
 
-| 鍵 | 型別 | 預設值 |
-|---|---|---|
-| `Testing:PostgresConnection` | 字串 | `""` |
+| 鍵 | 覆寫用的環境變數 |
+|---|---|
+| `Testing:PostgresConnection` | `STRUO_TEST_PG_CONNECTION` |
+| `Testing:SqlServerConnection` | `STRUO_TEST_SQLSERVER_CONNECTION` |
+| `Testing:MySqlConnection` | `STRUO_TEST_MYSQL_CONNECTION` |
+| `Testing:MariaDbConnection` | `STRUO_TEST_MARIADB_CONNECTION` |
 
-這個區段執行中的 API 完全不會讀，只有測試專案自己的 `ConfigurationBuilder` 會讀；也是整個設
-定面唯一一個環境變數覆寫規則不適用的鍵，只認 `STRUO_TEST_PG_CONNECTION`（優先），其次才是這
-個鍵本身。留空那組選用的 PostgreSQL 整合測試就不會真的連線，每一個都直接判定通過。SQLite 那
-組資料庫測試不受影響，照樣會跑。連線字串指到的資料庫名稱要包含 `test` 字樣。
+四個鍵的預設值都是 `""`。執行中的 API 完全不讀這個區段，只有測試專案自己的
+`ConfigurationBuilder` 會讀：先看表上的環境變數，沒有才讀 `appsettings.json` 與
+`appsettings.Development.json` 裡的鍵。它們是整個設定面唯一不適用 `__` 覆寫規則的鍵，
+`Testing__PostgresConnection` 這類變數沒有作用。
+
+每個連線各自打開那個後端的實機測試：migration 測試、`LiveRepositoryTests`、`TestDatabaseLiveTests`，PostgreSQL
+另外還有 `PostgresOnlyTests`。指到的資料庫名稱要包含 `test` 字樣、而且要事先建好，登入帳號要有建立與刪除
+資料庫的權限。
+
+留空時，那個後端的實機測試直接回傳、判定通過，所以要看每個測試花的時間來判斷有沒有真的連線。
+SQLite 那組資料庫測試不受影響，照樣會跑。
+
+環境變數 `STRUO_TEST_BACKEND` 選測試跑在哪個後端：`Sqlite`（預設）、`PostgreSQL`、`SqlServer`、
+`MySql` 或 `MariaDb`。選了實機後端，API 測試主機與單元測試的資料庫也搬到那個後端；那個後端的連
+線沒設定時，整個測試執行直接失敗，不會悄悄通過。測試分層見[第 22 章：測試與 CI](22-testing.md)。
 
 ## 接下來
 
