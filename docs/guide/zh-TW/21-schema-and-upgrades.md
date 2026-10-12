@@ -6,7 +6,7 @@ v0.8.x 用 CodeFirst 建出來的話，先照[第 24 章：接上 v0.8.x 的資�
 
 ## Migration 是唯一的結構來源
 
-每一張表、每一個欄位與索引，都來自一支 FluentMigrator migration。API 自己從不建表、也從不改表；
+每一張表、每一個欄位與索引，都來自一支 FluentMigrator migration。API 不會照 entity 自己建表或改表；
 套用過的 migration 記在版本表 `{前綴}schema_versions` 裡，前綴就是 `Database:TablePrefix`，
 預設 `struo_`。
 
@@ -86,7 +86,7 @@ System.InvalidOperationException: 3 migration(s) pending, the lowest is 20261008
 框架資料表已經存在、卻沒有版本表時，兩種設定都拒絕啟動，訊息要你先跑一次
 `migrate:baseline`，見[第 24 章](24-upgrading-from-0-8.md)。
 
-在 Development，啟動還會跑一次跟 `migrate:check` 相同的比對，有錯誤就拒絕啟動。正式環境不跑
+在 Development，啟動還會跑一次跟 `migrate:check` 相同的比對，有錯誤就拒絕啟動。其他環境不跑
 這一步，要自己跑 `migrate:check`。
 
 ## 版本表、鎖與交易
@@ -120,7 +120,7 @@ make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]
   `dotnet run --project src/Struo.Api` 時那是 `src/Struo.Api`，所以要寫
   `../../<你的專案>/Migrations`，或直接寫絕對路徑。
 
-範例的 `Tag` 產生出來是這樣（後面的欄位與 `Down()` 省略）：
+範例的 `Tag` 產生出來是這樣（開頭的 using 與 namespace、後面的欄位與 `Down()` 省略）：
 
 ```csharp
 [Migration(202610120958, "CreateTags")]
@@ -163,7 +163,7 @@ public sealed class CreateTags : StruoMigration
 ## 核心的四個 raw SQL 例外
 
 「所有資料庫存取都走 SqlSugar」這條不變式（見[第 2 章：系統架構](02-architecture.md)）有四個
-刻意的例外，都不碰請求輸入：
+刻意的例外：
 
 - **關聯篩選的子查詢包裝**：在 SqlSugar 產生的 SQL 外面組四種固定形式。
 - **`OrderByExpressionBuilder` 的 `ORDER BY` 文字**：欄位、關聯路徑與翻譯欄位三種排序形式。

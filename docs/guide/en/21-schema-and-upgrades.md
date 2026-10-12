@@ -6,8 +6,8 @@ the migrations with [Chapter 24: Joining a Database Built by v0.8.x](24-upgradin
 
 ## Migrations are the only schema source
 
-Every table, column and index comes from a FluentMigrator migration. The API never creates or alters
-a table itself. Applied migrations are recorded in the version table `{prefix}schema_versions`, where
+Every table, column and index comes from a FluentMigrator migration. The API never builds or alters
+a table from the entity classes. Applied migrations are recorded in the version table `{prefix}schema_versions`, where
 the prefix is `Database:TablePrefix` (default `struo_`).
 
 Migrations live in three places:
@@ -95,7 +95,7 @@ When the framework tables exist but there is no version table, both settings ref
 the message says to run `migrate:baseline` once — see [Chapter 24](24-upgrading-from-0-8.md).
 
 In Development, startup also runs the same comparison as `migrate:check` and refuses to start on any
-error. Production skips that step, so run `migrate:check` yourself.
+error. Other environments skip that step, so run `migrate:check` yourself.
 
 ## Version table, lock and transactions
 
@@ -132,7 +132,8 @@ make:migration <Name> [--entity <Type>] --output <dir> [--namespace <Ns>]
   working directory, which under `dotnet run --project src/Struo.Api` is `src/Struo.Api` — so write
   `../../<your project>/Migrations`, or an absolute path.
 
-For the sample's `Tag` it writes this (later columns and `Down()` omitted):
+For the sample's `Tag` it writes this (the leading usings and namespace, later columns and `Down()`
+omitted):
 
 ```csharp
 [Migration(202610120958, "CreateTags")]
@@ -167,7 +168,7 @@ An automatic diff cannot see intent, so a change that touches existing data take
    column, add another" loses the data.
 2. **Removing a property**: once you're sure the column is unused, drop it with a `Delete.Column`
    migration.
-3. **Narrowing a type**: add the new column, backfill and verify, then switch over and drop the old
+3. **Narrowing a type**: add the new column, backfill and verify, then switch over and drop the original
    one; narrowing in place fails or truncates.
 4. **Adding `NOT NULL` to a table with rows**: add the column nullable, backfill, then add `NOT NULL`.
 5. **Adding a unique index over duplicate values**: deduplicate first, then create the index.
@@ -180,8 +181,7 @@ elsewhere. Your fork's own tests can call `SchemaChecker.Check` and assert there
 ## The four raw-SQL exceptions in core
 
 The invariant that all database access goes through SqlSugar (see
-[Chapter 2: Architecture](02-architecture.md)) has four deliberate exceptions, none of which touches
-request input:
+[Chapter 2: Architecture](02-architecture.md)) has four deliberate exceptions:
 
 - **The relation-filter subquery wrapper**: four fixed forms assembled around SQL that SqlSugar
   generated.

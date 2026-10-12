@@ -35,7 +35,9 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
 
    Review the generated files and rebuild; if you deploy the image, rebuild it. Don't generate a
    migration for a table that doesn't exist yet: baseline would record it as applied and the table
-   would never be created. Add those after step 5.
+   would never be created. Add those after step 5. A relative `--output` resolves against
+   `src/Struo.Api`, and the directory must already exist; see
+   [Writing a migration](21-schema-and-upgrades.md#writing-a-migration) in Chapter 21.
 5. **Run `migrate:baseline`, once.** Until then, both `migrate` and API startup refuse, with a
    message telling you to run `migrate:baseline`. Baseline takes the migration lock, writes every
    version — core, the sample if enabled, and your fork — in one transaction, and logs the SQL
@@ -43,12 +45,12 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:baseline
-   [18:03:38 INF] VersionMigration migrating
    …
    Recorded 202610080000  CreateCoreSchema
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
-   3 migration(s) recorded as applied.
+   Recorded 202610120942  CreateNotes
+   4 migration(s) recorded as applied.
    ```
 
    The seed is recorded, not run, so existing users, roles and languages are untouched. Baseline only
@@ -66,12 +68,15 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    0 error(s), 30 warning(s)
    ```
 
-   Any error means an entity and its table disagree — usually a wrong entity, or a migration missing
-   from step 4. Fix it before starting in Development, where the startup check refuses on errors.
-8. **Start the API.**
-9. **Do the follow-ups for your backend in the next section.** `migrate:check` cannot see these:
+   The number of warnings depends on your tables. Any error means an entity and its table disagree —
+   usually a column the entity declares that the table doesn't have, or a column a `.sql` script
+   changed that the entity doesn't reflect. Fix it before starting in Development, where the startup
+   check refuses on errors.
+8. **Do the follow-ups for your backend in the next section.** `migrate:check` cannot see these:
    SQL Server's access-token index, MySQL/MariaDB timestamp precision, and the database character
-   set.
+   set. On SQL Server, finish them before starting the API: Chinese or emoji text stored before the
+   conversion becomes `?` and cannot be recovered.
+9. **Start the API.**
 
 ## Per-backend follow-ups
 
@@ -93,8 +98,8 @@ On PostgreSQL and MySQL/MariaDB, NULLs don't collide, so this step is optional t
 
 ### SQL Server: `varchar` to `nvarchar`
 
-v0.8.x created string columns as `varchar`, and characters outside the collation's code page (Chinese,
-emoji) are stored as `?`. If you store such text, convert before storing it: data already turned into
+v0.8.x created string columns as `varchar`, and characters outside the collation's code page (for example
+Chinese and emoji under a Latin1 collation) are stored as `?`. If you store such text, convert before storing it: data already turned into
 `?` is not recovered by the conversion.
 
 An indexed column cannot be altered in place, so each index is dropped, the column altered, and the

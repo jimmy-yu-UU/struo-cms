@@ -30,19 +30,20 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    ```
 
    檢查產生的檔案，重新建置；用映像部署的話，重建映像。還不存在的表不要在這一步產生：baseline
-   會把它記成已套用，那張表就永遠不會被建出來，等第 5 步之後再加。
+   會把它記成已套用，那張表就永遠不會被建出來，等第 5 步之後再加。`--output` 的相對路徑從
+   `src/Struo.Api` 算起，目錄要先建好，見[第 21 章〈撰寫 migration〉](21-schema-and-upgrades.md#撰寫-migration)。
 5. **跑一次 `migrate:baseline`。** 在這之前，`migrate` 與 API 啟動都會拒絕，訊息要你跑
    `migrate:baseline`。baseline 拿 migration 鎖，在一個交易裡寫入核心、範例（有開啟的話）與 fork
    的每一個版本，並列出 FluentMigrator 執行的 SQL：
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:baseline
-   [18:03:38 INF] VersionMigration migrating
    …
    Recorded 202610080000  CreateCoreSchema
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
-   3 migration(s) recorded as applied.
+   Recorded 202610120942  CreateNotes
+   4 migration(s) recorded as applied.
    ```
 
    植入資料只被記錄、沒有執行，既有的使用者、角色與語言不受影響。它只新增版本表，v0.8.x 的
@@ -59,11 +60,13 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    0 error(s), 30 warning(s)
    ```
 
-   任何錯誤都表示某個 entity 跟它的表不一致，通常是 entity 寫錯，或第 4 步漏了一支 migration。
-   先修好再在 Development 啟動，Development 的啟動檢查遇到錯誤會拒絕啟動。
-8. **啟動 API。**
-9. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到這幾件事：SQL Server 的 access
-   token 索引、MySQL／MariaDB 的時間精度，以及資料庫的字元集。
+   警告的數量依你的表而定。任何錯誤都表示某個 entity 跟它的表不一致，通常是 entity 宣告了、表裡
+   卻沒有的欄位，或某支 `.sql` 腳本改過、entity 沒有跟上的欄位。先修好再在 Development 啟動，
+   Development 的啟動檢查遇到錯誤會拒絕啟動。
+8. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到這幾件事：SQL Server 的 access
+   token 索引、MySQL／MariaDB 的時間精度，以及資料庫的字元集。SQL Server 上先做完再啟動 API：
+   在那之前存進去的中文與 emoji 會變成 `?`，救不回來。
+9. **啟動 API。**
 
 ## 各後端的後續處理
 
@@ -84,7 +87,7 @@ PostgreSQL 與 MySQL／MariaDB 的 NULL 不會互撞，這一步可做可不做�
 
 ### SQL Server：`varchar` 換成 `nvarchar`
 
-v0.8.x 建的字串欄位是 `varchar`，超出定序字碼頁的字元（中文、emoji）存進去會變成 `?`。要存這類
+v0.8.x 建的字串欄位是 `varchar`，超出定序字碼頁的字元（例如 Latin1 定序下的中文與 emoji）存進去會變成 `?`。要存這類
 文字，就在存之前轉換：已經變成 `?` 的資料，轉換後也救不回來。
 
 有索引的欄位不能直接 `ALTER COLUMN`，要先刪索引、改欄位、再照原樣建回索引。下面這支查詢不改
