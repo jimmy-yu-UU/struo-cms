@@ -17,15 +17,13 @@ public class DefaultOrderingTests : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    private readonly SqliteTestDatabase _file = new();
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly IItemRepository _repo;
 
     public DefaultOrderingTests()
     {
-        _db = SqlSugarClientFactory.Create(
-            new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = _file.ConnectionString },
-            new TestCurrentUserAccessor(Tester));
+        _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<Category>();
         var collections = MetadataScanner.ScanTypes([typeof(Article), typeof(Category), typeof(Tag)]);
         var provider = new CachedMetadataProvider(collections);
@@ -96,7 +94,8 @@ public class DefaultOrderingTests : IDisposable
         after.Should().Equal(before);
     }
 
-    // Equal createdAt values fall back to id ASC — UUIDv7 is time-ordered, so ties stay deterministic.
+    // Equal createdAt values fall back to id ASC in the database's own uuid order, which is not .NET's
+    // Guid order on SQL Server: docs/ai/decisions/guid-ordering-per-backend.md.
     [Fact]
     public async Task Equal_createdAt_ties_break_on_id_ascending()
     {
@@ -109,8 +108,10 @@ public class DefaultOrderingTests : IDisposable
         var r1 = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
         var r2 = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
 
+        var databaseIdOrder = await _db.Queryable<Category>().OrderBy(c => c.Id).Select(c => c.Id).ToListAsync();
+
         r1.Should().Equal(r2);
-        r1.Should().BeInAscendingOrder();
+        r1.Should().Equal(databaseIdOrder);
     }
 
     // An explicit client sort on a non-unique column gets the PK appended as tiebreak.
