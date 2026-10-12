@@ -128,6 +128,21 @@ jobs:
           done
           docker logs admin
           exit 1
+      # The compose stack builds its own images from the same Dockerfiles. It must
+      # come up healthy, serve the built SPA, and proxy an anonymous API call through nginx.
+      - name: Smoke-test the compose stack
+        run: |
+          trap 'docker compose down --volumes' EXIT
+          if ! docker compose up --detach --build --wait --wait-timeout 300; then
+            docker compose ps --all
+            docker compose logs
+            exit 1
+          fi
+          api="http://localhost:${STRUO_API_PORT:-8081}"
+          admin="http://localhost:${STRUO_ADMIN_PORT:-8080}"
+          curl --fail --silent --show-error "$api/health/ready"
+          curl --fail --silent --show-error "$admin/" | grep --quiet 'assets/index-'
+          curl --fail --silent --show-error "$admin/api/config" > /dev/null
 
   # The two jobs below report to SonarQube Cloud. They are deliberately separate
   # from the five standing gates above rather than wrapping them: the gates must
