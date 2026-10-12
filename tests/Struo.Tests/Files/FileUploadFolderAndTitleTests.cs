@@ -215,6 +215,17 @@ public class FileUploadFolderAndTitleTests : IDisposable
     }
 
     [Fact]
+    public void Clamp_cuts_an_extension_that_alone_fills_the_column_without_splitting_a_surrogate()
+    {
+        var clamped = FileService.ClampFileName("a." + new string('b', 300));
+        var withSurrogate = FileService.ClampFileName("a." + new string('b', 252) + "😀" + new string('b', 10));
+
+        clamped.Length.Should().BeLessThanOrEqualTo(255);
+        withSurrogate.Length.Should().BeLessThanOrEqualTo(255);
+        char.IsHighSurrogate(withSurrogate[^1]).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Upload_title_cut_does_not_split_a_surrogate_pair()
     {
         var longName = new string('a', 254) + "😀" + ".bin";
