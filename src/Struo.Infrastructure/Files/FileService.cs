@@ -28,7 +28,7 @@ public sealed class FileService(
     private readonly IImageDimensionReader imageReader = storage.Images;
     private readonly FileStorageOptions fileOptions = storage.Options;
 
-    // Width of the `filename` and `title` varchar columns (core migration `AsString(255)`).
+    // Width of the `filename` and `title` string columns (core migration `AsString(255)`).
     private const int NameColumnWidth = 255;
 
     // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
@@ -111,9 +111,13 @@ public sealed class FileService(
     {
         if (fileName.Length <= NameColumnWidth) return fileName;
         var ext = Path.GetExtension(fileName);
-        if (ext.Length >= NameColumnWidth) return fileName[..NameColumnWidth];
-        return fileName[..(NameColumnWidth - ext.Length)] + ext;
+        if (ext.Length >= NameColumnWidth) return CutWhole(fileName, NameColumnWidth);
+        return CutWhole(fileName, NameColumnWidth - ext.Length) + ext;
     }
+
+    // Cuts to at most `length` UTF-16 units without leaving half of a surrogate pair.
+    private static string CutWhole(string value, int length) =>
+        char.IsHighSurrogate(value[length - 1]) ? value[..(length - 1)] : value[..length];
 
     private async Task<File> SaveAsync(
         Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
@@ -153,7 +157,7 @@ public sealed class FileService(
         // a seed failure must not leave a title-less file (repository join-if-active).
         var title = Path.GetFileNameWithoutExtension(fileName);
         if (string.IsNullOrWhiteSpace(title)) title = fileName;
-        if (title.Length > NameColumnWidth) title = title[..NameColumnWidth];
+        if (title.Length > NameColumnWidth) title = CutWhole(title, NameColumnWidth);
         var translation = new FileTranslation
         {
             FileId = entity.Id, Locale = languages.DefaultCode(), Title = title,

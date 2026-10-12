@@ -163,4 +163,57 @@ public class FileUploadFolderAndTitleTests : IDisposable
         stored.FileName.Should().EndWith(".bin");
         stored.FileName.Should().Be(new string('a', 251) + ".bin");
     }
+
+    [Fact]
+    public async Task Upload_long_name_without_extension_is_cut_to_the_column_width()
+    {
+        var file = await _svc.UploadAsync(
+            new MemoryStream([1]), new string('a', 300), "application/octet-stream", length: 1);
+
+        var stored = await _db.Queryable<File>().InSingleAsync(file.Id);
+        stored.FileName.Should().Be(new string('a', 255));
+    }
+
+    [Fact]
+    public async Task Upload_long_name_with_several_dots_keeps_only_the_last_extension()
+    {
+        var longName = new string('a', 150) + ".v1." + new string('b', 150) + ".tar.gz";
+
+        var file = await _svc.UploadAsync(
+            new MemoryStream([1]), longName, "application/octet-stream", length: 1);
+
+        var stored = await _db.Queryable<File>().InSingleAsync(file.Id);
+        stored.FileName.Length.Should().Be(255);
+        stored.FileName.Should().EndWith(".gz");
+        stored.FileName.Should().Be(longName[..(255 - 3)] + ".gz");
+    }
+
+    [Fact]
+    public async Task Upload_file_name_cut_does_not_split_a_surrogate_pair()
+    {
+        var longName = new string('a', 250) + "😀" + new string('a', 10) + ".bin";
+
+        var file = await _svc.UploadAsync(
+            new MemoryStream([1]), longName, "application/octet-stream", length: 1);
+
+        var stored = await _db.Queryable<File>().InSingleAsync(file.Id);
+        file.FileName.Length.Should().BeLessThanOrEqualTo(255);
+        char.IsHighSurrogate(file.FileName[^5]).Should().BeFalse();
+        stored.FileName.Should().NotContain("�");
+        stored.FileName.Should().EndWith(".bin");
+    }
+
+    [Fact]
+    public async Task Upload_title_cut_does_not_split_a_surrogate_pair()
+    {
+        var longName = new string('a', 254) + "😀" + ".bin";
+
+        var file = await _svc.UploadAsync(
+            new MemoryStream([1]), longName, "application/octet-stream", length: 1);
+
+        var row = await _db.Queryable<FileTranslation>().Where(t => t.FileId == file.Id).FirstAsync();
+        row!.Title!.Length.Should().BeLessThanOrEqualTo(255);
+        char.IsHighSurrogate(row.Title[^1]).Should().BeFalse();
+        row.Title.Should().NotContain("�");
+    }
 }
