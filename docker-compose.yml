@@ -1,19 +1,22 @@
 # StruoCMS on Docker Compose.
 #   docker compose up -d --build            # PostgreSQL + Redis + API + admin SPA, ready to log in
 #   docker compose up -d postgres redis     # only the dependencies, for development
-#   docker compose --profile s3 up -d       # ...plus MinIO, only if Struo:Files:Backend is "s3"
+#   docker compose --profile s3 up -d postgres redis minio createbuckets
+#                                           # dependencies plus MinIO, for an API you run
+#                                           # yourself with Struo:Files:Backend "s3"
 # `up -d --build` is the simplest way to start the services for development and testing. For
 # development work or special needs, start only the services you need and run the rest yourself,
 # e.g. `docker compose up -d postgres redis` followed by `dotnet run` and the frontend dev server.
 #
 # By default the admin SPA is at http://localhost:8080 and the API at http://localhost:8081
-# (STRUO_ADMIN_PORT / STRUO_API_PORT). Services reach each other by service name, so stacks from
-# different checkouts can run side by side with different host ports. The first start
-# migrates the database and seeds an admin account: admin@admin.com / admin by default, overridable
-# with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD. The api service runs as Production, so the session
-# cookie is Secure: login works on http://localhost (browsers treat it as a secure context) but any
-# other host name needs HTTPS in front of the admin.
-# The database, Redis and MinIO credentials and the default admin account are for local development
+# (STRUO_ADMIN_PORT / STRUO_API_PORT). Container and volume names carry the Compose project name
+# (the checkout's folder name), so stacks from different checkouts can run side by side as long
+# as their host ports differ. The first start migrates the database and seeds an admin account:
+# admin@admin.com / admin by default, overridable with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD.
+# The api service runs as Production, so the session cookie is Secure: login works on
+# http://localhost (browsers treat it as a secure context) but any other host name needs HTTPS
+# in front of the admin.
+# The database and MinIO credentials and the default admin account are for local development
 # only — never reuse them anywhere else.
 #
 # Ports below default to the conventional values a clean machine expects. If any of them is
