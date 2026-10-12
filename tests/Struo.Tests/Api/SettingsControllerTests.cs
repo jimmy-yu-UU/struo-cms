@@ -30,7 +30,7 @@ public class SettingsControllerTests(ApiFactory factory)
 
     /// <summary>Seeds a minimal <see cref="Struo.Infrastructure.Files.File"/> row, mirroring the
     /// insert idiom used by FileServiceTransactionTests / ExternalLoginProvisioningTests (scoped
-    /// <see cref="ISqlSugarClient"/> off the DI container, not the unit-level SqliteTestDatabase).</summary>
+    /// <see cref="ISqlSugarClient"/> off the DI container, not a unit-level test database).</summary>
     private async Task<Guid> SeedFileAsync(string status)
     {
         using var scope = _factory.Services.CreateScope();

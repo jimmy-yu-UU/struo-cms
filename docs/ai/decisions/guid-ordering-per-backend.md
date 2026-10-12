@@ -29,8 +29,9 @@ The databases do not agree on that order:
 - `DefaultOrderingTests.Explicit_sort_gets_id_tiebreak_for_stable_pagination` asserts two pages of a
   sort on a non-unique column neither overlap nor repeat a row.
 - The storage types above are what SqlSugar's CodeFirst creates for a `Guid` primary key on each
-  backend, read back from the column catalog. On SQL Server, 200 mixed v4/v7 ids sorted by the
-  database did not match their .NET order; on the other four they did.
+  backend, read back from the column catalog.
+- Measured 2026-10-12 (scratch probe, not committed): on SQL Server, 200 mixed v4/v7 ids sorted by
+  the database did not match their .NET order; on the other four they did.
 
 ## Unknowns
 

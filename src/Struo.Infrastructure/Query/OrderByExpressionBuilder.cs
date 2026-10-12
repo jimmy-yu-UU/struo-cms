@@ -11,9 +11,8 @@ namespace Struo.Infrastructure.Query;
 /// <summary>
 /// Builds SQL ORDER BY expressions for item queries: plain columns, locale-scoped translatable
 /// fields (correlated subquery), and to-one relation paths (correlated subquery with one JOIN per
-/// hop). Extracted from <see cref="SqlSugarItemRepository"/>; now also injects a stable
-/// default order and a PK tiebreak — no client sort would otherwise leave PostgreSQL's
-/// heap order in effect, so an UPDATE (which rewrites the tuple elsewhere in the heap) makes the
+/// hop). Also injects a stable default order and a PK tiebreak: without them PostgreSQL's heap
+/// order is in effect, so an UPDATE (which rewrites the tuple elsewhere in the heap) makes the
 /// edited row visibly jump position in the admin list.
 /// </summary>
 public sealed class OrderByExpressionBuilder(
@@ -28,7 +27,8 @@ public sealed class OrderByExpressionBuilder(
         var idCol = db.EntityMaintenance.GetDbColumnName(d.IdProperty, d.EntityType);
         // No client sort: PostgreSQL heap order is unstable across UPDATEs (MVCC rewrites the tuple
         // elsewhere), so an edited row visibly jumps in the list. Default to newest-first with the PK
-        // (UUIDv7 = time-ordered) as tiebreak; entities without CreatedAt fall back to PK alone.
+        // ascending, in the database's own Guid order, as tiebreak
+        // (docs/ai/decisions/guid-ordering-per-backend.md); entities without CreatedAt fall back to PK alone.
         if (sort.Count == 0) return DefaultOrderBy(d, idCol);
 
         var collMeta = metadata.GetCollection(collection);
