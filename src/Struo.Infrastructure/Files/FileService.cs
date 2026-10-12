@@ -107,7 +107,7 @@ public sealed class FileService(
 
     // Shortens the stem so the name fits the column and keeps its extension; an extension that
     // alone fills the column is cut with the rest of the name.
-    private static string ClampFileName(string fileName)
+    internal static string ClampFileName(string fileName)
     {
         if (fileName.Length <= NameColumnWidth) return fileName;
         var ext = Path.GetExtension(fileName);
