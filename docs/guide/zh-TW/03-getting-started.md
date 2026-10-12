@@ -97,8 +97,9 @@ cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.
 dotnet run --project src/Struo.Api -- migrate
 ```
 
-`migrate` 依序套用 migration：先建框架資料表，再植入語言、角色權限與預設管理員帳號。輸出前段是
-FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied`，結束代碼 `0`：
+`migrate` 依序套用 migration：先建框架資料表，再植入語言、`admin` 與 `public` 兩個角色，以及預設
+管理員帳號。輸出前段是 FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied`，結束代碼
+`0`：
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate

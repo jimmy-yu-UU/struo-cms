@@ -270,7 +270,8 @@ HTTP_STATUS:400
 A many-to-one path such as `sort=category.name` responds normally with 200.
 
 Where `NULL` sorts is left to the database — the code never sends `NULLS FIRST`/`NULLS LAST`:
-SQLite sorts `NULL` first on an ascending sort, PostgreSQL sorts it last.
+SQLite, SQL Server and MySQL/MariaDB sort `NULL` first on an ascending sort, PostgreSQL sorts it
+last.
 
 **Default order.** With no `sort=`, the order is `createdAt DESC, id ASC`; a collection with no
 `CreatedAt` falls back to plain `id ASC`. This is deliberate — PostgreSQL's heap order is unstable
@@ -279,6 +280,11 @@ after an update, and without this default an edited row would jump position for 
 The primary key is always appended as the last, ascending tiebreaker on every caller-supplied sort,
 unless the caller already sorts by `id` itself — so paging never repeats or skips a row even when
 the sort field isn't unique.
+
+`id ASC` is the database's own order for the id column. On PostgreSQL, MySQL/MariaDB and SQLite it
+matches the ids' string order. SQL Server's `uniqueidentifier` compares the last 6 bytes first, so
+UUIDv7 ids are not in creation order there. Paging stays stable; just don't read creation order from
+the id order.
 
 Sorting by a translatable field opens a locale-scoped relation subquery against the translation
 sidecar; a row with no translation row for that locale sorts as `NULL`. The sort key allowlist is

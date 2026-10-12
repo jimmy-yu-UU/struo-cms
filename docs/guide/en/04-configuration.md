@@ -42,7 +42,7 @@ runs as Development.
 following environment-specific behavior:
 
 - Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE, and the startup schema
-  check (the same comparison as `migrate:check`, which refuses to start on errors).
+  check (the same comparison as `migrate:check`; startup is refused when it finds an error).
 - Non-Production only: `/scalar` and `/openapi/v1.json`.
 - Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
   unchanged default admin password.

@@ -2,7 +2,8 @@
 
 想幫 StruoCMS 加一個新的內容型別，這一章示範一個 C# 類別要寫成什麼樣子，才能同時變成資料表、
 REST／GraphQL 端點與後台表單。新增集合不會動到任何框架程式碼，只在你自己的內容專案裡加一個類
-別；它的資料表也不用寫 migration 腳本——CodeFirst 會在任何後端、任何環境自動建出缺少的資料表。
+別，外加一支建表的 migration：API 啟動時不會自己建表，`make:migration` 從類別產生這支
+migration，`migrate` 套用它。
 
 ## 最小集合
 
@@ -45,9 +46,12 @@ public sealed class Announcement : AuditableEntity
 }
 ```
 
-重啟 API 之後，這個類別就變成一張 `announcements` 資料表、側欄 Content 群組下的一個
-Announcement、一組 REST 與 GraphQL 端點，以及一張有四個輸入的後台表單。剛宣告好的集合還沒有
-任何 RBAC 授權，所以一開始只有 super-admin 看得到它。
+產生並套用它的 migration（見本章後面〈建立資料表〉）、再重啟 API 之後，這個類別就變成一張
+`announcements` 資料表、側欄 Content 群組下的一個 Announcement、一組 REST 與 GraphQL 端點，以及
+一張有四個輸入的後台表單。剛宣告好的集合還沒有任何 RBAC 授權，所以一開始只有 super-admin 看得
+到它。
+
+在 Development，集合宣告了、表卻還沒建的話，啟動時的結構檢查會回報缺表並拒絕啟動。
 
 `AuditableEntity` 把 `Id` 宣告成 `abstract`，忘記覆寫是編譯期錯誤；覆寫上要帶
 `[SugarColumn(IsPrimaryKey = true)]`，因為繼承來的 `Id` 上沒有 attribute，SqlSugar 認不出它
@@ -63,9 +67,10 @@ Announcement、一組 REST 與 GraphQL 端點，以及一張有四個輸入的�
 （見[第 4 章：設定參考](04-configuration.md)），你自己的集合不加。欄位名稱則照 SqlSugar 對 CLR
 屬性名稱的小寫轉換。
 
-可為 null 的屬性（`DateTime?`、`Guid?`、`int?`、`string?`）會自動對到可為 null 的欄位，
-CodeFirst 自己判斷，不需要再加 `[SugarColumn(IsNullable = true)]`；要反過來強制不可為 null，
-才需要明寫 `[SugarColumn(IsNullable = false)]`。
+可為 null 的屬性（`DateTime?`、`Guid?`、`int?`、`string?`）會自動對到可為 null 的欄位：
+entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Nullable()`，`migrate:check` 也拿
+它比對，不需要再加 `[SugarColumn(IsNullable = true)]`。要反過來強制不可為 null，才需要明寫
+`[SugarColumn(IsNullable = false)]`。
 
 ## `[CmsCollection]` 選項
 
@@ -179,21 +184,35 @@ SEO 欄位用 `Group = "SEO"`。
 入。放 API 專案裡還是獨立類別庫，選哪一種是你的事。解析不到列出的組件就啟動失敗，訊息會點
 名那個項目（見[第 4 章：設定參考](04-configuration.md)）。
 
-內容專案是一個普通的類別庫，最低限度只需要參照 `Struo.Domain`（取得 attribute 與列舉）與
-`SqlSugarCore` 套件（讓 `[SugarTable]`／`[SugarColumn]` 能用）。掃描只在啟動時跑一次，加了新
-的內容專案要重啟才會生效；就算某個組件裡有型別載入失敗，掃描也只是拿到成功載入的那些型別，
-不會整個中止。
+內容專案是一個普通的類別庫。只宣告 entity 的話，最低限度只需要參照 `Struo.Domain`（取得
+attribute 與列舉）與 `SqlSugarCore` 套件（讓 `[SugarTable]`／`[SugarColumn]` 能用）。這個專案
+如果也放自己的 migration，還要參照 `Struo.Infrastructure`，因為 migration 繼承它的
+`StruoMigration`；範例專案就是這樣。
+
+掃描只在啟動時跑一次，加了新的內容專案要重啟才會生效；就算某個組件裡有型別載入失敗，掃描也
+只是拿到成功載入的那些型別，不會整個中止。
 
 ## 建立資料表
 
-CodeFirst 會建出集合自己的資料表、它的翻譯 sidecar 資料表，以及它宣告的任何多對多 junction
-資料表，在五種後端、Development 與 Production 都一樣。框架自己的資料表和你的集合一起建，缺
-哪張就建哪張。建表只會處理還不存在的資料表——已經存在的資料表完全不會被動到。
+每一張表都來自一支 migration。一個集合可能需要好幾張表：集合自己的表、它的翻譯 sidecar，以及
+它宣告的每一張多對多 junction 表。每一張各跑一次 `make:migration`，`--entity` 接那張表的
+entity 型別名稱：
 
-要改動一張已經有資料的資料表，走的是 migration：`Database:MigrationsPath` 指到你自己準備、
-經過審查的 SQL 腳本；`Database:AutoSyncSchema` 只在 Development 有用，可以讓 CodeFirst 直接
-改既有資料表；其他環境設了也不會生效。這兩個鍵的完整語意與預設值見
-[第 4 章：設定參考](04-configuration.md)。
+```bash
+dotnet run --project src/Struo.Api -- make:migration CreateAnnouncements --entity Announcement --output <目錄>
+```
+
+`--output` 的目錄要先建好，相對路徑從 `src/Struo.Api` 算起。Migration 要放在會被掃描的組件
+裡：API 專案本身，或列在 `Struo:ContentAssemblies` 的類別庫。
+
+檢查產生出來的檔案，用 `migrate:preview` 看要執行的 SQL，再跑 `migrate`：
+
+```bash
+dotnet run --project src/Struo.Api -- migrate
+```
+
+要改一張已經有資料的表，另外寫一支新的 migration，不要回頭改已經套用過的那支。規則與拆步驟的
+寫法見[第 21 章〈撰寫 migration〉](21-schema-and-upgrades.md#撰寫-migration)。
 
 ## 檢查清單
 
@@ -206,8 +225,9 @@ CodeFirst 會建出集合自己的資料表、它的翻譯 sidecar 資料表，�
 4. 需要的話實作 `ISoftDeletable`，或設 `Revisions = true`。
 5. 有關聯的話加 `[CmsRelation]` 和 `[Navigate]`（見[第 8 章：關聯](08-relations.md)）。
 6. 加專案參照，並把項目加進 `Struo:ContentAssemblies`（獨立類別庫才需要）。
-7. 重啟行程，讓掃描抓到新集合。
-8. 授予 RBAC 權限，不然只有 super-admin 能用它。
+7. 每張新表跑一次 `make:migration --entity`，檢查產生的檔案，再跑 `migrate`。
+8. 重啟行程，讓掃描抓到新集合。
+9. 授予 RBAC 權限，不然只有 super-admin 能用它。
 
 ## 接下來
 

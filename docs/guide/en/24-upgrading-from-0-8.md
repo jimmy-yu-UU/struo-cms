@@ -98,9 +98,9 @@ On PostgreSQL and MySQL/MariaDB, NULLs don't collide, so this step is optional t
 
 ### SQL Server: `varchar` to `nvarchar`
 
-v0.8.x created string columns as `varchar`, and characters outside the collation's code page (for example
-Chinese and emoji under a Latin1 collation) are stored as `?`. If you store such text, convert before storing it: data already turned into
-`?` is not recovered by the conversion.
+v0.8.x created string columns as `varchar`, and characters outside the collation's code page (for
+example Chinese and emoji under a Latin1 collation) are stored as `?`. If you store such text,
+convert before storing it: data already turned into `?` is not recovered by the conversion.
 
 An indexed column cannot be altered in place, so each index is dropped, the column altered, and the
 index recreated as it was. The query below changes nothing; it prints those three groups of

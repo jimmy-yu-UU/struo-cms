@@ -6,27 +6,82 @@ each layer tests, which jobs CI runs, and what it deliberately doesn't run.
 ## Backend tests
 
 Backend tests live in `tests/Struo.Tests`, use xUnit, and run with `dotnet test`. The default
-backend is SQLite: most tests each create their own temp-file database (`SqliteTestDatabase`),
-deleted when the test ends, so no test shares state with another.
+backend is SQLite: unit tests get their database from `TestBackend.CreateUnitDatabase()`, which,
+with no backend switch set, is a temp SQLite file deleted when the test ends, so no test shares
+state with another. A test outside `tests/Struo.Tests/Support/` that uses `SqliteTestDatabase`
+directly fails `SqliteTestDatabaseUsageTests`, so every test follows the backend switch.
 
-The opt-in PostgreSQL integration suite (`PostgresIntegrationTests`) only actually runs when it
-can resolve a connection string: it checks the `STRUO_TEST_PG_CONNECTION` environment variable
-first, then falls back to the key in configuration.
+These unit tests build their tables from entities with CodeFirst. When your fork's own test
+entities declare unique group indexes, keep the names within 63 characters; see
+[Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
 
-That key's name, and the fact that it's the one place in the whole configuration surface that
-doesn't honor the `Section__Key` override rule, are in the `Testing` section of
-[Chapter 4: Configuration Reference](04-configuration.md); the tests' own `ConfigurationBuilder`
-reads it directly, never through the application's option binding.
+### Tests against live backends
 
-When no connection string resolves, every test in this suite passes outright rather than being
-marked skipped — a green line in the test report doesn't mean it ever actually connected to
-PostgreSQL.
+Four test connections each turn on one backend's live tests: `Testing:PostgresConnection`,
+`Testing:SqlServerConnection`, `Testing:MySqlConnection` and `Testing:MariaDbConnection`. Each key
+checks its own environment variable first, such as `STRUO_TEST_PG_CONNECTION`, then falls back to
+the configuration files. These four keys don't honor the `Section__Key` override rule; the keys and
+their variables are listed in the `Testing` section of
+[Chapter 4: Configuration Reference](04-configuration.md). The tests' own `ConfigurationBuilder`
+reads them directly, never through the application's option binding.
 
-The suite only accepts a connection string whose database name contains `test`
-(case-insensitive); a name that doesn't match is refused, so the tests can't connect to a
-database that's actually in use. `PgTestConnectionString.DisablePooling` separately turns off
-Npgsql's connection pooling, isolating a socket interruption observed under the test host — a
-phenomenon measured there, not evidence that production carries the same risk.
+A backend with a connection configured runs these suites:
+
+- the migration live tests, such as `CoreMigrationsLiveTests`, which apply the core migrations and
+  check the result with `SchemaChecker`;
+- `LiveRepositoryTests`, on every backend with a connection, independent of `STRUO_TEST_BACKEND`;
+- `PostgresOnlyTests`, the tests that hold only on PostgreSQL;
+- `TestDatabaseLiveTests`, which cover creating and cleaning up the test databases themselves.
+
+When a connection is empty, every live test for that backend passes outright rather than being
+marked skipped — a green line in the test report doesn't mean it ever connected to that database.
+Judge by how long each test took.
+
+The tests only accept a connection string whose database name contains `test` (case-insensitive);
+a name that doesn't match is refused, so the tests can't connect to a database that's actually in
+use. The configured database must exist beforehand, and the login needs rights to create and drop
+databases: suites such as `LiveRepositoryTests` create their own databases on the same server and
+drop them at the end.
+
+`PgTestConnectionString.DisablePooling` separately turns off Npgsql's connection pooling,
+isolating a socket interruption observed under the test host — a phenomenon measured there, not
+evidence that production carries the same risk.
+
+### Moving the whole suite to a live backend
+
+The `STRUO_TEST_BACKEND` environment variable selects the backend the whole suite runs on: `Sqlite`
+(the default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`, case-insensitive. An invalid value,
+or a live backend without its connection, fails the whole run with a message naming what to set.
+
+```bash
+STRUO_TEST_BACKEND=MySql dotnet test
+```
+
+The switch moves both kinds of test database:
+
+- **API test hosts** (`ApiFactory` and the CORS test host): each host creates its own database and
+  drops it when done.
+- **Unit tests**: lease a database from a per-backend pool, created on the first read of its
+  connection string or name. Every lease starts empty; returning it drops all its tables. Pool
+  databases are named `<name>_unit_<seq>_<runId>`.
+
+MySQL and MariaDB test databases are created as utf8mb4. Run MySQL with the server's default strict
+`sql_mode`: non-strict mode silently truncates or replaces values, which hides length and charset
+bugs.
+
+A test that only means something on SQLite carries `[SqliteOnlyFact]` or `[SqliteOnlyTheory]` and
+is skipped on a live backend, with a reason starting `SQLite-only:`.
+
+Pool databases are dropped at process exit, best effort. A crashed run can leave databases behind;
+on MySQL and MariaDB, a discarded database also survives until the connection holding it closes.
+After a live run, this drops the databases other runs left on the selected backend:
+
+```bash
+STRUO_TEST_BACKEND=<backend> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "FullyQualifiedName~Drop_leftover_databases_on_request"
+```
+
+It force-drops every other run's databases, so don't run it while another suite uses the same
+server.
 
 ### The test suite uses the sample as its fixture
 
@@ -105,8 +160,9 @@ The config sets `workers: 1`, and `use.baseURL` is `http://localhost:5173`; `cor
 `testIgnore: '**/e2e/sample/**'` to keep the sample specs out; `sample`'s `testDir` points
 straight at `./e2e/sample` and has nothing left to exclude.
 
-The bootstrap administrator account used for login has to be seeded first; the rest of the
-prerequisites and how to override the login credentials are in `frontend/e2e/README.md`.
+The database has to be migrated first (`migrate`, or `Database:MigrateOnStartup=true`), which seeds
+the bootstrap administrator account used for login; the rest of the prerequisites and how to
+override the login credentials are in `frontend/e2e/README.md`.
 
 For the `sample` project to run, opt the sample in first following the steps in
 [Chapter 23](23-sample-walkthrough.md); running the `sample` project with `--list` lists 8 spec
@@ -170,8 +226,8 @@ run at the repository root; `frontend` and `docs` each run inside their own subd
 
 `backend`: `dotnet restore`, `dotnet build --no-restore --configuration Release`,
 `dotnet test --no-build --configuration Release --verbosity normal`, running the whole backend
-test suite. CI never sets `STRUO_TEST_PG_CONNECTION`, so the opt-in PostgreSQL integration suite
-always takes its pass-outright path here.
+test suite. CI sets no `STRUO_TEST_*` connection and no `STRUO_TEST_BACKEND`, so it runs on SQLite
+only and every live suite takes its pass-outright path here.
 
 `frontend`: inside the `frontend` directory, `pnpm install --frozen-lockfile --ignore-scripts`,
 then `pnpm test`, then `pnpm build` (`vue-tsc -b && vite build`). Beyond the unit tests, this
@@ -187,10 +243,12 @@ TypeScript types are checked at this step.
 yourself in [Chapter 20: Deployment](20-deployment.md)), then starts the whole Compose stack and
 smoke-tests that too.
 
-The API image starts with `Database__DbType=Sqlite`,
-`Database__ConnectionString=Data Source=/tmp/struo-ci.db`, and is polled at `/health/ready` until
-healthy; the admin SPA image, once started, is polled at its home page for an `assets/index-`
-fragment in the response, proving the built assets are actually reachable through nginx.
+The API image first runs `migrate` with `Database__DbType=Sqlite` and
+`Database__ConnectionString=Data Source=/app/App_Data/struo-ci.db`, against a SQLite file on the
+named volume `struo-ci-data`; the API then starts on the same volume and is polled at
+`/health/ready` until healthy. The admin SPA image, once started, is polled at its home page for an
+`assets/index-` fragment in the response, proving the built assets are actually reachable through
+nginx.
 
 The Compose step runs `docker compose up --wait`, which builds its own images from the same two
 Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port
@@ -236,9 +294,8 @@ the API, or calls `playwright test`. End-to-end tests need a running API and dat
 the admin SPA's dev server — a heavier environment than any job here provisions — so they're a
 local, pre-merge discipline, not an automated gate.
 
-CI also never sets `STRUO_TEST_PG_CONNECTION`, so the opt-in PostgreSQL integration suite always
-takes its pass-outright path here, unlike locally with a real PostgreSQL connection string wired
-up.
+CI also never sets a `STRUO_TEST_*` connection, so the live suites always take their pass-outright
+path here, unlike locally with a real database connection wired up.
 
 The schema contract needs no job of its own: each side rides along inside `backend`'s
 `dotnet test` and `frontend`'s `pnpm test`.

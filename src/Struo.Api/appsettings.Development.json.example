@@ -1,9 +1,9 @@
 // Copy to appsettings.Development.json (gitignored) and edit.
 // Every application-configuration key here can also be supplied as an environment variable
 // using the double-underscore path separator, e.g. Database__ConnectionString. One exception:
-// Testing:PostgresConnection below is read by the test suite through its own ConfigurationBuilder
-// (no environment-variable provider registered), so Testing__PostgresConnection has no effect on
-// it — see that key's comment for the env var that actually works.
+// the four Testing:* keys below are read by the test suite through its own ConfigurationBuilder
+// (no environment-variable provider registered), so Testing__PostgresConnection and the like have
+// no effect — see the Testing comments for the env vars that actually work.
 {
   "Database": {
     "DbType": "PostgreSQL",
@@ -44,14 +44,18 @@
   },
 
   "Testing": {
-    // Opt-in live-PostgreSQL test suite. Point at a DISPOSABLE database whose name contains "test".
-    // Read directly by PostgresIntegrationTests's own ConfigurationBuilder (no env-var provider
-    // registered there), so the env var STRUO_TEST_PG_CONNECTION overrides this key — NOT
-    // Testing__PostgresConnection, which the double-underscore convention would otherwise suggest.
+    // Opt-in live tests, one connection per backend: the migration tests, LiveRepositoryTests,
+    // TestDatabaseLiveTests (PostgresOnlyTests on PostgreSQL only), and the API hosts and unit tests
+    // when STRUO_TEST_BACKEND selects that backend. Point each at a DISPOSABLE database whose name
+    // contains "test"; it must already exist, and the login needs create/drop-database rights (the
+    // migration tests write into it directly; the other live suites create their own databases next
+    // to it). An empty value makes the live tests return early as a pass, so judge them by per-test
+    // duration; with STRUO_TEST_BACKEND set to that backend the run fails instead. The env vars
+    // STRUO_TEST_PG_CONNECTION, STRUO_TEST_SQLSERVER_CONNECTION, STRUO_TEST_MYSQL_CONNECTION and
+    // STRUO_TEST_MARIADB_CONNECTION override these keys — NOT Testing__PostgresConnection and the
+    // like, which the double-underscore convention would otherwise suggest. MariaDB runs on the
+    // MySql dialect and is reported as its own cases.
     "PostgresConnection": "",
-    // Opt-in migration tests on SQL Server, MySQL and MariaDB. Each needs a DISPOSABLE database whose
-    // name contains "test" and which already exists. Env vars STRUO_TEST_SQLSERVER_CONNECTION,
-    // STRUO_TEST_MYSQL_CONNECTION and STRUO_TEST_MARIADB_CONNECTION override these keys.
     "SqlServerConnection": "",
     "MySqlConnection": "",
     "MariaDbConnection": ""

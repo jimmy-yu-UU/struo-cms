@@ -82,12 +82,12 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 ## 公開讀取
 
-`struo_roles` 資料表第一次建立時會一併建立 `admin`、`public` 兩個角色，第一個管理者被加進 `admin`；
-`public` 的授權是每個呼叫端的下限，怎麼被聯集進去見〈有效權限怎麼算〉。它本身怎麼被授予讀取，由設定
-鍵 `Rbac:PublicReadCollections` 決定。
+核心的植入 migration `SeedCoreData` 在第一次 `migrate`（或 `MigrateOnStartup`）時建立 `admin`、`public`
+兩個角色；有設定 bootstrap 管理員的話，把他加進 `admin`。`public` 的授權是每個呼叫端的下限，怎麼被聯
+集進去見〈有效權限怎麼算〉。它本身怎麼被授予讀取，由設定鍵 `Rbac:PublicReadCollections` 決定。
 
-清單裡的每個集合名稱都變成 `public` 角色上的一筆 `canRead = true` 授權。這個鍵只在 `struo_roles` 資料
-表第一次建立時套用，改了再重開對既有資料庫沒有追溯效果，鍵名與這個限制見
+清單裡的每個集合名稱都變成 `public` 角色上的一筆 `canRead = true` 授權。這個鍵只在植入 migration 執行
+時套用一次，改了再重開或再跑 `migrate`，對既有資料庫都沒有追溯效果，鍵名與這個限制見
 [第 4 章：設定參考](04-configuration.md)。
 
 ## `Hidden` 欄位與權限

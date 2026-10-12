@@ -76,7 +76,7 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 不加前綴。範例專案與你自己的集合不受影響。
 
 對一個已經有框架資料表的資料庫改這個值，新名稱下沒有任何表，也沒有版本紀錄：`migrate` 會在新
-名稱下建出一整組空的框架資料表並植入初始資料，舊表不會被讀取；`MigrateOnStartup` 為 `false` 時，
+名稱下建出一整組空的框架資料表並植入初始資料，既有的表不會被讀取；`MigrateOnStartup` 為 `false` 時，
 啟動則以「migration 待套用」拒絕。要換前綴，先把既有的表（連同版本表）改成新名稱。
 
 `MigrateOnStartup` 為 `false`（每個環境的預設）時，資料庫還有待套用的 migration，API 就拒絕啟動，

@@ -23,8 +23,8 @@ type — one instance of each:
 `[CmsCollection]`/`[CmsField]` attributes) and takes both paths to SqlSugar at once: it
 references the `SqlSugarCore` package directly, and it also references `Struo.Infrastructure`
 (which brings SqlSugar in transitively too) — [Chapter 5](05-collections.md) covers the direct
-reference as the minimum a collection library needs. The sample's own migration derives from
-`Struo.Infrastructure`'s `StruoMigration`, so it needs the second reference as well.
+reference as the minimum for a library that only declares entities. The sample's own migration
+derives from `Struo.Infrastructure`'s `StruoMigration`, so it needs the second reference as well.
 
 The only project that references it is the test project, `tests/Struo.Tests`, and it does so
 deeply — "Removing the sample completely" below lists every file that has to change.

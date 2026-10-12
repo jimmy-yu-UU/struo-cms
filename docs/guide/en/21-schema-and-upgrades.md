@@ -13,7 +13,8 @@ the prefix is `Database:TablePrefix` (default `struo_`).
 Migrations live in three places:
 
 - **Core**: `src/Struo.Infrastructure/Migrations/Core/`. `CreateCoreSchema` creates the framework
-  tables; `SeedCoreData` seeds the languages, roles and permissions, and the bootstrap admin.
+  tables; `SeedCoreData` seeds the languages, the `admin` and `public` roles, the bootstrap admin,
+  and the public read grants listed in `Rbac:PublicReadCollections`.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in your own content project. That project must be listed in

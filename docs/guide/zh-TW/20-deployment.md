@@ -16,8 +16,8 @@ job、init container，或 `docker run --rm … <映像> migrate`。也可以設
 `Database__MigrateOnStartup=true`，讓 API 自己在開始服務前套用。
 
 好幾個副本都設了 `MigrateOnStartup` 時，它們在 migration 鎖上排隊，只有一個在套用；等超過
-`Database:MigrationLockTimeoutSeconds` 的副本啟動失敗。Oracle 不拿鎖，要確定只有一處在跑
-`migrate`。
+`Database:MigrationLockTimeoutSeconds` 的副本啟動失敗。SQLite 與 Oracle 都不拿鎖，要確定只有一
+處在跑 `migrate`。
 
 Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
 自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。

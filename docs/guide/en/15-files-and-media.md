@@ -40,8 +40,9 @@ governs how the collection itself appears in the admin UI, a different thing fro
 | `status` | Select `draft`/`published` | Yes |
 
 `fileName` is the original filename recorded at upload time, and the only field the collection
-itself declares `Searchable`; `contentType` is the validated MIME type; `size` is the actual number
-of bytes stored.
+itself declares `Searchable`. A filename longer than 255 UTF-16 units is shortened to the column
+width, keeping its extension and never splitting a surrogate pair. `contentType` is the validated
+MIME type; `size` is the actual number of bytes stored.
 
 `width` and `height` are filled in only when the dimensions can be read from the header —
 every other upload, image or not, leaves both blank. `status` is the only one of its own fields
@@ -60,7 +61,7 @@ described in [Chapter 7: Multilingual Content](07-i18n.md).
 On upload, the default locale's `title` is auto-filled from the filename with its extension
 stripped; when stripping the extension leaves an empty string (a filename that's nothing but an
 extension), it falls back to the full filename, and the result is always truncated to 255
-characters.
+characters, again without splitting a surrogate pair.
 
 `alt` is never auto-filled, and no other locale gets an automatically generated row either, unless
 someone writes one by hand. `FileTranslation.Title` is also `Searchable`, so `search=` on `file`

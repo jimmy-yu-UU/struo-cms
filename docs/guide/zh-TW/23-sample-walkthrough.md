@@ -18,8 +18,9 @@
 
 `Struo.Sample.Blog.csproj` 是一個普通類別庫，參照 `Struo.Domain`（拿到 `[CmsCollection]`／
 `[CmsField]` 這些 attribute），並且兩條路都走：自己直接引用 `SqlSugarCore` 套件，也參照
-`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章](05-collections.md)說的最低限度
-就是前者。範例自己的 migration 繼承 `Struo.Infrastructure` 的 `StruoMigration`，所以後者也少不了。
+`Struo.Infrastructure`（SqlSugar 因此也會遞移帶進來）——[第 5 章](05-collections.md)說的、只宣告
+entity 時的最低限度就是前者。範例自己的 migration 繼承 `Struo.Infrastructure` 的
+`StruoMigration`，所以後者也少不了。
 
 參照它的只有測試專案 `tests/Struo.Tests`，而且用得很深，〈完全移除範例〉列出全部要動的
 檔案。`src/Struo.Api/Struo.Api.csproj` 沒有指到它的 `ProjectReference`，

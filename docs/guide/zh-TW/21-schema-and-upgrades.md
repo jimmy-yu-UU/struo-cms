@@ -13,7 +13,8 @@ v0.8.x 用 CodeFirst 建出來的話，先照[第 24 章：接上 v0.8.x 的資�
 Migration 放在三個地方：
 
 - **核心**：`src/Struo.Infrastructure/Migrations/Core/`。`CreateCoreSchema` 建框架資料表，
-  `SeedCoreData` 植入語言、角色權限與 bootstrap 管理員。
+  `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
+  `Rbac:PublicReadCollections` 列出的公開讀取權限。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在自己的內容專案裡。這個專案要列在 `Struo:ContentAssemblies`，並參照

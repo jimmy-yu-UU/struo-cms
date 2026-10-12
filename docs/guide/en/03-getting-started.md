@@ -111,8 +111,9 @@ dotnet run --project src/Struo.Api -- migrate
 ```
 
 `migrate` applies the migrations in order: first the framework tables, then the seed of languages,
-role permissions and the default admin account. The output starts with FluentMigrator's log of each
-step and ends with one `Applied` line per migration; the exit code is `0`:
+the `admin` and `public` roles, and the default admin account. The output starts with
+FluentMigrator's log of each step and ends with one `Applied` line per migration; the exit code is
+`0`:
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate

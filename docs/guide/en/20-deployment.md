@@ -21,7 +21,7 @@ API applies them itself before it starts serving.
 
 When several replicas all have `MigrateOnStartup` set, they queue on the migration lock and only one
 applies; a replica that waits longer than `Database:MigrationLockTimeoutSeconds` fails to start.
-Oracle takes no lock, so make sure `migrate` runs in one place only.
+SQLite and Oracle take no lock, so make sure `migrate` runs in one place only.
 
 Migrations only go forward and there is no rollback command, so back up the database first.
 Production does not run the schema check at startup; run `migrate:check` yourself after `migrate`.
