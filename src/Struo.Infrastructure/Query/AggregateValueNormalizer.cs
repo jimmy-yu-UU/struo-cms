@@ -42,6 +42,15 @@ internal static class AggregateValueNormalizer
             if (target == typeof(DateOnly)) return DateOnly.FromDateTime(dt);
             if (target == typeof(TimeOnly)) return TimeOnly.FromDateTime(dt);
         }
-        return raw.GetType() == target ? raw : Convert.ChangeType(raw, target, CultureInfo.InvariantCulture);
+        // A zone-aware column's min/max is an instant: SQL Server returns it as a DateTimeOffset and
+        // Npgsql as a Local DateTime. Convert.ChangeType cannot turn a DateTimeOffset into a DateTime
+        // (InvalidCastException), and a Local value would serialize with the host offset. Unspecified and
+        // Utc values (plain columns) are returned as read.
+        if (target == typeof(DateTime))
+        {
+            if (raw is DateTimeOffset offset) return offset.UtcDateTime;
+            if (raw is DateTime { Kind: DateTimeKind.Local } local) return local.ToUniversalTime();
+        }
+        return raw.GetType() == target ? raw :Convert.ChangeType(raw, target, CultureInfo.InvariantCulture);
     }
 }
