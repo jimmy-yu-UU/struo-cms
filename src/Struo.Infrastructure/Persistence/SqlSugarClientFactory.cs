@@ -100,7 +100,9 @@ public static class SqlSugarClientFactory
         return client;
     }
 
-    // The EntityService hook SqlSugar invokes once per reflected property during CodeFirst/InitTables.
+    // The EntityService hook SqlSugar invokes once per reflected property whenever it builds an entity's
+    // info: for CodeFirst and for the first query or command on that entity alike, so these conventions
+    // (the UTC-instant converter among them) also apply on a schema the migrations created.
     // Conventions run in sequence and several early-return, short-circuiting whatever is below
     // them for that property — the order here is deliberate, not incidental.
     private static void ApplyColumnConventions(PropertyInfo property, EntityColumnInfo column, DbType dbType, TranslationSidecarIndexPolicy policy)
@@ -220,7 +222,16 @@ public static class SqlSugarClientFactory
 
         if (shape == ColumnShape.Timestamp) ApplyTimestamp(column, dbType);
         else column.DataType = ColumnTypeMap.For(shape.Value, dbType);
+        if (shape == ColumnShape.TimestampWithTimeZone) ApplyUtcInstantConverter(property, column, dbType);
         return true;
+    }
+
+    // PostgreSQL and SQL Server: bind and read a zone-aware DateTime column as a UTC instant. MySQL,
+    // MariaDB and SQLite store the wall clock as given and never consult a time zone.
+    private static void ApplyUtcInstantConverter(PropertyInfo property, EntityColumnInfo column, DbType dbType)
+    {
+        if (UtcInstantConverter.AppliesTo(dbType) && UtcInstantConverter.IsUtcInstantProperty(property))
+            column.SqlParameterDbType = typeof(UtcInstantConverter);
     }
 
     // MySQL/MariaDB only: an unshaped DateTime/DateTime? property takes ColumnShape.Timestamp, unless its

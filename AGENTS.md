@@ -291,7 +291,9 @@ documented divergences each have a decision file:
   `docs/ai/decisions/sqlserver-cancellation-surfaces-as-sqlsugar-exception.md`;
 - CodeFirst index-name length limits —
   `docs/ai/decisions/migrations-are-the-only-schema-source.md`;
-- per-backend column literals — `docs/ai/decisions/column-type-map-per-backend-literals.md`.
+- per-backend column literals — `docs/ai/decisions/column-type-map-per-backend-literals.md`;
+- UTC instants in `TimestampWithTimeZone` columns on PostgreSQL and SQL Server —
+  `docs/ai/decisions/timestamptz-columns-are-utc-instants.md`.
 
 Configure `Testing:PostgresConnection` to a disposable database whose name contains `test`: the migration
 tests write into it directly, and the other live suites use its server and login to create their own
