@@ -122,12 +122,12 @@ public class ConditionalModelTranslatorPlainDateTimeTests
     }
 
     [Fact]
-    public void SQL_Server_rounding_does_not_overflow_at_the_largest_instant()
+    public void SQL_Server_text_at_the_largest_instant_is_the_datetime_maximum()
     {
         var cm = ConditionalModelTranslator.ToSingleModel(
             new ComparisonFilter("createdAt", QueryOperator.Gt, "9999-12-31T23:59:59.9999999Z"), Plain, Client("SqlServer"));
 
-        cm.FieldValue.Should().Be("9999-12-31T23:59:59.999");
+        cm.FieldValue.Should().Be("9999-12-31T23:59:59.997");
     }
 
     [Fact]

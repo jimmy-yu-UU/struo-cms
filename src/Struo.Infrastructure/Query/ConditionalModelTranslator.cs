@@ -75,7 +75,7 @@ public static class ConditionalModelTranslator
     // an instant (a TimestampWithTimeZone column on PostgreSQL and SQL Server) the value goes out as
     // DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy datetime
     // rounding touches. Any other column gets the UTC wall clock with no zone: SQL Server's datetime
-    // column rounds it to 1/300 s the way the stored value was rounded, so the text is an ISO 8601
+    // column rounds it to 1/300 s the way it rounds the stored value, so the text is an ISO 8601
     // form cut to milliseconds, which datetime reads under any language setting; the other backends
     // get Microsoft.Data.Sqlite's text form, which MySQL also reads as a datetime and PostgreSQL binds
     // as a zone-less timestamp (In/Nin render inline literals). A query-string _in/_nin value is one
@@ -110,11 +110,13 @@ public static class ConditionalModelTranslator
         };
     }
 
+    private static readonly DateTime SqlServerDateTimeMax = new(9999, 12, 31, 23, 59, 59, 997, DateTimeKind.Utc);
+
     // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes. The
-    // rounded value is clamped to DateTime.MaxValue, which the rounding would otherwise pass.
+    // rounded value is clamped to datetime's largest value, 9999-12-31 23:59:59.997.
     private static DateTime WallClock(DateTime instant, SqlSugar.DbType dbType) =>
         dbType == SqlSugar.DbType.SqlServer
-            ? new DateTime(Math.Min(DateTime.MaxValue.Ticks,
+            ? new DateTime(Math.Min(SqlServerDateTimeMax.Ticks,
                 (instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
                 * TimeSpan.TicksPerMillisecond), DateTimeKind.Utc)
             : instant;
