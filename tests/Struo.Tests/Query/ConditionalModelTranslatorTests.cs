@@ -306,4 +306,40 @@ public class ConditionalModelTranslatorTests
     /// are not defeated by SqlSugar's irregular internal spacing.</summary>
     private static string Normalize(string sql) =>
         System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ");
+
+    public static TheoryData<object> UtcInstantInputs()
+    {
+        var instant = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        return new TheoryData<object>
+        {
+            "2026-03-04T05:06:07Z",
+            "2026-03-04T13:06:07+08:00",
+            "2026-03-04T05:06:07",
+            new DateTimeOffset(2026, 3, 4, 13, 6, 7, TimeSpan.FromHours(8)),
+            instant.ToLocalTime(),
+            instant,
+        };
+    }
+
+    // GraphQL hands DateTimeOffset values, REST hands strings; both name one UTC instant.
+    [Theory]
+    [MemberData(nameof(UtcInstantInputs))]
+    public void Utc_instant_field_binds_the_utc_instant_for_every_input_form(object value)
+    {
+        using var file = TestBackend.CreateUnitDatabase();
+        var db = SqlSugarClientFactory.Create(file.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        var d = new EntityDescriptor(typeof(Struo.Infrastructure.Files.MediaFolder),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["createdAt"] = "CreatedAt" }, "Id");
+
+        var cm = ConditionalModelTranslator.ToSingleModel(
+            new ComparisonFilter("createdAt", QueryOperator.Gt, value), d, db);
+        var inList = ConditionalModelTranslator.ToSingleModel(
+            new ComparisonFilter("createdAt", QueryOperator.In, new List<object?> { value, value }), d, db);
+
+        var zoneAware = TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer;
+        var expected = zoneAware ? "2026-03-04T05:06:07.0000000+00:00" : "2026-03-04 05:06:07";
+        cm.CSharpTypeName.Should().Be(zoneAware ? "datetimeoffset" : "datetime");
+        cm.FieldValue.Should().Be(expected);
+        inList.FieldValue.Should().Be(expected + "," + expected);
+    }
 }
