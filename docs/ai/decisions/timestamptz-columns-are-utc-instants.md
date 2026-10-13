@@ -21,7 +21,7 @@ A zone-aware column gets a `datetimeoffset` at `+00:00` on PostgreSQL and SQL Se
 gets the UTC wall clock with no zone and the type name `datetime`. On SQL Server that is an ISO 8601
 text (`yyyy-MM-ddTHH:mm:ss.fff`) rounded to milliseconds: core plain columns are legacy `datetime`, which
 rounds the bound value to 1/300 s the way the stored value was rounded, so `_eq` matches and the column
-stays sargable; `IN` literals are inline text that `datetime` reads under any language setting. A fork
+is compared without an implicit conversion; `IN` literals are inline text that `datetime` reads under any language setting. A fork
 column declared `datetime2` binds the same `DbType.DateTime` the general path already used. MySQL,
 MariaDB and SQLite get Microsoft.Data.Sqlite's text form (`yyyy-MM-dd HH:mm:ss.FFFFFFF`), which they
 read as a datetime, and PostgreSQL binds it as a zone-less `timestamp`, which a plain `timestamp` column
@@ -104,6 +104,8 @@ column info. Measured on this suite's backends:
 - Not covered: any `Select` projection into a non-entity type reads these columns without the converter:
   PostgreSQL returns `Kind=Local` and SQL Server a `DateTimeOffset`. Only the aggregate path normalizes
   them.
+- Not covered: an exact `_in`/`_nin` on a fork's `datetime2` column holding sub-millisecond values: the
+  SQL Server literal is cut to milliseconds, where the general path inlined the text as given.
 - Not covered: `SetColumns(s => s.A, value)` (the column-plus-value overload) still binds `timestamp`
   on PostgreSQL. SqlSugar's bulk-copy and `Fastest` paths are unverified. Nothing in `src/` uses
   either on these columns.
