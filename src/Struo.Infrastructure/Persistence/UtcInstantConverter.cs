@@ -20,10 +20,10 @@ internal sealed class UtcInstantConverter : ISugarDataConverter
         return new SugarParameter("@UtcInstant" + columnIndex, value) { DbType = System.Data.DbType.DateTimeOffset };
     }
 
-    public T QueryConverter<T>(IDataRecord dr, int i)
+    public T QueryConverter<T>(IDataRecord dataRecord, int dataRecordIndex)
     {
-        if (dr.IsDBNull(i)) return default!;
-        object value = dr.GetValue(i) switch
+        if (dataRecord.IsDBNull(dataRecordIndex)) return default!;
+        object value = dataRecord.GetValue(dataRecordIndex) switch
         {
             DateTimeOffset offset => offset.UtcDateTime,
             DateTime instant => ToUtc(instant),

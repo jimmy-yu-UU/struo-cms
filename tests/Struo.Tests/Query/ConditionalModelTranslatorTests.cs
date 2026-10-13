@@ -307,25 +307,14 @@ public class ConditionalModelTranslatorTests
     private static string Normalize(string sql) =>
         System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ");
 
-    public static TheoryData<object> UtcInstantInputs()
-    {
-        var instant = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
-        return new TheoryData<object>
-        {
-            "2026-03-04T05:06:07Z",
-            "2026-03-04T13:06:07+08:00",
-            "2026-03-04T05:06:07",
-            new DateTimeOffset(2026, 3, 4, 13, 6, 7, TimeSpan.FromHours(8)),
-            instant.ToLocalTime(),
-            instant,
-        };
-    }
+    public static TheoryData<string> UtcInstantInputs() => new(UtcInstantInput.Forms);
 
     // GraphQL hands DateTimeOffset values, REST hands strings; both name one UTC instant.
     [Theory]
     [MemberData(nameof(UtcInstantInputs))]
-    public void Utc_instant_field_binds_the_utc_instant_for_every_input_form(object value)
+    public void Utc_instant_field_binds_the_utc_instant_for_every_input_form(string form)
     {
+        var value = UtcInstantInput.Of(form);
         using var file = TestBackend.CreateUnitDatabase();
         var db = SqlSugarClientFactory.Create(file.Options(), new TestCurrentUserAccessor(Guid.Empty));
         var d = new EntityDescriptor(typeof(Struo.Infrastructure.Files.MediaFolder),
