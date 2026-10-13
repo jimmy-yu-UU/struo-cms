@@ -65,8 +65,8 @@ assembly holds that migration, for example after the sample is removed from
 `migrate:preview` prints the SQL the pending migrations would run and writes nothing; its last line
 is `-- <n> migration(s) pending`.
 
-> On a new database the preview includes `SeedCoreData`'s `INSERT` with the bootstrap admin's email
-> and password hash. Treat that output as a secret; don't paste it into an issue or a public CI log.
+> On a new database the preview includes `SeedCoreData`'s `INSERT` with the bootstrap admin's email;
+> the password hash appears as `<redacted>`. `migrate` writes the real hash.
 
 `migrate:check` compares the live tables with the schema the entities declare. It takes no lock and
 writes nothing; a clean run prints only `0 error(s), 0 warning(s)`. Errors are a missing table or

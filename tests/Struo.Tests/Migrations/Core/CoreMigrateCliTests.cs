@@ -52,7 +52,8 @@ public sealed class CoreMigrateCliTests : IDisposable
 
         var preview = await Run(sp, "migrate:preview");
         preview.Code.Should().Be(MigrationCli.Success);
-        preview.Out.Should().Contain("INSERT INTO").And.NotContain("cli-plain-pw");
+        preview.Out.Should().Contain("INSERT INTO").And.NotContain("cli-plain-pw").And.NotContain("$argon2id");
+        preview.Out.Should().Contain("<redacted>").And.Contain("cli@example.com");
         Tables().Should().BeEmpty();
 
         var migrate = await Run(sp, "migrate");
@@ -63,6 +64,24 @@ public sealed class CoreMigrateCliTests : IDisposable
             new TranslationSidecarIndexPolicy(new Dictionary<Type, TranslationSidecarKey>()));
         db.Queryable<User>().Count().Should().Be(1);
         db.Queryable<Permission>().Count().Should().Be(1);
+        var stored = db.Queryable<User>().First();
+        stored.Password.Should().StartWith("$argon2id");
+        new Argon2idPasswordHasher().Verify(stored.Password, "cli-plain-pw").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Redacted_replaces_only_the_admin_password_hash()
+    {
+        var withAdmin = new CoreSeedData([], "a@example.com", "$argon2id$real", ["article"]);
+
+        var redacted = withAdmin.Redacted();
+
+        redacted.AdminPasswordHash.Should().Be("<redacted>");
+        redacted.AdminEmail.Should().Be("a@example.com");
+        redacted.PublicReadCollections.Should().Equal("article");
+        withAdmin.AdminPasswordHash.Should().Be("$argon2id$real");
+        var noAdmin = new CoreSeedData([], null, null, []);
+        noAdmin.Redacted().Should().Be(noAdmin);
     }
 
     [Fact]

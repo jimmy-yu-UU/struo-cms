@@ -91,10 +91,15 @@ public static class MigrationCli
     private static async Task<int> RunHostCommandAsync(
         string command, IServiceProvider services, TextWriter stdout, TextWriter stderr, CancellationToken ct)
     {
-        var host = new MigrationHost(
-            OptionsOverride(MigrationHostOptions.FromServices(
-                services, includeSeed: command is MigrateCommand or "migrate:preview")),
-            services.GetRequiredService<ILoggerFactory>());
+        var options = MigrationHostOptions.FromServices(
+            services, includeSeed: command is MigrateCommand or "migrate:preview");
+        if (command == "migrate:preview")
+        {
+            // The preview prints the seed INSERT; the password hash must not reach the output.
+            options = options with { Seed = options.Seed?.Redacted() };
+        }
+
+        var host = new MigrationHost(OptionsOverride(options), services.GetRequiredService<ILoggerFactory>());
         switch (command)
         {
             case MigrateCommand:
