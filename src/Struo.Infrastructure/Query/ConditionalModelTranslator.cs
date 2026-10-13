@@ -4,6 +4,7 @@ using System.Reflection;
 using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Query;
 
@@ -60,13 +61,67 @@ public static class ConditionalModelTranslator
     /// junction/translation entity — without going through the full <see cref="FilterNode"/> AST dispatch.
     /// </summary>
     public static ConditionalModel ToSingleModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
-        new()
+        ToUtcInstantModel(c, d, db) ?? new()
         {
             FieldName = Column(d, db, c.FieldPath),
             ConditionalType = MapOperator(c.Op),
             FieldValue = ToFieldValue(c.Op, c.Value),
             CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
         };
+
+    // A TimestampWithTimeZone column holds a UTC instant, so a comparison or set filter on it compares
+    // instants: a trailing Z or offset names the instant and a value without one is UTC, as
+    // UtcInstantConverter writes it. Where that converter binds the column (PostgreSQL, SQL Server) the
+    // value goes out as DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy
+    // datetime rounding touches; elsewhere as the UTC wall clock in the text form Microsoft.Data.Sqlite
+    // stores, which MySQL also reads as a datetime (In/Nin render inline literals). A query-string
+    // _in/_nin value is one comma-separated string, split the way SqlSugar splits it. Null for any
+    // other operator, another column, or a value that does not parse: the general path handles those.
+    private static ConditionalModel? ToUtcInstantModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db)
+    {
+        if (!InstantOperators.Contains(c.Op) || !IsUtcInstantField(d, c.FieldPath)) return null;
+
+        var values = c.Value switch
+        {
+            string text when c.Op is QueryOperator.In or QueryOperator.Nin => text.Split(',').Cast<object?>().ToList(),
+            System.Collections.IEnumerable list and not string => list.Cast<object?>().ToList(),
+            _ => [c.Value],
+        };
+        var instants = values.Select(ToUtcInstant).ToList();
+        if (instants.Any(i => i is null)) return null;
+
+        var zoneAware = UtcInstantConverter.AppliesTo(db.CurrentConnectionConfig.DbType);
+        return new ConditionalModel
+        {
+            FieldName = Column(d, db, c.FieldPath),
+            ConditionalType = MapOperator(c.Op),
+            FieldValue = string.Join(",", instants.Select(i => zoneAware
+                ? new DateTimeOffset(i!.Value).ToString("O", CultureInfo.InvariantCulture)
+                : i!.Value.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture))),
+            CSharpTypeName = zoneAware ? "datetimeoffset" : "datetime"
+        };
+    }
+
+    private static readonly HashSet<QueryOperator> InstantOperators =
+    [
+        QueryOperator.Eq, QueryOperator.Neq, QueryOperator.Gt, QueryOperator.Gte,
+        QueryOperator.Lt, QueryOperator.Lte, QueryOperator.In, QueryOperator.Nin
+    ];
+
+    private static bool IsUtcInstantField(EntityDescriptor d, string field) =>
+        d.FieldToProperty.TryGetValue(field, out var property)
+        && d.EntityType.GetProperty(property, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+            is { } info
+        && UtcInstantConverter.IsUtcInstantProperty(info);
+
+    private static DateTime? ToUtcInstant(object? value) => value switch
+    {
+        DateTime instant => UtcInstantConverter.ToUtc(instant),
+        DateTimeOffset offset => offset.UtcDateTime,
+        string text when DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var parsed) => parsed.UtcDateTime,
+        _ => null,
+    };
 
     private static IConditionalModel ToModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
     {

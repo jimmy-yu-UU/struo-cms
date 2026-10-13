@@ -200,6 +200,9 @@ when you merge a newer core; the [changelog](changelog.md) names every new core 
 merge, `migrate:status` lists them as `Pending`. Read their SQL with `migrate:preview`, run `migrate`
 on a backed-up database, then run `migrate:check`.
 
+Some releases also need existing data corrected by hand. That release's "Upgrade notes" in the
+changelog say when it applies and give the SQL to run.
+
 ## Backend differences
 
 - **MySQL/MariaDB**: migrations set no character set, so tables take the database default. Create the

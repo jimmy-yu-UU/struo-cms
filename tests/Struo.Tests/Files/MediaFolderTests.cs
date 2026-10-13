@@ -112,6 +112,82 @@ public sealed class MediaFolderTests : IDisposable
         updated!["name"].Should().Be("B2");
     }
 
+    // UpdateAsync writes the whole row back, CreatedAt included, so a CreatedAt read with the wrong
+    // instant or kind moves on every PATCH.
+    [Fact]
+    public async Task Updates_leave_CreatedAt_unchanged()
+    {
+        var before = DateTime.UtcNow;
+        var created = await _svc.CreateAsync("mediafolder", BodyOf(new { name = "A" }));
+        var id = created["id"]!.ToString()!;
+        var createdAt = (DateTime)(await _svc.GetAsync("mediafolder", id))!["createdAt"]!;
+
+        await _svc.UpdateAsync("mediafolder", id, BodyOf(new { name = "A2" }));
+        await _svc.UpdateAsync("mediafolder", id, BodyOf(new { name = "A3" }));
+
+        var after = (DateTime)(await _svc.GetAsync("mediafolder", id))!["createdAt"]!;
+        after.Should().Be(createdAt);
+        after.Should().BeCloseTo(before, TimeSpan.FromMinutes(1));
+        if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer)
+            after.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    // A filter value on a zone-aware column is an instant: a trailing Z or offset names it, and a value
+    // without one is UTC. The result depends on neither the database server's zone nor the host's.
+    [Theory]
+    [InlineData("utc")]
+    [InlineData("offset")]
+    [InlineData("unspecified")]
+    public async Task CreatedAt_filters_compare_against_the_utc_instant(string form)
+    {
+        var aId = await CreateFolderAsync("A");
+        await Task.Delay(50);
+        var bId = await CreateFolderAsync("B");
+        var aCreated = await CreatedAtAsync(aId);
+        var bCreated = await CreatedAtAsync(bId);
+        var cutoff = aCreated.AddTicks((bCreated - aCreated).Ticks / 2);
+
+        (await FolderIdsAsync(QueryOperator.Gt, cutoff, form)).Should().Equal(bId);
+        (await FolderIdsAsync(QueryOperator.Lt, cutoff, form)).Should().Equal(aId);
+        (await FolderIdsAsync(QueryOperator.Eq, aCreated, form)).Should().Equal(aId);
+    }
+
+    // A text operator is not an instant comparison: a date-prefix _starts_with matches the column's
+    // text form where the backend compares it as text. PostgreSQL has no LIKE on timestamptz, and SQL
+    // Server's text form of datetimeoffset is its own, so neither is asserted here.
+    [Fact]
+    public async Task CreatedAt_starts_with_a_date_prefix_matches_as_text()
+    {
+        if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer) return;
+        var id = await CreateFolderAsync("A");
+        var day = (await CreatedAtAsync(id)).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+        var filter = new ComparisonFilter("createdAt", QueryOperator.StartsWith, day);
+        var result = await _svc.QueryAsync("mediafolder", new QueryModel(null, filter, [], 0, 0, null));
+
+        result.Data.Select(d => (Guid)d["id"]!).Should().Equal(id);
+    }
+
+    private async Task<Guid> CreateFolderAsync(string name) =>
+        (Guid)(await _svc.CreateAsync("mediafolder", BodyOf(new { name })))["id"]!;
+
+    private async Task<DateTime> CreatedAtAsync(Guid id) => DateTime.SpecifyKind(
+        (DateTime)(await _svc.GetAsync("mediafolder", id.ToString()))!["createdAt"]!, DateTimeKind.Utc);
+
+    private async Task<List<Guid>> FolderIdsAsync(QueryOperator op, DateTime instant, string form)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        var value = form switch
+        {
+            "utc" => instant.ToString("O", invariant),
+            "offset" => new DateTimeOffset(instant).ToOffset(TimeSpan.FromHours(-5)).ToString("O", invariant),
+            _ => instant.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", invariant),
+        };
+        var filter = new ComparisonFilter("createdAt", op, value);
+        var result = await _svc.QueryAsync("mediafolder", new QueryModel(null, filter, [], 0, 0, null));
+        return result.Data.Select(d => (Guid)d["id"]!).ToList();
+    }
+
     [Fact]
     public async Task Files_filter_by_folderId_eq_and_null()
     {

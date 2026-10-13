@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.9.2 — 2026-10-13
+
+### Fixed
+
+- A `DateTime` column declared `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` stores a UTC
+  instant on PostgreSQL and SQL Server and reads back as `DateTimeKind.Utc`, whatever the PostgreSQL
+  server's `TimeZone` and the API host's zone. In core these are `UserSession.CreatedAt`/`ExpiresAt`,
+  `SiteSettings.UpdatedAt` and `MediaFolder.CreatedAt`/`UpdatedAt`.
+- Updating a media folder leaves `MediaFolder.CreatedAt` unchanged, whether or not the API host and
+  PostgreSQL share a time zone.
+- On SQL Server these columns keep 100 ns precision instead of rounding to 1/300 s.
+- REST and GraphQL filters on these columns with `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in` or
+  `_nin` compare the value as an instant: one with `Z` or an offset at the instant it names, one
+  without a zone as UTC. The result depends on neither the database server's zone nor the API host's,
+  on every backend. In 0.9.1, MySQL, MariaDB and SQLite read a `Z` or offset value as the API host's
+  local time, and PostgreSQL read a zone-less value in the session zone. `_contains`, `_starts_with`
+  and `_ends_with` are unchanged.
+- On PostgreSQL and SQL Server these columns reach API JSON as UTC strings ending in `Z`, for
+  example `MediaFolder`'s `createdAt` and `updatedAt` and a fork's own `TimestampWithTimeZone`
+  fields. PostgreSQL emitted the API host's offset (such as `+08:00`) and SQL Server no zone suffix;
+  check clients that parse these strings.
+
+### Upgrade notes
+
+Only PostgreSQL needs action, and only if the session time zone (the server's `TimeZone`, or the
+connection string's `Timezone` when set) was not UTC while 0.9.1 or earlier wrote the data. Every
+value written then is early by that zone's offset, and 0.9.2 reads it at its true instant, so it
+shows up shifted by that offset.
+
+To find the old zone, run `SHOW timezone;` in psql connected as the API's database user to the API's
+database, with `PGTZ` unset: a `timezone` set by `ALTER DATABASE` or `ALTER ROLE` makes it differ from
+the server default. If the API's connection string sets `Timezone`, or the API host sets the `PGTZ`
+environment variable, that value is the old zone.
+
+Back up the database first. Then stop the old API and, before starting 0.9.2, run the correction
+below once, with `'Asia/Taipei'` replaced by the old zone and the `struo_` prefix replaced by your
+`Database:TablePrefix`. Data written by 0.9.2 is already correct, so run it exactly once:
+running it again, or after 0.9.2 has written rows, shifts them a second time. Correct a fork's own
+`TimestampWithTimeZone` columns the same way.
+
+```sql
+BEGIN;
+UPDATE struo_user_sessions
+   SET createdat = (createdat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC',
+       expiresat = (expiresat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+UPDATE struo_site_settings
+   SET updatedat = (updatedat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+UPDATE struo_media_folders
+   SET createdat = (createdat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC',
+       updatedat = (updatedat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+COMMIT;
+```
+
+psql prints `BEGIN`, three `UPDATE <row count>` lines and `COMMIT`.
+
+Where the API host's zone differed from PostgreSQL's, the drift `MediaFolder.CreatedAt` has already
+accumulated is not recoverable by this correction: the database does not keep the original value.
+SQL Server, MySQL, MariaDB and SQLite need no action.
+
 ## 0.9.1 — 2026-10-13
 
 ::: danger Breaking

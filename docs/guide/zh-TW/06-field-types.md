@@ -84,6 +84,15 @@ MySQL／MariaDB 上沒有形狀的 `DateTime` 就是 `ColumnShape.Timestamp`，�
 兩次寫入才分得出先後；那裡的 `datetime` 只到整秒。其他後端明寫 `Timestamp` 也不會改變型別。
 SQLite 不檢查型別名稱，`timestamptz` 照字面收下。
 
+`TimestampWithTimeZone` 欄位存的是 UTC 時刻，不受 PostgreSQL 伺服器的 `TimeZone` 與 API 主機時區
+影響。在 PostgreSQL 與 SQL Server 上，讀回的值是 `DateTimeKind.Utc`；寫入時 `Local` 的值先換成
+UTC，`Unspecified` 的值當成 UTC。MySQL、MariaDB 與 SQLite 照原樣存下時鐘數字，寫入前要自己換成
+UTC。
+
+用比較運算子與 `_in`／`_nin` 篩選這些欄位時，值也當成時刻比較：帶 `Z` 或時差的值照它指的時刻，
+沒有時區的值當成 UTC。`_contains` 這類文字比對照欄位的文字形式比。Oracle 上沒有這層處理，也未經
+驗證。
+
 ### 選擇
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |

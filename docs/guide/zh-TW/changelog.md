@@ -1,5 +1,57 @@
 # 版本紀錄
 
+## 0.9.2 — 2026-10-13
+
+### 修正
+
+- 掛 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` 的 `DateTime` 欄位，在 PostgreSQL 與
+  SQL Server 上存的是 UTC 時刻，讀回 `DateTimeKind.Utc`，不受 PostgreSQL 伺服器 `TimeZone` 與 API
+  主機時區影響。核心裡是 `UserSession.CreatedAt`／`ExpiresAt`、`SiteSettings.UpdatedAt`、
+  `MediaFolder.CreatedAt`／`UpdatedAt`。
+- 更新媒體資料夾時 `MediaFolder.CreatedAt` 保持不變，不管 API 主機與 PostgreSQL 的時區是否相同。
+- SQL Server 上這些欄位保留到 100 奈秒，不會被捨入到 1/300 秒。
+- REST 與 GraphQL 用 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 篩選這些欄位時，值
+  當成時刻比較：帶 `Z` 或時差的值照它指的時刻，沒有時區的值當成 UTC，結果不受資料庫伺服器與 API
+  主機的時區影響，每個後端都一樣。0.9.1 的 MySQL、MariaDB 與 SQLite 把帶 `Z` 或時差的值換成 API
+  主機的當地時間來比，PostgreSQL 依連線時區解讀沒有時區的值。`_contains`、`_starts_with`、`_ends_with`
+  照舊。
+- PostgreSQL 與 SQL Server 上，這些欄位在 API JSON 裡是結尾帶 `Z` 的 UTC 字串，例如 `MediaFolder`
+  的 `createdAt`、`updatedAt`，以及 fork 自己掛 `TimestampWithTimeZone` 的欄位。PostgreSQL 原先輸出
+  API 主機的時差（如 `+08:00`），SQL Server 沒有時區後綴；用戶端照字串解析時要確認這點。
+
+### 升級說明
+
+只有 PostgreSQL 需要處理，而且只在 0.9.1 或更早版本寫入資料時，連線的時區（伺服器的 `TimeZone`，
+連線字串有 `Timezone` 時以它為準）不是 UTC。那段期間寫入的值都提早了該時區的時差，0.9.2 會照實際
+時刻讀出，看起來就差了那個時差。
+
+查舊時區時，用 API 的資料庫帳號連到 API 的資料庫，在沒有設定 `PGTZ` 的 psql 裡跑
+`SHOW timezone;`：`ALTER DATABASE` 或 `ALTER ROLE` 設的 `timezone` 會讓它和伺服器預設不同。
+API 的連線字串設了 `Timezone`，或 API 主機設了 `PGTZ` 環境變數時，舊時區就是那個值。
+
+先備份資料庫，再停下舊版 API，在啟動 0.9.2 之前跑一次下面的修正，把
+`'Asia/Taipei'` 換成舊時區；表名前綴不是 `struo_` 時換成 `Database:TablePrefix` 的值。0.9.2
+啟動後寫入的資料已經正確，修正只能跑一次，跑兩次或在新資料寫入後才跑都會再位移一次。fork 自己掛
+`TimestampWithTimeZone` 的欄位照同樣寫法修正。
+
+```sql
+BEGIN;
+UPDATE struo_user_sessions
+   SET createdat = (createdat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC',
+       expiresat = (expiresat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+UPDATE struo_site_settings
+   SET updatedat = (updatedat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+UPDATE struo_media_folders
+   SET createdat = (createdat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC',
+       updatedat = (updatedat AT TIME ZONE 'Asia/Taipei') AT TIME ZONE 'UTC';
+COMMIT;
+```
+
+psql 依序印出 `BEGIN`、三行 `UPDATE <列數>` 與 `COMMIT`。
+
+API 主機時區與 PostgreSQL 時區不同的環境，`MediaFolder.CreatedAt` 已經累積的位移，這段修正救不
+回來：資料庫裡沒有原本的值。SQL Server、MySQL、MariaDB 與 SQLite 不用處理。
+
 ## 0.9.1 — 2026-10-13
 
 ::: danger 破壞性變更

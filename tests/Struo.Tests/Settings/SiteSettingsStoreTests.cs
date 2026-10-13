@@ -118,9 +118,11 @@ public class SiteSettingsStoreTests(ApiFactory factory)
                 row.BrandName.Should().Be("Acme Renamed");
                 row.LogoFileId.Should().Be(secondLogo);
                 row.UpdatedBy.Should().Be(updatedBy);
-                // Round-trips through the timestamptz-mapped column without throwing (the Postgres
-                // Kind=Utc requirement for `timestamptz` writes is a live-PG-only concern — see class docs).
+                // The API host builds this table with the core migrations, not CodeFirst, so this pins
+                // the UTC-instant converter on a migrated schema.
                 row.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
+                if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer)
+                    row.UpdatedAt.Kind.Should().Be(DateTimeKind.Utc);
 
                 var count = await db.Queryable<SiteSettings>()
                     .Where(s => s.Id == SiteSettings.SingletonId).CountAsync();
