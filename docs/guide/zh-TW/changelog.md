@@ -1,5 +1,18 @@
 # 版本紀錄
 
+## 0.9.1 — 2026-10-13
+
+::: danger 破壞性變更
+- Compose 預設把每個埠只綁在 `127.0.0.1`，只有跑這套服務的機器連得到 PostgreSQL、Redis、API、
+  後台與 MinIO。從其他機器連進來的人要設定 `STRUO_BIND_ADDRESS=0.0.0.0`（寫進 `.env` 或設在
+  shell），埠就會開在所有網路介面上；固定的開發密碼與沒有密碼的 Redis 也會對網路公開。
+:::
+
+### 修正
+
+- `migrate:preview` 印出核心種子的 `INSERT` 時，bootstrap 管理員的密碼雜湊以 `<redacted>`
+  取代，管理員 email 照常顯示。`migrate` 與 `MigrateOnStartup` 寫入的仍是真正的雜湊。
+
 ## 0.9.0 — 2026-10-12
 
 ::: danger 破壞性變更

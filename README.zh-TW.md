@@ -45,6 +45,7 @@ docker compose ps   # 等 postgres、redis、api 都顯示 (healthy)
 
 - 埠號：被佔用時，複製 `.env.example` 成 `.env`，覆寫 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、
   `STRUO_PG_PORT` 或 `STRUO_REDIS_PORT`。
+- 埠預設只綁在 `127.0.0.1`；`STRUO_BIND_ADDRESS=0.0.0.0` 會把它們連同固定的開發密碼開放給網路。
 - 這套服務以 Production 執行，session cookie 帶 Secure：在 `http://localhost` 能登入，用其他主機名稱
   連進來，前面要先架 HTTPS。
 - `docker compose down` 保留資料；`docker compose down -v` 連資料一起刪。

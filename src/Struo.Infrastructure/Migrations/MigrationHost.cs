@@ -216,7 +216,8 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return applied ? MigrationState.Applied : MigrationState.Pending;
     }
 
-    /// <summary>Pending migrations and their SQL, written to <paramref name="sqlOut"/>. Executes nothing.</summary>
+    /// <summary>Pending migrations and their SQL, written to <paramref name="sqlOut"/>. Executes nothing.
+    /// The SQL includes the seed as given, so callers pass a redacted seed (the CLI does).</summary>
     public IReadOnlyList<MigrationInfo> Preview(TextWriter sqlOut)
     {
         var pending = GetStatus().Where(m => m.State == MigrationState.Pending).ToList();

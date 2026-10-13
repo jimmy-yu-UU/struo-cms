@@ -55,6 +55,8 @@ to use a different one, set `STRUO_ADMIN_EMAIL` / `STRUO_ADMIN_PASSWORD` in `.en
 
 - Ports: copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`, `STRUO_API_PORT`,
   `STRUO_PG_PORT` or `STRUO_REDIS_PORT` when one is taken.
+- The ports bind to `127.0.0.1` by default; `STRUO_BIND_ADDRESS=0.0.0.0` exposes them to the
+  network, together with the fixed dev passwords.
 - The stack runs as Production, so the session cookie is Secure: login works on
   `http://localhost`, but any other host name needs HTTPS in front.
 - `docker compose down` keeps the data; `docker compose down -v` wipes it.

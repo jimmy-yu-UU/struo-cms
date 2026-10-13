@@ -47,6 +47,10 @@ Redis. If any is taken, copy `.env.example` to `.env` and override `STRUO_ADMIN_
 `STRUO_API_PORT`, `STRUO_PG_PORT` or `STRUO_REDIS_PORT`. Only the host side changes; the services
 still reach each other by service name.
 
+The ports bind to `127.0.0.1` by default, so only this machine reaches them. To let other machines
+on the network in, set `STRUO_BIND_ADDRESS` to `0.0.0.0`; the fixed dev passwords and the
+password-less Redis are then exposed with them.
+
 The `api` service runs as Production, so the session cookie is `Secure`. Browsers treat
 `http://localhost` as a secure context, so logging in locally works; reaching the admin under any
 other host name needs HTTPS in front.

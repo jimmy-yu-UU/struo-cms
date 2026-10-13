@@ -17,7 +17,14 @@ public sealed record CoreSeedData(
     IReadOnlyList<SeedLanguage> Languages, string? AdminEmail, string? AdminPasswordHash,
     IReadOnlyList<string> PublicReadCollections)
 {
+    /// <summary>The placeholder that stands in for the hidden admin credential in previewed SQL.</summary>
+    public const string RedactionPlaceholder = "<redacted>";
+
     public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
+
+    /// <summary>A copy that hides the admin password hash; unchanged when there is no admin.</summary>
+    public CoreSeedData Redacted() =>
+        HasAdmin ? this with { AdminPasswordHash = RedactionPlaceholder } : this;
 
     public static CoreSeedData From(
         LocalizationOptions localization, IPasswordHasher hasher,

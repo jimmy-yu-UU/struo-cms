@@ -373,8 +373,10 @@ migrations itself on every start (`Database__MigrateOnStartup`). For production,
 deployment along the checklist earlier in this chapter.
 
 The PostgreSQL password is a fixed dev value and Redis has no password. Every port is published on
-all of the host's network interfaces, so other machines on your network can reach the database,
-Redis, the API and the admin. Run the stack only on a network you trust.
+`127.0.0.1` by default, so only this machine reaches the database, Redis, the API and the admin.
+`STRUO_BIND_ADDRESS` sets the address they bind to; `0.0.0.0` publishes the ports on all network
+interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
+password-less Redis go with them. Do that only on a network you trust.
 
 The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
 `http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only

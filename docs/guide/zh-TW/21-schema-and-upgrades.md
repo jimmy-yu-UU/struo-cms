@@ -61,8 +61,8 @@ migration，例如把範例從 `Struo:ContentAssemblies` 拿掉之後。孤兒�
 `migrate:preview` 印出待套用 migration 會執行的 SQL，什麼都不寫，最後一行是
 `-- <n> migration(s) pending`。
 
-> 在新資料庫上，預覽裡有 `SeedCoreData` 的 `INSERT`，其中包含 bootstrap 管理員的 email 與密碼
-> 雜湊。把這份輸出當成機密處理，不要貼進 issue 或公開的 CI 紀錄。
+> 在新資料庫上，預覽裡有 `SeedCoreData` 的 `INSERT`，其中有 bootstrap 管理員的 email，密碼雜湊
+> 則顯示為 `<redacted>`。`migrate` 寫入的是真正的雜湊。
 
 `migrate:check` 比對實際資料表與 entity 宣告的結構，不拿鎖、不寫入，乾淨時只印
 `0 error(s), 0 warning(s)`。錯誤包括缺表、缺欄、可否為 null 不同、型別類別不同、字串長度不同，

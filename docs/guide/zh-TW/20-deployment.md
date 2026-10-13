@@ -308,8 +308,10 @@ Healthy
 `api` 以 Production 執行，每次啟動先自己跑 migration（`Database__MigrateOnStartup`）。上正式
 環境，照本章前面的檢查清單自己組部署。
 
-PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠都開在 host 的所有網路介面上，同一個
-網路裡的其他機器連得到資料庫、Redis、API 跟後台。只在信得過的網路上跑這套環境。
+PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設只綁在 `127.0.0.1`，只有本機連得到
+資料庫、Redis、API 跟後台。`STRUO_BIND_ADDRESS` 決定綁定的位址；設成 `0.0.0.0` 會把埠開在所有
+網路介面上，同一個網路裡的其他機器就連得到，固定的開發密碼與沒有密碼的 Redis 也跟著公開。
+只在信得過的網路上這樣做。
 
 健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
 `http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，

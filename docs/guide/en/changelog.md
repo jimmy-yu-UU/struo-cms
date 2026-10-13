@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.1 — 2026-10-13
+
+::: danger Breaking
+- Compose publishes every port on `127.0.0.1` by default, so only the machine running the stack
+  reaches PostgreSQL, Redis, the API, the admin and MinIO. Anyone who reached the stack from another
+  machine must set `STRUO_BIND_ADDRESS=0.0.0.0` (in `.env` or the shell), which publishes the ports
+  on all network interfaces. That exposes the fixed dev passwords and the password-less Redis to the
+  network.
+:::
+
+### Fixed
+
+- `migrate:preview` prints the core seed's `INSERT` with the bootstrap admin's password hash
+  replaced by `<redacted>`; the admin's email stays visible. `migrate` and `MigrateOnStartup` still
+  write the real hash.
+
 ## 0.9.0 — 2026-10-12
 
 ::: danger Breaking
