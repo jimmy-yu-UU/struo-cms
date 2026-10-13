@@ -47,7 +47,7 @@ following environment-specific behavior:
 - Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
   unchanged default admin password.
 
-These six are host-facing ports in `docker-compose.yml`; they never reach the API's own
+These seven are host-facing settings in `docker-compose.yml`; they never reach the API's own
 configuration:
 
 - `STRUO_PG_PORT`
@@ -56,6 +56,7 @@ configuration:
 - `STRUO_API_PORT`
 - `STRUO_MINIO_PORT`
 - `STRUO_MINIO_CONSOLE_PORT`
+- `STRUO_BIND_ADDRESS` (the host address every port binds to, default `127.0.0.1`)
 
 If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to match.
 

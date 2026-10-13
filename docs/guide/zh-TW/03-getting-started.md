@@ -42,6 +42,9 @@ docker compose ps
 `.env.example` 成 `.env`，用 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、`STRUO_PG_PORT`、
 `STRUO_REDIS_PORT` 覆寫；改的只是主機這一側，服務之間照樣用服務名稱互連。
 
+這些埠預設只綁在 `127.0.0.1`，只有本機連得到。要讓網路上的其他機器連進來，把
+`STRUO_BIND_ADDRESS` 設成 `0.0.0.0`；固定的開發密碼與沒有密碼的 Redis 也會跟著公開。
+
 `api` 以 Production 環境執行，session cookie 帶 `Secure`。瀏覽器把 `http://localhost` 當成安全
 來源，所以本機登入沒問題；用其他主機名稱連進來，前面要先架一層 HTTPS。
 

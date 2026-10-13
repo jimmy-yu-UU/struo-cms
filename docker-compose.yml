@@ -19,6 +19,10 @@
 # The database and MinIO credentials and the default admin account are for local development
 # only — never reuse them anywhere else.
 #
+# Every published port binds to 127.0.0.1 by default, so only this machine reaches the services.
+# Set STRUO_BIND_ADDRESS=0.0.0.0 to expose them to the network; that publishes the fixed dev
+# passwords and the password-less Redis to everyone on it.
+#
 # Ports below default to the conventional values a clean machine expects. If any of them is
 # already bound on your machine, override the host side without editing this tracked file:
 # copy `.env.example` to `.env` (already gitignored) and edit it, or export the variable in
@@ -27,6 +31,7 @@
 # Variables: STRUO_PG_PORT (postgres, default 5432), STRUO_REDIS_PORT (redis, default 6379),
 # STRUO_ADMIN_PORT (admin SPA, default 8080), STRUO_API_PORT (API, default 8081),
 # STRUO_MINIO_PORT / STRUO_MINIO_CONSOLE_PORT (minio API/console, default 9000/9001).
+# STRUO_BIND_ADDRESS (host address every port binds to, default 127.0.0.1).
 services:
   postgres:
     image: postgres:17-alpine
@@ -35,7 +40,7 @@ services:
       POSTGRES_USER: struo
       POSTGRES_PASSWORD: struo
     ports:
-      - "${STRUO_PG_PORT:-5432}:5432"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_PG_PORT:-5432}:5432"
     volumes:
       - struo-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -47,7 +52,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "${STRUO_REDIS_PORT:-6379}:6379"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -70,7 +75,7 @@ services:
       Auth__BootstrapAdmin__Email: ${STRUO_ADMIN_EMAIL:-admin@admin.com}
       Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-admin}
     ports:
-      - "${STRUO_API_PORT:-8081}:8080"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_API_PORT:-8081}:8080"
     # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the
     # API is live; start_period leaves room for the first start's migrations.
     healthcheck:
@@ -91,7 +96,7 @@ services:
     environment:
       API_UPSTREAM: http://api:8080
     ports:
-      - "${STRUO_ADMIN_PORT:-8080}:80"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_ADMIN_PORT:-8080}:80"
 
   # S3-compatible object storage. Only needed when Struo:Files:Backend is "s3";
   # the default "local" backend writes to App_Data/uploads and needs no container. Behind the
@@ -108,8 +113,8 @@ services:
       MINIO_ROOT_USER: struoadmin
       MINIO_ROOT_PASSWORD: struoadmin
     ports:
-      - "${STRUO_MINIO_PORT:-9000}:9000"
-      - "${STRUO_MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_MINIO_PORT:-9000}:9000"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - struo-miniodata:/data
     healthcheck:
