@@ -58,7 +58,7 @@ public class UtcInstantConverterTests
     }
 
     // Columns typed object keep each value's Kind and type exactly as a provider's reader returns it.
-    private static IDataRecord Record(params object[] values)
+    private static DataTableReader Record(params object[] values)
     {
         var table = new DataTable();
         foreach (var i in Enumerable.Range(0, values.Length)) table.Columns.Add("c" + i, typeof(object));
