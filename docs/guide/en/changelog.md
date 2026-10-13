@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.3 — 2026-10-13
+
+### Fixed
+
+- A plain `DateTime` column (one without `TimestampWithTimeZone`, such as `CreatedAt`, `UpdatedAt`,
+  `DeletedAt` and a fork's own date fields) filtered with `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`,
+  `_in` or `_nin` compares a value with `Z` or an offset at the instant it names, and a value without a
+  zone as UTC. Before 0.9.3 such a value was read as the API host's local time, so on a host outside
+  UTC the result was off by the host's offset; queries like this now return different rows there,
+  which is the fix.
+- On SQL Server, `min` and `max` over a `TimestampWithTimeZone` column no longer throw
+  `InvalidCastException`.
+- On PostgreSQL, `min` and `max` over these columns return a UTC instant (JSON ending in `Z`)
+  instead of one carrying the API host's offset.
+
+### Upgrade notes
+
+No data correction is needed: the stored values were always right, and only how filters and
+aggregates read them changed.
+
 ## 0.9.2 — 2026-10-13
 
 ### Fixed

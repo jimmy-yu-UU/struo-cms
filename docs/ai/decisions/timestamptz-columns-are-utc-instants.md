@@ -9,15 +9,25 @@ on PostgreSQL and SQL Server only. The converter binds the write as `DbType.Date
 `DateTimeKind.Utc`. MySQL, MariaDB and SQLite get no converter. The factory sets no `Timezone` on the
 connection.
 
-Item-API and GraphQL filters on such a property never reach the converter: SqlSugar builds a
-`ConditionalModel` parameter from its value alone. `ConditionalModelTranslator.ToUtcInstantModel`
-therefore parses an `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in` or `_nin` value as an instant (a
-trailing `Z` or offset names it, a value without one is UTC; a query-string `_in`/`_nin` string is
-split on commas first, as SqlSugar splits it) and emits it as `datetimeoffset` at `+00:00` on
-PostgreSQL and SQL Server, and as the UTC wall clock in Microsoft.Data.Sqlite's text form
-(`yyyy-MM-dd HH:mm:ss.FFFFFFF`) on the other backends. SqlSugar renders `IN`/`NOT IN` as inline
-literals, so on SQLite the literal must match the stored text exactly. The text operators
-(`_contains`, `_starts_with`, `_ends_with`) keep the general path and compare the column's text form.
+Item-API and GraphQL filters never reach the converter: SqlSugar builds a `ConditionalModel` parameter
+from its value alone. `ConditionalModelTranslator.ToDateTimeInstantModel` therefore parses an `_eq`,
+`_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in` or `_nin` value on every `DateTime`/`DateTime?` property, zone-aware
+or not, as an instant: a trailing `Z` or offset names it, a value without one is UTC, and a
+query-string `_in`/`_nin` string is split on commas first, as SqlSugar splits it. A value that does not
+parse, `_null`, a property that is not a `DateTime` and the text operators (`_contains`,
+`_starts_with`, `_ends_with`) keep the general path, which compares the column's text form.
+
+The instant is emitted as `datetimeoffset` at `+00:00` on SQL Server for every `DateTime` column and on
+PostgreSQL for a zone-aware one. SQL Server compares a `datetime2` column against it by reading the
+column as UTC. Everywhere else it is the UTC wall clock in Microsoft.Data.Sqlite's text form
+(`yyyy-MM-dd HH:mm:ss.FFFFFFF`): MySQL, MariaDB and SQLite read it as a datetime, and PostgreSQL binds
+it as a zone-less `timestamp`, which a plain `timestamp` column compares as written. SqlSugar renders
+`IN`/`NOT IN` as inline literals, so on SQLite the literal must match the stored text exactly.
+
+Aggregates: `AggregateValueNormalizer` returns a `min`/`max` of a `DateTime` column as UTC. SQL Server
+hands a zone-aware column over as `DateTimeOffset`, taken as `.UtcDateTime`; PostgreSQL hands it over
+as `Kind=Local`, taken through `ToUniversalTime()`. `Unspecified` and `Utc` values, which plain columns
+produce, are returned as read.
 
 ## Why
 
@@ -67,8 +77,8 @@ and 22 on PostgreSQL 17 (server `TimeZone` UTC and `Asia/Taipei`) and PostgreSQL
 SQL Server and PostgreSQL 13.2.
 
 The filter failures follow SqlSugar's parsing: a `Z` or offset string parses to host-local time, a
-zone-less one is cast in the PostgreSQL session zone, SQL Server's legacy `datetime` rounding breaks
-`_eq`, and a query-string `_in` arrives as one comma-separated string.
+zone-less one is cast in the PostgreSQL session zone (a zone-aware column only), SQL Server's legacy
+`datetime` rounding breaks `_eq`, and a query-string `_in` arrives as one comma-separated string.
 
 The data-correction statements in the 0.9.2 changelog were run on PostgreSQL 17 with server
 `TimeZone` `Asia/Taipei`, against rows written by 0.9.1 code into the three core tables. Before the
@@ -82,10 +92,9 @@ column info. Measured on this suite's backends:
 
 - Covered: `Insertable` of one entity and of a list, `Updateable(entity)`, `SetColumns` member-init
   and `==` forms, lambda `Where`, and entity reads (`UtcInstantColumnTests`).
-- Not covered: aggregates. `AggregateQueries` selects into `AggregateRow`, so min/max of such a column
-  come back `Kind=Local` (the right instant) on PostgreSQL and throw `InvalidCastException` on SQL
-  Server, where `AggregateValueNormalizer` meets a `DateTimeOffset`. The SQL Server throw does not
-  depend on the converter. Any other `Select` projection into a non-entity type reads the same way.
+- Not covered: any `Select` projection into a non-entity type reads these columns without the converter:
+  PostgreSQL returns `Kind=Local` and SQL Server a `DateTimeOffset`. Only the aggregate path normalizes
+  them.
 - Not covered: `SetColumns(s => s.A, value)` (the column-plus-value overload) still binds `timestamp`
   on PostgreSQL. SqlSugar's bulk-copy and `Fastest` paths are unverified. Nothing in `src/` uses
   either on these columns.
