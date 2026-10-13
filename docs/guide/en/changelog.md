@@ -17,8 +17,8 @@
 
 ### Upgrade notes
 
-No data correction is needed: the stored values were always right, and only how filters and
-aggregates read them changed.
+No data correction is needed: the timestamps the CMS writes itself (audit fields, revisions,
+sessions and the like) were always right, and only how filters and aggregates read them changed.
 
 ## 0.9.2 — 2026-10-13
 
