@@ -95,6 +95,15 @@ so two writes within one second stay ordered; plain `datetime` there keeps whole
 other backends, declaring `Timestamp` explicitly does not change the type. SQLite does not check
 type names, so it takes `timestamptz` literally.
 
+A `TimestampWithTimeZone` column stores a UTC instant, whatever the PostgreSQL server's `TimeZone`
+and the API host's zone. On PostgreSQL and SQL Server the value reads back as `DateTimeKind.Utc`;
+on write, a `Local` value is converted to UTC and an `Unspecified` one is taken as UTC. MySQL,
+MariaDB and SQLite store the clock digits as given, so convert to UTC before writing.
+
+A comparison or `_in`/`_nin` filter on such a column compares instants too: a value with `Z` or an
+offset at the instant it names, one without a zone as UTC. Text operators such as `_contains` match
+the column's text form. Oracle gets none of this and is unverified.
+
 ### Choice
 
 | Interface | CLR type | Database column | Admin editor |

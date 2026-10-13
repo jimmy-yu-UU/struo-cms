@@ -180,6 +180,8 @@ fork；[版本紀錄](changelog.md)會點名每一支新的核心 migration。�
 列成 `Pending`。先用 `migrate:preview` 看要執行的 SQL，在備份過的資料庫上跑 `migrate`，再跑
 `migrate:check`。
 
+有些版本還要手動修正既有資料，版本紀錄裡該版的「升級說明」列出何時要做、要跑的 SQL。
+
 ## 各後端的差異
 
 - **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值。建資料庫時明確指定
