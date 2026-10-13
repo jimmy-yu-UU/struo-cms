@@ -51,6 +51,6 @@ internal static class AggregateValueNormalizer
             if (raw is DateTimeOffset offset) return offset.UtcDateTime;
             if (raw is DateTime { Kind: DateTimeKind.Local } local) return local.ToUniversalTime();
         }
-        return raw.GetType() == target ? raw :Convert.ChangeType(raw, target, CultureInfo.InvariantCulture);
+        return raw.GetType() == target ? raw : Convert.ChangeType(raw, target, CultureInfo.InvariantCulture);
     }
 }

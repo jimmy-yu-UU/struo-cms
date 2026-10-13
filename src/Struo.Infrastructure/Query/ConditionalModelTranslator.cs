@@ -72,12 +72,13 @@ public static class ConditionalModelTranslator
     // A filter value on a DateTime column is an instant: a trailing Z or offset names it and a value
     // without one is UTC, which is how every DateTime the product writes is kept. A comparison or set
     // operator therefore compares instants, never the host's local time. Where the column is bound as
-    // an instant (a TimestampWithTimeZone column on PostgreSQL, any DateTime column on SQL Server) the
-    // value goes out as DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy
-    // datetime rounding touches; SQL Server compares a datetime2 column against it by reading the column
-    // as UTC. Everywhere else the value goes out as the UTC wall clock in the text form
-    // Microsoft.Data.Sqlite stores, which MySQL also reads as a datetime and PostgreSQL binds as a
-    // zone-less timestamp (In/Nin render inline literals). A query-string _in/_nin value is one
+    // an instant (a TimestampWithTimeZone column on PostgreSQL and SQL Server) the value goes out as
+    // DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy datetime
+    // rounding touches. Any other column gets the UTC wall clock with no zone: SQL Server's datetime
+    // column rounds it to 1/300 s the way the stored value was rounded, so the text is an ISO 8601
+    // form cut to milliseconds, which datetime reads under any language setting; the other backends
+    // get Microsoft.Data.Sqlite's text form, which MySQL also reads as a datetime and PostgreSQL binds
+    // as a zone-less timestamp (In/Nin render inline literals). A query-string _in/_nin value is one
     // comma-separated string, split the way SqlSugar splits it. Null for any other operator, a
     // property that is not a DateTime, or a value that does not parse: the general path handles those.
     private static ConditionalModel? ToDateTimeInstantModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db)
@@ -94,18 +95,27 @@ public static class ConditionalModelTranslator
         if (instants.Any(i => i is null)) return null;
 
         var dbType = db.CurrentConnectionConfig.DbType;
-        var asOffset = dbType == SqlSugar.DbType.SqlServer
-            || (UtcInstantConverter.AppliesTo(dbType) && UtcInstantConverter.IsUtcInstantProperty(property));
+        var asOffset = UtcInstantConverter.AppliesTo(dbType) && UtcInstantConverter.IsUtcInstantProperty(property);
+        var wallClockFormat = dbType == SqlSugar.DbType.SqlServer
+            ? "yyyy-MM-ddTHH:mm:ss.fff"
+            : "yyyy-MM-dd HH:mm:ss.FFFFFFF";
         return new ConditionalModel
         {
             FieldName = Column(d, db, c.FieldPath),
             ConditionalType = MapOperator(c.Op),
             FieldValue = string.Join(",", instants.Select(i => asOffset
                 ? new DateTimeOffset(i!.Value).ToString("O", CultureInfo.InvariantCulture)
-                : i!.Value.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture))),
+                : WallClock(i!.Value, dbType).ToString(wallClockFormat, CultureInfo.InvariantCulture))),
             CSharpTypeName = asOffset ? "datetimeoffset" : "datetime"
         };
     }
+
+    // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes.
+    private static DateTime WallClock(DateTime instant, SqlSugar.DbType dbType) =>
+        dbType == SqlSugar.DbType.SqlServer
+            ? new DateTime((instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
+                * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc)
+            : instant;
 
     private static readonly HashSet<QueryOperator> InstantOperators =
     [

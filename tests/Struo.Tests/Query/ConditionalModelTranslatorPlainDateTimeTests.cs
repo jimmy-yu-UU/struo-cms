@@ -13,8 +13,9 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// <see cref="ConditionalModelTranslator"/> on plain DateTime columns (no time zone), per backend and
-/// without a database. PostgreSQL, MySQL and SQLite compare the UTC wall clock as a datetime; SQL Server
-/// binds the instant at +00:00, so its legacy datetime rounding never touches the value.
+/// without a database. Every backend compares the UTC wall clock as a datetime. SQL Server gets an ISO 8601
+/// text cut to milliseconds, which its legacy datetime column reads and rounds the way it rounded the
+/// stored value.
 /// </summary>
 public class ConditionalModelTranslatorPlainDateTimeTests
 {
@@ -41,9 +42,8 @@ public class ConditionalModelTranslatorPlainDateTimeTests
         new TestCurrentUserAccessor(Guid.Empty));
 
     private static string Expected(string backend) =>
-        backend == "SqlServer" ? "2026-03-04T05:06:07.0000000+00:00" : "2026-03-04 05:06:07";
+        backend == "SqlServer" ? "2026-03-04T05:06:07.000" : "2026-03-04 05:06:07";
 
-    private static string TypeName(string backend) => backend == "SqlServer" ? "datetimeoffset" : "datetime";
 
     public static TheoryData<string, string> BackendsAndForms()
     {
@@ -72,7 +72,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
             {
                 var cm = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter(field, op, value), Plain, db);
                 cm.FieldValue.Should().Be(Expected(backend));
-                cm.CSharpTypeName.Should().Be(TypeName(backend));
+                cm.CSharpTypeName.Should().Be("datetime");
             }
     }
 
@@ -93,7 +93,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
         ninModel.ConditionalType.Should().Be(ConditionalType.NotIn);
         inModel.FieldValue.Should().Be(string.Join(",", Enumerable.Repeat(Expected(backend), 3)));
         ninModel.FieldValue.Should().Be(string.Join(",", Enumerable.Repeat(Expected(backend), 2)));
-        inModel.CSharpTypeName.Should().Be(TypeName(backend));
+        inModel.CSharpTypeName.Should().Be("datetime");
     }
 
     [Theory]
@@ -120,6 +120,41 @@ public class ConditionalModelTranslatorPlainDateTimeTests
             new ComparisonFilter("size", QueryOperator.Eq, "5"), Plain, db);
         notDateTime.FieldValue.Should().Be("5");
         notDateTime.CSharpTypeName.Should().Be("long");
+    }
+
+    [Fact]
+    public void SQL_Server_text_is_rounded_to_milliseconds()
+    {
+        var db = Client("SqlServer");
+
+        var cm = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter("createdAt", QueryOperator.In,
+            "2026-03-04T05:06:07.1234567Z,2026-03-04T05:06:07.9996Z"), Plain, db);
+
+        cm.FieldValue.Should().Be("2026-03-04T05:06:07.123,2026-03-04T05:06:08.000");
+    }
+
+    private sealed class StampTranslation
+    {
+        public long Id { get; set; }
+        public Guid ParentId { get; set; }
+        public DateTime? ValidFrom { get; set; }
+    }
+
+    // Relation pushdown builds a camelCase descriptor for a translation sidecar the same way.
+    [Theory]
+    [MemberData(nameof(BackendNames))]
+    public void A_synthetic_translation_descriptor_takes_the_instant_path(string backend)
+    {
+        var props = typeof(StampTranslation).GetProperties();
+        var descriptor = new EntityDescriptor(typeof(StampTranslation),
+            props.ToDictionary(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..], p => p.Name,
+                StringComparer.OrdinalIgnoreCase), "Id");
+
+        var cm = ConditionalModelTranslator.ToSingleModel(
+            new ComparisonFilter("validFrom", QueryOperator.Gte, "2026-03-04T10:36:07+05:30"), descriptor, Client(backend));
+
+        cm.FieldValue.Should().Be(Expected(backend));
+        cm.CSharpTypeName.Should().Be("datetime");
     }
 
     private sealed class DatedRow
