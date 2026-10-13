@@ -17,10 +17,10 @@ public sealed record CoreSeedData(
     IReadOnlyList<SeedLanguage> Languages, string? AdminEmail, string? AdminPasswordHash,
     IReadOnlyList<string> PublicReadCollections)
 {
-    public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
-
     /// <summary>The placeholder that stands in for the admin password hash in previewed SQL.</summary>
     public const string RedactedPasswordHash = "<redacted>";
+
+    public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
 
     /// <summary>A copy that hides the admin password hash; unchanged when there is no admin.</summary>
     public CoreSeedData Redacted() =>

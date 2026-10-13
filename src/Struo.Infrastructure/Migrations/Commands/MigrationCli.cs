@@ -11,7 +11,8 @@ public static class MigrationCli
 {
     public const int Success = 0, Failure = 1, Usage = 2;
     private const string MigrateCommand = "migrate";
-    private static readonly string[] Runnable = [MigrateCommand, "migrate:status", "migrate:preview", "migrate:check", "migrate:baseline", "make:migration"];
+    private const string PreviewCommand = "migrate:preview";
+    private static readonly string[] Runnable = [MigrateCommand, "migrate:status", PreviewCommand, "migrate:check", "migrate:baseline", "make:migration"];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
@@ -92,8 +93,8 @@ public static class MigrationCli
         string command, IServiceProvider services, TextWriter stdout, TextWriter stderr, CancellationToken ct)
     {
         var options = MigrationHostOptions.FromServices(
-            services, includeSeed: command is MigrateCommand or "migrate:preview");
-        if (command == "migrate:preview")
+            services, includeSeed: command is MigrateCommand or PreviewCommand);
+        if (command == PreviewCommand)
         {
             // The preview prints the seed INSERT; the password hash must not reach the output.
             options = options with { Seed = options.Seed?.Redacted() };
@@ -108,7 +109,7 @@ public static class MigrationCli
             case "migrate:status":
                 await WriteStatusAsync(host, stdout);
                 return Success;
-            case "migrate:preview":
+            case PreviewCommand:
                 var pending = host.Preview(stdout);
                 await stdout.WriteLineAsync($"-- {pending.Count} migration(s) pending");
                 return Success;

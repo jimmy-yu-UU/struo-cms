@@ -2,13 +2,13 @@
 
 ## 0.9.1 — 2026-10-13
 
-### Changed
-
+::: danger Breaking
 - Compose publishes every port on `127.0.0.1` by default, so only the machine running the stack
-  reaches PostgreSQL, Redis, the API, the admin and MinIO. This changes behavior for anyone who
-  reached the stack from another machine: set `STRUO_BIND_ADDRESS=0.0.0.0` (in `.env` or the shell)
-  to publish the ports on all network interfaces again. That exposes the fixed dev passwords and the
-  password-less Redis to the network.
+  reaches PostgreSQL, Redis, the API, the admin and MinIO. Anyone who reached the stack from another
+  machine must set `STRUO_BIND_ADDRESS=0.0.0.0` (in `.env` or the shell), which publishes the ports
+  on all network interfaces. That exposes the fixed dev passwords and the password-less Redis to the
+  network.
+:::
 
 ### Fixed
 
