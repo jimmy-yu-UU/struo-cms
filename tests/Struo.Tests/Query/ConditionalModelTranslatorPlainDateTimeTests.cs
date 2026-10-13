@@ -44,7 +44,6 @@ public class ConditionalModelTranslatorPlainDateTimeTests
     private static string Expected(string backend) =>
         backend == "SqlServer" ? "2026-03-04T05:06:07.000" : "2026-03-04 05:06:07";
 
-
     public static TheoryData<string, string> BackendsAndForms()
     {
         var data = new TheoryData<string, string>();
@@ -120,6 +119,15 @@ public class ConditionalModelTranslatorPlainDateTimeTests
             new ComparisonFilter("size", QueryOperator.Eq, "5"), Plain, db);
         notDateTime.FieldValue.Should().Be("5");
         notDateTime.CSharpTypeName.Should().Be("long");
+    }
+
+    [Fact]
+    public void SQL_Server_rounding_does_not_overflow_at_the_largest_instant()
+    {
+        var cm = ConditionalModelTranslator.ToSingleModel(
+            new ComparisonFilter("createdAt", QueryOperator.Gt, "9999-12-31T23:59:59.9999999Z"), Plain, Client("SqlServer"));
+
+        cm.FieldValue.Should().Be("9999-12-31T23:59:59.999");
     }
 
     [Fact]

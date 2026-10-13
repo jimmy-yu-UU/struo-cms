@@ -110,11 +110,13 @@ public static class ConditionalModelTranslator
         };
     }
 
-    // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes.
+    // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes. The
+    // rounded value is clamped to DateTime.MaxValue, which the rounding would otherwise pass.
     private static DateTime WallClock(DateTime instant, SqlSugar.DbType dbType) =>
         dbType == SqlSugar.DbType.SqlServer
-            ? new DateTime((instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
-                * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc)
+            ? new DateTime(Math.Min(DateTime.MaxValue.Ticks,
+                (instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
+                * TimeSpan.TicksPerMillisecond), DateTimeKind.Utc)
             : instant;
 
     private static readonly HashSet<QueryOperator> InstantOperators =
