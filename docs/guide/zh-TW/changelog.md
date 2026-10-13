@@ -1,5 +1,21 @@
 # 版本紀錄
 
+## 0.9.3 — 2026-10-13
+
+### 修正
+
+- 一般 `DateTime` 欄位（沒有掛 `TimestampWithTimeZone`，例如 `CreatedAt`、`UpdatedAt`、`DeletedAt`
+  與 fork 自己的日期欄位）用 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 篩選時，帶 `Z` 或時差的值
+  照它指的時刻比，沒有時區的值當成 UTC。0.9.2 及更早版本把這種值換成 API 主機的當地時間來比，所以 API
+  主機不在 UTC 時，結果會差一個時差；改版後這類查詢的結果會跟著變，這是行為修正。
+- SQL Server 上，對掛 `TimestampWithTimeZone` 的欄位算 `min`／`max` 不再擲出
+  `InvalidCastException`。
+- PostgreSQL 上，這些欄位的 `min`／`max` 回傳 UTC 時刻（JSON 結尾帶 `Z`），不再帶 API 主機的時差。
+
+### 升級說明
+
+不需要處理資料：CMS 自己寫入的時間戳（稽核欄位、修訂、工作階段等）一直都是對的，改的只有篩選與彙總怎麼讀值。
+
 ## 0.9.2 — 2026-10-13
 
 ### 修正

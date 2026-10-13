@@ -168,6 +168,100 @@ public sealed class MediaFolderTests : IDisposable
         result.Data.Select(d => (Guid)d["id"]!).Should().Equal(id);
     }
 
+    // A plain audit column (no zone) takes the same filter forms: Z or offset names the instant, and a
+    // value without one is UTC.
+    [Theory]
+    [InlineData("utc")]
+    [InlineData("offset")]
+    [InlineData("unspecified")]
+    public async Task Plain_CreatedAt_filters_compare_against_the_utc_instant(string form)
+    {
+        var aId = await InsertFileAsync("a.txt");
+        await Task.Delay(50);
+        var bId = await InsertFileAsync("b.txt");
+        var aCreated = await FileCreatedAtAsync(aId);
+        var bCreated = await FileCreatedAtAsync(bId);
+        var cutoff = aCreated.AddTicks((bCreated - aCreated).Ticks / 2);
+
+        (await FileIdsAsync(QueryOperator.Gt, cutoff, form)).Should().Equal(bId);
+        (await FileIdsAsync(QueryOperator.Lt, cutoff, form)).Should().Equal(aId);
+        (await FileIdsAsync(QueryOperator.Eq, aCreated, form)).Should().Equal(aId);
+        (await FileIdsAsync(QueryOperator.Neq, aCreated, form)).Should().Equal(bId);
+
+        var inFilter = new ComparisonFilter("createdAt", QueryOperator.In,
+            new List<object> { FormatInstant(bCreated, form) });
+        var inResult = await _svc.QueryAsync("file", new QueryModel(null, inFilter, [], 0, 0, null));
+        inResult.Data.Select(d => (Guid)d["id"]!).Should().Equal(bId);
+    }
+
+    // min/max of a zone-aware column come back as UTC instants on every backend.
+    [Fact]
+    public async Task CreatedAt_min_and_max_are_utc_instants()
+    {
+        var aId = await CreateFolderAsync("A");
+        await Task.Delay(50);
+        var bId = await CreateFolderAsync("B");
+        var aCreated = await CreatedAtAsync(aId);
+        var bCreated = await CreatedAtAsync(bId);
+
+        var query = new QueryModel(null, null, [], 0, 0, null)
+        {
+            Aggregate = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>>
+            {
+                [AggregateOp.Min] = ["createdAt"],
+                [AggregateOp.Max] = ["createdAt"],
+            })
+        };
+        var aggregate = (await _svc.QueryAsync("mediafolder", query)).Aggregate!;
+
+        var min = (DateTime)aggregate.Values[AggregateOp.Min]["createdAt"]!;
+        var max = (DateTime)aggregate.Values[AggregateOp.Max]["createdAt"]!;
+        min.Should().Be(aCreated);
+        max.Should().Be(bCreated);
+        if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer)
+        {
+            min.Kind.Should().Be(DateTimeKind.Utc);
+            max.Kind.Should().Be(DateTimeKind.Utc);
+        }
+    }
+
+    private async Task<Guid> InsertFileAsync(string name)
+    {
+        var db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        var file = new File
+        {
+            Id = Guid.CreateVersion7(),
+            StorageKey = name,
+            FileName = name,
+            ContentType = "text/plain",
+            Size = 1,
+            Status = "draft",
+        };
+        await db.Insertable(file).ExecuteCommandAsync();
+        return file.Id;
+    }
+
+    private async Task<DateTime> FileCreatedAtAsync(Guid id) => DateTime.SpecifyKind(
+        (DateTime)(await _svc.GetAsync("file", id.ToString()))!["createdAt"]!, DateTimeKind.Utc);
+
+    private static string FormatInstant(DateTime instant, string form)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        return form switch
+        {
+            "utc" => instant.ToString("O", invariant),
+            "offset" => new DateTimeOffset(instant).ToOffset(TimeSpan.FromHours(-5)).ToString("O", invariant),
+            _ => instant.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", invariant),
+        };
+    }
+
+    private async Task<List<Guid>> FileIdsAsync(QueryOperator op, DateTime instant, string form)
+    {
+        var filter = new ComparisonFilter("createdAt", op, FormatInstant(instant, form));
+        var result = await _svc.QueryAsync("file", new QueryModel(null, filter, [], 0, 0, null));
+        return result.Data.Select(d => (Guid)d["id"]!).ToList();
+    }
+
     private async Task<Guid> CreateFolderAsync(string name) =>
         (Guid)(await _svc.CreateAsync("mediafolder", BodyOf(new { name })))["id"]!;
 

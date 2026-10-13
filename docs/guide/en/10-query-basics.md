@@ -115,6 +115,11 @@ text. The conversion table covers `Guid`, `int`, `long`, `short`, `bool`, `DateT
 `DateTimeOffset`, `decimal`, `double`, and `float`; `string` and any uncovered type stay a text
 comparison.
 
+**Date and time fields.** On a `DateTime` field, `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`
+and `_nin` compare the value as an instant: a value with `Z` or an offset is read at the instant it
+names, and a value without a zone is UTC. The result depends on neither the database server's zone
+nor the API host's. `_contains`, `_starts_with` and `_ends_with` stay text comparisons.
+
 Values must always be sent in a culture-invariant format, and the host's own default culture is
 pinned to invariant at startup too, so the two sides never read the same decimal or date
 differently. The operator and the field's interface are independent of each other — `_gt` is

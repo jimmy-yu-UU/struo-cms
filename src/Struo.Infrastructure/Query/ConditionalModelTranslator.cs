@@ -61,7 +61,7 @@ public static class ConditionalModelTranslator
     /// junction/translation entity — without going through the full <see cref="FilterNode"/> AST dispatch.
     /// </summary>
     public static ConditionalModel ToSingleModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
-        ToUtcInstantModel(c, d, db) ?? new()
+        ToDateTimeInstantModel(c, d, db) ?? new()
         {
             FieldName = Column(d, db, c.FieldPath),
             ConditionalType = MapOperator(c.Op),
@@ -69,17 +69,21 @@ public static class ConditionalModelTranslator
             CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
         };
 
-    // A TimestampWithTimeZone column holds a UTC instant, so a comparison or set filter on it compares
-    // instants: a trailing Z or offset names the instant and a value without one is UTC, as
-    // UtcInstantConverter writes it. Where that converter binds the column (PostgreSQL, SQL Server) the
-    // value goes out as DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy
-    // datetime rounding touches; elsewhere as the UTC wall clock in the text form Microsoft.Data.Sqlite
-    // stores, which MySQL also reads as a datetime (In/Nin render inline literals). A query-string
-    // _in/_nin value is one comma-separated string, split the way SqlSugar splits it. Null for any
-    // other operator, another column, or a value that does not parse: the general path handles those.
-    private static ConditionalModel? ToUtcInstantModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db)
+    // A filter value on a DateTime column is an instant: a trailing Z or offset names it and a value
+    // without one is UTC, which is how every DateTime the product writes is kept. A comparison or set
+    // operator therefore compares instants, never the host's local time. Where the column is bound as
+    // an instant (a TimestampWithTimeZone column on PostgreSQL and SQL Server) the value goes out as
+    // DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy datetime
+    // rounding touches. Any other column gets the UTC wall clock with no zone: SQL Server's datetime
+    // column rounds it to 1/300 s the way it rounds the stored value, so the text is an ISO 8601
+    // form cut to milliseconds, which datetime reads under any language setting; the other backends
+    // get Microsoft.Data.Sqlite's text form, which MySQL also reads as a datetime and PostgreSQL binds
+    // as a zone-less timestamp (In/Nin render inline literals). A query-string _in/_nin value is one
+    // comma-separated string, split the way SqlSugar splits it. Null for any other operator, a
+    // property that is not a DateTime, or a value that does not parse: the general path handles those.
+    private static ConditionalModel? ToDateTimeInstantModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db)
     {
-        if (!InstantOperators.Contains(c.Op) || !IsUtcInstantField(d, c.FieldPath)) return null;
+        if (!InstantOperators.Contains(c.Op) || DateTimeProperty(d, c.FieldPath) is not { } property) return null;
 
         var values = c.Value switch
         {
@@ -90,17 +94,32 @@ public static class ConditionalModelTranslator
         var instants = values.Select(ToUtcInstant).ToList();
         if (instants.Any(i => i is null)) return null;
 
-        var zoneAware = UtcInstantConverter.AppliesTo(db.CurrentConnectionConfig.DbType);
+        var dbType = db.CurrentConnectionConfig.DbType;
+        var asOffset = UtcInstantConverter.AppliesTo(dbType) && UtcInstantConverter.IsUtcInstantProperty(property);
+        var wallClockFormat = dbType == SqlSugar.DbType.SqlServer
+            ? "yyyy-MM-ddTHH:mm:ss.fff"
+            : "yyyy-MM-dd HH:mm:ss.FFFFFFF";
         return new ConditionalModel
         {
             FieldName = Column(d, db, c.FieldPath),
             ConditionalType = MapOperator(c.Op),
-            FieldValue = string.Join(",", instants.Select(i => zoneAware
+            FieldValue = string.Join(",", instants.Select(i => asOffset
                 ? new DateTimeOffset(i!.Value).ToString("O", CultureInfo.InvariantCulture)
-                : i!.Value.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture))),
-            CSharpTypeName = zoneAware ? "datetimeoffset" : "datetime"
+                : WallClock(i!.Value, dbType).ToString(wallClockFormat, CultureInfo.InvariantCulture))),
+            CSharpTypeName = asOffset ? "datetimeoffset" : "datetime"
         };
     }
+
+    private static readonly DateTime SqlServerDateTimeMax = new(9999, 12, 31, 23, 59, 59, 997, DateTimeKind.Utc);
+
+    // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes. The
+    // rounded value is clamped to datetime's largest value, 9999-12-31 23:59:59.997.
+    private static DateTime WallClock(DateTime instant, SqlSugar.DbType dbType) =>
+        dbType == SqlSugar.DbType.SqlServer
+            ? new DateTime(Math.Min(SqlServerDateTimeMax.Ticks,
+                (instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
+                * TimeSpan.TicksPerMillisecond), DateTimeKind.Utc)
+            : instant;
 
     private static readonly HashSet<QueryOperator> InstantOperators =
     [
@@ -108,11 +127,13 @@ public static class ConditionalModelTranslator
         QueryOperator.Lt, QueryOperator.Lte, QueryOperator.In, QueryOperator.Nin
     ];
 
-    private static bool IsUtcInstantField(EntityDescriptor d, string field) =>
+    private static PropertyInfo? DateTimeProperty(EntityDescriptor d, string field) =>
         d.FieldToProperty.TryGetValue(field, out var property)
         && d.EntityType.GetProperty(property, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
             is { } info
-        && UtcInstantConverter.IsUtcInstantProperty(info);
+        && (Nullable.GetUnderlyingType(info.PropertyType) ?? info.PropertyType) == typeof(DateTime)
+            ? info
+            : null;
 
     private static DateTime? ToUtcInstant(object? value) => value switch
     {

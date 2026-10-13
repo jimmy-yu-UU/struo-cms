@@ -56,4 +56,42 @@ public class AggregateValueNormalizerTests
     [Fact] public void Min_of_timeonly_read_as_datetime_from_npgsql_is_converted() =>
         AggregateValueNormalizer.Normalize(AggregateOp.Min, typeof(TimeOnly), new DateTime(1, 1, 1, 21, 8, 59))
             .Should().BeOfType<TimeOnly>().And.Be(new TimeOnly(21, 8, 59));
+
+    // SQL Server hands a datetimeoffset aggregate over as DateTimeOffset and PostgreSQL returns a
+    // timestamptz as a Local DateTime; both come back as the UTC instant.
+    [Fact] public void Max_of_a_datetimeoffset_is_the_utc_datetime()
+    {
+        var result = AggregateValueNormalizer.Normalize(AggregateOp.Max, typeof(DateTime),
+            new DateTimeOffset(2026, 3, 4, 10, 36, 7, TimeSpan.FromHours(5.5)));
+        result.Should().BeOfType<DateTime>();
+        ((DateTime)result!).Should().Be(new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc));
+        ((DateTime)result).Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact] public void Min_of_a_datetimeoffset_with_a_nullable_target_is_the_utc_datetime()
+    {
+        var result = AggregateValueNormalizer.Normalize(AggregateOp.Min, typeof(DateTime?),
+            new DateTimeOffset(2026, 3, 4, 13, 6, 7, TimeSpan.FromHours(8)));
+        ((DateTime)result!).Should().Be(new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc));
+        ((DateTime)result).Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact] public void Max_of_a_local_datetime_is_converted_to_utc()
+    {
+        var local = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc).ToLocalTime();
+        var result = (DateTime)AggregateValueNormalizer.Normalize(AggregateOp.Max, typeof(DateTime), local)!;
+        result.Kind.Should().Be(DateTimeKind.Utc);
+        result.Should().Be(new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc));
+    }
+
+    [Theory]
+    [InlineData(DateTimeKind.Unspecified)]
+    [InlineData(DateTimeKind.Utc)]
+    public void Max_of_an_unspecified_or_utc_datetime_is_untouched(DateTimeKind kind)
+    {
+        var raw = new DateTime(2026, 3, 4, 5, 6, 7, kind);
+        var result = (DateTime)AggregateValueNormalizer.Normalize(AggregateOp.Max, typeof(DateTime), raw)!;
+        result.Should().Be(raw);
+        result.Kind.Should().Be(kind);
+    }
 }

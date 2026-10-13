@@ -99,6 +99,10 @@ HTTP_STATUS:200
 `Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float`，`string` 與未涵蓋的型別維持文字比較。
 
+**日期與時間欄位。** `DateTime` 欄位上的 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 把值當成時刻：
+帶 `Z` 或時差的值照它指的時刻比，沒有時區的值當成 UTC，結果不受資料庫伺服器與 API 主機的時區影響。
+`_contains`、`_starts_with`、`_ends_with` 仍是文字比較。
+
 值一律用不隨地區變動的格式送出，程式啟動時也把預設文化特性固定成 invariant，兩邊才不會對同一個
 小數或日期讀出不同結果；運算子與欄位介面則互不相干，對一個 `Text` 欄位下 `_gt` 一樣會被接受，當成
 文字比較。
