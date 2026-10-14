@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
+import http from 'node:http'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
@@ -47,7 +48,15 @@ export default defineConfig({
     // explicitly is unambiguous and works everywhere loopback access is needed.
     host: '127.0.0.1',
     // Same-origin dev/E2E: browser hits /api on the Vite origin, proxied to the API.
-    proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
+    // Without an agent the proxy opens a new upstream connection with `Connection: close` per
+    // request, and on Windows a share of those end in ECONNRESET ("Failed to fetch").
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5221',
+        changeOrigin: true,
+        agent: new http.Agent({ keepAlive: true }),
+      },
+    },
   },
   test: {
     environment: 'jsdom',
