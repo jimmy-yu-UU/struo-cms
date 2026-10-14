@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.10.0 — 2026-10-14
+
+::: danger Breaking
+- REST responses carry every `DateTime` as a UTC instant ending in `Z`, such as
+  `2026-10-14T02:00:00Z`. They used to be zone-less for most columns. A client that read those
+  zone-less strings as local time now reads a different time, so check any code that parses these
+  values.
+:::
+
+### Fixed
+
+- Date-time fields in the admin show the browser-local time. A value entered as 10:00 in UTC+8 used
+  to show 02:00 after a reload.
+- A date-time written through REST or GraphQL with an offset, such as `2026-10-14T10:00:00+08:00`,
+  is stored as that instant. It was stored as the API host's local time.
+
+### Upgrade notes
+
+Values written through the API with a non-`Z` offset by 0.9.4 and earlier, on a host outside UTC,
+were stored as the host's local time. Those rows cannot be told apart from correct ones, so they
+need a manual correction if they matter.
+
+Values written by the admin were always stored correctly. Revision snapshots taken by 0.9.4 and
+earlier keep their zone-less strings.
+
 ## 0.9.4 — 2026-10-14
 
 ### Security

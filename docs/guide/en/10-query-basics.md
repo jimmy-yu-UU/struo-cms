@@ -120,6 +120,10 @@ and `_nin` compare the value as an instant: a value with `Z` or an offset is rea
 names, and a value without a zone is UTC. The result depends on neither the database server's zone
 nor the API host's. `_contains`, `_starts_with` and `_ends_with` stay text comparisons.
 
+REST responses carry every `DateTime` as a UTC instant ending in `Z`, and a value written with an
+offset is stored as that instant: `2026-10-14T10:00:00+08:00` is stored and read back as
+`2026-10-14T02:00:00Z`.
+
 Values must always be sent in a culture-invariant format, and the host's own default culture is
 pinned to invariant at startup too, so the two sides never read the same decimal or date
 differently. The operator and the field's interface are independent of each other — `_gt` is

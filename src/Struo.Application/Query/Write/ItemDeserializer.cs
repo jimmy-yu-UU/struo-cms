@@ -1,5 +1,6 @@
 // src/Struo.Application/Query/Write/ItemDeserializer.cs
 using System.Text.Json;
+using Struo.Application.Serialization;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -15,7 +16,10 @@ namespace Struo.Application.Query;
 /// </summary>
 public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSource m2mSource, RichTextCleaner richText)
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new UtcDateTimeJsonConverter() },
+    };
 
     private readonly FieldValidatorRegistry validatorRegistry = new();
 

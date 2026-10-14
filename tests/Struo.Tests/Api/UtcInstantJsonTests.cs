@@ -8,9 +8,8 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// A <c>TimestampWithTimeZone</c> value reaches API JSON as the stored UTC instant. On PostgreSQL and
-/// SQL Server it reads back as <see cref="DateTimeKind.Utc"/> and serialises with a trailing Z; the
-/// other backends read the UTC wall clock back without a zone.
+/// REST reads and writes every <c>DateTime</c> as a UTC instant: responses end in Z on every backend,
+/// and a written value with an offset is stored as that instant.
 /// </summary>
 [Collection("ApiIntegration")]
 public class UtcInstantJsonTests(ApiFactory factory)
@@ -27,11 +26,70 @@ public class UtcInstantJsonTests(ApiFactory factory)
         var body = await admin.GetStringAsync($"/api/items/mediaFolder/{id}");
         var createdAt = JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("createdAt").GetString()!;
 
-        if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer)
-            createdAt.Should().EndWith("Z");
+        createdAt.Should().EndWith("Z");
         DateTime.Parse(createdAt, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
             .Should().BeCloseTo(before, TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task Written_offset_value_is_stored_as_its_instant_and_found_by_that_instant()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var created = await admin.PostAsJsonAsync("/api/items/article", new
+        {
+            status = "draft",
+            publishedAt = "2026-10-14T10:00:00+08:00",
+            translations = new { en = new { title = "utc-offset-probe" } }
+        });
+        created.StatusCode.Should().Be(System.Net.HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var id = JsonDocument.Parse(await created.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("data").GetProperty("id").GetString()!;
+
+        var body = await admin.GetStringAsync($"/api/items/article/{id}");
+        JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("publishedAt").GetString()
+            .Should().Be("2026-10-14T02:00:00Z");
+
+        var found = await admin.GetStringAsync(
+            "/api/items/article?filter[publishedAt][_eq]=2026-10-14T02:00:00Z&limit=500");
+        JsonDocument.Parse(found).RootElement.GetProperty("data").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()).Should().Contain(id);
+    }
+
+    [Fact]
+    public async Task GraphQl_mutation_with_an_offset_value_stores_the_same_instant()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var response = await admin.PostAsJsonAsync("/graphql", new
+        {
+            query = "mutation { createArticle(input: { status: \"draft\", publishedAt: \"2026-10-14T10:00:00+08:00\", " +
+                    "translations: [ { locale: \"en\", fields: { title: \"utc-gql-probe\" } } ] }) { id } }"
+        });
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
+        var id = root.GetProperty("data").GetProperty("createArticle").GetProperty("id").GetString()!;
+
+        var body = await admin.GetStringAsync($"/api/items/article/{id}");
+        JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("publishedAt").GetString()
+            .Should().Be("2026-10-14T02:00:00Z");
+    }
+
+    [Fact]
+    public async Task A_new_revision_snapshot_carries_dates_ending_in_Z()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var created = await admin.PostAsJsonAsync("/api/items/article", new
+        {
+            status = "draft",
+            publishedAt = "2026-10-14T10:00:00+08:00",
+            translations = new { en = new { title = "utc-snapshot-probe" } }
+        });
+        var id = JsonDocument.Parse(await created.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("data").GetProperty("id").GetString()!;
+
+        var body = await admin.GetStringAsync($"/api/items/article/{id}/revisions/1");
+        JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("snapshot")
+            .GetProperty("publishedAt").GetString().Should().Be("2026-10-14T02:00:00Z");
     }
 
     // A query-string _in/_nin arrives as one comma-separated string; each element is an instant.
