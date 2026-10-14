@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.4 — 2026-10-14
+
+### Security
+
+- `System.Security.Cryptography.Pkcs` moves to 10.0.13. `Microsoft.Data.SqlClient` (through
+  `SqlSugarCore` and `FluentMigrator.Runner.SqlServer`) and `Oracle.ManagedDataAccess.Core` pulled in
+  9.0.0, affected by GHSA-846f-f764-76mx (High) and GHSA-2fmv-rv2c-59x7 (Moderate), both .NET
+  denial-of-service advisories. NuGet audit fails the restore of 0.9.3 and earlier on them.
+
 ## 0.9.3 — 2026-10-13
 
 ### Fixed
