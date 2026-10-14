@@ -276,6 +276,7 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
   `src/Struo.Api/Http/EnvelopeJsonOptionsHolder.cs`, and the MVC `JsonOptions` configured in
   `Program.cs`), and `MetadataScanner` derives each field's camelCase name from the CLR property name.
+  Every REST `JsonSerializerOptions` that carries a `DateTime` includes `UtcDateTimeJsonConverter`.
 - **Migration files**: one FluentMigrator class per file, versioned `yyyyMMddHHmm`
   (`[Migration(202610080000, "Description")]`) and named `<version>_<Name>.cs`; the version is the apply
   order, and a migration that may already be applied anywhere is never edited. `make:migration` writes

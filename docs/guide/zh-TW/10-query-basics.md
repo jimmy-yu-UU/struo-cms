@@ -13,7 +13,7 @@
 
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -89,7 +89,7 @@ HTTP_STATUS:200
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -102,6 +102,9 @@ HTTP_STATUS:200
 **日期與時間欄位。** `DateTime` 欄位上的 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 把值當成時刻：
 帶 `Z` 或時差的值照它指的時刻比，沒有時區的值當成 UTC，結果不受資料庫伺服器與 API 主機的時區影響。
 `_contains`、`_starts_with`、`_ends_with` 仍是文字比較。
+
+REST 回應裡每個 `DateTime` 都是以 `Z` 結尾的 UTC 時刻。寫入時帶時差的值，存成它指的那個時刻；沒有時區的值
+當成 UTC：`2026-10-14T10:00:00+08:00` 存入、讀回都是 `2026-10-14T02:00:00Z`。
 
 值一律用不隨地區變動的格式送出，程式啟動時也把預設文化特性固定成 invariant，兩邊才不會對同一個
 小數或日期讀出不同結果；運算子與欄位介面則互不相干，對一個 `Text` 欄位下 `_gt` 一樣會被接受，當成
@@ -152,7 +155,7 @@ array.`），查詢字串上沒分成欄位與運算子兩段的鍵是 `Malforme
 
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 

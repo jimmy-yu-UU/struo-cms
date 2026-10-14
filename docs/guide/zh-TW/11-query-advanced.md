@@ -226,7 +226,7 @@ SQL Server 上，整數欄位的 `avg` 先轉成 `FLOAT` 再平均，`sum` 先�
 
 ```text
 $ GET /api/items/article?aggregate[count]=publishedAt&aggregate[max]=publishedAt
-{"success":true,"data":[...],"meta":{"total":3,"limit":25,"offset":0,"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-06-01T00:00:00"}}}}
+{"success":true,"data":[...],"meta":{"total":3,"limit":25,"offset":0,"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-06-01T00:00:00Z"}}}}
 HTTP_STATUS:200
 ```
 
@@ -266,7 +266,7 @@ facet 跟彙總的驗證錯誤走 `BAD_USER_INPUT`／400，只有讀取授權被
 
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0&fields=id,status&deep=category,tags&facets=status&aggregate[count]=publishedAt
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","category":{"id":"01a08f92-3833-750e-bad3-6ee620f985c3","version":0,"name":"Guides","createdAt":"2026-09-11T08:25:19.670132","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.670271","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"},"tags":[{"id":"01a08f92-38f5-7f1b-a478-f8a1140f0b0b","version":0,"name":"howto","createdAt":"2026-09-11T08:25:19.861593","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.86169","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":null}},{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","version":0,"name":"release","createdAt":"2026-09-11T08:25:19.98309","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.98318","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
+{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","category":{"id":"01a08f92-3833-750e-bad3-6ee620f985c3","version":0,"name":"Guides","createdAt":"2026-09-11T08:25:19.670132Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.670271Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"},"tags":[{"id":"01a08f92-38f5-7f1b-a478-f8a1140f0b0b","version":0,"name":"howto","createdAt":"2026-09-11T08:25:19.861593Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.86169Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":null}},{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","version":0,"name":"release","createdAt":"2026-09-11T08:25:19.98309Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.98318Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
 HTTP_STATUS:200
 ```
 

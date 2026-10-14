@@ -14,7 +14,7 @@ of," lists every other parameter. Here is one filter, one descending sort, and p
 
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -103,7 +103,7 @@ not null":
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -119,6 +119,10 @@ comparison.
 and `_nin` compare the value as an instant: a value with `Z` or an offset is read at the instant it
 names, and a value without a zone is UTC. The result depends on neither the database server's zone
 nor the API host's. `_contains`, `_starts_with` and `_ends_with` stay text comparisons.
+
+REST responses carry every `DateTime` as a UTC instant ending in `Z`. A value written with an offset
+is stored as that instant, and one written without a zone is taken as UTC: `2026-10-14T10:00:00+08:00`
+is stored and read back as `2026-10-14T02:00:00Z`.
 
 Values must always be sent in a culture-invariant format, and the host's own default culture is
 pinned to invariant at startup too, so the two sides never read the same decimal or date
@@ -181,7 +185,7 @@ satisfies `_none`. Turning the path above into a quantifier:
 
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 

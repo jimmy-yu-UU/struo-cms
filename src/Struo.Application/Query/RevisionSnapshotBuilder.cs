@@ -1,5 +1,6 @@
 // src/Struo.Application/Query/RevisionSnapshotBuilder.cs
 using System.Text.Json;
+using Struo.Application.Serialization;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -29,7 +30,10 @@ public sealed class RevisionSnapshotBuilder(
     IEntityRegistry registry,
     IM2MDescriptorSource m2mSource)
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new UtcDateTimeJsonConverter() },
+    };
 
     public async Task<string> BuildAsync(string collection, object entity, CancellationToken ct = default)
     {

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.10.0 — 2026-10-14
+
+::: danger Breaking
+- REST responses carry every `DateTime` as a UTC instant ending in `Z`, such as
+  `2026-10-14T02:00:00Z`. They used to be zone-less for most columns. A client that read those
+  zone-less strings as local time now reads a different time, so check any code that parses these
+  values. Revision snapshots taken in 0.10.0 and later carry `Z` too, over REST and GraphQL.
+- A date-only value written through the API, such as `2026-10-14`, is UTC midnight and comes back as
+  `2026-10-14T00:00:00Z`, so a browser west of UTC shows the previous day.
+:::
+
+### Fixed
+
+- Date-time fields in the admin show the browser-local time. A value entered as 10:00 in UTC+8 used
+  to show 02:00 after a reload.
+- A date-time written through REST or GraphQL with an offset, such as `2026-10-14T10:00:00+08:00`,
+  is stored as that instant in a plain `DateTime` column, and in a zone-aware column on MySQL,
+  MariaDB and SQLite. It was stored as the API host's local time.
+
+### Upgrade notes
+
+Values written through the API with a non-`Z` offset by 0.9.4 and earlier, on a host outside UTC,
+were stored as the host's local time in a plain `DateTime` column, and in a zone-aware column on
+MySQL, MariaDB and SQLite. Those rows cannot be told apart from correct ones, so they need a manual
+correction if they matter. Zone-aware columns on PostgreSQL and SQL Server have been stored
+correctly since 0.9.2.
+
+Values written by the admin were always stored correctly. Revision snapshots taken by 0.9.4 and
+earlier keep their zone-less strings.
+
 ## 0.9.4 — 2026-10-14
 
 ### Security

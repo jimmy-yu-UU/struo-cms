@@ -35,6 +35,9 @@ A snapshot is one flat JSON object, with a fixed shape:
 - `translations`, holding every locale the item has a row for — the full translation state, not
   just the locale used for the current query.
 
+Date-time values in a snapshot are UTC instants ending in `Z`. A snapshot taken before 0.10.0 is
+returned as captured, without a zone.
+
 Within many-to-many relations, one whose junction carries no payload is stored as an ordered id
 array; one whose junction does carry payload is stored as an ordered array of `{ id, ...payload }`
 objects, one per linked target, including any hidden payload field's value. When the relation
@@ -135,7 +138,7 @@ no snapshot content, newest first:
 
 ```text
 $ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -260,11 +263,11 @@ $ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
 HTTP_STATUS:204
 
 $ GET /api/items/article?deleted=only&filter[id][_eq]=01a08c68-5909-7513-8a9c-906f1fc22943
-{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
 $ POST /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943/restore
-{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
+{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
 HTTP_STATUS:200
 ```
 

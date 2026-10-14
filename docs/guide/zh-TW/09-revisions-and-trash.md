@@ -29,6 +29,8 @@
 - `translations`，裡面是這個項目存在資料列的每一個 locale，是完整的翻譯狀態，不只是目前查詢
   用的那個 locale。
 
+快照裡的日期時間是以 `Z` 結尾的 UTC 時刻。0.10.0 之前擷取的快照照當時的樣子回傳，沒有時區。
+
 多對多關聯裡，junction 不帶 payload 的關聯存成一個有序的 id 陣列；junction 帶 payload 的
 關聯存成一個有序的 `{ id, ...payload }` 物件陣列，每個已連結目標各一筆，連隱藏的 payload
 欄位值都會收進去。有宣告排序欄位時，順序依那個欄位排。
@@ -111,7 +113,7 @@ GraphQL 從同一個開關加出對應的三個介面，不需要逐集合寫任
 
 ```text
 $ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -219,11 +221,11 @@ $ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
 HTTP_STATUS:204
 
 $ GET /api/items/article?deleted=only&filter[id][_eq]=01a08c68-5909-7513-8a9c-906f1fc22943
-{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
 $ POST /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943/restore
-{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
+{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
 HTTP_STATUS:200
 ```
 

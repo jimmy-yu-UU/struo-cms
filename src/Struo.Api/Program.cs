@@ -46,6 +46,7 @@ try
             o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             o.JsonSerializerOptions.Converters.Add(
                 new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+            o.JsonSerializerOptions.Converters.Add(new Struo.Application.Serialization.UtcDateTimeJsonConverter());
         });
 
     builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
