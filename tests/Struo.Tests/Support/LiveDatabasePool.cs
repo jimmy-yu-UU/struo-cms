@@ -32,7 +32,9 @@ internal sealed class LiveDatabasePool
 
     public int IdleCount => _idle.Count;
 
-    /// <summary>The process-wide pool for <paramref name="kind"/>; its databases are dropped at process exit.</summary>
+    /// <summary>
+    /// The process-wide pool for <paramref name="kind"/>; its databases are dropped when the test run
+    /// finishes; a ProcessExit handler drops any still left.</summary>
     public static LiveDatabasePool For(TestBackendKind kind) =>
         Shared.GetOrAdd(kind, k => new Lazy<LiveDatabasePool>(() =>
         {
@@ -43,6 +45,15 @@ internal sealed class LiveDatabasePool
 
     /// <summary>A wrapper that takes a database from the pool on first use of its connection or name.</summary>
     public ITestDatabase Lease() => new PooledTestDatabase(this);
+
+    /// <summary>Drops the databases of every shared pool that exists; creates none. Never throws.</summary>
+    public static void DropAllShared()
+    {
+        foreach (var lazy in Shared.Values)
+        {
+            if (lazy.IsValueCreated) lazy.Value.DropAll();
+        }
+    }
 
     /// <summary>Drops every database this pool created, idle or leased. Never throws.</summary>
     public void DropAll()
