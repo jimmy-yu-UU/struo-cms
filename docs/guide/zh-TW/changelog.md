@@ -1,5 +1,14 @@
 # 版本紀錄
 
+## 0.9.4 — 2026-10-14
+
+### 安全性
+
+- `System.Security.Cryptography.Pkcs` 升到 10.0.13。`Microsoft.Data.SqlClient`（經由 `SqlSugarCore` 與
+  `FluentMigrator.Runner.SqlServer`）和 `Oracle.ManagedDataAccess.Core` 帶進的 9.0.0 受 GHSA-846f-f764-76mx
+  （高）與 GHSA-2fmv-rv2c-59x7（中）影響，兩者都是 .NET 的阻斷服務弱點。NuGet 稽核會因此讓 0.9.3 及更早
+  版本的還原失敗。
+
 ## 0.9.3 — 2026-10-13
 
 ### 修正
