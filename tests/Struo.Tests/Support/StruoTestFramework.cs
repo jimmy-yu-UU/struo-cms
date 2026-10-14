@@ -44,7 +44,7 @@ internal sealed class StruoTestAssemblyRunner(
 {
     protected override async Task BeforeTestAssemblyFinishedAsync()
     {
-        LiveDatabasePool.DropAllShared();
         await base.BeforeTestAssemblyFinishedAsync();
+        Aggregator.Run(LiveDatabasePool.DropAllShared);
     }
 }

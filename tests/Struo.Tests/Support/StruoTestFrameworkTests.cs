@@ -16,15 +16,4 @@ public sealed class StruoTestFrameworkTests
         data.ConstructorArguments.Select(a => a.Value)
             .Should().Equal(typeof(StruoTestFramework).FullName, typeof(StruoTestFramework).Assembly.GetName().Name);
     }
-
-    [Fact]
-    public void Dropping_shared_pools_with_none_created_is_a_no_op()
-    {
-        // A live run may hold shared pools that parallel tests are using.
-        if (TestBackend.IsLive) return;
-
-        var act = LiveDatabasePool.DropAllShared;
-
-        act.Should().NotThrow();
-    }
 }

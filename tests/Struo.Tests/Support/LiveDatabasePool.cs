@@ -32,8 +32,9 @@ internal sealed class LiveDatabasePool
 
     public int IdleCount => _idle.Count;
 
-    /// <summary>The process-wide pool for <paramref name="kind"/>; its databases are dropped when the test run finishes,
-    /// or at process exit if the run ends abnormally.</summary>
+    /// <summary>
+    /// The process-wide pool for <paramref name="kind"/>; its databases are dropped when the test run
+    /// finishes; a ProcessExit handler drops any still left.</summary>
     public static LiveDatabasePool For(TestBackendKind kind) =>
         Shared.GetOrAdd(kind, k => new Lazy<LiveDatabasePool>(() =>
         {
