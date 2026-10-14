@@ -12,6 +12,15 @@
   `InvalidCastException`。
 - PostgreSQL 上，這些欄位的 `min`／`max` 回傳 UTC 時刻（JSON 結尾帶 `Z`），不再帶 API 主機的時差。
 
+### 安全性
+
+這幾項都是建置工具的間接依賴，不會進到打包後的程式：
+
+- 前端與文件站的 `source-map-js` 升到 1.2.2（GHSA-68fv-2mgg-jv7q）。
+- 文件站的 `vue` 升到 3.5.43，帶進修好的 `@vue/server-renderer`（GHSA-g2v6-rqmx-r4w6）。
+- 前端的 `postcss-selector-parser` 升到 7.1.6（GHSA-rj75-hqrm-r3gf）。`@tailwindcss/typography` 把它
+  鎖在 6.0.10，6.x 沒有修補版，所以 `frontend/pnpm-workspace.yaml` 用 override 跨主版號升級。
+
 ### 升級說明
 
 不需要處理資料：CMS 自己寫入的時間戳（稽核欄位、修訂、工作階段等）一直都是對的，改的只有篩選與彙總怎麼讀值。

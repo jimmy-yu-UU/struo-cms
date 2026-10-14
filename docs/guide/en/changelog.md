@@ -15,6 +15,17 @@
 - On PostgreSQL, `min` and `max` over these columns return a UTC instant (JSON ending in `Z`)
   instead of one carrying the API host's offset.
 
+### Security
+
+All of these are transitive dependencies of build tooling and do not reach the built application:
+
+- `source-map-js` in the frontend and the docs site moves to 1.2.2 (GHSA-68fv-2mgg-jv7q).
+- `vue` in the docs site moves to 3.5.43, which brings a fixed `@vue/server-renderer`
+  (GHSA-g2v6-rqmx-r4w6).
+- `postcss-selector-parser` in the frontend moves to 7.1.6 (GHSA-rj75-hqrm-r3gf).
+  `@tailwindcss/typography` pins it to 6.0.10 and 6.x has no fix, so an override in
+  `frontend/pnpm-workspace.yaml` takes it across the major.
+
 ### Upgrade notes
 
 No data correction is needed: the timestamps the CMS writes itself (audit fields, revisions,
