@@ -7,6 +7,12 @@
 # and brace-expansion to 5.x. Patching a vulnerability must not drag a
 # dependent across a major it has not been updated for.
 #
+# One entry crosses a major on purpose: @tailwindcss/typography pins
+# postcss-selector-parser to exactly 6.0.10, and the advisory has no 6.x fix.
+# 7.0's only breaking change is inserting nodes while iterating, which the
+# plugin's commonTrailingPseudos does not do; tailwindcss-typography PR #429
+# makes the same move upstream.
+#
 # Re-run `pnpm audit` after editing this file, and drop entries once the
 # packages upstream have moved past them on their own.
 overrides:
@@ -16,3 +22,4 @@ overrides:
   nanoid@<3.3.18: '>=3.3.18 <4'
   postcss@<=8.5.17: '>=8.5.18 <9'
   postcss@<=8.5.22: '>=8.5.23 <9'
+  postcss-selector-parser@<7.1.6: '>=7.1.6 <8'
