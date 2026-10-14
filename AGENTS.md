@@ -345,9 +345,9 @@ A test that only means something on SQLite carries `[SqliteOnlyFact("reason")]` 
 outside `tests/Struo.Tests/Support/` uses `SqliteTestDatabase` or `SqliteTempTestDatabase`
 directly, so every other test follows the switch.
 
-Pool databases are dropped at process exit, best effort. On MySQL and MariaDB a discarded database
-whose holder connection stays open survives until that connection closes, and a crashed run can
-leave databases behind on any backend. After a live run, this drops them on the selected backend:
+Pool databases are dropped when the test run finishes. On MySQL and MariaDB a discarded database
+whose holder connection stays open survives until that connection closes, and a crashed or killed
+run can leave databases behind on any backend. After a live run, this drops them on the selected backend:
 
 ```
 STRUO_TEST_BACKEND=<backend> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "FullyQualifiedName~Drop_leftover_databases_on_request"

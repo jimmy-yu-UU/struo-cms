@@ -72,7 +72,7 @@ bugs.
 A test that only means something on SQLite carries `[SqliteOnlyFact]` or `[SqliteOnlyTheory]` and
 is skipped on a live backend, with a reason starting `SQLite-only:`.
 
-Pool databases are dropped at process exit, best effort. A crashed run can leave databases behind;
+Pool databases are dropped when the test run finishes. A crashed or killed run can leave databases behind;
 on MySQL and MariaDB, a discarded database also survives until the connection holding it closes.
 After a live run, this drops the databases other runs left on the selected backend:
 
