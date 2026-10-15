@@ -30,7 +30,7 @@ public static class SchemaTypeMapper
     public static string RevertFieldName(string collection) => "revert" + Pascal(collection);
     public static string CreateInputName(string collection) => Pascal(collection) + "CreateInput";
     public static string UpdateInputName(string collection) => Pascal(collection) + "UpdateInput";
-    public static string TagItemInputName() => "TagItemInput";
+    public const string TagItemInputName = "TagItemInput";
     public static string RepeaterItemInputTypeName(string collection, string field) =>
         RepeaterItemTypeName(collection, field) + "Input";
     public static string TranslationInputName(string collection) => Pascal(collection) + "TranslationInput";
@@ -133,10 +133,10 @@ public static class SchemaTypeMapper
     // Simple, predictable English pluralisation (documented so hosts can rely on it).
     private static string Pluralise(string s)
     {
-        if (s.EndsWith("y", StringComparison.Ordinal) && s.Length > 1 && !"aeiou".Contains(s[^2]))
+        if (s.EndsWith('y') && s.Length > 1 && !"aeiou".Contains(s[^2]))
             return s[..^1] + "ies";
-        if (s.EndsWith("s", StringComparison.Ordinal) || s.EndsWith("x", StringComparison.Ordinal) ||
-            s.EndsWith("z", StringComparison.Ordinal) || s.EndsWith("ch", StringComparison.Ordinal) ||
+        if (s.EndsWith('s') || s.EndsWith('x') ||
+            s.EndsWith('z') || s.EndsWith("ch", StringComparison.Ordinal) ||
             s.EndsWith("sh", StringComparison.Ordinal))
             return s + "es";
         return s + "s";

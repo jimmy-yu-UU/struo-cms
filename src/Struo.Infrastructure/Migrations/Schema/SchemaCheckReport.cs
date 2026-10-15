@@ -24,9 +24,9 @@ public sealed record SchemaFinding(FindingSeverity Severity, FindingKind Kind, s
 /// <summary>The outcome of a schema check: every finding, with errors and warnings separated.</summary>
 public sealed record SchemaCheckReport(IReadOnlyList<SchemaFinding> Findings)
 {
-    public IReadOnlyList<SchemaFinding> Errors => Findings.Where(f => f.Severity == FindingSeverity.Error).ToList();
+    public IReadOnlyList<SchemaFinding> GetErrors() => Findings.Where(f => f.Severity == FindingSeverity.Error).ToList();
 
-    public IReadOnlyList<SchemaFinding> Warnings => Findings.Where(f => f.Severity == FindingSeverity.Warning).ToList();
+    public IReadOnlyList<SchemaFinding> GetWarnings() => Findings.Where(f => f.Severity == FindingSeverity.Warning).ToList();
 
     public bool HasErrors => Findings.Any(f => f.Severity == FindingSeverity.Error);
 
@@ -39,7 +39,7 @@ public sealed record SchemaCheckReport(IReadOnlyList<SchemaFinding> Findings)
             var target = f.Column is null ? f.Table : $"{f.Table}.{f.Column}";
             text.AppendLine($"{label} {target}: {f.Message}");
         }
-        text.Append($"{Errors.Count} error(s), {Warnings.Count} warning(s)");
+        text.Append($"{GetErrors().Count} error(s), {GetWarnings().Count} warning(s)");
         return text.ToString();
     }
 }

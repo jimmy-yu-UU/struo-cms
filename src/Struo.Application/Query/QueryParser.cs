@@ -6,7 +6,7 @@ namespace Struo.Application.Query;
 
 public static class QueryParser
 {
-    private static readonly IReadOnlyDictionary<string, QueryOperator> Operators =
+    private static readonly Dictionary<string, QueryOperator> Operators =
         new Dictionary<string, QueryOperator>(StringComparer.Ordinal)
         {
             ["_eq"] = QueryOperator.Eq, ["_neq"] = QueryOperator.Neq,

@@ -24,7 +24,7 @@ public sealed class UsersController(
     ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
     IOptions<PasswordPolicyOptions> passwordPolicy) : ControllerBase
 {
-    private IActionResult? RequireAdmin() =>
+    private ObjectResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
             ? null
             : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, "Admin role required.");
@@ -182,18 +182,7 @@ public sealed class UsersController(
             }
         }
         var eff = PermissionResolver.Resolve(data);
-        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        if (!eff.IsSuperAdmin)
-        {
-            foreach (var c in schema.GetAll())
-            {
-                var read = eff.CanRead(c.Name);
-                var write = eff.CanWrite(c.Name);
-                var del = eff.CanDelete(c.Name);
-                if (read || write || del)
-                    map[c.Name] = new { read, write, @delete = del };
-            }
-        }
+        var map = PermissionMap.Build(eff, schema);
         return Ok(new { isSuperAdmin = eff.IsSuperAdmin, permissions = map });
     }
 }

@@ -25,6 +25,9 @@ namespace Struo.Infrastructure.Security;
 /// </summary>
 public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitizer
 {
+    private const string TargetAttribute = "target";
+    private const string WidthAttribute = "width";
+
     // One to five ASCII digits, no leading zero: a bare pixel count and nothing else -- no unit, no
     // percentage, no decimal, no surrounding whitespace. \A and \z, never ^ and $: in .NET, $
     // (without RegexOptions.Multiline) also matches immediately before a single trailing '\n', so
@@ -52,7 +55,7 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         _sanitizer.AllowedAttributes.Clear();
         // width is narrowed to <img>-only, integer-only in PostProcessNode below; height is
         // deliberately never added (see the class summary).
-        foreach (var attr in new[] { "href", "src", "alt", "rel", "target", "style", "width" })
+        foreach (var attr in new[] { "href", "src", "alt", "rel", TargetAttribute, "style", WidthAttribute })
             _sanitizer.AllowedAttributes.Add(attr);
 
         // data-file-id: allow data-* attributes (inert; carry no script surface).
@@ -102,32 +105,32 @@ public sealed class GanssHtmlSanitizer : Struo.Application.Security.IHtmlSanitiz
         {
             if (e.Node is AngleSharp.Html.Dom.IHtmlAnchorElement a)
             {
-                if (a.GetAttribute("target") == "_blank" && a.HasAttribute("href"))
+                if (a.GetAttribute(TargetAttribute) == "_blank" && a.HasAttribute("href"))
                 {
                     a.SetAttribute("rel", "noopener");
                 }
                 else
                 {
-                    a.RemoveAttribute("target");
+                    a.RemoveAttribute(TargetAttribute);
                     a.RemoveAttribute("rel");
                 }
             }
             else if (e.Node is AngleSharp.Dom.IElement nonAnchor)
             {
-                nonAnchor.RemoveAttribute("target");
+                nonAnchor.RemoveAttribute(TargetAttribute);
             }
 
             if (e.Node is AngleSharp.Html.Dom.IHtmlImageElement img)
             {
-                var width = img.GetAttribute("width");
+                var width = img.GetAttribute(WidthAttribute);
                 if (width is null || !AllowedWidthPattern.IsMatch(width))
                 {
-                    img.RemoveAttribute("width");
+                    img.RemoveAttribute(WidthAttribute);
                 }
             }
             else if (e.Node is AngleSharp.Dom.IElement nonImage)
             {
-                nonImage.RemoveAttribute("width");
+                nonImage.RemoveAttribute(WidthAttribute);
             }
         };
 

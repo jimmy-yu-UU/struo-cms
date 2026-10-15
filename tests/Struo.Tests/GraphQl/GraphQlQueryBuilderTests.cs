@@ -27,10 +27,10 @@ public class GraphQlQueryBuilderTests
     [Fact]
     public void BuildQuery_maps_limit_offset_search_and_filter()
     {
-        var q = GraphQlQueryBuilder.BuildQuery(
-            filter: new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "x" } },
-            sort: IdDesc, limit: 5, offset: 10, search: "term",
-            deep: null);
+        var q = GraphQlQueryBuilder.BuildQuery(new GraphQlQueryArgs(
+            Filter: new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "x" } },
+            Sort: IdDesc, Limit: 5, Offset: 10, Search: "term",
+            Deep: null));
 
         q.Limit.Should().Be(5);
         q.Offset.Should().Be(10);
@@ -48,7 +48,7 @@ public class GraphQlQueryBuilderTests
                 new DeepSpec(new Dictionary<string, DeepRelationSpec> { ["parent"] = new DeepRelationSpec(null, null) }))
         });
 
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep);
+        var q = GraphQlQueryBuilder.BuildQuery(new GraphQlQueryArgs(null, null, null, null, null, deep));
 
         q.Deep.Should().BeSameAs(deep);
         q.Deep!.Relations["category"].Deep!.Relations.Should().ContainKey("parent");
@@ -58,7 +58,7 @@ public class GraphQlQueryBuilderTests
     public void BuildQuery_defaults_limit_and_offset_to_zero_when_absent()
     {
         // 0 = "let the validator clamp to DefaultLimit" (QueryValidator owns clamping).
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep: null);
+        var q = GraphQlQueryBuilder.BuildQuery(new GraphQlQueryArgs(null, null, null, null, null, null));
 
         q.Limit.Should().Be(0);
         q.Offset.Should().Be(0);
@@ -70,15 +70,16 @@ public class GraphQlQueryBuilderTests
         Func<string, string, string?> rel = (_, key) => key == "category" ? "category" : null;
 
         var q = GraphQlQueryBuilder.BuildQuery(
-            filter: new Dictionary<string, object?>
-            {
-                ["category"] = new Dictionary<string, object?>
+            new GraphQlQueryArgs(
+                Filter: new Dictionary<string, object?>
                 {
-                    ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
-                }
-            },
-            sort: null, limit: null, offset: null, search: null,
-            deep: null,
+                    ["category"] = new Dictionary<string, object?>
+                    {
+                        ["name"] = new Dictionary<string, object?> { ["eq"] = "Tech" }
+                    }
+                },
+                Sort: null, Limit: null, Offset: null, Search: null,
+                Deep: null),
             collection: "article", relationTarget: rel);
 
         var cmp = q.Filter.Should().BeOfType<ComparisonFilter>().Subject;
@@ -116,8 +117,11 @@ public class GraphQlQueryBuilderTests
     [Fact]
     public void BuildQuery_carries_facets_and_aggregate_onto_the_model()
     {
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, null, "article", null,
-            facets: ["status", "tags.name"], aggregate: new Dictionary<string, object?> { ["count"] = new List<object?> { "publishedAt" } });
+        var q = GraphQlQueryBuilder.BuildQuery(
+            new GraphQlQueryArgs(null, null, null, null, null, null,
+                Facets: ["status", "tags.name"],
+                Aggregate: new Dictionary<string, object?> { ["count"] = new List<object?> { "publishedAt" } }),
+            "article");
         q.Facets.Should().Equal("status", "tags.name");
         q.Aggregate!.Fields[AggregateOp.Count].Should().Equal("publishedAt");
     }
@@ -125,7 +129,7 @@ public class GraphQlQueryBuilderTests
     [Fact]
     public void BuildQuery_leaves_facets_and_aggregate_null_when_absent()
     {
-        var q = GraphQlQueryBuilder.BuildQuery(null, null, null, null, null, deep: null);
+        var q = GraphQlQueryBuilder.BuildQuery(new GraphQlQueryArgs(null, null, null, null, null, null));
         q.Facets.Should().BeNull();
         q.Aggregate.Should().BeNull();
     }

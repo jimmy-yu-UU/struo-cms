@@ -121,20 +121,22 @@ internal static class MakeMigrationCommand
     {
         string? name = null;
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        for (var i = 0; i < args.Count; i++)
+        var i = 0;
+        while (i < args.Count)
         {
             var arg = args[i];
             if (!arg.StartsWith("--", StringComparison.Ordinal))
             {
                 if (name is not null) return (null, new Failed($"Unexpected argument '{arg}'."));
                 name = arg;
+                i++;
                 continue;
             }
 
             var (option, value, consumedNext, optionError) = ReadOption(args, i);
             if (optionError is not null) return (null, optionError);
             if (!values.TryAdd(option, value!)) return (null, new Failed($"Option '{option}' was given more than once."));
-            if (consumedNext) i++;
+            i += consumedNext ? 2 : 1;
         }
 
         return Validate(name, values);
@@ -154,7 +156,7 @@ internal static class MakeMigrationCommand
             : (option, null, false, new Failed($"Option '{option}' needs a value."));
     }
 
-    private static (Parsed? Parsed, Failed? Error) Validate(string? name, IReadOnlyDictionary<string, string> values)
+    private static (Parsed? Parsed, Failed? Error) Validate(string? name, Dictionary<string, string> values)
     {
         if (name is null) return (null, new Failed("Missing migration name."));
         if (!MigrationGenerator.IsValidClassName(name)) return (null, new Failed($"'{name}' is not a valid migration class name."));

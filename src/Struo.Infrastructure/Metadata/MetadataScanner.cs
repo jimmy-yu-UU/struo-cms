@@ -423,11 +423,11 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
 
-        int? maxLength = attr.MaxLength > 0
-            ? attr.MaxLength
-            : prop.PropertyType == typeof(string) && ShortStringInterfaces.Contains(attr.Interface)
-                ? 255
-                : null;
+        int? maxLength = null;
+        if (attr.MaxLength > 0)
+            maxLength = attr.MaxLength;
+        else if (prop.PropertyType == typeof(string) && ShortStringInterfaces.Contains(attr.Interface))
+            maxLength = 255;
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
@@ -461,7 +461,7 @@ public static class MetadataScanner
     /// <see cref="RepeaterAllowedInterfaces"/> and must not be translatable. Fails fast on any
     /// violation of these guards.
     /// </summary>
-    private static IReadOnlyList<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
+    private static List<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
     {
         var t = prop.PropertyType;
         var isList = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>);
@@ -493,7 +493,7 @@ public static class MetadataScanner
         return fields;
     }
 
-    private static IReadOnlyList<FieldOption> ParseOptions(PropertyInfo prop, CmsOptionsAttribute attr)
+    private static List<FieldOption> ParseOptions(PropertyInfo prop, CmsOptionsAttribute attr)
     {
         var list = new List<FieldOption>();
         foreach (var entry in attr.Options)

@@ -80,7 +80,7 @@ internal static class IndexCatalog
     {
         var sql = Sql(dbType) ?? throw new NotSupportedException(
             $"Index introspection is not supported for {dbType}.");
-        var rows = db.Ado.SqlQuery<IndexRow>(sql, new SugarParameter("@table", table));
+        var rows = db.Ado.SqlQuery<IndexRow>(sql, new List<SugarParameter> { new("@table", table) });
         return rows
             .GroupBy(r => r.Name)
             .Select(g => new DbIndex(
@@ -100,6 +100,6 @@ internal static class IndexCatalog
         [SugarColumn(ColumnName = "column_name")]
         public string ColumnName { get; set; } = "";
 
-        public int Ordinal { get; set; }
+        public int Ordinal { get; init; }
     }
 }

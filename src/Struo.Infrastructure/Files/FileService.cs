@@ -188,7 +188,7 @@ public sealed class FileService(
         var row = await db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).FirstAsync(ct);
         if (row is null) return false;
 
-        var fkCol = db.EntityMaintenance.GetDbColumnName(nameof(FileTranslation.FileId), typeof(FileTranslation));
+        var fkCol = db.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId));
         // Delete the sidecar translations + the file row through the nesting-safe repository
         // helper (join-if-active), so composing this inside a larger unit-of-work joins that outer
         // transaction instead of opening — and prematurely committing — its own inner one.

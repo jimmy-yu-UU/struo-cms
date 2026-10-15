@@ -200,13 +200,13 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // Present + non-null => store the raw JSON text; absent or explicit JSON null => leave null.
     private static void SetJsonFieldRawText(CollectionMetadata meta, JsonElement body, EntityDescriptor d, object entity)
     {
-        foreach (var field in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable))
+        foreach (var fieldName in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable).Select(f => f.Name))
         {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
+            if (!d.FieldToProperty.TryGetValue(fieldName, out var prop)) continue;
             var pi = d.Properties.GetValueOrDefault(prop);
             if (pi is not { CanWrite: true } || pi.PropertyType != typeof(string)) continue;
             if (body.ValueKind == JsonValueKind.Object
-                && body.TryGetProperty(field.Name, out var el)
+                && body.TryGetProperty(fieldName, out var el)
                 && el.ValueKind != JsonValueKind.Null)
             {
                 pi.SetValue(entity, el.GetRawText());
@@ -248,11 +248,11 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // explicitly wipes the field (null/blank/Guid.Empty), never merely by omitting it.
     internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
-        foreach (var field in meta.Fields.Where(f => f.Required && !f.Translatable))
+        foreach (var fieldName in meta.Fields.Where(f => f.Required && !f.Translatable).Select(f => f.Name))
         {
-            var pi = d.FieldToProperty.TryGetValue(field.Name, out var prop) ? d.Properties.GetValueOrDefault(prop) : null;
+            var pi = d.FieldToProperty.TryGetValue(fieldName, out var prop) ? d.Properties.GetValueOrDefault(prop) : null;
             var value = pi?.GetValue(entity);
-            FieldValueRules.RequireParent(field.Name, value);
+            FieldValueRules.RequireParent(fieldName, value);
         }
     }
 

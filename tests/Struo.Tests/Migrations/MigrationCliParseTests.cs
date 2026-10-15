@@ -72,6 +72,14 @@ public sealed class MigrationCliParseTests
     }
 
     [Fact]
+    public void Host_key_value_pairs_between_command_args_keep_their_order()
+    {
+        var inv = MigrationCli.Parse(["make:migration", "--Database:DbType", "Sqlite", "X", "--Database:TablePrefix=p_", "--output", "d"]);
+        inv.HostArgs.Should().Equal("--Database:DbType", "Sqlite", "--Database:TablePrefix=p_");
+        inv.CommandArgs.Should().Equal("X", "--output", "d");
+    }
+
+    [Fact]
     public void Slash_key_with_equals_is_a_host_arg()
     {
         var inv = MigrationCli.Parse(["migrate:check", "/Database:TablePrefix=acme_"]);

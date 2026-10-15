@@ -11,7 +11,7 @@ public sealed class SqlSugarExternalUserStore(ISqlSugarClient db) : IExternalUse
     {
         var lowered = email.ToLowerInvariant();
         var u = await db.Queryable<User>()
-            .Where(x => x.Email.ToLower() == lowered)
+            .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);
         return u is null ? null : new ExternalUserMatch(u.Id, u.IsActive);
     }

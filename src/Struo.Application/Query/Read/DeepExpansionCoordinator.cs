@@ -56,7 +56,8 @@ public sealed class DeepExpansionCoordinator(
         // every level, since a nested M2M relation is expanded inside RelationExpander itself and
         // never comes back through this coordinator.
         var nested = await expander.ExpandAsync(
-            collection, entities, visible, projector.ProjectFor, ParentId, PropertyAccessorCache.Read,
+            collection, entities, visible,
+            new EntityAccessors(projector.ProjectFor, ParentId, PropertyAccessorCache.Read),
             locale, permissions.CanRead, ct);
 
         for (var i = 0; i < entities.Count; i++)

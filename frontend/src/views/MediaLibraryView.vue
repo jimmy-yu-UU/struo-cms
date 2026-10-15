@@ -128,10 +128,10 @@ async function load(): Promise<void> {
       rows: perPage.value,
       sort: mediaSort(sort.value),
       search: search.value || undefined,
-      filter: { ...(mediaTypeFilter(type.value) ?? {}),
+      filter: { ...mediaTypeFilter(type.value),
                 ...(searchActive.value || mode.value === 'trash' ? undefined : mediaFolderFilter(currentFolderId.value)) },
       locale: langStore.defaultCode || undefined,
-      ...(mode.value === 'trash' ? { deleted: 'only' } : {}),
+      ...(mode.value === 'trash' ? { deleted: 'only' } : undefined),
     })
     if (!mediaLoad.isCurrent(token)) return
     files.value = toFileRows(res.data)

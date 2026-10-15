@@ -127,7 +127,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         var report = SchemaChecker.Check(db, dbType, FrameworkEntityTypes.All);
         report.HasErrors.Should().BeFalse(report.ToString());
         if (nonUnicodeSqlServer)
-            report.Warnings.Should().Contain(f => f.Kind == FindingKind.NonUnicodeString, report.ToString());
+            report.GetWarnings().Should().Contain(f => f.Kind == FindingKind.NonUnicodeString, report.ToString());
     }
 
     [Fact]

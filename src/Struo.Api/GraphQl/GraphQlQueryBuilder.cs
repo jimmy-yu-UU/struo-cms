@@ -28,28 +28,21 @@ public static class GraphQlQueryBuilder
     }
 
     public static QueryModel BuildQuery(
-        IReadOnlyDictionary<string, object?>? filter,
-        IReadOnlyList<string>? sort,
-        int? limit,
-        int? offset,
-        string? search,
-        DeepSpec? deep,
+        GraphQlQueryArgs args,
         string collection = "",
-        Func<string, string, string?>? relationTarget = null,
-        IReadOnlyList<string>? facets = null,
-        IReadOnlyDictionary<string, object?>? aggregate = null)
+        Func<string, string, string?>? relationTarget = null)
     {
         return new QueryModel(
             Fields: null,
-            Filter: FilterInputTranslator.Translate(filter, collection, relationTarget),
-            Sort: ParseSort(sort),
-            Limit: limit ?? 0,
-            Offset: offset ?? 0,
-            Search: string.IsNullOrWhiteSpace(search) ? null : search)
+            Filter: FilterInputTranslator.Translate(args.Filter, collection, relationTarget),
+            Sort: ParseSort(args.Sort),
+            Limit: args.Limit ?? 0,
+            Offset: args.Offset ?? 0,
+            Search: string.IsNullOrWhiteSpace(args.Search) ? null : args.Search)
         {
-            Deep = deep,
-            Facets = facets,
-            Aggregate = ParseAggregate(aggregate)
+            Deep = args.Deep,
+            Facets = args.Facets,
+            Aggregate = ParseAggregate(args.Aggregate)
         };
     }
 

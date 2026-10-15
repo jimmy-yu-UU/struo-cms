@@ -16,6 +16,9 @@ namespace Struo.Api.GraphQl;
 /// </summary>
 internal static class MutationResolvers
 {
+    private const string InputArgument = "input";
+    private const string LocaleArgument = "locale";
+
     internal static ObjectFieldConfiguration CreateField(string collection, IMetadataProvider metadata)
     {
         var config = new ObjectFieldConfiguration(
@@ -23,18 +26,18 @@ internal static class MutationResolvers
             TypeReference.Parse(SchemaTypeMapper.TypeName(collection)),
             resolver: ctx => ResolveCreate(ctx, collection));
         config.Arguments.Add(new ArgumentConfiguration(
-            "input", null, TypeReference.Parse(SchemaTypeMapper.CreateInputName(collection) + "!")));
-        config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+            InputArgument, null, TypeReference.Parse(SchemaTypeMapper.CreateInputName(collection) + "!")));
+        config.Arguments.Add(new ArgumentConfiguration(LocaleArgument, null, TypeReference.Parse("String")));
         return config;
     }
 
     private static async ValueTask<object?> ResolveCreate(IResolverContext ctx, string collection)
     {
-        var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
-        var locale = ctx.ArgumentValue<string?>("locale");
+        var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>(InputArgument);
+        var locale = ctx.ArgumentValue<string?>(LocaleArgument);
         var payloadRelations = PayloadRelations(ctx, collection);
         var body = MutationInputMapper.ToJsonElement(
-            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, "input", input)), payloadRelations));
+            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, InputArgument, input)), payloadRelations));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var created = await source.CreateAsync(collection, body, ctx.RequestAborted);
@@ -66,19 +69,19 @@ internal static class MutationResolvers
             resolver: ctx => ResolveUpdate(ctx, collection));
         config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
         config.Arguments.Add(new ArgumentConfiguration(
-            "input", null, TypeReference.Parse(SchemaTypeMapper.UpdateInputName(collection) + "!")));
-        config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+            InputArgument, null, TypeReference.Parse(SchemaTypeMapper.UpdateInputName(collection) + "!")));
+        config.Arguments.Add(new ArgumentConfiguration(LocaleArgument, null, TypeReference.Parse("String")));
         return config;
     }
 
     private static async ValueTask<object?> ResolveUpdate(IResolverContext ctx, string collection)
     {
         var id = ctx.ArgumentValue<string>("id");
-        var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("input");
-        var locale = ctx.ArgumentValue<string?>("locale");
+        var input = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>(InputArgument);
+        var locale = ctx.ArgumentValue<string?>(LocaleArgument);
         var payloadRelations = PayloadRelations(ctx, collection);
         var body = MutationInputMapper.ToJsonElement(
-            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, "input", input)), payloadRelations));
+            FoldLinks(FoldTranslations(SentFieldsOnly(ctx, InputArgument, input)), payloadRelations));
 
         var source = ctx.Service<IGraphQlDataSource>();
         var updated = await source.UpdateAsync(collection, id, body, ctx.RequestAborted);
@@ -187,7 +190,7 @@ internal static class MutationResolvers
         foreach (var entry in entries)
         {
             if (entry is not IReadOnlyDictionary<string, object?> e) continue;
-            if (e.GetValueOrDefault("locale") is not string locale) continue;
+            if (e.GetValueOrDefault(LocaleArgument) is not string locale) continue;
             byLocale[locale] = e.GetValueOrDefault("fields");
         }
 

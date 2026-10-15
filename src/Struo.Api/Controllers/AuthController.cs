@@ -87,18 +87,7 @@ public sealed class AuthController(IAuthService auth, ILoginAttemptThrottle logi
         CancellationToken ct)
     {
         var eff = permissions.Current;
-        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        if (!eff.IsSuperAdmin)
-        {
-            foreach (var c in schema.GetAll())
-            {
-                var read = eff.CanRead(c.Name);
-                var write = eff.CanWrite(c.Name);
-                var del = eff.CanDelete(c.Name);
-                if (read || write || del)
-                    map[c.Name] = new { read, write, @delete = del };
-            }
-        }
+        var map = PermissionMap.Build(eff, schema);
 
         var uid = User.FindFirstValue(ClaimTypes.NameIdentifier);
         string? email = null;

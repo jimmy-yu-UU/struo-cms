@@ -41,7 +41,7 @@ public sealed class NonUnicodeStringLiveTests
             var report = SchemaChecker.Check(db, dbType, [typeof(CheckProbe)]);
 
             report.HasErrors.Should().BeFalse(report.ToString());
-            report.Warnings.Should().Contain(f => f.Kind == FindingKind.NonUnicodeString && f.Column == "title",
+            report.GetWarnings().Should().Contain(f => f.Kind == FindingKind.NonUnicodeString && f.Column == "title",
                 report.ToString());
         }
         finally

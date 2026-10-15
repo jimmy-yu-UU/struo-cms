@@ -6,7 +6,7 @@ namespace Struo.Infrastructure.Metadata;
 public sealed class CachedMetadataProvider : IMetadataProvider
 {
     private readonly IReadOnlyList<CollectionMetadata> _all;
-    private readonly IReadOnlyDictionary<string, CollectionMetadata> _byName;
+    private readonly Dictionary<string, CollectionMetadata> _byName;
 
     public CachedMetadataProvider(IReadOnlyList<CollectionMetadata> collections)
     {

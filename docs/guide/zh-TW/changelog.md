@@ -1,5 +1,19 @@
 # 版本紀錄
 
+## 0.11.0
+
+::: danger 破壞性變更
+- `SchemaCheckReport` 的 `Errors` 與 `Warnings` 是方法：`GetErrors()` 與 `GetWarnings()`。呼叫它們的程式
+  要把屬性存取改成方法呼叫。
+- `IRelationExpander.ExpandAsync` 與 `RelationExpander.ExpandAsync` 以一個 `EntityAccessors` 取代原本的三個
+  委派，參數位置在 `deep` 之後。它的欄位是 `ProjectTarget`、`ParentId`、`ReadProp`。實作 `IRelationExpander`
+  的 fork，要把自己的 `ExpandAsync` 簽章改成接收 `EntityAccessors`；直接呼叫 `ExpandAsync` 的 fork，要改成傳
+  `new EntityAccessors(...)`。
+- `GraphQlQueryBuilder.BuildQuery` 接受一個 `GraphQlQueryArgs`（篩選、排序、分頁、搜尋、`deep`、facets、
+  aggregate），後面接 `collection` 與 `relationTarget`。直接呼叫它的程式要改成先建 `GraphQlQueryArgs`。
+- `SchemaTypeMapper.TagItemInputName` 是常數，不是方法。把 `TagItemInputName()` 改成 `TagItemInputName`。
+:::
+
 ## 0.10.0 — 2026-10-14
 
 ::: danger 破壞性變更

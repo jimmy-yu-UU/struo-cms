@@ -17,6 +17,8 @@ namespace Struo.Api.GraphQl;
 
 internal static class CollectionResolvers
 {
+    private const string LocaleArgument = "locale";
+
     internal static ObjectFieldConfiguration SingleField(string collection, IMetadataProvider metadata)
     {
         var config = new ObjectFieldConfiguration(
@@ -24,7 +26,7 @@ internal static class CollectionResolvers
             TypeReference.Parse(SchemaTypeMapper.TypeName(collection)),
             resolver: ctx => ResolveSingle(ctx, collection));
         config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
-        config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+        config.Arguments.Add(new ArgumentConfiguration(LocaleArgument, null, TypeReference.Parse("String")));
         return config;
     }
 
@@ -39,7 +41,7 @@ internal static class CollectionResolvers
         config.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
         config.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
         config.Arguments.Add(new ArgumentConfiguration("search", null, TypeReference.Parse("String")));
-        config.Arguments.Add(new ArgumentConfiguration("locale", null, TypeReference.Parse("String")));
+        config.Arguments.Add(new ArgumentConfiguration(LocaleArgument, null, TypeReference.Parse("String")));
         config.Arguments.Add(new ArgumentConfiguration("deleted", null, TypeReference.Parse("DeletedFilter")));
         config.Arguments.Add(new ArgumentConfiguration("facets", null, TypeReference.Parse("[String!]")));
         config.Arguments.Add(new ArgumentConfiguration("aggregate", null, TypeReference.Parse("AggregateInput")));
@@ -49,7 +51,7 @@ internal static class CollectionResolvers
     private static async ValueTask<object?> ResolveSingle(IResolverContext ctx, string collection)
     {
         var id = ctx.ArgumentValue<string>("id");
-        var locale = ctx.ArgumentValue<string?>("locale");
+        var locale = ctx.ArgumentValue<string?>(LocaleArgument);
         var metadata = ctx.Service<IMetadataProvider>();
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: true);
         var data = await ctx.Service<IGraphQlDataSource>().GetAsync(collection, id, deep, locale, ctx.RequestAborted);
@@ -63,7 +65,7 @@ internal static class CollectionResolvers
         var limit = ctx.ArgumentValue<int?>("limit");
         var offset = ctx.ArgumentValue<int?>("offset");
         var search = ctx.ArgumentValue<string?>("search");
-        var locale = ctx.ArgumentValue<string?>("locale");
+        var locale = ctx.ArgumentValue<string?>(LocaleArgument);
         var deleted = ctx.ArgumentValue<DeletedFilter?>("deleted") ?? DeletedFilter.Exclude;
         var facets = ctx.ArgumentValue<IReadOnlyList<string>?>("facets");
         var aggregate = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("aggregate");
@@ -73,8 +75,8 @@ internal static class CollectionResolvers
             DeletedAccessGuard.EnsureCanViewDeleted(ctx.Service<IPermissionService>(), collection, deleted);
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
-            filter, sort, limit, offset, search, deep,
-            collection, RelationTargets(metadata), facets, aggregate);
+            new GraphQlQueryArgs(filter, sort, limit, offset, search, deep, facets, aggregate),
+            collection, RelationTargets(metadata));
         var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, deleted, ctx.RequestAborted);
         return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total, page.Facets ?? [], Http.MetaWire.Aggregate(page.Aggregate));
     }
@@ -268,7 +270,7 @@ internal static class CollectionResolvers
     /// HotChocolate parses any other literal argument. Isolated here, following the same precedent
     /// as <c>SentFieldsOnly</c>, so <see cref="BuildDeep"/> stays free of HC-internals detail.
     /// </summary>
-    private static IReadOnlyDictionary<string, object?> ReadSelectionArgs(IResolverContext ctx, Selection sel)
+    private static Dictionary<string, object?> ReadSelectionArgs(IResolverContext ctx, Selection sel)
     {
         var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, argValue) in sel.Arguments)

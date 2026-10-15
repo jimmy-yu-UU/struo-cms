@@ -61,7 +61,7 @@ public class SchemaTypeMapperMutationTests
     [Fact]
     public void Input_type_name_helpers_follow_convention()
     {
-        SchemaTypeMapper.TagItemInputName().Should().Be("TagItemInput");
+        SchemaTypeMapper.TagItemInputName.Should().Be("TagItemInput");
         SchemaTypeMapper.RepeaterItemInputTypeName("article", "faqs").Should().Be("ArticleFaqsItemInput");
     }
 

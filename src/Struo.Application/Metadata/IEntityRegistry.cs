@@ -17,7 +17,7 @@ public sealed record EntityDescriptor(
     /// </summary>
     public IReadOnlyDictionary<string, PropertyInfo> Properties { get; } = BuildProperties(EntityType);
 
-    private static IReadOnlyDictionary<string, PropertyInfo> BuildProperties(Type entityType)
+    private static Dictionary<string, PropertyInfo> BuildProperties(Type entityType)
     {
         // TryAdd is first-wins on name collisions (e.g. a `new`-shadowed property), keeping
         // whichever property Type.GetProperties enumerates first. The entities here never shadow,

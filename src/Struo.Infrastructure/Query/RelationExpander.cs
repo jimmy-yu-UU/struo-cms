@@ -11,7 +11,7 @@ namespace Struo.Infrastructure.Query;
 /// Expands <c>deep</c> relations for a page of already-fetched parent entities using
 /// batched follow-up queries (stitching) — one query per relation per page, so it is
 /// N+1-safe. Deliberately does NOT use SqlSugar <c>.Includes()</c>; relation rows are
-/// projected through the caller-supplied <c>projectTarget</c> delegate so target rows
+/// projected through <see cref="EntityAccessors.ProjectTarget"/> so target rows
 /// honour the same metadata projection (field whitelist, hidden/readable rules) as
 /// top-level rows.
 /// </summary>
@@ -41,16 +41,13 @@ public sealed class RelationExpander(
     /// Builds, per parent id, a map of <c>relationName -&gt; (object?|list)</c> of projected
     /// target rows for every relation named in <paramref name="deep"/>.
     /// </summary>
-    /// <param name="projectTarget">
-    /// <c>(targetCollection, targetEntity, fields?) -&gt; camelCase dict</c>; reuses the
-    /// item-service metadata projection for the target collection.
+    /// <param name="accessors">
+    /// The projection and entity-reading delegates; <see cref="EntityAccessors.ProjectTarget"/>
+    /// reuses the item-service metadata projection for the target collection.
     /// </param>
-    /// <param name="parentId">Reads the primary-key value off a parent entity.</param>
-    /// <param name="readProp">Reads a property value off an entity by CLR/camel name.</param>
     public async Task<Dictionary<object, Dictionary<string, object?>>> ExpandAsync(
         string collection, IReadOnlyList<object> parents, DeepSpec deep,
-        Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
-        Func<object, object> parentId, Func<object, string, object?> readProp,
+        EntityAccessors accessors,
         string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default)
     {
         // options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
@@ -59,6 +56,7 @@ public sealed class RelationExpander(
         // IItemRepository.QueryWhereInFilteredAsync's FilterTranslator.
         ArgumentNullException.ThrowIfNull(options);
 
+        var (projectTarget, parentId, readProp) = accessors;
         var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);
         var result = new Dictionary<object, Dictionary<string, object?>>();
         foreach (var p in parents) result[parentId(p)] = new Dictionary<string, object?>();
@@ -135,7 +133,7 @@ public sealed class RelationExpander(
             {
                 var distinct = expanded.Select(e => e.Entity).Distinct().ToList();
                 var sub = await ExpandAsync(
-                    rel.TargetCollection, distinct, spec.Deep, projectTarget, parentId, readProp,
+                    rel.TargetCollection, distinct, spec.Deep, accessors,
                     locale, canReadJunction, ct);
                 foreach (var (entity, dict) in expanded)
                     if (sub.TryGetValue(parentId(entity), out var subMap))
