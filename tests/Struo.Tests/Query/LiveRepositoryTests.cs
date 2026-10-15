@@ -215,12 +215,13 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         counter.ResetCount();
         var result = await expander.ExpandAsync(
             "category", parents, deep!,
-            projectTarget: (_, entity, _) => new Dictionary<string, object?>
-            {
-                ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
-            },
-            parentId: entity => ReadProp(entity, "id")!,
-            readProp: ReadProp);
+            new EntityAccessors(
+                (_, entity, _) => new Dictionary<string, object?>
+                {
+                    ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
+                },
+                entity => ReadProp(entity, "id")!,
+                ReadProp));
 
         // Linear in depth on real Postgres: exactly 1 WhereIn query per level (6 total), not
         // exponential and not one-query-per-entity.

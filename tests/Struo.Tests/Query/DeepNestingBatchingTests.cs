@@ -62,9 +62,10 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         counter.ResetCount();
         await expander.ExpandAsync(
             "category", parents, deep,
-            projectTarget: (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
-            parentId: entity => ReadProp(entity, "id")!,
-            readProp: ReadProp);
+            new EntityAccessors(
+                (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
+                entity => ReadProp(entity, "id")!,
+                ReadProp));
         return counter.WhereInCalls;
     }
 
@@ -115,9 +116,10 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         counter.ResetCount();
         await expander.ExpandAsync(
             "category", parents, deep,
-            projectTarget: (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
-            parentId: entity => ReadProp(entity, "id")!,
-            readProp: ReadProp);
+            new EntityAccessors(
+                (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
+                entity => ReadProp(entity, "id")!,
+                ReadProp));
         return counter.WhereInCalls;
     }
 
@@ -178,12 +180,13 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         counter.ResetCount();
         var result = await expander.ExpandAsync(
             "category", parents, deep,
-            projectTarget: (_, entity, _) => new Dictionary<string, object?>
-            {
-                ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
-            },
-            parentId: entity => ReadProp(entity, "id")!,
-            readProp: ReadProp);
+            new EntityAccessors(
+                (_, entity, _) => new Dictionary<string, object?>
+                {
+                    ["id"] = ReadProp(entity, "id"), ["name"] = ReadProp(entity, "name")
+                },
+                entity => ReadProp(entity, "id")!,
+                ReadProp));
 
         return (counter.WhereInCalls, result, leafIds);
     }

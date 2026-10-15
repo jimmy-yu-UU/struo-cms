@@ -103,8 +103,7 @@ public class DeleteRestrictWithGuidPkTests
     {
         public Task<Dictionary<object, Dictionary<string, object?>>> ExpandAsync(
             string c, IReadOnlyList<object> parents, DeepSpec deep,
-            Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> project,
-            Func<object, object> parentId, Func<object, string, object?> readProp,
+            EntityAccessors accessors,
             string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default) =>
             Task.FromResult(new Dictionary<object, Dictionary<string, object?>>());
     }

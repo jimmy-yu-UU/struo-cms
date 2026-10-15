@@ -15,9 +15,7 @@ public interface IRelationExpander
     /// Returns, per parent primary-key value, a map of <c>relationName -&gt; (object?|list)</c>
     /// of projected target rows for every relation named in <paramref name="deep"/>.
     /// </summary>
-    /// <param name="projectTarget"><c>(targetCollection, targetEntity, fields?) -&gt; camelCase dict</c>.</param>
-    /// <param name="parentId">Reads the primary-key value off a parent entity.</param>
-    /// <param name="readProp">Reads a property value off an entity by CLR/camel name.</param>
+    /// <param name="accessors">Reads and projects entities; see <see cref="EntityAccessors"/>.</param>
     /// <param name="canReadJunction">
     /// <c>junctionCollection -&gt; bool</c>, consulted before a payload-bearing M2M relation's
     /// <c>_junction</c> sub-object is attached, at every nesting level (this same delegate is
@@ -28,10 +26,17 @@ public interface IRelationExpander
         string collection,
         IReadOnlyList<object> parents,
         DeepSpec deep,
-        Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> projectTarget,
-        Func<object, object> parentId,
-        Func<object, string, object?> readProp,
+        EntityAccessors accessors,
         string? locale = null,
         Func<string, bool>? canReadJunction = null,
         CancellationToken ct = default);
 }
+
+/// <summary>The entity-reading and target-projection delegates an expansion works through.</summary>
+/// <param name="ProjectTarget"><c>(targetCollection, targetEntity, fields?) -&gt; camelCase dict</c>.</param>
+/// <param name="ParentId">Reads the primary-key value off a parent entity.</param>
+/// <param name="ReadProp">Reads a property value off an entity by CLR/camel name.</param>
+public sealed record EntityAccessors(
+    Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> ProjectTarget,
+    Func<object, object> ParentId,
+    Func<object, string, object?> ReadProp);
