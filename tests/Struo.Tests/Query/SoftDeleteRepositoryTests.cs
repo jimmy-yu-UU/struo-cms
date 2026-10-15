@@ -34,7 +34,7 @@ public class SoftDeleteRepositoryTests
         var result = await h.Repository.QueryAsync("article",
             new QueryModel(null, null, [], 100, 0, null), [], null, default);
 
-        var ids = result.Rows.Select(h.IdOf).ToList();
+        var ids = result.Rows.Select(SoftDeleteRepositoryHarness.IdOf).ToList();
         ids.Should().Contain(live);
         ids.Should().NotContain(trashed);
     }
@@ -49,7 +49,7 @@ public class SoftDeleteRepositoryTests
 
         var only = await h.Repository.QueryAsync("article",
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Only, default);
-        var ids = only.Rows.Select(h.IdOf).ToList();
+        var ids = only.Rows.Select(SoftDeleteRepositoryHarness.IdOf).ToList();
         Assert.Contains(trashed, ids);
         Assert.DoesNotContain(live, ids);
     }
@@ -283,8 +283,8 @@ public class SoftDeleteRepositoryTests
         var only = await h.Repository.QueryAsync("tag",
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Only, default);
 
-        excluded.Rows.Select(h.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
-        only.Rows.Select(h.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
+        excluded.Rows.Select(SoftDeleteRepositoryHarness.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
+        only.Rows.Select(SoftDeleteRepositoryHarness.IdOf).Should().BeEquivalentTo([t1.Id, t2.Id]);
     }
 
     [Fact]
@@ -298,14 +298,14 @@ public class SoftDeleteRepositoryTests
         // First call on this client lifts the floor via ClearFilter<ISoftDeletable>() (DeletedFilter.With).
         var with = await h.Repository.QueryAsync("article",
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.With, default);
-        with.Rows.Select(h.IdOf).Should().Contain([live, trashed]);
+        with.Rows.Select(SoftDeleteRepositoryHarness.IdOf).Should().Contain([live, trashed]);
 
         // A SUBSEQUENT call on the SAME client/scoped ISqlSugarClient with Exclude must still filter —
         // proving ClearFilter is applied fresh per Queryable<T>() call (NewQueryable()), not left
         // dangling/sticky on the shared scoped client from the prior With call.
         var excludeAgain = await h.Repository.QueryAsync("article",
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Exclude, default);
-        var idsAgain = excludeAgain.Rows.Select(h.IdOf).ToList();
+        var idsAgain = excludeAgain.Rows.Select(SoftDeleteRepositoryHarness.IdOf).ToList();
         idsAgain.Should().Contain(live);
         idsAgain.Should().NotContain(trashed);
     }
@@ -403,7 +403,7 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
             .Where(a => a.Id == id)
             .ExecuteCommandAsync();
 
-    public Guid IdOf(object row) => (Guid)row.GetType().GetProperty("Id")!.GetValue(row)!;
+    public static Guid IdOf(object row) => (Guid)row.GetType().GetProperty("Id")!.GetValue(row)!;
 
     public void Dispose() => _database.Dispose();
 }

@@ -58,6 +58,8 @@ public class DeepExpansionTests(ApiFactory factory)
         articles.GetArrayLength().Should().BeGreaterThanOrEqualTo(2);
     }
 
+    private static readonly string[] NameFields = ["name"];
+
     [Fact]
     public async Task Deep_m2o_honors_field_whitelist_via_envelope()
     {
@@ -72,7 +74,7 @@ public class DeepExpansionTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = articleId } },
-            deep = new { category = new { fields = new[] { "name" } } }
+            deep = new { category = new { fields = NameFields } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);

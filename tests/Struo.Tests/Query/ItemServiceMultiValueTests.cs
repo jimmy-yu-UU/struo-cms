@@ -28,7 +28,7 @@ namespace Struo.Tests.Query;
 /// (not the sample Article) so a Required multi-value field can be exercised without affecting other
 /// tests. Harness mirrors <see cref="ItemServiceMaxLengthTests"/>.
 /// </summary>
-public class ItemServiceMultiValueTests : IDisposable
+public sealed class ItemServiceMultiValueTests : IDisposable
 {
     [SugarTable("mv_thing")]
     [CmsCollection("MvThing")]
@@ -94,12 +94,14 @@ public class ItemServiceMultiValueTests : IDisposable
     private static readonly string[] B2b = ["b2b"];
     private static readonly string[] ApacAndMars = ["apac", "mars"];
 
+    private static readonly string[] ApacEmea = ["apac", "emea"];
+
     [Fact]
     public async Task Create_round_trips_all_three_multi_value_shapes()
     {
         var body = Body(new
         {
-            regions = new[] { "apac", "emea" },
+            regions = ApacEmea,
             audiences = B2b,
             keywords = new object[] { new { value = "tech" }, new { value = "ai", label = "人工智慧" } },
         });
@@ -154,12 +156,14 @@ public class ItemServiceMultiValueTests : IDisposable
             .WithMessage("Field 'keywords' has a tag with an empty value.");
     }
 
+    private static readonly string[] ApacApacEmea = ["apac", "apac", "emea"];
+
     [Fact]
     public async Task Create_de_duplicates_and_drops_blank_tag_labels()
     {
         var body = Body(new
         {
-            regions = new[] { "apac", "apac", "emea" },
+            regions = ApacApacEmea,
             keywords = new object[] { new { value = "tech", label = " " }, new { value = "tech", label = "X" } },
         });
         var created = await _svc.CreateAsync("mvthing", body);

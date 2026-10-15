@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceJsonFieldTests : IDisposable
+public sealed class ItemServiceJsonFieldTests : IDisposable
 {
     [SugarTable("json_thing")]
     [CmsCollection("JsonThing")]
@@ -75,13 +75,17 @@ public class ItemServiceJsonFieldTests : IDisposable
         return doc.RootElement.Clone();
     }
 
+    private static readonly string[] XAndY = ["x", "y"];
+
+    private static readonly int[] OneAndTwo = [1, 2];
+
     [Fact]
     public async Task Object_array_and_scalar_json_round_trip_as_structured_json()
     {
         var body = Body(new
         {
-            attributes = new { a = 1, nested = new { x = "人工智慧" }, arr = new[] { 1, 2 } },
-            requiredData = new[] { "x", "y" },
+            attributes = new { a = 1, nested = new { x = "人工智慧" }, arr = OneAndTwo },
+            requiredData = XAndY,
         });
         var created = await _svc.CreateAsync("jsonthing", body);
         var read = await _svc.GetAsync("jsonthing", created["id"]!.ToString()!);

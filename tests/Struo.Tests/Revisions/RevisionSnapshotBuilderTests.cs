@@ -84,6 +84,8 @@ public sealed class SnapshotBuilderHarness : IDisposable
         return doc.RootElement.Clone();
     }
 
+    private static readonly string[] ApacOnly = ["apac"];
+
     /// <summary>Creates a category + tag, then an article referencing both (M2O + M2M), with a
     /// multi-value own-field and en/zh-TW translations, via <see cref="ItemService.CreateAsync"/>.</summary>
     public async Task<(Guid articleId, Guid categoryId, Guid tagId)> SeedArticleWithRelationsAndI18nAsync()
@@ -99,7 +101,7 @@ public sealed class SnapshotBuilderHarness : IDisposable
             status = "draft",
             categoryId,
             tags = new[] { tagId },
-            regions = new[] { "apac" },
+            regions = ApacOnly,
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "AI" },

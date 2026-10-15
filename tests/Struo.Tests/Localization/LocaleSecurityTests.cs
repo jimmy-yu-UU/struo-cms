@@ -42,12 +42,14 @@ public class LocaleSecurityTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    private static readonly string[] SortByTitle = ["title"];
+
     [Fact]
     public async Task Query_sort_with_sql_injection_locale_returns_400_not_500()
     {
         var c = _factory.CreateClient();
         // A quote-bearing ?locale must be rejected before reaching the sort subquery builder.
-        var body = JsonSerializer.SerializeToElement(new { sort = new[] { "title" } });
+        var body = JsonSerializer.SerializeToElement(new { sort = SortByTitle });
         var resp = await c.PostAsJsonAsync("/api/items/article/query?locale=en'--", body);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -57,7 +59,7 @@ public class LocaleSecurityTests(ApiFactory factory)
     {
         // Sanity: a valid locale code must not be rejected by the format guard.
         var c = _factory.CreateClient();
-        var body = JsonSerializer.SerializeToElement(new { sort = new[] { "title" } });
+        var body = JsonSerializer.SerializeToElement(new { sort = SortByTitle });
         var resp = await c.PostAsJsonAsync("/api/items/article/query?locale=en", body);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }

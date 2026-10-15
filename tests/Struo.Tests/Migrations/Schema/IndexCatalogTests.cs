@@ -42,6 +42,8 @@ public sealed class IndexCatalogTests
         IndexCatalogLiveTests.AssertProbeIndexes(indexes, table);
     }
 
+    private static readonly string[] ColumnsId = ["id"];
+
     [SqliteOnlyFact("SQLite rowid primary key")]
     public void Sqlite_rowid_primary_key_is_reported_as_a_unique_index()
     {
@@ -51,7 +53,7 @@ public sealed class IndexCatalogTests
 
         var indexes = IndexCatalog.Read(client, StruoDbType.Sqlite, "rw_languages");
 
-        indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(new[] { "id" }));
+        indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(ColumnsId));
     }
 
     [SqliteOnlyFact("SQLite expression and partial index DDL")]

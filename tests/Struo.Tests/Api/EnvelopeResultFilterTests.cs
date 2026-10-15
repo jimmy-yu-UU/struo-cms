@@ -19,13 +19,15 @@ public class EnvelopeResultFilterTests
         env.Meta.Should().BeNull();
     }
 
+    private static readonly int[] SingleItem = [1];
+
     [Fact]
     public void Paged_result_becomes_success_with_meta()
     {
-        var res = EnvelopeResultFilter.BuildEnvelope(new OkObjectResult(new PagedResult(new[] { 1 }, 42, 25, 5)));
+        var res = EnvelopeResultFilter.BuildEnvelope(new OkObjectResult(new PagedResult(SingleItem, 42, 25, 5)));
         var env = res.Should().BeOfType<ObjectResult>().Subject.Value.Should().BeOfType<SuccessEnvelope>().Subject;
         env.Meta.Should().Be(new MetaInfo(42, 25, 5));
-        env.Data.Should().BeEquivalentTo(new[] { 1 });
+        env.Data.Should().BeEquivalentTo(SingleItem);
     }
 
     [Fact]

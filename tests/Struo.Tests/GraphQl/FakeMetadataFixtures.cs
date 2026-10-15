@@ -407,7 +407,7 @@ internal static class FakeMetadataFixtures
 
     private sealed class FakeRegistry : IEntityRegistry
     {
-        private static readonly IReadOnlyDictionary<string, EntityDescriptor> ByCollection =
+        private static readonly Dictionary<string, EntityDescriptor> ByCollection =
             new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase)
             {
                 ["article"] = new EntityDescriptor(

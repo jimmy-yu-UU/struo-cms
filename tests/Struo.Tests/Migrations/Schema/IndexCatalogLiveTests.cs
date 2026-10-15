@@ -19,12 +19,18 @@ public sealed class IndexCatalogLiveTests
         { NamespaceFilter = "Struo.Tests.Migrations.Probes.IndexCatalog" },
         NullLoggerFactory.Instance);
 
+    private static readonly string[] ColumnsId = ["id"];
+
+    private static readonly string[] ColumnsA = ["a"];
+
+    private static readonly string[] ColumnsBA = ["b", "a"];
+
     internal static void AssertProbeIndexes(IReadOnlyList<DbIndex> indexes, string table)
     {
-        indexes.Should().Contain(i => i.Name == table + "_ux_ba" && i.IsUnique && i.Columns.SequenceEqual(new[] { "b", "a" }));
-        indexes.Should().Contain(i => i.Name == table + "_ix_a" && !i.IsUnique && i.Columns.SequenceEqual(new[] { "a" }));
-        indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(new[] { "id" }));
-        indexes.Should().OnlyContain(i => i.Columns.All(c => c == c.ToLowerInvariant()));
+        indexes.Should().Contain(i => i.Name == table + "_ux_ba" && i.IsUnique && i.Columns.SequenceEqual(ColumnsBA));
+        indexes.Should().Contain(i => i.Name == table + "_ix_a" && !i.IsUnique && i.Columns.SequenceEqual(ColumnsA));
+        indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(ColumnsId));
+        indexes.Should().OnlyContain(i => i.Columns.All(c => string.CompareOrdinal(c, c.ToLowerInvariant()) == 0));
     }
 
     [Theory, MemberData(nameof(Backends))]

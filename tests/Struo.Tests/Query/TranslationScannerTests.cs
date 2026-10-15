@@ -46,7 +46,7 @@ public class TranslationScannerTests
         var collections = MetadataScanner.ScanTypes([typeof(TPost)]);
         var post = collections.Single(c => c.Name == "tPost");
         post.Translation.Should().NotBeNull();
-        post.Translation!.TranslationEntityType.Should().Be(typeof(TPostTranslation));
+        post.Translation!.TranslationEntityType.Should().Be<TPostTranslation>();
         post.Translation.ForeignKeyProperty.Should().Be("TPostId");
         post.Translation.LocaleProperty.Should().Be("Locale");
         post.Translation.Fields.Should().BeEquivalentTo("title");

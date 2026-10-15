@@ -7,7 +7,7 @@ namespace Struo.Tests.Identity;
 
 public class PasswordHasherTests
 {
-    private readonly IPasswordHasher _hasher = new Argon2idPasswordHasher();
+    private readonly Argon2idPasswordHasher _hasher = new();
 
     [Fact]
     public void Hash_is_not_the_plaintext_and_differs_each_call()

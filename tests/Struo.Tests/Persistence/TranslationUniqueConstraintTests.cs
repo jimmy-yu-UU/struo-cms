@@ -41,7 +41,7 @@ public sealed class TranslationUniqueConstraintTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(ArticleTranslation));
+            client.CodeFirst.InitTables<ArticleTranslation>();
             var articleId = Guid.NewGuid();
 
             client.Insertable(new ArticleTranslation { ArticleId = articleId, Locale = "en", Title = "First" })
@@ -60,7 +60,7 @@ public sealed class TranslationUniqueConstraintTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(FileTranslation));
+            client.CodeFirst.InitTables<FileTranslation>();
             var fileId = Guid.NewGuid();
 
             client.Insertable(new FileTranslation { FileId = fileId, Locale = "en", Title = "First" })
@@ -79,7 +79,7 @@ public sealed class TranslationUniqueConstraintTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables(typeof(ArticleTranslation));
+            client.CodeFirst.InitTables<ArticleTranslation>();
             var articleId = Guid.NewGuid();
 
             client.Insertable(new ArticleTranslation { ArticleId = articleId, Locale = "en", Title = "EN" })

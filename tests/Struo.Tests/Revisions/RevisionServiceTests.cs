@@ -103,10 +103,10 @@ public sealed class RevisionServiceHarness : IDisposable
     }
 
     /// <summary>A partial update body (e.g. <c>{"status":"published"}</c>).</summary>
-    public JsonElement Body(string status) => BodyOf(new { status });
+    public static JsonElement Body(string status) => BodyOf(new { status });
 
     /// <summary>A create body setting Article's Hidden own-field <c>internalNote</c> (fixture).</summary>
-    public JsonElement ArticleBodyWithInternalNote(string status, string internalNote) => BodyOf(new
+    public static JsonElement ArticleBodyWithInternalNote(string status, string internalNote) => BodyOf(new
     {
         status,
         internalNote,
@@ -115,7 +115,7 @@ public sealed class RevisionServiceHarness : IDisposable
 
     /// <summary>A create body with en/zh-TW translations that also set the Hidden+Translatable
     /// <c>internalSlug</c> field on Article's translation sidecar (fixture).</summary>
-    public JsonElement ArticleBodyWithInternalSlug() => BodyOf(new
+    public static JsonElement ArticleBodyWithInternalSlug() => BodyOf(new
     {
         status = "draft",
         translations = new Dictionary<string, object>
@@ -127,7 +127,7 @@ public sealed class RevisionServiceHarness : IDisposable
 
     /// <summary>A partial update body re-pointing the M2O category FK and replacing the M2M tag set
     /// (e.g. to move an article to a different category and clear its tags).</summary>
-    public JsonElement Body(Guid category, Guid[] tags) => BodyOf(new { categoryId = category, tags });
+    public static JsonElement Body(Guid category, Guid[] tags) => BodyOf(new { categoryId = category, tags });
 
     /// <summary>The create-article call as an un-awaited Task, so a failing capture's exception can
     /// be observed via <c>Assert.ThrowsAnyAsync</c> around the whole write.</summary>
@@ -214,7 +214,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");        // create -> rev 1
-        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // update -> rev 2
+        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // update -> rev 2
 
         var list = await h.Store.ListAsync("article", id, default);
         Assert.Equal(2, list.Count);
@@ -246,7 +246,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1 (create), status=draft
-        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2, status=published
+        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2, status=published
 
         var reverted = await h.Service.RevertAsync("article", id, 1, default);      // revert to rev 1 (draft)
         Assert.NotNull(reverted);
@@ -262,7 +262,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
-        await h.Service.UpdateAsync("article", id, h.Body(category: catB, tags: []), default); // rev2: catB, no tags
+        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(category: catB, tags: []), default); // rev2: catB, no tags
 
         await h.Service.RevertAsync("article", id, 1, default);
         var now = await h.Service.GetAsync("article", id, DeepFor("category", "tags"), null, default);
@@ -277,7 +277,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1
-        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default); // rev 2
+        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2
 
         await h.Service.RevertAsync("article", id, 1, default);                     // rev 3, reverting to 1
 
@@ -293,7 +293,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");
-        await h.Service.UpdateAsync("article", id, h.Body(status: "published"), default);
+        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default);
 
         var list = await h.Store.ListAsync("article", id, default);
         Assert.Null(list[0].SourceRevisionNumber);
@@ -328,7 +328,7 @@ public sealed class RevisionServiceTests
     public async Task GetRevision_redacts_hidden_own_field()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalNote("draft", "secret-token"));
+        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token"));
         var id = created["id"]!.ToString()!;
 
         var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
@@ -344,7 +344,7 @@ public sealed class RevisionServiceTests
     public async Task GetRevision_redacts_hidden_translatable_field_in_every_locale()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalSlug());
+        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalSlug());
         var id = created["id"]!.ToString()!;
 
         var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
@@ -367,11 +367,11 @@ public sealed class RevisionServiceTests
     public async Task Revert_restores_hidden_field_value_despite_external_redaction()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", h.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
+        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
         var id = created["id"]!.ToString()!;
         // rev 2: overwrite the hidden field so rev 1's value survives ONLY via the revert body itself.
         await h.Service.UpdateAsync("article", id,
-            h.ArticleBodyWithInternalNote("published", "changed-token"), default);
+            RevisionServiceHarness.ArticleBodyWithInternalNote("published", "changed-token"), default);
 
         // Confirm the externally-visible view (GetRevisionAsync) is redacted, as above.
         var rec = await h.Service.GetRevisionAsync("article", id, 1, default);

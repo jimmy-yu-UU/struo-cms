@@ -8,7 +8,7 @@ namespace Struo.Tests.Identity;
 
 public class UserCredentialStoreTests
 {
-    private static ISqlSugarClient NewDb(ITestDatabase db)
+    private static SqlSugarClient NewDb(ITestDatabase db)
     {
         var config = db.RawConfig();
         config.ConfigureExternalServices = new ConfigureExternalServices
@@ -21,7 +21,7 @@ public class UserCredentialStoreTests
             }
         };
         var client = new SqlSugarClient(config);
-        client.CodeFirst.InitTables(typeof(User));
+        client.CodeFirst.InitTables<User>();
         return client;
     }
 

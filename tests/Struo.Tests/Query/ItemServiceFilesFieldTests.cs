@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceFilesFieldTests : IDisposable
+public sealed class ItemServiceFilesFieldTests : IDisposable
 {
     [SugarTable("files_thing")]
     [CmsCollection("FilesThing")]
@@ -121,10 +121,12 @@ public class ItemServiceFilesFieldTests : IDisposable
             .WithMessage("Field 'requiredGallery' is required.");
     }
 
+    private static readonly string[] NotAGuid = ["not-a-guid"];
+
     [Fact]
     public async Task Non_guid_element_is_rejected_as_bad_request()
     {
-        var body = Body(new { gallery = new[] { "not-a-guid" }, requiredGallery = new[] { A } });
+        var body = Body(new { gallery = NotAGuid, requiredGallery = new[] { A } });
         var act = () => _svc.CreateAsync("filesthing", body);
         await act.Should().ThrowAsync<QueryException>(); // STJ JsonException -> QueryException (400), not 500
     }

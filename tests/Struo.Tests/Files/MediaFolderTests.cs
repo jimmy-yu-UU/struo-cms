@@ -29,7 +29,7 @@ public sealed class MediaFolderTests : IDisposable
 {
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
-    private readonly IMetadataProvider _metadata;
+    private readonly CachedMetadataProvider _metadata;
 
     public MediaFolderTests()
     {

@@ -26,7 +26,7 @@ public class DistributedCacheTicketStoreTests
         return new AuthenticationTicket(new ClaimsPrincipal(identity), "Cookies");
     }
 
-    private static IDistributedCache MemoryCache() =>
+    private static MemoryDistributedCache MemoryCache() =>
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     /// <summary>
@@ -41,7 +41,7 @@ public class DistributedCacheTicketStoreTests
         public readonly ITestDatabase Db = TestBackend.CreateUnitDatabase();
         public readonly ISqlSugarClient Client;
         public readonly IServiceScopeFactory ScopeFactory;
-        public readonly IDistributedCache Cache = MemoryCache();
+        public readonly MemoryDistributedCache Cache = MemoryCache();
         public readonly ListLogger<DistributedCacheTicketStore> Logger = new();
         private readonly ServiceProvider _provider;
 

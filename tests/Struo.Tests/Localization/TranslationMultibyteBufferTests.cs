@@ -21,7 +21,7 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
-    private static object Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
+    private static Dictionary<string, object> Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
     [Fact]
     public async Task Create_with_multibyte_translation_round_trips()
