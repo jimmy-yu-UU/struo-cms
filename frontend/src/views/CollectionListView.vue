@@ -119,16 +119,18 @@ function actionButtons(row: Row) {
       }, () => h(Trash2, { class: 'size-4 text-destructive' })))
     }
   } else if (canDelete.value) {
-    buttons.push(h(Button, {
-      variant: 'ghost', size: 'icon', 'data-testid': 'row-restore',
-      title: t('collectionList.restore'), 'aria-label': t('collectionList.restore'),
-      onClick: () => onRestore(row),
-    }, () => h(Undo2, { class: 'size-4' })))
-    buttons.push(h(Button, {
-      variant: 'ghost', size: 'icon', 'data-testid': 'row-purge',
-      title: t('collectionList.purge'), 'aria-label': t('collectionList.purge'),
-      onClick: () => onPurge(row),
-    }, () => h(Trash2, { class: 'size-4 text-destructive' })))
+    buttons.push(
+      h(Button, {
+        variant: 'ghost', size: 'icon', 'data-testid': 'row-restore',
+        title: t('collectionList.restore'), 'aria-label': t('collectionList.restore'),
+        onClick: () => onRestore(row),
+      }, () => h(Undo2, { class: 'size-4' })),
+      h(Button, {
+        variant: 'ghost', size: 'icon', 'data-testid': 'row-purge',
+        title: t('collectionList.purge'), 'aria-label': t('collectionList.purge'),
+        onClick: () => onPurge(row),
+      }, () => h(Trash2, { class: 'size-4 text-destructive' })),
+    )
   }
   return buttons
 }
