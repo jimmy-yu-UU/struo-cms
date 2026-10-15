@@ -27,7 +27,7 @@ export async function performMove(
 
   const settled = await Promise.allSettled(writes)
   const failure = settled.find((s) => s.status === 'rejected')
-  if (failure && failure.status === 'rejected') throw failure.reason
+  if (failure?.status === 'rejected') throw failure.reason
 
   return { moved: writes.length, skipped }
 }

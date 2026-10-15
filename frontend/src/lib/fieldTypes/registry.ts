@@ -36,7 +36,7 @@ const asOption: ListColumn = {
 const asJoinedOptions: ListColumn = {
   format: (v, f) => (Array.isArray(v)
     ? v.map((x) => f.options?.find((o) => o.value === String(x))?.label ?? String(x)).join(', ')
-    : String(v ?? '')),
+    : toDisplayString(v)),
 }
 const asJoinedTags: ListColumn = {
   format: (v) => (Array.isArray(v)
