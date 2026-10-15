@@ -72,9 +72,8 @@ internal sealed class CollectionSchemaBuilder(
 
         // Repeater input item types — built ONCE per field, referenced by name in both inputs
         // (building them inside AddWritableFields would register a duplicate for create AND update).
-        foreach (var f in meta.Fields)
-            if (f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
-                types.Add(BuildRepeaterItemInputType(meta.Name, f));
+        foreach (var f in meta.Fields.Where(f => f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 }))
+            types.Add(BuildRepeaterItemInputType(meta.Name, f));
 
         // Translation input types — built ONCE per collection (referenced by name in both inputs,
         // like the Repeater item input). Only for collections with a translation sidecar.
@@ -204,7 +203,7 @@ internal sealed class CollectionSchemaBuilder(
         return ObjectType.CreateUnsafe(config);
     }
 
-    private InputObjectType BuildRepeaterItemInputType(string collection, FieldMetadata repeater)
+    private static InputObjectType BuildRepeaterItemInputType(string collection, FieldMetadata repeater)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.RepeaterItemInputTypeName(collection, repeater.Name), null,
@@ -353,7 +352,7 @@ internal sealed class CollectionSchemaBuilder(
         return InputObjectType.CreateUnsafe(config);
     }
 
-    private ObjectType BuildListType(CollectionMetadata meta)
+    private static ObjectType BuildListType(CollectionMetadata meta)
     {
         var config = new ObjectTypeConfiguration(SchemaTypeMapper.TypeName(meta.Name) + "List", null, typeof(PagedResultView));
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
@@ -518,7 +517,7 @@ internal sealed class CollectionSchemaBuilder(
 
             string? sdl = f.Interface switch
             {
-                FieldInterface.Tags => $"[{SchemaTypeMapper.TagItemInputName()}!]",
+                FieldInterface.Tags => $"[{SchemaTypeMapper.TagItemInputName}!]",
                 FieldInterface.Repeater when f.Fields is { Count: > 0 } =>
                     $"[{SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)}!]",
                 _ => SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name)),
@@ -569,7 +568,7 @@ internal sealed class CollectionSchemaBuilder(
             : null;
     }
 
-    private static IReadOnlyList<object> TranslationList(IReadOnlyDictionary<string, object?> parent)
+    private static List<object> TranslationList(IReadOnlyDictionary<string, object?> parent)
     {
         // ItemService.OverlayTranslationsAsync projects translations as the CONCRETE type
         // Dictionary<string, Dictionary<string, object?>> — which does not implement the generic

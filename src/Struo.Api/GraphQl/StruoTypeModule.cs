@@ -56,7 +56,7 @@ public sealed class StruoTypeModule(
     private static InputObjectType TagItemInputType()
     {
         var config = new InputObjectTypeConfiguration(
-            SchemaTypeMapper.TagItemInputName(), null, typeof(IReadOnlyDictionary<string, object?>));
+            SchemaTypeMapper.TagItemInputName, null, typeof(IReadOnlyDictionary<string, object?>));
         config.Fields.Add(new InputFieldConfiguration("value", null, TypeReference.Parse("String!")));
         config.Fields.Add(new InputFieldConfiguration("label", null, TypeReference.Parse("String")));
         return InputObjectType.CreateUnsafe(config);
