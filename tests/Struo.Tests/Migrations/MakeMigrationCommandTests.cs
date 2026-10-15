@@ -59,7 +59,7 @@ namespace Struo.Tests.Migrations
         private ServiceProvider DefaultServices() =>
             Services(typeof(SchemaProbe), typeof(Revision));
 
-        private async Task<(int Code, string Out, string Err)> Run(IServiceProvider sp, params string[] args)
+        private static async Task<(int Code, string Out, string Err)> Run(IServiceProvider sp, params string[] args)
         {
             var (o, e) = (new StringWriter(), new StringWriter());
             var code = await MakeMigrationCommand.RunAsync(args, sp, o, e, Clock);

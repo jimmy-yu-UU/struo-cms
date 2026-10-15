@@ -8,10 +8,12 @@ namespace Struo.Tests.GraphQl;
 
 public class GraphQlQueryBuilderTests
 {
+    private static readonly string[] TitleThenPublishedDesc = ["title", "-publishedAt"];
+
     [Fact]
     public void ParseSort_handles_asc_and_desc_tokens()
     {
-        var s = GraphQlQueryBuilder.ParseSort(new[] { "title", "-publishedAt" });
+        var s = GraphQlQueryBuilder.ParseSort(TitleThenPublishedDesc);
 
         s.Should().HaveCount(2);
         s[0].Field.Should().Be("title");
@@ -20,12 +22,14 @@ public class GraphQlQueryBuilderTests
         s[1].Descending.Should().BeTrue();
     }
 
+    private static readonly string[] IdDesc = ["-id"];
+
     [Fact]
     public void BuildQuery_maps_limit_offset_search_and_filter()
     {
         var q = GraphQlQueryBuilder.BuildQuery(
             filter: new Dictionary<string, object?> { ["status"] = new Dictionary<string, object?> { ["eq"] = "x" } },
-            sort: new[] { "-id" }, limit: 5, offset: 10, search: "term",
+            sort: IdDesc, limit: 5, offset: 10, search: "term",
             deep: null);
 
         q.Limit.Should().Be(5);

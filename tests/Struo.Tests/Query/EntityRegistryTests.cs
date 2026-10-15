@@ -21,7 +21,7 @@ public class EntityRegistryTests
     {
         var d = Build().Get("article");
         d.Should().NotBeNull();
-        d!.EntityType.Should().Be(typeof(Article));
+        d!.EntityType.Should().Be<Article>();
         d.IdProperty.Should().Be("Id");
     }
 

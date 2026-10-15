@@ -12,9 +12,9 @@ public class TranslationQueryTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
-    private static object Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
+    private static Dictionary<string, object> Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
-    private async Task<string> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
+    private static async Task<string> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
     {
         var body = JsonSerializer.SerializeToElement(new
         {
@@ -61,6 +61,8 @@ public class TranslationQueryTests(ApiFactory factory)
         ids.Should().BeEquivalentTo([hit1, hit2]);
     }
 
+    private static readonly string[] SortByTitleDesc = ["-title"];
+
     [Fact]
     public async Task Sort_translatable_field_at_locale()
     {
@@ -76,7 +78,7 @@ public class TranslationQueryTests(ApiFactory factory)
         var zzz = await NewArticle(c, zzzTitle, "Zzz");
         var env = JsonSerializer.SerializeToElement(new
         {
-            sort = new[] { "-title" },
+            sort = SortByTitleDesc,
             filter = new Dictionary<string, object>
             {
                 ["title"] = new Dictionary<string, object> { ["_in"] = new[] { aaaTitle, zzzTitle } }

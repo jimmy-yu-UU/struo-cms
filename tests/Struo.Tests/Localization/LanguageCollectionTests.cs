@@ -14,6 +14,8 @@ public class LanguageCollectionTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
+    private static readonly string[] LanguageFieldNames = ["code", "name", "isDefault", "enabled"];
+
     [Fact]
     public async Task Language_collection_is_registered_in_schema()
     {
@@ -22,7 +24,7 @@ public class LanguageCollectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields")
             .EnumerateArray().Select(f => f.GetProperty("name").GetString())
-            .Should().Contain(new[] { "code", "name", "isDefault", "enabled" });
+            .Should().Contain(LanguageFieldNames);
     }
 
     [Fact]

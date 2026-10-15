@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceRepeaterTests : IDisposable
+public sealed class ItemServiceRepeaterTests : IDisposable
 {
     public sealed class Faq
     {
@@ -167,15 +167,17 @@ public class ItemServiceRepeaterTests : IDisposable
     [Fact]
     public async Task Required_repeater_empty_is_rejected()
     {
-        var body = Body(new { faqs = new object[0] }); // requiredFaqs omitted
+        var body = Body(new { faqs = Array.Empty<object>() }); // requiredFaqs omitted
         var act = () => _svc.CreateAsync("repeaterthing", body);
         await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'requiredFaqs' is required.");
     }
 
+    private static readonly string[] NotAnObject = ["not-an-object"];
+
     [Fact]
     public async Task Non_object_element_is_rejected_as_bad_request()
     {
-        var body = Body(new { faqs = new[] { "not-an-object" }, requiredFaqs = new[] { OneRequired } });
+        var body = Body(new { faqs = NotAnObject, requiredFaqs = new[] { OneRequired } });
         var act = () => _svc.CreateAsync("repeaterthing", body);
         await act.Should().ThrowAsync<QueryException>(); // STJ JsonException -> QueryException (400)
     }

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-public class LocalFileStorageTests : IDisposable
+public sealed class LocalFileStorageTests : IDisposable
 {
     private readonly string _root =
         Path.Combine(Path.GetTempPath(), "struo-files-" + Guid.NewGuid().ToString("N"));

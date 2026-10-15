@@ -14,7 +14,7 @@ namespace Struo.Tests.Documentation;
 /// for the extension-anchored form: a match is a violation iff the cited file resolves in this
 /// repository. A line carrying <c>citation-guard:allow</c> is skipped by both regexes.
 /// </summary>
-public sealed class CodeCitationConventionTests
+public sealed partial class CodeCitationConventionTests
 {
     /// <summary>
     /// A line carrying this literal marker is skipped by both citation regexes below; no real citation
@@ -54,9 +54,8 @@ public sealed class CodeCitationConventionTests
     /// Case-tolerant on the leading character specifically so it also covers <c>frontend/src</c>, where
     /// identifiers are camelCase by convention rather than PascalCase.
     /// </summary>
-    private static readonly Regex ConstructWithRangeCitation = new(
-        @"\b(?<construct>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)(?:[:：]\s?)(?<range>\d+-\d+)\b",
-        RegexOptions.Compiled);
+    [GeneratedRegex(@"\b(?<construct>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)(?:[:：]\s?)(?<range>\d+-\d+)\b")]
+    private static partial Regex ConstructWithRangeCitation();
 
     private static readonly string[] ScanRootFiles = ["AGENTS.md", "CLAUDE.md"];
     private static readonly string[] ScanRootDirs = ["docs/ai", "docs/guide", "frontend/src"];
@@ -190,7 +189,7 @@ public sealed class CodeCitationConventionTests
     private static void CollectConstructWithRangeViolations(
         string relativePath, int lineNumber, string line, List<Violation> violations)
     {
-        foreach (Match match in ConstructWithRangeCitation.Matches(line))
+        foreach (Match match in ConstructWithRangeCitation().Matches(line))
         {
             var construct = match.Groups["construct"].Value;
             var lastSegment = construct[(construct.LastIndexOf('.') + 1)..];

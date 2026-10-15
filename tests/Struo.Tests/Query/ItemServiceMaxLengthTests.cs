@@ -22,7 +22,7 @@ namespace Struo.Tests.Query;
 /// write paths: the non-translatable field loop in <c>Deserialize</c> and the per-locale
 /// loop in <c>SyncTranslationsAsync</c>. Harness mirrors <see cref="ItemServiceRichTextSanitizationTests"/>.
 /// </summary>
-public class ItemServiceMaxLengthTests : IDisposable
+public sealed class ItemServiceMaxLengthTests : IDisposable
 {
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;

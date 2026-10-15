@@ -26,6 +26,8 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public sealed class CoreSchemaSnapshotTests
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     private const string UpdateEnvVar = "UPDATE_SCHEMA_SNAPSHOT";
 
     [Fact]
@@ -100,7 +102,7 @@ public sealed class CoreSchemaSnapshotTests
             ["relationInterfaces"] = CamelCaseNames<RelationInterface>(),
         };
 
-        return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true })
+        return JsonSerializer.Serialize(doc, IndentedJson)
             .Replace("\r\n", "\n").TrimEnd('\n') + "\n";
     }
 
@@ -116,7 +118,7 @@ public sealed class CoreSchemaSnapshotTests
     /// host has the Blog sample wired in process-wide (Support/ContentAssemblyEnvBootstrap.cs), so
     /// /api/schema also serves article/category/tag — sample collections, deleted on fork.
     /// </summary>
-    private static IReadOnlySet<string> CoreCollectionNames() =>
+    private static HashSet<string> CoreCollectionNames() =>
         MetadataScanner.ScanTypes(FrameworkEntityTypes.All)
             .Select(c => c.Name)
             .ToHashSet(StringComparer.Ordinal);
@@ -127,7 +129,7 @@ public sealed class CoreSchemaSnapshotTests
     /// slices the first MAX_COLUMNS entries in array order, so reordering fields here would make the
     /// frontend contract test assert against a column set production never produces.
     /// </summary>
-    private static JsonNode[] CoreCollectionsInWireOrder(string envelopeJson, IReadOnlySet<string> core) =>
+    private static JsonNode[] CoreCollectionsInWireOrder(string envelopeJson, HashSet<string> core) =>
         JsonNode.Parse(envelopeJson)!["data"]!.AsArray()
             .Where(n => core.Contains(n!["name"]!.GetValue<string>()))
             .OrderBy(n => n!["name"]!.GetValue<string>(), StringComparer.Ordinal)
@@ -138,7 +140,7 @@ public sealed class CoreSchemaSnapshotTests
     // default, so the committed file is LF on every platform (.gitattributes expects LF for .json).
     private static string Serialize(JsonNode[] collections) =>
         JsonSerializer.Serialize(new JsonArray(collections),
-            new JsonSerializerOptions { WriteIndented = true })
+            IndentedJson)
                 .Replace("\r\n", "\n").TrimEnd('\n') + "\n";
 
     // Compare on content, not line endings: a Windows checkout can present the committed file

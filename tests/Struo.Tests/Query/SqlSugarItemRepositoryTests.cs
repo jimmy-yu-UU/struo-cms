@@ -13,13 +13,13 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class SqlSugarItemRepositoryTests : IDisposable
+public sealed class SqlSugarItemRepositoryTests : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
-    private readonly IItemRepository _repo;
+    private readonly SqlSugarItemRepository _repo;
 
     public SqlSugarItemRepositoryTests()
     {

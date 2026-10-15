@@ -29,10 +29,12 @@ public class EnvelopeTypesTests
         json.Should().NotContain("meta");
     }
 
+    private static readonly int[] SingleItem = [1];
+
     [Fact]
     public void Success_includes_meta_when_present()
     {
-        var json = JsonSerializer.Serialize(Envelope.Success(new[] { 1 }, new MetaInfo(42, 25, 0)), Web);
+        var json = JsonSerializer.Serialize(Envelope.Success(SingleItem, new MetaInfo(42, 25, 0)), Web);
         json.Should().Contain("\"meta\":{\"total\":42,\"limit\":25,\"offset\":0}");
     }
 

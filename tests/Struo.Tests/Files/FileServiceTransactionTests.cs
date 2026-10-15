@@ -21,7 +21,7 @@ namespace Struo.Tests.Files;
 // nesting-safe IItemRepository.InTransactionAsync helper (join-if-active), not raw
 // BeginTran/CommitTran/RollbackTran, so that when invoked inside an outer transaction the delete
 // joins it and an outer rollback undoes the delete.
-public class FileServiceTransactionTests : IDisposable
+public sealed class FileServiceTransactionTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage
     {
@@ -49,7 +49,7 @@ public class FileServiceTransactionTests : IDisposable
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
-    private readonly IItemRepository _repo;
+    private readonly SqlSugarItemRepository _repo;
     private readonly FileService _svc;
 
     public FileServiceTransactionTests()

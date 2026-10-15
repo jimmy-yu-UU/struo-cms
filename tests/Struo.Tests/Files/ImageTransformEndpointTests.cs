@@ -14,7 +14,7 @@ public class ImageTransformEndpointTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<string> UploadPng(System.Net.Http.HttpClient c, int w, int h)
+    private static async Task<string> UploadPng(System.Net.Http.HttpClient c, int w, int h)
     {
         var bytes = Image.Black(w, h).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png");
         var content = new ByteArrayContent(bytes);

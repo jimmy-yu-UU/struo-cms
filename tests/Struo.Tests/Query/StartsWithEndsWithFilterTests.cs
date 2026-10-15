@@ -24,7 +24,7 @@ public class StartsWithEndsWithFilterTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<string> Post(System.Net.Http.HttpClient c, string col, object body) =>
+    private static async Task<string> Post(System.Net.Http.HttpClient c, string col, object body) =>
         Root(await (await c.PostAsJsonAsync($"/api/items/{col}", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 

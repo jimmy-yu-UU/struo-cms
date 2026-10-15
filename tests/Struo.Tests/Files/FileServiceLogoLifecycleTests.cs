@@ -23,7 +23,7 @@ namespace Struo.Tests.Files;
 // deleted, which would otherwise leave a dangling reference that ConfigController would keep
 // resolving into a dead /api/files/{id}/content URL. FileService.DeleteAsync must null the column,
 // inside the same transaction as the file row delete, whenever the deleted file is the current logo.
-public class FileServiceLogoLifecycleTests : IDisposable
+public sealed class FileServiceLogoLifecycleTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage
     {
@@ -91,7 +91,7 @@ public class FileServiceLogoLifecycleTests : IDisposable
         return id;
     }
 
-    private Task InsertSiteSettingsAsync(Guid? logoFileId) =>
+    private Task<int> InsertSiteSettingsAsync(Guid? logoFileId) =>
         _db.Insertable(new SiteSettings
         {
             Id = SiteSettings.SingletonId, BrandName = "Brand", LogoFileId = logoFileId, UpdatedAt = DateTime.UtcNow,

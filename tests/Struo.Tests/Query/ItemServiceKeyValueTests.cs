@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceKeyValueTests : IDisposable
+public sealed class ItemServiceKeyValueTests : IDisposable
 {
     [SugarTable("kv_thing")]
     [CmsCollection("KvThing")]

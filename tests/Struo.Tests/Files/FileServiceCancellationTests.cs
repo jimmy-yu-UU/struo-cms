@@ -12,7 +12,7 @@ namespace Struo.Tests.Files;
 
 // FileService by-id read must forward the CancellationToken to the ORM query so an
 // already-cancelled request stops at the DB call instead of running to completion.
-public class FileServiceCancellationTests : IDisposable
+public sealed class FileServiceCancellationTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage
     {

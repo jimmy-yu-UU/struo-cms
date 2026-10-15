@@ -15,7 +15,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceRichTextSanitizationTests : IDisposable
+public sealed class ItemServiceRichTextSanitizationTests : IDisposable
 {
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;

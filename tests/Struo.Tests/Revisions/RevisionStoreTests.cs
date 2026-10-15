@@ -25,7 +25,7 @@ public sealed class RevisionStoreHarness : IDisposable
         Db = SqlSugarClientFactory.Create(
             _database.Options(),
             new TestCurrentUserAccessor(Tester));
-        Db.CodeFirst.InitTables(typeof(Revision));
+        Db.CodeFirst.InitTables<Revision>();
         Store = new SqlSugarRevisionStore(Db, new TestCurrentUserAccessor(Tester));
     }
 

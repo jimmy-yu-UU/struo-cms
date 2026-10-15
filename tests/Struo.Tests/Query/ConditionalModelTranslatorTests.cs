@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ConditionalModelTranslatorTests
+public partial class ConditionalModelTranslatorTests
 {
     private static (ISqlSugarClient db, EntityDescriptor d, ITestDatabase file) Setup()
     {
@@ -304,8 +304,10 @@ public class ConditionalModelTranslatorTests
 
     /// <summary>Collapses runs of whitespace to a single space so SQL-phrase assertions
     /// are not defeated by SqlSugar's irregular internal spacing.</summary>
-    private static string Normalize(string sql) =>
-        System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ");
+    private static string Normalize(string sql) => WhitespaceRun().Replace(sql, " ");
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s+")]
+    private static partial System.Text.RegularExpressions.Regex WhitespaceRun();
 
     public static TheoryData<string> UtcInstantInputs() => new(UtcInstantInput.Forms);
 
