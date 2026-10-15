@@ -16,6 +16,22 @@
   `TagItemInputName`.
 :::
 
+### Security
+
+- On MySQL and MariaDB, a language code could inject SQL through a sort on a translatable field. A
+  language written with a `"Code"` JSON key instead of `code` skipped the code-format check, and the
+  sort embedded the locale in the ORDER BY text as a quote-doubled string literal, which those
+  backends do not treat as safe. Sorting is now built from typed SqlSugar expressions and binds the
+  locale as a SQL parameter, so no SQL text is assembled for any sort. The code-format rule
+  (`[A-Za-z0-9_-]`, 1 to 35 characters) now runs on the stored language row inside the write
+  transaction, whatever the JSON key casing.
+
+### Upgrade notes
+
+The language-code format rule checks every row of the language collection on each write to it. A
+malformed code that is already stored blocks writes to the language collection until you correct it.
+Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and fix them first.
+
 ## 0.10.0 — 2026-10-14
 
 ::: danger Breaking

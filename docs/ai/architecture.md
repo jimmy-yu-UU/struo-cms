@@ -268,8 +268,8 @@ facade's own `filters` field (a field initializer cannot reference another insta
 none of these types holds state beyond its constructor arguments, so the extra instances behave
 identically to sharing one:
 
-- `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
-  query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
+- `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds typed `OrderBy` sort-key lambdas (`OrderTerm`) for the
+  query DSL, with no SQL text; the only collaborator registered as a scoped DI service. Not a delegation target —
   used inline in `QueryAsync`.
 - `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
   DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL

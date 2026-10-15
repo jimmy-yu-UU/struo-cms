@@ -121,10 +121,9 @@ query filter (`db.QueryFilter.AddTableFilter<ISoftDeletable>`); a fork does not 
 or re-register any of them.
 
 Every database access goes through SqlSugar; schema changes and seed data are FluentMigrator
-migrations. Only four deliberate exceptions assemble string SQL: the relation-filter subquery
-wrapper, the ORDER BY text `OrderByExpressionBuilder` assembles, the migration lock
-`MigrationLockSql`, and `IndexCatalog`'s read-only catalog queries for indexes. See
-[Chapter 21](21-schema-and-upgrades.md#the-four-raw-sql-exceptions-in-core) for details.
+migrations. Only three deliberate exceptions assemble string SQL: the relation-filter subquery
+wrapper, the migration lock `MigrationLockSql`, and `IndexCatalog`'s read-only catalog queries for indexes. See
+[Chapter 21](21-schema-and-upgrades.md#the-three-raw-sql-exceptions-in-core) for details.
 
 ## Technology stack
 
