@@ -73,8 +73,8 @@ internal static class CollectionResolvers
             DeletedAccessGuard.EnsureCanViewDeleted(ctx.Service<IPermissionService>(), collection, deleted);
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);
         var query = GraphQlQueryBuilder.BuildQuery(
-            filter, sort, limit, offset, search, deep,
-            collection, RelationTargets(metadata), facets, aggregate);
+            new GraphQlQueryArgs(filter, sort, limit, offset, search, deep, facets, aggregate),
+            collection, RelationTargets(metadata));
         var page = await ctx.Service<IGraphQlDataSource>().QueryAsync(collection, query, locale, deleted, ctx.RequestAborted);
         return new PagedResultView(page.Data.Cast<object>().ToList(), page.Total, page.Facets ?? [], Http.MetaWire.Aggregate(page.Aggregate));
     }
