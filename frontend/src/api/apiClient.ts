@@ -40,6 +40,11 @@ export class ApiError extends Error {
 const CSRF_HEADER = 'X-Struo-CSRF'
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
 
+function serializeBody(body: unknown, isForm: boolean): FormData | string | undefined {
+  if (body === undefined) return undefined
+  return isForm ? (body as FormData) : JSON.stringify(body)
+}
+
 export class ApiClient {
   private readonly baseUrl: string
   private onUnauthorized: (() => void) | null = null
@@ -90,7 +95,7 @@ export class ApiClient {
       method,
       credentials: 'include',
       headers: Object.keys(headers).length > 0 ? headers : undefined,
-      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
+      body: serializeBody(body, isForm),
     })
 
     if (res.status === 401) this.onUnauthorized?.()
