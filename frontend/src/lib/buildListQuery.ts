@@ -1,15 +1,20 @@
 export type FilterSpec = Record<string, { op: string; value: string }>
 
+export interface ListQueryOptions {
+  sort?: string
+  search?: string
+  filter?: FilterSpec
+  locale?: string
+  deleted?: 'exclude' | 'only' | 'with'
+  deep?: string[]
+}
+
 export function buildListQuery(
   page: number,
   rows: number,
-  sort?: string,
-  search?: string,
-  filter?: FilterSpec,
-  locale?: string,
-  deleted?: 'exclude' | 'only' | 'with',
-  deep?: string[],
+  opts: ListQueryOptions = {},
 ): Record<string, string> {
+  const { sort, search, filter, locale, deleted, deep } = opts
   const params: Record<string, string> = {
     limit: String(rows),
     offset: String(page * rows),
@@ -23,6 +28,6 @@ export function buildListQuery(
   }
   if (locale) params.locale = locale
   if (deleted && deleted !== 'exclude') params.deleted = deleted
-  if (deep && deep.length) params.deep = deep.join(',')
+  if (deep?.length) params.deep = deep.join(',')
   return params
 }

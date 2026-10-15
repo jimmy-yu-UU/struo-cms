@@ -28,9 +28,8 @@ export type RevisionDetail = RevisionInfo & { snapshot: unknown }
 
 export const itemsApi = {
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
-    const params = buildListQuery(
-      opts.page, opts.rows, opts.sort, opts.search, opts.filter, opts.locale, opts.deleted, opts.deep,
-    )
+    const { page, rows, ...query } = opts
+    const params = buildListQuery(page, rows, query)
     const qs = new URLSearchParams(params).toString()
     const path = qs ? `/items/${collection}?${qs}` : `/items/${collection}`
     const res = await apiClient.getRaw<ListEnvelope>(path)
