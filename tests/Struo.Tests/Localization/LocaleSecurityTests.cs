@@ -42,6 +42,8 @@ public class LocaleSecurityTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    private static readonly string[] SortByTitle = ["title"];
+
     [Fact]
     public async Task Query_sort_with_sql_injection_locale_returns_400_not_500()
     {
@@ -51,8 +53,6 @@ public class LocaleSecurityTests(ApiFactory factory)
         var resp = await c.PostAsJsonAsync("/api/items/article/query?locale=en'--", body);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
-
-    private static readonly string[] SortByTitle = ["title"];
 
     [Fact]
     public async Task Query_with_well_formed_locale_still_works()

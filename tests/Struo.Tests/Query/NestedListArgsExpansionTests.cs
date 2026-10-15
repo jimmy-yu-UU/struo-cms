@@ -111,6 +111,8 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         tags[0].GetProperty("name").GetString().Should().Be("AI");
     }
 
+    private static readonly string[] SortByStatus = ["status"];
+
     [Fact]
     public async Task Nested_o2m_sort_and_limit_apply_per_parent()
     {
@@ -200,8 +202,6 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         articles.GetArrayLength().Should().Be(1); // only article A (tagged "Wanted-8c3b")
         articles[0].GetProperty("id").GetString().Should().Be(articleA);
     }
-
-    private static readonly string[] SortByStatus = ["status"];
 
     [Fact]
     public async Task Limit_trims_before_recursing_into_nested_deep()
