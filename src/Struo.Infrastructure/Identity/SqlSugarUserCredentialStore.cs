@@ -9,7 +9,7 @@ public sealed class SqlSugarUserCredentialStore(ISqlSugarClient db) : IUserCrede
     {
         var lowered = email.ToLowerInvariant();
         var u = await db.Queryable<User>()
-            .Where(x => x.Email.ToLower() == lowered)
+            .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);
         return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive);
     }

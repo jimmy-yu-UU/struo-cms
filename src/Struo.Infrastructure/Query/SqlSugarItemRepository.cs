@@ -134,12 +134,12 @@ public sealed class SqlSugarItemRepository(
     // they keep ExecuteReturnEntityAsync and — like the tran APIs — cannot forward ct.
     private async Task<object> CreateGenericAsync<T>(object entity, CancellationToken ct) where T : class, new()
     {
-        var hasIdentityPk = db.EntityMaintenance.GetEntityInfo(typeof(T))
+        var hasIdentityPk = db.EntityMaintenance.GetEntityInfo<T>()
             .Columns.Any(c => c.IsPrimarykey && c.IsIdentity);
         if (hasIdentityPk)
         {
             ct.ThrowIfCancellationRequested();
-            return (await db.Insertable((T)entity).ExecuteReturnEntityAsync())!;
+            return (await db.Insertable((T)entity).ExecuteReturnEntityAsync());
         }
 
         await db.Insertable((T)entity).ExecuteCommandAsync(ct);
@@ -171,8 +171,8 @@ public sealed class SqlSugarItemRepository(
         {
             var expected = ae.Version;
             ae.Version = expected + 1;
-            var idColumn = db.EntityMaintenance.GetDbColumnName(nameof(Struo.Domain.Auditing.AuditableEntity.Id), typeof(T));
-            var versionColumn = db.EntityMaintenance.GetDbColumnName(nameof(Struo.Domain.Auditing.AuditableEntity.Version), typeof(T));
+            var idColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Id));
+            var versionColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Version));
             var affected = await db.Updateable((T)entity)
                 .Where($"{idColumn} = @__ocId AND {versionColumn} = @__ocVersion",
                     new { __ocId = ae.Id, __ocVersion = expected })
