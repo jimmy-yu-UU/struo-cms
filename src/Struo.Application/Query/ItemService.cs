@@ -169,13 +169,12 @@ public sealed class ItemService(
         if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
             throw new QueryException(
                 "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
-        // A non-object top-level body (array/scalar) reaches ValidateLanguageCodeIfNeeded /
-        // Deserialize below, both of which assume an object and throw an unhandled
+        // A non-object top-level body (array/scalar) reaches
+        // Deserialize below, which assumes an object and throws an unhandled
         // InvalidOperationException (-> 500) otherwise. Reject it here as the established
         // client-error (-> 400) path instead.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
-        ValidateLanguageCodeIfNeeded(collection, body);
         var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
 
@@ -213,10 +212,9 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
         // Same non-object-body guard as CreateAsync — placed identically, right after the
-        // permission checks and before ValidateLanguageCodeIfNeeded/Deserialize.
+        // permission checks and before Deserialize.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
-        ValidateLanguageCodeIfNeeded(collection, body);
         var d = registry.Get(collection)!;
 
         // Merge update: start from the existing row and overlay ONLY the fields the client actually
@@ -325,22 +323,6 @@ public sealed class ItemService(
     {
         if (IsLanguageCollection(collection))
             languages.Invalidate();
-    }
-
-    /// <summary>
-    /// When writing to the <c>language</c> collection, validates that the <c>code</c> field in
-    /// <paramref name="body"/> matches the strict locale-format whitelist so that a crafted code
-    /// value cannot later be used to inject SQL via the translatable sort subquery.
-    /// </summary>
-    private static void ValidateLanguageCodeIfNeeded(string collection, JsonElement body)
-    {
-        if (!IsLanguageCollection(collection)) return;
-        if (!body.TryGetProperty("code", out var codeElem)) return;
-        var code = codeElem.ValueKind == JsonValueKind.String ? codeElem.GetString() : null;
-        if (code is null) return; // missing/null code handled by required-field validation
-        if (!LocaleFormat.IsValid(code))
-            throw new QueryException(
-                $"Language code '{code}' contains invalid characters. Codes must match [A-Za-z0-9_-]{{1,35}}.");
     }
 
     /// <summary>

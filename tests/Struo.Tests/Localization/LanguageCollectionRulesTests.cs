@@ -42,6 +42,17 @@ public sealed class LanguageCollectionRulesTests : IDisposable
         (await act.Should().ThrowAsync<QueryException>()).WithMessage("Language code 'EN' already exists.");
     }
 
+    [Theory]
+    [InlineData("bad code")]
+    [InlineData("x' OR 1=1 #")]
+    public async Task Code_outside_the_locale_format_is_rejected(string code)
+    {
+        await _db.Insertable(new Language { Code = code, Name = "bad", Enabled = false, Sort = 9 }).ExecuteCommandAsync();
+        var act = () => _rules.EnsureInvariantsAsync();
+        (await act.Should().ThrowAsync<QueryException>())
+            .WithMessage($"Language code '{code}' contains invalid characters. Codes must match [A-Za-z0-9_-]{{1,35}}.");
+    }
+
     [Fact]
     public async Task Disabling_every_language_is_rejected()
     {

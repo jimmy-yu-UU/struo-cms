@@ -42,6 +42,53 @@ public class LocaleSecurityTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    private static StringContent RawJson(string json) => new(json, System.Text.Encoding.UTF8, "application/json");
+
+    private static async Task<bool> LanguageExistsAsync(HttpClient c, string code)
+    {
+        var list = Root(await (await c.GetAsync("/api/items/language?limit=200")).Content.ReadAsStringAsync());
+        return list.GetProperty("data").EnumerateArray()
+            .Any(r => string.Equals(r.GetProperty("code").GetString(), code, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Create_language_with_capitalised_Code_key_is_validated()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var bad = "x' OR 1=1 #";
+        var resp = await c.PostAsync("/api/items/language",
+            RawJson("{\"Code\":\"x' OR 1=1 #\",\"Name\":\"X\"}"));
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await LanguageExistsAsync(c, bad)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Update_language_with_duplicate_case_variant_keys_is_validated()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var create = await c.PostAsync("/api/items/language",
+            RawJson("{\"code\":\"zz-keep\",\"name\":\"Keep\",\"enabled\":false,\"sort\":97}"));
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetRawText();
+
+        var resp = await c.PutAsync($"/api/items/language/{id}",
+            RawJson("{\"code\":\"en\",\"Code\":\"bad code\"}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await LanguageExistsAsync(c, "zz-keep")).Should().BeTrue();
+        (await LanguageExistsAsync(c, "bad code")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Create_language_with_valid_capitalised_Code_key_succeeds()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var resp = await c.PostAsync("/api/items/language",
+            RawJson("{\"Code\":\"fr-CA\",\"Name\":\"French\",\"Enabled\":false}"));
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        (await LanguageExistsAsync(c, "fr-CA")).Should().BeTrue();
+    }
+
     private static readonly string[] SortByTitle = ["title"];
 
     [Fact]
