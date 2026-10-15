@@ -100,6 +100,6 @@ internal static class IndexCatalog
         [SugarColumn(ColumnName = "column_name")]
         public string ColumnName { get; set; } = "";
 
-        public int Ordinal { get; set; }
+        public int Ordinal { get; init; }
     }
 }
