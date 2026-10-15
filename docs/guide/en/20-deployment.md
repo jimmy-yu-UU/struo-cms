@@ -36,7 +36,7 @@ as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; 
 environment plays no part in seeding.
 
 The template ships no bootstrap password. Leave it empty and the seed generates a random
-24-character one, logged once as a Warning in the `migrate` output (or the API log, when the API
+password of at least 24 characters, logged once as a Warning in the `migrate` output (or the API log, when the API
 runs the migrations); copy it from there, because nothing prints it again. A password you set must
 satisfy `Auth:Password` and may not be `admin`, in any environment. While a weak value is
 configured, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error

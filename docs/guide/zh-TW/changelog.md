@@ -14,7 +14,7 @@
 - `SchemaTypeMapper.TagItemInputName` 是常數，不是方法。把 `TagItemInputName()` 改成 `TagItemInputName`。
 - 範本不再附帶 bootstrap 管理員密碼。`appsettings.json` 裡的 `Auth:BootstrapAdmin:Password` 是 `""`，
   `docker-compose.yml` 的 `STRUO_ADMIN_PASSWORD` 預設為空。密碼留空時，建立管理員的那次執行會隨機產生
-  24 個字元的密碼，並以 Warning 印出一次。設定的密碼若不符合 `Auth:Password`，或不分大小寫等於 `admin`，
+  至少 24 個字元的密碼，並以 Warning 印出一次。設定的密碼若不符合 `Auth:Password`，或不分大小寫等於 `admin`，
   現在會在任何環境被拒絕：`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會失敗，錯誤訊息點名
   `Auth__BootstrapAdmin__Password`，資料庫已經植入過也一樣，直到把值改好或移除。只在 Production 出現的
   預設密碼警告已移除。Playwright 測試從 `E2E_PASSWORD` 讀密碼，這個變數是必填。原本依賴
@@ -39,12 +39,16 @@
 
 ### 升級說明
 
-語言代碼的格式規則在每次寫入語言集合時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓語言集合
-的寫入被擋下，直到你修正它為止。請先檢查已儲存的語言資料列裡是否有不符合 `[A-Za-z0-9_-]{1,35}` 的代碼，
-並先修正。
+語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
+語言集合的所有寫入被擋下，直到你修正它為止；若有兩個以上格式不合的資料列，API 既修不了也刪不掉它們。請先檢查
+已儲存的語言資料列裡是否有不符合 `[A-Za-z0-9_-]{1,35}` 的代碼，並在升級前直接在資料庫裡修正或刪除這些資料列。
 
-若 `Oidc:Authority` 含有 `common`、`organizations` 或 `consumers`，升級前請先設定 `Oidc:AllowedTenantId`
-或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。
+若已啟用 OIDC，且 `Oidc:Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段（或 consumers
+租用戶的 GUID），升級前請先設定 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。
+
+若你的 `.env` 是從較早的 `.env.example` 複製來的，裡面會有 `STRUO_ADMIN_PASSWORD=admin`。升級前請清空它，或改成
+符合 `Auth:Password` 的值：compose 的 `api` 服務會執行 `Database:MigrateOnStartup`，遇到這個值就拒絕啟動，資料庫
+已經植入過也一樣。
 
 ## 0.10.0 — 2026-10-14
 

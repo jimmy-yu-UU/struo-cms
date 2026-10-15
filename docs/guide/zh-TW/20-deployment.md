@@ -28,7 +28,7 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
 那個 job 的環境裡，API 自己的環境跟植入無關。
 
-範本不附 bootstrap 密碼。留空的話，seed 會隨機產生 24 個字元的密碼，在 `migrate` 的輸出（由 API
+範本不附 bootstrap 密碼。留空的話，seed 會隨機產生至少 24 個字元的密碼，在 `migrate` 的輸出（由 API
 自己跑 migration 時則是 API 的 log）以 Warning 印出一次；請當場複製，之後不會再印。自己指定的密碼
 在任何環境都必須符合 `Auth:Password`，而且不能是 `admin`。只要設定的是弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
 啟動都會拒絕（資料庫已經植入過也一樣），錯誤訊息點名 `Auth__BootstrapAdmin__Password`；帳號建立之後就把

@@ -306,8 +306,8 @@ does (dispatching on two runtime types at once — here, entity type and the fac
 not just one), rather than being the only collaborator that needs it. `AggregateQueries` uses
 `GenericDispatcher` alone (dispatch on entity type only, since its projection carries every requested
 op/field in one row regardless of their individual value types). Not `TransactionRunner` (plain C#
-generics) or `OrderByExpressionBuilder` (a single reflection `GetProperty` lookup, no per-entity-type
-dispatch).
+generics) or `OrderByExpressionBuilder` (it builds expression trees from property names through
+`SortExpressionFactory`, with no per-entity-type dispatch).
 
 ### `IRelationExpander`
 

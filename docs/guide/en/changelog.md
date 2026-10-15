@@ -16,12 +16,11 @@
   `TagItemInputName`.
 - The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
   `appsettings.json` and `STRUO_ADMIN_PASSWORD` defaults to empty in `docker-compose.yml`. When the
-  password is empty, the run that creates the admin generates a random 24-character one and logs it once
-  as a Warning. A configured password that fails `Auth:Password` or equals `admin` in any letter case
+  password is empty, the run that creates the admin generates a random password of at least 24
+  characters and logs it once as a Warning. A configured password that fails `Auth:Password` or equals `admin` in any letter case
   is refused in every environment: `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start fail
   with an error naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded, until
-  the value is fixed or removed. The
-  Production-only default-password warning is gone. The Playwright suites read the password from
+  the value is fixed or removed. The Production-only default-password warning is gone. The Playwright suites read the password from
   `E2E_PASSWORD`, which is required. A fork that relied on `admin@admin.com` / `admin` must set a
   password or read the generated one from the `migrate` output.
 - An enabled `Oidc` section whose `Authority` has a path segment of `common`, `organizations` or
@@ -47,12 +46,20 @@
 
 ### Upgrade notes
 
-The language-code format rule checks every row of the language collection on each write to it. A
-malformed code that is already stored blocks writes to the language collection until you correct it.
-Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and fix them first.
+The language-code format rule checks every row of the language collection on each write to it,
+including a delete. A malformed code that is already stored blocks every write to the collection
+until it is corrected, and with two or more malformed rows the API can neither fix nor delete them.
+Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and correct or delete the
+malformed rows directly in the database before upgrading.
 
-If `Oidc:Authority` contains `common`, `organizations` or `consumers`, set `Oidc:AllowedTenantId` or
-`Oidc:AllowedEmailDomains` before upgrading, or the host refuses to start.
+If OIDC is enabled and `Oidc:Authority` has a path segment `common`, `organizations` or `consumers`
+(or the consumers tenant GUID), set `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` before
+upgrading, or the host refuses to start.
+
+If your `.env` was copied from an earlier `.env.example`, it sets `STRUO_ADMIN_PASSWORD=admin`. Clear
+it, or set a value that meets `Auth:Password`, before upgrading: the compose `api` service runs
+`Database:MigrateOnStartup` and refuses to start with that value, even on a database that is already
+seeded.
 
 ## 0.10.0 — 2026-10-14
 

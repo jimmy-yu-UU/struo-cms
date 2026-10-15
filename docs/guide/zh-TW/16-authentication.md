@@ -12,7 +12,7 @@
 `Administrator`，帳密取自 `Auth:BootstrapAdmin`，密碼留空就改用隨機產生的。這件事只做一次，之後改設定再重開，對既有
 資料庫什麼都不會發生。
 
-範本不附 bootstrap 密碼。`Auth:BootstrapAdmin:Password` 留空時，seed 會隨機產生 24 個字元的密碼，並在
+範本不附 bootstrap 密碼。`Auth:BootstrapAdmin:Password` 留空時，seed 會隨機產生至少 24 個字元的密碼，並在
 建立帳號的那次執行裡以 Warning 印出一次。自己設定的密碼會經過下一節的密碼原則，而且 `admin`（不分
 大小寫）會被拒絕；設定的值還是弱值時，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
 `Auth__BootstrapAdmin__Password`。這個值只用來植入帳號，之後可以移除。

@@ -260,8 +260,8 @@ exception (500) instead.
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
 migration reads them straight from configuration as strings, so the environment that runs `migrate`
-needs them. An empty password means the seed generates a random 24-character one and logs it once
-as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
+needs them. An empty password means the seed generates a random password of at least 24 characters and logs
+it once as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
 and may not be `admin` in any letter case. While it holds a weak value, `migrate`,
 `migrate:preview` and a start with `Database:MigrateOnStartup` all refuse, with an error that names
 `Auth__BootstrapAdmin__Password`. The value only seeds the account, so once the account exists it can
