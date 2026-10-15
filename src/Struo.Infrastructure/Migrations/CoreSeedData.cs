@@ -67,7 +67,7 @@ public sealed record CoreSeedData(
     {
         if (PasswordPolicy.Validate(password, policy) is null
             && !string.Equals(password, WeakPasswordLiteral, StringComparison.OrdinalIgnoreCase)) return;
-        throw new InvalidOperationException(
+        throw new BootstrapPasswordRefusedException(
             $"Auth__BootstrapAdmin__Password is too weak: use at least {policy.MinLength} characters and not " +
             $"'{WeakPasswordLiteral}', or leave it empty so a random password is generated.");
     }

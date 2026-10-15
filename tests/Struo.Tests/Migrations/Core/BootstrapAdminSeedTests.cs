@@ -1,8 +1,10 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Application.Security;
@@ -10,6 +12,7 @@ using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Commands;
+using Struo.Infrastructure.Migrations.FailAfterSeedProbe;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -29,15 +32,10 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         _h.Dispose();
     }
 
-    private sealed class CapturingProvider : ILoggerProvider, ILogger
+    private sealed class CapturingProvider(ListLogger logger) : ILoggerProvider
     {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
-        public ILogger CreateLogger(string categoryName) => this;
+        public ILogger CreateLogger(string categoryName) => logger;
         public void Dispose() { }
-        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception)));
     }
 
     [Theory]
@@ -93,7 +91,7 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     {
         var act = () => CoreMigrationHarness.Seed("a@b.c", weak);
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*Auth__BootstrapAdmin__Password*");
+        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*Auth__BootstrapAdmin__Password*");
     }
 
     [Fact]
@@ -103,14 +101,15 @@ public sealed class BootstrapAdminSeedTests : IDisposable
             new LocalizationOptions(), new Argon2idPasswordHasher(), "a@b.c", "only-ten-ch", [],
             new PasswordPolicyOptions { MinLength = 12 });
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*12 characters*");
+        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*12 characters*");
     }
 
     [Fact]
     public async Task Migrate_prints_generated_password_once()
     {
-        var capture = new CapturingProvider();
-        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(capture));
+        var capture = new ListLogger();
+        var provider = new CapturingProvider(capture);
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
         using var sp = Services(factory);
 
         var first = await Run(sp, "migrate");
@@ -131,8 +130,9 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     [Fact]
     public async Task Preview_never_prints_password()
     {
-        var capture = new CapturingProvider();
-        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(capture));
+        var capture = new ListLogger();
+        var provider = new CapturingProvider(capture);
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
         using var sp = Services(factory);
 
         var preview = await Run(sp, "migrate:preview");
@@ -147,20 +147,44 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     }
 
     [Fact]
-    public void Shipped_configuration_ships_no_bootstrap_password()
+    public async Task A_failing_later_migration_still_reports_the_generated_password()
     {
-        var shipped = new ConfigurationBuilder()
-            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false).Build();
+        var capture = new ListLogger();
+        var provider = new CapturingProvider(capture);
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
+        MigrationCli.OptionsOverride = o => o with { NamespaceFilter = "Struo.Infrastructure.Migrations" };
+        using var sp = Services(factory, FailAfterSeedProbe.TriggerEmail, [typeof(StruoMigration).Assembly, typeof(FailAfterSeedProbe).Assembly]);
 
-        shipped["Auth:BootstrapAdmin:Password"].Should().BeNullOrEmpty();
+        var run = await Run(sp, "migrate");
+
+        run.Code.Should().Be(MigrationCli.Failure);
+        run.Err.Should().Contain(FailAfterSeedProbe.Message);
+        var hash = _h.Db().Queryable<User>().Single().Password;
+        var line = capture.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message)
+            .Should().ContainSingle(m => m.Contains(FailAfterSeedProbe.TriggerEmail)).Subject;
+        var password = Regex.Match(line, "password ([A-Za-z0-9]{24})").Groups[1].Value;
+        new Argon2idPasswordHasher().Verify(hash, password).Should().BeTrue();
     }
 
-    private ServiceProvider Services(ILoggerFactory factory)
+    [Fact]
+    public async Task A_refused_bootstrap_password_fails_the_command_without_a_stack_trace()
+    {
+        using var sp = Services(NullLoggerFactory.Instance, "gen@example.com", [typeof(StruoMigration).Assembly], "admin");
+
+        var run = await Run(sp, "migrate");
+
+        run.Code.Should().Be(MigrationCli.Failure);
+        run.Err.Should().Contain("migrate failed:").And.Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
+    }
+
+    private ServiceProvider Services(
+        ILoggerFactory factory, string email = "gen@example.com",
+        Assembly[]? assemblies = null, string password = "")
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Auth:BootstrapAdmin:Email"] = "gen@example.com",
-            ["Auth:BootstrapAdmin:Password"] = "",
+            ["Auth:BootstrapAdmin:Email"] = email,
+            ["Auth:BootstrapAdmin:Password"] = password,
         }).Build();
         return new ServiceCollection()
             .AddSingleton(Options.Create(_h.Database.Options(_h.Prefix)))
@@ -168,7 +192,7 @@ public sealed class BootstrapAdminSeedTests : IDisposable
             .AddSingleton(Options.Create(new LocalizationOptions()))
             .AddSingleton(Options.Create(new PasswordPolicyOptions()))
             .AddSingleton<IPasswordHasher, Argon2idPasswordHasher>()
-            .AddSingleton(new ScannedAssemblies([typeof(StruoMigration).Assembly]))
+            .AddSingleton(new ScannedAssemblies(assemblies ?? [typeof(StruoMigration).Assembly]))
             .AddSingleton(factory)
             .BuildServiceProvider();
     }

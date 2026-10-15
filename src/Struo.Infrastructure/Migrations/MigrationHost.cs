@@ -35,13 +35,32 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Each migration commits on its own, so the seed can be recorded before a later one fails.
+            TryLogGeneratedPassword(before, logger);
             throw new MigrationFailedException($"Migration run failed; lowest unrecorded version: {FirstUnrecordedVersion()}. {Innermost(ex).Message}", ex);
         }
-        var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
-        IReadOnlyList<MigrationInfo> applied = GetStatus()
-            .Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
+        var applied = AppliedSince(before);
         LogGeneratedPassword(applied, logger);
         return applied;
+    }
+
+    private IReadOnlyList<MigrationInfo> AppliedSince(IReadOnlyList<MigrationInfo> before)
+    {
+        var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
+        return GetStatus().Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
+    }
+
+    // Never throws, so the original failure is always preserved.
+    private void TryLogGeneratedPassword(IReadOnlyList<MigrationInfo> before, ILogger logger)
+    {
+        try
+        {
+            LogGeneratedPassword(AppliedSince(before), logger);
+        }
+        catch (Exception)
+        {
+            // The status read failed too; the migration failure the caller rethrows is the useful one.
+        }
     }
 
     // The seed migration inserts the admin only on the run that applies it, so this is the one place
