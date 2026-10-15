@@ -91,7 +91,7 @@ internal static class IndexCatalog
             .ToArray();
     }
 
-    private sealed class IndexRow
+    internal sealed class IndexRow
     {
         public string Name { get; set; } = "";
         [SugarColumn(ColumnName = "is_unique")]
