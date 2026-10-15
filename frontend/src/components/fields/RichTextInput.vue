@@ -82,6 +82,8 @@ function onImageDialogOpenChange(open: boolean): void {
   if (!open) refocusAfterDialogCancel()
 }
 
+type LinkDialogResult = { href: string; newTab: boolean } | 'remove' | null
+
 // Bound to RichTextBubbleMenu's own template ref so openLinkDialog can force it away before the
 // dialog takes DOM focus -- see the comment on that call below.
 const bubbleMenuRef = ref<InstanceType<typeof RichTextBubbleMenu> | null>(null)
@@ -97,9 +99,9 @@ const linkDialogCanRemove = ref(false)
 // thing guaranteed by the three of them alone: neither a second openLinkDialog before this one
 // settles, nor unmounting while it is still open, is one of those three, so each is handled
 // explicitly below rather than left to this protocol.
-let resolveLinkDialog: ((value: { href: string; newTab: boolean } | 'remove' | null) => void) | null = null
+let resolveLinkDialog: ((value: LinkDialogResult) => void) | null = null
 
-function settleLinkDialog(value: { href: string; newTab: boolean } | 'remove' | null): void {
+function settleLinkDialog(value: LinkDialogResult): void {
   resolveLinkDialog?.(value)
   resolveLinkDialog = null
 }
@@ -109,7 +111,7 @@ const { focusIfStillInDocument, blurActiveElementBeforeDialog, refocusAfterDialo
 
 function openLinkDialog(
   initial: { href: string; newTab: boolean; canRemove: boolean },
-): Promise<{ href: string; newTab: boolean } | 'remove' | null> {
+): Promise<LinkDialogResult> {
   // Not reachable today (only one link command can run at a time), but settle any still-pending
   // prior call with null rather than letting the assignment below silently overwrite
   // resolveLinkDialog and leave that earlier promise unresolved forever.

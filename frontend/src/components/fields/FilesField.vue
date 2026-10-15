@@ -105,7 +105,7 @@ async function loadOptions(): Promise<void> {
   }
 }
 function toggle(id: string): void {
-  const existing = rows.value.find((r) => r.id === id)
+  const existing = rows.value.some((r) => r.id === id)
   if (existing) {
     commit(rows.value.filter((r) => r.id !== id))
     return
