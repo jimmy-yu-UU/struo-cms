@@ -30,7 +30,7 @@ The commands and the lock are covered in
 
 ### Choose or capture the bootstrap password at the first `migrate`
 
-`Auth:BootstrapAdmin:Password` is read exactly once, the first time the core seed migration runs;
+`Auth:BootstrapAdmin:Password` seeds the account the first time the core seed migration runs;
 changing this value afterward has no effect on the account that already exists. When `migrate` runs
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
@@ -38,8 +38,10 @@ environment plays no part in seeding.
 The template ships no bootstrap password. Leave it empty and the seed generates a random
 24-character one, logged once as a Warning in the `migrate` output (or the API log, when the API
 runs the migrations); copy it from there, because nothing prints it again. A password you set must
-satisfy `Auth:Password` and may not be `admin`, in any environment; otherwise `migrate` stops with an
-error naming `Auth__BootstrapAdmin__Password`.
+satisfy `Auth:Password` and may not be `admin`, in any environment. While a weak value is
+configured, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
+naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded; remove the value
+once the account exists.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 

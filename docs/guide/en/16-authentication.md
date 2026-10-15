@@ -19,8 +19,9 @@ does nothing to an existing database.
 The template ships no bootstrap password. When `Auth:BootstrapAdmin:Password` is empty, the seed
 generates a random 24-character password and logs it once, as a Warning, in the run that creates
 the account. A password you configure goes through the password policy the next section covers,
-and `admin` is refused in any letter case; a refused password stops the seed with an error that
-names `Auth__BootstrapAdmin__Password`. The transcripts log in with a placeholder for that
+and `admin` is refused in any letter case; while a weak value is configured, `migrate`, `migrate:preview`
+and a `Database:MigrateOnStartup` start refuse with an error that names
+`Auth__BootstrapAdmin__Password`. The value only seeds the account, so it can be removed afterwards. The transcripts log in with a placeholder for that
 password. Change it after the first login.
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator

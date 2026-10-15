@@ -231,8 +231,9 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
 密碼留空時，seed 會隨機產生 24 個字元的密碼，並在建立管理員的那次執行裡以 Warning 印出一次。自己指定
-的密碼必須符合 `Auth:Password`，而且不能是 `admin`（不分大小寫）；否則 seed 會拒絕執行，錯誤訊息點名
-`Auth__BootstrapAdmin__Password`。
+的密碼必須符合 `Auth:Password`，而且不能是 `admin`（不分大小寫）。只要它還是弱值，`migrate`、`migrate:preview`
+與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。這個值只用來
+植入帳號，帳號建立之後就可以移除。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有

@@ -262,8 +262,10 @@ never backfilled onto an existing database. These two keys have no options class
 migration reads them straight from configuration as strings, so the environment that runs `migrate`
 needs them. An empty password means the seed generates a random 24-character one and logs it once
 as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
-and may not be `admin` in any letter case; otherwise the seed refuses to run and the error names
-`Auth__BootstrapAdmin__Password`.
+and may not be `admin` in any letter case. While it holds a weak value, `migrate`,
+`migrate:preview` and a start with `Database:MigrateOnStartup` all refuse, with an error that names
+`Auth__BootstrapAdmin__Password`. The value only seeds the account, so once the account exists it can
+be removed.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.

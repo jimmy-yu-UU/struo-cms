@@ -15,7 +15,8 @@
 - 範本不再附帶 bootstrap 管理員密碼。`appsettings.json` 裡的 `Auth:BootstrapAdmin:Password` 是 `""`，
   `docker-compose.yml` 的 `STRUO_ADMIN_PASSWORD` 預設為空。密碼留空時，建立管理員的那次執行會隨機產生
   24 個字元的密碼，並以 Warning 印出一次。設定的密碼若不符合 `Auth:Password`，或不分大小寫等於 `admin`，
-  seed 現在會在任何環境以錯誤中止，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。只在 Production 出現的
+  現在會在任何環境被拒絕：`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會失敗，錯誤訊息點名
+  `Auth__BootstrapAdmin__Password`，資料庫已經植入過也一樣，直到把值改好或移除。只在 Production 出現的
   預設密碼警告已移除。Playwright 測試從 `E2E_PASSWORD` 讀密碼，這個變數是必填。原本依賴
   `admin@admin.com` / `admin` 的 fork，必須自己設定密碼，或從 `migrate` 的輸出讀產生的密碼。
 :::
