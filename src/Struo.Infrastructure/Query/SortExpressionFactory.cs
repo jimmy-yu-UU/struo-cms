@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/SortExpressionFactory.cs
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using SqlSugar;
@@ -17,10 +18,20 @@ internal sealed record SortHop(Type Target, string IdProperty, string FkOnPrevio
 internal static class SortExpressionFactory
 {
     // The locale is read through a field on a constant holder: SqlSugar binds that shape as a parameter.
-    private sealed class ValueBox(string value)
+    // Its member name is distinctive so the bound parameter cannot collide with a filter on a field named value.
+    private sealed class LocaleBox(string sortLocale)
     {
-        public readonly string Value = value;
+        public readonly string SortLocale = sortLocale;
     }
+
+    private static readonly MethodInfo SubqueryableDefinition = typeof(SqlFunc)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(m => m.Name == nameof(SqlFunc.Subqueryable) && m.IsGenericMethodDefinition
+            && m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 0);
+
+    private static readonly ConcurrentDictionary<Type, MethodInfo> SubqueryableByType = new();
+    private static readonly ConcurrentDictionary<(Type Sub, Type Entity), MethodInfo> WhereByType = new();
+    private static readonly ConcurrentDictionary<(Type Sub, Type Result), MethodInfo> SelectByType = new();
 
     /// <summary>
     /// it =&gt; Subqueryable&lt;TTrans&gt;().Where(t =&gt; t.Fk == it.Id &amp;&amp; t.Locale == locale).Select(t =&gt; t.Field)
@@ -31,7 +42,7 @@ internal static class SortExpressionFactory
     {
         var it = Expression.Parameter(entityType, "it");
         var t = Expression.Parameter(translationType, "t");
-        var localeValue = Expression.Field(Expression.Constant(new ValueBox(locale)), nameof(ValueBox.Value));
+        var localeValue = Expression.Field(Expression.Constant(new LocaleBox(locale)), nameof(LocaleBox.SortLocale));
         var predicate = Expression.AndAlso(
             Eq(Expression.Property(t, fkProperty), Expression.Property(it, idProperty)),
             Expression.Equal(Expression.Property(t, localeProperty), localeValue));
@@ -79,18 +90,17 @@ internal static class SortExpressionFactory
     }
 
     private static MethodInfo SubqueryableOf(Type type) =>
-        typeof(SqlFunc).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Single(m => m.Name == nameof(SqlFunc.Subqueryable) && m.IsGenericMethodDefinition
-                && m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 0)
-            .MakeGenericMethod(type);
+        SubqueryableByType.GetOrAdd(type, t => SubqueryableDefinition.MakeGenericMethod(t));
 
     private static MethodInfo SubWhere(Type subqueryType, Type entityType) =>
-        subqueryType.GetMethods().First(m => m.Name == "Where" && !m.IsGenericMethodDefinition
-            && m.GetParameters().Length == 1
-            && m.GetParameters()[0].ParameterType == typeof(Func<,>).MakeGenericType(entityType, typeof(bool)));
+        WhereByType.GetOrAdd((subqueryType, entityType), k =>
+            k.Sub.GetMethods().First(m => m.Name == "Where" && !m.IsGenericMethodDefinition
+                && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == typeof(Func<,>).MakeGenericType(k.Entity, typeof(bool))));
 
     private static MethodInfo SubSelect(Type subqueryType, Type resultType) =>
-        subqueryType.GetMethods().First(m => m.Name == "Select" && m.IsGenericMethodDefinition
-            && m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 1)
-            .MakeGenericMethod(resultType);
+        SelectByType.GetOrAdd((subqueryType, resultType), k =>
+            k.Sub.GetMethods().First(m => m.Name == "Select" && m.IsGenericMethodDefinition
+                && m.GetGenericArguments().Length == 1 && m.GetParameters().Length == 1)
+                .MakeGenericMethod(k.Result));
 }
