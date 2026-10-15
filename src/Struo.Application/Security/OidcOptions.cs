@@ -27,10 +27,12 @@ public sealed class OidcOptions
     public string? AllowedTenantId { get; set; }
     public string[] AllowedEmailDomains { get; set; } = [];
 
-    private static readonly string[] MultiTenantSegments = ["common", "organizations", "consumers"];
+    // The GUID is the Entra consumers tenant, which accepts any personal Microsoft account.
+    private static readonly string[] MultiTenantSegments =
+        ["common", "organizations", "consumers", "9188040d-6c67-4c5b-b112-36a304b66dad"];
 
     /// <summary>True when <see cref="Authority"/> is an Entra multi-tenant endpoint (a path segment of
-    /// <c>common</c>, <c>organizations</c> or <c>consumers</c>) and neither a tenant nor an email
+    /// <c>common</c>, <c>organizations</c>, <c>consumers</c> or the consumers tenant GUID) and neither a tenant nor an email
     /// domain is pinned.</summary>
     public bool IsUnpinnedMultiTenant()
     {

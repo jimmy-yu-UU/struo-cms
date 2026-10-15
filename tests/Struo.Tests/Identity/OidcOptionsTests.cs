@@ -42,6 +42,7 @@ public class OidcOptionsTests
     [InlineData("https://login.microsoftonline.com/organizations/v2.0", true)]
     [InlineData("https://login.microsoftonline.com/Consumers/v2.0", true)]
     [InlineData("https://login.microsoftonline.com/COMMON", true)]
+    [InlineData("https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0", true)]
     [InlineData("https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0", false)]
     [InlineData("https://login.microsoftonline.com/commonwealth/v2.0", false)]
     [InlineData("https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0", false)]
