@@ -39,31 +39,42 @@ public class MigrationGeneratorTests
         return EntitySchemaReader.Read(Client(policy: policy), typeof(FileTranslation));
     }
 
-    public static TheoryData<string, MigrationSpec> GoldenCases() => new()
+    private static readonly string[] GoldenNames =
+        ["EmptySkeleton", "EmptySkeletonNamespaced", "SchemaProbe", "Revision", "FileTranslation"];
+
+    private static MigrationSpec GoldenSpec(string name) => name switch
     {
-        { "EmptySkeleton", new MigrationSpec("AddNothing", 202610070900, null, null) },
-        { "EmptySkeletonNamespaced", new MigrationSpec("AddNothing", 202610070900, "Acme.Migrations", null) },
-        { "SchemaProbe", new MigrationSpec("CreateSchemaProbe", 202610070901, "Acme.Migrations", Probe()) },
-        { "Revision", new MigrationSpec("CreateRevisions", 202610070902, "Acme.Migrations", RevisionTable()) },
-        { "FileTranslation", new MigrationSpec("CreateFileTranslations", 202610070903, "Acme.Migrations", FileTranslationTable()) },
+        "EmptySkeleton" => new MigrationSpec("AddNothing", 202610070900, null, null),
+        "EmptySkeletonNamespaced" => new MigrationSpec("AddNothing", 202610070900, "Acme.Migrations", null),
+        "SchemaProbe" => new MigrationSpec("CreateSchemaProbe", 202610070901, "Acme.Migrations", Probe()),
+        "Revision" => new MigrationSpec("CreateRevisions", 202610070902, "Acme.Migrations", RevisionTable()),
+        "FileTranslation" => new MigrationSpec("CreateFileTranslations", 202610070903, "Acme.Migrations", FileTranslationTable()),
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, null),
     };
+
+    public static TheoryData<string> GoldenCases() => new(GoldenNames);
 
     [Theory]
     [MemberData(nameof(GoldenCases))]
-    public void Generate_matches_the_golden_file(string name, MigrationSpec spec) =>
-        CompareOrWrite(MigrationGenerator.Generate(spec), Path.Combine(SchemaTestsDir(), "Golden", name + ".cs.txt"));
+    public void Generate_matches_the_golden_file(string name) =>
+        CompareOrWrite(MigrationGenerator.Generate(GoldenSpec(name)), Path.Combine(SchemaTestsDir(), "Golden", name + ".cs.txt"));
 
-    public static TheoryData<string, MigrationSpec> GeneratedCases() => new()
+    private static readonly string[] GeneratedNames = ["SchemaProbe", "Revision", "FileTranslation"];
+
+    private static MigrationSpec GeneratedSpec(string name) => name switch
     {
-        { "SchemaProbe", new MigrationSpec("CreateSchemaProbe", 202610071001, $"{GeneratedNamespace}.SchemaProbe", Probe()) },
-        { "Revision", new MigrationSpec("CreateRevisions", 202610071002, $"{GeneratedNamespace}.Revision", RevisionTable()) },
-        { "FileTranslation", new MigrationSpec("CreateFileTranslations", 202610071003, $"{GeneratedNamespace}.FileTranslation", FileTranslationTable()) },
+        "SchemaProbe" => new MigrationSpec("CreateSchemaProbe", 202610071001, $"{GeneratedNamespace}.SchemaProbe", Probe()),
+        "Revision" => new MigrationSpec("CreateRevisions", 202610071002, $"{GeneratedNamespace}.Revision", RevisionTable()),
+        "FileTranslation" => new MigrationSpec("CreateFileTranslations", 202610071003, $"{GeneratedNamespace}.FileTranslation", FileTranslationTable()),
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, null),
     };
+
+    public static TheoryData<string> GeneratedCases() => new(GeneratedNames);
 
     [Theory]
     [MemberData(nameof(GeneratedCases))]
-    public void Checked_in_generated_migration_matches_the_generator(string name, MigrationSpec spec) =>
-        CompareOrWrite(MigrationGenerator.Generate(spec), Path.Combine(SchemaTestsDir(), "Generated", name + ".cs"));
+    public void Checked_in_generated_migration_matches_the_generator(string name) =>
+        CompareOrWrite(MigrationGenerator.Generate(GeneratedSpec(name)), Path.Combine(SchemaTestsDir(), "Generated", name + ".cs"));
 
     [Fact]
     public void Unique_groups_shared_by_two_tables_generate_distinct_index_names()
