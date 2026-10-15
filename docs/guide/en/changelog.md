@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.0
+
+::: danger Breaking
+- `Errors` and `Warnings` on `SchemaCheckReport` are methods: `GetErrors()` and `GetWarnings()`. Code that
+  reads them as properties must call the methods.
+- `IRelationExpander.ExpandAsync` and `RelationExpander.ExpandAsync` take one `EntityAccessors(ProjectTarget,
+  ParentId, ReadProp)` in place of the three delegates, right after `deep`. A fork that replaces the
+  expander, or calls it directly, must pass `new EntityAccessors(...)`.
+- `GraphQlQueryBuilder.BuildQuery` takes a `GraphQlQueryArgs` (filter, sort, paging, search, `deep`,
+  facets, aggregate), followed by `collection` and `relationTarget`. Code that calls it directly must
+  build a `GraphQlQueryArgs` first.
+- `SchemaTypeMapper.TagItemInputName` is a constant, not a method. Change `TagItemInputName()` to
+  `TagItemInputName`.
+:::
+
 ## 0.10.0 — 2026-10-14
 
 ::: danger Breaking
