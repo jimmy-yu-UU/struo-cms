@@ -310,7 +310,7 @@ try
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
@@ -323,7 +323,5 @@ catch (Exception ex)
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }
-
-public partial class Program;
