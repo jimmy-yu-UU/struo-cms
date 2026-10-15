@@ -38,11 +38,13 @@ public class NestedListArgsValidationTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    private static readonly string[] SortByCategoryName = ["category.name"];
+
     [Fact]
     public async Task Relation_path_nested_sort_returns_400()
     {
         var resp = await Query("category",
-            new { deep = new { articles = new { sort = new[] { "category.name" } } } });
+            new { deep = new { articles = new { sort = SortByCategoryName } } });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -54,11 +56,13 @@ public class NestedListArgsValidationTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    private static readonly string[] SortByStatus = ["status"];
+
     [Fact]
     public async Task Valid_nested_own_field_args_return_200()
     {
         var resp = await Query("category",
-            new { deep = new { articles = new { filter = new { status = new Dictionary<string, object> { ["_eq"] = "published" } }, sort = new[] { "status" }, limit = 3, offset = 0 } } });
+            new { deep = new { articles = new { filter = new { status = new Dictionary<string, object> { ["_eq"] = "published" } }, sort = SortByStatus, limit = 3, offset = 0 } } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

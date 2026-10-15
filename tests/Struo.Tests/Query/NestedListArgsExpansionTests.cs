@@ -122,7 +122,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = new[] { "status" }, limit = 2 } }
+            deep = new { articles = new { sort = SortByStatus, limit = 2 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
@@ -142,7 +142,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = new[] { "status" }, offset = 1, limit = 1 } }
+            deep = new { articles = new { sort = SortByStatus, offset = 1, limit = 1 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
@@ -150,6 +150,8 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
             .Select(a => a.GetProperty("status").GetString()).ToList();
         statuses.Should().Equal("b"); // skip 1 (a), take 1 -> b
     }
+
+    private static readonly string[] SortByName = ["name"];
 
     [Fact]
     public async Task Nested_limit_is_independent_per_parent()
@@ -165,8 +167,8 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { name = new Dictionary<string, object> { ["_starts_with"] = "PP-" } },
-            sort = new[] { "name" },
-            deep = new { articles = new { sort = new[] { "status" }, limit = 2 } }
+            sort = SortByName,
+            deep = new { articles = new { sort = SortByStatus, limit = 2 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
@@ -199,6 +201,8 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         articles[0].GetProperty("id").GetString().Should().Be(articleA);
     }
 
+    private static readonly string[] SortByStatus = ["status"];
+
     [Fact]
     public async Task Limit_trims_before_recursing_into_nested_deep()
     {
@@ -211,7 +215,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = new[] { "status" }, limit = 1, deep = new { category = new { } } } }
+            deep = new { articles = new { sort = SortByStatus, limit = 1, deep = new { category = new { } } } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];

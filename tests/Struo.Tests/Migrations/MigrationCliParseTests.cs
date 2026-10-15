@@ -24,10 +24,12 @@ public sealed class MigrationCliParseTests
         inv.HostArgs.Should().Equal("--Database:DbType", "Sqlite");
     }
 
+    private static readonly string[] UrlsHostArgs = ["--urls=http://localhost:5221"];
+
     [Fact]
     public void Web_host_args_are_untouched() =>
         MigrationCli.Parse(["--urls=http://localhost:5221"]).Should()
-            .BeEquivalentTo(new { Command = (string?)null, HostArgs = new[] { "--urls=http://localhost:5221" } });
+            .BeEquivalentTo(new { Command = (string?)null, HostArgs = UrlsHostArgs });
 
     [Fact]
     public void Web_host_args_have_no_command_args() =>

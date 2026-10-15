@@ -126,6 +126,8 @@ public class FilterInputTranslatorTests
         cmp.Value.Should().Be("Root");
     }
 
+    private static readonly string[] StatusAndCategoryName = ["status", "category.name"];
+
     [Fact]
     public void Own_field_and_nested_relation_are_anded()
     {
@@ -142,7 +144,7 @@ public class FilterInputTranslatorTests
         logical.Op.Should().Be(LogicalOperator.And);
         logical.Children.Should().HaveCount(2);
         logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
-            .Should().Contain(new[] { "status", "category.name" });
+            .Should().Contain(StatusAndCategoryName);
     }
 
     [Fact]

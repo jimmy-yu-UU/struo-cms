@@ -591,6 +591,8 @@ public class GraphQlExecutionTests
             .Which.FieldPath.Should().Be("category.parent.name");
     }
 
+    private static readonly string[] StatusAndCategoryName = ["status", "category.name"];
+
     [Fact]
     public async Task Own_field_and_nested_relation_filter_are_anded()
     {
@@ -606,7 +608,7 @@ public class GraphQlExecutionTests
 
         var logical = captured!.Filter.Should().BeOfType<LogicalFilter>().Subject;
         logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
-            .Should().Contain(new[] { "status", "category.name" });
+            .Should().Contain(StatusAndCategoryName);
     }
 
     [Fact]
@@ -685,6 +687,8 @@ public class GraphQlExecutionTests
             .Which.FieldPath.Should().Be("articles.category.name");
     }
 
+    private static readonly string[] StatusAndTagsName = ["status", "tags.name"];
+
     [Fact]
     public async Task Own_field_and_to_many_relation_filter_are_anded()
     {
@@ -700,7 +704,7 @@ public class GraphQlExecutionTests
 
         var logical = captured!.Filter.Should().BeOfType<LogicalFilter>().Subject;
         logical.Children.OfType<ComparisonFilter>().Select(c => c.FieldPath)
-            .Should().Contain(new[] { "status", "tags.name" });
+            .Should().Contain(StatusAndTagsName);
     }
 
     [Fact]

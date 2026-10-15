@@ -17,6 +17,8 @@ public class CrossRelationSortTests(ApiFactory factory)
         Root(await (await c.PostAsJsonAsync($"/api/items/{col}", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
+    private static readonly string[] SortByCategoryNameDesc = ["-category.name"];
+
     [Fact]
     public async Task Sort_descending_by_category_name()
     {
@@ -33,7 +35,7 @@ public class CrossRelationSortTests(ApiFactory factory)
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_in"] = new[] { artA, artZ } } },
-            sort = new[] { "-category.name" }
+            sort = SortByCategoryNameDesc
         });
         var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -42,12 +44,14 @@ public class CrossRelationSortTests(ApiFactory factory)
         order.IndexOf(artZ).Should().BeLessThan(order.IndexOf(artA));
     }
 
+    private static readonly string[] SortByChildrenNameDesc = ["-children.name"];
+
     [Fact]
     public async Task Sort_across_to_many_returns_400()
     {
         var c = _factory.CreateClient();
         // children is a O2M relation on category — sorting across to-many must be rejected.
-        var envelope = JsonSerializer.SerializeToElement(new { sort = new[] { "-children.name" } });
+        var envelope = JsonSerializer.SerializeToElement(new { sort = SortByChildrenNameDesc });
         (await c.PostAsJsonAsync("/api/items/category/query", envelope)).StatusCode
             .Should().Be(HttpStatusCode.BadRequest);
     }

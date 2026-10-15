@@ -61,6 +61,8 @@ public class TranslationQueryTests(ApiFactory factory)
         ids.Should().BeEquivalentTo([hit1, hit2]);
     }
 
+    private static readonly string[] SortByTitleDesc = ["-title"];
+
     [Fact]
     public async Task Sort_translatable_field_at_locale()
     {
@@ -76,7 +78,7 @@ public class TranslationQueryTests(ApiFactory factory)
         var zzz = await NewArticle(c, zzzTitle, "Zzz");
         var env = JsonSerializer.SerializeToElement(new
         {
-            sort = new[] { "-title" },
+            sort = SortByTitleDesc,
             filter = new Dictionary<string, object>
             {
                 ["title"] = new Dictionary<string, object> { ["_in"] = new[] { aaaTitle, zzzTitle } }

@@ -14,6 +14,8 @@ public class FileCollectionTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
+    private static readonly string[] FileFieldNames = ["fileName", "contentType", "size", "status", "title", "alt"];
+
     [Fact]
     public async Task File_schema_lists_metadata_and_translatable_fields()
     {
@@ -22,7 +24,7 @@ public class FileCollectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var fields = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("fields");
         var names = fields.EnumerateArray().Select(f => f.GetProperty("name").GetString()).ToList();
-        names.Should().Contain(new[] { "fileName", "contentType", "size", "status", "title", "alt" });
+        names.Should().Contain(FileFieldNames);
         fields.EnumerateArray().Should().Contain(f =>
             f.GetProperty("name").GetString() == "title" && f.GetProperty("translatable").GetBoolean());
     }

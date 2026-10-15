@@ -139,12 +139,14 @@ public class QueryParserTests
         category.Deep.Relations["parent"].Deep.Should().BeNull(); // leaf
     }
 
+    private static readonly string[] NameFields = ["name"];
+
     [Fact]
     public void ParseEnvelope_keeps_flat_deep_backward_compatible()
     {
         var env = JsonSerializer.SerializeToElement(new
         {
-            deep = new { category = new { fields = new[] { "name" } } }
+            deep = new { category = new { fields = NameFields } }
         });
 
         var model = QueryParser.ParseEnvelope(env);
