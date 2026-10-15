@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class DefaultOrderingTests : IDisposable
+public sealed class DefaultOrderingTests : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 

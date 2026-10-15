@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceRepeaterTests : IDisposable
+public sealed class ItemServiceRepeaterTests : IDisposable
 {
     public sealed class Faq
     {

@@ -17,7 +17,7 @@ namespace Struo.Tests.Localization;
 // concurrent callers block on the same load instead of each racing to run the underlying query and
 // observe different list instances. Invalidate() swaps in a fresh Lazy rather than mutating the old
 // value (immutability rule).
-public class LanguageProviderCacheTests : IDisposable
+public sealed class LanguageProviderCacheTests : IDisposable
 {
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;

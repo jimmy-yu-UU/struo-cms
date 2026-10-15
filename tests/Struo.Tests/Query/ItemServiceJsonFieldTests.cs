@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceJsonFieldTests : IDisposable
+public sealed class ItemServiceJsonFieldTests : IDisposable
 {
     [SugarTable("json_thing")]
     [CmsCollection("JsonThing")]

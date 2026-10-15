@@ -28,7 +28,7 @@ namespace Struo.Tests.Query;
 /// (not the sample Article) so a Required multi-value field can be exercised without affecting other
 /// tests. Harness mirrors <see cref="ItemServiceMaxLengthTests"/>.
 /// </summary>
-public class ItemServiceMultiValueTests : IDisposable
+public sealed class ItemServiceMultiValueTests : IDisposable
 {
     [SugarTable("mv_thing")]
     [CmsCollection("MvThing")]

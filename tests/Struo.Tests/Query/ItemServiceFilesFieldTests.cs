@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServiceFilesFieldTests : IDisposable
+public sealed class ItemServiceFilesFieldTests : IDisposable
 {
     [SugarTable("files_thing")]
     [CmsCollection("FilesThing")]

@@ -24,7 +24,7 @@ namespace Struo.Tests.Files;
 // retains blob + FileTranslation rows, clears site_settings.logofileid when applicable) and
 // FileService.RestoreAsync (clears DeletedAt/DeletedBy). FileService.DeleteAsync stays as-is and
 // now serves as the "purge" operation (already hard-deletes row + translations + blob + logo ref).
-public class FileServiceSoftDeleteTests : IDisposable
+public sealed class FileServiceSoftDeleteTests : IDisposable
 {
     private sealed class CountingStorage : IFileStorage
     {

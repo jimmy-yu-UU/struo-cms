@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class SqlSugarItemRepositoryTests : IDisposable
+public sealed class SqlSugarItemRepositoryTests : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 

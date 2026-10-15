@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-public class ItemServicePermissionTests : IDisposable
+public sealed class ItemServicePermissionTests : IDisposable
 {
     // A permission service that denies reads on a specific collection.
     private sealed class DenyReadPermissions : IPermissionService

@@ -20,7 +20,7 @@ namespace Struo.Tests.Files;
 
 // Upload seeds a default-locale Title from the filename (extension stripped); upload
 // accepts an optional folderId, validated against MediaFolder existence.
-public class FileUploadFolderAndTitleTests : IDisposable
+public sealed class FileUploadFolderAndTitleTests : IDisposable
 {
     private sealed class NoopStorage : IFileStorage
     {
