@@ -139,7 +139,7 @@ public sealed class SqlSugarItemRepository(
         if (hasIdentityPk)
         {
             ct.ThrowIfCancellationRequested();
-            return (await db.Insertable((T)entity).ExecuteReturnEntityAsync());
+            return await db.Insertable((T)entity).ExecuteReturnEntityAsync();
         }
 
         await db.Insertable((T)entity).ExecuteCommandAsync(ct);
