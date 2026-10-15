@@ -13,7 +13,7 @@ public class FileTranslationTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<string> Upload(System.Net.Http.HttpClient c)
+    private static async Task<string> Upload(System.Net.Http.HttpClient c)
     {
         var content = new ByteArrayContent([1, 2, 3]);
         content.Headers.ContentType = new MediaTypeHeaderValue("text/plain"); // whitelisted

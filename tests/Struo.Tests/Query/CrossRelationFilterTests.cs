@@ -18,7 +18,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
 
     private static Dictionary<string, object> Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
-    private async Task<string> Post(System.Net.Http.HttpClient c, string col, object body) =>
+    private static async Task<string> Post(System.Net.Http.HttpClient c, string col, object body) =>
         Root(await (await c.PostAsJsonAsync($"/api/items/{col}", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 

@@ -14,7 +14,7 @@ public class TranslationQueryTests(ApiFactory factory)
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
     private static Dictionary<string, object> Eq(object v) => new Dictionary<string, object> { ["_eq"] = v };
 
-    private async Task<string> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
+    private static async Task<string> NewArticle(System.Net.Http.HttpClient c, string enTitle, string zhTitle)
     {
         var body = JsonSerializer.SerializeToElement(new
         {
