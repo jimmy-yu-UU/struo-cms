@@ -129,7 +129,7 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         _log.Clear();
         await Ids(Sorted("-id"));
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName(nameof(Article.Id), typeof(Article));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<Article>(nameof(Article.Id));
         var select = _log.Single(l => l.Sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) && l.Sql.Contains("articles"));
         var orderBy = select.Sql[select.Sql.LastIndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase)..];
         System.Text.RegularExpressions.Regex.Matches(orderBy, $@"\b{idCol}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)

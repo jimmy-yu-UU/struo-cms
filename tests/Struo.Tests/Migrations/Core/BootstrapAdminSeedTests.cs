@@ -19,7 +19,7 @@ using Xunit;
 namespace Struo.Tests.Migrations.Core;
 
 [Collection("MigrationCli")] // the CLI tests set a static options override; keep these serial with them
-public sealed class BootstrapAdminSeedTests : IDisposable
+public sealed partial class BootstrapAdminSeedTests : IDisposable
 {
     private readonly CoreMigrationHarness _h = new();
 
@@ -31,6 +31,12 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         MigrationCli.OptionsOverride = o => o;
         _h.Dispose();
     }
+
+    [GeneratedRegex("password ([A-Za-z0-9]{24})")]
+    private static partial Regex LoggedPassword();
+
+    [GeneratedRegex("password [A-Za-z0-9]{24}")]
+    private static partial Regex LoggedPasswordAnywhere();
 
     private sealed class CapturingProvider(ListLogger logger) : ILoggerProvider
     {
@@ -120,7 +126,7 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         var hash = _h.Db().Queryable<User>().Single().Password;
         var warnings = capture.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message).ToList();
         var line = warnings.Should().ContainSingle(m => m.Contains("gen@example.com")).Subject;
-        var password = Regex.Match(line, "password ([A-Za-z0-9]{24})").Groups[1].Value;
+        var password = LoggedPassword().Match(line).Groups[1].Value;
         password.Should().HaveLength(24);
         new Argon2idPasswordHasher().Verify(hash, password).Should().BeTrue();
         capture.Entries.Count(e => e.Message.Contains(password)).Should().Be(1);
@@ -142,7 +148,7 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         preview.Out.Should().Contain("INSERT INTO").And.Contain("<redacted>").And.NotContain("$argon2id");
         var everything = preview.Out + preview.Err + status.Out + status.Err
             + string.Join("\n", capture.Entries.Select(e => e.Message));
-        Regex.IsMatch(everything, "password [A-Za-z0-9]{24}").Should().BeFalse();
+        LoggedPasswordAnywhere().IsMatch(everything).Should().BeFalse();
         everything.Should().NotContain("generated password");
     }
 
@@ -162,7 +168,7 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         var hash = _h.Db().Queryable<User>().Single().Password;
         var line = capture.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message)
             .Should().ContainSingle(m => m.Contains(FailAfterSeedProbe.TriggerEmail)).Subject;
-        var password = Regex.Match(line, "password ([A-Za-z0-9]{24})").Groups[1].Value;
+        var password = LoggedPassword().Match(line).Groups[1].Value;
         new Argon2idPasswordHasher().Verify(hash, password).Should().BeTrue();
     }
 

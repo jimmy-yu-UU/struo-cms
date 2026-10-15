@@ -98,10 +98,10 @@ public sealed class OrderByExpressionBuilder(
         var rootDesc = registry.Get(rootCollection)!;
         var hops = new List<SortHop>();
         var previous = rootDesc;
-        foreach (var seg in segs)
+        foreach (var relation in segs.Select(seg => seg.Relation))
         {
-            var target = registry.Get(seg.Relation.TargetCollection)!;
-            hops.Add(new SortHop(target.EntityType, target.IdProperty, FkProperty(previous, seg.Relation.ForeignKey!)));
+            var target = registry.Get(relation.TargetCollection)!;
+            hops.Add(new SortHop(target.EntityType, target.IdProperty, FkProperty(previous, relation.ForeignKey!)));
             previous = target;
         }
 

@@ -26,9 +26,9 @@ public sealed record CoreSeedData(
     public string? GeneratedPassword { get; init; }
 
     private const int GeneratedPasswordLength = 24;
-    private const string GeneratedPasswordAlphabet =
+    private const string GeneratedSecretAlphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    private const string WeakPasswordLiteral = "admin";
+    private const string RefusedBootstrapValue = "admin";
 
     public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
 
@@ -51,7 +51,7 @@ public sealed record CoreSeedData(
         var hasAdmin = !string.IsNullOrWhiteSpace(email);
         var generated = hasAdmin && string.IsNullOrWhiteSpace(password)
             ? RandomNumberGenerator.GetString(
-                GeneratedPasswordAlphabet, Math.Max(GeneratedPasswordLength, effectivePolicy.MinLength))
+                GeneratedSecretAlphabet, Math.Max(GeneratedPasswordLength, effectivePolicy.MinLength))
             : null;
         var plain = generated ?? (hasAdmin ? password : null);
         if (generated is null && hasAdmin) RefuseWeakPassword(plain!, effectivePolicy);
@@ -66,10 +66,10 @@ public sealed record CoreSeedData(
     private static void RefuseWeakPassword(string password, PasswordPolicyOptions policy)
     {
         if (PasswordPolicy.Validate(password, policy) is null
-            && !string.Equals(password, WeakPasswordLiteral, StringComparison.OrdinalIgnoreCase)) return;
+            && !string.Equals(password, RefusedBootstrapValue, StringComparison.OrdinalIgnoreCase)) return;
         throw new BootstrapPasswordRefusedException(
             $"Auth__BootstrapAdmin__Password is too weak: use at least {policy.MinLength} characters and not " +
-            $"'{WeakPasswordLiteral}', or leave it empty so a random password is generated.");
+            $"'{RefusedBootstrapValue}', or leave it empty so a random password is generated.");
     }
 
     /// <summary>Reads the seed inputs from application configuration and hashes the bootstrap password.</summary>

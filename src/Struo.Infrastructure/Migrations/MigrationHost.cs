@@ -44,7 +44,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return applied;
     }
 
-    private IReadOnlyList<MigrationInfo> AppliedSince(IReadOnlyList<MigrationInfo> before)
+    private List<MigrationInfo> AppliedSince(IReadOnlyList<MigrationInfo> before)
     {
         var pendingBefore = before.Where(m => m.State == MigrationState.Pending).Select(m => m.Version).ToHashSet();
         return GetStatus().Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
