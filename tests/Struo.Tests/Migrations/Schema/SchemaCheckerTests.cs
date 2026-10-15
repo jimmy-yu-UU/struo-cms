@@ -46,8 +46,8 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, FrameworkEntityTypes.All.ToArray());
 
-        report.Errors.Should().HaveCount(FrameworkEntityTypes.All.Count);
-        report.Errors.Should().OnlyContain(f => f.Kind == FindingKind.MissingTable && f.Column == null);
+        report.GetErrors().Should().HaveCount(FrameworkEntityTypes.All.Count);
+        report.GetErrors().Should().OnlyContain(f => f.Kind == FindingKind.MissingTable && f.Column == null);
         db.DbMaintenance.GetTableInfoList(false).Should().BeEmpty();
     }
 
@@ -59,7 +59,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(CheckProbe));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.MissingColumn && f.Column == "note");
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.MissingColumn && f.Column == "note");
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(CheckProbe));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.NullabilityMismatch && f.Column == "title");
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.NullabilityMismatch && f.Column == "title");
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(CheckProbe));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.LengthMismatch && f.Column == "title");
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.LengthMismatch && f.Column == "title");
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class SchemaCheckerTests : IDisposable
         report.HasErrors.Should().BeFalse(report.ToString());
         // The finding names the column as the database reports it. On PostgreSQL the column is created
         // and reported as `extra`.
-        report.Warnings.Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn
+        report.GetWarnings().Should().ContainSingle(f => f.Kind == FindingKind.UndeclaredColumn
             && string.Equals(f.Column, "Extra", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -107,7 +107,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(CheckProbe));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.TypeMismatch && f.Column == "title");
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.TypeMismatch && f.Column == "title");
     }
 
     private static string RevisionTable(string prefix) => prefix + "revisions";
@@ -122,7 +122,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(Revision));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex);
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class SchemaCheckerTests : IDisposable
 
         var report = Check(db, typeof(Revision));
 
-        report.Errors.Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex);
+        report.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex);
     }
 
     [Fact]

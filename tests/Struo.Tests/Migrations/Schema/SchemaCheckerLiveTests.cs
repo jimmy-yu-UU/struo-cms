@@ -37,9 +37,9 @@ public sealed class SchemaCheckerLiveTests
             db.DbMaintenance.DropIndex("ux_" + revisions + "_item_no", revisions);
 
             var dropped = SchemaChecker.Check(db, dbType, FrameworkEntityTypes.All);
-            dropped.Errors.Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex && f.Table == revisions,
+            dropped.GetErrors().Should().ContainSingle(f => f.Kind == FindingKind.MissingUniqueIndex && f.Table == revisions,
                 dropped.ToString());
-            dropped.Errors.Should().HaveCount(1, dropped.ToString());
+            dropped.GetErrors().Should().HaveCount(1, dropped.ToString());
         }
         finally
         {
