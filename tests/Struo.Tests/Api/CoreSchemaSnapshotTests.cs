@@ -116,7 +116,7 @@ public sealed class CoreSchemaSnapshotTests
     /// host has the Blog sample wired in process-wide (Support/ContentAssemblyEnvBootstrap.cs), so
     /// /api/schema also serves article/category/tag — sample collections, deleted on fork.
     /// </summary>
-    private static IReadOnlySet<string> CoreCollectionNames() =>
+    private static HashSet<string> CoreCollectionNames() =>
         MetadataScanner.ScanTypes(FrameworkEntityTypes.All)
             .Select(c => c.Name)
             .ToHashSet(StringComparer.Ordinal);

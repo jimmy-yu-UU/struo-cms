@@ -8,7 +8,7 @@ namespace Struo.Tests.Support.Seeding;
 
 public class AdminUserSeederTests
 {
-    private static ISqlSugarClient NewDb(ITestDatabase db)
+    private static SqlSugarClient NewDb(ITestDatabase db)
     {
         var config = db.RawConfig();
         config.ConfigureExternalServices = new ConfigureExternalServices

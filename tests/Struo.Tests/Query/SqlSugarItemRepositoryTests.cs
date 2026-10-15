@@ -19,7 +19,7 @@ public sealed class SqlSugarItemRepositoryTests : IDisposable
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
-    private readonly IItemRepository _repo;
+    private readonly SqlSugarItemRepository _repo;
 
     public SqlSugarItemRepositoryTests()
     {

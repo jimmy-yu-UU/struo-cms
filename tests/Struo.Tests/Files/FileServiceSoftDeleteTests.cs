@@ -94,7 +94,7 @@ public sealed class FileServiceSoftDeleteTests : IDisposable
         return id;
     }
 
-    private Task InsertSiteSettingsAsync(Guid? logoFileId) =>
+    private Task<int> InsertSiteSettingsAsync(Guid? logoFileId) =>
         _db.Insertable(new SiteSettings
         {
             Id = SiteSettings.SingletonId, BrandName = "Brand", LogoFileId = logoFileId, UpdatedAt = DateTime.UtcNow,

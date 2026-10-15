@@ -26,7 +26,7 @@ public class DistributedCacheTicketStoreTests
         return new AuthenticationTicket(new ClaimsPrincipal(identity), "Cookies");
     }
 
-    private static IDistributedCache MemoryCache() =>
+    private static MemoryDistributedCache MemoryCache() =>
         new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
 
     /// <summary>

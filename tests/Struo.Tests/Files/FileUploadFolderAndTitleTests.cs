@@ -48,7 +48,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
-    private readonly ILanguageProvider _languages = new StubLanguages();
+    private readonly StubLanguages _languages = new();
     private readonly FileService _svc;
 
     public FileUploadFolderAndTitleTests()

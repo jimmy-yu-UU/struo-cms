@@ -49,7 +49,7 @@ public sealed class FileServiceTransactionTests : IDisposable
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
-    private readonly IItemRepository _repo;
+    private readonly SqlSugarItemRepository _repo;
     private readonly FileService _svc;
 
     public FileServiceTransactionTests()
