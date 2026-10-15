@@ -77,7 +77,7 @@ function selectedIds(): string[] {
 }
 
 async function ensureSelectedLabels(): Promise<void> {
-  const missing = selectedIds().filter((id) => !labelById.value[id])
+  const missing = [...new Set(selectedIds())].filter((id) => !labelById.value[id])
   await Promise.all(missing.map(async (id) => {
     try {
       const row = await itemsApi.get(props.relation.targetCollection, id, { locale: langStore.defaultCode })
