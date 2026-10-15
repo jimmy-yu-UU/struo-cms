@@ -19,6 +19,9 @@
   `Auth__BootstrapAdmin__Password`，資料庫已經植入過也一樣，直到把值改好或移除。只在 Production 出現的
   預設密碼警告已移除。Playwright 測試從 `E2E_PASSWORD` 讀密碼，這個變數是必填。原本依賴
   `admin@admin.com` / `admin` 的 fork，必須自己設定密碼，或從 `migrate` 的輸出讀產生的密碼。
+- 已啟用的 `Oidc` 區段，若 `Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段，
+  除非設定了 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則啟動時會被拒絕，錯誤訊息點名這兩個鍵。
+  使用多租用戶 authority 又沒有設定限制的 fork，必須設定其中一個，或改用單一 tenant 的 authority。
 :::
 
 ### 安全性
@@ -34,6 +37,9 @@
 語言代碼的格式規則在每次寫入語言集合時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓語言集合
 的寫入被擋下，直到你修正它為止。請先檢查已儲存的語言資料列裡是否有不符合 `[A-Za-z0-9_-]{1,35}` 的代碼，
 並先修正。
+
+若 `Oidc:Authority` 含有 `common`、`organizations` 或 `consumers`，升級前請先設定 `Oidc:AllowedTenantId`
+或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。
 
 ## 0.10.0 — 2026-10-14
 

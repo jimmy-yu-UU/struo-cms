@@ -227,6 +227,11 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 上都能接管一個既有的密碼帳號；正式環境該怎麼設定這幾道關卡，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
 
+有一種組合會在啟動時被拒絕：OIDC 已啟用，而且 `Oidc:Authority` 的路徑含有 `common`、`organizations`
+或 `consumers` 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
+`Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
+空白的值不算已設定。單一 tenant 的 authority，或 OIDC 停用時，都不受影響。
+
 外部登入失敗時，回應是 `401` 加上 `{ "error": { "message": "External login failed." } }`（提供者
 本身回報使用者拒絕時是 `External login denied.`），這個形狀是手寫的，不是每個端點共用的那個標準
 信封。`GET /api/auth/login/oidc` 接受 `returnUrl`，會先淨化成站內路徑才拿去挑戰，留空則退回

@@ -24,6 +24,10 @@
   Production-only default-password warning is gone. The Playwright suites read the password from
   `E2E_PASSWORD`, which is required. A fork that relied on `admin@admin.com` / `admin` must set a
   password or read the generated one from the `migrate` output.
+- An enabled `Oidc` section whose `Authority` has a path segment of `common`, `organizations` or
+  `consumers` is refused at startup unless `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` is set.
+  The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
+  switch to a single-tenant authority.
 :::
 
 ### Security
@@ -41,6 +45,9 @@
 The language-code format rule checks every row of the language collection on each write to it. A
 malformed code that is already stored blocks writes to the language collection until you correct it.
 Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and fix them first.
+
+If `Oidc:Authority` contains `common`, `organizations` or `consumers`, set `Oidc:AllowedTenantId` or
+`Oidc:AllowedEmailDomains` before upgrading, or the host refuses to start.
 
 ## 0.10.0 — 2026-10-14
 

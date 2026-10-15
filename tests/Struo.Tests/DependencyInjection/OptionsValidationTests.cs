@@ -111,6 +111,37 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("Oidc");
     }
 
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_unpinned_multi_tenant_authority_fails_startup()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Oidc:Enabled"] = "true";
+            s["Oidc:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:AllowedTenantId"] = "";
+            s["Oidc:ClientId"] = "client";
+            s["Oidc:ClientSecret"] = "test-secret";
+        });
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull();
+        var text = string.Join(" ", ove!.Failures);
+        text.Should().Contain("Oidc:AllowedTenantId").And.Contain("Oidc:AllowedEmailDomains");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_multi_tenant_authority_with_a_domain_pin_starts()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Oidc:Enabled"] = "true";
+            s["Oidc:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:ClientId"] = "client";
+            s["Oidc:ClientSecret"] = "test-secret";
+            s["Oidc:AllowedEmailDomains:0"] = "corp.com";
+        });
+        ExceptionChainSearch.FindInner<OptionsValidationException>(error).Should().BeNull();
+    }
+
     [Fact]
     public void MigrateOnStartup_defaults_to_false()
     {

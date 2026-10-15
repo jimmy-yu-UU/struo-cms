@@ -296,6 +296,12 @@ layered on top, anyone whose email matches in any identity provider could in the
 existing password account. How to configure those guards for a production environment is in the
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
+One combination is refused at startup. When OIDC is enabled and `Oidc:Authority` has a path segment
+of `common`, `organizations` or `consumers` (an Entra multi-tenant endpoint, where anyone can create
+a tenant and present any email), the host fails to start unless `Oidc:AllowedTenantId` or
+`Oidc:AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
+A single-tenant authority, or OIDC disabled, is never affected.
+
 A failed external login returns `401` with `{ "error": { "message": "External login failed." } }`
 (`External login denied.` when the provider itself reports that the user declined) — this shape is
 hand-written, not the standard envelope every other endpoint shares. `GET /api/auth/login/oidc`

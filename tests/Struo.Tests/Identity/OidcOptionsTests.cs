@@ -36,4 +36,38 @@ public class OidcOptionsTests
         p.AllowedTenantId.Should().Be("tenant-1");
         p.AllowedEmailDomains.Should().BeEquivalentTo(["corp.com"]);
     }
+
+    [Theory]
+    [InlineData("https://login.microsoftonline.com/common/v2.0", true)]
+    [InlineData("https://login.microsoftonline.com/organizations/v2.0", true)]
+    [InlineData("https://login.microsoftonline.com/Consumers/v2.0", true)]
+    [InlineData("https://login.microsoftonline.com/COMMON", true)]
+    [InlineData("https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0", false)]
+    [InlineData("https://login.microsoftonline.com/commonwealth/v2.0", false)]
+    [InlineData("https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0", false)]
+    [InlineData("https://accounts.google.com", false)]
+    [InlineData("not a uri", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsUnpinnedMultiTenant_matches_whole_path_segments(string? authority, bool expected)
+    {
+        new OidcOptions { Authority = authority }.IsUnpinnedMultiTenant().Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("tenant-1", null, false)]
+    [InlineData("   ", null, true)]
+    [InlineData(null, "x.com", false)]
+    [InlineData(null, " ", true)]
+    [InlineData(null, "", true)]
+    public void IsUnpinnedMultiTenant_honours_either_pin(string? tenant, string? domain, bool expected)
+    {
+        var o = new OidcOptions
+        {
+            Authority = "https://login.microsoftonline.com/common/v2.0",
+            AllowedTenantId = tenant,
+            AllowedEmailDomains = domain is null ? [] : [domain]
+        };
+        o.IsUnpinnedMultiTenant().Should().Be(expected);
+    }
 }

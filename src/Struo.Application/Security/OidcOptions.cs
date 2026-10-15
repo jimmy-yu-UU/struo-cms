@@ -20,16 +20,29 @@ public sealed class OidcOptions
 
     public string[] Scopes { get; set; } = [];
     public string ReturnUrlDefault { get; set; } = "/";
-    // ACCEPTED RISK: JIT provisioning links an external identity to an existing
-    // local account by email equality, and these guards default to OFF. That means a deployment MUST
-    // pin trust via configuration — set a single-tenant Authority + AllowedTenantId (and/or
-    // AllowedEmailDomains), and prefer RequireEmailVerified=true — otherwise a password account could be
-    // taken over by any IdP identity presenting a matching email. Left open by decision to keep the
-    // zero-config dev experience; production is expected to constrain it. See
-    // docs/guide/en/16-authentication.md.
+    // An external identity links to a local account by email equality, so these guards pin trust.
+    // They default to off, except that an enabled multi-tenant Authority needs a tenant or domain pin
+    // (see IsUnpinnedMultiTenant). See docs/guide/en/16-authentication.md.
     public bool RequireEmailVerified { get; set; }
     public string? AllowedTenantId { get; set; }
     public string[] AllowedEmailDomains { get; set; } = [];
+
+    private static readonly string[] MultiTenantSegments = ["common", "organizations", "consumers"];
+
+    /// <summary>True when <see cref="Authority"/> is an Entra multi-tenant endpoint (a path segment of
+    /// <c>common</c>, <c>organizations</c> or <c>consumers</c>) and neither a tenant nor an email
+    /// domain is pinned.</summary>
+    public bool IsUnpinnedMultiTenant()
+    {
+        if (!Uri.TryCreate(Authority, UriKind.Absolute, out var uri)) return false;
+        var multiTenant = uri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(s => MultiTenantSegments.Contains(s, StringComparer.OrdinalIgnoreCase));
+        if (!multiTenant) return false;
+        var pinned = !string.IsNullOrWhiteSpace(AllowedTenantId)
+                     || AllowedEmailDomains.Any(d => !string.IsNullOrWhiteSpace(d));
+        return !pinned;
+    }
 
     public ExternalLoginPolicy ToPolicy() =>
         new(RequireEmailVerified, AllowedTenantId, AllowedEmailDomains);
