@@ -86,20 +86,28 @@ public static class EntitySchemaReader
             return ColumnCategory.DateTimeWithTimeZone;
         if (DeclaresUnknownDataType(column, dbType)) return ColumnCategory.Other;
 
-        var type = Nullable.GetUnderlyingType(column.UnderType) ?? column.UnderType;
-        if (type.IsEnum) return ColumnCategory.Integer;
-        if (type == typeof(string)) return ColumnCategory.String;
-        if (type == typeof(int) || type == typeof(short) || type == typeof(byte)) return ColumnCategory.Integer;
-        if (type == typeof(long)) return ColumnCategory.BigInteger;
-        if (type == typeof(decimal)) return ColumnCategory.Decimal;
-        if (type == typeof(double) || type == typeof(float)) return ColumnCategory.Double;
-        if (type == typeof(bool)) return ColumnCategory.Boolean;
-        if (type == typeof(Guid)) return ColumnCategory.Guid;
-        if (type == typeof(DateTime)) return ColumnCategory.DateTime;
-        if (type == typeof(DateTimeOffset)) return ColumnCategory.DateTimeWithTimeZone;
-        if (type == typeof(byte[])) return ColumnCategory.Binary;
-        return ColumnCategory.Other;
+        return CategoryOfClrType(Nullable.GetUnderlyingType(column.UnderType) ?? column.UnderType);
     }
+
+    private static readonly Dictionary<Type, ColumnCategory> ClrTypeCategories = new()
+    {
+        [typeof(string)] = ColumnCategory.String,
+        [typeof(int)] = ColumnCategory.Integer,
+        [typeof(short)] = ColumnCategory.Integer,
+        [typeof(byte)] = ColumnCategory.Integer,
+        [typeof(long)] = ColumnCategory.BigInteger,
+        [typeof(decimal)] = ColumnCategory.Decimal,
+        [typeof(double)] = ColumnCategory.Double,
+        [typeof(float)] = ColumnCategory.Double,
+        [typeof(bool)] = ColumnCategory.Boolean,
+        [typeof(Guid)] = ColumnCategory.Guid,
+        [typeof(DateTime)] = ColumnCategory.DateTime,
+        [typeof(DateTimeOffset)] = ColumnCategory.DateTimeWithTimeZone,
+        [typeof(byte[])] = ColumnCategory.Binary,
+    };
+
+    private static ColumnCategory CategoryOfClrType(Type type) =>
+        type.IsEnum ? ColumnCategory.Integer : ClrTypeCategories.GetValueOrDefault(type, ColumnCategory.Other);
 
     // An explicit [SugarColumn(ColumnDataType = ...)] other than a ColumnTypeMap literal has no portable category.
     private static bool DeclaresUnknownDataType(EntityColumnInfo column, SqlSugar.DbType dbType) =>
