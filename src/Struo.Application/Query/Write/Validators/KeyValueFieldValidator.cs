@@ -17,9 +17,8 @@ public sealed class KeyValueFieldValidator : IFieldValidator
         var map = pi.GetValue(entity) as IDictionary<string, string>;
         if (map is not null)
         {
-            foreach (var key in map.Keys)
-                if (string.IsNullOrWhiteSpace(key))
-                    throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
+            if (map.Keys.Any(string.IsNullOrWhiteSpace))
+                throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
         }
         if (field.Required && (map is null || map.Count == 0))
             throw new QueryException($"Field '{field.Name}' is required.");

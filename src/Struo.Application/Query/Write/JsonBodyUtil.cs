@@ -20,11 +20,8 @@ internal static class JsonBodyUtil
         using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
         {
             writer.WriteStartObject();
-            foreach (var prop in source.EnumerateObject())
-            {
-                if (!keysToRemove.Contains(prop.Name))
-                    prop.WriteTo(writer);
-            }
+            foreach (var prop in source.EnumerateObject().Where(p => !keysToRemove.Contains(p.Name)))
+                prop.WriteTo(writer);
             writer.WriteEndObject();
         }
         return ms.ToArray();

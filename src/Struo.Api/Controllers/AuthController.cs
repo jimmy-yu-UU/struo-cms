@@ -90,13 +90,13 @@ public sealed class AuthController(IAuthService auth, ILoginAttemptThrottle logi
         var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         if (!eff.IsSuperAdmin)
         {
-            foreach (var c in schema.GetAll())
+            foreach (var collectionName in schema.GetAll().Select(c => c.Name))
             {
-                var read = eff.CanRead(c.Name);
-                var write = eff.CanWrite(c.Name);
-                var del = eff.CanDelete(c.Name);
+                var read = eff.CanRead(collectionName);
+                var write = eff.CanWrite(collectionName);
+                var del = eff.CanDelete(collectionName);
                 if (read || write || del)
-                    map[c.Name] = new { read, write, @delete = del };
+                    map[collectionName] = new { read, write, @delete = del };
             }
         }
 
