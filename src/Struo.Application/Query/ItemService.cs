@@ -48,6 +48,8 @@ public sealed class ItemService(
     // invariants are not enforced (only direct construction in tests).
     ILanguageCollectionRules? languageRules = null) : IItemUseCases
 {
+    private const string ReadNotPermitted = "Read not permitted.";
+
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
     // the sibling `deserializer` field above (CS0236).
@@ -70,7 +72,7 @@ public sealed class ItemService(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         ValidateLocale(locale);
 
         // Effective query locale: explicit locale ?? global default. Computed unconditionally —
@@ -128,7 +130,7 @@ public sealed class ItemService(
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         ValidateLocale(locale);
         var entity = await repository.GetByIdAsync(collection, id, deleted, ct);
         if (entity is null) return null;
@@ -296,7 +298,7 @@ public sealed class ItemService(
             await EnforceLanguageRulesAsync(collection, ct);
             if (meta.Revisions)
             {
-                var snapshot = await snapshotBuilder.BuildAsync(collection, updated!, ct);
+                var snapshot = await snapshotBuilder.BuildAsync(collection, updated, ct);
                 await revisions.CaptureAsync(collection, updatedId.ToString()!, operation, snapshot,
                     sourceRevisionNumber, ct: ct);
             }
@@ -551,7 +553,7 @@ public sealed class ItemService(
         string collection, string id, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return [];
         return await revisions.ListAsync(collection, id, ct);
     }
@@ -569,7 +571,7 @@ public sealed class ItemService(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
     {
         var meta = Meta(collection);
-        if (!permissions.CanRead(collection)) throw new PermissionDeniedException("Read not permitted.");
+        if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
