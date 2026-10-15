@@ -132,8 +132,8 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         var idCol = _db.EntityMaintenance.GetDbColumnName<Article>(nameof(Article.Id));
         var select = _log.Single(l => l.Sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) && l.Sql.Contains("articles"));
         var orderBy = select.Sql[select.Sql.LastIndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase)..];
-        System.Text.RegularExpressions.Regex.Matches(orderBy, $@"\b{idCol}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            .Count.Should().Be(1);
+        System.Text.RegularExpressions.Regex.Count(orderBy, $@"\b{idCol}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Should().Be(1);
     }
 
     [Fact]
