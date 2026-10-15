@@ -16,7 +16,7 @@ public class SqlSugarExternalUserStoreTests
         var db = SqlSugarClientFactory.Create(
             file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables(typeof(User));
+        db.CodeFirst.InitTables<User>();
         return db;
     }
 

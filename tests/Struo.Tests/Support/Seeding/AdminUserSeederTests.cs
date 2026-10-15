@@ -21,7 +21,7 @@ public class AdminUserSeederTests
             }
         };
         var c = new SqlSugarClient(config);
-        c.CodeFirst.InitTables(typeof(User));
+        c.CodeFirst.InitTables<User>();
         return c;
     }
 

@@ -55,7 +55,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void A_missing_column_is_an_error()
     {
         var db = Client("chkc_");
-        db.CodeFirst.InitTables(typeof(CheckProbeWithoutNote));
+        db.CodeFirst.InitTables<CheckProbeWithoutNote>();
 
         var report = Check(db, typeof(CheckProbe));
 
@@ -66,7 +66,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void Flipped_nullability_is_an_error()
     {
         var db = Client("chkd_");
-        db.CodeFirst.InitTables(typeof(CheckProbeNullableTitle));
+        db.CodeFirst.InitTables<CheckProbeNullableTitle>();
 
         var report = Check(db, typeof(CheckProbe));
 
@@ -77,7 +77,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void A_shorter_string_column_is_a_length_error()
     {
         var db = Client("chke_");
-        db.CodeFirst.InitTables(typeof(CheckProbeShortTitle));
+        db.CodeFirst.InitTables<CheckProbeShortTitle>();
 
         var report = Check(db, typeof(CheckProbe));
 
@@ -88,7 +88,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void An_extra_database_column_is_only_a_warning()
     {
         var db = Client("chkg_");
-        db.CodeFirst.InitTables(typeof(CheckProbeExtraColumn));
+        db.CodeFirst.InitTables<CheckProbeExtraColumn>();
 
         var report = Check(db, typeof(CheckProbe));
 
@@ -103,7 +103,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void An_incompatible_column_type_is_an_error()
     {
         var db = Client("chki_");
-        db.CodeFirst.InitTables(typeof(CheckProbeTypeShift));
+        db.CodeFirst.InitTables<CheckProbeTypeShift>();
 
         var report = Check(db, typeof(CheckProbe));
 
@@ -117,7 +117,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void A_missing_unique_index_is_an_error()
     {
         var db = Client("chkf1_");
-        db.CodeFirst.InitTables(typeof(Revision));
+        db.CodeFirst.InitTables<Revision>();
         db.DbMaintenance.DropIndex(RevisionIndex("chkf1_"), RevisionTable("chkf1_"));
 
         var report = Check(db, typeof(Revision));
@@ -129,7 +129,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void A_unique_index_with_another_name_on_the_same_columns_satisfies_the_check()
     {
         var db = Client("chkf2_");
-        db.CodeFirst.InitTables(typeof(Revision));
+        db.CodeFirst.InitTables<Revision>();
         db.DbMaintenance.DropIndex(RevisionIndex("chkf2_"), RevisionTable("chkf2_"));
         db.DbMaintenance.CreateIndex(
             RevisionTable("chkf2_"), ["itemid", "collectionname", "revisionnumber"], "renamed_unique", true);
@@ -143,7 +143,7 @@ public sealed class SchemaCheckerTests : IDisposable
     public void A_unique_index_with_an_extra_column_does_not_satisfy_the_check()
     {
         var db = Client("chkf3_");
-        db.CodeFirst.InitTables(typeof(Revision));
+        db.CodeFirst.InitTables<Revision>();
         db.DbMaintenance.DropIndex(RevisionIndex("chkf3_"), RevisionTable("chkf3_"));
         db.DbMaintenance.CreateIndex(
             RevisionTable("chkf3_"), ["collectionname", "itemid", "revisionnumber", "operation"], "four_cols", true);

@@ -21,7 +21,7 @@ public class UserCredentialStoreTests
             }
         };
         var client = new SqlSugarClient(config);
-        client.CodeFirst.InitTables(typeof(User));
+        client.CodeFirst.InitTables<User>();
         return client;
     }
 
