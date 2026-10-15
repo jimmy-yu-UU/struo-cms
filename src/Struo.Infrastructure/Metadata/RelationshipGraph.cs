@@ -86,10 +86,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                         OnDelete.Cascade => inboundCascade,
                         _ => inboundRestrict
                     };
-                    if (bucket.TryGetValue(r.TargetCollection, out var lst))
-                        lst.Add((c.Name, r.ForeignKey!));
-                    else
-                        bucket[r.TargetCollection] = [(c.Name, r.ForeignKey!)];
+                    AppendInbound(bucket, r.TargetCollection, (c.Name, r.ForeignKey!));
                 }
             }
 
@@ -100,6 +97,15 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         _inboundRestrict = Freeze(inboundRestrict);
         _inboundSetNull = Freeze(inboundSetNull);
         _inboundCascade = Freeze(inboundCascade);
+    }
+
+    private static void AppendInbound(
+        Dictionary<string, List<(string, string)>> bucket, string key, (string, string) item)
+    {
+        if (bucket.TryGetValue(key, out var list))
+            list.Add(item);
+        else
+            bucket[key] = [item];
     }
 
     private static Dictionary<string, IReadOnlyList<(string, string)>> Freeze(
