@@ -22,7 +22,7 @@ function build(): VueWrapper {
 describe('RichTextTableGrid', () => {
   it('renders a 10 by 8 grid', () => {
     w = build()
-    expect(w.findAll('[data-cell]').length).toBe(80)
+    expect(w.findAll('[data-cell]')).toHaveLength(80)
     // A count of 80 alone would also pass an 8-column by 10-row grid (transposed) -- these two
     // corners are only both present in the intended 10-wide by 8-tall layout.
     expect(w.find('[data-cell="8-10"]').exists()).toBe(true)
@@ -37,10 +37,10 @@ describe('RichTextTableGrid', () => {
   it('owns its cells through eight role="row" wrappers', () => {
     w = build()
     const rows = w.findAll('[role="row"]')
-    expect(rows.length).toBe(8)
+    expect(rows).toHaveLength(8)
     // Scoped to the first row, not the grid: 80 gridcells anywhere under the grid would also be
     // true of cells parented directly by it, which is the arrangement this test exists to reject.
-    expect(rows[0].findAll('[role="gridcell"]').length).toBe(10)
+    expect(rows[0].findAll('[role="gridcell"]')).toHaveLength(10)
   })
 
   // The accessible name is deliberately the STATIC widget name, with the live size linked as a
@@ -63,7 +63,7 @@ describe('RichTextTableGrid', () => {
 
   it('shows no highlight or readout before the first hover or key press', () => {
     w = build()
-    expect(w.findAll('[data-cell][data-in-range="true"]').length).toBe(0)
+    expect(w.findAll('[data-cell][data-in-range="true"]')).toHaveLength(0)
     // A readout that already says "1 column x 1 row" before any interaction would tell a
     // sighted user (and, worse, a screen-reader user who has only just landed on the grid) that a
     // size has already been chosen -- the very thing the no-highlight rule above exists to avoid.
@@ -73,7 +73,7 @@ describe('RichTextTableGrid', () => {
   it('highlights the hovered rectangle and reads out its size', async () => {
     w = build()
     await w.get('[data-cell="3-4"]').trigger('mouseenter')
-    expect(w.findAll('[data-cell][data-in-range="true"]').length).toBe(12)
+    expect(w.findAll('[data-cell][data-in-range="true"]')).toHaveLength(12)
     expect(w.get('[data-testid="table-size-readout"]').text()).toBe('4 columns × 3 rows')
   })
 

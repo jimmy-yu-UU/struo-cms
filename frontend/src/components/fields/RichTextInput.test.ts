@@ -408,7 +408,7 @@ describe('RichTextInput', () => {
     })
     await flushPromises()
     await waitForEditorCreate()
-    expect(w.findAll('[data-resize-handle]').length).toBe(0)
+    expect(w.findAll('[data-resize-handle]')).toHaveLength(0)
   })
 
   // The setEditable() that removes those handles emits 'update'. Unsuppressed, that reaches
@@ -529,8 +529,8 @@ describe('RichTextInput', () => {
     await flushPromises()
     const emitted = w.emitted('update:modelValue')
     const html = String(emitted!.at(-1)![0])
-    expect((html.match(/<tr>/g) ?? []).length).toBe(2)
-    expect((html.match(/<th\b/g) ?? []).length).toBe(4)
+    expect(html.match(/<tr>/g) ?? []).toHaveLength(2)
+    expect(html.match(/<th\b/g) ?? []).toHaveLength(4)
     w.unmount()
   })
 
@@ -1209,7 +1209,7 @@ describe('RichTextInput', () => {
     const vm = w.vm as unknown as { editor: { getHTML: () => string } }
     const html = vm.editor.getHTML()
     expect(html).toContain('<table')
-    expect((html.match(/<tr>/g) ?? []).length).toBe(3)
+    expect(html.match(/<tr>/g) ?? []).toHaveLength(3)
     // 3 <tr> alone is true whether withHeaderRow is true or false -- this is what actually
     // discriminates the dialog's default-checked header box reaching insertTable.
     expect(html).toContain('<th')
@@ -1234,7 +1234,7 @@ describe('RichTextInput', () => {
     // `/<th[\s>]/` so this can never match `<thead`, since the "not <thead" check below is the
     // only thing standing between a false pass and a wrapped-in-thead-again regression otherwise.
     expect(html).toContain('<th')
-    expect((html.match(/<th[\s>]/g) ?? []).length).toBe(2)
+    expect(html.match(/<th[\s>]/g) ?? []).toHaveLength(2)
     // "H1" surviving toContain(html) alone would also pass if it landed outside any <th> at all --
     // assert it falls inside the first header cell's own tag pair instead.
     const firstTh = html.indexOf('<th')
@@ -1243,7 +1243,7 @@ describe('RichTextInput', () => {
     expect(html.slice(firstTh, firstThClose)).toContain('H1')
     expect(html).toContain('H2')
     // ...the body row is untouched...
-    expect((html.match(/<td/g) ?? []).length).toBe(2)
+    expect(html.match(/<td/g) ?? []).toHaveLength(2)
     // ...the header row still comes before the body row, not reordered -- `/<th[\s>]/` again so a
     // stray `<thead` (which this test already asserts is absent) could never be mistaken for it...
     expect(html.search(/<th[\s>]/)).toBeLessThan(html.indexOf('<td'))
@@ -2152,7 +2152,7 @@ describe('RichTextInput resize handle visibility contract', () => {
     // would also pass if the class simply never appeared anywhere.
     expect(w.get('[data-resize-container]').classes()).not.toContain('ProseMirror-selectednode')
     const handles = w.findAll('[data-resize-handle]')
-    expect(handles.length).toBe(8)
+    expect(handles).toHaveLength(8)
     for (const handle of handles) {
       expect(displayValuesFor(handle.element)).toEqual(['none'])
     }
@@ -2166,7 +2166,7 @@ describe('RichTextInput resize handle visibility contract', () => {
 
     expect(w.get('[data-resize-container]').classes()).toContain('ProseMirror-selectednode')
     const handles = w.findAll('[data-resize-handle]')
-    expect(handles.length).toBe(8)
+    expect(handles).toHaveLength(8)
     for (const handle of handles) {
       expect(displayValuesFor(handle.element)).toEqual([])
     }

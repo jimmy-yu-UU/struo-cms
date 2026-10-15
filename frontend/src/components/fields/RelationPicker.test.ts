@@ -229,7 +229,7 @@ describe('RelationPicker', () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     const w = mountPicker({ tree: true, modelValue: null }, live)
     await flushPromises()
-    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBe(null)
+    expect(w.findComponent({ name: 'TreeSelect' }).props('modelValue')).toBeNull()
   })
 
   it('passes disabled through to the tree branch', async () => {

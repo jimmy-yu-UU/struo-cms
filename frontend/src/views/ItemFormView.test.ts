@@ -333,7 +333,7 @@ describe('ItemFormView', () => {
     // No conflict recovery: banner not armed, edits not touched, and NO recovery refetch (get unchanged).
     expect((w.vm as any).conflict).toBe(false)
     expect((w.vm as any).serverError).toBe('Email is already in use.')
-    expect(get.mock.calls.length).toBe(getCallsAfterLoad)
+    expect(get.mock.calls).toHaveLength(getCallsAfterLoad)
   })
 
   it('Reload latest overwrites the model with the server copy and clears conflict', async () => {
