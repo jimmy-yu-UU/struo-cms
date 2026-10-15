@@ -47,7 +47,7 @@ public sealed class TypedOrderBySecurityTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    private void Seed(string? hostileLocale = null)
+    private void Seed()
     {
         var pz = new Category { Id = Guid.CreateVersion7(), Name = "Zeta" };
         var pa = new Category { Id = Guid.CreateVersion7(), Name = "Alpha" };
@@ -96,11 +96,14 @@ public sealed class TypedOrderBySecurityTests : IDisposable
     {
         _db.Insertable(new ArticleTranslation { ArticleId = _a3, Locale = hostile, Title = "Evil" }).ExecuteCommand();
 
-        var ids = await Ids(Sorted("-title"), hostile);
+        var desc = await Ids(Sorted("-title"), hostile);
+        var asc = await Ids(Sorted("title"), hostile);
 
-        ids.Should().HaveCount(4);
-        // The only non-NULL key belongs to a3: first on DESC where NULLs sort low, last where they sort high.
-        (ids[0] == _a3 || ids[^1] == _a3).Should().BeTrue();
+        desc.Should().HaveCount(4);
+        asc.Should().HaveCount(4);
+        // a3 holds the only non-NULL key, so it sits at opposite ends of the two directions.
+        var ends = new[] { (desc[0], asc[^1]), (desc[^1], asc[0]) };
+        ends.Should().Contain(e => e.Item1 == _a3 && e.Item2 == _a3);
     }
 
     [Fact]

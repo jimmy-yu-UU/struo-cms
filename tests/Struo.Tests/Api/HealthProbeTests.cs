@@ -2,6 +2,7 @@
 using System.Net;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Security;
 using Struo.Tests.Support;
@@ -29,18 +30,17 @@ public class HealthProbeTests(ApiFactory factory)
             throw new InvalidOperationException("permission store unreachable");
     }
 
-    private HttpClient CreateClientWithFailingPermissionStore() =>
-        _factory
-            .WithWebHostBuilder(b => b.ConfigureServices(s =>
-                s.AddScoped<IRolePermissionStore, ThrowingRolePermissionStore>()))
-            .CreateClient();
+    private WebApplicationFactory<Program> FactoryWithFailingPermissionStore() =>
+        _factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+            s.AddScoped<IRolePermissionStore, ThrowingRolePermissionStore>()));
 
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
     public async Task Health_probes_succeed_when_permission_resolution_would_fail(string path)
     {
-        var client = CreateClientWithFailingPermissionStore();
+        await using var factory = FactoryWithFailingPermissionStore();
+        using var client = factory.CreateClient();
 
         var response = await client.GetAsync(path);
 
@@ -50,7 +50,8 @@ public class HealthProbeTests(ApiFactory factory)
     [Fact]
     public async Task Api_routes_still_resolve_permissions_through_the_store()
     {
-        var client = CreateClientWithFailingPermissionStore();
+        await using var factory = FactoryWithFailingPermissionStore();
+        using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/ping");
 
@@ -62,7 +63,8 @@ public class HealthProbeTests(ApiFactory factory)
     [InlineData("/health-foo")]
     public async Task Paths_that_only_share_the_health_prefix_do_not_skip_resolution(string path)
     {
-        var client = CreateClientWithFailingPermissionStore();
+        await using var factory = FactoryWithFailingPermissionStore();
+        using var client = factory.CreateClient();
 
         var response = await client.GetAsync(path);
 
