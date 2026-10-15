@@ -25,12 +25,14 @@ public static class MigrationCli
         if (args.Length == 0 || !IsCommand(args[0])) return new MigrationCliInvocation(null, [], args);
 
         List<string> commandArgs = [], hostArgs = [];
-        for (var i = 1; i < args.Length; i++)
+        var i = 1;
+        while (i < args.Length)
         {
-            if (!IsConfigKey(args[i])) { commandArgs.Add(args[i]); continue; }
-            hostArgs.Add(args[i]);
-            if (!args[i].Contains('=') && i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
-                hostArgs.Add(args[++i]);
+            var arg = args[i++];
+            if (!IsConfigKey(arg)) { commandArgs.Add(arg); continue; }
+            hostArgs.Add(arg);
+            if (!arg.Contains('=') && i < args.Length && !args[i].StartsWith("--", StringComparison.Ordinal))
+                hostArgs.Add(args[i++]);
         }
         return new MigrationCliInvocation(args[0], commandArgs, [.. hostArgs]);
     }

@@ -189,6 +189,7 @@ namespace Struo.Tests.Migrations
                 new[] { "--output", _dir },
                 ["CreateX", "--output", _dir, "--bogus", "1"],
                 ["CreateX", "--output"],
+                ["CreateX", "--entity", "--output", _dir],
                 ["CreateX", "--output", _dir, "--output", _dir],
                 ["CreateX", "Extra", "--output", _dir],
             })
