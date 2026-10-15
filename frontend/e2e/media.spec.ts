@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from './credentials'
 
 // Live gate: Media Library upload + per-locale Title/Alt save. Upload goes through a real
 // <input type="file"> via Playwright's setInputFiles() with an
@@ -11,7 +12,7 @@ import { type Page } from '@playwright/test'
 // FilesController.Upload — there is no server-side image validation that could reject it.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
 const API = process.env.E2E_API ?? 'http://localhost:5221'

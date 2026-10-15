@@ -21,8 +21,10 @@ Both suites need, at minimum:
   `Auth:BootstrapAdmin:Password`). The API refuses to start on an unmigrated database: run
   `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local
   configuration. A local database built by v0.8.x CodeFirst needs `migrate:baseline` once instead.
-  Override the credentials the specs log in with via `E2E_EMAIL` /
-  `E2E_PASSWORD` if your seeded admin differs from the shipped default.
+  `E2E_PASSWORD` is required: the template ships no bootstrap password, so the specs fail at load
+  without it. Set it to the seeded admin's password (`Auth__BootstrapAdmin__Password`, or the one the
+  `migrate` run printed when none was configured). `E2E_EMAIL` defaults to the shipped
+  `admin@admin.com`.
 - No login-rate-limit override needed for a default checkout. `RateLimiting:Login` (the per-client-IP
   limiter, which counts every attempt — success or failure — against its window) ships **disabled** by
   default, and `RateLimiting:LoginAccount` (the per-account throttle, on by default) only counts
@@ -54,10 +56,10 @@ those up):
 pnpm e2e
 ```
 
-Override credentials if needed:
+Pass the credentials:
 
 ```bash
-E2E_EMAIL=someone@example.com E2E_PASSWORD=secret pnpm e2e
+E2E_EMAIL=someone@example.com E2E_PASSWORD=your-admin-password pnpm e2e
 ```
 
 ## Artifacts

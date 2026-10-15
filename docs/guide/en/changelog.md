@@ -14,6 +14,14 @@
   build a `GraphQlQueryArgs` first.
 - `SchemaTypeMapper.TagItemInputName` is a constant, not a method. Change `TagItemInputName()` to
   `TagItemInputName`.
+- The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
+  `appsettings.json` and `STRUO_ADMIN_PASSWORD` defaults to empty in `docker-compose.yml`. When the
+  password is empty, the run that creates the admin generates a random 24-character one and logs it once
+  as a Warning. A configured password that fails `Auth:Password` or equals `admin` in any letter case
+  now stops the seed with an error naming `Auth__BootstrapAdmin__Password`, in every environment. The
+  Production-only default-password warning is gone. The Playwright suites read the password from
+  `E2E_PASSWORD`, which is required. A fork that relied on `admin@admin.com` / `admin` must set a
+  password or read the generated one from the `migrate` output.
 :::
 
 ### Security

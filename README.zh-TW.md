@@ -39,8 +39,9 @@ docker compose up -d --build
 docker compose ps   # 等 postgres、redis、api 都顯示 (healthy)
 ```
 
-開啟 `http://localhost:8080`，用預設帳號登入：`admin@admin.com` / `admin`。API 在 `http://localhost:8081`。
-第一次啟動會建立資料表並植入這組帳密；要換帳密，第一次啟動前在 `.env` 設
+開啟 `http://localhost:8080`，用 `admin@admin.com` 登入。API 在 `http://localhost:8081`。
+第一次啟動會建立資料表並植入這個帳號，密碼是隨機產生的，只會在 api 的 log 印出一次
+（`docker compose logs api`）。要自己指定，第一次啟動前在 `.env` 設
 `STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。
 
 - 埠號：被佔用時，複製 `.env.example` 成 `.env`，覆寫 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、
@@ -74,10 +75,8 @@ pnpm dev
 # 監聽 http://localhost:5173，並將 /api 轉發到 :5221
 ```
 
-開啟 `http://localhost:5173`，用預設帳號登入：`admin@admin.com` / `admin`。這組帳密由 `migrate` 指令植入；
-要換帳密，執行它之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`。
-
-用 Production 環境啟動、密碼還是預設值時，log 只會留下一筆警告，不會擋下啟動——上線前先把它改掉。完整
+開啟 `http://localhost:5173`，用 `admin@admin.com` 登入。這個帳號由 `migrate` 指令植入，並只印出一次隨機產生的密碼；
+要自己指定，執行它之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`。完整
 步驟，包括 PostgreSQL／Redis 埠號覆寫與健康檢查，見
 [第 3 章：快速開始](docs/guide/zh-TW/03-getting-started.md)。
 

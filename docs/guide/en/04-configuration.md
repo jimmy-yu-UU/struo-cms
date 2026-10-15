@@ -44,8 +44,7 @@ following environment-specific behavior:
 - Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE, and the startup schema
   check (the same comparison as `migrate:check`; startup is refused when it finds an error).
 - Non-Production only: `/scalar` and `/openapi/v1.json`.
-- Production-only: the cookie `SecurePolicy` is fixed to `Always`, and the warning about an
-  unchanged default admin password.
+- Production-only: the cookie `SecurePolicy` is fixed to `Always`.
 
 These seven are host-facing settings in `docker-compose.yml`; they never reach the API's own
 configuration:
@@ -62,7 +61,8 @@ If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to m
 
 `STRUO_ADMIN_EMAIL` and `STRUO_ADMIN_PASSWORD` are different: Compose passes them to its `api`
 service as `Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password`. They only affect the
-API that Compose starts, not one you run yourself.
+API that Compose starts, not one you run yourself. `STRUO_ADMIN_PASSWORD` is empty by default, so
+the seed generates a password and prints it once in the `api` log.
 
 ## Database
 
@@ -116,7 +116,6 @@ The database part of startup runs in this order:
    check the database and refuse to start if the framework tables exist without a version table,
    or if migrations are pending.
 3. In Development, run the schema check and refuse to start on errors.
-4. In Production, log a warning if the default admin password is unchanged.
 
 ## Struo:ContentAssemblies
 
@@ -254,17 +253,17 @@ exception (500) instead.
 | Key | Type | Default |
 |---|---|---|
 | `Auth:BootstrapAdmin:Email` | string | `"admin@admin.com"` |
-| `Auth:BootstrapAdmin:Password` | string | `"admin"` |
+| `Auth:BootstrapAdmin:Password` | string | `""` |
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
-never backfilled onto an existing database, but it is read again on every start — the Production
-default-password warning compares against it. These two keys have no options class; the seed
-migration and the warning each read them straight from configuration as strings, so the
-environment that runs `migrate` needs them. The seed migration doesn't enforce the password policy,
-so whatever you put here is accepted as-is. The default `admin` is only five characters, shorter
-than `MinLength`'s 8.
+never backfilled onto an existing database. These two keys have no options class; the seed
+migration reads them straight from configuration as strings, so the environment that runs `migrate`
+needs them. An empty password means the seed generates a random 24-character one and logs it once
+as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
+and may not be `admin` in any letter case; otherwise the seed refuses to run and the error names
+`Auth__BootstrapAdmin__Password`.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.

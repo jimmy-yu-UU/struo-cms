@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from '../credentials'
 
 // Live gate: revision history + revert.
 //
@@ -14,7 +15,7 @@ import { type Page } from '@playwright/test'
 // revert, plus an independent API confirmation.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // Backend origin for out-of-band API calls. See conflict.spec.ts: localhost (not 127.0.0.1) so
 // page.request carries the app's auth cookie (host-only, ignores port).

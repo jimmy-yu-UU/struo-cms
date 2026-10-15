@@ -303,11 +303,6 @@ try
             sp.GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>().CollectForInitTables(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
             CancellationToken.None);
-
-        BootstrapAdminPasswordWarning.LogIfDefault(
-            app.Environment.IsProduction(),
-            builder.Configuration["Auth:BootstrapAdmin:Password"],
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }
 
     await app.RunAsync();

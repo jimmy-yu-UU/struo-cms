@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from '../credentials'
 
 // Live gate: optimistic-concurrency (version) recovery.
 //
@@ -23,7 +24,7 @@ import { type Page } from '@playwright/test'
 // exercised.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // Backend origin for out-of-band writes. MUST share the auth cookie's host with the app: the SPA
 // (baseURL localhost:5173) receives a host-only cookie for `localhost`, which page.request replays

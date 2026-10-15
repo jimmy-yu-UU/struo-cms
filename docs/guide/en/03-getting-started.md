@@ -1,6 +1,6 @@
 # 3. Getting Started
 
-This chapter gets the API and admin SPA running and logs in once with the default account — either
+This chapter gets the API and admin SPA running and logs in once with the seeded admin account — either
 with a single Docker Compose command that starts the whole stack, or by starting only the services
 you need and running the rest yourself.
 
@@ -27,8 +27,8 @@ docker compose up -d --build
 ```
 
 It builds the API and admin images and starts four services: `postgres`, `redis`, `api` and
-`admin`. On the first start the API runs the database migrations and seeds the default admin
-account.
+`admin`. On the first start the API runs the database migrations and seeds the admin account
+with a generated password.
 
 Wait for them to come up:
 
@@ -39,8 +39,15 @@ docker compose ps
 `postgres`, `redis` and `api` must read `healthy`; `admin` has no health check, so `Up` is enough.
 You can also run `docker compose up -d --build --wait`, which returns only once everything is ready.
 
-Open `http://localhost:8080` and log in with the default account: `admin@admin.com` / `admin`. The
-API itself is at `http://localhost:8081`.
+Open `http://localhost:8080` and log in as `admin@admin.com`. The password is generated on the first
+start and printed once in the `api` log:
+
+```bash
+docker compose logs api
+```
+
+Look for the Warning that begins `Bootstrap admin created`. The API itself is at
+`http://localhost:8081`.
 
 The host ports default to 8080 for the admin, 8081 for the API, 5432 for PostgreSQL and 6379 for
 Redis. If any is taken, copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`,
@@ -55,10 +62,10 @@ The `api` service runs as Production, so the session cookie is `Secure`. Browser
 `http://localhost` as a secure context, so logging in locally works; reaching the admin under any
 other host name needs HTTPS in front.
 
-The default account is seeded only on the first start, while the database is still empty. To use a
-different email and password, set `STRUO_ADMIN_EMAIL`/`STRUO_ADMIN_PASSWORD` in `.env` before that
-first start. This account and the database credentials are for local development only; while
-`STRUO_ADMIN_PASSWORD` is still the default, every start logs a warning.
+The account is seeded only on the first start, while the database is still empty. To choose the
+email and password yourself, set `STRUO_ADMIN_EMAIL`/`STRUO_ADMIN_PASSWORD` in `.env` before that
+first start; a password you set must pass the password policy and may not be `admin`. This account
+and the database credentials are for local development only.
 
 `docker compose down` removes the containers but keeps the database and uploaded files in their
 volumes; `docker compose down -v` deletes the volumes too, so the next start begins with an empty
@@ -115,18 +122,20 @@ dotnet run --project src/Struo.Api -- migrate
 ```
 
 `migrate` applies the migrations in order: first the framework tables, then the seed of languages,
-the `admin` and `public` roles, and the default admin account. The output starts with
+the `admin` and `public` roles, and the admin account. The output starts with
 FluentMigrator's log of each step and ends with one `Applied` line per migration; the exit code is
 `0`:
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[18:30:29 INF] Beginning Transaction
-[18:30:29 INF] Rolling back transaction
-[18:30:29 INF] VersionMigration migrating
+[16:47:28 INF] Beginning Transaction
+[16:47:28 INF] Rolling back transaction
+[16:47:28 INF] VersionMigration migrating
+[16:47:28 INF] Beginning Transaction
 …
-[18:30:29 INF] 202610080001: SeedCoreData migrated
-[18:30:29 INF] => 0.0086777s
+[16:47:28 INF] 202610080001: SeedCoreData migrated
+[16:47:28 INF] => 0.0019894s
+[16:47:28 WRN] Bootstrap admin created: admin@admin.com with the generated password Yo43Ui4K7N3WJB92vKVIxFL8. It is shown only once; change it after the first login.
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 ```
@@ -208,15 +217,13 @@ API as the same origin — the development environment needs no separate CORS co
 
 ### 6. First login
 
-Open `http://localhost:5173` and log in with the default account: `admin@admin.com` / `admin`.
+Open `http://localhost:5173` and log in as `admin@admin.com` with the password that step 3's `migrate`
+printed. It is a Warning in the `migrate` output, shown once and never again.
 
 Change the password right after logging in.
 
-If you start in the Production environment while the password is still the default, the log records
-only a warning naming `Auth__BootstrapAdmin__Password` — it does not block startup.
-
-Step 3's `migrate` seeds this account, once, on an empty database. To start with a different email
-and password, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before running
+Step 3's `migrate` seeds this account, once, on an empty database. To choose the email
+and password yourself, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before running
 `migrate`; once it is seeded, the only way to change them is to log in to the admin UI.
 
 ## What you'll see

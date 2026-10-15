@@ -13,14 +13,15 @@ it expires, and how it's revoked. What a caller can do once authenticated is in
 
 The moment the `struo_users` table is created and still empty, the first administrator account is
 created along with it: active, its name fixed at `Administrator`, its email and password taken
-from `Auth:BootstrapAdmin`. This happens exactly once — changing the setting and restarting
+from `Auth:BootstrapAdmin`; an empty password is replaced by a generated one. This happens exactly once — changing the setting and restarting
 does nothing to an existing database.
 
-This default account is the one deliberate bypass of the password policy: its configured
-password is hashed and written directly, skipping the length check the next section covers,
-so the short default password in the settings file still works for that first login. The
-transcripts log in with that same default password. A production environment should change it
-immediately after the first login.
+The template ships no bootstrap password. When `Auth:BootstrapAdmin:Password` is empty, the seed
+generates a random 24-character password and logs it once, as a Warning, in the run that creates
+the account. A password you configure goes through the password policy the next section covers,
+and `admin` is refused in any letter case; a refused password stops the seed with an error that
+names `Auth__BootstrapAdmin__Password`. The transcripts log in with a placeholder for that
+password. Change it after the first login.
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator
 to `admin` — the detail is left to

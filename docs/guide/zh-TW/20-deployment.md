@@ -22,15 +22,16 @@ job、init container，或 `docker run --rm … <映像> migrate`。也可以設
 Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
 自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
 
-### 第一次 `migrate` 前就換掉 bootstrap 密碼
+### 第一次 `migrate` 時指定或記下 bootstrap 密碼
 
 `Auth:BootstrapAdmin:Password` 只在核心的 seed migration 第一次執行時被讀一次，之後再怎麼改這個
 值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
 那個 job 的環境裡，API 自己的環境跟植入無關。
 
-用預設值在 Production 啟動只會在 Warning 等級記一筆，點名這個設定鍵，不會擋下啟動。這道警告
-比對的是目前設定裡的值，不是資料庫裡實際存的雜湊：先用預設值植入、之後才改設定，警告會消失，
-帳號的密碼卻還是預設值那一組。
+範本不附 bootstrap 密碼。留空的話，seed 會隨機產生 24 個字元的密碼，在 `migrate` 的輸出（由 API
+自己跑 migration 時則是 API 的 log）以 Warning 印出一次；請當場複製，之後不會再印。自己指定的密碼
+在任何環境都必須符合 `Auth:Password`，而且不能是 `admin`；否則 `migrate` 會以錯誤中止，錯誤訊息點名
+`Auth__BootstrapAdmin__Password`。
 
 ### 登入速率限制：帳號層開、IP 層看拓樸
 

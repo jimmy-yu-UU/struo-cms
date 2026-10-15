@@ -6,10 +6,8 @@ namespace Struo.Application.Security;
 /// password routes through <see cref="Validate"/> — inlining the check anywhere else lets those paths
 /// drift (which is exactly what this type replaced).
 /// <para>
-/// The one deliberate exception is the core seed migration: it hashes <c>Auth:BootstrapAdmin:Password</c>
-/// straight from config, bypassing this validator, so a fresh install always has a login even though the
-/// shipped default (<c>"admin"</c>, 5 characters) would otherwise fail this very policy. That bypass is
-/// intentional and out of scope for this type to close.
+/// The core seed migration applies it too: <c>CoreSeedData</c> refuses a configured
+/// <c>Auth:BootstrapAdmin:Password</c> that fails this validator, and generates a password when it is blank.
 /// </para></summary>
 public static class PasswordPolicy
 {

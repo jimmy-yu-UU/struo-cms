@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { e2ePassword } from '../credentials'
 
 // The SPA detects a 404 by the response envelope's error code
 // (`error.code === 'NOT_FOUND'`), not by matching the error message text.
@@ -6,7 +7,7 @@ import { test, expect } from '../fixtures'
 // live envelope.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 
 test('a non-existent item id renders the not-found view (driven by error code)', async ({ page }) => {
   await page.goto('/')
