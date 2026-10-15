@@ -7,5 +7,9 @@ export function relationTargetQuery(opts: {
   locale?: string
   filter?: FilterSpec
 }): Record<string, string> {
-  return buildListQuery(opts.page, opts.rows, undefined, opts.search, opts.filter, opts.locale)
+  return buildListQuery(opts.page, opts.rows, {
+    search: opts.search,
+    filter: opts.filter,
+    locale: opts.locale,
+  })
 }

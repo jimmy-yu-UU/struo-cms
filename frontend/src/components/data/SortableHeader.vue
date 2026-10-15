@@ -15,15 +15,20 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:sort': [SortEntry[]] }>()
 
 const active = computed(() => props.sort.find((s) => s.id === props.columnId))
-const ariaSort = computed(() =>
-  !active.value ? 'none' : active.value.desc ? 'descending' : 'ascending',
-)
-const Icon = computed(() => (!active.value ? ArrowUpDown : active.value.desc ? ArrowDown : ArrowUp))
+const ariaSort = computed(() => {
+  if (!active.value) return 'none'
+  return active.value.desc ? 'descending' : 'ascending'
+})
+const Icon = computed(() => {
+  if (!active.value) return ArrowUpDown
+  return active.value.desc ? ArrowDown : ArrowUp
+})
 
 const { t } = useI18n()
-const actionLabel = computed(() =>
-  !active.value ? t('common.sortAscending') : active.value.desc ? t('common.clearSort') : t('common.sortDescending'),
-)
+const actionLabel = computed(() => {
+  if (!active.value) return t('common.sortAscending')
+  return active.value.desc ? t('common.clearSort') : t('common.sortDescending')
+})
 
 // Single-column sorting only: the backend's `sort` query param takes one field
 // ("title" / "-title"), so a multi-sort UI would promise something it cannot deliver.

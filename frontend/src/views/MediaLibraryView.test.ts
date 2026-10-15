@@ -571,7 +571,7 @@ describe('MediaLibraryView', () => {
     await (w.vm as unknown as { onRestore: (id: string) => Promise<void> }).onRestore('f1')
     await flushPromises()
     expect(restore).toHaveBeenCalledWith('f1')
-    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+    expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(fileCallsBefore + 1)
   })
 
   it('delete-permanently in trash view asks with a top-level danger severity, then calls filesApi.remove(id,{purge:true}) and reloads', async () => {
@@ -589,7 +589,7 @@ describe('MediaLibraryView', () => {
     // purgeConfirm(t) carries a top-level severity, matching CollectionListView's onPurge.
     expect(confirmRequire.mock.calls[0][0].severity).toBe('danger')
     expect(remove).toHaveBeenCalledWith('f1', { purge: true })
-    expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+    expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(fileCallsBefore + 1)
   })
 
   it('surfaces a toast when filesApi.restore fails instead of failing silently', async () => {
@@ -1124,7 +1124,7 @@ describe('MediaLibraryView', () => {
     expect(rootCrumb.element.tagName).toBe('BUTTON')
     await rootCrumb.trigger('click')
     await flushPromises()
-    expect((w.vm as unknown as { currentFolderId: string | null }).currentFolderId).toBe(null)
+    expect((w.vm as unknown as { currentFolderId: string | null }).currentFolderId).toBeNull()
   })
 
   // The move-to dialog's submit is wired to the existing move path. Exercise the wiring directly
@@ -1195,7 +1195,7 @@ describe('MediaLibraryView', () => {
       await (w.vm as unknown as { onRemoveFile: (id: string) => Promise<void> }).onRemoveFile('f1')
       await flushPromises()
       expect(remove).toHaveBeenCalledWith('f1')
-      expect(list.mock.calls.filter((c) => c[0] === 'file').length).toBe(fileCallsBefore + 1)
+      expect(list.mock.calls.filter((c) => c[0] === 'file')).toHaveLength(fileCallsBefore + 1)
     })
 
     it('does not delete a file when the confirmation is declined', async () => {

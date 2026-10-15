@@ -108,7 +108,7 @@ describe('RichTextCommandButton', () => {
     // A tagged command must have its glyph wrapped in exactly that tag and nothing else -- if
     // 'bold' rendered an unwrapped glyph, boldBtn.get('b') above would already have thrown, but
     // this also rules out an extra, unrelated wrapper (e.g. a <span>) sitting around the <b>.
-    expect(boldBtn.element.children.length).toBe(1)
+    expect(boldBtn.element.children).toHaveLength(1)
     expect(boldBtn.element.children[0]?.tagName).toBe('B')
 
     const bare = mount(RichTextCommandButton, {
@@ -118,7 +118,7 @@ describe('RichTextCommandButton', () => {
     const subBtn = bare.get('[data-cmd="subscript"]')
     expect(subBtn.text()).toBe('x₂')
     // No element children at all -- not just "no <span>" -- is what "bare text" actually means.
-    expect(subBtn.element.children.length).toBe(0)
+    expect(subBtn.element.children).toHaveLength(0)
   })
 
   it('forwards disabled to the rendered button, and omits the attribute when not disabled', () => {

@@ -105,8 +105,8 @@ async function loadOptions(): Promise<void> {
   }
 }
 function toggle(id: string): void {
-  const existing = rows.value.find((r) => r.id === id)
-  if (existing) {
+  const alreadySelected = rows.value.some((r) => r.id === id)
+  if (alreadySelected) {
     commit(rows.value.filter((r) => r.id !== id))
     return
   }

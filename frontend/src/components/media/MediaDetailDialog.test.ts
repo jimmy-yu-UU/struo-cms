@@ -407,7 +407,7 @@ describe('MediaDetailDialog', () => {
     const w = mountDialog()
     await flushPromises()
     expect(w.text()).not.toContain('Open in full editor')
-    expect(w.findAll('.pi-external-link').length).toBe(0)
+    expect(w.findAll('.pi-external-link')).toHaveLength(0)
   })
 
   // Folder assignment lives in the media library's drag-and-drop / "Move to…" context menu / batch

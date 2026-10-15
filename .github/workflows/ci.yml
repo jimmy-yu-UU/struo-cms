@@ -218,6 +218,7 @@ jobs:
           /o:"stu640978"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
+          /d:sonar.test.exclusions="frontend/**"
           /d:sonar.coverage.exclusions="docs/**"
           /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml"
           $SONAR_ARGS

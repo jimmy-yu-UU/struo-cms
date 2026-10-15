@@ -129,7 +129,7 @@ async function load(): Promise<void> {
       sort: mediaSort(sort.value),
       search: search.value || undefined,
       filter: { ...(mediaTypeFilter(type.value) ?? {}),
-                ...(searchActive.value || mode.value === 'trash' ? {} : mediaFolderFilter(currentFolderId.value)) },
+                ...(searchActive.value || mode.value === 'trash' ? undefined : mediaFolderFilter(currentFolderId.value)) },
       locale: langStore.defaultCode || undefined,
       ...(mode.value === 'trash' ? { deleted: 'only' } : {}),
     })

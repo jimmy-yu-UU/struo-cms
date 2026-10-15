@@ -71,19 +71,21 @@ async function loadOptions(): Promise<void> {
   }
 }
 
+function selectedIds(): string[] {
+  if (props.multiple) return ((props.modelValue as string[] | null) ?? []).map(String)
+  return props.modelValue != null ? [String(props.modelValue)] : []
+}
+
 async function ensureSelectedLabels(): Promise<void> {
-  const ids = props.multiple
-    ? ((props.modelValue as string[] | null) ?? [])
-    : props.modelValue != null ? [String(props.modelValue)] : []
-  for (const id of ids) {
-    if (labelById.value[id]) continue
+  const missing = [...new Set(selectedIds())].filter((id) => !labelById.value[id])
+  await Promise.all(missing.map(async (id) => {
     try {
       const row = await itemsApi.get(props.relation.targetCollection, id, { locale: langStore.defaultCode })
       labelById.value[id] = toOption(row).label
     } catch {
       labelById.value[id] = id // deleted / inaccessible -> show id
     }
-  }
+  }))
 }
 
 // Select/Combobox render labels from their options list only, so a preselected id that is not on
@@ -91,9 +93,7 @@ async function ensureSelectedLabels(): Promise<void> {
 // (labelled from labelById, back-filled by ensureSelectedLabels) into the rendered options without
 // mutating either source.
 const displayOptions = computed<Option[]>(() => {
-  const selected = props.multiple
-    ? ((props.modelValue as string[] | null) ?? []).map(String)
-    : props.modelValue != null ? [String(props.modelValue)] : []
+  const selected = selectedIds()
   const present = new Set(options.value.map((o) => o.id))
   const missingIds = [...new Set(selected.filter((id) => !present.has(id)))]
   const missing: Option[] = missingIds.map((id) => ({

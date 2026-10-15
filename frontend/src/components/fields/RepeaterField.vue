@@ -15,7 +15,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: Row[]): void }>()
 const { t } = useI18n()
 
 function toRows(v: unknown): Row[] {
-  return Array.isArray(v) ? (v as Row[]).map((r) => ({ ...(r ?? {}) })) : []
+  return Array.isArray(v) ? (v as Row[]).map((r) => ({ ...r })) : []
 }
 
 const rows = ref<Row[]>(toRows(props.modelValue))

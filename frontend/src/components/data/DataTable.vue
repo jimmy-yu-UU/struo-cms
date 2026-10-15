@@ -30,7 +30,8 @@ export type DataTableColumn<TRow extends Record<string, unknown>> = TanstackColu
 // consumers don't each re-derive this conversion when building the actual list request.
 export function toSortParam(sort: SortEntry[]): string | undefined {
   const active = sort[0]
-  return active ? (active.desc ? `-${active.id}` : active.id) : undefined
+  if (!active) return undefined
+  return active.desc ? `-${active.id}` : active.id
 }
 </script>
 
