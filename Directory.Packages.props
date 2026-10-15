@@ -24,7 +24,7 @@
     <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.SqlServer" Version="8.0.1" />
-    <PackageVersion Include="HotChocolate.AspNetCore" Version="16.6.7" />
+    <PackageVersion Include="HotChocolate.AspNetCore" Version="16.6.8" />
     <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
     <PackageVersion Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
@@ -65,12 +65,12 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="NetVips" Version="3.2.0" />
     <PackageVersion Include="NetVips.Native" Version="8.18.7" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.13" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.14" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="SqlSugarCore" Version="5.1.4.221" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 </Project>
