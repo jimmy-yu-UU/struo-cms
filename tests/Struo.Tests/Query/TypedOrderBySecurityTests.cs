@@ -116,7 +116,8 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         // NULLs form one contiguous block, tied rows are in PK order.
         var firstNull = ids.IndexOf(nulls[0]);
         ids.Skip(firstNull).Take(2).Should().BeEquivalentTo(nulls);
-        nulls.Should().Equal(nulls.OrderBy(i => i));
+        var dbOrder = _db.Queryable<Article>().Where(a => a.Id == _a3 || a.Id == _a4).OrderBy(a => a.Id).Select(a => a.Id).ToList();
+        nulls.Should().Equal(dbOrder);
     }
 
     [Fact]
