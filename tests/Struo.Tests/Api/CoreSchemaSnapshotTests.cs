@@ -26,6 +26,8 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public sealed class CoreSchemaSnapshotTests
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     private const string UpdateEnvVar = "UPDATE_SCHEMA_SNAPSHOT";
 
     [Fact]
@@ -100,7 +102,7 @@ public sealed class CoreSchemaSnapshotTests
             ["relationInterfaces"] = CamelCaseNames<RelationInterface>(),
         };
 
-        return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true })
+        return JsonSerializer.Serialize(doc, IndentedJson)
             .Replace("\r\n", "\n").TrimEnd('\n') + "\n";
     }
 
@@ -138,7 +140,7 @@ public sealed class CoreSchemaSnapshotTests
     // default, so the committed file is LF on every platform (.gitattributes expects LF for .json).
     private static string Serialize(JsonNode[] collections) =>
         JsonSerializer.Serialize(new JsonArray(collections),
-            new JsonSerializerOptions { WriteIndented = true })
+            IndentedJson)
                 .Replace("\r\n", "\n").TrimEnd('\n') + "\n";
 
     // Compare on content, not line endings: a Windows checkout can present the committed file
