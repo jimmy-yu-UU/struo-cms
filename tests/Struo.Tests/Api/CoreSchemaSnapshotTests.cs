@@ -129,7 +129,7 @@ public sealed class CoreSchemaSnapshotTests
     /// slices the first MAX_COLUMNS entries in array order, so reordering fields here would make the
     /// frontend contract test assert against a column set production never produces.
     /// </summary>
-    private static JsonNode[] CoreCollectionsInWireOrder(string envelopeJson, IReadOnlySet<string> core) =>
+    private static JsonNode[] CoreCollectionsInWireOrder(string envelopeJson, HashSet<string> core) =>
         JsonNode.Parse(envelopeJson)!["data"]!.AsArray()
             .Where(n => core.Contains(n!["name"]!.GetValue<string>()))
             .OrderBy(n => n!["name"]!.GetValue<string>(), StringComparer.Ordinal)

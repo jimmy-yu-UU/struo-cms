@@ -41,7 +41,7 @@ public class DistributedCacheTicketStoreTests
         public readonly ITestDatabase Db = TestBackend.CreateUnitDatabase();
         public readonly ISqlSugarClient Client;
         public readonly IServiceScopeFactory ScopeFactory;
-        public readonly IDistributedCache Cache = MemoryCache();
+        public readonly MemoryDistributedCache Cache = MemoryCache();
         public readonly ListLogger<DistributedCacheTicketStore> Logger = new();
         private readonly ServiceProvider _provider;
 
