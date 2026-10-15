@@ -11,7 +11,7 @@ namespace Struo.Infrastructure.Query;
 /// Expands <c>deep</c> relations for a page of already-fetched parent entities using
 /// batched follow-up queries (stitching) — one query per relation per page, so it is
 /// N+1-safe. Deliberately does NOT use SqlSugar <c>.Includes()</c>; relation rows are
-/// projected through the caller-supplied <c>projectTarget</c> delegate so target rows
+/// projected through <see cref="EntityAccessors.ProjectTarget"/> so target rows
 /// honour the same metadata projection (field whitelist, hidden/readable rules) as
 /// top-level rows.
 /// </summary>
