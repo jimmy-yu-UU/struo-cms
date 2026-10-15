@@ -30,7 +30,7 @@ public sealed class IndexCatalogLiveTests
         indexes.Should().Contain(i => i.Name == table + "_ux_ba" && i.IsUnique && i.Columns.SequenceEqual(ColumnsBA));
         indexes.Should().Contain(i => i.Name == table + "_ix_a" && !i.IsUnique && i.Columns.SequenceEqual(ColumnsA));
         indexes.Should().Contain(i => i.IsUnique && i.Columns.SequenceEqual(ColumnsId));
-        indexes.Should().OnlyContain(i => i.Columns.All(c => c == c.ToLowerInvariant()));
+        indexes.Should().OnlyContain(i => i.Columns.All(c => string.CompareOrdinal(c, c.ToLowerInvariant()) == 0));
     }
 
     [Theory, MemberData(nameof(Backends))]
