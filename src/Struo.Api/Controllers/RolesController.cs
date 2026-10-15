@@ -18,7 +18,7 @@ public sealed record RolePermissionEntry(string Collection, bool CanRead, bool C
 public sealed class RolesController(
     IPermissionGrantStore grants, IMetadataProvider metadata, ICurrentPermissions permissions) : ControllerBase
 {
-    private IActionResult? RequireAdmin() =>
+    private ObjectResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
             ? null
             : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, "Admin role required.");

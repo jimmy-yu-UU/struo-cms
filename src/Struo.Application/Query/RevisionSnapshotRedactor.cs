@@ -111,7 +111,7 @@ public static class RevisionSnapshotRedactor
     }
 
     private static void WriteRedactedTranslations(
-        Utf8JsonWriter writer, JsonElement translations, IReadOnlySet<string> hiddenTranslatable)
+        Utf8JsonWriter writer, JsonElement translations, HashSet<string> hiddenTranslatable)
     {
         writer.WriteStartObject();
         foreach (var locale in translations.EnumerateObject())

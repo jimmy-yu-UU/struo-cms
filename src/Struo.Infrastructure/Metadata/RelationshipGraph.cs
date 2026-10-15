@@ -31,10 +31,10 @@ public sealed record RelationDescriptor(
 public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 {
     private readonly IReadOnlyList<CollectionMetadata> _collections;
-    private readonly IReadOnlyDictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
-    private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
-    private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
-    private readonly IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> _inboundCascade;
+    private readonly Dictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
+    private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
+    private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
+    private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundCascade;
 
     /// <summary>
     /// <paramref name="collections"/> must come from <see cref="MetadataScanner.ScanTypes"/> /
@@ -86,9 +86,10 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                         OnDelete.Cascade => inboundCascade,
                         _ => inboundRestrict
                     };
-                    if (!bucket.TryGetValue(r.TargetCollection, out var lst))
-                        bucket[r.TargetCollection] = lst = [];
-                    lst.Add((c.Name, r.ForeignKey!));
+                    if (bucket.TryGetValue(r.TargetCollection, out var lst))
+                        lst.Add((c.Name, r.ForeignKey!));
+                    else
+                        bucket[r.TargetCollection] = [(c.Name, r.ForeignKey!)];
                 }
             }
 
@@ -101,7 +102,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         _inboundCascade = Freeze(inboundCascade);
     }
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<(string, string)>> Freeze(
+    private static Dictionary<string, IReadOnlyList<(string, string)>> Freeze(
         Dictionary<string, List<(string, string)>> source) =>
         source.ToDictionary(
             k => k.Key,
