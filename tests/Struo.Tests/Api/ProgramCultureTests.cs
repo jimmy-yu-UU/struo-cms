@@ -10,7 +10,7 @@ namespace Struo.Tests.Api;
 /// Proves the process-wide invariant-culture fix in Program.cs actually runs as part of real host
 /// startup, not just something the direct translator+SqlSugar pairing in
 /// ConditionalModelTranslatorTests exercises on its own. WebApplicationFactory&lt;Program&gt; invokes
-/// the real top-level statements in Program.cs (everything up to, but not including, app.Run()) the
+/// the real top-level statements in Program.cs (everything up to, but not including, await app.RunAsync()) the
 /// first time the host is built, so forcing that via CreateClient() is enough to trigger it.
 /// Asserting CultureInfo.DefaultThreadCurrentCulture/UICulture (rather than CultureInfo.CurrentCulture
 /// inside a request) is the provable, non-overkill check here: it is the exact static Program.cs sets,
