@@ -15,11 +15,8 @@ public sealed class KeyValueFieldValidator : IFieldValidator
     public void ValidateAndNormalize(FieldMetadata field, PropertyInfo pi, object entity)
     {
         var map = pi.GetValue(entity) as IDictionary<string, string>;
-        if (map is not null)
-        {
-            if (map.Keys.Any(string.IsNullOrWhiteSpace))
-                throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
-        }
+        if (map is not null && map.Keys.Any(string.IsNullOrWhiteSpace))
+            throw new QueryException($"Field '{field.Name}' has an entry with an empty key.");
         if (field.Required && (map is null || map.Count == 0))
             throw new QueryException($"Field '{field.Name}' is required.");
     }
