@@ -98,6 +98,13 @@ pnpm -C docs install
 pnpm -C docs dev
 ```
 
+## CI 與 SonarQube Cloud
+
+`.github/workflows/ci.yml` 的 `sonar-backend`、`sonar-frontend` 兩個 job 把程式碼送到 SonarQube
+Cloud 分析。fork 要設定儲存庫變數 `SONAR_ORGANIZATION`、`SONAR_BACKEND_PROJECT_KEY`、
+`SONAR_FRONTEND_PROJECT_KEY`，以及 secret `SONAR_TOKEN`；沒有 `SONAR_ORGANIZATION` 時兩個 job 都會
+跳過。
+
 ## 授權
 
 StruoCMS 採用 [MIT 授權](LICENSE)。隨圖片轉換功能一併打包的第三方元件，其各自的授權條款列於

@@ -220,7 +220,9 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 跑完。
 
 `sonar-backend`、`sonar-frontend` 把分析結果送到 SonarQube Cloud，兩個 job 都要
-`SONAR_TOKEN`：Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個
+`SONAR_TOKEN` secret，組織與專案 key 則讀自儲存庫變數 `SONAR_ORGANIZATION`、
+`SONAR_BACKEND_PROJECT_KEY`、`SONAR_FRONTEND_PROJECT_KEY`；沒有 `SONAR_ORGANIZATION` 的儲存庫
+兩個 job 都跳過。Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個
 儲存庫時才跑。
 
 `sonar-backend` 先裝 `dotnet-sonarscanner`、`dotnet-coverage` 兩個 CLI 工具，跑一次

@@ -261,8 +261,10 @@ This job needs no secret, so a pull request from a fork or a Dependabot update c
 to completion just the same.
 
 `sonar-backend` and `sonar-frontend` send analysis results to SonarQube Cloud; both jobs need
-`SONAR_TOKEN`. A Dependabot update always skips them, and a pull request only runs them when its
-source branch and the target are in the same repository.
+the `SONAR_TOKEN` secret and read the organization and project keys from the repository variables
+`SONAR_ORGANIZATION`, `SONAR_BACKEND_PROJECT_KEY` and `SONAR_FRONTEND_PROJECT_KEY`. A repository
+without `SONAR_ORGANIZATION` skips both jobs. A Dependabot update always skips them, and a pull
+request only runs them when its source branch and the target are in the same repository.
 
 `sonar-backend` first installs the two `dotnet-sonarscanner` and `dotnet-coverage` CLI tools,
 runs `dotnet-sonarscanner begin`, builds normally, wraps `dotnet test` with
