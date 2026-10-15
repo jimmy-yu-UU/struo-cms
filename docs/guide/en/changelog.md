@@ -40,6 +40,11 @@
   (`[A-Za-z0-9_-]`, 1 to 35 characters) now runs on the stored language row inside the write
   transaction, whatever the JSON key casing.
 
+### Fixed
+
+- `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
+  the role store cannot make the liveness probe return 500 and restart healthy instances.
+
 ### Upgrade notes
 
 The language-code format rule checks every row of the language collection on each write to it. A

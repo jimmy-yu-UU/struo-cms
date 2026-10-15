@@ -184,7 +184,8 @@ throwing `PermissionDeniedException` on denial. The sole shippable `IPermissionS
 `ICurrentPermissions.Current` (`src/Struo.Application/Security/ICurrentPermissions.cs`), which only
 exposes that read-only `Current` getter; writing a new snapshot goes through the separate
 `ICurrentPermissionsWriter.Set`, and the only caller of it is `PermissionResolutionMiddleware`
-(`src/Struo.Api/Auth/PermissionResolutionMiddleware.cs`). `DataServiceCollectionExtensions.AddStruoData`
+(`src/Struo.Api/Auth/PermissionResolutionMiddleware.cs`), which every request passes through except
+paths under `/health`, so the health probes never read the role store. `DataServiceCollectionExtensions.AddStruoData`
 resolves both interfaces from the same factory-forwarded scoped `CurrentPermissions` instance, the same
 pattern used for `IItemUseCases` below — otherwise the middleware's write and a controller's read would
 land on two different objects. A fork that substitutes its own permissions holder must replace all
