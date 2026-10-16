@@ -160,10 +160,15 @@ jobs:
   # To make a failing quality gate block a merge, mark these checks as required
   # in branch protection — no change to this file is needed.
 
+  # Both jobs read the SonarQube Cloud organization and project keys from the
+  # repository variables SONAR_ORGANIZATION, SONAR_BACKEND_PROJECT_KEY and
+  # SONAR_FRONTEND_PROJECT_KEY, next to the SONAR_TOKEN secret. A repository
+  # without SONAR_ORGANIZATION skips them.
   sonar-backend:
     runs-on: ubuntu-latest
     if: >-
-      github.actor != 'dependabot[bot]'
+      vars.SONAR_ORGANIZATION != ''
+      && github.actor != 'dependabot[bot]'
       && (github.event_name != 'pull_request'
       || github.event.pull_request.head.repo.full_name == github.repository)
     steps:
@@ -198,6 +203,8 @@ jobs:
       - name: Begin analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_BACKEND_PROJECT_KEY }}
         # $SONAR_ARGS is intentionally unquoted: it carries several arguments
         # and must word-split. It is built by the step above from environment
         # variables rather than by interpolating ${{ }} into the shell, so a
@@ -214,8 +221,8 @@ jobs:
         # here is what keeps the gate honest.
         run: >
           dotnet-sonarscanner begin
-          /k:"stu640978_struo-cms_backend"
-          /o:"stu640978"
+          /k:"$SONAR_PROJECT_KEY"
+          /o:"$SONAR_ORG"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.exclusions="**/node_modules/**,**/bin/**,**/obj/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.playwright-mcp/**,**/.sonarqube/**,frontend/**"
           /d:sonar.test.exclusions="frontend/**"
@@ -235,7 +242,8 @@ jobs:
   sonar-frontend:
     runs-on: ubuntu-latest
     if: >-
-      github.actor != 'dependabot[bot]'
+      vars.SONAR_ORGANIZATION != ''
+      && github.actor != 'dependabot[bot]'
       && (github.event_name != 'pull_request'
       || github.event.pull_request.head.repo.full_name == github.repository)
     defaults:
@@ -280,6 +288,9 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
-        # Reads frontend/sonar-project.properties for everything else.
+          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_FRONTEND_PROJECT_KEY }}
+        # The project key and organization come from repository variables;
+        # frontend/sonar-project.properties holds everything else.
         # $SONAR_ARGS unquoted for the same reason as in sonar-backend.
-        run: pnpm dlx sonarqube-scanner $SONAR_ARGS
+        run: pnpm dlx sonarqube-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.organization="$SONAR_ORG" $SONAR_ARGS

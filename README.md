@@ -111,6 +111,13 @@ pnpm -C docs install
 pnpm -C docs dev
 ```
 
+## CI and SonarQube Cloud
+
+The `sonar-backend` and `sonar-frontend` jobs in `.github/workflows/ci.yml` analyse the code on
+SonarQube Cloud. A fork sets the repository variables `SONAR_ORGANIZATION`,
+`SONAR_BACKEND_PROJECT_KEY` and `SONAR_FRONTEND_PROJECT_KEY` plus the secret `SONAR_TOKEN`;
+without `SONAR_ORGANIZATION` both jobs are skipped.
+
 ## License
 
 StruoCMS is licensed under the [MIT License](LICENSE). Third-party components bundled with the
