@@ -34,12 +34,15 @@ public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<Oid
         var prefix = AuthSchemes.SessionCookieName + "=";
         var kept = new List<string>();
         foreach (var header in request.Headers.Cookie)
-        foreach (var pair in (header ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (pair.StartsWith(prefix, StringComparison.Ordinal))
-                SessionRotation.RecordPresentedCookie(context, pair[prefix.Length..]);
-            else
-                kept.Add(pair);
+            var pairs = (header ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var pair in pairs)
+            {
+                if (pair.StartsWith(prefix, StringComparison.Ordinal))
+                    SessionRotation.RecordPresentedCookie(context, pair[prefix.Length..]);
+                else
+                    kept.Add(pair);
+            }
         }
         if (SessionRotation.PresentedCookie(context) is null) return;
         if (kept.Count == 0) request.Headers.Remove("Cookie");

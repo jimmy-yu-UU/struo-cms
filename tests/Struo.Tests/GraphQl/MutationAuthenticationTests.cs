@@ -40,8 +40,8 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
         await db.Deleteable<Category>().Where(c => c.Name == CreatedName).ExecuteCommandAsync();
     }
 
-    private Task SetPublicWriteAsync(ISqlSugarClient db, bool canWrite) =>
-        db.Updateable<Permission>()
+    private async Task SetPublicWriteAsync(ISqlSugarClient db, bool canWrite) =>
+        await db.Updateable<Permission>()
             .SetColumns(p => new Permission { CanWrite = canWrite, CanDelete = canWrite })
             .Where(p => p.RoleId == _publicRoleId && p.Collection == Collection)
             .ExecuteCommandAsync();

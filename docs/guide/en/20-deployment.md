@@ -360,7 +360,7 @@ that's genuinely missing turns into an error, rather than an endless reload.
   relies on the S3-compatible bucket's own versioning or replication; backing up only the database
   silently misses every uploaded file.
 - **Redis needs none** — Redis (or its in-process substitute) holds only short-lived state: the
-  ticket behind a cookie session, account login-failure counters, and session revocation records.
+  ticket behind a cookie session, account login-attempt counters, and session revocation records.
   Losing it only forces every logged-in user to log in again and resets the login counters; it
   isn't an authoritative source and needs no separate backup.
 - **Migrations and configuration** — the fork's own migration classes, `appsettings.*`, and the
