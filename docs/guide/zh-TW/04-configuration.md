@@ -269,12 +269,15 @@ IDE 另外只認開發環境，不受這個鍵控制。
 | `RateLimiting:LoginAccount:Enabled` | 布林 | `true` |
 | `RateLimiting:LoginAccount:PermitLimit` | 整數 | `10` |
 | `RateLimiting:LoginAccount:WindowSeconds` | 整數（秒） | `900` |
+| `RateLimiting:LoginConcurrency:Enabled` | 布林 | `true` |
+| `RateLimiting:LoginConcurrency:PermitLimit` | 整數 | `4` |
+| `RateLimiting:LoginConcurrency:QueueLimit` | 整數 | `32` |
 | `RateLimiting:Password:Enabled` | 布林 | `true` |
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這九個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*` 與 `Password:*` 這兩個限流政策
-被擋下時回 429，訊息依政策命名，有 `Retry-After` 時一併帶出；`LoginAccount` 的 429 由登入端點
+這十二個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
+被擋下時回 429，訊息依政策命名，並帶 `Retry-After`；`LoginAccount` 的 429 由登入端點
 自己回，訊息固定。
 
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
@@ -285,15 +288,20 @@ IDE 另外只認開發環境，不受這個鍵控制。
 `KnownProxies`／`KnownNetworks`——這個專案預設沒有註冊它。這層狀態留在行程記憶體，不會跨副本
 共用；跨副本的 IP 限制要放在前面的閘道或 WAF。
 
-`LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先檢查，被擋下的請求不會消耗
-Argon2id 運算；只有失敗會累計，登入成功會清空該帳號的計數。不論帳號存不存在、密碼錯還是帳號被
-停用，都算一次失敗，而且一律回同一種 429，這是防止帳號列舉的關鍵。
+`LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先把這次嘗試記上，被擋下的請求不會消耗
+Argon2id 運算，同時發出的猜測也不可能一起溜過上限；登入成功會清空該帳號的計數。不論帳號存不存
+在、密碼錯還是帳號被停用，都算一次嘗試，而且一律回同一種 429，這是防止帳號列舉的關鍵。
 
-這層限流的計數存在 `IDistributedCache`，跟 session ticket 同一個底層：設了
-`Redis:ConnectionString` 就是每個帳號一個跨副本共用的計數器，留空則各副本各自計數。
+設了 `Redis:ConnectionString` 時，每個帳號是一個跨副本共用的 Redis 原子計數器，Redis 連不上時登
+入會回 5xx，不會跳過檢查；留空則計數存在行程內的分散式快取，由各副本內的每帳號鎖序列化，副本之
+間各自計數。預設值比 IP 限流寬鬆、視窗長（900 秒），擋的是長時間針對單一帳號的密碼噴灑。
 
-計數不是原子的讀改寫，極端情況下兩個同時發生的失敗可能只被記成一次。預設值比 IP 限流寬鬆、視
-窗長（900 秒），擋的是長時間針對單一帳號的密碼噴灑。
+因為每一次嘗試都會計數，知道某個帳號 email 的人可以把它的額度用光，讓該帳號在視窗剩下的時間內
+無法用密碼登入。這是刻意接受的取捨；SSO 登入不受影響。
+
+`LoginConcurrency:*` 限制單一行程內同時驗證密碼的登入數：同時跑 `PermitLimit` 個，最多再有
+`QueueLimit` 個在排隊等空位，其餘回 429。不論來源 IP 或帳號，都能框住 Argon2id 的 CPU 與記憶體用
+量；每個副本各自執行自己的上限。
 
 `Password:*` 只保護 `PUT /api/users/{id}/password`，以呼叫者自己的 user id 分桶，取不到
 user id 時才退回用 IP——這個端點要登入才能呼叫，實務上不會發生。因為分桶鍵是操作者本人，
@@ -346,7 +354,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 
 留空時退回記憶體內的分散式快取，session 會在行程每次重啟後消失，只適合短暫的本機測試；有多個
 副本、或需要 session 撐過重啟時，一定要設定這個鍵。預設值是空字串，鍵整個不見時是 `null`，兩
-者都會落到這個記憶體內分支。這個鍵同時也是 `RateLimiting:LoginAccount` 共用的儲存底層。
+者都會落到這個記憶體內分支。這個鍵同時決定登入節流的計數存在哪裡：留空時用上面的記憶體內快取，設了就直接在 Redis 計數。
 
 ## Oidc
 

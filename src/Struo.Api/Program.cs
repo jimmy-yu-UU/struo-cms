@@ -90,9 +90,12 @@ try
         .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
     // Config-bound tuning for the per-account login throttle (AuthController.Login, via
     // ILoginAttemptThrottle) — independent of the per-client-IP limiter above. Defaults: enabled,
-    // 10 failed attempts per 900s
+    // 10 attempts per 900s
     builder.Services.AddOptions<Struo.Application.Configuration.LoginAccountRateLimitOptions>()
         .BindConfiguration(Struo.Application.Configuration.LoginAccountRateLimitOptions.SectionName);
+    // Process-wide cap on concurrent logins (see LoginConcurrencyOptions and the global limiter below).
+    builder.Services.AddOptions<Struo.Application.Configuration.LoginConcurrencyOptions>()
+        .BindConfiguration(Struo.Application.Configuration.LoginConcurrencyOptions.SectionName);
     // Fail fast at boot: MinLength is published to the SPA and sizes the admin password generator, so
     // a misconfigured MinLength > MaxLength would hand an administrator a "Generate strong password"
     // button that produces passwords the server always rejects, with no error until the next write.
@@ -131,18 +134,18 @@ try
         rateLimiterOptions.OnRejected = async (context, ct) =>
         {
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-            {
-                context.HttpContext.Response.Headers.RetryAfter =
-                    ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
-            }
-
             // OnRejected is global across every policy, so the copy must come from the policy that
             // actually rejected — a 429 from the change-password endpoint saying "login attempts" is
             // simply wrong. PolicyName comes off the endpoint's [EnableRateLimiting] metadata.
             var policyName = context.HttpContext.GetEndpoint()
                 ?.Metadata.GetMetadata<Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute>()
                 ?.PolicyName;
+            // A concurrency rejection carries no retry hint, so a slot is retried after one second.
+            var retryAfterSeconds = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
+                ? (int)Math.Ceiling(retryAfter.TotalSeconds)
+                : 1;
+            context.HttpContext.Response.Headers.RetryAfter =
+                retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
             var message = policyName switch
             {
                 "login" => "Too many login attempts. Please try again later.",
@@ -153,6 +156,26 @@ try
                 Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.TooManyRequests, message),
                 cancellationToken: ct);
         };
+
+        // Caps concurrent logins process-wide: the "login" endpoint shares one concurrency partition,
+        // every other request is unlimited here.
+        rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var policyName = httpContext.GetEndpoint()
+                ?.Metadata.GetMetadata<Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute>()
+                ?.PolicyName;
+            var concurrency = httpContext.RequestServices
+                .GetRequiredService<IOptions<Struo.Application.Configuration.LoginConcurrencyOptions>>().Value;
+            if (policyName != "login" || !concurrency.Enabled)
+                return RateLimitPartition.GetNoLimiter("none");
+
+            return RateLimitPartition.GetConcurrencyLimiter("login-concurrency", _ => new ConcurrencyLimiterOptions
+            {
+                PermitLimit = concurrency.PermitLimit,
+                QueueLimit = concurrency.QueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            });
+        });
 
         rateLimiterOptions.AddPolicy("login", httpContext =>
         {

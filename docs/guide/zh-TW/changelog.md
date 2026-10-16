@@ -41,6 +41,13 @@
   受害者瀏覽器的 cookie 會變成受害者的 session。現在每次登入一律發出全新的 session，請求帶來的那個 session
   在登入成功後即撤銷；登入失敗則不動它。
 
+- 登入嘗試現在會在驗證密碼之前就先記到帳號上，同時發出的猜測不再能讀到同一個計數、一起溜過
+  `RateLimiting:LoginAccount:PermitLimit`。設了 `Redis:ConnectionString` 時，計數是所有實例共用的
+  Redis 原子計數器，Redis 連不上時登入會回 5xx。新增的 `RateLimiting:LoginConcurrency` 區段
+  （`Enabled` 為 true、`PermitLimit` 4、`QueueLimit` 32）限制單一行程內同時驗證密碼的登入數，其餘回
+  429 並帶 `Retry-After`。因為每次嘗試都算數，知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼
+  登入；SSO 登入不受影響。
+
 ### 修正
 
 - `/health/live` 與 `/health/ready` 不再解析呼叫端的權限，所以角色資料庫失敗時，存活探測不會回 500

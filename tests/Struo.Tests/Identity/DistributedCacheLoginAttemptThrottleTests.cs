@@ -27,141 +27,142 @@ public class DistributedCacheLoginAttemptThrottleTests
             Enabled = enabled, PermitLimit = permitLimit, WindowSeconds = windowSeconds,
         }), clock);
 
+    private static async Task ReserveAsync(DistributedCacheLoginAttemptThrottle throttle, string email, int times)
+    {
+        for (var i = 0; i < times; i++)
+            await throttle.TryReserveAsync(email);
+    }
+
     [Fact]
-    public async Task CheckAsync_is_not_blocked_before_any_failure_is_recorded()
+    public async Task TryReserveAsync_is_not_blocked_for_a_fresh_account()
     {
         var throttle = Throttle(MemoryCache());
-        var state = await throttle.CheckAsync("nobody@struo.test");
+        var state = await throttle.TryReserveAsync("nobody@struo.test");
         state.IsBlocked.Should().BeFalse();
     }
 
     [Fact]
-    public async Task CheckAsync_blocks_once_failures_reach_the_permit_limit()
+    public async Task TryReserveAsync_blocks_the_attempt_after_the_permit_limit()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 3);
+        var throttle = Throttle(MemoryCache(), permitLimit: 3);
         const string email = "spammed@struo.test";
 
-        for (var i = 0; i < 3; i++)
-            await throttle.RecordFailureAsync(email);
+        await ReserveAsync(throttle, email, 3);
 
-        var state = await throttle.CheckAsync(email);
+        var state = await throttle.TryReserveAsync(email);
         state.IsBlocked.Should().BeTrue();
         state.RetryAfterSeconds.Should().BeGreaterThanOrEqualTo(1);
     }
 
     [Fact]
-    public async Task CheckAsync_does_not_block_one_failure_short_of_the_limit()
+    public async Task TryReserveAsync_allows_the_last_attempt_within_the_limit()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 3);
+        var throttle = Throttle(MemoryCache(), permitLimit: 3);
         const string email = "almost@struo.test";
 
-        await throttle.RecordFailureAsync(email);
-        await throttle.RecordFailureAsync(email);
+        await ReserveAsync(throttle, email, 2);
 
-        (await throttle.CheckAsync(email)).IsBlocked.Should().BeFalse();
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Concurrent_reservations_are_each_counted_once()
+    {
+        var throttle = Throttle(MemoryCache(), permitLimit: 10);
+        const string email = "parallel@struo.test";
+
+        var states = await Task.WhenAll(Enumerable.Range(0, 50)
+            .Select(_ => Task.Run(() => throttle.TryReserveAsync(email))));
+
+        states.Count(s => !s.IsBlocked).Should().Be(10);
+        states.Count(s => s.IsBlocked).Should().Be(40);
     }
 
     [Fact]
     public async Task ResetAsync_clears_a_blocked_account()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1);
         const string email = "reset-me@struo.test";
 
-        await throttle.RecordFailureAsync(email);
-        (await throttle.CheckAsync(email)).IsBlocked.Should().BeTrue();
+        await ReserveAsync(throttle, email, 1);
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
 
         await throttle.ResetAsync(email);
 
-        (await throttle.CheckAsync(email)).IsBlocked.Should().BeFalse();
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
     }
 
     [Fact]
     public async Task Throttling_is_per_account()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1);
 
-        await throttle.RecordFailureAsync("account-a@struo.test");
+        await ReserveAsync(throttle, "account-a@struo.test", 1);
 
-        (await throttle.CheckAsync("account-a@struo.test")).IsBlocked.Should().BeTrue();
-        (await throttle.CheckAsync("account-b@struo.test")).IsBlocked.Should().BeFalse();
+        (await throttle.TryReserveAsync("account-a@struo.test")).IsBlocked.Should().BeTrue();
+        (await throttle.TryReserveAsync("account-b@struo.test")).IsBlocked.Should().BeFalse();
     }
 
     [Fact]
     public async Task Email_matching_is_case_and_whitespace_insensitive()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1);
 
-        await throttle.RecordFailureAsync("  Spray@Struo.Test  ");
+        await ReserveAsync(throttle, "  Spray@Struo.Test  ", 1);
 
-        (await throttle.CheckAsync("spray@struo.test")).IsBlocked.Should().BeTrue();
+        (await throttle.TryReserveAsync("spray@struo.test")).IsBlocked.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Disabled_never_blocks_regardless_of_failure_count()
+    public async Task Disabled_never_blocks_regardless_of_attempt_count()
     {
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1, enabled: false);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1, enabled: false);
         const string email = "off@struo.test";
 
-        await throttle.RecordFailureAsync(email);
-        await throttle.RecordFailureAsync(email);
-        await throttle.RecordFailureAsync(email);
+        await ReserveAsync(throttle, email, 3);
 
-        (await throttle.CheckAsync(email)).IsBlocked.Should().BeFalse();
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
     }
 
     [Fact]
-    public async Task Repeated_failures_do_not_slide_the_window_forward()
+    public async Task Repeated_attempts_do_not_slide_the_window_forward()
     {
-        // permitLimit=1 means the account is already over budget from the FIRST failure onward, for
-        // as long as its window stays open — which is what makes this discriminate fixed-vs-sliding:
-        // if a SECOND failure, recorded while still inside the original window, incorrectly restarted
-        // the window's clock, blocking would still be in effect at t≈3.2s (1.5s past the second
-        // failure's own would-be 3s window). Observing NOT-blocked at that point instead proves the
-        // window's expiry stayed anchored to the FIRST failure's timestamp the whole time. The clock
-        // is a fake advanced by hand rather than a real Task.Delay, so the test is instant and cannot
-        // flake on scheduler jitter. The real MemoryDistributedCache entry's own AbsoluteExpiration is
-        // still computed from the fake clock's (advancing) "now" but checked against the REAL wall
-        // clock, which has barely moved during this test — so it stays comfortably in the future and
-        // never interferes with the assertions below, which are purely about the throttle's own
-        // fixed-window math.
+        // permitLimit=1 means the account is over budget from the FIRST attempt onward, for as long as
+        // its window stays open — which is what makes this discriminate fixed-vs-sliding: if a SECOND
+        // attempt, made while still inside the original window, restarted the window's clock, blocking
+        // would still be in effect at t≈3.2s. Observing NOT-blocked there proves the window's expiry
+        // stayed anchored to the FIRST attempt. The clock is a fake advanced by hand rather than a real
+        // Task.Delay, so the test is instant and cannot flake on scheduler jitter. The cache entry's own
+        // AbsoluteExpiration is computed from the fake clock but checked against the REAL wall clock,
+        // which has barely moved, so it stays in the future and never interferes with the assertions.
         var clock = new FakeTimeProvider();
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3, clock: clock);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1, windowSeconds: 3, clock: clock);
         const string email = "fixed-window@struo.test";
 
-        await throttle.RecordFailureAsync(email); // count=1, window starts at t=0, ends at t=3s
+        await throttle.TryReserveAsync(email);    // count=1, window starts at t=0, ends at t=3s
         clock.Advance(TimeSpan.FromSeconds(1.5)); // t≈1.5s — still inside the original window
-        await throttle.RecordFailureAsync(email); // count=2, SAME window if fixed; a fresh one (ending ≈4.5s) if sliding
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
 
-        clock.Advance(TimeSpan.FromSeconds(1.7)); // t≈3.2s: past the ORIGINAL window's end, short of a slid one's
-        (await throttle.CheckAsync(email)).IsBlocked.Should().BeFalse(
-            "the window must have expired at its original 3s mark, not been pushed out to ~4.5s by " +
-            "the second failure");
+        clock.Advance(TimeSpan.FromSeconds(1.7)); // t≈3.2s: past the ORIGINAL window's end
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse(
+            "the window must have expired at its original 3s mark, not been pushed out by the blocked attempt");
     }
 
     [Fact]
     public async Task RetryAfterSeconds_decreases_as_the_window_elapses()
     {
         // A fake, hand-advanced clock removes real-clock timing concerns (CI jitter crossing the
-        // window boundary), so the window can stay a natural small size: the advance below is exact,
-        // not a Task.Delay guess.
+        // window boundary): the advance below is exact, not a Task.Delay guess.
         var clock = new FakeTimeProvider();
-        var cache = MemoryCache();
-        var throttle = Throttle(cache, permitLimit: 1, windowSeconds: 3, clock: clock);
+        var throttle = Throttle(MemoryCache(), permitLimit: 1, windowSeconds: 3, clock: clock);
         const string email = "decreasing@struo.test";
 
-        await throttle.RecordFailureAsync(email);
-        var first = await throttle.CheckAsync(email);
+        await throttle.TryReserveAsync(email);
+        var first = await throttle.TryReserveAsync(email);
         first.IsBlocked.Should().BeTrue();
 
         clock.Advance(TimeSpan.FromSeconds(1.5));
-        var second = await throttle.CheckAsync(email);
+        var second = await throttle.TryReserveAsync(email);
         second.IsBlocked.Should().BeTrue();
 
         second.RetryAfterSeconds.Should().BeLessThan(first.RetryAfterSeconds);

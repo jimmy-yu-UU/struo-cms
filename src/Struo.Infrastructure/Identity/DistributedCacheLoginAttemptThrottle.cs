@@ -9,26 +9,20 @@ using Struo.Application.Security;
 namespace Struo.Infrastructure.Identity;
 
 /// <summary>
-/// <see cref="ILoginAttemptThrottle"/> backed by <c>IDistributedCache</c> (Redis when configured, an
-/// in-memory cache otherwise — the same store <c>DistributedCacheTicketStore</c> uses, wired by
-/// <c>AuthWiring</c>).
+/// <see cref="ILoginAttemptThrottle"/> backed by <c>IDistributedCache</c> (an in-memory cache unless
+/// Redis is configured, in which case the Redis-backed throttle is used instead).
 /// <para>
 /// Fixed window, stored as a single <c>{ Count, WindowStartUnixSeconds }</c> payload per account, with
-/// <see cref="DistributedCacheEntryOptions.AbsoluteExpiration"/> set to the window's own end. This is
-/// deliberate: <c>IDistributedCache</c> exposes no sliding/refresh-on-read primitive here, so the
-/// window's boundary is fixed at whichever moment the FIRST failure in it was recorded, and repeated
-/// failures never push that boundary forward. Once the entry expires the account starts a fresh
-/// window on its very next failure.
+/// <see cref="DistributedCacheEntryOptions.AbsoluteExpiration"/> set to the window's own end. The
+/// window's boundary is fixed at the first attempt in it, and later attempts never push it forward.
 /// </para>
 /// <para>
-/// <c>IDistributedCache</c> has no atomic read-modify-write (no compare-and-swap, no native INCR
-/// primitive independent of the concrete store). <see cref="RecordFailureAsync"/> therefore reads the
-/// current count and writes back count+1 as two separate operations, so two failing requests against
-/// the SAME account arriving concurrently can both read the same starting count and each write back
-/// the same incremented value, losing one increment. This is an accepted, deliberate trade-off for a
-/// throttle, not a bug to fix here: undercounting costs a handful of extra guesses at the boundary, not
-/// a bypass, and a truly atomic counter would tie this abstraction to a store-specific primitive (e.g.
-/// Redis <c>INCR</c>) it is deliberately kept independent of.
+/// <c>IDistributedCache</c> has no atomic read-modify-write, so <see cref="TryReserveAsync"/> reads the
+/// count and writes back count+1 under a per-account in-process lock (a fixed set of striped locks, so
+/// memory stays bounded). Concurrent attempts against one account inside this process are serialized
+/// and each is counted exactly once. The lock cannot span processes: where several instances share a
+/// distributed cache that is not Redis, concurrent attempts landing on different instances can read
+/// the same count and undercount, admitting a few extra guesses per window.
 /// </para>
 /// </summary>
 public sealed class DistributedCacheLoginAttemptThrottle(
@@ -36,61 +30,66 @@ public sealed class DistributedCacheLoginAttemptThrottle(
     : ILoginAttemptThrottle
 {
     private const string KeyPrefix = "login-throttle:";
+    private const int LockStripes = 256;
 
-    // Trailing optional so DI (AddSingleton<ILoginAttemptThrottle, DistributedCacheLoginAttemptThrottle>())
-    // keeps resolving unchanged; tests pass a fake to advance the clock without a real Task.Delay.
+    private static readonly SemaphoreSlim[] Locks =
+        Enumerable.Range(0, LockStripes).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
+
+    // Trailing optional so DI resolves it without a registered TimeProvider; tests pass a fake to
+    // advance the clock without a real Task.Delay.
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     private sealed record WindowState(int Count, long WindowStartUnixSeconds);
 
-    public async Task<LoginThrottleState> CheckAsync(string email, CancellationToken ct = default)
+    public async Task<LoginThrottleState> TryReserveAsync(string email, CancellationToken ct = default)
     {
         var opts = options.Value;
         if (!opts.Enabled) return new LoginThrottleState(false, 0);
 
-        var state = await ReadAsync(email, ct);
-        if (state is null) return new LoginThrottleState(false, 0);
+        var key = CacheKey(email);
+        var gate = Locks[(uint)key.GetHashCode() % LockStripes];
+        await gate.WaitAsync(ct);
+        try
+        {
+            var now = _clock.GetUtcNow().ToUnixTimeSeconds();
+            var state = await ReadAsync(key, ct);
 
-        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
-        var windowEnd = state.WindowStartUnixSeconds + opts.WindowSeconds;
-        if (now >= windowEnd || state.Count < opts.PermitLimit)
+            // A missing or expired window starts a fresh one at `now`.
+            if (state is null || now >= state.WindowStartUnixSeconds + opts.WindowSeconds)
+            {
+                await WriteAsync(key, new WindowState(1, now), now + opts.WindowSeconds, ct);
+                return new LoginThrottleState(false, 0);
+            }
+
+            var windowEnd = state.WindowStartUnixSeconds + opts.WindowSeconds;
+            if (state.Count >= opts.PermitLimit)
+                return new LoginThrottleState(true, (int)Math.Max(1, windowEnd - now));
+
+            await WriteAsync(key, state with { Count = state.Count + 1 }, windowEnd, ct);
             return new LoginThrottleState(false, 0);
-
-        return new LoginThrottleState(true, (int)Math.Max(1, windowEnd - now));
-    }
-
-    public async Task RecordFailureAsync(string email, CancellationToken ct = default)
-    {
-        var opts = options.Value;
-        if (!opts.Enabled) return;
-
-        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
-        var state = await ReadAsync(email, ct);
-
-        // A missing or already-expired window starts a fresh one at `now`; an active window keeps
-        // its original start (see class doc — the window never slides forward on repeated failures).
-        var (windowStart, count) = state is null || now >= state.WindowStartUnixSeconds + opts.WindowSeconds
-            ? (now, 1)
-            : (state.WindowStartUnixSeconds, state.Count + 1);
-
-        await WriteAsync(
-            email, new WindowState(count, windowStart),
-            DateTimeOffset.FromUnixTimeSeconds(windowStart + opts.WindowSeconds), ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public Task ResetAsync(string email, CancellationToken ct = default) =>
         options.Value.Enabled ? cache.RemoveAsync(CacheKey(email), ct) : Task.CompletedTask;
 
-    private async Task<WindowState?> ReadAsync(string email, CancellationToken ct)
+    private async Task<WindowState?> ReadAsync(string key, CancellationToken ct)
     {
-        var bytes = await cache.GetAsync(CacheKey(email), ct);
+        var bytes = await cache.GetAsync(key, ct);
         return bytes is null ? null : JsonSerializer.Deserialize<WindowState>(bytes);
     }
 
-    private Task WriteAsync(string email, WindowState state, DateTimeOffset expiresAt, CancellationToken ct) =>
+    private Task WriteAsync(string key, WindowState state, long expiresAtUnixSeconds, CancellationToken ct) =>
         cache.SetAsync(
-            CacheKey(email), JsonSerializer.SerializeToUtf8Bytes(state),
-            new DistributedCacheEntryOptions { AbsoluteExpiration = expiresAt }, ct);
+            key, JsonSerializer.SerializeToUtf8Bytes(state),
+            new DistributedCacheEntryOptions
+            {
+                AbsoluteExpiration = DateTimeOffset.FromUnixTimeSeconds(expiresAtUnixSeconds),
+            }, ct);
 
     // Never put the raw email in a cache key — hash the normalized (trimmed, lowercased) address so a
     // Redis operator with read access to key names cannot enumerate attempted account emails.

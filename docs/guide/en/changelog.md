@@ -51,6 +51,15 @@
   sign-in now always issues a fresh session, and the session the request presented is revoked once the
   sign-in succeeds. A failed login leaves it untouched.
 
+- A login attempt is now counted against the account before its password is verified, so parallel
+  guesses can no longer all read the same count and slip past `RateLimiting:LoginAccount:PermitLimit`.
+  With `Redis:ConnectionString` set the count is a Redis atomic counter shared by every instance, and a
+  login fails with a 5xx error while Redis is unreachable. A new `RateLimiting:LoginConcurrency`
+  section (`Enabled` true, `PermitLimit` 4, `QueueLimit` 32) caps how many logins verify a password at
+  once in a process; the rest get 429 with `Retry-After`. Because every attempt counts, anyone who knows
+  an account's email can keep it locked out of password sign-in until the window ends; SSO sign-in is
+  unaffected.
+
 ### Fixed
 
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in

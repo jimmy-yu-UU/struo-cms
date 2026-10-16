@@ -204,14 +204,26 @@ unchecked, brute-forcing passwords doubles as a CPU-exhaustion attack. Two indep
 defense guard against it, and neither can substitute for the other.
 
 Per-account throttling (`RateLimiting:LoginAccount`) is on by default, partitioning by the account
-in the request body (keyed on a hash of the email, never the plain text), checked before the
-password is verified — a request it blocks costs no Argon2id computation at all. This
-layer is a fixed window, not a sliding one: the window starts counting once, and further failures
-during it never push the end time back; once the window passes, the next failure starts a new one.
+in the request body (keyed on a hash of the email, never the plain text). The attempt is counted
+before the password is verified, so parallel guesses cannot all slip past the limit, and a request
+it blocks costs no Argon2id computation at all. This layer is a fixed window, not a sliding one:
+the window starts counting once, and further attempts during it never push the end time back; once
+the window passes, the next attempt starts a new one.
 
-A missing account, a wrong password, and a deactivated account all count alike as one failure, and
+A missing account, a wrong password, and a deactivated account all count alike as one attempt, and
 a blocked request always returns the same `429`, so the throttle itself can't be turned into a
 tool for guessing whether an account exists; a successful login clears that account's count.
+
+The count is shared by every replica when `Redis:ConnectionString` is set, and a login fails with a
+5xx error while Redis is unreachable. Without Redis each replica counts on its own.
+
+Counting every attempt has a cost: whoever knows an account's email can use up its limit and keep
+that account locked out of password sign-in until the window ends. This is a deliberate trade-off;
+SSO sign-in is unaffected.
+
+A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
+password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
+protects CPU and memory from a flood of parallel attempts whatever their source.
 
 Per-caller-IP throttling (`RateLimiting:Login`) is the opposite: off by default, and it protects
 only the login endpoint — logout, `me`, and the OIDC challenge are all unaffected by it.

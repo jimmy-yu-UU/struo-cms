@@ -3,9 +3,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Struo.Api.Http;
 using Struo.Application.Abstractions;
+using Struo.Application.Configuration;
+using Struo.Infrastructure.Identity;
 using Struo.Application.Security;
 
 namespace Struo.Api.Auth;
@@ -29,6 +33,18 @@ public static class AuthWiring
             services.AddStackExchangeRedisCache(o => o.Configuration = redis);
         else
             services.AddDistributedMemoryCache();
+
+        // Redis (when configured) counts login attempts with an atomic INCR shared by every instance;
+        // otherwise the distributed-cache throttle registered by AddStruoInfrastructure serves. The
+        // connection string is read when the throttle is first resolved, so late configuration counts.
+        services.Replace(ServiceDescriptor.Singleton<ILoginAttemptThrottle>(sp =>
+        {
+            var connection = sp.GetRequiredService<IConfiguration>().GetValue<string>("Redis:ConnectionString");
+            var accountOptions = sp.GetRequiredService<IOptions<LoginAccountRateLimitOptions>>();
+            return string.IsNullOrWhiteSpace(connection)
+                ? new DistributedCacheLoginAttemptThrottle(sp.GetRequiredService<IDistributedCache>(), accountOptions)
+                : new RedisLoginAttemptThrottle(connection, accountOptions);
+        }));
 
         services.AddSingleton<DistributedCacheTicketStore>();
         services.AddSingleton<SessionRotation>();

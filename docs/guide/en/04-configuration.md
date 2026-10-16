@@ -305,14 +305,17 @@ key.
 | `RateLimiting:LoginAccount:Enabled` | bool | `true` |
 | `RateLimiting:LoginAccount:PermitLimit` | integer | `10` |
 | `RateLimiting:LoginAccount:WindowSeconds` | integer (seconds) | `900` |
+| `RateLimiting:LoginConcurrency:Enabled` | bool | `true` |
+| `RateLimiting:LoginConcurrency:PermitLimit` | integer | `4` |
+| `RateLimiting:LoginConcurrency:QueueLimit` | integer | `32` |
 | `RateLimiting:Password:Enabled` | bool | `true` |
 | `RateLimiting:Password:PermitLimit` | integer | `5` |
 | `RateLimiting:Password:WindowSeconds` | integer (seconds) | `60` |
 
-None of the nine keys has a validation rule; a wrong value only surfaces once a request comes
-in. When either of the two rate-limiter policies (`Login:*` and `Password:*`) blocks a request it
-returns 429, with a message naming the policy and, where one applies, a `Retry-After` header; the
-`LoginAccount` 429 is returned by the login endpoint itself, with a fixed message.
+None of the twelve keys has a validation rule; a wrong value only surfaces once a request comes
+in. When a rate-limiter policy (`Login:*`, `LoginConcurrency:*` or `Password:*`) blocks a request it
+returns 429, with a message naming the policy and a `Retry-After` header; the `LoginAccount` 429 is
+returned by the login endpoint itself, with a fixed message.
 
 `Login:*` is a fixed-window limit bucketed by client IP, protecting only `POST /api/auth/login`;
 it's off by default because admin users often share the same outbound IP, and enabling it can lock
@@ -323,15 +326,24 @@ To enable it behind a reverse proxy, you have to add `UseForwardedHeaders` yours
 lives in process memory and isn't shared across replicas; a cross-replica IP limit belongs in a
 gateway or WAF in front of the API.
 
-`LoginAccount:*` buckets by the email in the request and checks before password verification, so a
-blocked request never spends Argon2id compute; only failures accumulate, and a successful login
-clears that account's count. Whether the account doesn't exist, the password is wrong, or the
-account is disabled, all of it counts as one failure and returns the same 429. That uniformity is
-what prevents account enumeration.
+`LoginAccount:*` buckets by the email in the request and counts the attempt before the password is
+verified, so a blocked request never spends Argon2id compute and parallel guesses cannot all slip
+past the limit. A successful login clears that account's count. Whether the account doesn't exist,
+the password is wrong, or the account is disabled, all of it counts as one attempt and returns the
+same 429. That uniformity is what prevents account enumeration.
 
-This limiter's counts live in `IDistributedCache`, the same underlying store as session tickets:
-with `Redis:ConnectionString` configured, each account gets one counter shared across replicas; left
-empty, each replica counts on its own.
+With `Redis:ConnectionString` configured, each account gets one atomic Redis counter shared across
+replicas, and a login fails with a 5xx error while Redis is unreachable rather than skipping the
+check. Left empty, the counts live in the in-process distributed cache, serialized by a per-account
+lock inside each replica; replicas count on their own.
+
+Because every attempt counts, whoever knows an account's email can use up its limit and keep that
+account locked out of password sign-in for the rest of the window. This is a deliberate trade-off;
+SSO sign-in is unaffected.
+
+`LoginConcurrency:*` caps how many logins verify a password at the same time in one process:
+`PermitLimit` run at once, up to `QueueLimit` more wait for a slot, and the rest get 429. It bounds
+Argon2id CPU and memory whatever the source IPs or accounts. Each replica enforces its own cap.
 
 The count isn't an atomic read-modify-write, so in rare cases two simultaneous failures are recorded
 as one. The default is looser than the IP limit, with a long 900-second window. It's aimed at
@@ -396,7 +408,8 @@ Left empty, it falls back to an in-memory distributed cache, and sessions disapp
 process restarts — fine only for brief local testing; set this key whenever you run more than one
 replica, or need sessions to survive a restart. The default value is an empty string, and an absent
 key yields `null`; both land on the same in-memory branch. This key also backs the store shared by
-`RateLimiting:LoginAccount`.
+`RateLimiting:LoginAccount` when it is empty; when it is set, the login throttle counts in Redis
+directly.
 
 ## Oidc
 
