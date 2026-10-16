@@ -31,6 +31,9 @@
   `Secure`；兩者原本只看 Production，所以類 Staging 環境（Staging、UAT 等）會公開 API 規格，並讓 cookie 走純
   HTTP。新增的 `OpenApi:Enabled` 與 `Auth:Cookie:RequireSecure` 可分別覆寫預設值。在 Development 之外對外提供
   OpenAPI，或跑在 HTTP 上的 fork，必須設定 `OpenApi__Enabled=true` 或 `Auth__Cookie__RequireSecure=false`。
+- 每個 GraphQL mutation 都需要已登入的呼叫端。就算 `public` 角色在該集合上有寫入授權，匿名 mutation 也會被以
+  `UNAUTHORIZED` 拒絕；查詢不受影響。這與 REST 的寫入端點一致，那邊本來就要求登入。原本不帶 session cookie
+  或 bearer token 就透過 GraphQL 寫入的用戶端，必須先登入。
 :::
 
 ### 安全性

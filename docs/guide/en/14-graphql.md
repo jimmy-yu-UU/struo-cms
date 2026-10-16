@@ -224,6 +224,10 @@ alias — merges the nested expansion, but only the first occurrence's
 Every collection gets four fixed mutations; a collection with revisions turned on gets one more,
 `revert<X>`.
 
+Every mutation needs a signed-in caller (session cookie or bearer token), whatever the `public` role
+is granted: an anonymous mutation gets `UNAUTHORIZED` before any permission check runs, the same as a
+REST write. Queries stay open to anonymous callers within their read grants.
+
 | Mutation | Signature |
 |---|---|
 | `create<X>` | `(input: <X>CreateInput!, locale: String): <X>` |

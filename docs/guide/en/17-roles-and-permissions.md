@@ -109,7 +109,8 @@ permissions are computed". What `public` is granted to read is decided by the
 Each collection name in that list becomes one `canRead = true` grant row on `public`. This key
 applies once, when the seed migration runs; changing it and restarting, or running `migrate` again,
 has no retroactive effect on an existing database. The key name and this limit are in
-[Chapter 4: Configuration Reference](04-configuration.md).
+[Chapter 4: Configuration Reference](04-configuration.md). `public` write grants apply only to signed-in
+callers: every GraphQL mutation and every REST write endpoint refuses an anonymous request.
 
 ## `Hidden` fields and permissions
 

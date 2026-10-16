@@ -54,7 +54,8 @@ public static class GraphQlServiceCollectionExtensions
                 // Anchor field so the Mutation root is valid even before the type module adds
                 // collection mutations (GraphQL requires each root type to have >=1 field). Also
                 // serves as the empty-schema guard when zero collections are discovered.
-                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL mutations"))
+                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL mutations")
+                    .Use(MutationAuthentication.Middleware))
             .AddType<LongType>()
             .AddType<DateTimeType>()
             .AddType<DateType>()

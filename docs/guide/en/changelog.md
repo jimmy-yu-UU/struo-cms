@@ -40,6 +40,10 @@
   The new `OpenApi:Enabled` and `Auth:Cookie:RequireSecure` keys override each default. A fork that
   serves OpenAPI or runs over HTTP outside Development must set `OpenApi__Enabled=true` or
   `Auth__Cookie__RequireSecure=false`.
+- Every GraphQL mutation requires a signed-in caller. An anonymous mutation is refused with
+  `UNAUTHORIZED` even when the `public` role holds a write grant on the collection; queries are
+  unchanged. This matches the REST write endpoints, which already require sign-in. A client that wrote
+  through GraphQL without a session cookie or bearer token must sign in first.
 :::
 
 ### Security
