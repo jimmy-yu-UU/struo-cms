@@ -24,7 +24,9 @@
   使用多租用戶 authority 又沒有設定限制的 fork，必須設定其中一個，或改用單一 tenant 的 authority。
 - `GET /api/items/{collection}/{id}/revisions` 對未知的項目 id 回 404，原本回空陣列。垃圾桶中項目的版本紀錄
   （列表與單筆，REST 與 GraphQL）需要該集合的刪除授權；沒有的呼叫端在 REST 收到 404，在 GraphQL 收到空清單
-  或 `null`。
+  或 `null`。`IItemUseCases.ListRevisionsAsync` 與 `IGraphQlDataSource.ListRevisionsAsync` 改回傳可為 null 的
+  清單，`null` 代表項目未知或被隱藏。讀取結果的程式必須處理 `null`；fork 自己的實作遇到被隱藏的項目也必須回傳
+  `null`，否則不會隱藏垃圾桶中的項目。
 :::
 
 ### 安全性

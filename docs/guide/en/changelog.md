@@ -30,7 +30,10 @@
 - `GET /api/items/{collection}/{id}/revisions` returns 404 for an unknown item id; it returned an empty
   array. The revisions of a trashed item (list and single revision, REST and GraphQL) need delete
   permission on the collection; a caller without it gets 404 on REST and an empty list or `null` on
-  GraphQL.
+  GraphQL. `IItemUseCases.ListRevisionsAsync` and `IGraphQlDataSource.ListRevisionsAsync` return a
+  nullable list, where `null` means the item is unknown or hidden. Code that reads the result must handle
+  `null`, and a fork's own implementation must return `null` for a hidden item, or it will not hide
+  trashed items.
 :::
 
 ### Security
