@@ -83,6 +83,11 @@
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
   the role store cannot make the liveness probe return 500 and restart healthy instances.
 
+- A Production start with an empty `Redis:ConnectionString` logs one warning: sessions and login
+  throttling are then kept in process memory, so only a single replica works and a restart signs every
+  user out. Replacing a role's permission grants joins a transaction the caller already opened instead of
+  committing its own. Chapter 16 states that an API access token survives a password change.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's failed-login count starts from zero

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Struo.Api.Http;
 using Struo.Application.Abstractions;
@@ -94,6 +95,19 @@ public static class AuthWiring
         services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Logs one warning when Production runs without Redis: sessions and the login throttle then live
+    /// in process memory, so only a single replica works and a restart signs everyone out.
+    /// </summary>
+    public static void WarnIfSessionsAreInMemory(IConfiguration config, IHostEnvironment env, ILogger logger)
+    {
+        if (!env.IsProduction() || !string.IsNullOrWhiteSpace(config.GetValue<string>("Redis:ConnectionString")))
+            return;
+        logger.LogWarning(
+            "Redis:ConnectionString is empty in Production: sessions and login throttling are kept in process memory. " +
+            "Run a single replica only; every restart signs all users out. Set Redis:ConnectionString for multi-instance or durable sessions.");
     }
 
     private static void ConfigureCookieOptions(CookieAuthenticationOptions options)

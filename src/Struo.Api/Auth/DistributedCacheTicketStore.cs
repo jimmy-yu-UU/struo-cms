@@ -83,7 +83,7 @@ public sealed class DistributedCacheTicketStore(
     private async Task IndexNewSessionAsync(string key, AuthenticationTicket ticket)
     {
         if (ExtractUserId(ticket) is not { } userId) return;
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
         var now = DateTime.UtcNow;
         await sessions.RecordAsync(userId, key, now, now + AuthSchemes.SessionLifetime);
@@ -100,7 +100,7 @@ public sealed class DistributedCacheTicketStore(
             // A ticket with no readable user id leaves the row untouched — same as StoreAsync, there is
             // nobody to attribute it to.
             if (ExtractUserId(ticket) is not { } userId) return;
-            using var scope = scopeFactory.CreateScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
             var expiresAt = DateTime.UtcNow + AuthSchemes.SessionLifetime;
             // Re-attributes the row to this ticket's current user, so a renewal that carries a different
@@ -128,7 +128,7 @@ public sealed class DistributedCacheTicketStore(
 
     private async Task RemoveIndexAsync(string key)
     {
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
         await sessions.RemoveByTicketKeyAsync(key);
     }

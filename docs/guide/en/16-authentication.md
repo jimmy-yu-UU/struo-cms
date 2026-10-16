@@ -168,6 +168,13 @@ one write per token per minute, so a busy integration doesn't turn every call in
 the account itself is deactivated, authentication fails regardless of whether the token is
 otherwise still valid, and this flag is re-checked on every request.
 
+A token belongs to one user, and each user has at most one: issuing a token for a user who already
+has one replaces it, and a super-admin can issue or revoke a token for any user. Changing a password
+revokes that user's sessions but never the token, so a password change does not cut off an
+integration that authenticates with a token. If a token may have leaked, revoke it, or regenerate it
+to replace it, rather than relying on a password change. The last-used time recorded on every
+authenticated request shows which tokens have gone unused and are worth revoking.
+
 Bearer counts on every endpoint, including the read endpoints that declare no scheme — it
 isn't only write actions that recognize it; a bearer caller's permissions are its own role's
 grants, not anonymous. A bearer call needs no CSRF header; the full selection rule and CSRF detail
