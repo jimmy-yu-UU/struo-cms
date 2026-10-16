@@ -27,6 +27,10 @@
   或 `null`。`IItemUseCases.ListRevisionsAsync` 與 `IGraphQlDataSource.ListRevisionsAsync` 改回傳可為 null 的
   清單，`null` 代表項目未知或被隱藏。讀取結果的程式必須處理 `null`；fork 自己的實作遇到被隱藏的項目也必須回傳
   `null`，否則不會隱藏垃圾桶中的項目。
+- `/openapi/v1.json` 與 `/scalar` 只在 Development 註冊，session cookie 在 Development 之外的所有環境一律帶
+  `Secure`；兩者原本只看 Production，所以類 Staging 環境（Staging、UAT 等）會公開 API 規格，並讓 cookie 走純
+  HTTP。新增的 `OpenApi:Enabled` 與 `Auth:Cookie:RequireSecure` 可分別覆寫預設值。在 Development 之外對外提供
+  OpenAPI，或跑在 HTTP 上的 fork，必須設定 `OpenApi__Enabled=true` 或 `Auth__Cookie__RequireSecure=false`。
 :::
 
 ### 安全性

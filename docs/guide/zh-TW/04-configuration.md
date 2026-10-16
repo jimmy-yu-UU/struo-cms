@@ -34,8 +34,9 @@
 
 - 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、啟動時的結構檢查（跟
   `migrate:check` 相同的比對，有錯誤就拒絕啟動）。
-- 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
-- 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`。
+- 預設只在 Development 開：`/scalar` 與 `/openapi/v1.json`（`OpenApi:Enabled` 可覆寫）。
+- 預設除了 Development 之外的環境都生效：cookie `SecurePolicy` 為 `Always`
+  （`Auth:Cookie:RequireSecure` 可覆寫）。
 
 以下七個是 `docker-compose.yml` 的 host 對外設定，不會傳進 API 的設定：
 
@@ -227,6 +228,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:BootstrapAdmin:Password` | 字串 | `""` |
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
+| `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
@@ -239,6 +241,21 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
 `MinLength >= 1 && MinLength <= MaxLength` 的啟動驗證，設反了會讓啟動失敗；只有 `MinLength`
 會透過 `GET /api/config` 回傳給前端。
+
+`Auth:Cookie:RequireSecure` 決定 session cookie 是否一律帶 `Secure`。留空時，除了 Development 之外的環境
+一律是 `Always`，Development 則跟隨請求本身；`true` 在所有環境強制 `Secure`；`false` 讓 cookie 可以走純
+HTTP，前面沒有 TLS 的類 Staging 主機需要這樣設。只要設定了任何 `Struo:Cors` 來源，不論這個鍵怎麼設，
+都會強制 `Secure`。
+
+## OpenApi
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `OpenApi:Enabled` | 布林（可留空） | 無（依環境判斷） |
+
+留空時，`/openapi/v1.json` 與 `/scalar` 只在 Development 存在；其他環境（含 Production）一律回 404。
+`true` 在任何環境都開，`false` 在所有環境都關。這兩個路由沒有任何驗證就公開整份 API 規格，要在
+Development 之外打開之前，前面要自己加一層驗證。
 
 ## Rbac
 

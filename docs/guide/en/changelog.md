@@ -34,6 +34,12 @@
   nullable list, where `null` means the item is unknown or hidden. Code that reads the result must handle
   `null`, and a fork's own implementation must return `null` for a hidden item, or it will not hide
   trashed items.
+- `/openapi/v1.json` and `/scalar` are mapped in Development only, and the session cookie is always
+  `Secure` in every environment except Development; both were gated on Production alone, so a
+  Staging-like environment (Staging, UAT, ...) exposed the API spec and sent cookies over plain HTTP.
+  The new `OpenApi:Enabled` and `Auth:Cookie:RequireSecure` keys override each default. A fork that
+  serves OpenAPI or runs over HTTP outside Development must set `OpenApi__Enabled=true` or
+  `Auth__Cookie__RequireSecure=false`.
 :::
 
 ### Security

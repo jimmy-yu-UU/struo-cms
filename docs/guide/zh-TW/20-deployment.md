@@ -57,7 +57,8 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 
 ### Cookie 只在 HTTPS 下送回
 
-Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回；沒有先終結 TLS 就把流量送進
+Development 之外的環境，認證 cookie 只有透過 HTTPS 的請求才會被送回（`Auth:Cookie:RequireSecure`
+可覆寫，只有前面沒有 TLS 的主機才該設成 `false`）；沒有先終結 TLS 就把流量送進
 來，登入回應看起來正常（帶著 `Set-Cookie`），但瀏覽器往後不會再帶著這個 cookie，呼叫端等於卡
 在「登入了卻又要登入」的迴圈。安全政策怎麼判斷、CORS 開了之後多出哪些規則，見
 [第 16 章](16-authentication.md)。
@@ -65,9 +66,9 @@ Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回
 唯一的例外是 `http://localhost`：瀏覽器把它當成安全來源，照樣送回 cookie。本章最後的本機
 Compose 環境就是靠這點，不架 TLS 也能登入。
 
-### Scalar／OpenAPI 在 Production 關閉
+### Scalar／OpenAPI 在 Development 之外關閉
 
-`GET /scalar` 與 `/openapi/v1.json` 只在非 Production 環境註冊，Production 啟動時這兩個路由
+`GET /scalar` 與 `/openapi/v1.json` 只在 Development 註冊（除非 `OpenApi:Enabled` 為 `true`），Production 啟動時這兩個路由
 完全不存在。
 
 相鄰的 GraphQL schema 揭露路由另外由 `GraphQl:ExposeSchema` 控制，預設值 `null`

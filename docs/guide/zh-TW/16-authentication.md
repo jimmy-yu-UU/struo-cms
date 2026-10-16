@@ -61,7 +61,8 @@ IP：超級管理員連續幫多個使用者重設密碼，扣的是自己的額
 ## 登入與工作階段 cookie
 
 沒有帶 `Authorization: Bearer …` 標頭的請求一律走 cookie：名稱 `struo.session`，`HttpOnly`，
-`SameSite` 預設 `Lax`；正式環境的安全政策固定是 `Always`，其他環境跟隨請求本身；只要設定了任何一
+`SameSite` 預設 `Lax`；安全政策跟隨
+`Auth:Cookie:RequireSecure`，留空時除了 Development 之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一
 個 CORS 來源，安全政策與 `SameSite` 都會改成 `Always`／`None`，因為瀏覽器只在 `Secure` 的前提下
 接受 `SameSite=None`，代表跨來源部署雙邊都得跑 HTTPS。
 

@@ -43,8 +43,9 @@ following environment-specific behavior:
 
 - Development-only: `GraphQl:ExposeSchema`'s default value, the Nitro IDE, and the startup schema
   check (the same comparison as `migrate:check`; startup is refused when it finds an error).
-- Non-Production only: `/scalar` and `/openapi/v1.json`.
-- Production-only: the cookie `SecurePolicy` is fixed to `Always`.
+- Development-only by default: `/scalar` and `/openapi/v1.json` (`OpenApi:Enabled` overrides it).
+- Every environment except Development by default: the cookie `SecurePolicy` is `Always`
+  (`Auth:Cookie:RequireSecure` overrides it).
 
 These seven are host-facing settings in `docker-compose.yml`; they never reach the API's own
 configuration:
@@ -256,6 +257,7 @@ exception (500) instead.
 | `Auth:BootstrapAdmin:Password` | string | `""` |
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
+| `Auth:Cookie:RequireSecure` | bool (may be empty) | none (environment-dependent) |
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
@@ -272,6 +274,22 @@ The password policy is shared by the same validation on `POST /api/users` and
 These two keys carry their own startup validation, `MinLength >= 1 && MinLength <= MaxLength`.
 Setting them backwards fails startup. Only `MinLength` is returned to the admin SPA, through
 `GET /api/config`.
+
+`Auth:Cookie:RequireSecure` decides whether the session cookie is always `Secure`. Unset, it is `Always`
+in every environment except Development, which follows the request itself. `true` forces `Secure`
+everywhere; `false` lets the cookie travel over plain HTTP, which a Staging-like host without TLS in
+front of it needs. Configuring any `Struo:Cors` origin forces `Secure` whatever this key says.
+
+## OpenApi
+
+| Key | Type | Default |
+|---|---|---|
+| `OpenApi:Enabled` | bool (may be empty) | none (environment-dependent) |
+
+Unset, `/openapi/v1.json` and `/scalar` exist in Development only; every other environment, Production
+included, returns 404. `true` maps them in any environment and `false` in none. Both publish the
+whole API spec with no authentication, so put your own authentication layer in front before enabling
+them outside Development.
 
 ## Rbac
 

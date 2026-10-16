@@ -76,7 +76,8 @@ undercount.
 
 ### Cookies come back only over HTTPS
 
-In a Production environment, the authentication cookie is only sent back on requests over HTTPS;
+Outside Development, the authentication cookie is only sent back on requests over HTTPS
+(`Auth:Cookie:RequireSecure` overrides this; set it to `false` only for a host with no TLS in front);
 sending traffic in without terminating TLS first makes the login response look normal (it comes
 back with `Set-Cookie`), but the browser never attaches the cookie again afterward, and the caller
 ends up stuck in a "logged in, yet asked to log in again" loop. How the security policy decides
@@ -85,10 +86,10 @@ this, and what extra rules apply once CORS is enabled, are in [Chapter 16](16-au
 The one exception is `http://localhost`: browsers treat it as a secure context and send the cookie
 back, which is how the local Compose stack at the end of this chapter logs in without TLS.
 
-### Scalar/OpenAPI are off in Production
+### Scalar/OpenAPI are off outside Development
 
-`GET /scalar` and `/openapi/v1.json` are only registered outside Production; at Production
-startup, these two routes don't exist at all.
+`GET /scalar` and `/openapi/v1.json` are only registered in Development unless `OpenApi:Enabled`
+is `true`; at Production startup, these two routes don't exist at all.
 
 The neighboring GraphQL schema-exposure route is controlled separately by
 `GraphQl:ExposeSchema`, whose default value of `null` likewise only opens it in Development — the

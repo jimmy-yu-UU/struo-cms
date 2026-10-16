@@ -219,9 +219,9 @@ Compose 是 `http://localhost:8081`；從後台的埠（8080）打，拿到的�
 `Redis:ConnectionString` 時，會改用記憶體內的暫存，一樣會通過，所以這個綠燈不能當成 Redis
 真的連得上的證明。
 
-API 文件在 `/scalar`，原始的 OpenAPI 規格在 `/openapi/v1.json`；兩個路由都只在非 Production
-環境開放，Production 回 404。這兩個路由沒有任何驗證就公開整份 API 規格；如果你要在
-Production 打開它們，前面要自己加一層驗證。
+API 文件在 `/scalar`，原始的 OpenAPI 規格在 `/openapi/v1.json`；兩個路由都只在 Development
+環境開放，其他環境（含 Production）回 404，除非 `OpenApi:Enabled` 設為 `true`。這兩個路由沒有任何驗證就公開整份 API 規格；如果你要在
+Development 之外打開它們，前面要自己加一層驗證。
 
 ## 接下來
 

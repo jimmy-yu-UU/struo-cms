@@ -225,10 +225,10 @@ HTTP_STATUS:200
 | `GET /graphql?sdl` | 依 `GraphQl:ExposeSchema` | 讀目前的 SDL 文字，預設僅 Development |
 | `GET /health/live` | 匿名 | 純文字健康探測 |
 | `GET /health/ready` | 匿名 | 純文字就緒探測 |
-| `GET /openapi/v1.json` 與 `/scalar` | 僅非 Production | OpenAPI 文件與 Scalar 介面 |
+| `GET /openapi/v1.json` 與 `/scalar` | 預設僅 Development（`OpenApi:Enabled`） | OpenAPI 文件與 Scalar 介面 |
 
 兩個健康探測都回純文字（例如 `Healthy`），不是這裡的 JSON 信封。GraphQL 本身的文件見
-[第 14 章：GraphQL API](14-graphql.md)；`/openapi/v1.json`、`/scalar` 這兩個非 Production 限定
+[第 14 章：GraphQL API](14-graphql.md)；`/openapi/v1.json`、`/scalar` 這兩個由 `OpenApi:Enabled` 控制的
 路由的閘道規則，[第 3 章：快速開始](03-getting-started.md)與
 [第 4 章：設定參考](04-configuration.md)已經講過，這裡只列路由。
 

@@ -298,10 +298,9 @@ try
     app.MapControllers();
     app.MapStruoGraphQl();
 
-    // The OpenAPI document and Scalar explorer are mapped outside Production only: they publish the
-    // full API surface without authentication. Set them up behind your own auth if you need them in
-    // production.
-    if (!app.Environment.IsProduction())
+    // The OpenAPI document and Scalar explorer publish the full API surface without authentication,
+    // so they are mapped in Development only unless OpenApi:Enabled says otherwise.
+    if (Struo.Api.EnvironmentGates.ResolveOpenApiEnabled(app.Configuration, app.Environment))
     {
         app.MapOpenApi();
         app.MapScalarApiReference(options =>
