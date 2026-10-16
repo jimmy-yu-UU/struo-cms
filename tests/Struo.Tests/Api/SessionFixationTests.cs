@@ -152,7 +152,9 @@ public class SessionFixationTests(ApiFactory factory)
     [Theory]
     [InlineData("POST", "/api/auth/login", true)]
     [InlineData("GET", "/api/auth/login", false)]
+    [InlineData("POST", "/api/auth/login/", true)]
     [InlineData("GET", "/signin-oidc", true)]
+    [InlineData("GET", "/signin-oidc/", true)]
     [InlineData("GET", "/api/auth/me", false)]
     public async Task Middleware_hides_the_session_cookie_only_on_sign_in_requests(string method, string path, bool hidden)
     {

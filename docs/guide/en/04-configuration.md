@@ -424,9 +424,9 @@ shape and uniqueness and that `DefaultLocale` is in the list. Adding a catalog i
 Left empty, it falls back to an in-memory distributed cache, and sessions disappear every time the
 process restarts — fine only for brief local testing; set this key whenever you run more than one
 replica, or need sessions to survive a restart. The default value is an empty string, and an absent
-key yields `null`; both land on the same in-memory branch. This key also backs the store shared by
-`RateLimiting:LoginAccount` when it is empty; when it is set, the login throttle counts in Redis
-directly.
+key yields `null`; both land on the same in-memory branch. This key also decides where
+`RateLimiting:LoginAccount` counts: left empty, each process counts in its own memory; when set, the
+login throttle counts in Redis directly.
 
 ## Oidc
 

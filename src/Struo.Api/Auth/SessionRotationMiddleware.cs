@@ -21,11 +21,12 @@ public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<Oid
 
     private bool IsSignInRequest(HttpRequest request)
     {
-        if (HttpMethods.IsPost(request.Method) && request.Path.Equals(LoginPath, StringComparison.OrdinalIgnoreCase))
+        var path = (request.Path.Value ?? "").TrimEnd('/');
+        if (HttpMethods.IsPost(request.Method) && path.Equals(LoginPath, StringComparison.OrdinalIgnoreCase))
             return true;
         var o = oidc.Value;
         return o.Enabled && !string.IsNullOrEmpty(o.CallbackPath)
-            && request.Path.Equals(o.CallbackPath, StringComparison.OrdinalIgnoreCase);
+            && path.Equals(o.CallbackPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
     }
 
     private static void HidePresentedCookie(HttpRequest request, HttpContext context)

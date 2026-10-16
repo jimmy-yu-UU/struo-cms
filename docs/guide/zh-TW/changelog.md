@@ -30,7 +30,8 @@
 - `/openapi/v1.json` 與 `/scalar` 只在 Development 註冊，session cookie 在 Development 之外的所有環境一律帶
   `Secure`；兩者原本只看 Production，所以類 Staging 環境（Staging、UAT 等）會公開 API 規格，並讓 cookie 走純
   HTTP。新增的 `OpenApi:Enabled` 與 `Auth:Cookie:RequireSecure` 可分別覆寫預設值。在 Development 之外對外提供
-  OpenAPI，或跑在 HTTP 上的 fork，必須設定 `OpenApi__Enabled=true` 或 `Auth__Cookie__RequireSecure=false`。
+  OpenAPI 的 fork，必須設定 `OpenApi__Enabled=true`；跑在 HTTP 上的 fork，必須設定
+  `Auth__Cookie__RequireSecure=false`。
 - 每個 GraphQL mutation 都需要已登入的呼叫端。就算 `public` 角色在該集合上有寫入授權，匿名 mutation 也會被以
   `UNAUTHORIZED` 拒絕；查詢不受影響。這與 REST 的寫入端點一致，那邊本來就要求登入。原本不帶 session cookie
   或 bearer token 就透過 GraphQL 寫入的用戶端，必須先登入。
@@ -40,6 +41,11 @@
   可用，也不會改寫任何既有資料列。期待讀回自己送出的大小寫的用戶端，現在收到的是小寫。升級前，維運人員可用
   `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;`
   列出既有的大小寫重複（資料表名稱依 `Database:TablePrefix` 調整），再合併或刪除多餘的資料列。
+- `ILoginAttemptThrottle` 以 `TryReserveAsync` 取代 `CheckAsync` 與 `RecordFailureAsync`；`ResetAsync` 不變。
+  `TryReserveAsync` 會把這次嘗試算進去並回報是否可以繼續，呼叫端要在驗證密碼之前呼叫它。實作這個介面的
+  fork 必須提供它，呼叫舊方法的 fork 必須改呼叫它。
+- 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的；設了 `Redis:ConnectionString`
+  時，Redis 連不上期間登入會回 5xx。
 :::
 
 ### 安全性
@@ -72,7 +78,8 @@
 
 ### 升級說明
 
-Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入失敗計數會歸零一次。
+Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入嘗試計數會歸零。滾動式部署期間，仍在 0.10 的實例與
+0.11 的實例各用不同的鍵計數，帳號在所有實例都升到 0.11 之前，可能收到上限兩倍的嘗試次數。
 
 語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
 語言集合的所有寫入被擋下，直到你修正它為止；若有兩個以上格式不合的資料列，API 既修不了也刪不掉它們。請先檢查

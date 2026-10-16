@@ -38,8 +38,8 @@
   `Secure` in every environment except Development; both were gated on Production alone, so a
   Staging-like environment (Staging, UAT, ...) exposed the API spec and sent cookies over plain HTTP.
   The new `OpenApi:Enabled` and `Auth:Cookie:RequireSecure` keys override each default. A fork that
-  serves OpenAPI or runs over HTTP outside Development must set `OpenApi__Enabled=true` or
-  `Auth__Cookie__RequireSecure=false`.
+  serves OpenAPI outside Development must set `OpenApi__Enabled=true`, and one that runs over HTTP
+  outside Development must set `Auth__Cookie__RequireSecure=false`.
 - Every GraphQL mutation requires a signed-in caller. An anonymous mutation is refused with
   `UNAUTHORIZED` even when the `public` role holds a write grant on the collection; queries are
   unchanged. This matches the REST write endpoints, which already require sign-in. A client that wrote
@@ -52,6 +52,12 @@
   lowercase. Before upgrading, an operator can list pre-existing case-duplicates with
   `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;` (adjust the
   table name to your `Database:TablePrefix`) and merge or delete the extra rows.
+- `ILoginAttemptThrottle` has `TryReserveAsync` in place of `CheckAsync` and `RecordFailureAsync`;
+  `ResetAsync` is unchanged. `TryReserveAsync` counts the attempt and reports whether it may proceed,
+  and the caller invokes it before verifying the password. A fork that implements the interface must
+  provide it, and a fork that calls the old methods must call it instead.
+- Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones, and
+  with `Redis:ConnectionString` set a login fails with a 5xx error while Redis is unreachable.
 :::
 
 ### Security
@@ -90,8 +96,10 @@
 
 ### Upgrade notes
 
-The Redis login throttle counts under new keys, so each account's failed-login count starts from zero
-once at upgrade.
+The Redis login throttle counts under new keys, so each account's login-attempt count starts from
+zero at upgrade. During a rolling deploy, instances still on 0.10 and instances on 0.11 count under
+different keys, so an account can receive up to twice its limit in attempts until every instance runs
+0.11.
 
 The language-code format rule checks every row of the language collection on each write to it,
 including a delete. A malformed code that is already stored blocks every write to the collection

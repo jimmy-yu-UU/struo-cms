@@ -70,9 +70,10 @@ for sessions to survive a process restart, it has to be set.
 
 Without it, every restart forces every user to log in again, and multiple replicas each keep their
 own copy — the same user hitting a different replica looks like they were never logged in. With
-Redis set, this counter is shared across every replica, but it isn't a guaranteed ceiling —
-`IDistributedCache` has no atomic read-modify-write, so concurrent failed attempts can occasionally
-undercount.
+Redis set, the login-attempt counter is one atomic Redis counter shared by every replica, and a
+login fails with a 5xx error while Redis is unreachable. Without Redis, each process keeps its own
+counter and counts every attempt under a per-account lock before the password is verified, so one
+replica never undercounts, but replicas do not see each other's attempts.
 
 ### Cookies come back only over HTTPS
 
