@@ -1,8 +1,9 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from '../credentials'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 
 async function login(page: Page): Promise<void> {

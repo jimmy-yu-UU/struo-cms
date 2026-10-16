@@ -35,7 +35,7 @@
 - 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、啟動時的結構檢查（跟
   `migrate:check` 相同的比對，有錯誤就拒絕啟動）。
 - 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
-- 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`、預設管理員密碼未改的警告。
+- 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`。
 
 以下七個是 `docker-compose.yml` 的 host 對外設定，不會傳進 API 的設定：
 
@@ -51,7 +51,8 @@
 
 `STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD` 不一樣：Compose 會把它們當成
 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password` 傳給 `api` 服務，只影響 Compose
-起的那個 API，自己跑的 API 不受影響。
+起的那個 API，自己跑的 API 不受影響。`STRUO_ADMIN_PASSWORD` 預設是空的，所以 seed 會隨機產生密碼，
+並在 `api` 的 log 印出一次。
 
 ## Database
 
@@ -99,7 +100,6 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 2. `MigrateOnStartup` 為 `true` 就拿鎖、套用 migration；為 `false` 就檢查資料庫，框架資料表存在
    卻沒有版本表，或還有待套用的 migration，都拒絕啟動。
 3. 在 Development，跑一次結構檢查，有錯誤就拒絕啟動。
-4. Production 下預設管理員密碼未改時，記一筆警告。
 
 ## Struo:ContentAssemblies
 
@@ -224,15 +224,16 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
 | `Auth:BootstrapAdmin:Email` | 字串 | `"admin@admin.com"` |
-| `Auth:BootstrapAdmin:Password` | 字串 | `"admin"` |
+| `Auth:BootstrapAdmin:Password` | 字串 | `""` |
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
-庫上；但每次啟動都會重新讀取——Production 那筆預設密碼警告就是拿它比對出來的。這兩個鍵沒有選項
-類別，seed migration 與那筆警告各自直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
-seed migration 不套用密碼原則，這裡填什麼都會被接受——預設的 `admin` 只有五個字元，比
-`MinLength` 的 8 還短。
+庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
+密碼留空時，seed 會隨機產生至少 24 個字元的密碼，並在建立管理員的那次執行裡以 Warning 印出一次。自己指定
+的密碼必須符合 `Auth:Password`，而且不能是 `admin`（不分大小寫）。只要它還是弱值，`migrate`、`migrate:preview`
+與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。這個值只用來
+植入帳號，帳號建立之後就可以移除。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有

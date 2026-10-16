@@ -25,6 +25,10 @@ public static class OidcWiring
                       && !string.IsNullOrWhiteSpace(o.ClientId)
                       && !string.IsNullOrWhiteSpace(o.ClientSecret)),
                 "Oidc enabled requires Authority, ClientId, ClientSecret")
+            .Validate(
+                o => !o.Enabled || !o.IsUnpinnedMultiTenant(),
+                "Oidc Authority is multi-tenant (common, organizations or consumers); " +
+                "set Oidc:AllowedTenantId or Oidc:AllowedEmailDomains, or use a single-tenant Authority")
             .ValidateOnStart();
         services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 

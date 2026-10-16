@@ -28,19 +28,20 @@ Production does not run the schema check at startup; run `migrate:check` yoursel
 The commands and the lock are covered in
 [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
 
-### Change the bootstrap password before the first `migrate`
+### Choose or capture the bootstrap password at the first `migrate`
 
-`Auth:BootstrapAdmin:Password` is read exactly once, the first time the core seed migration runs;
+`Auth:BootstrapAdmin:Password` seeds the account the first time the core seed migration runs;
 changing this value afterward has no effect on the account that already exists. When `migrate` runs
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-Starting in Production with the default value only logs a Warning naming this
-setting key — it doesn't block startup.
-
-That warning compares against the value currently in configuration, not the hash actually stored
-in the database: seed with the default first and change the setting afterward, and the warning
-disappears while the account's password is still the default one.
+The template ships no bootstrap password. Leave it empty and the seed generates a random
+password of at least 24 characters, logged once as a Warning in the `migrate` output (or the API log, when the API
+runs the migrations); copy it from there, because nothing prints it again. A password you set must
+satisfy `Auth:Password` and may not be `admin`, in any environment. While a weak value is
+configured, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
+naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded; remove the value
+once the account exists.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 

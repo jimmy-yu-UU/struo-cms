@@ -71,9 +71,7 @@ public sealed class CoreSeedMigrationTests : IDisposable
     [InlineData(null, "pw")]
     [InlineData("", "pw")]
     [InlineData("  ", "pw")]
-    [InlineData("admin@example.com", null)]
-    [InlineData("admin@example.com", " ")]
-    public async Task Blank_email_or_password_seeds_no_user_and_no_user_role(string? email, string? password)
+    public async Task Blank_email_seeds_no_user_and_no_user_role(string? email, string? password)
     {
         await _h.Host(CoreMigrationHarness.Seed(email, password)).ApplyAsync(default);
         var db = _h.Db();
@@ -153,7 +151,7 @@ public sealed class CoreSeedMigrationTests : IDisposable
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Auth:BootstrapAdmin:Email"] = "root@example.com",
-            ["Auth:BootstrapAdmin:Password"] = "pw-1",
+            ["Auth:BootstrapAdmin:Password"] = "pw-123456",
             ["Rbac:PublicReadCollections:0"] = "article",
         }).Build();
         using var sp = new ServiceCollection()
@@ -165,7 +163,7 @@ public sealed class CoreSeedMigrationTests : IDisposable
         var seed = CoreSeedData.FromServices(sp);
 
         seed.AdminEmail.Should().Be("root@example.com");
-        new Argon2idPasswordHasher().Verify(seed.AdminPasswordHash!, "pw-1").Should().BeTrue();
+        new Argon2idPasswordHasher().Verify(seed.AdminPasswordHash!, "pw-123456").Should().BeTrue();
         seed.PublicReadCollections.Should().Equal("article");
         seed.Languages.Should().HaveCount(2);
     }

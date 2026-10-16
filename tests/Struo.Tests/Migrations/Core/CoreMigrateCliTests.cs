@@ -38,7 +38,7 @@ public sealed class CoreMigrateCliTests : IDisposable
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Auth:BootstrapAdmin:Email"] = "cli@example.com",
-            ["Auth:BootstrapAdmin:Password"] = "cli-plain-pw",
+            ["Auth:BootstrapAdmin:Password"] = "cli-plain-pw-1",
             ["Rbac:PublicReadCollections:0"] = "article",
         }).Build();
         using var sp = new ServiceCollection()
@@ -52,7 +52,7 @@ public sealed class CoreMigrateCliTests : IDisposable
 
         var preview = await Run(sp, "migrate:preview");
         preview.Code.Should().Be(MigrationCli.Success);
-        preview.Out.Should().Contain("INSERT INTO").And.NotContain("cli-plain-pw").And.NotContain("$argon2id");
+        preview.Out.Should().Contain("INSERT INTO").And.NotContain("cli-plain-pw-1").And.NotContain("$argon2id");
         preview.Out.Should().Contain("<redacted>").And.Contain("cli@example.com");
         Tables().Should().BeEmpty();
 
@@ -66,7 +66,7 @@ public sealed class CoreMigrateCliTests : IDisposable
         db.Queryable<Permission>().Count().Should().Be(1);
         var stored = db.Queryable<User>().First();
         stored.Password.Should().StartWith("$argon2id");
-        new Argon2idPasswordHasher().Verify(stored.Password, "cli-plain-pw").Should().BeTrue();
+        new Argon2idPasswordHasher().Verify(stored.Password, "cli-plain-pw-1").Should().BeTrue();
     }
 
     [Fact]

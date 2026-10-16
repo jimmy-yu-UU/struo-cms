@@ -79,10 +79,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** (Schema
+- **All database access is through SqlSugar, with three deliberate exceptions for raw SQL.** (Schema
   changes and seed inserts are FluentMigrator migrations, see "Migrations are the only schema source"
-  below.) The first two assemble portable SQL text; the third is deliberately per-backend lock SQL that runs wherever
-  `migrate` runs; the fourth is per-backend read-only catalog SQL that runs wherever `migrate:check`
+  below.) The first assembles portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
+  `migrate` runs; the third is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
   `SchemaChecker.Check`.
   The first is the relation-filter pushdown's subquery wrapper
@@ -91,32 +91,23 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   assembled around SqlSugar-generated SQL — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
   `(<col> IS NULL OR <col> NOT IN (<sql>))` and `(<sql1> OR <sql2> …)` — where `<col>` always comes from
   `GetDbColumnName` and `<sql>` from `ToSql()`.
-  The second is `OrderByExpressionBuilder`'s ORDER BY text
-  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`), the sole source of the string passed
-  to the one `queryable.OrderBy(string)` call, in `SqlSugarItemRepository.RunQueryAsync`: it assembles
-  three per-field forms — a plain column (`<col> ASC|DESC`), a to-one relation-path sort as a correlated
-  subquery with one JOIN per extra hop (`RelationOrderExpr`), and a translatable-field sort as a correlated
-  subquery against the translation sidecar with the query locale embedded as an escaped string literal
-  (`TranslatableOrderExpr`; the locale is either a request locale already validated by
-  `ItemService.ValidateLocale`, or — when no `?locale=` was given — the configured default code
-  (`ItemService.QueryAsync`'s `locale ?? languages.DefaultCode()`), whose format is guarded only on
-  write, by `ValidateLanguageCodeIfNeeded`; the quote-doubling on the literal at this sink remains
-  either way) — plus the no-client-sort default clause (`<created> DESC, <id> ASC`, or `<id> ASC`
-  alone when the entity has no `CreatedAt`) and the `, <id> ASC` pagination tiebreak/comma-join that
-  wrap every sort. Every column name across all of it comes from
-  `db.EntityMaintenance.GetDbColumnName`/`GetTableName`, never a hardcoded string.
-  The third is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
+  The second is the migration lock (`src/Struo.Infrastructure/Migrations/MigrationLockSql.cs`): one
   advisory-lock acquire command and one release command per backend (PostgreSQL
   `pg_try_advisory_lock`, MySQL `GET_LOCK`, SQL Server `sp_getapplock`; SQLite and Oracle take no
   lock), parameterised, with no request input.
-  The fourth is `IndexCatalog`'s read-only index queries
+  The third is `IndexCatalog`'s read-only index queries
   (`src/Struo.Infrastructure/Migrations/Schema/IndexCatalog.cs`), used by `migrate:check` and
   `SchemaChecker.Check`: one catalog query per backend (PostgreSQL, SQL Server, MySQL/MariaDB, SQLite),
   parameterised with `@table`, with no request input and no writes. Oracle has no index query, so the
   index check is skipped with a warning.
+  Sorting assembles no SQL text: `OrderByExpressionBuilder` returns typed sort-key lambdas
+  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`, `SortExpressionFactory.cs`) that
+  `SqlSugarItemRepository.RunQueryAsync` chains as typed `OrderBy` calls. A translatable-field sort is a
+  correlated `SqlFunc.Subqueryable` over the translation sidecar with the locale bound as a SQL parameter,
+  and a to-one relation-path sort is one nested typed subquery per hop.
   Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the three exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
 - **Schema changes are FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).

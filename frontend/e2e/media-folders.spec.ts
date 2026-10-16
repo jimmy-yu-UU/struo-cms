@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from './credentials'
 
 // Media-library folders live gate. Covers folder browsing, filename -> Title autofill (already
 // implemented server-side by Struo.Infrastructure.Files.FileService.UploadAsync), that a detail-
@@ -12,7 +13,7 @@ import { type Page } from '@playwright/test'
 // See media.spec.ts for the shared upload/login/mdField conventions this spec reuses verbatim.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 const API = process.env.E2E_API ?? 'http://localhost:5221'
 

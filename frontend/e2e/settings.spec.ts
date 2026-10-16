@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from './credentials'
 
 // Live gate: Site Settings branding editor (/settings, super-admin only) — save-then-persist,
 // and the same unsaved-changes leave guard pattern as ItemFormView
@@ -11,7 +12,7 @@ import { type Page } from '@playwright/test'
 // spec never leaks a stamped brand name into the shared environment.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
 const API = process.env.E2E_API ?? 'http://localhost:5221'

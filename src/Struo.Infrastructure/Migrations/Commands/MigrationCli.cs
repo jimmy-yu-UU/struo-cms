@@ -84,7 +84,7 @@ public static class MigrationCli
             return await RunHostCommandAsync(command, services, stdout, stderr, ct);
         }
         catch (Exception ex) when (ex is MigrationFailedException or MigrationLockTimeoutException or MigrationBaselineRefusedException
-            or OptionsValidationException)
+            or BootstrapPasswordRefusedException or OptionsValidationException)
         {
             await stderr.WriteLineAsync($"{command} failed: {ex.Message}");
             return Failure;

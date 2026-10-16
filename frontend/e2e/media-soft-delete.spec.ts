@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { type Page } from '@playwright/test'
+import { e2ePassword } from './credentials'
 
 // File soft-delete live gate. Covers the critical path this feature adds to the media
 // library: trashing a file from its DETAIL DIALOG (the active-view path, distinct from the
@@ -11,7 +12,7 @@ import { type Page } from '@playwright/test'
 // See media.spec.ts for the shared upload/login/PNG-fixture conventions this spec reuses verbatim.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'admin'
+const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
 // See sample/conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
 const API = process.env.E2E_API ?? 'http://localhost:5221'

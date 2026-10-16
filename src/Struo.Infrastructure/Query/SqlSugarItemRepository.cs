@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/SqlSugarItemRepository.cs
+using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -42,7 +43,7 @@ public sealed class SqlSugarItemRepository(
     // take a second, separate `new FilterTranslator(...)` rather than the `filters` field below it
     // for the same CS0236 reason; FilterTranslator holds no state beyond its constructor arguments,
     // so the second instance behaves identically to sharing the first.
-    private readonly OrderByExpressionBuilder orderByBuilder = new(db, registry, graph, metadata, options);
+    private readonly OrderByExpressionBuilder orderByBuilder = new(registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly FilterTranslator filters = new(db, graph, metadata, registry, options);
     private readonly WhereInQueries whereIn = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
@@ -54,9 +55,9 @@ public sealed class SqlSugarItemRepository(
         new FilterTranslator(db, graph, metadata, registry, options), new TranslationStore(db, new TransactionRunner(db)));
     private readonly AggregateQueries aggregates = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
 
-    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, List<IConditionalModel>, string?, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryDispatcher =
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, List<IConditionalModel>, IReadOnlyList<OrderTerm>, int, int, DeletedFilter, CancellationToken, Task<QueryResult>>> RunQueryDispatcher =
         new(typeof(SqlSugarItemRepository), nameof(RunQueryAsync),
-            [typeof(List<IConditionalModel>), typeof(string), typeof(int), typeof(int), typeof(DeletedFilter), typeof(CancellationToken)]);
+            [typeof(List<IConditionalModel>), typeof(IReadOnlyList<OrderTerm>), typeof(int), typeof(int), typeof(DeletedFilter), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdDispatcher =
         new(typeof(SqlSugarItemRepository), nameof(GetByIdGenericAsync), [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)]);
@@ -81,7 +82,7 @@ public sealed class SqlSugarItemRepository(
     }
 
     private async Task<QueryResult> RunQueryAsync<T>(
-        List<IConditionalModel> conditionals, string? orderBy, int limit, int offset,
+        List<IConditionalModel> conditionals, IReadOnlyList<OrderTerm> orderBy, int limit, int offset,
         DeletedFilter deleted, CancellationToken ct)
         where T : class, new()
     {
@@ -90,7 +91,8 @@ public sealed class SqlSugarItemRepository(
         // window.
         var total = await DeletedScope.Root<T>(db, conditionals, deleted).CountAsync(ct);
         var queryable = DeletedScope.Root<T>(db, conditionals, deleted);
-        if (!string.IsNullOrWhiteSpace(orderBy)) queryable = queryable.OrderBy(orderBy);
+        foreach (var term in orderBy)
+            queryable = queryable.OrderBy((Expression<Func<T, object>>)term.Selector, term.Direction);
         var rows = await queryable.Skip(offset).Take(limit).ToListAsync(ct);
         return new QueryResult(rows.Cast<object>().ToList(), total);
     }

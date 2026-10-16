@@ -491,11 +491,10 @@ none is ever surfaced client-side.
   soft-delete filter, regardless of the outer request's own `?deleted=`. This translator
   hand-assembles exactly four SQL string forms and nothing else, every other fragment of SQL text
   coming from SqlSugar's own `ToSql()`, never a hand-built dialect-specific string — see
-  `AGENTS.md`, "Invariants", for the full enumeration (its first raw-SQL exception). Sort is the
-  other place SqlSugar's typed surface runs out: the string passed to the one
-  `queryable.OrderBy(string)` call (`SqlSugarItemRepository.RunQueryAsync`) is assembled by
-  `OrderByExpressionBuilder` (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) —
-  `AGENTS.md`'s second raw-SQL exception. Every filter value `ConditionalModelTranslator` renders
+  `AGENTS.md`, "Invariants", for the full enumeration (its first raw-SQL exception). Sort assembles no SQL text: `OrderByExpressionBuilder`
+  (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) returns typed sort-key lambdas and
+  `SqlSugarItemRepository.RunQueryAsync` chains them as typed `OrderBy` calls, binding a translatable
+  sort's locale as a SQL parameter. Every filter value `ConditionalModelTranslator` renders
   into a `ConditionalModel` (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and
   `Program.cs` sets the host process's own default culture to invariant at startup — needed
   because SqlSugar re-parses that same rendered value back with `CultureInfo.CurrentCulture`

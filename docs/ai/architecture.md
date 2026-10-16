@@ -184,7 +184,8 @@ throwing `PermissionDeniedException` on denial. The sole shippable `IPermissionS
 `ICurrentPermissions.Current` (`src/Struo.Application/Security/ICurrentPermissions.cs`), which only
 exposes that read-only `Current` getter; writing a new snapshot goes through the separate
 `ICurrentPermissionsWriter.Set`, and the only caller of it is `PermissionResolutionMiddleware`
-(`src/Struo.Api/Auth/PermissionResolutionMiddleware.cs`). `DataServiceCollectionExtensions.AddStruoData`
+(`src/Struo.Api/Auth/PermissionResolutionMiddleware.cs`), which every request passes through except
+paths under `/health`, so the health probes never read the role store. `DataServiceCollectionExtensions.AddStruoData`
 resolves both interfaces from the same factory-forwarded scoped `CurrentPermissions` instance, the same
 pattern used for `IItemUseCases` below — otherwise the middleware's write and a controller's read would
 land on two different objects. A fork that substitutes its own permissions holder must replace all
@@ -268,8 +269,8 @@ facade's own `filters` field (a field initializer cannot reference another insta
 none of these types holds state beyond its constructor arguments, so the extra instances behave
 identically to sharing one:
 
-- `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds `OrderBy` expressions for the
-  query DSL; the only collaborator registered as a scoped DI service. Not a delegation target —
+- `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds typed `OrderBy` sort-key lambdas (`OrderTerm`) for the
+  query DSL, with no SQL text; the only collaborator registered as a scoped DI service. Not a delegation target —
   used inline in `QueryAsync`.
 - `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
   DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL
@@ -305,8 +306,8 @@ does (dispatching on two runtime types at once — here, entity type and the fac
 not just one), rather than being the only collaborator that needs it. `AggregateQueries` uses
 `GenericDispatcher` alone (dispatch on entity type only, since its projection carries every requested
 op/field in one row regardless of their individual value types). Not `TransactionRunner` (plain C#
-generics) or `OrderByExpressionBuilder` (a single reflection `GetProperty` lookup, no per-entity-type
-dispatch).
+generics) or `OrderByExpressionBuilder` (it builds expression trees from property names through
+`SortExpressionFactory`, with no per-entity-type dispatch).
 
 ### `IRelationExpander`
 

@@ -265,7 +265,10 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();
-    app.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>();
+    // Health probes never touch the role/permission store, so a database blip cannot fail liveness.
+    app.UseWhen(
+        ctx => !ctx.Request.Path.StartsWithSegments("/health"),
+        branch => branch.UseMiddleware<Struo.Api.Auth.PermissionResolutionMiddleware>());
     app.UseRateLimiter();
 
     app.MapControllers();
@@ -303,11 +306,6 @@ try
             sp.GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>().CollectForInitTables(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
             CancellationToken.None);
-
-        BootstrapAdminPasswordWarning.LogIfDefault(
-            app.Environment.IsProduction(),
-            builder.Configuration["Auth:BootstrapAdmin:Password"],
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }
 
     await app.RunAsync();
