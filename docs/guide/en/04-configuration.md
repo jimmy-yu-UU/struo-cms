@@ -345,9 +345,8 @@ SSO sign-in is unaffected.
 `PermitLimit` run at once, up to `QueueLimit` more wait for a slot, and the rest get 429. It bounds
 Argon2id CPU and memory whatever the source IPs or accounts. Each replica enforces its own cap.
 
-The count isn't an atomic read-modify-write, so in rare cases two simultaneous failures are recorded
-as one. The default is looser than the IP limit, with a long 900-second window. It's aimed at
-sustained password spraying against a single account.
+The default is looser than the IP limit, with a long 900-second window. It's aimed at sustained
+password spraying against a single account.
 
 `Password:*` protects only `PUT /api/users/{id}/password`, bucketed by the caller's own user id,
 falling back to IP only when no user id is available — since the endpoint requires login, that

@@ -67,6 +67,9 @@
 
 ### Upgrade notes
 
+The Redis login throttle counts under new keys, so each account's failed-login count starts from zero
+once at upgrade.
+
 The language-code format rule checks every row of the language collection on each write to it,
 including a delete. A malformed code that is already stored blocks every write to the collection
 until it is corrected, and with two or more malformed rows the API can neither fix nor delete them.

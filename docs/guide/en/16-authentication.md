@@ -200,8 +200,8 @@ environment's `article` collection doesn't grant anonymous read — the authoriz
 ## Login rate limiting
 
 Every anonymous login attempt, whatever the outcome, runs one full Argon2id verification; left
-unchecked, brute-forcing passwords doubles as a CPU-exhaustion attack. Two independent layers of
-defense guard against it, and neither can substitute for the other.
+unchecked, brute-forcing passwords doubles as a CPU-exhaustion attack. Three independent layers of
+defense guard against it, and none can substitute for the others.
 
 Per-account throttling (`RateLimiting:LoginAccount`) is on by default, partitioning by the account
 in the request body (keyed on a hash of the email, never the plain text). The attempt is counted
@@ -230,8 +230,8 @@ only the login endpoint — logout, `me`, and the OIDC challenge are all unaffec
 Why it's off by default, and when it's appropriate to turn on, is in the `RateLimiting` section of
 [Chapter 4: Configuration Reference](04-configuration.md).
 
-Both layers return `429` when they block, with the envelope code always `TOO_MANY_REQUESTS` and
-`Retry-After` always present, so the caller can't tell the two apart. The transcript below sends
+Every layer returns `429` when it blocks, with the envelope code always `TOO_MANY_REQUESTS` and
+`Retry-After` always present, so the caller can't tell them apart. The transcript below sends
 ten failed logins in a row against the same never-used email, and the eleventh trips the
 throttle — the response shown is one more request sent after the throttle engaged:
 

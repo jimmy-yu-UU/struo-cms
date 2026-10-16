@@ -99,6 +99,28 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
     }
 
     [Fact]
+    public async Task Distributed_cache_entry_under_the_old_key_name_does_not_break_login()
+    {
+        if (ConnectionString is null) return;
+        // RedisCache stores entries as a HASH under login-throttle:<hash>; INCR on that name would be WRONGTYPE.
+        using var throttle = new RedisLoginAttemptThrottle(ConnectionString, Options.Create(
+            new LoginAccountRateLimitOptions { Enabled = true, PermitLimit = 10, WindowSeconds = 60 }));
+        var email = Email("old-key");
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(email)));
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        var db = mux.GetDatabase();
+        await db.HashSetAsync("login-throttle:" + hash, "data", "x");
+        try
+        {
+            (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
+        }
+        finally
+        {
+            await db.KeyDeleteAsync(["login-throttle:" + hash, "login-attempts:" + hash]);
+        }
+    }
+
+    [Fact]
     public async Task Key_without_ttl_self_heals()
     {
         if (ConnectionString is null) return;

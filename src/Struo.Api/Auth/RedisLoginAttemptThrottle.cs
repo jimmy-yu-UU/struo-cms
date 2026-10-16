@@ -20,7 +20,9 @@ namespace Struo.Api.Auth;
 /// </summary>
 public sealed class RedisLoginAttemptThrottle : ILoginAttemptThrottle, IDisposable
 {
-    private const string DefaultKeyPrefix = "login-throttle:";
+    // Distinct from the distributed-cache throttle's "login-throttle:" keys, which RedisCache stores as
+    // hashes that INCR cannot touch.
+    private const string DefaultKeyPrefix = "login-attempts:";
 
     private readonly IOptions<LoginAccountRateLimitOptions> _options;
     private readonly string _keyPrefix;
