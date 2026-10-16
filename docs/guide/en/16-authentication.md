@@ -168,12 +168,12 @@ one write per token per minute, so a busy integration doesn't turn every call in
 the account itself is deactivated, authentication fails regardless of whether the token is
 otherwise still valid, and this flag is re-checked on every request.
 
-A token belongs to one user, and each user has at most one: issuing a token for a user who already
-has one replaces it, and a super-admin can issue or revoke a token for any user. Changing a password
-revokes that user's sessions but never the token, so a password change does not cut off an
-integration that authenticates with a token. If a token may have leaked, revoke it, or regenerate it
-to replace it, rather than relying on a password change. The last-used time recorded on every
-authenticated request shows which tokens have gone unused and are worth revoking.
+Each user has at most one token, and only a super-admin can issue or revoke one, for any user.
+Changing a password revokes that user's sessions but never the token, so a password change does not
+cut off an integration that authenticates with a token. If a token may have leaked, revoke it or
+issue a new one; do not rely on a password change. The last-used time is written only by
+bearer-authenticated requests, at most once a minute, and lives in the database alone: the API and the
+admin UI do not show it, so finding stale tokens means reading it from the users data directly.
 
 Bearer counts on every endpoint, including the read endpoints that declare no scheme — it
 isn't only write actions that recognize it; a bearer caller's permissions are its own role's
