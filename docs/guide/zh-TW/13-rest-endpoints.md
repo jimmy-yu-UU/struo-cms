@@ -221,7 +221,7 @@ HTTP_STATUS:200
 
 | 路由 | 權限／閘道 | 用途 |
 |---|---|---|
-| `POST /graphql` | 匿名 | GraphQL 查詢與 mutation 入口 |
+| `POST /graphql` | 查詢匿名，mutation 需登入 | GraphQL 查詢與 mutation 入口 |
 | `GET /graphql?sdl` | 依 `GraphQl:ExposeSchema` | 讀目前的 SDL 文字，預設僅 Development |
 | `GET /health/live` | 匿名 | 純文字健康探測 |
 | `GET /health/ready` | 匿名 | 純文字就緒探測 |

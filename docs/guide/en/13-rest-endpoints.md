@@ -253,7 +253,7 @@ phrasings the legend doesn't define:
 
 | Route | Permission/gate | Purpose |
 |---|---|---|
-| `POST /graphql` | Anonymous | GraphQL query and mutation entry point |
+| `POST /graphql` | Anonymous for queries, sign-in for mutations | GraphQL query and mutation entry point |
 | `GET /graphql?sdl` | Gated by `GraphQl:ExposeSchema` | Read the current SDL text, Development-only by default |
 | `GET /health/live` | Anonymous | Plain-text liveness probe |
 | `GET /health/ready` | Anonymous | Plain-text readiness probe |

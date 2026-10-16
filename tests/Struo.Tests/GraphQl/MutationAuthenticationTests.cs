@@ -5,6 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Infrastructure.Identity;
+using Struo.Sample.Blog;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -19,6 +20,7 @@ namespace Struo.Tests.GraphQl;
 public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLifetime
 {
     private const string Collection = "category";
+    private const string CreatedName = "signed-in";
     private Guid _publicRoleId;
 
     // The shared test database seeds `public` with read on this collection; the tests add write.
@@ -33,12 +35,14 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
     public async Task DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();
-        await SetPublicWriteAsync(scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(), canWrite: false);
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        await SetPublicWriteAsync(db, canWrite: false);
+        await db.Deleteable<Category>().Where(c => c.Name == CreatedName).ExecuteCommandAsync();
     }
 
     private Task SetPublicWriteAsync(ISqlSugarClient db, bool canWrite) =>
         db.Updateable<Permission>()
-            .SetColumns(p => p.CanWrite == canWrite)
+            .SetColumns(p => new Permission { CanWrite = canWrite, CanDelete = canWrite })
             .Where(p => p.RoleId == _publicRoleId && p.Collection == Collection)
             .ExecuteCommandAsync();
 
@@ -72,11 +76,11 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
         var (client, _) = await factory.CreateRolelessClientAsync();
 
         var root = await PostAsync(client,
-            "mutation { createCategory(input: { name: \"signed-in\" }) { id name } }");
+            $"mutation {{ createCategory(input: {{ name: \"{CreatedName}\" }}) {{ id name }} }}");
 
         root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
         root.GetProperty("data").GetProperty("createCategory").GetProperty("name").GetString()
-            .Should().Be("signed-in");
+            .Should().Be(CreatedName);
     }
 
     [Fact]
