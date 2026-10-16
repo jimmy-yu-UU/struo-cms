@@ -44,6 +44,14 @@
   `UNAUTHORIZED` even when the `public` role holds a write grant on the collection; queries are
   unchanged. This matches the REST write endpoints, which already require sign-in. A client that wrote
   through GraphQL without a session cookie or bearer token must sign in first.
+- User emails are stored trimmed and lowercase, on every write path: `POST /api/users`, create and update
+  of the `user` collection through the items API and GraphQL, accounts created by OIDC sign-in, and the
+  bootstrap admin. An email that matches another user's in any letter case is refused with `409`
+  `CONFLICT`. Sign-in still matches in any letter case, so rows stored with mixed case keep working, and
+  no existing row is rewritten. A client that expects the casing it sent to come back now receives
+  lowercase. Before upgrading, an operator can list pre-existing case-duplicates with
+  `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;` (adjust the
+  table name to your `Database:TablePrefix`) and merge or delete the extra rows.
 :::
 
 ### Security

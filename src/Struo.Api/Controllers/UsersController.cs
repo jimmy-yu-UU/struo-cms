@@ -37,11 +37,12 @@ public sealed class UsersController(
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Email is required.");
         if (PasswordPolicy.Validate(body.Password, passwordPolicy.Value) is { } policyError)
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, policyError);
-        if (await store.FindByEmailAsync(body.Email, ct) is not null)
+        var email = EmailAddress.Normalize(body.Email);
+        if (await store.FindByEmailAsync(email, ct) is not null)
             return ApiResults.Fail(StatusCodes.Status409Conflict, ErrorCodes.Conflict, "Email already in use.");
 
-        var id = await accounts.CreateAsync(body.Email, hasher.Hash(body.Password), body.Name, ct);
-        return Created($"/api/items/user/{id}", new { id, email = body.Email, name = body.Name });
+        var id = await accounts.CreateAsync(email, hasher.Hash(body.Password), body.Name, ct);
+        return Created($"/api/items/user/{id}", new { id, email, name = body.Name });
     }
 
     [HttpPut("{id:guid}/password")]

@@ -14,7 +14,7 @@ public sealed class SqlSugarUserAccountStore(ISqlSugarClient db) : IUserAccountS
         // UpdatedBy here without help — unlike the column-scoped updates below.
         await db.Insertable(new User
         {
-            Id = id, Email = email, Password = passwordHash, Name = name, IsActive = true,
+            Id = id, Email = EmailAddress.Normalize(email), Password = passwordHash, Name = name, IsActive = true,
         }).ExecuteCommandAsync(ct);
         return id;
     }

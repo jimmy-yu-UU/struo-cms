@@ -9,7 +9,7 @@ public sealed class SqlSugarExternalUserStore(ISqlSugarClient db) : IExternalUse
 {
     public async Task<ExternalUserMatch?> FindByEmailAsync(string email, CancellationToken ct = default)
     {
-        var lowered = email.ToLowerInvariant();
+        var lowered = EmailAddress.Normalize(email);
         var u = await db.Queryable<User>()
             .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);
@@ -21,7 +21,7 @@ public sealed class SqlSugarExternalUserStore(ISqlSugarClient db) : IExternalUse
         var id = Guid.CreateVersion7();
         await db.Insertable(new User
         {
-            Id = id, Email = email, Name = name, Password = "", IsActive = true, AccessToken = null
+            Id = id, Email = EmailAddress.Normalize(email), Name = name, Password = "", IsActive = true, AccessToken = null
         }).ExecuteCommandAsync(ct);
         return id;
     }

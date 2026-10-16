@@ -34,6 +34,12 @@
 - 每個 GraphQL mutation 都需要已登入的呼叫端。就算 `public` 角色在該集合上有寫入授權，匿名 mutation 也會被以
   `UNAUTHORIZED` 拒絕；查詢不受影響。這與 REST 的寫入端點一致，那邊本來就要求登入。原本不帶 session cookie
   或 bearer token 就透過 GraphQL 寫入的用戶端，必須先登入。
+- 使用者 email 在每條寫入路徑上都以去除前後空白並轉成小寫的形式儲存：`POST /api/users`、透過 items API 與
+  GraphQL 對 `user` 集合的建立與更新、OIDC 登入建立的帳號，以及 bootstrap 管理員。與另一位使用者的 email
+  只差大小寫的值，會被以 `409` `CONFLICT` 拒絕。登入仍然不分大小寫比對，所以以大小寫混合儲存的資料列照常
+  可用，也不會改寫任何既有資料列。期待讀回自己送出的大小寫的用戶端，現在收到的是小寫。升級前，維運人員可用
+  `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;`
+  列出既有的大小寫重複（資料表名稱依 `Database:TablePrefix` 調整），再合併或刪除多餘的資料列。
 :::
 
 ### 安全性
