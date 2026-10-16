@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
@@ -181,5 +182,47 @@ public class SessionFixationTests(ApiFactory factory)
         await invoke(ctx);
 
         SessionRotation.PresentedCookie(ctx).Should().BeNull();
+    }
+
+    private sealed class FixedExternalLogin(Guid userId) : IExternalLoginService
+    {
+        public Task<ExternalLoginResult> ResolveOrProvisionAsync(
+            ExternalIdentity identity, ExternalLoginPolicy policy, CancellationToken ct = default) =>
+            Task.FromResult(ExternalLoginResult.Ok(userId, false));
+    }
+
+    // Runs the callback request through the real middleware, then the production OnTokenValidated logic.
+    private async Task<ClaimsPrincipal?> OidcCallbackAsync(TestUser user, string? presentedCookie)
+    {
+        var oidc = new OidcOptions { Enabled = true, CallbackPath = "/signin-oidc" };
+        var services = new ServiceCollection()
+            .AddSingleton<IExternalLoginService>(new FixedExternalLogin(user.Id))
+            .AddSingleton(Options.Create(oidc))
+            .AddSingleton(factory.Services.GetRequiredService<SessionRotation>())
+            .BuildServiceProvider();
+        var ctx = Request("GET", "/signin-oidc", $"{AuthSchemes.SessionCookieName}={presentedCookie}");
+        ctx.RequestServices = services;
+        await Middleware(oidc)(ctx);
+        return (await OidcWiring.ResolveLocalPrincipalAsync(ctx, new ClaimsPrincipal(new ClaimsIdentity()))).Principal;
+    }
+
+    [Fact]
+    public async Task Oidc_callback_over_existing_session_revokes_the_presented_session()
+    {
+        var client = NewClient();
+        var userA = await SeedUserAsync();
+        var userB = await SeedUserAsync();
+        var cookieA = SessionCookieFrom(await LoginAsync(client, userA, null));
+        using var scope = factory.Services.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
+        (await sessions.ListTicketKeysForUserAsync(userA.Id)).Should().HaveCount(1);
+
+        var principal = await OidcCallbackAsync(userB, cookieA);
+
+        principal!.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be(userB.Id.ToString());
+        var presented = await MeAsync(client, cookieA);
+        presented.Id.Should().NotBe(userB.Id.ToString());
+        presented.Status.Should().Be(HttpStatusCode.Unauthorized);
+        (await sessions.ListTicketKeysForUserAsync(userA.Id)).Should().BeEmpty();
     }
 }
