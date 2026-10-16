@@ -61,8 +61,8 @@ public class ItemsControllerSeamTests
         public Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyDictionary<string, object?>?>(null);
 
-        public Task<IReadOnlyList<RevisionInfo>> ListRevisionsAsync(string collection, string id, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RevisionInfo>>([]);
+        public Task<IReadOnlyList<RevisionInfo>?> ListRevisionsAsync(string collection, string id, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RevisionInfo>?>([]);
 
         public Task<RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct = default)
             => Task.FromResult<RevisionRecord?>(null);

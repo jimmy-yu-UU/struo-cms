@@ -27,6 +27,10 @@
   `consumers` is refused at startup unless `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` is set.
   The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
   switch to a single-tenant authority.
+- `GET /api/items/{collection}/{id}/revisions` returns 404 for an unknown item id; it returned an empty
+  array. The revisions of a trashed item (list and single revision, REST and GraphQL) need delete
+  permission on the collection; a caller without it gets 404 on REST and an empty list or `null` on
+  GraphQL.
 :::
 
 ### Security

@@ -19,7 +19,7 @@ public interface IGraphQlDataSource
     Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct);
-    Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(string collection, string id, CancellationToken ct);
+    Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>?> ListRevisionsAsync(string collection, string id, CancellationToken ct);
     Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct);
     Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, CancellationToken ct);
 }
@@ -44,7 +44,7 @@ public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDa
     public Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct)
         => items.RestoreAsync(collection, id, ct);
 
-    public Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(string collection, string id, CancellationToken ct)
+    public Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>?> ListRevisionsAsync(string collection, string id, CancellationToken ct)
         => items.ListRevisionsAsync(collection, id, ct);
 
     public Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct)

@@ -42,8 +42,9 @@ public interface IItemUseCases
     Task<IReadOnlyDictionary<string, object?>?> RestoreAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
-    /// non-revisioned collection.</summary>
-    Task<IReadOnlyList<RevisionInfo>> ListRevisionsAsync(string collection, string id, CancellationToken ct = default);
+    /// non-revisioned collection; null (→ 404) for an unknown item or a trashed item the caller lacks
+    /// delete permission to see.</summary>
+    Task<IReadOnlyList<RevisionInfo>?> ListRevisionsAsync(string collection, string id, CancellationToken ct = default);
 
     /// <summary>A single revision including its (hidden-field-redacted) snapshot. Requires read
     /// permission. Null for an unknown revision or a non-revisioned collection (→ 404).</summary>

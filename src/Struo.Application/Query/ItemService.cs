@@ -527,14 +527,25 @@ public sealed class ItemService(
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
-    /// non-revisioned collection.</summary>
-    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(
+    /// non-revisioned collection; null (→ 404) for an unknown item or a trashed item the caller lacks
+    /// delete permission to see.</summary>
+    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>?> ListRevisionsAsync(
         string collection, string id, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return [];
+        if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         return await revisions.ListAsync(collection, id, ct);
+    }
+
+    /// <summary>True when the item exists and is either live or trashed with the caller holding
+    /// delete permission. Hides trashed items' history from read-only callers as not-found.</summary>
+    private async Task<bool> IsItemVisibleForRevisionsAsync(string collection, string id, CancellationToken ct)
+    {
+        var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (entity is null) return false;
+        return entity is not ISoftDeletable { DeletedAt: not null } || permissions.CanDelete(collection);
     }
 
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
@@ -552,6 +563,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return null;
+        if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
         return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };

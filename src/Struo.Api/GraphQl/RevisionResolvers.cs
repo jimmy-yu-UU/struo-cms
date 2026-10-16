@@ -70,6 +70,7 @@ internal static class RevisionResolvers
     {
         var id = ctx.ArgumentValue<string>("id");
         var list = await ctx.Service<IGraphQlDataSource>().ListRevisionsAsync(collection, id, ctx.RequestAborted);
+        if (list is null) return new List<IReadOnlyDictionary<string, object?>>();   // hidden/unknown item: empty, like a non-revisioned collection
         return list.Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
         {
             [RevisionNumberKey] = r.RevisionNumber,

@@ -56,7 +56,8 @@ delegated collection grant doesn't count.
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md); for a collection with revisions
-off, listing revisions returns an empty array, not a 404.
+off, listing revisions returns an empty array, not a 404; an unknown item id, or a trashed item the
+caller lacks delete permission for, is a 404.
 
 The example below uses the Blog sample's `article` collection (revisions on) to show restore
 returning `200` rather than `204`; the ids that appear are specific to this batch of test data, and

@@ -22,6 +22,9 @@
 - 已啟用的 `Oidc` 區段，若 `Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段，
   除非設定了 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則啟動時會被拒絕，錯誤訊息點名這兩個鍵。
   使用多租用戶 authority 又沒有設定限制的 fork，必須設定其中一個，或改用單一 tenant 的 authority。
+- `GET /api/items/{collection}/{id}/revisions` 對未知的項目 id 回 404，原本回空陣列。垃圾桶中項目的版本紀錄
+  （列表與單筆，REST 與 GraphQL）需要該集合的刪除授權；沒有的呼叫端在 REST 收到 404，在 GraphQL 收到空清單
+  或 `null`。
 :::
 
 ### 安全性
