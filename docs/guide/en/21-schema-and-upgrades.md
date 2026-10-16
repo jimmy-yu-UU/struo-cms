@@ -179,19 +179,20 @@ Afterwards, read the SQL with `migrate:preview`, then run `migrate` and `migrate
 disposable database of the backend you actually use; DDL that SQLite accepts may not be accepted
 elsewhere. Your fork's own tests can call `SchemaChecker.Check` and assert there are no errors.
 
-## The four raw-SQL exceptions in core
+## The three raw-SQL exceptions in core
 
 The invariant that all database access goes through SqlSugar (see
-[Chapter 2: Architecture](02-architecture.md)) has four deliberate exceptions:
+[Chapter 2: Architecture](02-architecture.md)) has three deliberate exceptions:
 
 - **The relation-filter subquery wrapper**: four fixed forms assembled around SQL that SqlSugar
   generated.
-- **`OrderByExpressionBuilder`'s `ORDER BY` text**: three sort forms — column, relation path and
-  translated field.
 - **The migration lock, `MigrationLockSql`**: one parameterised acquire and release statement per
   backend.
 - **`IndexCatalog`'s index queries**: the read-only catalog queries `migrate:check` uses to read
   indexes; Oracle has none, so the index check is skipped with a warning.
+
+Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
+expressions, and a translated-field sort binds the language code as a SQL parameter.
 
 ## Upgrading core
 

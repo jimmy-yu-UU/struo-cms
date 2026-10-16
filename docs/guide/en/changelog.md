@@ -14,7 +14,52 @@
   build a `GraphQlQueryArgs` first.
 - `SchemaTypeMapper.TagItemInputName` is a constant, not a method. Change `TagItemInputName()` to
   `TagItemInputName`.
+- The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
+  `appsettings.json` and `STRUO_ADMIN_PASSWORD` defaults to empty in `docker-compose.yml`. When the
+  password is empty, the run that creates the admin generates a random password of at least 24
+  characters and logs it once as a Warning. A configured password that fails `Auth:Password` or equals `admin` in any letter case
+  is refused in every environment: `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start fail
+  with an error naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded, until
+  the value is fixed or removed. The Production-only default-password warning is gone. The Playwright suites read the password from
+  `E2E_PASSWORD`, which is required. A fork that relied on `admin@admin.com` / `admin` must set a
+  password or read the generated one from the `migrate` output.
+- An enabled `Oidc` section whose `Authority` has a path segment of `common`, `organizations` or
+  `consumers` is refused at startup unless `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` is set.
+  The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
+  switch to a single-tenant authority.
 :::
+
+### Security
+
+- On MySQL and MariaDB, a language code could inject SQL through a sort on a translatable field. A
+  language written with a `"Code"` JSON key instead of `code` skipped the code-format check, and the
+  sort embedded the locale in the ORDER BY text as a quote-doubled string literal, which those
+  backends do not treat as safe. Sorting is now built from typed SqlSugar expressions and binds the
+  locale as a SQL parameter, so no SQL text is assembled for any sort. The code-format rule
+  (`[A-Za-z0-9_-]`, 1 to 35 characters) now runs on the stored language row inside the write
+  transaction, whatever the JSON key casing.
+
+### Fixed
+
+- `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
+  the role store cannot make the liveness probe return 500 and restart healthy instances.
+
+### Upgrade notes
+
+The language-code format rule checks every row of the language collection on each write to it,
+including a delete. A malformed code that is already stored blocks every write to the collection
+until it is corrected, and with two or more malformed rows the API can neither fix nor delete them.
+Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and correct or delete the
+malformed rows directly in the database before upgrading.
+
+If OIDC is enabled and `Oidc:Authority` has a path segment `common`, `organizations` or `consumers`
+(or the consumers tenant GUID), set `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` before
+upgrading, or the host refuses to start.
+
+If your `.env` was copied from an earlier `.env.example`, it sets `STRUO_ADMIN_PASSWORD=admin`. Clear
+it, or set a value that meets `Auth:Password`, before upgrading: the compose `api` service runs
+`Database:MigrateOnStartup` and refuses to start with that value, even on a database that is already
+seeded.
 
 ## 0.10.0 — 2026-10-14
 

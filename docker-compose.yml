@@ -12,11 +12,12 @@
 # (STRUO_ADMIN_PORT / STRUO_API_PORT). Container and volume names carry the Compose project name
 # (the checkout's folder name), so stacks from different checkouts can run side by side as long
 # as their host ports differ. The first start migrates the database and seeds an admin account:
-# admin@admin.com / admin by default, overridable with STRUO_ADMIN_EMAIL / STRUO_ADMIN_PASSWORD.
+# admin@admin.com by default (STRUO_ADMIN_EMAIL). STRUO_ADMIN_PASSWORD is empty by default, so a
+# random password is generated and printed once in the api log: `docker compose logs api`.
 # The api service runs as Production, so the session cookie is Secure: login works on
 # http://localhost (browsers treat it as a secure context) but any other host name needs HTTPS
 # in front of the admin.
-# The database and MinIO credentials and the default admin account are for local development
+# The database and MinIO credentials are for local development
 # only — never reuse them anywhere else.
 #
 # Every published port binds to 127.0.0.1 by default, so only this machine reaches the services.
@@ -73,7 +74,7 @@ services:
       Database__MigrateOnStartup: "true"
       Redis__ConnectionString: redis:6379
       Auth__BootstrapAdmin__Email: ${STRUO_ADMIN_EMAIL:-admin@admin.com}
-      Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-admin}
+      Auth__BootstrapAdmin__Password: ${STRUO_ADMIN_PASSWORD:-}
     ports:
       - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_API_PORT:-8081}:8080"
     # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the

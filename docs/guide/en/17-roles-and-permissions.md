@@ -32,7 +32,8 @@ per-collection grant at all — it's a short-circuit for the whole check chain.
 A single request can involve several roles at once, so the permission actually applied isn't a
 lookup against one role — it's recomputed on every request.
 
-`PermissionResolutionMiddleware` runs this resolution after authentication. It first unions the
+`PermissionResolutionMiddleware` runs this resolution after authentication on every request except those
+under `/health`, so the health probes keep answering when the permission data cannot be read. It first unions the
 caller's held roles with the `public` role's grants. `public`'s grants are always added in, whether
 the caller is anonymous, holds no role, or already holds several — not only as a floor that applies
 when the role set happens to be empty.

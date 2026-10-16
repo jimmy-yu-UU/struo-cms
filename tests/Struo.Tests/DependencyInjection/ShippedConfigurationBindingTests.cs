@@ -243,14 +243,11 @@ public sealed class ShippedConfigurationBindingTests
     /// <c>Configuration["Auth:BootstrapAdmin:Email"]</c> and <c>[":Password"]</c> straight into
     /// <c>CoreSeedData.From</c>, so there is no binder to compare a bound object against. What makes it
     /// worth pinning anyway is the failure mode on the consuming side: <c>CoreSeedData.From</c>
-    /// creates no admin when either value is null or blank, so a shipped file whose keys have moved from
-    /// those literal paths seeds NO admin at all on a fresh install — nobody can log in, and nothing logs
-    /// an error.
+    /// creates no admin when the email is null or blank, so a shipped file whose keys have moved from
+    /// those literal paths seeds NO admin at all on a fresh install, and nothing logs an error.
     /// <para>
-    /// The password is additionally compared against <c>BootstrapAdminPasswordWarning.DefaultPassword</c>, the constant
-    /// the production default-password WARNING compares against. If those drift apart the warning
-    /// silently stops firing while the default account is still created — the exact combination a
-    /// production deployment must not be in.
+    /// The shipped password is empty: <c>CoreSeedData.From</c> generates one when it is blank, so no
+    /// fork ships a known credential.
     /// </para>
     /// <para>
     /// The literal paths below are spelled the way <c>CoreSeedData</c> spells them. That is the coupling under
@@ -267,9 +264,8 @@ public sealed class ShippedConfigurationBindingTests
         configuration["Auth:BootstrapAdmin:Email"].Should().NotBeNullOrWhiteSpace(
             "the core seed creates no admin when the email is null or blank, leaving a fresh install " +
             "with no account to log in with");
-        configuration["Auth:BootstrapAdmin:Password"].Should().Be(BootstrapAdminPasswordWarning.DefaultPassword,
-            "the shipped password is what the production startup WARNING compares against; if the two " +
-            "drift the warning silently stops firing");
+        configuration["Auth:BootstrapAdmin:Password"].Should().BeNullOrEmpty(
+            "the template ships no bootstrap password; a blank one is replaced by a generated password");
     }
 
     /// <summary>

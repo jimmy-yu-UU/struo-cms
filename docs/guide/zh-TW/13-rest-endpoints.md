@@ -170,7 +170,7 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 ```text
 $ POST /api/auth/login
 body:
-{"email":"admin@admin.com","password":"admin"}
+{"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
 Date: Fri, 11 Sep 2026 08:25:49 GMT

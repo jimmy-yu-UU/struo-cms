@@ -13,14 +13,17 @@ it expires, and how it's revoked. What a caller can do once authenticated is in
 
 The moment the `struo_users` table is created and still empty, the first administrator account is
 created along with it: active, its name fixed at `Administrator`, its email and password taken
-from `Auth:BootstrapAdmin`. This happens exactly once — changing the setting and restarting
-does nothing to an existing database.
+from `Auth:BootstrapAdmin`; an empty password is replaced by a generated one. This happens exactly
+once — changing the setting and restarting does nothing to an existing database.
 
-This default account is the one deliberate bypass of the password policy: its configured
-password is hashed and written directly, skipping the length check the next section covers,
-so the short default password in the settings file still works for that first login. The
-transcripts log in with that same default password. A production environment should change it
-immediately after the first login.
+The template ships no bootstrap password. When `Auth:BootstrapAdmin:Password` is empty, the seed
+generates a random password of at least 24 characters and logs it once, as a Warning, in the run
+that creates the account. A password you configure goes through the password policy the next
+section covers, and `admin` is refused in any letter case; while a weak value is configured,
+`migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
+names `Auth__BootstrapAdmin__Password`. The value only seeds the account, so it can be removed
+afterwards. The transcripts log in with a placeholder for that password. Change it after the first
+login.
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator
 to `admin` — the detail is left to
@@ -293,6 +296,12 @@ Matching on email equality alone is a deliberately accepted risk: without at lea
 layered on top, anyone whose email matches in any identity provider could in theory take over an
 existing password account. How to configure those guards for a production environment is in the
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
+
+One combination is refused at startup. When OIDC is enabled and `Oidc:Authority` has a path segment
+of `common`, `organizations` or `consumers` (an Entra multi-tenant endpoint, where anyone can create
+a tenant and present any email), the host fails to start unless `Oidc:AllowedTenantId` or
+`Oidc:AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
+A single-tenant authority, or OIDC disabled, is never affected.
 
 A failed external login returns `401` with `{ "error": { "message": "External login failed." } }`
 (`External login denied.` when the provider itself reports that the user declined) — this shape is

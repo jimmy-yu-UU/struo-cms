@@ -9,12 +9,14 @@
 ## 第一個管理者
 
 `struo_users` 資料表剛建好、裡面還是空的時候，會一併建立第一個管理者帳號：啟用狀態，名稱固定是
-`Administrator`，帳密取自 `Auth:BootstrapAdmin`。這件事只做一次，之後改設定再重開，對既有
+`Administrator`，帳密取自 `Auth:BootstrapAdmin`，密碼留空就改用隨機產生的。這件事只做一次，之後改設定再重開，對既有
 資料庫什麼都不會發生。
 
-這個預設帳號是密碼原則唯一刻意繞過的地方：它把設定裡的密碼直接雜湊寫入，不經過下一節的長度
-檢查——設定檔裡偏短的預設密碼因此依然能拿來第一次登入；示範裡登入用的就是這組預設密碼，正式
-環境第一次登入之後應該立刻換掉它。
+範本不附 bootstrap 密碼。`Auth:BootstrapAdmin:Password` 留空時，seed 會隨機產生至少 24 個字元的密碼，並在
+建立帳號的那次執行裡以 Warning 印出一次。自己設定的密碼會經過下一節的密碼原則，而且 `admin`（不分
+大小寫）會被拒絕；設定的值還是弱值時，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
+`Auth__BootstrapAdmin__Password`。這個值只用來植入帳號，之後可以移除。
+示範裡登入用的是這組密碼的佔位符。第一次登入之後就把它換掉。
 
 同一批種子資料也會建立 `admin`、`public` 兩個角色，並把第一個管理者加進 `admin`，細節留給
 [第 17 章：角色與權限](17-roles-and-permissions.md)。
@@ -224,6 +226,11 @@ HTTP_STATUS:429
 email 相等本身是刻意接受的風險：沒有另外加上至少一道關卡，任何身分提供者裡 email 對得上的人理論
 上都能接管一個既有的密碼帳號；正式環境該怎麼設定這幾道關卡，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
+
+有一種組合會在啟動時被拒絕：OIDC 已啟用，而且 `Oidc:Authority` 的路徑含有 `common`、`organizations`
+或 `consumers` 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
+`Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
+空白的值不算已設定。單一 tenant 的 authority，或 OIDC 停用時，都不受影響。
 
 外部登入失敗時，回應是 `401` 加上 `{ "error": { "message": "External login failed." } }`（提供者
 本身回報使用者拒絕時是 `External login denied.`），這個形狀是手寫的，不是每個端點共用的那個標準
