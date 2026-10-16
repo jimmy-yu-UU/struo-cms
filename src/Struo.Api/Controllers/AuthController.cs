@@ -12,7 +12,8 @@ namespace Struo.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(IAuthService auth, ILoginAttemptThrottle loginThrottle) : ControllerBase
+public sealed class AuthController(
+    IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation) : ControllerBase
 {
     public sealed record LoginRequest(string Email, string Password);
 
@@ -67,6 +68,7 @@ public sealed class AuthController(IAuthService auth, ILoginAttemptThrottle logi
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
         await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
+        await sessionRotation.RevokePresentedAsync(HttpContext);
         return Ok(new { id = result.UserId });
     }
 

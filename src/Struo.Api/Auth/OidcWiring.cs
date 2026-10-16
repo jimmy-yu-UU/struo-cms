@@ -75,6 +75,9 @@ public static class OidcWiring
                         return;
                     }
 
+                    await ctx.HttpContext.RequestServices.GetRequiredService<SessionRotation>()
+                        .RevokePresentedAsync(ctx.HttpContext);
+
                     // Replace the external principal with a local Cookie identity; the handler then
                     // signs THIS into the cookie SignInScheme (→ Redis ticket store).
                     var claims = new[] { new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()) };

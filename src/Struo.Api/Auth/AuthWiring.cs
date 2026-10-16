@@ -31,6 +31,7 @@ public static class AuthWiring
             services.AddDistributedMemoryCache();
 
         services.AddSingleton<DistributedCacheTicketStore>();
+        services.AddSingleton<SessionRotation>();
 
         // In production HTTPS is enforced at the reverse proxy; in development/test the test host
         // runs over HTTP so SecurePolicy.Always would prevent the cookie from being sent back.

@@ -262,6 +262,7 @@ try
     // AuthenticationFailureEnvelopeTests. It stays INSIDE Serilog request logging (so the handled 500
     // is what gets logged) and INSIDE CORS (so the error response still carries CORS headers).
     app.UseExceptionHandler();
+    app.UseMiddleware<Struo.Api.Auth.SessionRotationMiddleware>();
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseMiddleware<Struo.Api.Auth.CsrfProtectionMiddleware>();

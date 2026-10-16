@@ -104,8 +104,8 @@ public sealed class DistributedCacheTicketStore(
             var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
             var expiresAt = DateTime.UtcNow + AuthSchemes.SessionLifetime;
             // Re-attributes the row to this ticket's current user, so a renewal that carries a different
-            // principal than the row was last recorded under (e.g. logging in as B over a still-valid
-            // cookie for A) moves the row to B rather than leaving it attributed to A.
+            // principal than the row was last recorded under moves the row rather than leaving it
+            // attributed to the previous user.
             if (await sessions.RenewAsync(key, userId, expiresAt)) return;
 
             // No row matched: this ticket predates the index (or its StoreAsync couldn't attribute a

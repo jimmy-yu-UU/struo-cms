@@ -39,6 +39,11 @@
   (`[A-Za-z0-9_-]`, 1 to 35 characters) now runs on the stored language row inside the write
   transaction, whatever the JSON key casing.
 
+- A password or OIDC login that arrived with a valid session cookie signed the new user into that
+  cookie's existing session, so a cookie planted in a victim's browser became the victim's session. A
+  sign-in now always issues a fresh session, and the session the request presented is revoked once the
+  sign-in succeeds. A failed login leaves it untouched.
+
 ### Fixed
 
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
