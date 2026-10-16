@@ -120,8 +120,10 @@ Revisions are exposed as three REST endpoints:
 Listing and viewing need only the collection's ordinary read grant, and reverting needs its
 ordinary write grant — revisions have no permission tier of their own. For a collection with
 revisions off, the list returns an empty array rather than 404, while the single-revision view is
-404, and so is an unknown version number or item id. The list is always ordered by version
-number, not by creation time.
+404, and so is an unknown version number. On a revisioned collection, an unknown item id is 404 on both
+endpoints. The history of a trashed item needs delete permission on the collection as well; a caller
+without it gets 404, not 403, as if the item did not exist, and GraphQL returns an empty list or `null`.
+The list is always ordered by version number, not by creation time.
 
 GraphQL adds the matching three surfaces from the same flag, with no per-collection code needed: a
 revisions list field, a single-revision field, and a revert mutation, sharing one `Revision` type

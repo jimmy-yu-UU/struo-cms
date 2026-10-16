@@ -242,9 +242,9 @@ falls back to an in-memory cache and still passes — so a green result here is 
 is reachable.
 
 The API docs live at `/scalar`, and the raw OpenAPI spec at `/openapi/v1.json`; both routes are
-mapped only outside the Production environment; in Production they return 404. Either one exposes
-the entire API spec with no authentication, so if you deliberately enable them in Production, put
-your own authentication layer in front.
+mapped in the Development environment only; everywhere else, Production included, they return 404
+unless `OpenApi:Enabled` is `true`. Either one exposes the entire API spec with no authentication,
+so if you deliberately enable them outside Development, put your own authentication layer in front.
 
 ## What's next
 

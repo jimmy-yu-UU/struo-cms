@@ -62,23 +62,15 @@ public static class OidcWiring
             {
                 OnTokenValidated = async ctx =>
                 {
-                    var svc = ctx.HttpContext.RequestServices.GetRequiredService<IExternalLoginService>();
-                    var policy = ctx.HttpContext.RequestServices
-                        .GetRequiredService<IOptions<OidcOptions>>().Value.ToPolicy();
-
-                    var identity = OidcClaimsMapper.Map(ctx.Principal!);
-                    var result = await svc.ResolveOrProvisionAsync(identity, policy, ctx.HttpContext.RequestAborted);
-
-                    if (!result.Succeeded)
+                    var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
+                    if (principal is null)
                     {
-                        ctx.Fail($"external_login_{result.Failure}");
+                        ctx.Fail($"external_login_{failure}");
                         return;
                     }
 
-                    // Replace the external principal with a local Cookie identity; the handler then
-                    // signs THIS into the cookie SignInScheme (→ Redis ticket store).
-                    var claims = new[] { new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()) };
-                    ctx.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, AuthSchemes.Cookie));
+                    // The handler signs THIS into the cookie SignInScheme (→ Redis ticket store).
+                    ctx.Principal = principal;
                 },
 
                 OnRemoteFailure = ctx =>
@@ -98,5 +90,24 @@ public static class OidcWiring
         });
 
         return services;
+    }
+
+    /// <summary>Resolves/JIT-provisions the local user for a validated external principal and returns the
+    /// local Cookie principal that replaces it, revoking the session the request presented. Returns a null
+    /// principal and the failure reason when the external login is refused.</summary>
+    public static async Task<(ClaimsPrincipal? Principal, ExternalLoginFailure? Failure)> ResolveLocalPrincipalAsync(
+        HttpContext http, ClaimsPrincipal external)
+    {
+        var svc = http.RequestServices.GetRequiredService<IExternalLoginService>();
+        var policy = http.RequestServices.GetRequiredService<IOptions<OidcOptions>>().Value.ToPolicy();
+
+        var identity = OidcClaimsMapper.Map(external);
+        var result = await svc.ResolveOrProvisionAsync(identity, policy, http.RequestAborted);
+        if (!result.Succeeded) return (null, result.Failure);
+
+        await http.RequestServices.GetRequiredService<SessionRotation>().RevokePresentedAsync(http);
+
+        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()) };
+        return (new ClaimsPrincipal(new ClaimsIdentity(claims, AuthSchemes.Cookie)), null);
     }
 }

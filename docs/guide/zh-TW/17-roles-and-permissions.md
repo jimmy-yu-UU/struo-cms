@@ -88,8 +88,9 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 集進去見〈有效權限怎麼算〉。它本身怎麼被授予讀取，由設定鍵 `Rbac:PublicReadCollections` 決定。
 
 清單裡的每個集合名稱都變成 `public` 角色上的一筆 `canRead = true` 授權。這個鍵只在植入 migration 執行
-時套用一次，改了再重開或再跑 `migrate`，對既有資料庫都沒有追溯效果，鍵名與這個限制見
-[第 4 章：設定參考](04-configuration.md)。
+時套用一次，改了再重開或再跑 `migrate`，對既有資料庫都沒有追溯效果。鍵名與這個限制見
+[第 4 章：設定參考](04-configuration.md)。`public` 的寫入授權只對已登入的呼叫端生效：每個 GraphQL mutation 與每個 REST
+寫入端點都會拒絕匿名請求。
 
 ## `Hidden` 欄位與權限
 

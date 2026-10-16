@@ -27,6 +27,37 @@
   `consumers` is refused at startup unless `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` is set.
   The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
   switch to a single-tenant authority.
+- `GET /api/items/{collection}/{id}/revisions` returns 404 for an unknown item id; it returned an empty
+  array. The revisions of a trashed item (list and single revision, REST and GraphQL) need delete
+  permission on the collection; a caller without it gets 404 on REST and an empty list or `null` on
+  GraphQL. `IItemUseCases.ListRevisionsAsync` and `IGraphQlDataSource.ListRevisionsAsync` return a
+  nullable list, where `null` means the item is unknown or hidden. Code that reads the result must handle
+  `null`, and a fork's own implementation must return `null` for a hidden item, or it will not hide
+  trashed items.
+- `/openapi/v1.json` and `/scalar` are mapped in Development only, and the session cookie is always
+  `Secure` in every environment except Development; both were gated on Production alone, so a
+  Staging-like environment (Staging, UAT, ...) exposed the API spec and sent cookies over plain HTTP.
+  The new `OpenApi:Enabled` and `Auth:Cookie:RequireSecure` keys override each default. A fork that
+  serves OpenAPI outside Development must set `OpenApi__Enabled=true`, and one that runs over HTTP
+  outside Development must set `Auth__Cookie__RequireSecure=false`.
+- Every GraphQL mutation requires a signed-in caller. An anonymous mutation is refused with
+  `UNAUTHORIZED` even when the `public` role holds a write grant on the collection; queries are
+  unchanged. This matches the REST write endpoints, which already require sign-in. A client that wrote
+  through GraphQL without a session cookie or bearer token must sign in first.
+- User emails are stored trimmed and lowercase, on every write path: `POST /api/users`, create and update
+  of the `user` collection through the items API and GraphQL, accounts created by OIDC sign-in, and the
+  bootstrap admin. An email that matches another user's in any letter case is refused with `409`
+  `CONFLICT`. Sign-in still matches in any letter case, so rows stored with mixed case keep working, and
+  no existing row is rewritten. A client that expects the casing it sent to come back now receives
+  lowercase. Before upgrading, an operator can list pre-existing case-duplicates with
+  `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;` (adjust the
+  table name to your `Database:TablePrefix`) and merge or delete the extra rows.
+- `ILoginAttemptThrottle` has `TryReserveAsync` in place of `CheckAsync` and `RecordFailureAsync`;
+  `ResetAsync` is unchanged. `TryReserveAsync` counts the attempt and reports whether it may proceed,
+  and the caller invokes it before verifying the password. A fork that implements the interface must
+  provide it, and a fork that calls the old methods must call it instead.
+- Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones, and
+  with `Redis:ConnectionString` set a login fails with a 5xx error while Redis is unreachable.
 :::
 
 ### Security
@@ -39,12 +70,34 @@
   (`[A-Za-z0-9_-]`, 1 to 35 characters) now runs on the stored language row inside the write
   transaction, whatever the JSON key casing.
 
+- A password or OIDC login that arrived with a valid session cookie signed the new user into that
+  cookie's existing session, so a cookie planted in a victim's browser became the victim's session. A
+  sign-in now always issues a fresh session, and the session the request presented is revoked once the
+  sign-in succeeds. A failed login leaves it untouched.
+
+- A login attempt is now counted against the account before its password is verified, so parallel
+  guesses can no longer all read the same count and slip past `RateLimiting:LoginAccount:PermitLimit`.
+  With `Redis:ConnectionString` set the count is a Redis atomic counter shared by every instance. A new `RateLimiting:LoginConcurrency`
+  section (`Enabled` true, `PermitLimit` 4, `QueueLimit` 32) caps how many logins verify a password at
+  once in a process; the rest get 429 with `Retry-After`. Anyone who knows an account's email can keep it
+  locked out of password sign-in until the window ends; SSO sign-in is unaffected.
+
 ### Fixed
 
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
   the role store cannot make the liveness probe return 500 and restart healthy instances.
 
+- A Production start with an empty `Redis:ConnectionString` logs one warning: sessions and login
+  throttling are then kept in process memory, so only a single replica works and a restart signs every
+  user out. Replacing a role's permission grants joins a transaction the caller already opened instead of
+  committing its own. Chapter 16 states that an API access token survives a password change.
+
 ### Upgrade notes
+
+The Redis login throttle counts under new keys, so each account's login-attempt count starts from
+zero at upgrade. During a rolling deploy, instances still on 0.10 and instances on 0.11 count under
+different keys, so an account can receive up to twice its limit in attempts until every instance runs
+0.11.
 
 The language-code format rule checks every row of the language collection on each write to it,
 including a delete. A malformed code that is already stored blocks every write to the collection

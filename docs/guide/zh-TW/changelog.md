@@ -22,6 +22,30 @@
 - 已啟用的 `Oidc` 區段，若 `Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段，
   除非設定了 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則啟動時會被拒絕，錯誤訊息點名這兩個鍵。
   使用多租用戶 authority 又沒有設定限制的 fork，必須設定其中一個，或改用單一 tenant 的 authority。
+- `GET /api/items/{collection}/{id}/revisions` 對未知的項目 id 回 404，原本回空陣列。垃圾桶中項目的版本紀錄
+  （列表與單筆，REST 與 GraphQL）需要該集合的刪除授權；沒有的呼叫端在 REST 收到 404，在 GraphQL 收到空清單
+  或 `null`。`IItemUseCases.ListRevisionsAsync` 與 `IGraphQlDataSource.ListRevisionsAsync` 改回傳可為 null 的
+  清單，`null` 代表項目未知或被隱藏。讀取結果的程式必須處理 `null`；fork 自己的實作遇到被隱藏的項目也必須回傳
+  `null`，否則不會隱藏垃圾桶中的項目。
+- `/openapi/v1.json` 與 `/scalar` 只在 Development 註冊，session cookie 在 Development 之外的所有環境一律帶
+  `Secure`；兩者原本只看 Production，所以類 Staging 環境（Staging、UAT 等）會公開 API 規格，並讓 cookie 走純
+  HTTP。新增的 `OpenApi:Enabled` 與 `Auth:Cookie:RequireSecure` 可分別覆寫預設值。在 Development 之外對外提供
+  OpenAPI 的 fork，必須設定 `OpenApi__Enabled=true`；跑在 HTTP 上的 fork，必須設定
+  `Auth__Cookie__RequireSecure=false`。
+- 每個 GraphQL mutation 都需要已登入的呼叫端。就算 `public` 角色在該集合上有寫入授權，匿名 mutation 也會被以
+  `UNAUTHORIZED` 拒絕；查詢不受影響。這與 REST 的寫入端點一致，那邊本來就要求登入。原本不帶 session cookie
+  或 bearer token 就透過 GraphQL 寫入的用戶端，必須先登入。
+- 使用者 email 在每條寫入路徑上都以去除前後空白並轉成小寫的形式儲存：`POST /api/users`、透過 items API 與
+  GraphQL 對 `user` 集合的建立與更新、OIDC 登入建立的帳號，以及 bootstrap 管理員。與另一位使用者的 email
+  只差大小寫的值，會被以 `409` `CONFLICT` 拒絕。登入仍然不分大小寫比對，所以以大小寫混合儲存的資料列照常
+  可用，也不會改寫任何既有資料列。期待讀回自己送出的大小寫的用戶端，現在收到的是小寫。升級前，維運人員可用
+  `SELECT lower(email), count(*) FROM struo_users GROUP BY lower(email) HAVING count(*) > 1;`
+  列出既有的大小寫重複（資料表名稱依 `Database:TablePrefix` 調整），再合併或刪除多餘的資料列。
+- `ILoginAttemptThrottle` 以 `TryReserveAsync` 取代 `CheckAsync` 與 `RecordFailureAsync`；`ResetAsync` 不變。
+  `TryReserveAsync` 會把這次嘗試算進去並回報是否可以繼續，呼叫端要在驗證密碼之前呼叫它。實作這個介面的
+  fork 必須提供它，呼叫舊方法的 fork 必須改呼叫它。
+- 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的；設了 `Redis:ConnectionString`
+  時，Redis 連不上期間登入會回 5xx。
 :::
 
 ### 安全性
@@ -32,12 +56,29 @@
   不再組 SQL 文字。代碼格式規則（`[A-Za-z0-9_-]`，1 到 35 個字元）現在在寫入交易內對儲存的語言資料列執行，
   與 JSON 鍵的大小寫無關。
 
+- 帶著有效 session cookie 的密碼登入或 OIDC 登入，會把新使用者登入到該 cookie 既有的 session，因此被塞進
+  受害者瀏覽器的 cookie 會變成受害者的 session。現在每次登入一律發出全新的 session，請求帶來的那個 session
+  在登入成功後即撤銷；登入失敗則不動它。
+
+- 登入嘗試現在會在驗證密碼之前就先記到帳號上，同時發出的猜測不再能讀到同一個計數、一起溜過
+  `RateLimiting:LoginAccount:PermitLimit`。設了 `Redis:ConnectionString` 時，計數是所有實例共用的
+  Redis 原子計數器。新增的 `RateLimiting:LoginConcurrency` 區段
+  （`Enabled` 為 true、`PermitLimit` 4、`QueueLimit` 32）限制單一行程內同時驗證密碼的登入數，其餘回
+  429 並帶 `Retry-After`。知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼登入；SSO 登入不受影響。
+
 ### 修正
 
 - `/health/live` 與 `/health/ready` 不再解析呼叫端的權限，所以角色資料庫失敗時，存活探測不會回 500
   而讓健康的執行個體被重啟。
 
+- Production 環境啟動時若 `Redis:ConnectionString` 是空的，會記錄一則警告：工作階段與登入節流此時存放在
+  行程記憶體，只能跑單一副本，重新啟動會讓所有使用者登出。取代角色的權限授權時，會加入呼叫端已經開啟的交易，
+  不再自行提交。第 16 章說明 API 存取權杖在改密碼後仍然有效。
+
 ### 升級說明
+
+Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入嘗試計數會歸零。滾動式部署期間，仍在 0.10 的實例與
+0.11 的實例各用不同的鍵計數，帳號在所有實例都升到 0.11 之前，可能收到上限兩倍的嘗試次數。
 
 語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
 語言集合的所有寫入被擋下，直到你修正它為止；若有兩個以上格式不合的資料列，API 既修不了也刪不掉它們。請先檢查

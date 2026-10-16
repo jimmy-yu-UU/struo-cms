@@ -7,7 +7,7 @@ public sealed class SqlSugarUserCredentialStore(ISqlSugarClient db) : IUserCrede
 {
     public async Task<UserCredential?> FindByEmailAsync(string email, CancellationToken ct = default)
     {
-        var lowered = email.ToLowerInvariant();
+        var lowered = EmailAddress.Normalize(email);
         var u = await db.Queryable<User>()
             .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);

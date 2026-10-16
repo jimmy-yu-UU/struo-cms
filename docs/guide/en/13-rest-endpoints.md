@@ -56,7 +56,8 @@ delegated collection grant doesn't count.
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md); for a collection with revisions
-off, listing revisions returns an empty array, not a 404.
+off, listing revisions returns an empty array, not a 404; an unknown item id, or a trashed item the
+caller lacks delete permission for, is a 404.
 
 The example below uses the Blog sample's `article` collection (revisions on) to show restore
 returning `200` rather than `204`; the ids that appear are specific to this batch of test data, and
@@ -252,15 +253,15 @@ phrasings the legend doesn't define:
 
 | Route | Permission/gate | Purpose |
 |---|---|---|
-| `POST /graphql` | Anonymous | GraphQL query and mutation entry point |
+| `POST /graphql` | Anonymous for queries, sign-in for mutations | GraphQL query and mutation entry point |
 | `GET /graphql?sdl` | Gated by `GraphQl:ExposeSchema` | Read the current SDL text, Development-only by default |
 | `GET /health/live` | Anonymous | Plain-text liveness probe |
 | `GET /health/ready` | Anonymous | Plain-text readiness probe |
-| `GET /openapi/v1.json` and `/scalar` | Non-Production only | OpenAPI document and the Scalar interface |
+| `GET /openapi/v1.json` and `/scalar` | Development only by default (`OpenApi:Enabled`) | OpenAPI document and the Scalar interface |
 
 Both health probes return plain text (`Healthy`, for example), not this chapter's JSON envelope.
 GraphQL's own documentation is in [Chapter 14: GraphQL API](14-graphql.md); the gating rules for the
-two non-Production-only routes, `/openapi/v1.json` and `/scalar`, are already covered in
+two routes gated by `OpenApi:Enabled`, `/openapi/v1.json` and `/scalar`, are already covered in
 [Chapter 3: Getting Started](03-getting-started.md) and
 [Chapter 4: Configuration Reference](04-configuration.md) — this chapter only lists the routes.
 

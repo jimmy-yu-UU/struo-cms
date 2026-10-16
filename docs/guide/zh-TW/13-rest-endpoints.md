@@ -46,7 +46,7 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 
 版本紀錄與垃圾桶的完整規則（`DELETE` 的等冪行為、`?purge=` 的細節、版本快照的欄位形狀）留給
 [第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)；沒有版本紀錄的集合，讀取版本列表會回空
-陣列，不是 404。
+陣列，不是 404；未知的項目 id，或呼叫端沒有刪除授權的垃圾桶項目，則回 404。
 
 以下用 Blog 樣板的 `article`（有開版本紀錄）示範復原回 `200` 而不是 `204`；下面出現的 id 都是這
 批測試資料本身的，讀者環境會不同：
@@ -221,14 +221,14 @@ HTTP_STATUS:200
 
 | 路由 | 權限／閘道 | 用途 |
 |---|---|---|
-| `POST /graphql` | 匿名 | GraphQL 查詢與 mutation 入口 |
+| `POST /graphql` | 查詢匿名，mutation 需登入 | GraphQL 查詢與 mutation 入口 |
 | `GET /graphql?sdl` | 依 `GraphQl:ExposeSchema` | 讀目前的 SDL 文字，預設僅 Development |
 | `GET /health/live` | 匿名 | 純文字健康探測 |
 | `GET /health/ready` | 匿名 | 純文字就緒探測 |
-| `GET /openapi/v1.json` 與 `/scalar` | 僅非 Production | OpenAPI 文件與 Scalar 介面 |
+| `GET /openapi/v1.json` 與 `/scalar` | 預設僅 Development（`OpenApi:Enabled`） | OpenAPI 文件與 Scalar 介面 |
 
 兩個健康探測都回純文字（例如 `Healthy`），不是這裡的 JSON 信封。GraphQL 本身的文件見
-[第 14 章：GraphQL API](14-graphql.md)；`/openapi/v1.json`、`/scalar` 這兩個非 Production 限定
+[第 14 章：GraphQL API](14-graphql.md)；`/openapi/v1.json`、`/scalar` 這兩個由 `OpenApi:Enabled` 控制的
 路由的閘道規則，[第 3 章：快速開始](03-getting-started.md)與
 [第 4 章：設定參考](04-configuration.md)已經講過，這裡只列路由。
 

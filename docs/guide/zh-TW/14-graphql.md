@@ -177,6 +177,10 @@ HTTP_STATUS:200
 
 每個集合固定四個 mutation；開了版本紀錄的集合多一個 `revert<X>`。
 
+每個 mutation 都需要已登入的呼叫端（session cookie 或 bearer token），不管 `public` 角色被授予什麼：
+匿名 mutation 在任何權限檢查之前就拿到 `UNAUTHORIZED`，跟 REST 的寫入一樣。查詢仍然對匿名呼叫端開放，範圍
+就是讀取授權。
+
 | Mutation | 簽名 |
 |---|---|
 | `create<X>` | `(input: <X>CreateInput!, locale: String): <X>` |

@@ -34,8 +34,9 @@
 
 - 只在 Development 開：`GraphQl:ExposeSchema` 的預設值、Nitro IDE、啟動時的結構檢查（跟
   `migrate:check` 相同的比對，有錯誤就拒絕啟動）。
-- 只在非 Production 開：`/scalar` 與 `/openapi/v1.json`。
-- 只在 Production 生效：cookie `SecurePolicy` 固定為 `Always`。
+- 預設只在 Development 開：`/scalar` 與 `/openapi/v1.json`（`OpenApi:Enabled` 可覆寫）。
+- 預設除了 Development 之外的環境都生效：cookie `SecurePolicy` 為 `Always`
+  （`Auth:Cookie:RequireSecure` 可覆寫）。
 
 以下七個是 `docker-compose.yml` 的 host 對外設定，不會傳進 API 的設定：
 
@@ -227,6 +228,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:BootstrapAdmin:Password` | 字串 | `""` |
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
+| `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
@@ -239,6 +241,21 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
 `MinLength >= 1 && MinLength <= MaxLength` 的啟動驗證，設反了會讓啟動失敗；只有 `MinLength`
 會透過 `GET /api/config` 回傳給前端。
+
+`Auth:Cookie:RequireSecure` 決定 session cookie 是否一律帶 `Secure`。留空時，除了 Development 之外的環境
+一律是 `Always`，Development 則跟隨請求本身；`true` 在所有環境強制 `Secure`；`false` 讓 cookie 可以走純
+HTTP，前面沒有 TLS 的類 Staging 主機需要這樣設。只要設定了任何 `Struo:Cors` 來源，不論這個鍵怎麼設，
+都會強制 `Secure`。
+
+## OpenApi
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `OpenApi:Enabled` | 布林（可留空） | 無（依環境判斷） |
+
+留空時，`/openapi/v1.json` 與 `/scalar` 只在 Development 存在；其他環境（含 Production）一律回 404。
+`true` 在任何環境都開，`false` 在所有環境都關。這兩個路由沒有任何驗證就公開整份 API 規格，要在
+Development 之外打開之前，前面要自己加一層驗證。
 
 ## Rbac
 
@@ -269,12 +286,15 @@ IDE 另外只認開發環境，不受這個鍵控制。
 | `RateLimiting:LoginAccount:Enabled` | 布林 | `true` |
 | `RateLimiting:LoginAccount:PermitLimit` | 整數 | `10` |
 | `RateLimiting:LoginAccount:WindowSeconds` | 整數（秒） | `900` |
+| `RateLimiting:LoginConcurrency:Enabled` | 布林 | `true` |
+| `RateLimiting:LoginConcurrency:PermitLimit` | 整數 | `4` |
+| `RateLimiting:LoginConcurrency:QueueLimit` | 整數 | `32` |
 | `RateLimiting:Password:Enabled` | 布林 | `true` |
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這九個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*` 與 `Password:*` 這兩個限流政策
-被擋下時回 429，訊息依政策命名，有 `Retry-After` 時一併帶出；`LoginAccount` 的 429 由登入端點
+這十二個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
+被擋下時回 429，訊息依政策命名，並帶 `Retry-After`；`LoginAccount` 的 429 由登入端點
 自己回，訊息固定。
 
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
@@ -285,15 +305,22 @@ IDE 另外只認開發環境，不受這個鍵控制。
 `KnownProxies`／`KnownNetworks`——這個專案預設沒有註冊它。這層狀態留在行程記憶體，不會跨副本
 共用；跨副本的 IP 限制要放在前面的閘道或 WAF。
 
-`LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先檢查，被擋下的請求不會消耗
-Argon2id 運算；只有失敗會累計，登入成功會清空該帳號的計數。不論帳號存不存在、密碼錯還是帳號被
-停用，都算一次失敗，而且一律回同一種 429，這是防止帳號列舉的關鍵。
+`LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先把這次嘗試記上，被擋下的請求不會消耗
+Argon2id 運算，同時發出的猜測也不可能一起溜過上限；登入成功會清空該帳號的計數。不論帳號存不存
+在、密碼錯還是帳號被停用，都算一次嘗試，而且一律回同一種 429，這是防止帳號列舉的關鍵。
 
-這層限流的計數存在 `IDistributedCache`，跟 session ticket 同一個底層：設了
-`Redis:ConnectionString` 就是每個帳號一個跨副本共用的計數器，留空則各副本各自計數。
+設了 `Redis:ConnectionString` 時，每個帳號是一個跨副本共用的 Redis 原子計數器，Redis 連不上時登
+入會回 5xx，不會跳過檢查；留空則計數存在行程內的分散式快取，由各副本內的每帳號鎖序列化，副本之
+間各自計數。
 
-計數不是原子的讀改寫，極端情況下兩個同時發生的失敗可能只被記成一次。預設值比 IP 限流寬鬆、視
-窗長（900 秒），擋的是長時間針對單一帳號的密碼噴灑。
+預設值比 IP 限流寬鬆、視窗長（900 秒），擋的是長時間針對單一帳號的密碼噴灑。
+
+因為每一次嘗試都會計數，知道某個帳號 email 的人可以把它的額度用光，讓該帳號在視窗剩下的時間內
+無法用密碼登入。這是刻意接受的取捨；SSO 登入不受影響。
+
+`LoginConcurrency:*` 限制單一行程內同時驗證密碼的登入數：同時跑 `PermitLimit` 個，最多再有
+`QueueLimit` 個在排隊等空位，其餘回 429。不論來源 IP 或帳號，都能框住 Argon2id 的 CPU 與記憶體用
+量；每個副本各自執行自己的上限。
 
 `Password:*` 只保護 `PUT /api/users/{id}/password`，以呼叫者自己的 user id 分桶，取不到
 user id 時才退回用 IP——這個端點要登入才能呼叫，實務上不會發生。因為分桶鍵是操作者本人，
@@ -346,7 +373,8 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 
 留空時退回記憶體內的分散式快取，session 會在行程每次重啟後消失，只適合短暫的本機測試；有多個
 副本、或需要 session 撐過重啟時，一定要設定這個鍵。預設值是空字串，鍵整個不見時是 `null`，兩
-者都會落到這個記憶體內分支。這個鍵同時也是 `RateLimiting:LoginAccount` 共用的儲存底層。
+者都會落到這個記憶體內分支。這個鍵同時決定登入節流的計數存在哪裡：
+留空時用上面的記憶體內快取，設了就直接在 Redis 計數。
 
 ## Oidc
 

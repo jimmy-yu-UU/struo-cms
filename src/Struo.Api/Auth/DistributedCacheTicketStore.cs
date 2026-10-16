@@ -83,7 +83,7 @@ public sealed class DistributedCacheTicketStore(
     private async Task IndexNewSessionAsync(string key, AuthenticationTicket ticket)
     {
         if (ExtractUserId(ticket) is not { } userId) return;
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
         var now = DateTime.UtcNow;
         await sessions.RecordAsync(userId, key, now, now + AuthSchemes.SessionLifetime);
@@ -100,12 +100,12 @@ public sealed class DistributedCacheTicketStore(
             // A ticket with no readable user id leaves the row untouched — same as StoreAsync, there is
             // nobody to attribute it to.
             if (ExtractUserId(ticket) is not { } userId) return;
-            using var scope = scopeFactory.CreateScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
             var expiresAt = DateTime.UtcNow + AuthSchemes.SessionLifetime;
             // Re-attributes the row to this ticket's current user, so a renewal that carries a different
-            // principal than the row was last recorded under (e.g. logging in as B over a still-valid
-            // cookie for A) moves the row to B rather than leaving it attributed to A.
+            // principal than the row was last recorded under moves the row rather than leaving it
+            // attributed to the previous user.
             if (await sessions.RenewAsync(key, userId, expiresAt)) return;
 
             // No row matched: this ticket predates the index (or its StoreAsync couldn't attribute a
@@ -128,7 +128,7 @@ public sealed class DistributedCacheTicketStore(
 
     private async Task RemoveIndexAsync(string key)
     {
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IUserSessionStore>();
         await sessions.RemoveByTicketKeyAsync(key);
     }

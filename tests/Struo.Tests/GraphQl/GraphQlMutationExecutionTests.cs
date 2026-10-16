@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Execution;
 using HotChocolate.Types;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
 using Struo.Application.Configuration;
@@ -17,7 +18,8 @@ public class GraphQlMutationExecutionTests
 {
     // Mirrors GraphQlExecutionTests.ExecutorAsync but adds the Mutation root anchor and registers
     // the error filter (mutations must surface domain-exception codes).
-    private static async Task<IRequestExecutor> ExecutorAsync(FakeGraphQlDataSource ds)
+    private static async Task<IRequestExecutor> ExecutorAsync(
+        FakeGraphQlDataSource ds, bool authenticated = true)
     {
         var services = new ServiceCollection()
             .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
@@ -26,7 +28,8 @@ public class GraphQlMutationExecutionTests
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
-            .AddHttpContextAccessor() // StruoErrorFilter now injects IHttpContextAccessor
+            .AddSingleton<IHttpContextAccessor>(
+                authenticated ? new AuthenticatedHttpContextAccessor() : new HttpContextAccessor()) // mutations need a signed-in caller; StruoErrorFilter reads it too
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>();
 
@@ -180,10 +183,27 @@ public class GraphQlMutationExecutionTests
         json.Should().Contain("required");
     }
 
-    // No HttpContext in this in-process executor ⇒ unauthenticated ⇒ UNAUTHORIZED, matching REST via
-    // the shared DomainErrorMap.
+    // No HttpContext ⇒ unauthenticated ⇒ UNAUTHORIZED before the data source is reached, matching REST
+    // via the shared DomainErrorMap.
     [Fact]
-    public async Task Create_permission_denied_without_http_context_maps_to_UNAUTHORIZED()
+    public async Task Mutation_without_http_context_maps_to_UNAUTHORIZED_and_skips_the_data_source()
+    {
+        var reached = false;
+        var ds = new FakeGraphQlDataSource
+        {
+            OnCreate = (_, _) => { reached = true; return new Dictionary<string, object?> { ["id"] = "1" }; }
+        };
+
+        var json = (await (await ExecutorAsync(ds, authenticated: false)).ExecuteAsync(
+            "mutation { createArticle(input: { status: \"x\" }) { id } }")).ToJson();
+
+        json.Should().Contain("UNAUTHORIZED");
+        reached.Should().BeFalse();
+    }
+
+    // Authenticated caller denied by RBAC inside the service ⇒ FORBIDDEN.
+    [Fact]
+    public async Task Create_permission_denied_for_signed_in_caller_maps_to_FORBIDDEN()
     {
         var ds = new FakeGraphQlDataSource
         {
@@ -193,7 +213,7 @@ public class GraphQlMutationExecutionTests
         var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
             "mutation { createArticle(input: { status: \"x\" }) { id } }")).ToJson();
 
-        json.Should().Contain("UNAUTHORIZED");
+        json.Should().Contain("FORBIDDEN");
     }
 
     [Fact]

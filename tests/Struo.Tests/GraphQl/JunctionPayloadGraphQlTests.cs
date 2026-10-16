@@ -5,6 +5,7 @@ using HotChocolate;
 using HotChocolate.Execution;
 using HotChocolate.Serialization;
 using HotChocolate.Types;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
 using Struo.Application.Configuration;
@@ -61,7 +62,7 @@ public class JunctionPayloadGraphQlTests
             .AddScoped<IGraphQlDataSource>(_ => ds)
             .AddSingleton(new StruoQueryOptions())
             .AddSingleton<StruoTypeModule>()
-            .AddHttpContextAccessor()
+            .AddSingleton<IHttpContextAccessor, AuthenticatedHttpContextAccessor>()
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>();
 

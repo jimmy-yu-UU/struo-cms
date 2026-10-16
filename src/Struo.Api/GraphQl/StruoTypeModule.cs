@@ -112,6 +112,8 @@ public sealed class StruoTypeModule(
             if (metadata.GetCollection(name)?.Revisions == true)
                 config.Fields.Add(MutationResolvers.RevertField(name));
         }
+        foreach (var field in config.Fields)
+            field.MiddlewareConfigurations.Add(MutationAuthentication.Configuration);
         return ObjectTypeExtension.CreateUnsafe(config);
     }
 

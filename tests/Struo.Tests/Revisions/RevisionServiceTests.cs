@@ -252,7 +252,7 @@ public sealed class RevisionServiceTests
         Assert.NotNull(reverted);
         Assert.Equal("draft", reverted!["status"]);                                 // current state matches rev 1
 
-        var list = await h.Service.ListRevisionsAsync("article", id, default);
+        var list = (await h.Service.ListRevisionsAsync("article", id, default))!;
         Assert.Equal(3, list.Count);                                                // append-only: 1,2 preserved + revert
         Assert.Equal("revert", list[0].Operation);
     }
