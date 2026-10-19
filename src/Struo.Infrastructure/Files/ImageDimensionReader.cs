@@ -151,14 +151,14 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
     // at SOS/EOI or the end of the stream. Reads only, so a stream that cannot report its length works.
     private static (int, int)? Jpeg(byte[] b, Stream s)
     {
-        if (b.Length < 4 || b[0] != 0xFF || b[1] != 0xD8) return null;
+        if (!HasJpegSignature(b)) return null;
         s.Position = 2;
         while (true)
         {
             var marker = NextJpegMarker(s);
             if (marker < 0) return null;
             if (IsStandaloneJpegMarker(marker)) continue;
-            if (marker == 0xD9 || marker == 0xDA) return null;   // EOI, SOS: no frame header before the scan
+            if (EndsBeforeFrameHeader(marker)) return null;
 
             var len = ReadJpegSegmentLength(s);
             if (len < 2) return null;
@@ -166,6 +166,11 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
             if (!SkipByReading(s, len - 2)) return null;
         }
     }
+
+    private static bool HasJpegSignature(byte[] b) => b.Length >= 4 && b[0] == 0xFF && b[1] == 0xD8;
+
+    // EOI and SOS: no frame header follows.
+    private static bool EndsBeforeFrameHeader(int marker) => marker == 0xD9 || marker == 0xDA;
 
     // Returns the next marker code, or -1 at the end of the stream.
     private static int NextJpegMarker(Stream s)
