@@ -152,6 +152,12 @@
   optimistic-lock update and the trash and restore guards already filtered on the `id`, `version` and
   `deletedat` columns, so they are unaffected; they now use the same typed filter.
 
+- Deleting a file through the generic items API (`DELETE /api/items/file/{id}`) or the GraphQL `deleteFile`
+  mutation does what the media library does. Trashing clears the brand logo when it was that file; purging
+  also deletes the translations, the logo reference and the stored blob. A purge no longer leaves the blob
+  behind, and a storage failure while deleting the blob is logged as a warning with the storage key instead
+  of being ignored.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from

@@ -63,6 +63,7 @@ public static class FileStorageServiceCollectionExtensions
         });
 
         services.AddScoped<FileService>();
+        services.AddScoped<IFileLifecycle>(sp => sp.GetRequiredService<FileService>());
         return services;
     }
 }

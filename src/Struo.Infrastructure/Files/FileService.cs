@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
@@ -22,8 +24,10 @@ public sealed class FileService(
     IItemRepository repository,
     ILanguageProvider languages,
     ICurrentUserAccessor currentUser,
-    IItemChangeNotifier? notifier = null)
+    IItemChangeNotifier? notifier = null,
+    ILogger<FileService>? logger = null) : IFileLifecycle
 {
+    private readonly ILogger log = logger ?? NullLogger<FileService>.Instance;
     private readonly IFileStorage blobs = storage.Storage;
     private readonly IImageDimensionReader imageReader = storage.Images;
     private readonly FileStorageOptions fileOptions = storage.Options;
@@ -218,14 +222,16 @@ public sealed class FileService(
         }, ct);
 
         await NotifyAsync(id, ItemChangeKind.Purged);
-        // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).
-        try { await blobs.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
+        // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
+        await BlobCleanup.TryDeleteAsync(blobs, row.StorageKey, log);
         return true;
     }
 
     // Default "delete" for the media library is trash, not purge. Reuses the same atomic
     // repository primitive ItemService uses for every other soft-deletable collection (WHERE
     // deletedat IS NULL) instead of reimplementing that logic here.
+    public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
+
     public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)
     {
         var trashed = await repository.InTransactionAsync(async () =>

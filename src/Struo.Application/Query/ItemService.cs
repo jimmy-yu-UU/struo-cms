@@ -48,7 +48,10 @@ public sealed class ItemService(
     // invariants are not enforced (only direct construction in tests).
     ILanguageCollectionRules? languageRules = null,
     // Trailing and optional like the others: backs the User collection's email uniqueness check.
-    IUserCredentialStore? userCredentials = null) : IItemUseCases
+    IUserCredentialStore? userCredentials = null,
+    // Trailing and optional like the others: owns the file collection's delete lifecycle (logo
+    // reference, blob); null (direct construction in tests) means the generic pipeline only.
+    IFileLifecycle? fileLifecycle = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
 
@@ -348,6 +351,9 @@ public sealed class ItemService(
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
+        if (fileLifecycle is not null && IsFileCollection(collection))
+            return await DeleteFileAsync(collection, id, purge, fileLifecycle, ct);
+
         if (meta.SoftDelete && !purge)
         {
             // Pre-read resolves ONLY unknown-id -> 404 (mirrors RestoreAsync's pre-read below). Whether
@@ -415,6 +421,23 @@ public sealed class ItemService(
             await RevokeSessionsIfUserAsync(collection, id);
         }
         return existed;
+    }
+
+    private static bool IsFileCollection(string collection) =>
+        string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase);
+
+    // File deletes run through the file lifecycle (same as the media library) so the brand-logo
+    // reference and the stored blob are handled; the Restrict guard still applies first.
+    private async Task<bool> DeleteFileAsync(
+        string collection, string id, bool purge, IFileLifecycle lifecycle, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var fileId)) return false;
+        var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (existing is null) return false;
+        await this.purge.CheckRestrictAsync(collection, id, ct);
+        if (purge) return await lifecycle.PurgeAsync(fileId, ct);
+        await lifecycle.TrashAsync(fileId, ct);
+        return true; // an already-trashed file is idempotent success, like the generic trash path
     }
 
     /// <summary>
