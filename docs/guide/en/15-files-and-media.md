@@ -252,7 +252,9 @@ readable by anyone with its id again. To make every new upload private from the 
 
 A brand logo must be `published`. Settings refuse to save a logo that isn't, and a saved logo that is
 later switched to `draft` stops resolving: the public settings endpoint falls back to the default
-logo.
+logo. With `DefaultStatus` set to `draft`, a logo uploaded from Settings therefore has to be published
+in the media library before the save, or the save returns `400`. A draft also gives anonymous pages and
+read-only library users a `404`, so their thumbnails and images are broken until it is published.
 
 ## Media folders
 
@@ -387,6 +389,10 @@ several of libvips's optional dependencies (mozjpeg, libpng, libwebp, cairo, pan
 others), under a mix of MIT, BSD and LGPLv3 licenses, each recorded in the `NetVips.Native.*`
 package's own notice file.
 
+The host sets `NetVips.BlockUntrusted` while it registers the file services, which loads native libvips
+at startup even when transforms are disabled. A host without a usable libvips fails to start instead of
+failing on the first transform.
+
 ## Trash for files
 
 The general soft-delete mechanism — the underlying query filter, the `deleted=` filter, and how it
@@ -403,13 +409,16 @@ transaction also clears that reference, so the public settings endpoint never re
 soft-deletable collection.
 
 Both `DELETE` and `restore` require the `file` delete grant, not the write grant; without it the
-response is `Delete not permitted.`. Both return `204` on success, and `404` when the target
-doesn't exist.
+response is `Delete not permitted.`. Both return `204` on success, `404` when the target doesn't
+exist, and `409` `CONFLICT` when another item still references the file through an `OnDelete.Restrict`
+relation.
 
 `DELETE /api/files/{id}?purge=true` is the actual permanent delete: the file row, the translation
-row and the stored blob are removed together. Cleaning up the blob is best-effort and happens
-outside the transaction — the row data is already gone, so at worst a storage-layer failure leaves
-an orphaned blob behind.
+row and the stored blob are removed together. Purge follows the same relation rules as any other
+collection: a `Restrict` reference blocks it, references with `OnDelete.SetNull` are set to null, and
+many-to-many junction rows pointing at the file are removed. Cleaning up the blob is best-effort and
+happens outside the transaction — the row data is already gone, so at worst a storage-layer failure
+leaves an orphaned blob behind.
 
 Purge re-queries the row with the soft-delete filter cleared, so the most common flow — trash
 first, then purge (the default delete already trashes first) — works. Purge clears the brand-logo
@@ -430,7 +439,12 @@ field. The correct form is `?purge=true`.
 Upload, trash, restore and purge — the four write paths specific to files — each emit their own
 change notification (see
 [Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md)),
-because `FileService` bypasses `ItemService` entirely and has to add this itself.
+because `FileService` handles file writes itself. A purge reports one batch: `Purged` for the file,
+and `Updated` for every live item whose reference was set to null and every parent that lost a
+junction row.
+
+The items API (`DELETE /api/items/file/{id}`) and the GraphQL file delete hand off to the same file
+lifecycle as the media library, so they behave identically, including the `409`.
 
 Clearing the brand-logo reference doesn't separately count as a site-settings change; only the file
 itself gets reported.

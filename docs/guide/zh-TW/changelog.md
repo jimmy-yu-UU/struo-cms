@@ -85,6 +85,9 @@
   進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`
   `IMAGE_TRANSFORM_BUSY`。變體快取由 `CacheMaxBytes`（2 GB）設上限，並以最久未使用者優先淘汰。需要精確像素
   尺寸的用戶端，必須請求階梯上的尺寸或自行設定 `SizeSteps`；傳過其他 `fit` 值的用戶端必須改掉。
+- `IImageTransformer.Transform` 在請求之後多一個 `long maxSourcePixels` 參數，並回傳可為 null 的
+  `ImageTransformResult?`，`null` 代表解碼器會產生的影像超過該上限。實作這個介面的 fork 必須加上參數並遵守
+  上限，呼叫它的 fork 必須傳入上限並處理 `null`（改回傳原始位元組）。
 :::
 
 ### 新增
@@ -162,6 +165,13 @@ Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入�
 語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
 語言集合的所有寫入被擋下，直到你修正它為止；若有兩個以上格式不合的資料列，API 既修不了也刪不掉它們。請先檢查
 已儲存的語言資料列裡是否有不符合 `[A-Za-z0-9_-]{1,35}` 的代碼，並在升級前直接在資料庫裡修正或刪除這些資料列。
+
+快取裡既有的圖片變體是依未正規化的參數產生鍵，現在的請求會算出不同的鍵，所以這些變體再也不會被讀到。它們仍
+計入 `CacheMaxBytes`，第一次碰到上限的寫入可能會把它們清掉。刪除 `CachePath` 目錄可以立刻回收空間；
+`CacheMaxBytes` 設為 `0`（不設上限）時，它們會一直留著，直到你自己刪除。
+
+主機在註冊服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生 libvips。沒有可用
+libvips 的主機現在會啟動失敗。
 
 若已啟用 OIDC，且 `Oidc:Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段（或 consumers
 租用戶的 GUID），升級前請先設定 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。

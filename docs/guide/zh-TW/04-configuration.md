@@ -134,7 +134,8 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 - `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
 - `DefaultStatus`：新上傳檔案的狀態，`"published"` 或 `"draft"`；其他值會讓啟動失敗，錯誤訊息指出
   `Struo:Files:DefaultStatus`。已發布的檔案任何持有 id 的人都能讀取；草稿只有已登入且有 `file` 寫入
-  授權的呼叫端能讀取。編輯者之後可以切換狀態（見[第 15 章](15-files-and-media.md)）。
+  授權的呼叫端能讀取。編輯者之後可以切換狀態（見[第 15 章](15-files-and-media.md)）。設成 `draft` 時，從設定頁上傳的
+  Logo 必須先發布才能儲存，否則儲存回 `400`；匿名頁面與唯讀的媒體庫使用者讀這個檔案會得到 `404`。
 - `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
   由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 

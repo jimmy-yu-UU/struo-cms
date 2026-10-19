@@ -110,6 +110,10 @@
   is capped by `CacheMaxBytes` (2 GB) with least-recently-used eviction. A client that needs an exact
   pixel size must request a size on the list or configure `SizeSteps`, and one that passed another
   `fit` value must change it.
+- `IImageTransformer.Transform` takes a `long maxSourcePixels` after the request and returns a nullable
+  `ImageTransformResult?`, where `null` means the image the decoder would produce is over that limit. A
+  fork that implements the interface must add the parameter and honour the limit, and a fork that calls
+  it must pass the limit and handle `null` (serve the original bytes).
 :::
 
 ### Added
@@ -205,6 +209,14 @@ including a delete. A malformed code that is already stored blocks every write t
 until it is corrected, and with two or more malformed rows the API can neither fix nor delete them.
 Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and correct or delete the
 malformed rows directly in the database before upgrading.
+
+Image variants already in the cache were keyed on parameters that were not normalized, and requests now
+produce different keys, so those variants are never read again. They still count toward `CacheMaxBytes`,
+and the first capped write may sweep them. Deleting the `CachePath` directory reclaims the space at once;
+with `CacheMaxBytes` set to `0` (no cap) they stay until you delete them.
+
+The host sets `NetVips.BlockUntrusted` during service registration, which loads native libvips at
+startup even when image transforms are disabled. A host without a usable libvips now fails to start.
 
 If OIDC is enabled and `Oidc:Authority` has a path segment `common`, `organizations` or `consumers`
 (or the consumers tenant GUID), set `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` before

@@ -158,7 +158,9 @@ correctly typed value is never checked further.
 - `DefaultStatus`: the status a new upload gets, `"published"` or `"draft"`; any other value fails
   startup with an error naming `Struo:Files:DefaultStatus`. A published file is readable by anyone
   with its id; a draft only by signed-in callers with the `file` write grant. Editors can switch a
-  file afterwards (see [Chapter 15](15-files-and-media.md)).
+  file afterwards (see [Chapter 15](15-files-and-media.md)). With `draft`, a logo uploaded from
+  Settings must be published before the save, or the save returns `400`, and anonymous pages and
+  read-only library users get `404` for the file.
 - `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
   the default `false` has the API stream the bytes itself, which suits setups where the browser
   can't reach storage directly.
