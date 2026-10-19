@@ -101,9 +101,10 @@ public class LanguageCacheInvalidationTests
     private sealed class RecordingLanguages : ILanguageProvider
     {
         public int InvalidateCalls { get; private set; }
-        public IReadOnlyList<LanguageInfo> Enabled() => [];
-        public string DefaultCode() => "en";
-        public bool IsEnabled(string code) => true;
+        public Task<IReadOnlyList<LanguageInfo>> GetEnabledAsync() => Task.FromResult<IReadOnlyList<LanguageInfo>>([]);
+        public Task<string> DefaultCodeAsync() => Task.FromResult("en");
+        public Task<bool> IsEnabledAsync(string code) => Task.FromResult(true);
+        public Task<string?> CanonicalizeAsync(string code) => Task.FromResult<string?>(code);
         public void Invalidate() => InvalidateCalls++;
     }
 
@@ -124,9 +125,9 @@ public class LanguageCacheInvalidationTests
         public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, string? queryLocale, CancellationToken ct) =>
+        public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, string? queryLocale, int? maxRows, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, CancellationToken ct) =>
+        public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, int? maxRows, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task SyncManyToManyAsync(Type jt, string pfk, string tfk, string? sort, object pid, IReadOnlyList<JunctionLink> links, CancellationToken ct) =>
             Task.CompletedTask;

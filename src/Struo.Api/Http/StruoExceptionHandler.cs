@@ -33,6 +33,8 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
             logger?.LogError(exception, "Unhandled API exception");
         else if (code == ErrorCodes.SearchUnavailable)
             logger?.LogWarning(exception, "Search provider unavailable");
+        else if (DomainErrorMap.IsUniqueViolation(exception))
+            logger?.LogWarning(exception, "Unique constraint violation");
         return (DomainErrorMap.StatusFor(code), new ErrorBody(code, message));
     }
 }

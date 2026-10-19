@@ -173,11 +173,10 @@ public sealed class SqlSugarItemRepository(
         {
             var expected = ae.Version;
             ae.Version = expected + 1;
-            var idColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Id));
-            var versionColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Version));
             var affected = await db.Updateable((T)entity)
-                .Where($"{idColumn} = @__ocId AND {versionColumn} = @__ocVersion",
-                    new { __ocId = ae.Id, __ocVersion = expected })
+                .Where(TypedPredicates.EqualAndEqual<T>(
+                    nameof(Struo.Domain.Auditing.AuditableEntity.Id), ae.Id,
+                    nameof(Struo.Domain.Auditing.AuditableEntity.Version), expected))
                 .ExecuteCommandAsync(ct);
             if (affected == 0)
                 throw new Struo.Domain.Query.ConcurrencyConflictException(
@@ -226,13 +225,14 @@ public sealed class SqlSugarItemRepository(
         whereIn.QueryWhereInAsync(collection, property, values, ct);
 
     public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
-        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default) =>
-        whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, ct);
+        Type entityType, string propertyName, IReadOnlyList<object> values,
+        int? maxRows = null, CancellationToken ct = default) =>
+        whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, maxRows, ct);
 
     public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default) =>
-        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
+        FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default) =>
+        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
 
     public Task SyncManyToManyAsync(
         Type junctionType,

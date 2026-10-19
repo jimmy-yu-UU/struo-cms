@@ -102,7 +102,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     {
         await _svc.QueryAsync("category", Q("Alp"));
         _provider.Requests.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new SearchRequest("category", "Alp", _languages.DefaultCode(), ["name"]),
+            .Which.Should().BeEquivalentTo(new SearchRequest("category", "Alp", await _languages.DefaultCodeAsync(), ["name"]),
                 o => o.WithStrictOrdering());
         _provider.Requests.Clear();
         await _svc.QueryAsync("category", Q("Alp"), locale: "zh-TW");

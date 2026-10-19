@@ -153,8 +153,9 @@ own.
 **A cap on the number of conditions.** `Query:MaxFilterConditions` (default 50) counts every leaf
 comparison in the whole request — including every `_and`/`_or` branch and every quantifier's inner
 filter — and rejects the request once that cap is exceeded: `Too many filter conditions (max
-50).`. A cross-relation condition has no similar cap, because a relation condition only adds one
-more level of nested subquery; it doesn't need to be bounded the way fetching a set of ids does.
+50).`. The root `filter` and every nested `deep` filter draw from that one budget. A cross-relation
+condition has no similar cap, because a relation condition only adds one more level of nested
+subquery; it doesn't need to be bounded the way fetching a set of ids does.
 
 **Other shape errors.** An empty `filter` object is an error (`Empty filter object.`), while
 omitting the `filter` key entirely is a valid no-op.
@@ -265,7 +266,8 @@ might reach one that does.
 ## Sorting
 
 `sort=` is a comma list; each field can take a `-` prefix for descending order, and fields apply
-in the order you list them.
+in the order you list them. A sort holds at most `Query:MaxSortFields` fields (default 5); a longer
+list is rejected with `Too many sort fields (max 5).`. `offset` has no cap.
 
 A sort key can be a dotted path, but every segment must be many-to-one; hitting a to-many segment
 anywhere in the path is rejected:

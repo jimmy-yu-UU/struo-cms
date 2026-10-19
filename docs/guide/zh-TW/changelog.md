@@ -46,7 +46,40 @@
   fork 必須提供它，呼叫舊方法的 fork 必須改呼叫它。
 - 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的；設了 `Redis:ConnectionString`
   時，Redis 連不上期間登入會回 5xx。
+- `ILanguageProvider` 改為非同步：`Enabled()`、`DefaultCode()`、`IsEnabled(code)` 由 `GetEnabledAsync()`、
+  `DefaultCodeAsync()`、`IsEnabledAsync(code)` 取代，另新增 `CanonicalizeAsync(code)`，回傳已啟用語言設定的
+  寫法，未啟用則回 `null`。實作這個介面的 fork 必須改這些簽章並加上 `CanonicalizeAsync`，呼叫舊方法的 fork
+  必須改呼叫非同步版本。
+- 翻譯 payload 裡的 locale 鍵與 `?locale=` 的值，以語言列設定的寫法儲存與查詢（`ZH-tw` 會變成 `zh-TW`），
+  不會改寫任何既有資料列。在 locale 比對區分大小寫的 PostgreSQL 與 SQLite 上（Oracle 預設也區分大小寫，但
+  文件中仍列為未驗證），若資料庫裡已有同一個項目以同一個 locale 的兩種寫法各存一列，兩列都會保留；
+  維運人員可用
+  `SELECT <外鍵欄位>, lower(locale), count(*) FROM <翻譯資料表> GROUP BY <外鍵欄位>, lower(locale) HAVING count(*) > 1;`
+  （把 `<外鍵欄位>` 換成翻譯資料表的外鍵欄位）找出，再刪除多餘的資料列。另有一種情況：某列只有一種寫法，
+  但不完全等於設定的語言代碼（語言是 `zh-TW` 而資料列存 `zh-tw`），在這些後端上會讀不到，該項目下次更新時
+  還會在它旁邊再插入一列。照上面的方式清掉重複列之後，用
+  `SELECT DISTINCT locale FROM <翻譯資料表> WHERE locale NOT IN (SELECT code FROM <語言資料表>);`
+  找出這類資料列，再逐一用
+  `UPDATE <翻譯資料表> SET locale = '<設定的代碼>' WHERE locale = '<儲存的寫法>';` 修正。框架自己的資料表
+  帶有 `Database:TablePrefix`（預設 `struo_`）；你自己的資料表維持你取的名稱。
+- 新增三個 `Query` 鍵來限制單一請求的成本。`MaxSortFields`（預設 5）限制頂層排序與每個巢狀清單 `sort`
+  的欄位數，`MaxDeepRelations`（預設 20）限制 `deep` 樹的關聯節點數，`MaxExpandRows`（預設 1000）限制
+  單次關聯讀取最多讀的列數。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
+  過去每個巢狀篩選各自計算。超過任一上限的請求回 400；關聯讀取超過 `MaxExpandRows` 時直接拒絕，不會
+  截斷。`IItemRepository.QueryWhereInFilteredAsync` 與 `QueryEntityWhereInAsync` 在取消權杖之前多了選用的
+  `int? maxRows`，實作這個介面的 fork 必須加上，以位置傳入權杖的呼叫必須改成具名（`ct: ct`）。
+  `QueryValidator.Validate` 多了選用的 `FilterBudget`。`DeepExpansionCoordinator.ExpandAsync` 由 `Prepare`
+  （驗證 `deep` 樹，接受 `FilterBudget?`）與 `ExpandPreparedAsync`（展開已準備好的樹）取代，用過
+  `ExpandAsync` 的呼叫端要改成兩個都呼叫。`ItemService` 在搜尋查詢或根層查詢之前就驗證 `deep` 樹，所以
+  依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。`offset` 沒有上限。
 :::
+
+### 新增
+
+- `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
+  所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
+  仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
+  `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
 
 ### 安全性
 
@@ -68,12 +101,27 @@
 
 ### 修正
 
+- `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁
+  的筆數會超過 `MaxLimit`。`Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出
+  `MetadataException`，現在它的 `InnerException` 帶著原始的載入失敗。
+
+- 已啟用語言清單以非同步查詢載入，載入失敗時不會留到請求結束：下一次存取會重新查詢。
+
 - `/health/live` 與 `/health/ready` 不再解析呼叫端的權限，所以角色資料庫失敗時，存活探測不會回 500
   而讓健康的執行個體被重啟。
 
 - Production 環境啟動時若 `Redis:ConnectionString` 是空的，會記錄一則警告：工作階段與登入節流此時存放在
   行程記憶體，只能跑單一副本，重新啟動會讓所有使用者登出。取代角色的權限授權時，會加入呼叫端已經開啟的交易，
   不再自行提交。第 16 章說明 API 存取權杖在改密碼後仍然有效。
+
+- 寫入撞到資料庫的唯一鍵（例如重複的角色名稱）時，REST 與 GraphQL 都回 `409 CONFLICT`，訊息是
+  `A record with the same unique value already exists.`，每一種支援的資料庫都一樣；先前會回 500。訊息不會
+  出現索引或欄位名稱。
+
+- 清除（purge）項目時，會把所有參照它的資料列的外鍵設為 null，這個陳述式現在會為欄位名稱加上引號。關聯欄位的
+  欄位名稱若是保留字（`order`、`user`、`group`），清除會因 SQL 語法錯誤而失敗；混合大小寫的自訂欄位名稱在
+  PostgreSQL 上則比對不到。樂觀鎖更新與垃圾桶、還原的防護條件一直是以 `id`、`version`、`deletedat`
+  欄位篩選，不受影響；它們現在改用同一種型別化篩選。
 
 ### 升級說明
 

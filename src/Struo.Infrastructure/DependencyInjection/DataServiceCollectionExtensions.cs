@@ -19,13 +19,14 @@ public static class DataServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoData(this IServiceCollection services)
     {
-        // Fail fast on out-of-range limits ([Range(1, int.MaxValue)]) at boot via
-        // ValidateOnStart, enforced by the BCL DataAnnotations validator. The unwrapped singleton
+        // Fail fast on out-of-range limits ([Range(1, int.MaxValue)]) and DefaultLimit > MaxLimit at boot via
+        // ValidateOnStart (DataAnnotations validator + StruoQueryOptionsValidator). The unwrapped singleton
         // below (StruoQueryOptions, injected directly into repositories/resolvers) is preserved.
         services.AddOptions<StruoQueryOptions>()
             .BindConfiguration(StruoQueryOptions.SectionName)
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<StruoQueryOptions>, DataAnnotationsValidateOptions<StruoQueryOptions>>();
+        services.AddSingleton<IValidateOptions<StruoQueryOptions>, StruoQueryOptionsValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value);
         // Seed source for the Language table (the core seed migration). Validated at boot alongside the other
         // options so a misconfigured section fails the host, not the first migration run.

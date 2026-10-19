@@ -8,8 +8,8 @@ namespace Struo.Infrastructure.Query;
 
 internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
 {
-    private static readonly GenericDispatcher<Func<PurgeOps, string, string, object, CancellationToken, Task>> SetForeignKeyNullDispatcher =
-        new(typeof(PurgeOps), nameof(SetForeignKeyNullGenericAsync), [typeof(string), typeof(string), typeof(object), typeof(CancellationToken)]);
+    private static readonly GenericDispatcher<Func<PurgeOps, string, object, CancellationToken, Task>> SetForeignKeyNullDispatcher =
+        new(typeof(PurgeOps), nameof(SetForeignKeyNullGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<PurgeOps, string, object, CancellationToken, Task>> DeleteByPropertyDispatcher =
         new(typeof(PurgeOps), nameof(DeleteByPropertyGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
@@ -21,12 +21,11 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
     {
         var d = RepositoryHelpers.Descriptor(registry, sourceCollection);
         var clrProperty = d.FieldToProperty.TryGetValue(foreignKeyProperty, out var p) ? p : foreignKeyProperty;
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
-        await SetForeignKeyNullDispatcher.For(d.EntityType)(this, clrProperty, fkColumn, typedId, ct);
+        await SetForeignKeyNullDispatcher.For(d.EntityType)(this, clrProperty, typedId, ct);
     }
 
     private async Task SetForeignKeyNullGenericAsync<T>(
-        string clrPropertyName, string fkColumn, object typedId, CancellationToken ct)
+        string clrPropertyName, object typedId, CancellationToken ct)
         where T : class, new()
     {
         // SqlSugar's IUpdateable<T> has no raw-SQL-fragment SetColumns(string) overload — only
@@ -46,14 +45,11 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
             Expression.Bind(prop, Expression.Constant(null, prop.PropertyType)));
         var setExpr = Expression.Lambda<Func<T, T>>(memberInit, param);
 
-        // WHERE side stays parameterized; "@__fk" (not "@id"/"@fk") avoids colliding with any
-        // auto-bound internal parameter SqlSugar generates for Updateable<T>() (see
-        // SoftDeleteOps.SoftDeleteGenericAsync's identical note on "@__sdId"). Updateable<T> is NOT subject to the
-        // ISoftDeletable query filter, so an already-trashed source row referencing the purge target
-        // is still found and nulled.
+        // Updateable<T> is NOT subject to the ISoftDeletable query filter, so an already-trashed source
+        // row referencing the purge target is still found and nulled.
         await db.Updateable<T>()
             .SetColumns(setExpr)
-            .Where($"{fkColumn} = @__fk", new { __fk = typedId })
+            .Where(TypedPredicates.Equal<T>(clrPropertyName, typedId))
             .ExecuteCommandAsync(ct);
     }
 

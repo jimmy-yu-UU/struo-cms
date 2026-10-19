@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Struo.Application.Security;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Api.Http;
 
@@ -19,10 +20,11 @@ public static class DomainErrorMap
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
     /// yields <see cref="ErrorCodes.Forbidden"/>. Mapped domain exceptions surface their
-    /// client-safe <see cref="System.Exception.Message"/> verbatim — except
-    /// <see cref="SearchUnavailableException"/>, which is the deliberate exception to "verbatim": its
-    /// message may name a provider's internal host and is replaced with the FIXED
-    /// <see cref="SearchUnavailableMessage"/>. Any unmapped type collapses to
+    /// client-safe <see cref="System.Exception.Message"/> verbatim. Two cases carry a fixed message
+    /// instead, because the exception's own text names internals:
+    /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
+    /// host) and a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
+    /// constraint, index or column). Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
     /// </summary>
@@ -40,6 +42,7 @@ public static class DomainErrorMap
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
+            _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
@@ -49,6 +52,15 @@ public static class DomainErrorMap
     /// host — that detail only ever reaches the Warning-level server log.
     /// </summary>
     public const string SearchUnavailableMessage = "Search is temporarily unavailable.";
+
+    /// <summary>True when <paramref name="exception"/> is a database duplicate-key violation.</summary>
+    public static bool IsUniqueViolation(Exception exception) => UniqueViolation.IsMatch(exception);
+
+    /// <summary>
+    /// Fixed client-facing message for a database unique-key violation. Never the provider's own
+    /// message, which names the constraint, index or column.
+    /// </summary>
+    public const string UniqueViolationMessage = "A record with the same unique value already exists.";
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the

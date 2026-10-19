@@ -1,6 +1,6 @@
-using System.Data.Common;
 using SqlSugar;
 using Struo.Application.Settings;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Settings;
 
@@ -60,7 +60,7 @@ public sealed class SqlSugarSiteSettingsStore(ISqlSugarClient db) : ISiteSetting
             }).ExecuteCommandAsync(ct);
             if (ownsTransaction) await db.Ado.CommitTranAsync();
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (UniqueViolation.IsMatch(ex))
         {
             if (ownsTransaction) await db.Ado.RollbackTranAsync();
             // Lost the insert race to a concurrent first save: the singleton row now exists, so the
@@ -87,31 +87,4 @@ public sealed class SqlSugarSiteSettingsStore(ISqlSugarClient db) : ISiteSetting
             })
             .Where(s => s.Id == SiteSettings.SingletonId)
             .ExecuteCommandAsync(ct);
-
-    // Postgres error code for unique_violation (https://www.postgresql.org/docs/current/errcodes-appsummary.html).
-    // Not sourced from a provider package on purpose — see IsUniqueViolation.
-    private const string PostgresUniqueViolationSqlState = "23505";
-
-    /// <summary>
-    /// Unwraps the exception chain looking for a Postgres 23505 (unique_violation) via the
-    /// provider-agnostic <see cref="DbException.SqlState"/> (.NET 8+, <c>System.Data.Common</c>) rather
-    /// than a direct <c>Npgsql.PostgresException</c> type check. Deliberate: adding a direct
-    /// <c>PackageReference</c> to Npgsql here would let NuGet resolve it independently of the version
-    /// SqlSugarCore 5.1.4.216 itself depends on (Npgsql 5.0.18 transitively) and silently upgrade the
-    /// whole app's Postgres driver across major versions wherever the resolver picks a newer floor — a
-    /// binary-compatibility and behavior risk (e.g. Npgsql 6+ tightened <c>DateTime.Kind</c> handling for
-    /// timestamp columns) this store has no business introducing. <c>Npgsql.PostgresException</c>
-    /// overrides <see cref="DbException.SqlState"/>, so this check still recognizes it correctly without
-    /// ever referencing the Npgsql assembly. SQLite (the test provider) never reaches this path under the
-    /// test suite's single-connection, sequential execution — a real concurrent-insert race is PG-only
-    /// and covered by a live-PG gate, not unit tests.
-    /// </summary>
-    private static bool IsUniqueViolation(Exception ex)
-    {
-        for (Exception? current = ex; current is not null; current = current.InnerException)
-        {
-            if (current is DbException { SqlState: PostgresUniqueViolationSqlState }) return true;
-        }
-        return false;
-    }
 }

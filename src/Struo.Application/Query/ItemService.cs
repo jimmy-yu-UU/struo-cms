@@ -76,14 +76,17 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
-        ValidateLocale(locale);
+        locale = await ValidateLocaleAsync(locale);
 
         // Effective query locale: explicit locale ?? global default. Computed unconditionally —
         // the subquery translator needs it even for a root collection without its own translation
         // sidecar (e.g. a relation path reaching into a translated related collection).
-        var queryLocale = locale ?? languages.DefaultCode();
+        var queryLocale = locale ?? await languages.DefaultCodeAsync();
 
-        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions);
+        var budget = new FilterBudget();
+        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions, budget);
+        // The deep tree shares the filter budget and is refused before any search or root query runs.
+        var deepSpec = deepExpansion.Prepare(collection, raw.Deep, budget);
         var searchable = QueryValidator.SearchableFields(meta);
         // A registered ISearchProvider may answer the search with candidate ids (spec §3.2); the same
         // `validated` then feeds the list, every facet and the aggregate, so all three agree (R3).
@@ -95,7 +98,8 @@ public sealed class ItemService(
 
         var entities = result.Rows;
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
-        await deepExpansion.ExpandAsync(collection, raw.Deep, entities, rows, queryLocale, ct);
+        if (deepSpec is not null)
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, ct);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
         var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
         var aggregate = validated.Aggregate is null ? null
@@ -134,27 +138,30 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
-        ValidateLocale(locale);
+        locale = await ValidateLocaleAsync(locale);
+        var deepSpec = deepExpansion.Prepare(collection, deep, budget: null);
         var entity = await repository.GetByIdAsync(collection, id, deleted, ct);
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
-        var queryLocale = locale ?? languages.DefaultCode();
-        await deepExpansion.ExpandAsync(collection, deep, [entity], [projected], queryLocale, ct);
+        var queryLocale = locale ?? await languages.DefaultCodeAsync();
+        if (deepSpec is not null)
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, ct);
         await overlay.ApplyAsync(meta, [entity], [projected], locale, ct);
         return projected;
     }
 
-    private void ValidateLocale(string? locale)
+    // Returns the configured spelling of an enabled locale, so callers query and store one form.
+    private async Task<string?> ValidateLocaleAsync(string? locale)
     {
-        if (locale is null) return;
-        // Reject ill-formed locale codes before the IsEnabled membership check, so a crafted code
+        if (locale is null) return null;
+        // Reject ill-formed locale codes before the membership check, so a crafted code
         // (for example one containing a quote) never reaches a query.
         if (!LocaleFormat.IsValid(locale))
             throw new QueryException(
                 $"Locale '{locale}' contains invalid characters. Codes must match [A-Za-z0-9_-]{{1,35}}.");
-        if (!languages.IsEnabled(locale))
-            throw new QueryException($"Unknown or disabled locale '{locale}'.");
+        return await languages.CanonicalizeAsync(locale)
+            ?? throw new QueryException($"Unknown or disabled locale '{locale}'.");
     }
 
     public async Task<IReadOnlyDictionary<string, object?>> CreateAsync(string collection, JsonElement body, CancellationToken ct = default)

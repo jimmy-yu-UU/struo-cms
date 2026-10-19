@@ -6,6 +6,13 @@ public sealed class CmsCollectionAttribute(string label) : Attribute
     public string Label { get; } = label;
     public string? Icon { get; set; }
     public string? Group { get; set; }
+
+    /// <summary>
+    /// Pins the collection name (REST route segment, permission grants, revisions, GraphQL names) so a
+    /// C# class rename cannot change it. Must match <c>^[a-z][A-Za-z0-9]*$</c> and be unique across all
+    /// collections. When unset, the name is the camel-cased class name.
+    /// </summary>
+    public string? Name { get; set; }
     public string? DefaultDisplayField { get; set; }
 
     /// <summary>

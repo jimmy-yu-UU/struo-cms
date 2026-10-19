@@ -160,7 +160,7 @@ public sealed class FileService(
         if (title.Length > NameColumnWidth) title = CutWhole(title, NameColumnWidth);
         var translation = new FileTranslation
         {
-            FileId = entity.Id, Locale = languages.DefaultCode(), Title = title,
+            FileId = entity.Id, Locale = await languages.DefaultCodeAsync(), Title = title,
         };
 
         // ExecuteReturnEntityAsync has no CancellationToken overload (5.1.4.216); the File PK is a

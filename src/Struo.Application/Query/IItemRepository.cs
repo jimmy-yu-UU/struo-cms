@@ -54,18 +54,22 @@ public interface IItemRepository
     /// Like <see cref="QueryWhereInAsync"/> but ANDs an additional filter into the batched WHERE —
     /// own-collection leaves, relation paths/predicates and translatable leaves (at <paramref name="queryLocale"/>)
     /// are all pushed down as SQL subqueries. Used by nested-list expansion to push a to-many list's
-    /// filter into the single batched fetch.
+    /// filter into the single batched fetch. A non-null <paramref name="maxRows"/> limits the fetch to
+    /// that many rows (a typed <c>Take</c>); callers pass one more than they accept to detect overflow.
     /// </summary>
     Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default);
+        FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default);
 
     /// <summary>
     /// Returns all rows of the given CLR <paramref name="entityType"/> (e.g. a junction type)
     /// whose <paramref name="propertyName"/> (a CLR property name) is in <paramref name="values"/>.
-    /// Empty <paramref name="values"/> returns an empty list without issuing a query.
+    /// Empty <paramref name="values"/> returns an empty list without issuing a query. A non-null
+    /// <paramref name="maxRows"/> limits the fetch to that many rows (a typed <c>Take</c>).
     /// </summary>
-    Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default);
+    Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
+        Type entityType, string propertyName, IReadOnlyList<object> values,
+        int? maxRows = null, CancellationToken ct = default);
 
     /// <summary>
     /// Diffs and patches the junction rows for <paramref name="parentId"/> on the given

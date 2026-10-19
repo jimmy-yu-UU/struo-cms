@@ -58,7 +58,49 @@
   provide it, and a fork that calls the old methods must call it instead.
 - Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones, and
   with `Redis:ConnectionString` set a login fails with a 5xx error while Redis is unreachable.
+- `ILanguageProvider` is asynchronous: `Enabled()`, `DefaultCode()` and `IsEnabled(code)` are replaced by
+  `GetEnabledAsync()`, `DefaultCodeAsync()` and `IsEnabledAsync(code)`, and `CanonicalizeAsync(code)`
+  returns the configured spelling of an enabled language, or `null`. A fork that implements the
+  interface must change those signatures and add `CanonicalizeAsync`, and a fork that calls the old
+  methods must call the async ones.
+- A locale key in a translations payload and a `?locale=` value are stored and queried in the language
+  row's configured spelling (`ZH-tw` becomes `zh-TW`). No existing row is rewritten. On PostgreSQL and
+  SQLite, where locale comparison is case-sensitive (and on Oracle, which is case-sensitive by default and
+  is documented as unverified), a database that already holds translation rows for one item under two
+  spellings of the same locale keeps both; an operator can find them with
+  `SELECT <foreign key column>, lower(locale), count(*) FROM <translation table> GROUP BY <foreign key column>, lower(locale) HAVING count(*) > 1;`
+  (substitute the translation table's foreign key column) and delete the extra row. A row with a single
+  spelling that is not exactly a configured language code (`zh-tw` where the language is `zh-TW`) is no
+  longer found on those backends, and the next update of its item inserts a second row beside it. After
+  removing duplicates as above, find such rows with
+  `SELECT DISTINCT locale FROM <translation table> WHERE locale NOT IN (SELECT code FROM <language table>);`
+  and fix each one with
+  `UPDATE <translation table> SET locale = '<configured code>' WHERE locale = '<stored spelling>';`
+  The framework's own tables carry the `Database:TablePrefix` (default `struo_`); a table of your own
+  keeps the name you gave it.
+- Three new `Query` keys bound the cost of one request. `MaxSortFields` (default 5) caps the fields of a
+  top-level sort and of each nested list's `sort`, `MaxDeepRelations` (default 20) caps the relation
+  nodes in a `deep` tree, and `MaxExpandRows` (default 1000) caps the rows one relation fetch may read.
+  `MaxFilterConditions` is now one budget shared by the root filter and every nested `deep` filter, where
+  each nested filter used to count on its own. A request over any of these limits is refused with 400;
+  a relation fetch over `MaxExpandRows` is refused, never truncated. `IItemRepository.QueryWhereInFilteredAsync` and
+  `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
+  that implements the interface must add it, and a call that passed the token positionally must name it
+  (`ct: ct`). `QueryValidator.Validate` takes an optional `FilterBudget`.
+  `DeepExpansionCoordinator.ExpandAsync` is replaced by `Prepare`, which validates the `deep` tree and
+  takes a `FilterBudget?`, and `ExpandPreparedAsync`, which expands the prepared tree; a caller that used
+  `ExpandAsync` calls both. `ItemService` validates the `deep` tree before the search lookup or the root
+  query, so an over-cap `deep` on a `GET` by id returns 400 even when the id does not exist (it returned
+  404 before). There is no cap on `offset`.
 :::
+
+### Added
+
+- `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
+  grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
+  without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It
+  must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a `MetadataException` naming
+  both types. Without `Name` the collection keeps the camel-cased class name.
 
 ### Security
 
@@ -84,6 +126,14 @@
 
 ### Fixed
 
+- A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the
+  host used to start and serve default pages larger than `MaxLimit`. A `Struo:ContentAssemblies` entry that
+  cannot be loaded still fails startup with a `MetadataException`, which now carries the original load
+  failure as its `InnerException`.
+
+- The enabled-language list loads with an asynchronous query, and a failed load is not kept for the rest
+  of the request: the next access queries again.
+
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
   the role store cannot make the liveness probe return 500 and restart healthy instances.
 
@@ -91,6 +141,16 @@
   throttling are then kept in process memory, so only a single replica works and a restart signs every
   user out. Replacing a role's permission grants joins a transaction the caller already opened instead of
   committing its own. Chapter 16 states that an API access token survives a password change.
+
+- A write that hits a database unique key (a duplicate role name, for example) returns `409 CONFLICT` with the
+  message `A record with the same unique value already exists.` on REST and GraphQL, on every supported
+  backend; it returned a 500. The message never names the index or column.
+
+- Purging an item sets the foreign key to null on every row that references it, and that statement now quotes
+  the column name. A relation field whose column name is a reserved word (`order`, `user`, `group`) made the
+  purge fail with a SQL syntax error, and a mixed-case custom column name did not match on PostgreSQL. The
+  optimistic-lock update and the trash and restore guards already filtered on the `id`, `version` and
+  `deletedat` columns, so they are unaffected; they now use the same typed filter.
 
 ### Upgrade notes
 

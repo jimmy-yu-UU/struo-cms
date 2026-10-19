@@ -41,9 +41,10 @@ public sealed class FileServiceLogoLifecycleTests : IDisposable
 
     private sealed class StubLanguages : ILanguageProvider
     {
-        public IReadOnlyList<LanguageInfo> Enabled() => [];
-        public string DefaultCode() => "en";
-        public bool IsEnabled(string code) => true;
+        public Task<IReadOnlyList<LanguageInfo>> GetEnabledAsync() => Task.FromResult<IReadOnlyList<LanguageInfo>>([]);
+        public Task<string> DefaultCodeAsync() => Task.FromResult("en");
+        public Task<bool> IsEnabledAsync(string code) => Task.FromResult(true);
+        public Task<string?> CanonicalizeAsync(string code) => Task.FromResult<string?>(code);
         public void Invalidate() { }
     }
 

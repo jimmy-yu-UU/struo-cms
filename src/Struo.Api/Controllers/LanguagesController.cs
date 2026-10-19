@@ -11,9 +11,9 @@ namespace Struo.Api.Controllers;
 public sealed class LanguagesController(ILanguageProvider languages) : ControllerBase
 {
     [HttpGet]
-    public IActionResult GetAll()
+    public async Task<IActionResult> GetAll()
     {
-        var data = languages.Enabled()
+        var data = (await languages.GetEnabledAsync())
             .Select(l => new { code = l.Code, name = l.Name, isDefault = l.IsDefault })
             .ToList();
         return Ok(data);

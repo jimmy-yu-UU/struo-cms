@@ -45,6 +45,12 @@ public sealed class StruoErrorFilter(
             return error.WithMessage(message).WithCode(code).WithException(null!);
         }
 
+        if (code == Http.ErrorCodes.Conflict && DomainErrorMap.IsUniqueViolation(exception))
+        {
+            logger.LogWarning(exception, "Unique constraint violation");
+            return error.WithMessage(message).WithCode(code).WithException(null!);
+        }
+
         return error.WithMessage(message).WithCode(code);
     }
 }

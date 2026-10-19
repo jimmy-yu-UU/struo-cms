@@ -9,10 +9,10 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Validates the requested deep relations against the relationship graph and the
-/// configured <see cref="StruoQueryOptions.MaxRelationDepth"/>, then nests the expanded
-/// (batched) relation rows into each projected parent dictionary. No-op when
-/// <c>deep</c> is null/empty or there are no parent rows.
+/// Validates the requested deep relations against the relationship graph and the configured
+/// <see cref="StruoQueryOptions.MaxRelationDepth"/> (<see cref="Prepare"/>), then nests the
+/// expanded (batched) relation rows into each projected parent dictionary
+/// (<see cref="ExpandPreparedAsync"/>). Both are no-ops when <c>deep</c> is null/empty.
 /// </summary>
 public sealed class DeepExpansionCoordinator(
     StruoQueryOptions options,
@@ -23,25 +23,37 @@ public sealed class DeepExpansionCoordinator(
     ItemProjector projector,
     IPermissionService permissions)
 {
-    /// <inheritdoc cref="DeepExpansionCoordinator"/>
-    public async Task ExpandAsync(
-        string collection, DeepSpec? deep,
-        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, CancellationToken ct)
+    /// <summary>
+    /// Prunes the requested relations to the readable ones and validates the whole nested tree
+    /// (nesting depth, relation names, per-level filter/sort/limit/offset, the shared filter
+    /// <paramref name="budget"/>). Throws <see cref="QueryException"/> on a violation. Needs no
+    /// rows, so callers run it before the first query and the verdict never depends on row count.
+    /// Returns null when nothing remains to expand.
+    /// </summary>
+    public DeepSpec? Prepare(string collection, DeepSpec? deep, FilterBudget? budget)
     {
-        if (deep is null || deep.Relations.Count == 0) return;
+        if (deep is null || deep.Relations.Count == 0) return null;
 
         // Pruning precedes validation on purpose: a nested filter/sort on an unreadable relation is
         // never validated against that collection's metadata, so its error messages cannot be used
         // to probe which fields exist there.
         var visible = PruneUnreadable(collection, deep);
-        if (visible.Relations.Count == 0) return;
+        if (visible.Relations.Count == 0) return null;
 
-        // Validate the whole nested tree: nesting depth <= MaxRelationDepth, and every relation
-        // name resolves against its own level's collection. Runs before any query executes,
-        // and independent of row count — an over-depth/unknown-relation request must be
-        // rejected even when the parent query matched zero rows.
-        ValidateDeepTree(collection, visible, depth: 1);
+        var nodes = 0;
+        ValidateDeepTree(collection, visible, depth: 1, budget ?? new FilterBudget(), ref nodes);
+        return visible;
+    }
+
+    /// <summary>
+    /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
+    /// each projected parent dictionary. No-op when there are no parent rows.
+    /// </summary>
+    public async Task ExpandPreparedAsync(
+        string collection, DeepSpec visible,
+        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        string? locale, CancellationToken ct)
+    {
         if (entities.Count == 0) return;
 
         var parentDesc = registry.Get(collection)!;
@@ -98,7 +110,7 @@ public sealed class DeepExpansionCoordinator(
     /// filter fields whitelisted against the target collection, sort restricted to the target's
     /// own fields (no cross-relation sort for nested lists), and non-negative limit/offset.
     /// </summary>
-    private void ValidateDeepTree(string coll, DeepSpec spec, int depth)
+    private void ValidateDeepTree(string coll, DeepSpec spec, int depth, FilterBudget budget, ref int nodes)
     {
         if (depth > options.MaxRelationDepth)
             throw new QueryException(
@@ -107,6 +119,8 @@ public sealed class DeepExpansionCoordinator(
         {
             var rel = graph.Resolve(coll, relName)
                 ?? throw new QueryException($"Unknown relation '{relName}' on '{coll}'.");
+            if (++nodes > options.MaxDeepRelations)
+                throw new QueryException($"Too many relations in deep (max {options.MaxDeepRelations}).");
 
             var hasArgs = relSpec.Filter is not null || relSpec.Sort is not null
                           || relSpec.Limit is not null || relSpec.Offset is not null;
@@ -120,26 +134,30 @@ public sealed class DeepExpansionCoordinator(
             if (relSpec.Offset is < 0)
                 throw new QueryException($"Nested 'offset' must not be negative for relation '{relName}'.");
 
-            var targetMeta = Meta(rel.TargetCollection);
-            if (relSpec.Filter is not null)
-                QueryValidator.Validate(
-                    new QueryModel(null, relSpec.Filter, [], 0, 0, null),
-                    targetMeta, options, graph, metadata, permissions);
-
-            if (relSpec.Sort is not null)
-                foreach (var s in relSpec.Sort)
-                {
-                    if (RelationPath.IsRelationPath(s.Field))
-                        throw new QueryException(
-                            $"Sort across relations is not supported for nested lists: '{s.Field}'.");
-                    QueryValidator.Validate(
-                        new QueryModel(null, null, [s], 0, 0, null),
-                        targetMeta, options, graph, metadata, permissions);
-                }
+            ValidateNestedFilterAndSort(rel.TargetCollection, relSpec, budget);
 
             if (relSpec.Deep is not null)
-                ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1);
+                ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1, budget, ref nodes);
         }
+    }
+
+    private void ValidateNestedFilterAndSort(string target, DeepRelationSpec relSpec, FilterBudget budget)
+    {
+        var targetMeta = Meta(target);
+        if (relSpec.Filter is not null)
+            QueryValidator.Validate(
+                new QueryModel(null, relSpec.Filter, [], 0, 0, null),
+                targetMeta, options, graph, metadata, permissions, budget);
+
+        if (relSpec.Sort is null) return;
+
+        var crossing = relSpec.Sort.FirstOrDefault(s => RelationPath.IsRelationPath(s.Field));
+        if (crossing is not null)
+            throw new QueryException(
+                $"Sort across relations is not supported for nested lists: '{crossing.Field}'.");
+        QueryValidator.Validate(
+            new QueryModel(null, null, relSpec.Sort, 0, 0, null),
+            targetMeta, options, graph, metadata, permissions);
     }
 
     private CollectionMetadata Meta(string collection) =>

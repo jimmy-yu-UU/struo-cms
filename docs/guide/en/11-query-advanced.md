@@ -52,7 +52,7 @@ That means a nested `filter` under `deep` only filters out the expanded relation
 shrinks the parent page itself: `{"deep":{"tags":{"filter":{...}}}}` reads like "only return
 articles with a matching tag," but it isn't — this filter is applied only after the parent page is
 already fixed. [Chapter 8: Relations](08-relations.md) already covers how the whole `deep` tree is
-validated before any query actually runs, independent of row count.
+validated before the search lookup or the root query, independent of row count.
 
 A nested relation's own `filter` and `sort` go through the same `QueryValidator`, checked against
 the target collection's own metadata.
@@ -62,6 +62,9 @@ supported for nested lists: '<field>'.` It is not the message a top-level `sort=
 path — that one is `Sort across to-many relations is not supported: '<path>'.`, covered in [the
 query basics chapter](10-query-basics.md). One governs sorting inside a nested list, the other
 top-level sorting.
+
+A nested `sort` holds at most `Query:MaxSortFields` fields, like a top-level one, and the nested
+`filter` conditions count toward the same `Query:MaxFilterConditions` budget as the root `filter`.
 
 The junction's payload (the `_junction` key) is already covered in
 [Chapter 8: Relations](08-relations.md); it shows up again in this chapter's complete example at
@@ -87,6 +90,20 @@ HTTP_STATUS:400
 `category` plus six more `parent` hops is seven relation hops total; the depth is 7, over the cap
 of 6, so it's rejected. Dropping the innermost `parent` back down to six hops validates and
 responds normally.
+
+**The breadth and row caps.** A `deep` tree may hold at most `Query:MaxDeepRelations` relation nodes
+(default 20), siblings and nested levels together: `Too many relations in deep (max 20).`. Each
+relation fetch reads at most `Query:MaxExpandRows` rows (default 1000). A fetch that finds more fails
+with a 400 naming the relation, such as `Relation 'children' has more than 1000 rows to expand; narrow
+the nested filter or expand fewer parent rows.`, and the rows are never truncated. A nested `limit`
+is applied after the fetch, so it does not lower the count the cap checks; narrow with a nested
+`filter` or a smaller `limit` on the parent page.
+
+For a many-to-many relation the count is junction rows: every link between the page's parents and
+their targets, read before the nested `filter` runs. A nested `filter` does not lower it, so the
+only way under the cap is a smaller `limit` on the parent page (or fewer links per parent). Its 400
+says so: `Relation 'tags' has more than 1000 rows to expand; the count is junction rows linking this
+page's parents to their targets; a nested filter does not lower it, so request fewer parent rows.`
 
 ## Facet counting
 

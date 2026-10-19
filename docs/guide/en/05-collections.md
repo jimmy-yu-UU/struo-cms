@@ -90,10 +90,19 @@ reverse, forcing a column to be non-nullable, needs an explicit `[SugarColumn(Is
 | `Label` | `string` | constructor argument | sidebar and page title |
 | `Icon` | `string?` | `null` | sidebar icon, names below |
 | `Group` | `string?` | `null` | sidebar navigation group |
+| `Name` | `string?` | camelCased class name | collection name, see below |
 | `DefaultDisplayField` | `string?` | `null` | item display title |
 | `AdminOnly` | `bool` | `false` | generic CRUD writes always require super-admin |
 | `Hidden` | `bool` | `false` | sidebar only; REST, GraphQL, RBAC and schema unaffected |
 | `Revisions` | `bool` | `false` | enable revision history |
+
+`Name` is the identity of the collection: the REST route segment, the GraphQL names, and the value
+stored in permission grants, revisions and other rows. Left unset, it is the camelCased class name,
+so renaming the class silently orphans that data. A fork should set `Name` on each of its collections
+before they hold data. It must match `^[a-z][A-Za-z0-9]*$` and be unique across all collections,
+framework ones included; anything else throws `MetadataException` at startup. `Name` does not
+change the translation sidecar convention: a sidecar's foreign key property is still `{ClassName}Id`,
+so it must be renamed together with the class.
 
 `DefaultDisplayField` must name a real field — the match is against the camelCased field name — and
 a name that doesn't resolve throws `MetadataException` at startup.

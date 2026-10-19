@@ -143,7 +143,7 @@ public sealed class ItemPurgePipeline(
         InboundM2MDescriptor inbound, object typedId, ItemChangeSet changes, CancellationToken ct)
     {
         var desc = inbound.Descriptor;
-        var junctionRows = await repository.QueryEntityWhereInAsync(desc.JunctionType, desc.TargetFkProperty, [typedId], ct);
+        var junctionRows = await repository.QueryEntityWhereInAsync(desc.JunctionType, desc.TargetFkProperty, [typedId], ct: ct);
         if (junctionRows.Count == 0) return;
 
         var parentFkProp = desc.JunctionType.GetProperty(desc.ParentFkProperty);

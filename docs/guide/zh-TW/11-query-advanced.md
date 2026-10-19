@@ -44,12 +44,15 @@ HTTP_STATUS:400
 經撈回來的那一頁父列，不是整張表。這代表 `deep` 底下的巢狀 `filter` 只會篩掉展開出來的關聯列，不
 會讓父層那一頁跟著變小：`{"deep":{"tags":{"filter":{...}}}}` 讀起來像「只回傳有符合標籤的文
 章」，其實不是——這個篩選是在父層那一頁已經固定之後才套用的。[第 8 章：關聯](08-relations.md)已
-經說過整棵 `deep` 樹會在任何查詢真的執行之前驗證完，跟列數無關。
+經說過整棵 `deep` 樹會在搜尋查詢與根層查詢之前驗證完，跟列數無關。
 
 巢狀關聯自己的 `filter` 跟 `sort`，走的是同一個 `QueryValidator`，對照的是目標集合自己的中繼資料；巢
 狀 `sort` 不能是帶點號的路徑，觸發的是另一個訊息——`Sort across relations is not supported for nested
 lists: '<field>'.`——跟[第 10 章](10-query-basics.md)頂層 `sort=` 碰到多對多路徑時的 `Sort across
 to-many relations is not supported: '<path>'.` 是兩回事，一個管巢狀清單自己的排序，一個管頂層排序。
+
+巢狀 `sort` 跟頂層一樣最多 `Query:MaxSortFields` 個欄位，巢狀 `filter` 的條件也跟根層 `filter` 共用
+同一份 `Query:MaxFilterConditions` 額度。
 
 junction 的 payload（`_junction` 鍵）[第 8 章：關聯](08-relations.md)已經介紹過，本章最後的完整
 範例會再看到一次。
@@ -71,6 +74,17 @@ HTTP_STATUS:400
 
 `category` 加六層 `parent`，一共七個關聯跳，深度是 7，超過上限 6，所以被擋下；拿掉最內層的
 `parent`、變回六層，就會是驗證通過、正常回應的請求。
+
+**廣度與列數上限。** 一棵 `deep` 樹最多只能有 `Query:MaxDeepRelations` 個關聯節點（預設 20），同層與
+巢狀層合併計算：`Too many relations in deep (max 20).`。每次關聯讀取最多讀 `Query:MaxExpandRows` 列
+（預設 1000）；讀到更多就回 400 並點名該關聯，例如 `Relation 'children' has more than 1000 rows to
+expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。巢狀 `limit` 是在讀取之後
+才套用，所以不會降低上限檢查的列數；要縮小範圍，用巢狀 `filter`，或減少父頁的 `limit`。
+
+多對多關聯算的是 junction 列：這一頁父列與其目標之間的每一筆連結，都在巢狀 `filter` 執行之前就被讀進來
+計算。巢狀 `filter` 無法降低這個數字，要低於上限只能縮小父頁的 `limit`（或減少每個父列的連結數）。它的
+400 訊息也這樣說：`Relation 'tags' has more than 1000 rows to expand; the count is junction rows linking
+this page's parents to their targets; a nested filter does not lower it, so request fewer parent rows.`
 
 ## Facet 計數
 
