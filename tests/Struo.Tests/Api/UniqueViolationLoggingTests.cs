@@ -27,7 +27,7 @@ public class UniqueViolationLoggingTests
             Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, exception));
     }
 
-    private static Exception UniqueFailure() =>
+    private static InvalidOperationException UniqueFailure() =>
         new InvalidOperationException(Constraint, new SqliteException(Constraint, 19, 2067));
 
     [Fact]

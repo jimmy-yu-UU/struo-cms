@@ -109,7 +109,7 @@ public class CollectionNameTests
         var descriptors = MetadataScanner.ScanDescriptors([typeof(CnPinnedArticle), typeof(CnDerived)]);
 
         descriptors.Keys.Should().BeEquivalentTo("legacyArticle", "cnDerived");
-        descriptors["legacyArticle"].EntityType.Should().Be(typeof(CnPinnedArticle));
+        descriptors["legacyArticle"].EntityType.Should().Be<CnPinnedArticle>();
     }
 
     private static readonly Type[] RelationTypes = [typeof(CnSource), typeof(CnPinnedTarget), typeof(CnPinnedLink)];

@@ -52,7 +52,7 @@ That means a nested `filter` under `deep` only filters out the expanded relation
 shrinks the parent page itself: `{"deep":{"tags":{"filter":{...}}}}` reads like "only return
 articles with a matching tag," but it isn't — this filter is applied only after the parent page is
 already fixed. [Chapter 8: Relations](08-relations.md) already covers how the whole `deep` tree is
-validated before any query actually runs, independent of row count.
+validated before the search lookup or the root query, independent of row count.
 
 A nested relation's own `filter` and `sort` go through the same `QueryValidator`, checked against
 the target collection's own metadata.

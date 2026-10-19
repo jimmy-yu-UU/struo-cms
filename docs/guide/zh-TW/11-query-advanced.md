@@ -44,7 +44,7 @@ HTTP_STATUS:400
 經撈回來的那一頁父列，不是整張表。這代表 `deep` 底下的巢狀 `filter` 只會篩掉展開出來的關聯列，不
 會讓父層那一頁跟著變小：`{"deep":{"tags":{"filter":{...}}}}` 讀起來像「只回傳有符合標籤的文
 章」，其實不是——這個篩選是在父層那一頁已經固定之後才套用的。[第 8 章：關聯](08-relations.md)已
-經說過整棵 `deep` 樹會在任何查詢真的執行之前驗證完，跟列數無關。
+經說過整棵 `deep` 樹會在搜尋查詢與根層查詢之前驗證完，跟列數無關。
 
 巢狀關聯自己的 `filter` 跟 `sort`，走的是同一個 `QueryValidator`，對照的是目標集合自己的中繼資料；巢
 狀 `sort` 不能是帶點號的路徑，觸發的是另一個訊息——`Sort across relations is not supported for nested

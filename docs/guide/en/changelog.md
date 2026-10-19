@@ -87,9 +87,11 @@
   `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
   that implements the interface must add it, and a call that passed the token positionally must name it
   (`ct: ct`). `QueryValidator.Validate` takes an optional `FilterBudget`.
-  `DeepExpansionCoordinator.ExpandAsync` takes a `FilterBudget?` before the cancellation token, and the
-  new `Prepare` and `ExpandPreparedAsync` split its validation from its expansion, so `ItemService`
-  refuses an over-cap `deep` before it reads any row. There is no cap on `offset`.
+  `DeepExpansionCoordinator.ExpandAsync` is replaced by `Prepare`, which validates the `deep` tree and
+  takes a `FilterBudget?`, and `ExpandPreparedAsync`, which expands the prepared tree; a caller that used
+  `ExpandAsync` calls both. `ItemService` validates the `deep` tree before the search lookup or the root
+  query, so an over-cap `deep` on a `GET` by id returns 400 even when the id does not exist (it returned
+  404 before). There is no cap on `offset`.
 :::
 
 ### Added

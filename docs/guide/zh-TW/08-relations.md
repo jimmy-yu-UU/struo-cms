@@ -218,7 +218,7 @@ to-many relations; '{relation}' on '{collection}' is many-to-one.`
 排最前，比不出大小的值視為相等以維持穩定順序。沒有巢狀排序時，一對多維持抓取順序，多對多維持
 junction 順序——關聯沒有宣告 `SortField`、或該欄位不是數字時，會退化成插入順序，而不是失敗。
 
-整棵 `deep` 樹在任何查詢真的執行之前就會先驗證完，跟列數無關，就算頁面是空的，深度超過或關聯名稱不存
+整棵 `deep` 樹在搜尋查詢與根層查詢之前就會先驗證完，跟列數無關，就算頁面是空的，深度超過或關聯名稱不存
 在一樣會失敗：`Relation nesting too deep (depth {n}); the maximum is {max}.`、`Unknown relation
 '{name}' on '{collection}'.` 巢狀 `limit`／`offset` 給負值會被拒絕，巢狀排序如果帶點號路徑（跨關聯）
 也會被拒絕。關聯路徑的深度上限由 `Query:MaxRelationDepth` 控制，預設 6，設定方式見

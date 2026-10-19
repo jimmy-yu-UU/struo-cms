@@ -259,7 +259,7 @@ With no nested sort, a one-to-many keeps fetch order and a many-to-many keeps ju
 when the relation declares no `SortField`, or the column isn't numeric, it degrades to insertion
 order rather than failing.
 
-The whole `deep` tree is validated before any query actually runs, independent of row count — an
+The whole `deep` tree is validated before the search lookup or the root query, independent of row count — an
 over-depth or unknown relation name fails even on an empty page: `Relation nesting too deep (depth
 {n}); the maximum is {max}.`, `Unknown relation '{name}' on '{collection}'.` A negative nested
 `limit`/`offset` is rejected, and a dotted nested sort path (crossing relations) is rejected too.

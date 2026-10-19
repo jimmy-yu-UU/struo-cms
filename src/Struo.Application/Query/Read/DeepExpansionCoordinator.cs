@@ -46,20 +46,6 @@ public sealed class DeepExpansionCoordinator(
     }
 
     /// <summary>
-    /// <see cref="Prepare"/> followed by <see cref="ExpandPreparedAsync"/>, for callers that have
-    /// not validated yet.
-    /// </summary>
-    public async Task ExpandAsync(
-        string collection, DeepSpec? deep,
-        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, FilterBudget? budget, CancellationToken ct)
-    {
-        var visible = Prepare(collection, deep, budget);
-        if (visible is not null)
-            await ExpandPreparedAsync(collection, visible, entities, rows, locale, ct);
-    }
-
-    /// <summary>
     /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
     /// each projected parent dictionary. No-op when there are no parent rows.
     /// </summary>
@@ -148,26 +134,30 @@ public sealed class DeepExpansionCoordinator(
             if (relSpec.Offset is < 0)
                 throw new QueryException($"Nested 'offset' must not be negative for relation '{relName}'.");
 
-            var targetMeta = Meta(rel.TargetCollection);
-            if (relSpec.Filter is not null)
-                QueryValidator.Validate(
-                    new QueryModel(null, relSpec.Filter, [], 0, 0, null),
-                    targetMeta, options, graph, metadata, permissions, budget);
-
-            if (relSpec.Sort is not null)
-            {
-                foreach (var s in relSpec.Sort)
-                    if (RelationPath.IsRelationPath(s.Field))
-                        throw new QueryException(
-                            $"Sort across relations is not supported for nested lists: '{s.Field}'.");
-                QueryValidator.Validate(
-                    new QueryModel(null, null, relSpec.Sort, 0, 0, null),
-                    targetMeta, options, graph, metadata, permissions);
-            }
+            ValidateNestedFilterAndSort(rel.TargetCollection, relSpec, budget);
 
             if (relSpec.Deep is not null)
                 ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1, budget, ref nodes);
         }
+    }
+
+    private void ValidateNestedFilterAndSort(string target, DeepRelationSpec relSpec, FilterBudget budget)
+    {
+        var targetMeta = Meta(target);
+        if (relSpec.Filter is not null)
+            QueryValidator.Validate(
+                new QueryModel(null, relSpec.Filter, [], 0, 0, null),
+                targetMeta, options, graph, metadata, permissions, budget);
+
+        if (relSpec.Sort is null) return;
+
+        var crossing = relSpec.Sort.FirstOrDefault(s => RelationPath.IsRelationPath(s.Field));
+        if (crossing is not null)
+            throw new QueryException(
+                $"Sort across relations is not supported for nested lists: '{crossing.Field}'.");
+        QueryValidator.Validate(
+            new QueryModel(null, null, relSpec.Sort, 0, 0, null),
+            targetMeta, options, graph, metadata, permissions);
     }
 
     private CollectionMetadata Meta(string collection) =>

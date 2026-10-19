@@ -68,9 +68,10 @@
   過去每個巢狀篩選各自計算。超過任一上限的請求回 400；關聯讀取超過 `MaxExpandRows` 時直接拒絕，不會
   截斷。`IItemRepository.QueryWhereInFilteredAsync` 與 `QueryEntityWhereInAsync` 在取消權杖之前多了選用的
   `int? maxRows`，實作這個介面的 fork 必須加上，以位置傳入權杖的呼叫必須改成具名（`ct: ct`）。
-  `QueryValidator.Validate` 多了選用的 `FilterBudget`。`DeepExpansionCoordinator.ExpandAsync` 在取消權杖
-  之前多了 `FilterBudget?`，新增的 `Prepare` 與 `ExpandPreparedAsync` 把它的驗證與展開拆開，所以
-  `ItemService` 會在讀任何資料列之前就拒絕超限的 `deep`。`offset` 沒有上限。
+  `QueryValidator.Validate` 多了選用的 `FilterBudget`。`DeepExpansionCoordinator.ExpandAsync` 由 `Prepare`
+  （驗證 `deep` 樹，接受 `FilterBudget?`）與 `ExpandPreparedAsync`（展開已準備好的樹）取代，用過
+  `ExpandAsync` 的呼叫端要改成兩個都呼叫。`ItemService` 在搜尋查詢或根層查詢之前就驗證 `deep` 樹，所以
+  依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。`offset` 沒有上限。
 :::
 
 ### 新增
