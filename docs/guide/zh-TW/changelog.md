@@ -46,6 +46,15 @@
   fork 必須提供它，呼叫舊方法的 fork 必須改呼叫它。
 - 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的；設了 `Redis:ConnectionString`
   時，Redis 連不上期間登入會回 5xx。
+- `ILanguageProvider` 改為非同步：`Enabled()`、`DefaultCode()`、`IsEnabled(code)` 由 `GetEnabledAsync()`、
+  `DefaultCodeAsync()`、`IsEnabledAsync(code)` 取代，另新增 `CanonicalizeAsync(code)`，回傳已啟用語言設定的
+  寫法，未啟用則回 `null`。實作這個介面的 fork 必須改這些簽章並加上 `CanonicalizeAsync`，呼叫舊方法的 fork
+  必須改呼叫非同步版本。
+- 翻譯 payload 裡的 locale 鍵與 `?locale=` 的值，以語言列設定的寫法儲存與查詢（`ZH-tw` 會變成 `zh-TW`），
+  不會改寫任何既有資料列。在 locale 比對區分大小寫的 PostgreSQL 與 SQLite 上，若資料庫裡已有同一個項目以
+  同一個 locale 的兩種寫法各存一列，兩列都會保留；維運人員可用
+  `SELECT parent_fk, lower(locale), count(*) FROM <翻譯資料表> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
+  找出，再刪除多餘的資料列。
 :::
 
 ### 安全性
@@ -67,6 +76,8 @@
   429 並帶 `Retry-After`。知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼登入；SSO 登入不受影響。
 
 ### 修正
+
+- 已啟用語言清單以非同步查詢載入，載入失敗時不會留到請求結束：下一次存取會重新查詢。
 
 - `/health/live` 與 `/health/ready` 不再解析呼叫端的權限，所以角色資料庫失敗時，存活探測不會回 500
   而讓健康的執行個體被重啟。

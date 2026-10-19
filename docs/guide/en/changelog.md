@@ -58,6 +58,17 @@
   provide it, and a fork that calls the old methods must call it instead.
 - Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones, and
   with `Redis:ConnectionString` set a login fails with a 5xx error while Redis is unreachable.
+- `ILanguageProvider` is asynchronous: `Enabled()`, `DefaultCode()` and `IsEnabled(code)` are replaced by
+  `GetEnabledAsync()`, `DefaultCodeAsync()` and `IsEnabledAsync(code)`, and `CanonicalizeAsync(code)`
+  returns the configured spelling of an enabled language, or `null`. A fork that implements the
+  interface must change those signatures and add `CanonicalizeAsync`, and a fork that calls the old
+  methods must call the async ones.
+- A locale key in a translations payload and a `?locale=` value are stored and queried in the language
+  row's configured spelling (`ZH-tw` becomes `zh-TW`). No existing row is rewritten. On PostgreSQL and
+  SQLite, where locale comparison is case-sensitive, a database that already holds translation rows for
+  one item under two spellings of the same locale keeps both; an operator can find them with
+  `SELECT parent_fk, lower(locale), count(*) FROM <translation table> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
+  and delete the extra row.
 :::
 
 ### Security
@@ -83,6 +94,9 @@
   locked out of password sign-in until the window ends; SSO sign-in is unaffected.
 
 ### Fixed
+
+- The enabled-language list loads with an asynchronous query, and a failed load is not kept for the rest
+  of the request: the next access queries again.
 
 - `/health/live` and `/health/ready` no longer resolve the caller's permissions, so a database failure in
   the role store cannot make the liveness probe return 500 and restart healthy instances.

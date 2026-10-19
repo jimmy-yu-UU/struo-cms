@@ -26,7 +26,7 @@ public sealed class ItemWriteSideSync(
 {
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
-    /// <c>translations</c> object, validates each locale (enabled), each field key (⊆ translatable
+    /// <c>translations</c> object, canonicalizes and validates each locale (enabled), each field key (⊆ translatable
     /// fields), and required fields, then delegates to
     /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
     /// <para>
@@ -53,7 +53,7 @@ public sealed class ItemWriteSideSync(
         {
             if (isCreate)
                 throw new QueryException(
-                    $"A translation for the default locale '{languages.DefaultCode()}' is required.");
+                    $"A translation for the default locale '{await languages.DefaultCodeAsync()}' is required.");
             return; // update: absent/non-object translations = no-op partial update
         }
 
@@ -70,9 +70,8 @@ public sealed class ItemWriteSideSync(
 
         foreach (var localeProp in trElem.EnumerateObject())
         {
-            var locale = localeProp.Name;
-            if (!languages.IsEnabled(locale))
-                throw new QueryException($"Unknown or disabled locale '{locale}'.");
+            var locale = await languages.CanonicalizeAsync(localeProp.Name)
+                ?? throw new QueryException($"Unknown or disabled locale '{localeProp.Name}'.");
             if (localeProp.Value.ValueKind != JsonValueKind.Object)
                 throw new QueryException($"Translation for locale '{locale}' must be an object.");
 
@@ -108,8 +107,8 @@ public sealed class ItemWriteSideSync(
         // On create, the default locale's translation must be supplied.
         if (isCreate)
         {
-            var def = languages.DefaultCode();
-            if (!perLocale.Keys.Any(k => string.Equals(k, def, StringComparison.OrdinalIgnoreCase)))
+            var def = await languages.DefaultCodeAsync();
+            if (!perLocale.ContainsKey(def))
                 throw new QueryException($"A translation for the default locale '{def}' is required.");
         }
 

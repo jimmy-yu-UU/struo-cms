@@ -38,9 +38,10 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
 
     private sealed class StubLanguages : ILanguageProvider
     {
-        public IReadOnlyList<LanguageInfo> Enabled() => [];
-        public string DefaultCode() => "en";
-        public bool IsEnabled(string code) => true;
+        public Task<IReadOnlyList<LanguageInfo>> GetEnabledAsync() => Task.FromResult<IReadOnlyList<LanguageInfo>>([]);
+        public Task<string> DefaultCodeAsync() => Task.FromResult("en");
+        public Task<bool> IsEnabledAsync(string code) => Task.FromResult(true);
+        public Task<string?> CanonicalizeAsync(string code) => Task.FromResult<string?>(code);
         public void Invalidate() { }
     }
 
@@ -95,7 +96,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
 
         var rows = await _db.Queryable<FileTranslation>().Where(t => t.FileId == file.Id).ToListAsync();
         rows.Should().HaveCount(1);
-        rows[0].Locale.Should().Be(_languages.DefaultCode());
+        rows[0].Locale.Should().Be(await _languages.DefaultCodeAsync());
         rows[0].Title.Should().Be("photo-01");
         rows[0].Alt.Should().BeNull();
     }
