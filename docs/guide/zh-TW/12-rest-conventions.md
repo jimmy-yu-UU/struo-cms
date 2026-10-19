@@ -91,6 +91,7 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `ACCOUNT_INACTIVE` | 401 | 密碼正確，但帳號已被停用 |
 | `SESSION_REVOCATION_FAILED` | 500 | 密碼變更或刪除使用者後，撤銷工作階段失敗 |
 | `SEARCH_UNAVAILABLE` | 503 | 已註冊的搜尋提供者自己回應失敗 |
+| `IMAGE_TRANSFORM_BUSY` | 503 | 在佇列逾時內沒有圖片轉換名額空出來 |
 
 - `CONFLICT` 涵蓋被關聯擋下的刪除、使用者 email 重複、資料庫唯一鍵衝突，以及其他一般 409。
 - `TOO_MANY_REQUESTS` 由三個地方直接寫出，不經過上面這套錯誤對照：登入依帳號的節流、登入依呼叫端
@@ -100,6 +101,9 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
   是專屬的。
 - `SEARCH_UNAVAILABLE` 的訊息固定是 `Search is temporarily unavailable.`，提供者自己回報的原因
   只會寫進伺服器端的紀錄。
+- `IMAGE_TRANSFORM_BUSY` 出自 `GET /api/files/{id}/content`：所有轉換名額在
+  `Struo:Files:ImageTransform:QueueTimeoutSeconds` 內一直被占用時回傳；回應帶 `Retry-After` 標頭，值
+  就是那個秒數（見[第 15 章](15-files-and-media.md)）。
 
 `PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的傳超過上限的位元
 組，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERVER_ERROR` 只出現在真正未處理的錯誤上。

@@ -218,27 +218,33 @@ referenced by 'file'.`。
 轉換走的是下載端點本身，加上一組查詢參數：`GET /api/files/{id}/content?width=&height=
 &format=&fit=&quality=`。只有三件事同時成立才會真的轉檔：功能本身開著（鍵是
 `Struo:Files:ImageTransform:Enabled`，預設 `true`）、`width`／`height`／`format` 至少給了一
-個，而且這一列的 `contentType` 是以 `image/` 開頭。缺一個條件，請求就直接落回原本的串流或轉
-址，不受影響。
+個，而且這一列的 `contentType` 是 `TransformableContentTypes` 之一（預設是 JPEG、PNG、
+WebP、AVIF、GIF）。缺一個條件，請求就直接落回原本的串流或轉址，不受影響。SVG 是最常見的例子：
+對 SVG 帶 `?width=50`，回的就是那份 SVG 本身。
 
 ### 參數
 
 | 參數 | 值 | 超出範圍時 |
 |---|---|---|
-| `width` | 整數 | 夾進 1–`MaxWidth`；缺省時由另一邊等比推算 |
-| `height` | 整數 | 夾進 1–`MaxHeight`；缺省時由另一邊等比推算 |
+| `width` | 整數 | 夾進 1–`MaxWidth`，再往上對齊到尺寸階梯 |
+| `height` | 整數 | 夾進 1–`MaxHeight`，再往上對齊到尺寸階梯 |
 | `format` | `AllowedFormats` 之一 | 其他值 `400`；缺省退回 WebP，不會保留來源格式 |
-| `fit` | 任意字串 | 缺省 `inside`；只有 `cover` 加寬高才裁切 |
-| `quality` | 整數 | 夾進 1–100；缺省用 `DefaultQuality` |
+| `fit` | `inside` 或 `cover` | 其他值 `400`；缺省是 `inside` |
+| `quality` | 整數 | 四捨五入到 10 的倍數，範圍 10–100；缺省用 `DefaultQuality` |
 
-`MaxWidth`、`MaxHeight`、`AllowedFormats`、`DefaultQuality` 這幾個鍵都在
-[第 4 章](04-configuration.md)。`format` 只有呼叫端明確給了值才會去比對 `AllowedFormats`，
+`MaxWidth`、`MaxHeight`、`AllowedFormats`、`DefaultQuality`、`SizeSteps` 與其他轉換限制的鍵都
+在 [第 4 章](04-configuration.md)。`format` 只有呼叫端明確給了值才會去比對 `AllowedFormats`，
 比對時大小寫不拘，`?format=WEBP` 一樣算數；不在清單裡的值是 `400`，`Unsupported format
 '{x}'.`。省略 `format` 時一律是 WebP，連 `Content-Type` 也一起變成 `image/webp`，不會沿用來
 源檔案自己的編碼。
 
-`fit=cover` 只有寬高兩個維度都給，才會真的裁切成那個框；只給一個維度的 `cover`，或任何其他
-寫法，都是等比縮到框內、不放大。連寬高都沒給，只調格式或品質，轉換會跳過縮圖那一步，直接用
+尺寸會對齊，讓呼叫端能製造出的變體數量維持在小範圍：預設階梯下 `width=100` 會得到 128 寬的圖，
+`width=65` 與 `width=128` 共用同一份快取變體；超過最後一階就取最後一階。`fit=cover` 對齊的是寬度，
+高度則依請求的 `width` 與 `height` 比例推算，所以裁切後仍維持被要求的比例；`width=300&height=200
+&fit=cover` 會得到 320×213。
+
+`fit=cover` 只有寬高兩個維度都給，才會真的裁切成那個框；只給一個維度的 `cover` 是等比縮到框
+內、不放大。`fit=inside` 則把給了的每一邊各自對齊。連寬高都沒給，只調格式或品質，轉換會跳過縮圖那一步，直接用
 原本的解析度重新編碼，沒有框可以縮。只給 `height` 的請求，會先從標頭讀出來源寬度（同樣不解
 碼像素），讓沒被限制的那一邊也能正確縮放。
 
@@ -250,19 +256,12 @@ referenced by 'file'.`。
 出的，所以帶的是這一列自己的內容類型與附件 `Content-Disposition`，轉檔失敗的回應從標頭上就
 看得出來跟成功的不一樣。
 
+解碼之前，會先從標頭讀出來源的寬與高。超過 `MaxSourcePixels` 的來源，或標頭讀不出來的來源，一律
+送出原始位元組，所以宣告了巨大畫布的小檔案不會被解碼。同時最多進行 `MaxConcurrentTransforms` 個
+轉換；請求等超過 `QueueTimeoutSeconds` 秒還拿不到名額，就回 `503`，代碼是 `IMAGE_TRANSFORM_BUSY`，
+並帶 `Retry-After` 標頭。
+
 ### 例子
-
-```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=32&format=webp
-HTTP/1.1 200 OK
-Content-Length: 292
-Content-Type: image/webp
-# decoded WebP VP8X: width=32, height=24
-# body: 292 bytes (binary, not shown)
-HTTP_STATUS:200
-```
-
-來源是 64×48 的 PNG，`width=32` 等比縮出 32×24，格式跟 `Content-Type` 都照要求換成 WebP。
 
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
@@ -284,13 +283,17 @@ HTTP_STATUS:200
 錄不同。
 
 快取鍵是一段帶標籤文字的 SHA-256，轉成小寫十六進位：檔案 id、這一列的 `version`，加上
-`width`、`height`、`format`、`fit`、`quality`，各佔一行。改動其中任何一項都會換一把鍵。版
+`width`、`height`、`format`、`fit`、`quality`，各佔一行，取自對齊與四捨五入之後的請求。改動其中任何一項都會換一把鍵。版
 本戳記用的是樂觀並行控制的 `version` 計數器，不是 `UpdatedAt`。這一列任何一次更新都會讓
 `version` 前進，舊的變體就自然作廢，不需要任何機制主動失效。
 
 每一筆快取項目按鍵的前兩個十六進位字元分到一個子目錄，寫入時先寫進同目錄的暫存檔，再搬移
 過去，所以並發的讀取不會看到寫到一半的變體。讀取如果跟一次並發的寫入搶輸了，會被當成沒中快
 取，不是錯誤。
+
+快取容量由 `CacheMaxBytes` 設上限（預設 2 GB）。每次命中都會把該變體標成剛用過；寫入讓快取超過上限
+時，會從最久沒被讀取的變體開始刪，直到符合上限。某個變體在另一個請求讀取它的時候被淘汰，會被當成
+沒中快取，重新轉換一次。
 
 ## NetVips 與 LGPL
 

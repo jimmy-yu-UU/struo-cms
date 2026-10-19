@@ -5,7 +5,7 @@ namespace Struo.Infrastructure.Files;
 /// <summary>
 /// Reads image pixel dimensions from file headers only — it never decodes pixel data, so it
 /// adds no dependency and presents almost no attack surface for untrusted uploads. Supports the
-/// common web raster formats (PNG, JPEG, GIF, WebP); returns null for anything else. Format is
+/// common web raster formats (PNG, JPEG, GIF, WebP, AVIF); returns null for anything else. Format is
 /// detected by magic bytes, not the supplied content type.
 /// </summary>
 public sealed class ImageDimensionReader : IImageDimensionReader
@@ -16,7 +16,7 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         {
             if (seekable.CanSeek) seekable.Position = 0;
             var b = ReadHeader(seekable, 64 * 1024);
-            return Png(b) ?? Gif(b) ?? Webp(b) ?? Jpeg(b);
+            return Png(b) ?? Gif(b) ?? Webp(b) ?? Jpeg(b) ?? Avif(b);
         }
         catch
         {
@@ -104,6 +104,22 @@ public sealed class ImageDimensionReader : IImageDimensionReader
                 return (w, h);
             }
             i += 2 + len;
+        }
+        return null;
+    }
+
+    // AVIF (ISO BMFF): an "ftyp" box with an avif brand, then the "ispe" property box whose payload is
+    // 4 bytes version/flags followed by width and height as big-endian uint32.
+    private static (int, int)? Avif(byte[] b)
+    {
+        if (b.Length < 16 || b[4] != (byte)'f' || b[5] != (byte)'t' || b[6] != (byte)'y' || b[7] != (byte)'p')
+            return null;
+        var brand = System.Text.Encoding.ASCII.GetString(b, 8, 4);
+        if (brand is not ("avif" or "avis")) return null;
+        for (var i = 8; i + 16 <= b.Length; i++)
+        {
+            if (b[i] == (byte)'i' && b[i + 1] == (byte)'s' && b[i + 2] == (byte)'p' && b[i + 3] == (byte)'e')
+                return (Be32(b, i + 8), Be32(b, i + 12));
         }
         return null;
     }

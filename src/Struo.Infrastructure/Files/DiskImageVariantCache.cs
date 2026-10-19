@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Struo.Application.Files;
 
 namespace Struo.Infrastructure.Files;
@@ -13,8 +15,20 @@ namespace Struo.Infrastructure.Files;
 /// hex characters (avoids one huge flat directory) and written atomically (temp file + rename) so
 /// a concurrent reader never observes a partially-written variant.
 /// </summary>
-public sealed class DiskImageVariantCache(string rootPath) : IImageVariantCache
+/// <remarks>
+/// When <c>maxBytes</c> is positive the cache is size-capped: a hit stamps the file's last-write time,
+/// and a write that leaves the total above the cap deletes the least recently stamped variants until
+/// it fits. Eviction failures are logged and never reach the caller.
+/// </remarks>
+public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
+    : IImageVariantCache
 {
+    private const int MoveAttempts = 5;
+    private const int MoveRetryDelayMs = 10;
+
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
+    private readonly SemaphoreSlim _sweepGate = new(1, 1);
+
     public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req)
     {
         // Every field of the request feeds the hash input, each preceded by a distinct tag, so a
@@ -40,9 +54,15 @@ public sealed class DiskImageVariantCache(string rootPath) : IImageVariantCache
 
         try
         {
-            return await System.IO.File.ReadAllBytesAsync(path, ct);
+            // FileShare.Delete lets a concurrent eviction or replacement proceed while this read is open.
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 4096, useAsync: true);
+            var bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, ct);
+            Touch(path);
+            return bytes;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Lost a race with a concurrent SetAsync's temp-file rename, or the entry was evicted
             // between the existence check and the read: treat as a miss rather than surfacing an
@@ -64,15 +84,95 @@ public sealed class DiskImageVariantCache(string rootPath) : IImageVariantCache
         try
         {
             await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
-            System.IO.File.Move(tempPath, path, overwrite: true);
+            await MoveIntoPlaceAsync(tempPath, path, ct);
         }
         catch
         {
-            if (System.IO.File.Exists(tempPath))
-            {
-                try { System.IO.File.Delete(tempPath); } catch (IOException) { /* best-effort cleanup */ }
-            }
+            TryDeleteTemp(tempPath);
             throw;
+        }
+
+        if (maxBytes > 0) Sweep();
+    }
+
+    // The destination can be briefly unreplaceable while a concurrent reader, evictor or writer of
+    // the same key has it open or pending deletion. A few retries cover that; a variant that still
+    // cannot be stored is dropped (the cache is an optimization) and logged.
+    private async Task MoveIntoPlaceAsync(string tempPath, string path, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                System.IO.File.Move(tempPath, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt < MoveAttempts)
+                {
+                    await Task.Delay(MoveRetryDelayMs, ct);
+                    continue;
+                }
+                _logger.LogWarning(ex, "Could not store image variant {Path}; it is served uncached.", path);
+                TryDeleteTemp(tempPath);
+                return;
+            }
+        }
+    }
+
+    private static void TryDeleteTemp(string tempPath)
+    {
+        if (!System.IO.File.Exists(tempPath)) return;
+        try { System.IO.File.Delete(tempPath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup */ }
+    }
+
+    private void Touch(string path)
+    {
+        try { System.IO.File.SetLastWriteTimeUtc(path, DateTime.UtcNow); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "Could not stamp image variant {Path}.", path);
+        }
+    }
+
+    // One sweep at a time; a write that finds a sweep running skips it, the running sweep or the
+    // next write brings the total back under the cap.
+    private void Sweep()
+    {
+        if (!_sweepGate.Wait(0)) return;
+        try
+        {
+            var files = new DirectoryInfo(rootPath)
+                .EnumerateFiles("*", SearchOption.AllDirectories)
+                .Where(f => !f.Name.StartsWith('.'))
+                .ToList();
+            var total = files.Sum(f => f.Length);
+            if (total <= maxBytes) return;
+
+            foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
+            {
+                if (total <= maxBytes) break;
+                var length = file.Length;
+                try
+                {
+                    file.Delete();
+                    total -= length;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(ex, "Could not evict image variant {Path}.", file.FullName);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Image variant cache sweep failed under {Root}.", rootPath);
+        }
+        finally
+        {
+            _sweepGate.Release();
         }
     }
 

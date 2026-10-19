@@ -25,9 +25,10 @@ An array-valued key has to be replaced as a whole: at a higher-precedence layer,
 override keep the value from the layer below, so filling in only the first few elements doesn't
 shorten the array.
 
-The default `appsettings.json` fully populates four arrays: `Oidc:Scopes`,
-`Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:AllowedContentTypes`, and
-`Serilog:WriteTo`; the first two fall back to their built-in default even if you delete them
+The default `appsettings.json` fully populates six arrays: `Oidc:Scopes`,
+`Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:ImageTransform:SizeSteps`,
+`Struo:Files:ImageTransform:TransformableContentTypes`, `Struo:Files:AllowedContentTypes`, and
+`Serilog:WriteTo`; the first four fall back to their built-in default even if you delete them
 entirely. Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to shorten an array, edit the
 settings file itself.
 
@@ -146,8 +147,9 @@ reported.
 `Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
 startup: an unrecognized value fails startup immediately, and the required fields of whichever
 backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`,
-`AllowedContentTypes`, `PresignedRedirect`, and the whole `ImageTransform` section have no
-validation rule — a correctly typed value is never checked further.
+`AllowedContentTypes`, `PresignedRedirect`, and the `ImageTransform` keys other than the ones
+listed under [ImageTransform](#imagetransform) as validated have no validation rule — a
+correctly typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
   about the length is still limited.
@@ -195,6 +197,12 @@ startup; the default value is the `REPLACE_ME` placeholder, waiting to be replac
 | `Struo:Files:ImageTransform:AllowedFormats` | string array | see below |
 | `Struo:Files:ImageTransform:DefaultQuality` | integer | `82` |
 | `Struo:Files:ImageTransform:CachePath` | string | `"App_Data/image-cache"` |
+| `Struo:Files:ImageTransform:SizeSteps` | integer array | see below |
+| `Struo:Files:ImageTransform:TransformableContentTypes` | string array | see below |
+| `Struo:Files:ImageTransform:MaxConcurrentTransforms` | integer | `2` |
+| `Struo:Files:ImageTransform:QueueTimeoutSeconds` | integer | `10` |
+| `Struo:Files:ImageTransform:CacheMaxBytes` | integer (bytes) | `2147483648` |
+| `Struo:Files:ImageTransform:MaxSourcePixels` | integer | `50000000` |
 
 This is the actual value, not the nested form used in `appsettings.json`:
 ```text
@@ -204,12 +212,35 @@ Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 Leaving `AllowedFormats` empty or deleting it restores the built-in `webp`/`jpeg`/`png`/`avif` at
 startup, so there is no way to configure "no format allowed"; the list is also only checked when
 the caller asks for an explicit `format`. To turn transforms off entirely, set `Enabled=false`.
-A transform only happens when the caller requests a width, height, or format, the file itself is
-an image, and `Enabled` is `true`; otherwise the original file is streamed as-is.
+A transform only happens when the caller requests a width, height, or format, the file's
+content type is in `TransformableContentTypes`, and `Enabled` is `true`; otherwise the original file is streamed as-is.
 
 When `CachePath` is a relative path, it's relative to the application's content root, not the
 process's current working directory. This matters for where the cache actually ends up when
 something like systemd starts the process from a different directory.
+
+The keys below bound what one caller can make the server compute and store.
+
+- `SizeSteps`: the output widths and heights a request can get. A requested `width` or `height`
+  snaps up to the next step; above the last step the last step applies (and `MaxWidth` /
+  `MaxHeight` still cap it). The default is `[64, 128, 256, 320, 480, 640, 768, 1024, 1280, 1600,
+  1920, 2560, 3840, 4096]`. Fewer steps mean fewer cached variants. Leaving it empty restores the
+  default; entries must be positive.
+- `TransformableContentTypes`: the source types that are transformed. The default is
+  `image/jpeg`, `image/png`, `image/webp`, `image/avif` and `image/gif`. Any other image, SVG
+  included, is served as its original bytes even when transform parameters are present.
+- `MaxConcurrentTransforms`: how many transforms run at once across all requests (at least `1`).
+  A request that finds every slot busy waits up to `QueueTimeoutSeconds` (`0` or more; `0` does not
+  wait) and then gets `503` `IMAGE_TRANSFORM_BUSY` with a `Retry-After` header.
+- `CacheMaxBytes`: the size cap of the variant cache on disk. When a write leaves the cache above
+  it, the least recently read variants are deleted until it fits. `0` or less removes the cap. A
+  deletion that fails is logged and never fails the request.
+- `MaxSourcePixels`: the largest source, width times height, that is decoded (at least `1`). The
+  size is read from the file header; a larger source, or one whose header cannot be read, is
+  served as its original bytes.
+
+`MaxConcurrentTransforms`, `QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps`
+are validated at startup.
 
 ## Struo:Cors
 

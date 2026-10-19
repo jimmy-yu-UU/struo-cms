@@ -271,32 +271,39 @@ The transform runs through the download endpoint itself, driven by a set of quer
 `GET /api/files/{id}/content?width=&height=&format=&fit=&quality=`. A request only actually
 transforms when three things are true at once: the feature itself is on (key
 `Struo:Files:ImageTransform:Enabled`, default `true`), at least one of `width`/`height`/`format`
-was given, and this row's `contentType` starts with `image/`.
+was given, and this row's `contentType` is one of `TransformableContentTypes` (JPEG, PNG, WebP,
+AVIF and GIF by default).
 
 If any one condition is missing, the request falls straight back to the original stream or
-redirect, unaffected.
+redirect, unaffected. An SVG is the common case: `?width=50` on an SVG returns the SVG itself.
 
 ### Parameters
 
 | Parameter | Value | Out of range |
 |---|---|---|
-| `width` | Integer | Clamped 1–`MaxWidth`; missing derives proportionally |
-| `height` | Integer | Clamped 1–`MaxHeight`; missing derives proportionally |
+| `width` | Integer | Clamped 1–`MaxWidth`, then snapped up to a size step |
+| `height` | Integer | Clamped 1–`MaxHeight`, then snapped up to a size step |
 | `format` | One of `AllowedFormats` | Other values `400`; missing gives WebP, not source format |
-| `fit` | Any string | Defaults `inside`; `cover` crops only with both |
-| `quality` | Integer | Clamped 1–100; missing uses `DefaultQuality` |
+| `fit` | `inside` or `cover` | Other values `400`; missing is `inside` |
+| `quality` | Integer | Rounded to a multiple of 10, 10–100; missing: `DefaultQuality` |
 
-`MaxWidth`, `MaxHeight`, `AllowedFormats` and `DefaultQuality` are all in
-[Chapter 4](04-configuration.md). `format` is only checked against `AllowedFormats` when the caller
+`MaxWidth`, `MaxHeight`, `AllowedFormats`, `DefaultQuality`, `SizeSteps` and the other transform
+limits are all in [Chapter 4](04-configuration.md). `format` is only checked against `AllowedFormats` when the caller
 explicitly gives a value, matched case-insensitively — `?format=WEBP` counts just the same; a value
 not on the list is `400`, `Unsupported format '{x}'.`.
 
 Omitting `format` always means WebP, and `Content-Type` changes to `image/webp` right along with
 it — it never carries over the source file's own encoding.
 
+Sizes snap so that the number of distinct variants a caller can create stays small: `width=100`
+returns a 128-wide image with the default steps, and `width=65` and `width=128` share one cached
+variant. A request above the last step gets the last step. `fit=cover` snaps the width and derives
+the height from the ratio of the requested `width` and `height`, so the crop keeps the proportions
+that were asked for; a request of `width=300&height=200&fit=cover` returns 320×213.
+
 `fit=cover` only actually crops to that frame when both dimensions are given; a `cover` with just
-one dimension, or any other spelling, scales proportionally to fit inside the frame without
-enlarging. With neither dimension given, and only format or quality adjusted, the transform skips
+one dimension scales proportionally to fit inside the frame without enlarging. `fit=inside` snaps
+each given side on its own. With neither dimension given, and only format or quality adjusted, the transform skips
 the resizing step entirely and re-encodes at the original resolution, since there's no frame to fit.
 
 A request giving only `height` reads the source width from the header first (again without
@@ -314,20 +321,13 @@ Those original bytes go out the same way an ordinary download does, so they carr
 content type and attachment `Content-Disposition` — a failed transform's response is
 distinguishable from a successful one just by its headers.
 
+Before decoding, the source's width and height are read from its header. A source over
+`MaxSourcePixels`, or one whose header cannot be read, is served as its original bytes, so a small
+upload that declares a huge canvas is never decoded. At most `MaxConcurrentTransforms` transforms
+run at once; a request that waits longer than `QueueTimeoutSeconds` for a slot gets `503` with the
+`IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
+
 ### Examples
-
-```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=32&format=webp
-HTTP/1.1 200 OK
-Content-Length: 292
-Content-Type: image/webp
-# decoded WebP VP8X: width=32, height=24
-# body: 292 bytes (binary, not shown)
-HTTP_STATUS:200
-```
-
-The source is a 64×48 PNG; `width=32` scales proportionally to 32×24, with both the format and
-`Content-Type` changed to WebP as requested.
 
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
@@ -350,8 +350,8 @@ Transformed variants are stored on disk, at the path set by
 here resolves against the application's content root, unlike `local`'s own root.
 
 The cache key is a SHA-256 of a labeled text block, lowercased to hex: the file id, this row's
-`version`, plus `width`, `height`, `format`, `fit` and `quality`, one per line. Changing any one of
-them produces a different key. The version stamp used is the optimistic-concurrency `version`
+`version`, plus `width`, `height`, `format`, `fit` and `quality`, one per line, taken from the request after
+snapping and rounding. Changing any one of them produces a different key. The version stamp used is the optimistic-concurrency `version`
 counter, not `UpdatedAt`. Any update to this row advances `version`, which naturally invalidates
 old variants with no active invalidation mechanism needed.
 
@@ -359,6 +359,11 @@ Each cache entry is bucketed into a subdirectory by the key's first two hex char
 goes to a temp file in the same directory first and is then moved into place, so a concurrent read
 never sees a half-written variant. A read that loses a race against a concurrent write is treated
 as a cache miss, not an error.
+
+The cache is size-capped by `CacheMaxBytes` (2 GB by default). Every hit stamps the variant as
+recently used; when a write leaves the cache over the cap, the variants that were read least
+recently are deleted until it fits. A variant evicted while another request is reading it is read
+as a miss and transformed again.
 
 ## NetVips and LGPL
 

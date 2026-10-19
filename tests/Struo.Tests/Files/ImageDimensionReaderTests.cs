@@ -15,6 +15,18 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(Png1x1), "image/png").Should().Be((1, 1));
 
     [Fact]
+    public void Reads_avif_dimensions_from_the_ispe_box()
+    {
+        byte[] avif =
+        [
+            0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0,
+            0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0,
+            0, 0, 0x1F, 0x40, 0, 0, 0x17, 0x70
+        ];
+        new ImageDimensionReader().TryRead(new MemoryStream(avif), "image/avif").Should().Be((8000, 6000));
+    }
+
+    [Fact]
     public void Reads_gif_dimensions()
     {
         // GIF89a header, logical screen 3x2 (little-endian uint16), then trailing bytes.

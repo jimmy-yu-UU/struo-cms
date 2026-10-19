@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Struo.Application.Query;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
@@ -49,6 +50,8 @@ public static class FileStorageServiceCollectionExtensions
         // NetVipsImageTransformer is stateless (no fields) so a Singleton is safe and avoids a
         // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.
         services.AddSingleton<IImageTransformer, NetVipsImageTransformer>();
+        // libvips loaders flagged untrusted (e.g. ImageMagick, SVG) never run on uploaded content.
+        NetVips.NetVips.BlockUntrusted = true;
         services.AddSingleton<IImageVariantCache>(sp =>
         {
             var options = sp.GetRequiredService<FileStorageOptions>();
@@ -61,8 +64,12 @@ public static class FileStorageServiceCollectionExtensions
             var root = Path.IsPathRooted(cachePath)
                 ? cachePath
                 : Path.Combine(env.ContentRootPath, cachePath);
-            return new DiskImageVariantCache(root);
+            return new DiskImageVariantCache(
+                root, options.ImageTransform.CacheMaxBytes, sp.GetRequiredService<ILogger<DiskImageVariantCache>>());
         });
+        // One gate for the whole process: the concurrency cap spans all requests.
+        services.AddSingleton<ImageTransformGate>();
+        services.AddSingleton<ImageTransformServices>();
 
         // FileService's trash and purge need the shared reference-handling pipeline; AddStruoData
         // registers the same type, so whichever runs first wins.

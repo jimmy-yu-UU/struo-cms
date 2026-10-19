@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
@@ -15,7 +16,7 @@ namespace Struo.Api.Controllers;
 [Route("api/files")]
 public sealed class FilesController(
     FileService files, IFileStorage storage, FileStorageOptions options, IFileAccessPolicy access,
-    IImageTransformer transformer, IImageVariantCache variantCache, ILogger<FilesController> logger)
+    ImageTransformServices images, ILogger<FilesController> logger)
     : ControllerBase
 {
     // The media library is the "file" collection. Mutations go through the dedicated file storage
@@ -85,27 +86,19 @@ public sealed class FilesController(
         if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
 
         // On-the-fly image transform. Only when the caller actually asked for one (at least one
-        // of width/height/format present), the content behind this row is an image, and the feature is
-        // enabled. Otherwise fall straight through to the existing passthrough behavior below —
+        // of width/height/format present), the content behind this row is a transformable image type, and
+        // the feature is enabled. Otherwise fall straight through to the existing passthrough behavior below —
         // unchanged for every non-image file and for image requests with no transform params.
         var imageTransform = options.ImageTransform;
         var wantsTransform = imageTransform.Enabled
             && (width is not null || height is not null || format is not null)
-            && row.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            && imageTransform.TransformableContentTypes.Contains(row.ContentType, StringComparer.OrdinalIgnoreCase);
 
         if (wantsTransform)
         {
-            var normalizedFormat = (format ?? "").ToLowerInvariant();
-            if (format is not null && !imageTransform.AllowedFormats.Contains(normalizedFormat))
-                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                    $"Unsupported format '{format}'.");
-
-            var req = new ImageTransformRequest(
-                Width: width is null ? null : Math.Clamp(width.Value, 1, imageTransform.MaxWidth),
-                Height: height is null ? null : Math.Clamp(height.Value, 1, imageTransform.MaxHeight),
-                Format: format is null ? null : normalizedFormat,
-                Fit: string.IsNullOrEmpty(fit) ? "inside" : fit,
-                Quality: Math.Clamp(quality ?? imageTransform.DefaultQuality, 1, 100));
+            if (!ImageTransformRequestNormalizer.TryNormalize(
+                    width, height, format, fit, quality, imageTransform, out var req, out var requestError))
+                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, requestError);
 
             // Version stamp: row.Version (AuditableEntity's optimistic-concurrency counter) rather than
             // UpdatedAt, because UpdatedAt is a non-nullable DateTime here (no "unset" sentinel to
@@ -113,11 +106,20 @@ public sealed class FilesController(
             // counter — it increments on every update, including a future re-upload/replace, so stale
             // variants naturally miss instead of serving bytes from a since-replaced file.
             var fileVersion = row.Version.ToString();
-            var key = variantCache.DeriveKey(id, fileVersion, req);
+            var key = images.Cache.DeriveKey(id, fileVersion, req);
 
-            var cached = await variantCache.TryGetAsync(key, ct);
+            var cached = await images.Cache.TryGetAsync(key, ct);
             if (cached is not null)
                 return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
+
+            // The gate is taken before the source is read so waiting requests hold no source bytes.
+            using var lease = await images.Gate.TryEnterAsync(ct);
+            if (lease is null)
+            {
+                Response.Headers.RetryAfter = imageTransform.QueueTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+                return ApiResults.Fail(StatusCodes.Status503ServiceUnavailable, ErrorCodes.ImageTransformBusy,
+                    "Image transforms are busy; retry shortly.");
+            }
 
             byte[] sourceBytes;
             await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
@@ -127,10 +129,19 @@ public sealed class FilesController(
                 sourceBytes = ms.ToArray();
             }
 
+            // Header-only probe: a source with unreadable or oversized dimensions is served as is
+            // instead of being decoded.
+            using (var probe = new MemoryStream(sourceBytes, writable: false))
+            {
+                var dims = images.Dimensions.TryRead(probe, row.ContentType);
+                if (dims is null || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
+                    return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
+            }
+
             ImageTransformResult result;
             try
             {
-                result = transformer.Transform(sourceBytes, req);
+                result = images.Transformer.Transform(sourceBytes, req);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -140,11 +151,10 @@ public sealed class FilesController(
                 // a worse UX than an un-transformed original, but a swallowed error is worse still.
                 logger.LogWarning(ex,
                     "Image transform failed for file {FileId}; falling back to original bytes.", id);
-                var fallback = await storage.OpenReadAsync(row.StorageKey, ct);
-                return File(fallback, row.ContentType, fileDownloadName: row.FileName);
+                return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
             }
 
-            await variantCache.SetAsync(key, result.Bytes, ct);
+            await images.Cache.SetAsync(key, result.Bytes, ct);
             return File(result.Bytes, result.ContentType);
         }
 

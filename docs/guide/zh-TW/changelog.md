@@ -76,6 +76,15 @@
   一樣的關聯規則。仍被 `OnDelete.Restrict` 關聯參照的檔案，兩者都會回 `409 CONFLICT`，過去會被移到
   垃圾桶或清除。清除時會把 `OnDelete.SetNull` 的參照設為 null、移除多對多的連接資料列，過去這些參照
   會留著、指向不存在的檔案。通用項目 API 與 GraphQL 刪除檔案走同一條流程。
+- 圖片轉換的參數會被正規化，轉換本身也有了上限。請求的 `width` 或 `height` 會往上對齊到
+  `Struo:Files:ImageTransform:SizeSteps` 的下一個值（預設 64、128、256、320、480、640、768、1024、1280、
+  1600、1920、2560、3840、4096），所以 `width=100` 會得到 128 寬的圖。`fit=cover` 只對齊寬度，高度依請求的
+  比例推算。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。`quality` 四捨五入到 10 的倍數，範圍 10 到
+  100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、AVIF、GIF）裡的來源會被轉換；對 SVG 帶
+  `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣。同時最多
+  進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`
+  `IMAGE_TRANSFORM_BUSY`。變體快取由 `CacheMaxBytes`（2 GB）設上限，並以最久未使用者優先淘汰。需要精確像素
+  尺寸的用戶端，必須請求階梯上的尺寸或自行設定 `SizeSteps`；傳過其他 `fit` 值的用戶端必須改掉。
 :::
 
 ### 新增

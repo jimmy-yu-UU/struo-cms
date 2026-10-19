@@ -63,12 +63,55 @@ public sealed class FileStorageOptions
         // (e.g. a systemd unit or a different shell) than the project folder.
         public string CachePath { get; set; } = "App_Data/image-cache";
 
+        public static readonly int[] DefaultSizeSteps =
+            [64, 128, 256, 320, 480, 640, 768, 1024, 1280, 1600, 1920, 2560, 3840, 4096];
+
+        public static readonly string[] DefaultTransformableContentTypes =
+            ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
+
+        /// <summary>Output sizes a requested width/height snaps UP to; above the last step the last
+        /// step applies. Empty until <see cref="ApplyCollectionDefaults"/> runs.</summary>
+        public int[] SizeSteps { get; set; } = [];
+
+        /// <summary>Source content types that are transformed; any other image (e.g. SVG) is served
+        /// as the original bytes. Empty until <see cref="ApplyCollectionDefaults"/> runs.</summary>
+        public string[] TransformableContentTypes { get; set; } = [];
+
+        /// <summary>Transforms that may run at the same time across all requests.</summary>
+        public int MaxConcurrentTransforms { get; set; } = 2;
+
+        /// <summary>Seconds a request waits for a free transform slot before answering 503.</summary>
+        public int QueueTimeoutSeconds { get; set; } = 10;
+
+        /// <summary>Disk cache size cap in bytes; least-recently-used variants are evicted above it.
+        /// 0 or less = no cap.</summary>
+        public long CacheMaxBytes { get; set; } = 2_147_483_648;
+
+        /// <summary>Largest source (width x height) that is decoded; a larger source is served as the
+        /// original bytes.</summary>
+        public long MaxSourcePixels { get; set; } = 50_000_000;
+
         /// <summary>Applies defaults that cannot live in a property initializer without
         /// ConfigurationBinder appending to them. Must run after binding and before the value is
         /// consumed.</summary>
         public void ApplyCollectionDefaults()
         {
             if (AllowedFormats.Length == 0) AllowedFormats = [.. DefaultAllowedFormats];
+            if (SizeSteps.Length == 0) SizeSteps = [.. DefaultSizeSteps];
+            if (TransformableContentTypes.Length == 0)
+                TransformableContentTypes = [.. DefaultTransformableContentTypes];
+        }
+
+        public void Validate()
+        {
+            if (SizeSteps.Any(s => s < 1))
+                throw new InvalidOperationException("Struo:Files:ImageTransform:SizeSteps entries must be positive.");
+            if (MaxConcurrentTransforms < 1)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxConcurrentTransforms must be at least 1.");
+            if (QueueTimeoutSeconds < 0)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:QueueTimeoutSeconds must not be negative.");
+            if (MaxSourcePixels < 1)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxSourcePixels must be positive.");
         }
     }
 
@@ -80,6 +123,7 @@ public sealed class FileStorageOptions
 
     public void Validate()
     {
+        ImageTransform.Validate();
         if (DefaultStatus is not (PublishedStatus or DraftStatus))
             throw new InvalidOperationException(
                 $"Unknown Struo:Files:DefaultStatus '{DefaultStatus}' (expected '{PublishedStatus}' or '{DraftStatus}').");

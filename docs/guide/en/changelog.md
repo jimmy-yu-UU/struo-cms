@@ -97,6 +97,18 @@
   `OnDelete.Restrict` relation returns `409 CONFLICT` on both, where it was trashed or purged. A purge sets
   `OnDelete.SetNull` references to null and removes many-to-many junction rows, where it left them
   pointing at a missing file. The generic items API and GraphQL delete of a file go through the same path.
+- Image transform parameters are normalized, and the transform is bounded. A requested `width` or
+  `height` snaps up to the next value of `Struo:Files:ImageTransform:SizeSteps` (default 64, 128, 256,
+  320, 480, 640, 768, 1024, 1280, 1600, 1920, 2560, 3840, 4096), so `width=100` returns a 128-wide
+  image. With `fit=cover` only the width snaps and the height follows the requested ratio. `fit` is
+  `inside` or `cover`; any other value is `400`. `quality` rounds to a multiple of 10 within 10 to 100.
+  Only sources in `TransformableContentTypes` (JPEG, PNG, WebP, AVIF, GIF) are transformed; an SVG with
+  `?width=` returns the original bytes, as does a source over `MaxSourcePixels` (50 000 000) or whose
+  header cannot be read. At most `MaxConcurrentTransforms` (2) transforms run at once, and a request
+  that waits longer than `QueueTimeoutSeconds` (10) gets `503` `IMAGE_TRANSFORM_BUSY`. The variant cache
+  is capped by `CacheMaxBytes` (2 GB) with least-recently-used eviction. A client that needs an exact
+  pixel size must request a size on the list or configure `SizeSteps`, and one that passed another
+  `fit` value must change it.
 :::
 
 ### Added
