@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using SqlSugar;
+using Struo.Application.Changes;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Application.Localization;
@@ -8,6 +9,7 @@ using Struo.Domain.Localization;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Changes;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
@@ -103,6 +105,7 @@ public sealed class FileReferenceCleanupTests : IDisposable
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ISqlSugarClient _db;
     private readonly RecordingStorage _storage = new();
+    private readonly RecordingItemChangeListener _listener = new();
     private readonly FileService _files;
     private readonly ItemService _items;
 
@@ -138,7 +141,8 @@ public sealed class FileReferenceCleanupTests : IDisposable
 
         _files = new FileService(
             _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), repo,
-            new StubLanguages(), currentUser, references: pipeline);
+            new StubLanguages(), currentUser,
+            notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()), references: pipeline);
         _items = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, new RelationExpander(repo, graph, options), graph, new StubLanguages(), options,
             new GanssHtmlSanitizer(), currentUser, revisions,
@@ -219,6 +223,28 @@ public sealed class FileReferenceCleanupTests : IDisposable
         await trashItems.Should().ThrowAsync<RelationConflictException>();
         (await _db.Queryable<File>().In(s.FileId).AnyAsync()).Should().BeTrue();
         (await _db.Queryable<FileRefDoc>().In(s.DocId).FirstAsync())!.CoverId.Should().Be(s.FileId);
+        _storage.Deleted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Purge_announces_the_file_as_purged_and_each_affected_row_as_updated()
+    {
+        var s = await SeedAsync();
+
+        await _files.DeleteAsync(s.FileId);
+
+        var all = _listener.All.ToList();
+        all.Should().Contain(c => c.Kind == ItemChangeKind.Purged && c.Collection == "file" && c.Id == s.FileId.ToString());
+        all.Should().Contain(c => c.Kind == ItemChangeKind.Updated
+            && string.Equals(c.Collection, "FileRefDoc", StringComparison.OrdinalIgnoreCase) && c.Id == s.DocId.ToString());
+    }
+
+    [Fact]
+    public async Task Purge_of_an_unknown_file_is_false_and_announces_nothing()
+    {
+        (await _files.DeleteAsync(Guid.NewGuid())).Should().BeFalse();
+
+        _listener.All.Should().BeEmpty();
         _storage.Deleted.Should().BeEmpty();
     }
 }

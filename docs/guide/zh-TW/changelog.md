@@ -72,6 +72,10 @@
   （驗證 `deep` 樹，接受 `FilterBudget?`）與 `ExpandPreparedAsync`（展開已準備好的樹）取代，用過
   `ExpandAsync` 的呼叫端要改成兩個都呼叫。`ItemService` 在搜尋查詢或根層查詢之前就驗證 `deep` 樹，所以
   依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。`offset` 沒有上限。
+- 媒體庫對檔案的垃圾桶與清除（`DELETE /api/files/{id}`，清除加 `?purge=true`）改為套用其他集合刪除時
+  一樣的關聯規則。仍被 `OnDelete.Restrict` 關聯參照的檔案，兩者都會回 `409 CONFLICT`，過去會被移到
+  垃圾桶或清除。清除時會把 `OnDelete.SetNull` 的參照設為 null、移除多對多的連接資料列，過去這些參照
+  會留著、指向不存在的檔案。通用項目 API 與 GraphQL 刪除檔案走同一條流程。
 :::
 
 ### 新增
@@ -125,10 +129,7 @@
 
 - 透過通用項目 API（`DELETE /api/items/file/{id}`）或 GraphQL 的 `deleteFile` 刪除檔案，行為與媒體庫一致。
   移到垃圾桶時，若該檔案是品牌 Logo 會一併清除這個設定；清除（purge）時還會刪除翻譯、Logo 參照與儲存的檔案
-  內容。清除不再留下檔案內容，刪除檔案內容時儲存端失敗，會以警告記錄並附上儲存鍵，不再被忽略。兩個入口共用
-  同一條流程：媒體庫的垃圾桶與清除現在也套用關聯規則，仍被 `OnDelete.Restrict` 關聯參照的檔案會回
-  `409 CONFLICT`，清除時會把 `OnDelete.SetNull` 的參照設為 null、移除多對多的連接資料列，不再留下指向
-  不存在檔案的參照。
+  內容。清除不再留下檔案內容，刪除檔案內容時儲存端失敗，會以警告記錄並附上儲存鍵，不再被忽略。
 
 ### 升級說明
 

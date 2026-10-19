@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Struo.Application.Query;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Struo.Application.Files;
@@ -62,6 +64,9 @@ public static class FileStorageServiceCollectionExtensions
             return new DiskImageVariantCache(root);
         });
 
+        // FileService's trash and purge need the shared reference-handling pipeline; AddStruoData
+        // registers the same type, so whichever runs first wins.
+        services.TryAddScoped<ItemPurgePipeline>();
         services.AddScoped<FileService>();
         services.AddScoped<IFileLifecycle>(sp => sp.GetRequiredService<FileService>());
         return services;

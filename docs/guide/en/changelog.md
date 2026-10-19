@@ -92,6 +92,11 @@
   `ExpandAsync` calls both. `ItemService` validates the `deep` tree before the search lookup or the root
   query, so an over-cap `deep` on a `GET` by id returns 400 even when the id does not exist (it returned
   404 before). There is no cap on `offset`.
+- The media library's trash and purge of a file (`DELETE /api/files/{id}`, with `?purge=true`) apply the
+  relation rules every other collection's delete applies. A file still referenced through an
+  `OnDelete.Restrict` relation returns `409 CONFLICT` on both, where it was trashed or purged. A purge sets
+  `OnDelete.SetNull` references to null and removes many-to-many junction rows, where it left them
+  pointing at a missing file. The generic items API and GraphQL delete of a file go through the same path.
 :::
 
 ### Added
@@ -156,10 +161,7 @@
   mutation does what the media library does. Trashing clears the brand logo when it was that file; purging
   also deletes the translations, the logo reference and the stored blob. A purge no longer leaves the blob
   behind, and a storage failure while deleting the blob is logged as a warning with the storage key instead
-  of being ignored. Both entry points share one path: the media library's trash and purge now also apply
-  the relation rules, so a file still referenced through an `OnDelete.Restrict` relation returns
-  `409 CONFLICT`, and a purge sets `OnDelete.SetNull` references to null and removes many-to-many junction
-  rows instead of leaving them pointing at a missing file.
+  of being ignored.
 
 ### Upgrade notes
 

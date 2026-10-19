@@ -67,7 +67,7 @@ public static class DataServiceCollectionExtensions
         // registration resolves for a single-service GetRequiredService) — either way it must keep the
         // never-throw contract IItemChangeNotifier documents.
         services.TryAddScoped<IItemChangeNotifier, ItemChangeNotifier>();
-        services.AddScoped<ItemPurgePipeline>();
+        services.TryAddScoped<ItemPurgePipeline>();
         services.AddScoped<ItemService>();
         // Expose the use-case seam controllers depend on, forwarding to the SAME scoped
         // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.

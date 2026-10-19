@@ -211,12 +211,15 @@ public sealed class FileService(
         // One transaction: the shared purge pipeline (Restrict guard, SetNull of referencing rows, junction
         // rows, translations, the row) plus the logo reference. Nesting-safe, so it joins an outer unit of work.
         var changes = new ItemChangeSet();
-        await repository.InTransactionAsync(async () =>
+        var purged = await repository.InTransactionAsync(async () =>
         {
-            await References.PurgeCoreAsync(
+            var removed = await References.PurgeCoreAsync(
                 FileCollection.Name, id.ToString(), new HashSet<(string Collection, string Id)>(), changes, ct);
-            await ClearLogoReferenceAsync(id, ct);
+            if (removed) await ClearLogoReferenceAsync(id, ct);
+            return removed;
         }, ct);
+        // A concurrent purge that won between the pre-read and the transaction leaves nothing to announce.
+        if (!purged) return false;
 
         await NotifyAsync(changes);
         // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
@@ -224,11 +227,11 @@ public sealed class FileService(
         return true;
     }
 
+    public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
+
     // Default "delete" for the media library is trash, not purge. Reuses the same atomic
     // repository primitive ItemService uses for every other soft-deletable collection (WHERE
     // deletedat IS NULL) instead of reimplementing that logic here.
-    public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
-
     public async Task<bool> TrashAsync(Guid id, CancellationToken ct = default)
     {
         var trashed = await repository.InTransactionAsync(async () =>
