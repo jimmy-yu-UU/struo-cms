@@ -23,18 +23,19 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     }
 
     public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
-        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default)
+        Type entityType, string propertyName, IReadOnlyList<object> values,
+        int? maxRows = null, CancellationToken ct = default)
     {
         System.Threading.Interlocked.Increment(ref _whereInCalls);
-        return inner.QueryEntityWhereInAsync(entityType, propertyName, values, ct);
+        return inner.QueryEntityWhereInAsync(entityType, propertyName, values, maxRows, ct);
     }
 
     public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default)
+        FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default)
     {
         System.Threading.Interlocked.Increment(ref _whereInCalls);
-        return inner.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
+        return inner.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
     }
 
     // Delegate every other member straight through (no counting).

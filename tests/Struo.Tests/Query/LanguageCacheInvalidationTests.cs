@@ -125,9 +125,9 @@ public class LanguageCacheInvalidationTests
         public Task<T> InTransactionAsync<T>(Func<Task<T>> body, CancellationToken ct) => body();
         public Task<IReadOnlyList<object>> QueryWhereInAsync(string c, string prop, IReadOnlyList<object> vals, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, string? queryLocale, CancellationToken ct) =>
+        public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(string c, string prop, IReadOnlyList<object> vals, FilterNode? extraFilter, string? queryLocale, int? maxRows, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
-        public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, CancellationToken ct) =>
+        public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(Type t, string p, IReadOnlyList<object> vals, int? maxRows, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task SyncManyToManyAsync(Type jt, string pfk, string tfk, string? sort, object pid, IReadOnlyList<JunctionLink> links, CancellationToken ct) =>
             Task.CompletedTask;

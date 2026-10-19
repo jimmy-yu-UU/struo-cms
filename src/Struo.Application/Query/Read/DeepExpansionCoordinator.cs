@@ -27,7 +27,7 @@ public sealed class DeepExpansionCoordinator(
     public async Task ExpandAsync(
         string collection, DeepSpec? deep,
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, CancellationToken ct)
+        string? locale, CancellationToken ct, FilterBudget? budget = null)
     {
         if (deep is null || deep.Relations.Count == 0) return;
 
@@ -41,7 +41,8 @@ public sealed class DeepExpansionCoordinator(
         // name resolves against its own level's collection. Runs before any query executes,
         // and independent of row count — an over-depth/unknown-relation request must be
         // rejected even when the parent query matched zero rows.
-        ValidateDeepTree(collection, visible, depth: 1);
+        var nodes = 0;
+        ValidateDeepTree(collection, visible, depth: 1, budget ?? new FilterBudget(), ref nodes);
         if (entities.Count == 0) return;
 
         var parentDesc = registry.Get(collection)!;
@@ -98,7 +99,7 @@ public sealed class DeepExpansionCoordinator(
     /// filter fields whitelisted against the target collection, sort restricted to the target's
     /// own fields (no cross-relation sort for nested lists), and non-negative limit/offset.
     /// </summary>
-    private void ValidateDeepTree(string coll, DeepSpec spec, int depth)
+    private void ValidateDeepTree(string coll, DeepSpec spec, int depth, FilterBudget budget, ref int nodes)
     {
         if (depth > options.MaxRelationDepth)
             throw new QueryException(
@@ -107,6 +108,8 @@ public sealed class DeepExpansionCoordinator(
         {
             var rel = graph.Resolve(coll, relName)
                 ?? throw new QueryException($"Unknown relation '{relName}' on '{coll}'.");
+            if (++nodes > options.MaxDeepRelations)
+                throw new QueryException($"Too many relations in deep (max {options.MaxDeepRelations}).");
 
             var hasArgs = relSpec.Filter is not null || relSpec.Sort is not null
                           || relSpec.Limit is not null || relSpec.Offset is not null;
@@ -124,21 +127,21 @@ public sealed class DeepExpansionCoordinator(
             if (relSpec.Filter is not null)
                 QueryValidator.Validate(
                     new QueryModel(null, relSpec.Filter, [], 0, 0, null),
-                    targetMeta, options, graph, metadata, permissions);
+                    targetMeta, options, graph, metadata, permissions, budget);
 
             if (relSpec.Sort is not null)
+            {
                 foreach (var s in relSpec.Sort)
-                {
                     if (RelationPath.IsRelationPath(s.Field))
                         throw new QueryException(
                             $"Sort across relations is not supported for nested lists: '{s.Field}'.");
-                    QueryValidator.Validate(
-                        new QueryModel(null, null, [s], 0, 0, null),
-                        targetMeta, options, graph, metadata, permissions);
-                }
+                QueryValidator.Validate(
+                    new QueryModel(null, null, relSpec.Sort, 0, 0, null),
+                    targetMeta, options, graph, metadata, permissions);
+            }
 
             if (relSpec.Deep is not null)
-                ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1);
+                ValidateDeepTree(rel.TargetCollection, relSpec.Deep, depth + 1, budget, ref nodes);
         }
     }
 

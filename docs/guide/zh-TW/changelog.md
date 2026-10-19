@@ -55,6 +55,14 @@
   同一個 locale 的兩種寫法各存一列，兩列都會保留；維運人員可用
   `SELECT parent_fk, lower(locale), count(*) FROM <翻譯資料表> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
   找出，再刪除多餘的資料列。
+- 新增三個 `Query` 鍵來限制單一請求的成本。`MaxSortFields`（預設 5）限制頂層排序與每個巢狀清單 `sort`
+  的欄位數，`MaxDeepRelations`（預設 20）限制 `deep` 樹的關聯節點數，`MaxExpandRows`（預設 1000）限制
+  單次關聯讀取最多讀的列數。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
+  過去每個巢狀篩選各自計算。超過任一上限的請求回 400；關聯讀取超過 `MaxExpandRows` 時直接拒絕，不會
+  截斷。`IItemRepository.QueryWhereInFilteredAsync` 與 `QueryEntityWhereInAsync` 在取消權杖之前多了選用的
+  `int? maxRows`，實作這個介面的 fork 必須加上，以位置傳入權杖的呼叫必須改成具名（`ct: ct`）。
+  `QueryValidator.Validate` 與 `DeepExpansionCoordinator.ExpandAsync` 多了選用的 `FilterBudget`。`offset`
+  沒有上限。
 :::
 
 ### 安全性

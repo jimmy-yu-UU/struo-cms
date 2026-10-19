@@ -51,6 +51,9 @@ HTTP_STATUS:400
 lists: '<field>'.`——跟[第 10 章](10-query-basics.md)頂層 `sort=` 碰到多對多路徑時的 `Sort across
 to-many relations is not supported: '<path>'.` 是兩回事，一個管巢狀清單自己的排序，一個管頂層排序。
 
+巢狀 `sort` 跟頂層一樣最多 `Query:MaxSortFields` 個欄位，巢狀 `filter` 的條件也跟根層 `filter` 共用
+同一份 `Query:MaxFilterConditions` 額度。
+
 junction 的 payload（`_junction` 鍵）[第 8 章：關聯](08-relations.md)已經介紹過，本章最後的完整
 範例會再看到一次。
 
@@ -71,6 +74,12 @@ HTTP_STATUS:400
 
 `category` 加六層 `parent`，一共七個關聯跳，深度是 7，超過上限 6，所以被擋下；拿掉最內層的
 `parent`、變回六層，就會是驗證通過、正常回應的請求。
+
+**廣度與列數上限。** 一棵 `deep` 樹最多只能有 `Query:MaxDeepRelations` 個關聯節點（預設 20），同層與
+巢狀層合併計算：`Too many relations in deep (max 20).`。每次關聯讀取最多讀 `Query:MaxExpandRows` 列
+（預設 1000）；讀到更多就回 400 並點名該關聯，例如 `Relation 'children' has more than 1000 rows to
+expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。巢狀 `limit` 是在讀取之後
+才套用，所以不會降低上限檢查的列數；要縮小範圍，用巢狀 `filter`，或減少父頁的 `limit`。
 
 ## Facet 計數
 

@@ -82,7 +82,7 @@ public sealed class RevisionSnapshotBuilder(
         foreach (var desc in m2mSource.M2MDescriptors(collection))
         {
             var junctions = await repository.QueryEntityWhereInAsync(
-                desc.JunctionType, desc.ParentFkProperty, [idValue!], ct);
+                desc.JunctionType, desc.ParentFkProperty, [idValue!], ct: ct);
             var ordered = desc.SortProperty is null
                 ? junctions
                 : junctions.OrderBy(j => ReadProp(j, desc.SortProperty)).ToList();

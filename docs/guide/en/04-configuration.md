@@ -231,18 +231,29 @@ working.
 | `Query:DefaultLimit` | integer | `25` |
 | `Query:MaxFilterConditions` | integer | `50` |
 | `Query:MaxRelationDepth` | integer | `6` |
+| `Query:MaxSortFields` | integer | `5` |
+| `Query:MaxDeepRelations` | integer | `20` |
+| `Query:MaxExpandRows` | integer | `1000` |
 | `Query:MaxFacets` | integer | `10` |
 | `Query:MaxFacetValues` | integer | `50` |
 | `Query:MaxAggregates` | integer | `10` |
 | `Query:MaxSearchCandidates` | integer | `1000` |
 
-All eight keys carry `[Range(1, int.MaxValue)]` validation and are bound with `ValidateOnStart`;
+All eleven keys carry `[Range(1, int.MaxValue)]` validation and are bound with `ValidateOnStart`;
 setting one to zero or a negative number fails startup immediately. A key name outside this list (a
 typo, say) is silently ignored, with no error.
 
 A `limit` above `MaxLimit` is clamped, not rejected; omitting `limit`, or supplying a non-positive
 value, falls back to `DefaultLimit`. Exceeding `MaxFilterConditions`, `MaxFacets`, or
-`MaxAggregates` instead throws an exception naming the limit, and the query never executes.
+`MaxAggregates` instead throws an exception naming the limit, and the query never executes. So does
+exceeding `MaxSortFields`, which counts the fields of the top-level `sort` and of each nested list's
+`sort` separately, and `MaxDeepRelations`, which counts every relation node in one request's `deep`
+tree. `MaxFilterConditions` is one budget for the whole request: the root `filter` and every nested
+`deep` filter draw from it together.
+
+`MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
+finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never
+truncated. There is no cap on `offset`.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
 `_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate

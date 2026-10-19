@@ -226,13 +226,14 @@ public sealed class SqlSugarItemRepository(
         whereIn.QueryWhereInAsync(collection, property, values, ct);
 
     public Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
-        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default) =>
-        whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, ct);
+        Type entityType, string propertyName, IReadOnlyList<object> values,
+        int? maxRows = null, CancellationToken ct = default) =>
+        whereIn.QueryEntityWhereInAsync(entityType, propertyName, values, maxRows, ct);
 
     public Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default) =>
-        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, ct);
+        FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default) =>
+        whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
 
     public Task SyncManyToManyAsync(
         Type junctionType,

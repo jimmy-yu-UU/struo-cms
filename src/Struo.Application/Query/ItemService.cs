@@ -83,7 +83,8 @@ public sealed class ItemService(
         // sidecar (e.g. a relation path reaching into a translated related collection).
         var queryLocale = locale ?? await languages.DefaultCodeAsync();
 
-        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions);
+        var budget = new FilterBudget();
+        var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions, budget);
         var searchable = QueryValidator.SearchableFields(meta);
         // A registered ISearchProvider may answer the search with candidate ids (spec §3.2); the same
         // `validated` then feeds the list, every facet and the aggregate, so all three agree (R3).
@@ -95,7 +96,7 @@ public sealed class ItemService(
 
         var entities = result.Rows;
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
-        await deepExpansion.ExpandAsync(collection, raw.Deep, entities, rows, queryLocale, ct);
+        await deepExpansion.ExpandAsync(collection, raw.Deep, entities, rows, queryLocale, ct, budget);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
         var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
         var aggregate = validated.Aggregate is null ? null

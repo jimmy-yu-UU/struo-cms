@@ -8,11 +8,11 @@ namespace Struo.Infrastructure.Query;
 
 internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registry, FilterTranslator filters)
 {
-    private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInDispatcher =
-        new(typeof(WhereInQueries), nameof(WhereInGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
+    private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, int?, CancellationToken, Task<IReadOnlyList<object>>>> WhereInDispatcher =
+        new(typeof(WhereInQueries), nameof(WhereInGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(int?), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredDispatcher =
-        new(typeof(WhereInQueries), nameof(WhereInFilteredGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
+    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, int?, CancellationToken, Task<IReadOnlyList<object>>>> WhereInFilteredDispatcher =
+        new(typeof(WhereInQueries), nameof(WhereInFilteredGenericAsync), [typeof(List<IConditionalModel>), typeof(int?), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<WhereInQueries, string, IReadOnlyList<object>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInWithDeletedGenericAsync), [typeof(string), typeof(IReadOnlyList<object>), typeof(CancellationToken)]);
@@ -23,21 +23,22 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         var d = RepositoryHelpers.Descriptor(registry, collection);
         // Map camelCase field name -> CLR property name (fall back to the raw name, e.g. "id").
         var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        return QueryEntityWhereInAsync(d.EntityType, clrProperty, values, ct);
+        return QueryEntityWhereInAsync(d.EntityType, clrProperty, values, ct: ct);
     }
 
     public async Task<IReadOnlyList<object>> QueryEntityWhereInAsync(
-        Type entityType, string propertyName, IReadOnlyList<object> values, CancellationToken ct = default)
+        Type entityType, string propertyName, IReadOnlyList<object> values,
+        int? maxRows = null, CancellationToken ct = default)
     {
         // Empty value set -> never emit an "IN ()"; return empty.
         if (values.Count == 0) return [];
 
         var column = db.EntityMaintenance.GetDbColumnName(propertyName, entityType);
-        return await WhereInDispatcher.For(entityType)(this, column, values, ct);
+        return await WhereInDispatcher.For(entityType)(this, column, values, maxRows, ct);
     }
 
     private async Task<IReadOnlyList<object>> WhereInGenericAsync<T>(
-        string column, IReadOnlyList<object> values, CancellationToken ct) where T : class, new()
+        string column, IReadOnlyList<object> values, int? maxRows, CancellationToken ct) where T : class, new()
     {
         // Use a ConditionalModel (ConditionalType.In) rather than the typed .In(string, ...)
         // overload: SqlSugar's In(string, FieldType[]) is value-typed/array-bound and brittle
@@ -53,13 +54,17 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
                 CSharpTypeName = RepositoryHelpers.TypeNameOf(values.FirstOrDefault(v => v is not null))
             }
         };
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        var rows = await Capped(db.Queryable<T>().Where(conditionals), maxRows).ToListAsync(ct);
         return rows.Cast<object>().ToList();
     }
 
+    // Typed Take; SqlSugar emits the backend's own row-limit form (LIMIT / TOP / FETCH FIRST).
+    private static ISugarQueryable<T> Capped<T>(ISugarQueryable<T> query, int? maxRows) =>
+        maxRows is { } n ? query.Take(n) : query;
+
     public async Task<IReadOnlyList<object>> QueryWhereInFilteredAsync(
         string collection, string property, IReadOnlyList<object> values,
-        FilterNode? extraFilter, string? queryLocale, CancellationToken ct = default)
+        FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
         var d = RepositoryHelpers.Descriptor(registry, collection);
@@ -81,13 +86,13 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         if (extraFilter is not null)
             conditionals.AddRange(filters.Translate(collection, extraFilter, null, null, [], queryLocale));
 
-        return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, ct);
+        return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, maxRows, ct);
     }
 
     private async Task<IReadOnlyList<object>> WhereInFilteredGenericAsync<T>(
-        List<IConditionalModel> conditionals, CancellationToken ct) where T : class, new()
+        List<IConditionalModel> conditionals, int? maxRows, CancellationToken ct) where T : class, new()
     {
-        var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
+        var rows = await Capped(db.Queryable<T>().Where(conditionals), maxRows).ToListAsync(ct);
         return rows.Cast<object>().ToList();
     }
 

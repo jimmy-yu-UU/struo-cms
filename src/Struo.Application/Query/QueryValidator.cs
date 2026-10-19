@@ -8,13 +8,22 @@ using Struo.Domain.Query;
 
 namespace Struo.Application.Query;
 
+/// <summary>Filter conditions counted so far; shared by the root filter and every nested deep filter of one request.</summary>
+public sealed class FilterBudget
+{
+    public int Used { get; set; }
+}
+
 public static class QueryValidator
 {
     public static QueryModel Validate(
         QueryModel q, CollectionMetadata meta, StruoQueryOptions opts,
-        IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions)
+        IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions,
+        FilterBudget? budget = null)
     {
-        var ctx = new ValidationContext(opts, graph, metadata, permissions);
+        var ctx = new ValidationContext(opts, graph, metadata, permissions, budget ?? new FilterBudget());
+        if (q.Sort.Count > opts.MaxSortFields)
+            throw new QueryException($"Too many sort fields (max {opts.MaxSortFields}).");
         ctx.ValidateFilter(q.Filter, meta, hopsUsed: 0, logicalDepth: 1);
 
         foreach (var s in q.Sort) ctx.CheckField(s.Field, meta, forSort: true);
@@ -45,15 +54,14 @@ public static class QueryValidator
         (q.Facets ?? []).Select(f => FacetPathResolver.Resolve(meta, f, graph, metadata)).ToList();
 
     /// <summary>
-    /// Holds the per-request state (condition count, per-collection field allowlist cache) that used
-    /// to live as closures over local functions in <see cref="Validate"/>. Recursion into a quantified
-    /// relation predicate's inner filter needs that state to keep counting toward the same caps, so it
-    /// is threaded through as fields here instead.
+    /// Holds the per-request state (per-collection field allowlist cache, the shared condition budget)
+    /// threaded through <see cref="Validate"/>. Recursion into a quantified relation predicate's
+    /// inner filter keeps counting toward the same caps through these fields.
     /// </summary>
     private sealed class ValidationContext(
-        StruoQueryOptions opts, IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions)
+        StruoQueryOptions opts, IRelationshipGraph graph, IMetadataProvider metadata, IPermissionService permissions,
+        FilterBudget budget)
     {
-        private int conditionCount;
         private readonly Dictionary<string, HashSet<string>> knownCache = new(StringComparer.OrdinalIgnoreCase);
 
         private static readonly HashSet<FieldInterface> Numeric =
@@ -279,8 +287,8 @@ public static class QueryValidator
 
         private void CountCondition()
         {
-            conditionCount++;
-            if (conditionCount > opts.MaxFilterConditions)
+            budget.Used++;
+            if (budget.Used > opts.MaxFilterConditions)
                 throw new QueryException($"Too many filter conditions (max {opts.MaxFilterConditions}).");
         }
 

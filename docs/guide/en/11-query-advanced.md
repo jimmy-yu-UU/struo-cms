@@ -63,6 +63,9 @@ path — that one is `Sort across to-many relations is not supported: '<path>'.`
 query basics chapter](10-query-basics.md). One governs sorting inside a nested list, the other
 top-level sorting.
 
+A nested `sort` holds at most `Query:MaxSortFields` fields, like a top-level one, and the nested
+`filter` conditions count toward the same `Query:MaxFilterConditions` budget as the root `filter`.
+
 The junction's payload (the `_junction` key) is already covered in
 [Chapter 8: Relations](08-relations.md); it shows up again in this chapter's complete example at
 the end.
@@ -87,6 +90,14 @@ HTTP_STATUS:400
 `category` plus six more `parent` hops is seven relation hops total; the depth is 7, over the cap
 of 6, so it's rejected. Dropping the innermost `parent` back down to six hops validates and
 responds normally.
+
+**The breadth and row caps.** A `deep` tree may hold at most `Query:MaxDeepRelations` relation nodes
+(default 20), siblings and nested levels together: `Too many relations in deep (max 20).`. Each
+relation fetch reads at most `Query:MaxExpandRows` rows (default 1000). A fetch that finds more fails
+with a 400 naming the relation, such as `Relation 'children' has more than 1000 rows to expand; narrow
+the nested filter or expand fewer parent rows.`, and the rows are never truncated. A nested `limit`
+is applied after the fetch, so it does not lower the count the cap checks; narrow with a nested
+`filter` or a smaller `limit` on the parent page.
 
 ## Facet counting
 

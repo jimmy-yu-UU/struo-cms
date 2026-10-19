@@ -69,6 +69,16 @@
   one item under two spellings of the same locale keeps both; an operator can find them with
   `SELECT parent_fk, lower(locale), count(*) FROM <translation table> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
   and delete the extra row.
+- Three new `Query` keys bound the cost of one request. `MaxSortFields` (default 5) caps the fields of a
+  top-level sort and of each nested list's `sort`, `MaxDeepRelations` (default 20) caps the relation
+  nodes in a `deep` tree, and `MaxExpandRows` (default 1000) caps the rows one relation fetch may read.
+  `MaxFilterConditions` is now one budget shared by the root filter and every nested `deep` filter, where
+  each nested filter used to count on its own. A request over any of these limits is refused with 400;
+  a relation fetch over `MaxExpandRows` is refused, never truncated. `IItemRepository.QueryWhereInFilteredAsync` and
+  `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
+  that implements the interface must add it, and a call that passed the token positionally must name it
+  (`ct: ct`). `QueryValidator.Validate` and `DeepExpansionCoordinator.ExpandAsync` take an optional
+  `FilterBudget`. There is no cap on `offset`.
 :::
 
 ### Security

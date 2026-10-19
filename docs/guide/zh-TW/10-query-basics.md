@@ -130,7 +130,7 @@ POST 到 `/api/items/article/query`；三篇文章都符合——草稿那一篇
 
 **條件數量上限。** `Query:MaxFilterConditions`（預設 50）計算的是整個請求裡所有葉節點比較——含每
 個 `_and`／`_or` 分支，也含每個量詞內層篩選——超過就先被拒絕：
-`Too many filter conditions (max 50).` 跨關聯的條件沒有類似的上限，因為一個關聯條件只多一層巢狀子
+`Too many filter conditions (max 50).` 根層 `filter` 與每個巢狀 `deep` 篩選共用這一份額度。跨關聯的條件沒有類似的上限，因為一個關聯條件只多一層巢狀子
 查詢，不需要像撈一份 id 集合那樣限制大小。
 
 **其他形狀錯誤。** 一個空的 `filter` 物件是錯誤（`Empty filter object.`），不帶 `filter` 鍵則是合法
@@ -218,7 +218,8 @@ OR 接起來。
 
 ## 排序
 
-`sort=` 是逗號清單，每個欄位可以加上 `-` 前綴代表遞減，套用順序就是列出的順序。
+`sort=` 是逗號清單，每個欄位可以加上 `-` 前綴代表遞減，套用順序就是列出的順序。一份排序最多 `Query:MaxSortFields` 個欄位（預設 5），超過會被拒絕：
+`Too many sort fields (max 5).`。`offset` 沒有上限。
 
 排序鍵可以是一條點號路徑，但每一段都必須是多對一，只要碰到一段是多對多或一對多就被拒絕：
 
