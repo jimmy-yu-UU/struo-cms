@@ -41,7 +41,7 @@ public static class DomainErrorMap
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
-            _ when UniqueViolation.IsMatch(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
+            _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
@@ -51,6 +51,9 @@ public static class DomainErrorMap
     /// host — that detail only ever reaches the Warning-level server log.
     /// </summary>
     public const string SearchUnavailableMessage = "Search is temporarily unavailable.";
+
+    /// <summary>True when <paramref name="exception"/> is a database duplicate-key violation.</summary>
+    public static bool IsUniqueViolation(Exception exception) => UniqueViolation.IsMatch(exception);
 
     /// <summary>
     /// Fixed client-facing message for a database unique-key violation. Never the provider's own
