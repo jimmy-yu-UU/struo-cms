@@ -243,6 +243,9 @@ All eleven keys carry `[Range(1, int.MaxValue)]` validation and are bound with `
 setting one to zero or a negative number fails startup immediately. A key name outside this list (a
 typo, say) is silently ignored, with no error.
 
+`DefaultLimit` must not exceed `MaxLimit`. A larger `DefaultLimit` fails startup with an error that
+names both keys.
+
 A `limit` above `MaxLimit` is clamped, not rejected; omitting `limit`, or supplying a non-positive
 value, falls back to `DefaultLimit`. Exceeding `MaxFilterConditions`, `MaxFacets`, or
 `MaxAggregates` instead throws an exception naming the limit, and the query never executes. So does

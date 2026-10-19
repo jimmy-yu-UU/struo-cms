@@ -91,6 +91,10 @@
 
 ### 修正
 
+- `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁
+  的筆數會超過 `MaxLimit`。`Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出
+  `MetadataException`，現在它的 `InnerException` 帶著原始的載入失敗。
+
 - 已啟用語言清單以非同步查詢載入，載入失敗時不會留到請求結束：下一次存取會重新查詢。
 
 - `/health/live` 與 `/health/ready` 不再解析呼叫端的權限，所以角色資料庫失敗時，存活探測不會回 500

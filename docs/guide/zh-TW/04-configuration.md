@@ -215,6 +215,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 十一個鍵全部都有 `[Range(1, int.MaxValue)]` 驗證，並用 `ValidateOnStart` 綁定，改成 0 或負數
 會直接讓啟動失敗；宣告以外的鍵名（例如打錯字）則會被靜靜忽略，不會報錯。
 
+`DefaultLimit` 不可大於 `MaxLimit`。`DefaultLimit` 較大時啟動會失敗，錯誤訊息同時點名這兩個鍵。
+
 `limit` 超過 `MaxLimit` 會被夾到上限，不會被拒絕；沒帶 `limit` 或給了非正值，改用
 `DefaultLimit`。超過 `MaxFilterConditions`、`MaxFacets` 或 `MaxAggregates` 則是直接丟出例
 外，訊息會點名是哪個上限，查詢在執行前就先被擋下來。`MaxSortFields` 也一樣：頂層 `sort` 與每個巢狀清單的 `sort` 各自計算欄位數；

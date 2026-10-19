@@ -112,6 +112,11 @@
 
 ### Fixed
 
+- A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the
+  host used to start and serve default pages larger than `MaxLimit`. A `Struo:ContentAssemblies` entry that
+  cannot be loaded still fails startup with a `MetadataException`, which now carries the original load
+  failure as its `InnerException`.
+
 - The enabled-language list loads with an asynchronous query, and a failed load is not kept for the rest
   of the request: the next access queries again.
 

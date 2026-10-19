@@ -50,6 +50,16 @@ public sealed class ConventionMetadataDiscoveryTests
     }
 
     [Fact]
+    public void Unloadable_content_assembly_keeps_the_original_load_failure_as_inner_exception()
+    {
+        var act = () => new ServiceCollection().AddStruoMetadata(Config("Nope.Not.Real"));
+
+        var thrown = act.Should().Throw<MetadataException>().Which;
+        thrown.InnerException.Should().BeOfType<FileNotFoundException>();
+        thrown.InnerException!.Message.Should().Contain("Nope.Not.Real");
+    }
+
+    [Fact]
     public void Registers_entity_type_collector()
     {
         using var sp = new ServiceCollection()

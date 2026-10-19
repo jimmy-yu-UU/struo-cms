@@ -74,7 +74,7 @@ public static class MetadataServiceCollectionExtensions
             catch (Exception ex)
             {
                 throw new MetadataException(
-                    $"Struo:ContentAssemblies entry '{name}' could not be loaded: {ex.Message}");
+                    $"Struo:ContentAssemblies entry '{name}' could not be loaded: {ex.Message}", ex);
             }
         }
 
