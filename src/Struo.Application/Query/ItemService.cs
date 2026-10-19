@@ -426,15 +426,14 @@ public sealed class ItemService(
     private static bool IsFileCollection(string collection) =>
         string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase);
 
-    // File deletes run through the file lifecycle (same as the media library) so the brand-logo
-    // reference and the stored blob are handled; the Restrict guard still applies first.
+    // File deletes run through the file lifecycle, the single path shared with the media library: the
+    // Restrict guard, SetNull and junction cleanup, the brand-logo reference and the stored blob.
     private async Task<bool> DeleteFileAsync(
         string collection, string id, bool purge, IFileLifecycle lifecycle, CancellationToken ct)
     {
         if (!Guid.TryParse(id, out var fileId)) return false;
         var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
-        await this.purge.CheckRestrictAsync(collection, id, ct);
         if (purge) return await lifecycle.PurgeAsync(fileId, ct);
         await lifecycle.TrashAsync(fileId, ct);
         return true; // an already-trashed file is idempotent success, like the generic trash path

@@ -156,7 +156,10 @@
   mutation does what the media library does. Trashing clears the brand logo when it was that file; purging
   also deletes the translations, the logo reference and the stored blob. A purge no longer leaves the blob
   behind, and a storage failure while deleting the blob is logged as a warning with the storage key instead
-  of being ignored.
+  of being ignored. Both entry points share one path: the media library's trash and purge now also apply
+  the relation rules, so a file still referenced through an `OnDelete.Restrict` relation returns
+  `409 CONFLICT`, and a purge sets `OnDelete.SetNull` references to null and removes many-to-many junction
+  rows instead of leaving them pointing at a missing file.
 
 ### Upgrade notes
 

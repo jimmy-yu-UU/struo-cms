@@ -25,7 +25,10 @@ public sealed class FileService(
     ILanguageProvider languages,
     ICurrentUserAccessor currentUser,
     IItemChangeNotifier? notifier = null,
-    ILogger<FileService>? logger = null) : IFileLifecycle
+    ILogger<FileService>? logger = null,
+    // Reference handling shared with every collection's delete (Restrict guard, SetNull, junctions,
+    // translations). DI always supplies it; only upload-only test harnesses leave it null.
+    ItemPurgePipeline? references = null) : IFileLifecycle
 {
     private readonly ILogger log = logger ?? NullLogger<FileService>.Instance;
     private readonly IFileStorage blobs = storage.Storage;
@@ -38,11 +41,24 @@ public sealed class FileService(
     // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
     private Task NotifyAsync(Guid id, ItemChangeKind kind)
     {
-        if (notifier is null) return Task.CompletedTask;
         var set = new ItemChangeSet();
         set.Add(FileCollection.Name, id.ToString(), kind);
-        return notifier.NotifyAsync(set.ToList(), CancellationToken.None);
+        return NotifyAsync(set);
     }
+
+    private Task NotifyAsync(ItemChangeSet set) =>
+        notifier is null ? Task.CompletedTask : notifier.NotifyAsync(set.ToList(), CancellationToken.None);
+
+    private ItemPurgePipeline References =>
+        references ?? throw new InvalidOperationException("FileService was built without reference handling.");
+
+    // The brand-logo reference is cleared with an entity-typed SetColumns so the nullable column gets a
+    // typed NULL (a plain NULL literal makes Postgres raise 42804). A no-op when the file is not the logo.
+    private Task ClearLogoReferenceAsync(Guid id, CancellationToken ct) =>
+        db.Updateable<SiteSettings>()
+            .SetColumns(s => new SiteSettings { LogoFileId = null })
+            .Where(s => s.LogoFileId == id)
+            .ExecuteCommandAsync(ct);
 
     public async Task<File> UploadAsync(
         Stream content, string fileName, string contentType, long length, Guid? folderId = null,
@@ -192,36 +208,17 @@ public sealed class FileService(
         var row = await db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).FirstAsync(ct);
         if (row is null) return false;
 
-        var fkCol = db.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId));
-        // Delete the sidecar translations + the file row through the nesting-safe repository
-        // helper (join-if-active), so composing this inside a larger unit-of-work joins that outer
-        // transaction instead of opening — and prematurely committing — its own inner one.
+        // One transaction: the shared purge pipeline (Restrict guard, SetNull of referencing rows, junction
+        // rows, translations, the row) plus the logo reference. Nesting-safe, so it joins an outer unit of work.
+        var changes = new ItemChangeSet();
         await repository.InTransactionAsync(async () =>
         {
-            await db.Deleteable<FileTranslation>()
-                .Where(new List<IConditionalModel>
-                {
-                    new ConditionalModel
-                    {
-                        FieldName = fkCol, ConditionalType = ConditionalType.In, FieldValue = id.ToString()
-                    }
-                }).ExecuteCommandAsync(ct);
-            await db.Deleteable<File>().In(id).ExecuteCommandAsync(ct);
-
-            // SettingsController only validates the logo file is published at SAVE
-            // time (TOCTOU) — if this deleted file was the current brand logo, clear the reference
-            // now rather than leaving `SiteSettings.LogoFileId` dangling. Entity-typed SetColumns
-            // (see SqlSugarSiteSettingsStore.UpdateRowAsync) so the nullable column gets a typed
-            // NULL, avoiding the Postgres 42804 error a plain NULL literal triggers via SqlSugar's
-            // untyped SetColumns overload. A no-op (0 rows affected) when this file was never the
-            // logo, or when no `SiteSettings` row exists yet.
-            await db.Updateable<SiteSettings>()
-                .SetColumns(s => new SiteSettings { LogoFileId = null })
-                .Where(s => s.LogoFileId == id)
-                .ExecuteCommandAsync(ct);
+            await References.PurgeCoreAsync(
+                FileCollection.Name, id.ToString(), new HashSet<(string Collection, string Id)>(), changes, ct);
+            await ClearLogoReferenceAsync(id, ct);
         }, ct);
 
-        await NotifyAsync(id, ItemChangeKind.Purged);
+        await NotifyAsync(changes);
         // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
         await BlobCleanup.TryDeleteAsync(blobs, row.StorageKey, log);
         return true;
@@ -236,16 +233,13 @@ public sealed class FileService(
     {
         var trashed = await repository.InTransactionAsync(async () =>
         {
+            await References.CheckRestrictAsync(FileCollection.Name, id.ToString(), ct);
             var trashedNow = await repository.SoftDeleteAsync(
                 FileCollection.Name, id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
             if (!trashedNow) return false;
-            // A trashed file is filtered out of every read; if it is the current brand logo, clear the
-            // reference now so ConfigController stops resolving it into a dead /content URL (mirrors
-            // the logo-clear step in DeleteAsync/purge above).
-            await db.Updateable<SiteSettings>()
-                .SetColumns(s => new SiteSettings { LogoFileId = null })
-                .Where(s => s.LogoFileId == id)
-                .ExecuteCommandAsync(ct);
+            // A trashed file is filtered out of every read; a trashed brand logo would resolve into a dead
+            // /content URL, so the reference is cleared with the trash.
+            await ClearLogoReferenceAsync(id, ct);
             return true;
         }, ct);
         if (trashed) await NotifyAsync(id, ItemChangeKind.Trashed);
