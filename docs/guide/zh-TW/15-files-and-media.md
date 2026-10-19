@@ -55,8 +55,9 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 `FileTranslation.Title` 也是 `Searchable`，所以對 `file` 下 `search=` 同時比對檔名與各
 locale 的標題。
 
-上傳成功之後，`status` 一律是 `"published"`，即使這個欄位自己宣告的預設值是 `"draft"`——一
-旦 `file` 帶有公開讀取授權，剛上傳的檔案立刻是公開的，不需要另外發布。
+新上傳的檔案採用 `Struo:Files:DefaultStatus` 的值（鍵見[第 4 章](04-configuration.md)）：預設
+是 `published`，也可以設成 `draft`。這個欄位自己宣告的預設值 `"draft"` 不會套用到上傳。預設為
+`published` 時，剛上傳的檔案立刻能被任何持有其 id 的人讀取，不需要另外發布。
 
 ## 上傳
 
@@ -152,9 +153,10 @@ allowed.`。
 `GET /api/files/{id}` 與 `GET /api/files/{id}/content` 完全沒有 `[Authorize]`，匿名請求兩者
 都到得了：已發布檔案的中繼資料與位元組都可以嵌進公開頁面，不需要工作階段。
 
+可見性採「不公開連結」模型：`published` 的檔案，任何持有其 id 的人都能讀取，id 就是唯一的秘密。
 `status` 不是 `published` 的檔案，需要同時滿足兩件事：呼叫端已登入，而且對 `file` 有寫入授
 權。沒有另一個「讀取未發布」的授權旗標，這條規則就是從每個集合都有的那三個既有旗標推出來
-的。
+的。列出媒體庫（`GET /api/items/file`）是另一回事，需要一般的 `file` 讀取授權。
 
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
@@ -185,6 +187,23 @@ HTTP_STATUS:200
 presigned 網址；它預設關閉，好讓後台的縮圖不需要任何額外設定就能顯示，也讓儲存端點本身可以
 保持私有。`local` 後端上這個設定完全沒有作用，presigned 查詢一律回 null，下載照樣落回串
 流。每個回應都帶 `X-Content-Type-Options: nosniff`，是下載端點附件處置之外再加的一層防線。
+
+### 把檔案設為私有
+
+把檔案的 `status` 設成 `draft`。在管理介面中，到媒體庫開啟該檔案，關掉「已發佈」開關後儲存；
+用 API 的話，則是在一般的項目更新帶上 `status`：
+
+```text
+PUT /api/items/file/{id}
+{"status":"draft","version":3}
+```
+
+這需要 `file` 的寫入授權，`version` 是一般的樂觀並行權杖。`published`、`draft` 以外的值一律
+`400`。改回 `published`，任何持有 id 的人又能讀取。想讓每個新上傳一開始就是私有，把
+`Struo:Files:DefaultStatus` 設成 `draft`。
+
+品牌 Logo 必須是 `published`。設定頁拒絕儲存不是 `published` 的 Logo；已儲存的 Logo 之後被改成
+`draft`，就不再解析：公開設定端點會退回預設 Logo。
 
 ## 媒體資料夾
 

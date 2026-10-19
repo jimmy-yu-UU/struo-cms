@@ -39,4 +39,24 @@ public class FileStorageOptionsTests
         // bytes through the API. Redirect-to-storage is a deployment opt-in.
         new FileStorageOptions().PresignedRedirect.Should().BeFalse();
     }
+
+    [Fact]
+    public void DefaultStatus_defaults_to_published() =>
+        new FileStorageOptions().DefaultStatus.Should().Be("published");
+
+    [Theory]
+    [InlineData("published")]
+    [InlineData("draft")]
+    public void Allowed_default_status_passes(string status) =>
+        new FileStorageOptions { DefaultStatus = status }
+            .Invoking(x => x.Validate()).Should().NotThrow();
+
+    [Theory]
+    [InlineData("archived")]
+    [InlineData("")]
+    [InlineData("Published")]
+    public void Unknown_default_status_throws_naming_the_key(string status) =>
+        new FileStorageOptions { DefaultStatus = status }
+            .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>()
+            .WithMessage("*Struo:Files:DefaultStatus*");
 }

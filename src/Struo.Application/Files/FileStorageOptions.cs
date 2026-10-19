@@ -13,6 +13,13 @@ public sealed class FileStorageOptions
     // endpoint private and works when the browser cannot reach storage (or its scheme) directly.
     public bool PresignedRedirect { get; set; } = false;
 
+    /// <summary>Status given to a newly uploaded file: <c>published</c> (readable by anyone with its
+    /// id) or <c>draft</c> (readable only by callers with a file write grant).</summary>
+    public string DefaultStatus { get; set; } = PublishedStatus;
+
+    public const string PublishedStatus = "published";
+    public const string DraftStatus = "draft";
+
     public LocalOptions Local { get; set; } = new();
     public S3Options S3 { get; set; } = new();
     public ImageTransformOptions ImageTransform { get; set; } = new();
@@ -73,6 +80,9 @@ public sealed class FileStorageOptions
 
     public void Validate()
     {
+        if (DefaultStatus is not (PublishedStatus or DraftStatus))
+            throw new InvalidOperationException(
+                $"Unknown Struo:Files:DefaultStatus '{DefaultStatus}' (expected '{PublishedStatus}' or '{DraftStatus}').");
         switch (Backend?.ToLowerInvariant())
         {
             case "local":

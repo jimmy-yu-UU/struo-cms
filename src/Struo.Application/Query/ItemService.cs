@@ -280,6 +280,10 @@ public sealed class ItemService(
         // can differ from what CREATE (Required checked first) would report for the identical shape.
         // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
         // the same values a full PUT would.
+        if (IsFileCollection(collection) && bodyKeys.Contains("status")
+            && d.FieldToProperty.TryGetValue("status", out var statusProp)
+            && d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) is string fileStatus)
+            EnsureFileStatus(fileStatus);
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
         if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
             await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
@@ -421,6 +425,14 @@ public sealed class ItemService(
             await RevokeSessionsIfUserAsync(collection, id);
         }
         return existed;
+    }
+
+    // A file is either published (readable by anyone with its id) or draft (file writers only).
+    private static void EnsureFileStatus(string status)
+    {
+        if (status is not (FileStorageOptions.PublishedStatus or FileStorageOptions.DraftStatus))
+            throw new QueryException(
+                $"Field 'status' must be '{FileStorageOptions.PublishedStatus}' or '{FileStorageOptions.DraftStatus}'.");
     }
 
     private static bool IsFileCollection(string collection) =>

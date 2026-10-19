@@ -85,6 +85,11 @@
   仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
   `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
 
+- 編輯者可以在媒體庫的檔案對話框把檔案切換為 `published` 或 `draft`；項目 API 對 `published`、`draft`
+  以外的檔案 `status` 回 `400`。`Struo:Files:DefaultStatus`（`published` 或 `draft`，預設
+  `published`）決定新上傳檔案的狀態，其他值會讓啟動失敗。已發布的檔案仍然任何持有其 id 的人都能讀取。
+  模型說明見第 15 章。
+
 ### 安全性
 
 - 在 MySQL 與 MariaDB 上，語言代碼可以透過翻譯欄位的排序注入 SQL。用 `"Code"` 這種 JSON 鍵（而不是

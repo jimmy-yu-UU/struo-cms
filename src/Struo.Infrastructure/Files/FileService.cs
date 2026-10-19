@@ -13,8 +13,8 @@ using Struo.Infrastructure.Settings;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a published
-/// <see cref="File"/> row) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
+/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a
+/// <see cref="File"/> row with the configured default status) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
 /// reference the framework <see cref="File"/> entity directly. Bypasses <c>ItemService</c>, so each
 /// write path raises its own post-commit <see cref="IItemChangeNotifier"/> notification.
 /// </summary>
@@ -167,7 +167,7 @@ public sealed class FileService(
             Size = buffer.Length,
             Width = dims?.Width,
             Height = dims?.Height,
-            Status = "published",
+            Status = fileOptions.DefaultStatus,
             FolderId = folderId,
         };
 

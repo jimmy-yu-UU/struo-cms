@@ -67,9 +67,10 @@ UTF-16 units, again without splitting a surrogate pair.
 someone writes one by hand. `FileTranslation.Title` is also `Searchable`, so `search=` on `file`
 matches both the filename and every locale's title.
 
-Once an upload succeeds, `status` is always `"published"`, even though the field's own declared
-default is `"draft"` — as soon as `file` carries a public read grant, a freshly uploaded file is
-immediately public, with no separate publish step needed.
+A new upload takes the status in `Struo:Files:DefaultStatus` (key in
+[Chapter 4](04-configuration.md)): `published` by default, or `draft`. The field's own declared
+default of `"draft"` is never what an upload gets. With the default `published`, a freshly uploaded
+file is readable at once by anyone who has its id, with no separate publish step.
 
 ## Uploading
 
@@ -187,9 +188,12 @@ that can't be found is a clean `404` to the caller, never a `500`.
 anonymous request reaches both: a published file's metadata and bytes can be embedded in a public
 page with no session needed.
 
-A file whose `status` isn't `published` needs both conditions at once: the caller is signed in, and
-holds a write grant on `file`. There's no separate "read unpublished" grant flag — this rule is
-derived from the same three grant flags every collection already has.
+Visibility follows an unlisted-link model: a `published` file is readable by anyone who has its id,
+and the id is the only secret. A file whose `status` isn't `published` needs both conditions at
+once: the caller is signed in, and holds a write grant on `file`. There's no separate "read
+unpublished" grant flag — this rule is derived from the same three grant flags every collection
+already has. Listing the library (`GET /api/items/file`) is a separate matter and needs the
+ordinary `file` read grant.
 
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
@@ -230,6 +234,25 @@ the download falls back to streaming as usual.
 
 Every response carries `X-Content-Type-Options: nosniff`, one more layer of defense on top of the
 download endpoint's own attachment disposition.
+
+### Making a file private
+
+Set the file's `status` to `draft`. In the admin UI, open the file in the media library and turn
+off the Published switch, then save; over the API, send `status` on an ordinary item update:
+
+```text
+PUT /api/items/file/{id}
+{"status":"draft","version":3}
+```
+
+This needs the `file` write grant, and `version` is the usual optimistic-concurrency token. Any
+value other than `published` or `draft` is `400`. Switching back to `published` makes the file
+readable by anyone with its id again. To make every new upload private from the start, set
+`Struo:Files:DefaultStatus` to `draft`.
+
+A brand logo must be `published`. Settings refuse to save a logo that isn't, and a saved logo that is
+later switched to `draft` stops resolving: the public settings endpoint falls back to the default
+logo.
 
 ## Media folders
 

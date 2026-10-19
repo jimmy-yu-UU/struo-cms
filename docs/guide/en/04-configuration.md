@@ -140,11 +140,12 @@ reported.
 | `Struo:Files:Backend` | string | `"local"` |
 | `Struo:Files:MaxUploadBytes` | long (bytes) | `26214400` |
 | `Struo:Files:AllowedContentTypes` | string array | `[]` |
+| `Struo:Files:DefaultStatus` | string | `"published"` |
 | `Struo:Files:PresignedRedirect` | bool | `false` |
 
-`Backend` is the only top-level key in this section that's actually validated at startup: an
-unrecognized value fails startup immediately, and the required fields of whichever backend you
-picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`, `AllowedContentTypes`,
+`Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
+startup: an unrecognized value fails startup immediately, and the required fields of whichever
+backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`, `AllowedContentTypes`,
 `PresignedRedirect`, and the whole `ImageTransform` section have no validation rule — a correctly
 typed value is never checked further.
 
@@ -152,6 +153,10 @@ typed value is never checked further.
   about the length is still limited.
 - `AllowedContentTypes`: leaving it empty means no format is restricted; the default
   `appsettings.json` already lists 18 MIME types.
+- `DefaultStatus`: the status a new upload gets, `"published"` or `"draft"`; any other value fails
+  startup with an error naming `Struo:Files:DefaultStatus`. A published file is readable by anyone
+  with its id; a draft only by signed-in callers with the `file` write grant. Editors can switch a
+  file afterwards (see [Chapter 15](15-files-and-media.md)).
 - `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
   the default `false` has the API stream the bytes itself, which suits setups where the browser
   can't reach storage directly.

@@ -122,14 +122,18 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:Backend` | 字串 | `"local"` |
 | `Struo:Files:MaxUploadBytes` | 長整數（bytes） | `26214400` |
 | `Struo:Files:AllowedContentTypes` | 字串陣列 | `[]` |
+| `Struo:Files:DefaultStatus` | 字串 | `"published"` |
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
-`Backend` 是這個區段裡唯一在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
+`Backend` 與 `DefaultStatus` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
 要欄位（見下面 Local／S3）也一併驗證。`MaxUploadBytes`、`AllowedContentTypes`、
 `PresignedRedirect` 跟整個 `ImageTransform` 都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
 - `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
+- `DefaultStatus`：新上傳檔案的狀態，`"published"` 或 `"draft"`；其他值會讓啟動失敗，錯誤訊息指出
+  `Struo:Files:DefaultStatus`。已發布的檔案任何持有 id 的人都能讀取；草稿只有已登入且有 `file` 寫入
+  授權的呼叫端能讀取。編輯者之後可以切換狀態（見[第 15 章](15-files-and-media.md)）。
 - `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
   由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 

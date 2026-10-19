@@ -20,7 +20,8 @@ const i18n = createI18n({
     detailTitle: 'File details',
     detailDescription: "Review this file's preview and metadata, and edit its title or alt text.",
     fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
-    copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL', status: 'Status',
+    copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL',
+    statusPublished: 'Published', statusPublishedHint: 'Anyone with the link', statusDraftHint: 'Writers only',
     save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
@@ -497,5 +498,37 @@ describe('MediaDetailDialog', () => {
     expect(messages.filter((m) => m.includes('Missing `Description`'))).toEqual([])
     w.unmount()
     container.remove()
+  })
+
+  describe('visibility switch', () => {
+    const findSwitch = (w: VueWrapper) => w.find('[role="switch"]')
+
+    it('reflects the loaded status', async () => {
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, status: 'draft' } as never)
+      const w = mountDialog()
+      await flushPromises()
+      expect(findSwitch(w).attributes('aria-checked')).toBe('false')
+    })
+
+    it('sends the new status with the version on Save and reflects it', async () => {
+      vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+      const w = mountDialog()
+      await flushPromises()
+      expect(findSwitch(w).attributes('aria-checked')).toBe('true')
+      await findSwitch(w).trigger('click')
+      await flushPromises()
+      expect(findSwitch(w).attributes('aria-checked')).toBe('false')
+      await (w.vm as unknown as { onSave: () => Promise<void> }).onSave()
+      await flushPromises()
+      expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ status: 'draft', version: 3 }))
+    })
+
+    it('is disabled for a read-only user', async () => {
+      vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+      const w = mountDialog({ canWrite: false })
+      await flushPromises()
+      expect(findSwitch(w).attributes('disabled')).toBeDefined()
+    })
   })
 })

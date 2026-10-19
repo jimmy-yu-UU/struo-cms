@@ -107,6 +107,11 @@
   must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a `MetadataException` naming
   both types. Without `Name` the collection keeps the camel-cased class name.
 
+- Editors can switch a file between `published` and `draft` in the media library's file dialog, and the
+  items API refuses a file `status` other than those two with `400`. `Struo:Files:DefaultStatus`
+  (`published` or `draft`, default `published`) sets the status of a new upload; any other value fails
+  startup. A published file stays readable by anyone who has its id. Chapter 15 describes the model.
+
 ### Security
 
 - On MySQL and MariaDB, a language code could inject SQL through a sort on a translatable field. A
