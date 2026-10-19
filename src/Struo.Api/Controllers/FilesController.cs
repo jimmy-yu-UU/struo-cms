@@ -167,7 +167,15 @@ public sealed class FilesController(
 
             // The slot is released before the cache write, whose size sweep must not hold it.
             lease.Dispose();
-            await images.Cache.SetAsync(key, transformed.Bytes, ct);
+            try
+            {
+                await images.Cache.SetAsync(key, transformed.Bytes, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // An unwritable cache (disk full, read-only directory) costs only the caching.
+                logger.LogWarning(ex, "Image variant for file {FileId} could not be cached; serving it uncached.", id);
+            }
             return File(transformed.Bytes, transformed.ContentType);
         }
 

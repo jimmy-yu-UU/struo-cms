@@ -254,6 +254,76 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         await first;
     }
 
+    [Theory]
+    [InlineData("probe")]
+    [InlineData("throws")]
+    [InlineData("null")]
+    public async Task A_fallback_response_releases_the_slot_for_the_next_request(string fallback)
+    {
+        IImageTransformer transformer = fallback switch
+        {
+            "throws" => new ThrowingTransformer(),
+            "null" => new NullTransformer(),
+            _ => new CountingTransformer(TimeSpan.Zero),
+        };
+        var host = HostWith(transformer, maxConcurrent: 1, timeoutSeconds: 1, s =>
+        {
+            if (fallback == "probe") s.AddSingleton<IImageDimensionReader>(new SwitchingDimensions());
+        });
+        var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
+
+        var first = await host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+        var second = await host.GetAsync($"/api/files/{id}/content?width=256&format=png");
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_cache_write_failure_serves_the_transformed_bytes_uncached()
+    {
+        var fake = new CountingTransformer(TimeSpan.Zero);
+        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+            s => s.AddSingleton<IImageVariantCache>(new FailingWriteCache()));
+        var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
+
+        var resp = await host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await resp.Content.ReadAsByteArrayAsync()).Should().Equal([1, 2, 3]);
+    }
+
+    private sealed class FailingWriteCache : IImageVariantCache
+    {
+        public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req) => "ab";
+        public Task<byte[]?> TryGetAsync(string key, CancellationToken ct) => Task.FromResult<byte[]?>(null);
+        public Task SetAsync(string key, byte[] bytes, CancellationToken ct) => throw new IOException("disk full");
+    }
+
+    // The first probe reports an oversized source, later probes a small one.
+    private sealed class SwitchingDimensions : IImageDimensionReader
+    {
+        private int _reads;
+        public (int Width, int Height)? TryRead(Stream seekable, string contentType) =>
+            Interlocked.Increment(ref _reads) == 1 ? (100_000, 100_000) : (10, 10);
+    }
+
+    private sealed class ThrowingTransformer : IImageTransformer
+    {
+        private int _calls;
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels) =>
+            Interlocked.Increment(ref _calls) == 1
+                ? throw new InvalidOperationException("decoder fault")
+                : new ImageTransformResult([1, 2, 3], "image/png", 1, 1);
+    }
+
+    private sealed class NullTransformer : IImageTransformer
+    {
+        private int _calls;
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels) =>
+            Interlocked.Increment(ref _calls) == 1 ? null : new ImageTransformResult([1, 2, 3], "image/png", 1, 1);
+    }
+
     private sealed class MissThenHitCache : IImageVariantCache
     {
         public static readonly byte[] Payload = [9, 8, 7];
