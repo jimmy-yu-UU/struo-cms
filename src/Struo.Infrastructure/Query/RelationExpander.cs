@@ -101,7 +101,7 @@ public sealed class RelationExpander(
                     var ids = parents.Select(parentId).ToList();
                     var children = EnsureWithinCap(relName, await repository.QueryWhereInFilteredAsync(
                         rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter, locale,
-                        options.MaxExpandRows + 1, ct));
+                        options.MaxExpandRows + 1, ct), OneToManyCapHint);
                     var grouped = children
                         .GroupBy(ch => readProp(ch, desc.ReverseForeignKeyProperty!)!)
                         .ToDictionary(g => g.Key, g => g.ToList());
@@ -147,11 +147,17 @@ public sealed class RelationExpander(
 
     // A relation fetch is requested with MaxExpandRows + 1 rows, so one extra row proves the cap is
     // exceeded; the request fails rather than returning a truncated relation.
-    private IReadOnlyList<object> EnsureWithinCap(string relName, IReadOnlyList<object> rows) =>
+    private IReadOnlyList<object> EnsureWithinCap(string relName, IReadOnlyList<object> rows, string hint) =>
         rows.Count > options.MaxExpandRows
             ? throw new QueryException(
-                $"Relation '{relName}' has more than {options.MaxExpandRows} rows to expand; narrow the nested filter or expand fewer parent rows.")
+                $"Relation '{relName}' has more than {options.MaxExpandRows} rows to expand; {hint}")
             : rows;
+
+    private const string OneToManyCapHint = "narrow the nested filter or expand fewer parent rows.";
+
+    // A many-to-many fetch counts junction rows, which a nested filter on the targets does not reduce.
+    private const string ManyToManyCapHint =
+        "the count is junction rows linking this page's parents to their targets; a nested filter does not lower it, so request fewer parent rows.";
 
     // ManyToMany case of ExpandAsync's per-relation switch, extracted verbatim (same conditions,
     // order, and semantics) to keep ExpandAsync's cognitive complexity in check. Queries the
@@ -168,7 +174,7 @@ public sealed class RelationExpander(
         var expanded = new List<(object Entity, Dictionary<string, object?> Dict)>();
         var ids = parents.Select(ctx.ParentId).ToList();
         var junctions = EnsureWithinCap(relName, await repository.QueryEntityWhereInAsync(
-            desc.JunctionType!, desc.JunctionParentFk!, ids, options.MaxExpandRows + 1, ct));
+            desc.JunctionType!, desc.JunctionParentFk!, ids, options.MaxExpandRows + 1, ct), ManyToManyCapHint);
         var junctionsByParent = junctions.ToLookup(j => ctx.ReadProp(j, desc.JunctionParentFk!)!);
         var targetIds = junctions
             .Select(j => ctx.ReadProp(j, desc.JunctionTargetFk!)!)

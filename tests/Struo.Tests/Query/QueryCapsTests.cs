@@ -100,7 +100,7 @@ public class QueryCapsTests(ApiFactory factory)
         var c = await SeededClient();
         var (status, body) = await Query(c, "category", new { deep = Tree(21) });
         status.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("20");
+        body.Should().Contain("Too many relations in deep (max 20)");
     }
 
     [Fact]
@@ -186,6 +186,69 @@ public class QueryCapsTests(ApiFactory factory)
             doc.RootElement.GetProperty("data")[0].GetProperty("children").GetArrayLength().Should().Be(max);
         }
         finally { await DeleteFamily(parentId); }
+    }
+
+    // One article linked to `count` tags through direct junction inserts.
+    private async Task<Guid> SeedArticleWithJunctions(int count)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var created = await c.PostAsJsonAsync("/api/items/article",
+            new { status = "draft", translations = new { en = new { title = "CapsJunctions" } } });
+        using var cd = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var articleId = Guid.Parse(cd.RootElement.GetProperty("data").GetProperty("id").GetString()!);
+        var tags = Enumerable.Range(0, count)
+            .Select(i => new Tag { Id = Guid.NewGuid(), Name = $"caps-j-{i}" }).ToList();
+        await db.Insertable(tags).ExecuteCommandAsync();
+        var links = tags.Select((t, i) => new ArticleTag { Id = Guid.NewGuid(), ArticleId = articleId, TagId = t.Id, Sort = i }).ToList();
+        await db.Insertable(links).ExecuteCommandAsync();
+        return articleId;
+    }
+
+    private async Task DeleteJunctions(Guid articleId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var tagIds = (await db.Queryable<ArticleTag>().Where(x => x.ArticleId == articleId).ToListAsync())
+            .Select(x => x.TagId).ToList();
+        await db.Deleteable<ArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
+        foreach (var chunk in tagIds.Chunk(500))
+            await db.Deleteable<Tag>().Where(t => chunk.Contains(t.Id)).ExecuteCommandAsync();
+        await db.Deleteable<Article>().Where(a => a.Id == articleId).ExecuteCommandAsync();
+    }
+
+    [Fact]
+    public async Task Many_to_many_expansion_over_the_junction_row_cap_returns_400_naming_the_relation()
+    {
+        var max = _factory.Services.GetRequiredService<StruoQueryOptions>().MaxExpandRows;
+        var articleId = await SeedArticleWithJunctions(max + 1);
+        try
+        {
+            var c = await _factory.CreateAuthenticatedClientAsync();
+            var (status, body) = await Query(c, "article",
+                new { filter = Eq("id", articleId), deep = new { tags = new { } } });
+            status.Should().Be(HttpStatusCode.BadRequest);
+            body.Should().Contain("'tags'").And.Contain("junction rows");
+        }
+        finally { await DeleteJunctions(articleId); }
+    }
+
+    [Fact]
+    public async Task Many_to_many_expansion_at_the_junction_row_cap_returns_200_with_every_row()
+    {
+        var max = _factory.Services.GetRequiredService<StruoQueryOptions>().MaxExpandRows;
+        var articleId = await SeedArticleWithJunctions(max);
+        try
+        {
+            var c = await _factory.CreateAuthenticatedClientAsync();
+            var (status, body) = await Query(c, "article",
+                new { filter = Eq("id", articleId), deep = new { tags = new { } } });
+            status.Should().Be(HttpStatusCode.OK);
+            using var doc = JsonDocument.Parse(body);
+            doc.RootElement.GetProperty("data")[0].GetProperty("tags").GetArrayLength().Should().Be(max);
+        }
+        finally { await DeleteJunctions(articleId); }
     }
 
     [Fact]

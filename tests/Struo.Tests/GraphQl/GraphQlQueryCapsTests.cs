@@ -69,7 +69,7 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
     {
         var (root, raw) = await Run($"{{ articles {{ items {{ {Selection(21)} }} }} }}");
         root.TryGetProperty("errors", out _).Should().BeTrue(raw);
-        raw.Should().Contain("relations");
+        raw.Should().Contain("Too many relations in deep");
     }
 
     [Fact]

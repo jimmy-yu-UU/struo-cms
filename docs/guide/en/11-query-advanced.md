@@ -99,6 +99,12 @@ the nested filter or expand fewer parent rows.`, and the rows are never truncate
 is applied after the fetch, so it does not lower the count the cap checks; narrow with a nested
 `filter` or a smaller `limit` on the parent page.
 
+For a many-to-many relation the count is junction rows: every link between the page's parents and
+their targets, read before the nested `filter` runs. A nested `filter` does not lower it, so the
+only way under the cap is a smaller `limit` on the parent page (or fewer links per parent). Its 400
+says so: `Relation 'tags' has more than 1000 rows to expand; the count is junction rows linking this
+page's parents to their targets; a nested filter does not lower it, so request fewer parent rows.`
+
 ## Facet counting
 
 `facets=` computes an extra summary distribution over the same filtered result set; it never

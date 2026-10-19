@@ -81,6 +81,11 @@ HTTP_STATUS:400
 expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。巢狀 `limit` 是在讀取之後
 才套用，所以不會降低上限檢查的列數；要縮小範圍，用巢狀 `filter`，或減少父頁的 `limit`。
 
+多對多關聯算的是 junction 列：這一頁父列與其目標之間的每一筆連結，都在巢狀 `filter` 執行之前就被讀進來
+計算。巢狀 `filter` 無法降低這個數字，要低於上限只能縮小父頁的 `limit`（或減少每個父列的連結數）。它的
+400 訊息也這樣說：`Relation 'tags' has more than 1000 rows to expand; the count is junction rows linking
+this page's parents to their targets; a nested filter does not lower it, so request fewer parent rows.`
+
 ## Facet 計數
 
 `facets=` 在同一批經過篩選的結果上另外算摘要分佈，不會改變 `data` 或分頁；沒被要求就完全不會算，
