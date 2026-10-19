@@ -81,7 +81,7 @@
   1600、1920、2560、3840、4096），所以 `width=100` 會得到 128 寬的圖。`fit=cover` 只對齊寬度，高度依請求的
   比例推算並四捨五入到 8 像素的倍數。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。呼叫端給的 `quality` 四捨五入到 10 的倍數，範圍 10 到
   100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、AVIF、GIF）裡的來源會被轉換；對 SVG 帶
-  `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣。同時最多
+  `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣，AVIF 網格影像則一律不轉換。同時最多
   進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`
   `IMAGE_TRANSFORM_BUSY`。變體快取由 `CacheMaxBytes`（2 GB）設上限，並以最久未使用者優先淘汰。需要精確像素
   尺寸的用戶端，必須請求階梯上的尺寸或自行設定 `SizeSteps`；傳過其他 `fit` 值的用戶端必須改掉。

@@ -325,7 +325,8 @@ distinguishable from a successful one just by its headers.
 Before decoding, the source's width and height are read from its header. A source over
 `MaxSourcePixels`, or one whose header cannot be read, is served as its original bytes, so a small
 file whose header declares a huge image is not decoded. For a GIF the size is the canvas its frames
-need, and for an AVIF it is the largest image size the header declares. A client-supplied `quality`
+need, and for an AVIF it is the largest image size the header declares. An AVIF grid image is
+served as its original bytes, without transformation. A client-supplied `quality`
 is rounded to a multiple of 10; the configured `DefaultQuality` is used exactly as written. At most `MaxConcurrentTransforms` transforms
 run at once; a request that waits longer than `QueueTimeoutSeconds` for a slot gets `503` with the
 `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.

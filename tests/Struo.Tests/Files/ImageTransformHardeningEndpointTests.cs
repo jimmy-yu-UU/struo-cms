@@ -75,6 +75,29 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Avif_grid_image_returns_the_original_bytes_and_a_plain_avif_is_transformed()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        byte[] grid =
+        [
+            0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0,
+            0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 64,
+            0, 0, 0, 21, (byte)'i', (byte)'n', (byte)'f', (byte)'e', 2, 0, 0, 0, 0, 1, 0, 0,
+            (byte)'g', (byte)'r', (byte)'i', (byte)'d'
+        ];
+        var gridId = await Upload(c, grid, "image/avif", "grid.avif");
+        var plain = Image.Black(300, 200).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".avif");
+        var plainId = await Upload(c, plain, "image/avif", "plain.avif");
+
+        var gridResp = await c.GetAsync($"/api/files/{gridId}/content?width=128&format=png");
+        var plainResp = await c.GetAsync($"/api/files/{plainId}/content?width=128&format=png");
+
+        (await gridResp.Content.ReadAsByteArrayAsync()).Should().Equal(grid);
+        using var img = Image.NewFromBuffer(await plainResp.Content.ReadAsByteArrayAsync());
+        img.Width.Should().Be(128);
+    }
+
+    [Fact]
     public async Task Unknown_fit_is_a_400()
     {
         var c = await factory.CreateAuthenticatedClientAsync();

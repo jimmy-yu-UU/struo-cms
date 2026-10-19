@@ -53,6 +53,52 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(ms.ToArray()), "image/avif").Should().Be((8000, 6000));
     }
 
+    private static byte[] AvifWithInfe(byte version, string itemType, bool truncate = false)
+    {
+        var ms = new MemoryStream();
+        void W(params byte[] b) => ms.Write(b);
+        W(0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0);
+        W(0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 64);
+        W(0, 0, 0, 21, (byte)'i', (byte)'n', (byte)'f', (byte)'e', version, 0, 0, 0);
+        if (version == 3) W(0, 0, 0, 1); else W(0, 1);          // item_ID
+        W(0, 0);                                                // item_protection_index
+        W(System.Text.Encoding.ASCII.GetBytes(itemType));
+        var bytes = ms.ToArray();
+        return truncate ? bytes[..^2] : bytes;
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Avif_with_a_grid_item_is_not_safely_sizable(byte version) =>
+        new ImageDimensionReader().TryRead(new MemoryStream(AvifWithInfe(version, "grid")), "image/avif")
+            .Should().BeNull();
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Avif_with_only_ordinary_items_is_sized(byte version) =>
+        new ImageDimensionReader().TryRead(new MemoryStream(AvifWithInfe(version, "av01")), "image/avif")
+            .Should().Be((64, 64));
+
+    [Fact]
+    public void A_truncated_infe_box_does_not_throw_and_does_not_hide_the_ispe()
+    {
+        var bytes = AvifWithInfe(2, "grid", truncate: true);
+        new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/avif").Should().Be((64, 64));
+    }
+
+    [Fact]
+    public void Avif_scan_has_no_fixed_size_cap()
+    {
+        var ms = new MemoryStream();
+        ms.Write([0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0]);
+        ms.Write(new byte[70 * 1024 * 1024]);
+        ms.Write([0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0x1F, 0x40, 0, 0, 0x17, 0x70]);
+
+        new ImageDimensionReader().TryRead(new MemoryStream(ms.ToArray()), "image/avif").Should().Be((8000, 6000));
+    }
+
     [Fact]
     public void Reads_a_real_encoder_avif()
     {

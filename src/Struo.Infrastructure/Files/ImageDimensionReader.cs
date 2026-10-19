@@ -10,7 +10,6 @@ namespace Struo.Infrastructure.Files;
 /// </summary>
 public sealed class ImageDimensionReader : IImageDimensionReader
 {
-    private const int MaxAvifScanBytes = 64 * 1024 * 1024;
 
     public (int Width, int Height)? TryRead(Stream seekable, string contentType)
     {
@@ -162,16 +161,17 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         var brand = System.Text.Encoding.ASCII.GetString(b, 8, 4);
         if (brand is not ("avif" or "avis")) return null;
 
-        // Property boxes can sit anywhere in the file, so the whole (size-bounded) stream is scanned;
-        // a decoy ispe early must not hide the real one.
+        // Property boxes can sit anywhere in the file, so the whole stream is scanned; a decoy ispe
+        // early must not hide the real one.
         s.Position = 0;
-        b = ReadHeader(s, MaxAvifScanBytes);
+        b = ReadHeader(s, int.MaxValue);
         // A grid image carries one ispe per tile plus one for the whole grid; the largest area is the
         // size a decoder may produce.
         (int, int)? largest = null;
         long largestArea = -1;
         for (var i = 8; i + 16 <= b.Length; i++)
         {
+            if (IsGridInfe(b, i)) return null;
             if (b[i] != (byte)'i' || b[i + 1] != (byte)'s' || b[i + 2] != (byte)'p' || b[i + 3] != (byte)'e')
                 continue;
             var w = (int)Math.Min(BeU32(b, i + 8), int.MaxValue);
@@ -181,6 +181,19 @@ public sealed class ImageDimensionReader : IImageDimensionReader
             largest = (w, h);
         }
         return largest;
+    }
+
+    // A derived grid image is sized by its grid descriptor, which is not read here, so an item entry
+    // ("infe", version 2 or 3: version/flags, item_ID, protection index, then the 4-byte item type)
+    // of type "grid" makes the file not safely sizable.
+    private static bool IsGridInfe(byte[] b, int i)
+    {
+        if (b[i] != (byte)'i' || b[i + 1] != (byte)'n' || b[i + 2] != (byte)'f' || b[i + 3] != (byte)'e')
+            return false;
+        var typeAt = b[i + 4] switch { 2 => i + 12, 3 => i + 14, _ => -1 };
+        return typeAt > 0 && typeAt + 4 <= b.Length
+            && b[typeAt] == (byte)'g' && b[typeAt + 1] == (byte)'r'
+            && b[typeAt + 2] == (byte)'i' && b[typeAt + 3] == (byte)'d';
     }
 
     private static long BeU32(byte[] b, int o) =>
