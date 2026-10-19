@@ -80,7 +80,7 @@ public static class MetadataScanner
     {
         var typeList = types as IReadOnlyList<Type> ?? types.ToList();
         var collections = new List<CollectionMetadata>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var type in typeList)
         {
@@ -88,9 +88,9 @@ public static class MetadataScanner
             if (collectionAttr is null) continue;
 
             var meta = BuildCollection(type, collectionAttr);
-            if (!seen.Add(meta.Name))
+            if (!seen.TryAdd(meta.Name, type))
                 throw new MetadataException(
-                    $"Duplicate collection name '{meta.Name}' (type '{type.FullName}').");
+                    $"Duplicate collection name '{meta.Name}' (types '{seen[meta.Name].FullName}' and '{type.FullName}').");
             collections.Add(meta);
         }
 
@@ -131,7 +131,7 @@ public static class MetadataScanner
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         foreach (var type in types)
         {
-            var owner = byName.GetValueOrDefault(Camel(type.Name));
+            var owner = byName.GetValueOrDefault(CollectionNameOf(type));
             if (owner is null) continue;
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -149,7 +149,7 @@ public static class MetadataScanner
         IReadOnlyDictionary<string, CollectionMetadata> byName)
     {
         var junctionType = NavigateMappingType(navData)!;
-        var junction = byName.GetValueOrDefault(Camel(junctionType.Name));
+        var junction = byName.GetValueOrDefault(CollectionNameOf(junctionType));
         if (junction is null) return; // plain junction: nothing to validate
 
         var writable = junction.Fields.Where(f => !f.IsSystem && !f.ReadOnly).Select(f => f.Name)
@@ -181,7 +181,7 @@ public static class MetadataScanner
         var checkedJunctions = new HashSet<Type>();
         foreach (var type in types)
         {
-            var owner = byName.GetValueOrDefault(Camel(type.Name));
+            var owner = byName.GetValueOrDefault(CollectionNameOf(type));
             if (owner is null) continue;
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -224,7 +224,7 @@ public static class MetadataScanner
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var typeByName = types
             .Where(t => t.GetCustomAttribute<CmsCollectionAttribute>() is not null)
-            .ToDictionary(t => Camel(t.Name), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(CollectionNameOf, StringComparer.OrdinalIgnoreCase);
         return collections
             .Select(c => c.Relations.Any(r => r.JunctionCollection is not null)
                 ? c with { Relations = c.Relations.Select(r => WithJunctionPayloadFields(r, typeByName[c.Name], byName)).ToList() }
@@ -259,7 +259,7 @@ public static class MetadataScanner
         {
             if (type.GetCustomAttribute<CmsCollectionAttribute>() is null) continue;
 
-            var collection = Camel(type.Name);
+            var collection = CollectionNameOf(type);
             var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var idProperty = "Id";
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -295,6 +295,25 @@ public static class MetadataScanner
     }
 
     private static string Camel(string name) => JsonNamingPolicy.CamelCase.ConvertName(name);
+
+    private static readonly System.Text.RegularExpressions.Regex ExplicitNamePattern =
+        new("^[a-z][A-Za-z0-9]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The collection name of a <c>[CmsCollection]</c> type: the attribute's explicit
+    /// <c>Name</c> when set (validated), otherwise the camel-cased CLR type name. Every place that maps a
+    /// type to its collection goes through here.
+    /// </summary>
+    public static string CollectionNameOf(Type type)
+    {
+        var explicitName = type.GetCustomAttribute<CmsCollectionAttribute>()?.Name;
+        if (explicitName is null) return Camel(type.Name);
+        if (!ExplicitNamePattern.IsMatch(explicitName))
+            throw new MetadataException(
+                $"Collection type '{type.Name}' declares the invalid name '{explicitName}'; " +
+                "a collection name must match ^[a-z][A-Za-z0-9]*$.");
+        return explicitName;
+    }
 
     private static CollectionMetadata BuildCollection(Type type, CmsCollectionAttribute attr)
     {
@@ -332,7 +351,7 @@ public static class MetadataScanner
             .Select(f => f.field)
             .ToList();
 
-        var name = Camel(type.Name);
+        var name = CollectionNameOf(type);
         var defaultDisplay = attr.DefaultDisplayField is null ? null : Camel(attr.DefaultDisplayField);
         if (defaultDisplay is not null && ordered.All(f => f.Name != defaultDisplay))
             throw new MetadataException(
@@ -576,7 +595,7 @@ public static class MetadataScanner
                 else if (NavigateMappingType(navData)?.GetCustomAttribute<CmsCollectionAttribute>() is not null)
                     // The M2M junction is itself a [CmsCollection]: its non-FK, non-sort fields are
                     // payload the API reads/writes alongside the relation (see RelationshipGraph).
-                    junctionCollection = Camel(NavigateMappingType(navData)!.Name);
+                    junctionCollection = CollectionNameOf(NavigateMappingType(navData)!);
             }
             else
             {
@@ -594,7 +613,7 @@ public static class MetadataScanner
                 Name = Camel(prop.Name),
                 Label = prop.Name,
                 Kind = kind,
-                TargetCollection = Camel(target.Name),
+                TargetCollection = CollectionNameOf(target),
                 Interface = rel.Interface,
                 ForeignKey = fk,
                 DisplayTemplate = rel.DisplayTemplate,

@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Metadata;
@@ -34,7 +33,7 @@ public static class MetadataServiceCollectionExtensions
         var collectionTypes = allTypes
             .Where(t => t.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsCollectionAttribute>() is not null)
             .ToDictionary(
-                t => JsonNamingPolicy.CamelCase.ConvertName(t.Name),
+                MetadataScanner.CollectionNameOf,
                 t => t,
                 StringComparer.OrdinalIgnoreCase);
 

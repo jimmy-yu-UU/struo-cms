@@ -81,6 +81,13 @@
   `FilterBudget`. There is no cap on `offset`.
 :::
 
+### Added
+
+- `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
+  grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
+  freely. It must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a
+  `MetadataException` naming both types. Without `Name` the collection keeps the camel-cased class name.
+
 ### Security
 
 - On MySQL and MariaDB, a language code could inject SQL through a sort on a translatable field. A

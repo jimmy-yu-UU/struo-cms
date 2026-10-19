@@ -81,10 +81,16 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 | `Label` | `string` | 建構子參數 | 側欄與頁面標題 |
 | `Icon` | `string?` | `null` | 側欄圖示，名稱見下 |
 | `Group` | `string?` | `null` | 側欄導覽分組 |
+| `Name` | `string?` | camelCase 類別名稱 | 集合名稱，見下 |
 | `DefaultDisplayField` | `string?` | `null` | 項目顯示標題 |
 | `AdminOnly` | `bool` | `false` | 一般 CRUD 寫入一律要求 super-admin |
 | `Hidden` | `bool` | `false` | 只從後台側欄移除；REST、GraphQL、權限與 schema 不受影響 |
 | `Revisions` | `bool` | `false` | 啟用版本紀錄 |
+
+`Name` 是集合的身分：REST 路由片段、GraphQL 名稱，以及存在權限授予、版本紀錄與其他資料列裡的值。
+沒設時就是 camelCase 的類別名稱，所以重新命名類別會讓那些資料無聲地失去對應。fork 應該在集合有資料之前，
+替自己的每個集合設好 `Name`。名稱必須符合 `^[a-z][A-Za-z0-9]*$`，且在所有集合（含框架內建的）之間不可
+重複；不符合就在啟動時丟出 `MetadataException`。
 
 `DefaultDisplayField` 名稱要對得上某個欄位，比對時看 camelCase 之後的名字，對不上就在啟動時
 丟出 `MetadataException`。
