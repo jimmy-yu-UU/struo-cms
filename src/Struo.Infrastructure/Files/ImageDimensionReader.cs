@@ -10,13 +10,15 @@ namespace Struo.Infrastructure.Files;
 /// </summary>
 public sealed class ImageDimensionReader : IImageDimensionReader
 {
+    private const int MaxAvifScanBytes = 64 * 1024 * 1024;
+
     public (int Width, int Height)? TryRead(Stream seekable, string contentType)
     {
         try
         {
             if (seekable.CanSeek) seekable.Position = 0;
             var b = ReadHeader(seekable, 64 * 1024);
-            return Png(b) ?? Gif(b, seekable) ?? Webp(b) ?? Jpeg(b) ?? Avif(b);
+            return Png(b) ?? Gif(b, seekable) ?? Webp(b) ?? Jpeg(b) ?? Avif(b, seekable);
         }
         catch
         {
@@ -152,12 +154,18 @@ public sealed class ImageDimensionReader : IImageDimensionReader
 
     // AVIF (ISO BMFF): an "ftyp" box with an avif brand, then "ispe" property boxes whose payload is
     // 4 bytes version/flags followed by width and height as big-endian uint32.
-    private static (int, int)? Avif(byte[] b)
+    private static (int, int)? Avif(byte[] head, Stream s)
     {
+        var b = head;
         if (b.Length < 16 || b[4] != (byte)'f' || b[5] != (byte)'t' || b[6] != (byte)'y' || b[7] != (byte)'p')
             return null;
         var brand = System.Text.Encoding.ASCII.GetString(b, 8, 4);
         if (brand is not ("avif" or "avis")) return null;
+
+        // Property boxes can sit anywhere in the file, so the whole (size-bounded) stream is scanned;
+        // a decoy ispe early must not hide the real one.
+        s.Position = 0;
+        b = ReadHeader(s, MaxAvifScanBytes);
         // A grid image carries one ispe per tile plus one for the whole grid; the largest area is the
         // size a decoder may produce.
         (int, int)? largest = null;

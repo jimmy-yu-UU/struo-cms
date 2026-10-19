@@ -40,6 +40,27 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(avif), "image/avif").Should().Be((8000, 6000));
     }
 
+    [Fact]
+    public void Avif_scans_past_the_first_64_KB_for_a_larger_ispe()
+    {
+        var ms = new MemoryStream();
+        void W(params byte[] b) => ms.Write(b);
+        W(0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0);
+        W(0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 64);
+        W(new byte[70_000]);
+        W(0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0x1F, 0x40, 0, 0, 0x17, 0x70);
+
+        new ImageDimensionReader().TryRead(new MemoryStream(ms.ToArray()), "image/avif").Should().Be((8000, 6000));
+    }
+
+    [Fact]
+    public void Reads_a_real_encoder_avif()
+    {
+        var bytes = NetVips.Image.Black(64, 48).Cast(NetVips.Enums.BandFormat.Uchar).WriteToBuffer(".avif");
+
+        new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/avif").Should().Be((64, 48));
+    }
+
     private static byte[] GifWithFrame(int screenW, int screenH, int left, int frameW, int frameH)
     {
         var ms = new MemoryStream();

@@ -84,7 +84,7 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         // subsequent move is same-volume and atomic), then move it into place. A reader that
         // stats the final path either sees nothing or the complete file — never a partial one.
         var tempPath = Path.Combine(dir, $".{key}.{Guid.NewGuid():N}.tmp");
-        if (maxBytes > 0) EnsureSeeded();
+        if (maxBytes > 0 && !TrySeed()) return;
         var replaced = ExistingLength(path);
         var stored = false;
         try
@@ -104,13 +104,23 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
 
     // The first capped write counts what is already on disk; later writes and evictions adjust the
     // total without touching the directory tree.
-    private void EnsureSeeded()
+    // False when the directory cannot be counted; the variant is then served uncached.
+    private bool TrySeed()
     {
-        if (Interlocked.Read(ref _totalBytes) >= 0) return;
+        if (Interlocked.Read(ref _totalBytes) >= 0) return true;
         lock (_seedLock)
         {
-            if (Interlocked.Read(ref _totalBytes) >= 0) return;
-            Interlocked.Exchange(ref _totalBytes, ListVariants().Sum(v => v.Length));
+            if (Interlocked.Read(ref _totalBytes) >= 0) return true;
+            try
+            {
+                Interlocked.Exchange(ref _totalBytes, ListVariants().Sum(v => v.Length));
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Could not count image variants under {Root}; the variant is served uncached.", rootPath);
+                return false;
+            }
         }
     }
 

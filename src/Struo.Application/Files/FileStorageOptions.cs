@@ -104,6 +104,12 @@ public sealed class FileStorageOptions
 
         public void Validate()
         {
+            if (MaxWidth < 1)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxWidth must be at least 1.");
+            if (MaxHeight < 1)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxHeight must be at least 1.");
+            if (DefaultQuality is < 1 or > 100)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:DefaultQuality must be between 1 and 100.");
             if (SizeSteps.Any(s => s < 1))
                 throw new InvalidOperationException("Struo:Files:ImageTransform:SizeSteps entries must be positive.");
             if (MaxConcurrentTransforms < 1)

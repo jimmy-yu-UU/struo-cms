@@ -365,7 +365,7 @@ as a cache miss, not an error.
 
 The cache is size-capped by `CacheMaxBytes` (2 GB by default). Every hit stamps the variant as
 recently used; when a write leaves the cache over the cap, the variants that were read least
-recently are deleted until it fits. A variant evicted while another request is reading it is read
+recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A variant evicted while another request is reading it is read
 as a miss and transformed again.
 
 ## NetVips and LGPL

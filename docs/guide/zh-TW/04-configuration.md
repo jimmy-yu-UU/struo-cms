@@ -209,7 +209,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
   或標頭讀不出來的來源，一律送出原始位元組。大小是不解碼、只讀標頭得到的；GIF 取其影格所需的畫布大小，
   AVIF 取標頭宣告的最大影像尺寸。
 
-`MaxConcurrentTransforms`、`QueueTimeoutSeconds`、`MaxSourcePixels` 與 `SizeSteps` 的各個元素在啟動時驗證。
+`MaxWidth` 與 `MaxHeight`（至少 `1`）、`DefaultQuality`（1 到 100）、`MaxConcurrentTransforms`、
+`QueueTimeoutSeconds`、`MaxSourcePixels` 與 `SizeSteps` 的各個元素在啟動時驗證；值超出範圍會讓啟動失敗，並指出是哪個鍵。
 
 ## Struo:Cors
 

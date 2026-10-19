@@ -174,6 +174,37 @@ public class DiskImageVariantCacheTests
         logger.Warnings.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task A_failure_while_counting_the_existing_variants_is_logged_and_the_write_is_skipped()
+    {
+        if (!OperatingSystem.IsWindows()) return;   // uses a deny ACL on a subdirectory
+
+        var root = Root();
+        var blocked = Directory.CreateDirectory(Path.Combine(root, "zz"));
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(
+            me, System.Security.AccessControl.FileSystemRights.ListDirectory,
+            System.Security.AccessControl.AccessControlType.Deny);
+        var acl = blocked.GetAccessControl();
+        acl.AddAccessRule(deny);
+        blocked.SetAccessControl(acl);
+        try
+        {
+            var logger = new CapturingLogger();
+            var c = new DiskImageVariantCache(root, maxBytes: 1000, logger);
+
+            var act = () => c.SetAsync(Key(c, 1), new byte[100], default);
+
+            await act.Should().NotThrowAsync();
+            logger.Warnings.Should().BeGreaterThan(0);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            blocked.SetAccessControl(acl);
+        }
+    }
+
     private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger
     {
         public int Warnings;

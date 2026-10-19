@@ -39,6 +39,10 @@ public class ImageTransformOptionsTests
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxConcurrentTransforms), 0)]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.QueueTimeoutSeconds), -1)]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxSourcePixels), 0)]
+    [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxWidth), 0)]
+    [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxHeight), 0)]
+    [InlineData(nameof(FileStorageOptions.ImageTransformOptions.DefaultQuality), 0)]
+    [InlineData(nameof(FileStorageOptions.ImageTransformOptions.DefaultQuality), 101)]
     public void Out_of_range_hardening_values_fail_validation(string property, long value)
     {
         var o = new FileStorageOptions();

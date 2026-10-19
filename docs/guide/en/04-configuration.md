@@ -241,8 +241,9 @@ The keys below bound what one caller can make the server compute and store.
   be read, is served as its original bytes. For a GIF the size is the canvas its frames need; for an
   AVIF it is the largest image size the header declares.
 
-`MaxConcurrentTransforms`, `QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps`
-are validated at startup.
+`MaxWidth` and `MaxHeight` (at least `1`), `DefaultQuality` (1 to 100), `MaxConcurrentTransforms`,
+`QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps` are validated at startup;
+a value out of range stops startup with an error naming the key.
 
 ## Struo:Cors
 
