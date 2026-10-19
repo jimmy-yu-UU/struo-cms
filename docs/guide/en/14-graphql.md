@@ -425,13 +425,19 @@ or `UNAUTHORIZED` for an anonymous caller, still on that same `200`-with-a-code 
 
 ## Depth caps
 
-Three independent caps each guard their own concern:
+Six independent caps each guard their own concern:
 
 | Limit | Value | Guards against |
 |---|---|---|
 | Execution depth | 12 levels | Selection sets nested too deep; introspection fields exempt |
 | Cost (`MaxFieldCost`/`MaxTypeCost`) | 150 | Alias amplification: one costly field under many aliases |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
+| Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
+| Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
+| Rows per relation (`Query:MaxExpandRows`) | 1000 by default | One relation fetch reading too many rows; shared with REST |
+
+Each relation field you select counts as one node of the deep tree, so a query that selects many
+relations can hit `MaxDeepRelations` without sending any `deep` argument.
 
 ## What's next
 

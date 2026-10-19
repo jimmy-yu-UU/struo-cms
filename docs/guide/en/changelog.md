@@ -69,7 +69,15 @@
   is documented as unverified), a database that already holds translation rows for one item under two
   spellings of the same locale keeps both; an operator can find them with
   `SELECT <foreign key column>, lower(locale), count(*) FROM <translation table> GROUP BY <foreign key column>, lower(locale) HAVING count(*) > 1;`
-  (substitute the translation table's foreign key column) and delete the extra row.
+  (substitute the translation table's foreign key column) and delete the extra row. A row with a single
+  spelling that is not exactly a configured language code (`zh-tw` where the language is `zh-TW`) is no
+  longer found on those backends, and the next update of its item inserts a second row beside it. After
+  removing duplicates as above, find such rows with
+  `SELECT DISTINCT locale FROM <translation table> WHERE locale NOT IN (SELECT code FROM <language table>);`
+  and fix each one with
+  `UPDATE <translation table> SET locale = '<configured code>' WHERE locale = '<stored spelling>';`
+  The framework's own tables carry the `Database:TablePrefix` (default `struo_`); a table of your own
+  keeps the name you gave it.
 - Three new `Query` keys bound the cost of one request. `MaxSortFields` (default 5) caps the fields of a
   top-level sort and of each nested list's `sort`, `MaxDeepRelations` (default 20) caps the relation
   nodes in a `deep` tree, and `MaxExpandRows` (default 1000) caps the rows one relation fetch may read.
@@ -78,8 +86,10 @@
   a relation fetch over `MaxExpandRows` is refused, never truncated. `IItemRepository.QueryWhereInFilteredAsync` and
   `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
   that implements the interface must add it, and a call that passed the token positionally must name it
-  (`ct: ct`). `QueryValidator.Validate` and `DeepExpansionCoordinator.ExpandAsync` take an optional
-  `FilterBudget`. There is no cap on `offset`.
+  (`ct: ct`). `QueryValidator.Validate` takes an optional `FilterBudget`.
+  `DeepExpansionCoordinator.ExpandAsync` takes a `FilterBudget?` before the cancellation token, and the
+  new `Prepare` and `ExpandPreparedAsync` split its validation from its expansion, so `ItemService`
+  refuses an over-cap `deep` before it reads any row. There is no cap on `offset`.
 :::
 
 ### Added

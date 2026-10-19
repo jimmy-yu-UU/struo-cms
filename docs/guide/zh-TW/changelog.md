@@ -55,23 +55,30 @@
   文件中仍列為未驗證），若資料庫裡已有同一個項目以同一個 locale 的兩種寫法各存一列，兩列都會保留；
   維運人員可用
   `SELECT <外鍵欄位>, lower(locale), count(*) FROM <翻譯資料表> GROUP BY <外鍵欄位>, lower(locale) HAVING count(*) > 1;`
-  （把 `<外鍵欄位>` 換成翻譯資料表的外鍵欄位）找出，再刪除多餘的資料列。
+  （把 `<外鍵欄位>` 換成翻譯資料表的外鍵欄位）找出，再刪除多餘的資料列。另有一種情況：某列只有一種寫法，
+  但不完全等於設定的語言代碼（語言是 `zh-TW` 而資料列存 `zh-tw`），在這些後端上會讀不到，該項目下次更新時
+  還會在它旁邊再插入一列。照上面的方式清掉重複列之後，用
+  `SELECT DISTINCT locale FROM <翻譯資料表> WHERE locale NOT IN (SELECT code FROM <語言資料表>);`
+  找出這類資料列，再逐一用
+  `UPDATE <翻譯資料表> SET locale = '<設定的代碼>' WHERE locale = '<儲存的寫法>';` 修正。框架自己的資料表
+  帶有 `Database:TablePrefix`（預設 `struo_`）；你自己的資料表維持你取的名稱。
 - 新增三個 `Query` 鍵來限制單一請求的成本。`MaxSortFields`（預設 5）限制頂層排序與每個巢狀清單 `sort`
   的欄位數，`MaxDeepRelations`（預設 20）限制 `deep` 樹的關聯節點數，`MaxExpandRows`（預設 1000）限制
   單次關聯讀取最多讀的列數。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
   過去每個巢狀篩選各自計算。超過任一上限的請求回 400；關聯讀取超過 `MaxExpandRows` 時直接拒絕，不會
   截斷。`IItemRepository.QueryWhereInFilteredAsync` 與 `QueryEntityWhereInAsync` 在取消權杖之前多了選用的
   `int? maxRows`，實作這個介面的 fork 必須加上，以位置傳入權杖的呼叫必須改成具名（`ct: ct`）。
-  `QueryValidator.Validate` 與 `DeepExpansionCoordinator.ExpandAsync` 多了選用的 `FilterBudget`。`offset`
-  沒有上限。
+  `QueryValidator.Validate` 多了選用的 `FilterBudget`。`DeepExpansionCoordinator.ExpandAsync` 在取消權杖
+  之前多了 `FilterBudget?`，新增的 `Prepare` 與 `ExpandPreparedAsync` 把它的驗證與展開拆開，所以
+  `ItemService` 會在讀任何資料列之前就拒絕超限的 `deep`。`offset` 沒有上限。
 :::
 
 ### 新增
 
 - `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
   所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
-  仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可
-  重複；重複時啟動會丟出 `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
+  仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
+  `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
 
 ### 安全性
 

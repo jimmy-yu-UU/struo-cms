@@ -350,13 +350,19 @@ HTTP_STATUS:400
 
 ## 深度上限
 
-三個獨立的上限各自把關：
+六個獨立的上限各自把關：
 
 | 限制 | 數值 | 防的是什麼 |
 |---|---|---|
 | 執行深度 | 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
 | Cost（`MaxFieldCost`／`MaxTypeCost`） | 150 | alias 放大：同一昂貴欄位配多別名重複算 |
 | 關聯路徑深度（`Query:MaxRelationDepth`） | 預設 6 | 跨關聯篩選與巢狀展開，跟 REST 共用設定 |
+| 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
+| 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
+| 每個關聯的列數（`Query:MaxExpandRows`） | 預設 1000 | 單次關聯抓取讀太多列，跟 REST 共用設定 |
+
+你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
+`MaxDeepRelations`。
 
 ## 接下來
 
