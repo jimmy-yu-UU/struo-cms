@@ -93,7 +93,7 @@ means the same thing on both protocols:
 | `UNAUTHORIZED` | 401 | No or invalid credentials; a denial while unauthenticated |
 | `FORBIDDEN` | 403 | Authenticated but not permitted; a missing CSRF header |
 | `NOT_FOUND` | 404 | An unknown collection, a missing file, or another plain 404 |
-| `CONFLICT` | 409 | Relation-blocked delete, duplicate email, a database unique-key violation, or a plain 409 |
+| `CONFLICT` | 409 | A conflict other than a version mismatch (see below) |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
@@ -106,6 +106,8 @@ means the same thing on both protocols:
 | `SESSION_REVOCATION_FAILED` | 500 | Revocation failure after password change or user delete |
 | `SEARCH_UNAVAILABLE` | 503 | The registered search provider's own failure to respond |
 
+- `CONFLICT` covers a delete blocked by a relation, a duplicate email, a database unique-key
+  violation, and any other plain 409.
 - `TOO_MANY_REQUESTS` is written directly at three sites rather than going through the error
   mapping above: the per-account login throttle, the per-caller-IP login throttle, and the
   password-change throttle.

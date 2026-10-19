@@ -51,10 +51,11 @@
   寫法，未啟用則回 `null`。實作這個介面的 fork 必須改這些簽章並加上 `CanonicalizeAsync`，呼叫舊方法的 fork
   必須改呼叫非同步版本。
 - 翻譯 payload 裡的 locale 鍵與 `?locale=` 的值，以語言列設定的寫法儲存與查詢（`ZH-tw` 會變成 `zh-TW`），
-  不會改寫任何既有資料列。在 locale 比對區分大小寫的 PostgreSQL 與 SQLite 上，若資料庫裡已有同一個項目以
-  同一個 locale 的兩種寫法各存一列，兩列都會保留；維運人員可用
-  `SELECT parent_fk, lower(locale), count(*) FROM <翻譯資料表> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
-  找出，再刪除多餘的資料列。
+  不會改寫任何既有資料列。在 locale 比對區分大小寫的 PostgreSQL 與 SQLite 上（Oracle 預設也區分大小寫，但
+  文件中仍列為未驗證），若資料庫裡已有同一個項目以同一個 locale 的兩種寫法各存一列，兩列都會保留；
+  維運人員可用
+  `SELECT <外鍵欄位>, lower(locale), count(*) FROM <翻譯資料表> GROUP BY <外鍵欄位>, lower(locale) HAVING count(*) > 1;`
+  （把 `<外鍵欄位>` 換成翻譯資料表的外鍵欄位）找出，再刪除多餘的資料列。
 - 新增三個 `Query` 鍵來限制單一請求的成本。`MaxSortFields`（預設 5）限制頂層排序與每個巢狀清單 `sort`
   的欄位數，`MaxDeepRelations`（預設 20）限制 `deep` 樹的關聯節點數，`MaxExpandRows`（預設 1000）限制
   單次關聯讀取最多讀的列數。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
@@ -68,7 +69,8 @@
 ### 新增
 
 - `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
-  所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可
+  所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
+  仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可
   重複；重複時啟動會丟出 `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
 
 ### 安全性

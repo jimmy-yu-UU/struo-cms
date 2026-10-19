@@ -65,10 +65,11 @@
   methods must call the async ones.
 - A locale key in a translations payload and a `?locale=` value are stored and queried in the language
   row's configured spelling (`ZH-tw` becomes `zh-TW`). No existing row is rewritten. On PostgreSQL and
-  SQLite, where locale comparison is case-sensitive, a database that already holds translation rows for
-  one item under two spellings of the same locale keeps both; an operator can find them with
-  `SELECT parent_fk, lower(locale), count(*) FROM <translation table> GROUP BY parent_fk, lower(locale) HAVING count(*) > 1;`
-  and delete the extra row.
+  SQLite, where locale comparison is case-sensitive (and on Oracle, which is case-sensitive by default and
+  is documented as unverified), a database that already holds translation rows for one item under two
+  spellings of the same locale keeps both; an operator can find them with
+  `SELECT <foreign key column>, lower(locale), count(*) FROM <translation table> GROUP BY <foreign key column>, lower(locale) HAVING count(*) > 1;`
+  (substitute the translation table's foreign key column) and delete the extra row.
 - Three new `Query` keys bound the cost of one request. `MaxSortFields` (default 5) caps the fields of a
   top-level sort and of each nested list's `sort`, `MaxDeepRelations` (default 20) caps the relation
   nodes in a `deep` tree, and `MaxExpandRows` (default 1000) caps the rows one relation fetch may read.
@@ -85,8 +86,9 @@
 
 - `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
   grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
-  without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a
-  `MetadataException` naming both types. Without `Name` the collection keeps the camel-cased class name.
+  without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It
+  must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a `MetadataException` naming
+  both types. Without `Name` the collection keeps the camel-cased class name.
 
 ### Security
 
