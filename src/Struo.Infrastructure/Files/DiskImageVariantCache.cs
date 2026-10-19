@@ -18,7 +18,8 @@ namespace Struo.Infrastructure.Files;
 /// <remarks>
 /// When <c>maxBytes</c> is positive the cache is size-capped: a hit stamps the file's last-write time,
 /// and a write that leaves the total above the cap deletes the least recently stamped variants until
-/// it fits. Eviction failures are logged and never reach the caller.
+/// it is at 90% of the cap. A running byte total, seeded from disk on the first write, decides when a
+/// sweep is needed. Eviction failures are logged and never reach the caller.
 /// </remarks>
 public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
     : IImageVariantCache
@@ -28,6 +29,8 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
 
     private readonly ILogger _logger = logger ?? NullLogger.Instance;
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
+    private readonly object _seedLock = new();
+    private long _totalBytes = -1;   // -1 until seeded from disk
 
     public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req)
     {
@@ -81,10 +84,13 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         // subsequent move is same-volume and atomic), then move it into place. A reader that
         // stats the final path either sees nothing or the complete file — never a partial one.
         var tempPath = Path.Combine(dir, $".{key}.{Guid.NewGuid():N}.tmp");
+        if (maxBytes > 0) EnsureSeeded();
+        var replaced = ExistingLength(path);
+        var stored = false;
         try
         {
             await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
-            await MoveIntoPlaceAsync(tempPath, path, ct);
+            stored = await MoveIntoPlaceAsync(tempPath, path, ct);
         }
         catch
         {
@@ -92,20 +98,45 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
             throw;
         }
 
-        if (maxBytes > 0) Sweep();
+        if (maxBytes <= 0 || !stored) return;
+        if (Interlocked.Add(ref _totalBytes, bytes.Length - replaced) > maxBytes) Sweep();
     }
+
+    // The first capped write counts what is already on disk; later writes and evictions adjust the
+    // total without touching the directory tree.
+    private void EnsureSeeded()
+    {
+        if (Interlocked.Read(ref _totalBytes) >= 0) return;
+        lock (_seedLock)
+        {
+            if (Interlocked.Read(ref _totalBytes) >= 0) return;
+            Interlocked.Exchange(ref _totalBytes, ListVariants().Sum(v => v.Length));
+        }
+    }
+
+    private static long ExistingLength(string path)
+    {
+        try { return new FileInfo(path) is { Exists: true } info ? info.Length : 0; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
+    }
+
+    private List<FileInfo> ListVariants() =>
+        Directory.Exists(rootPath)
+            ? new DirectoryInfo(rootPath).EnumerateFiles("*", SearchOption.AllDirectories)
+                .Where(v => !v.Name.StartsWith('.')).ToList()
+            : [];
 
     // The destination can be briefly unreplaceable while a concurrent reader, evictor or writer of
     // the same key has it open or pending deletion. A few retries cover that; a variant that still
     // cannot be stored is dropped (the cache is an optimization) and logged.
-    private async Task MoveIntoPlaceAsync(string tempPath, string path, CancellationToken ct)
+    private async Task<bool> MoveIntoPlaceAsync(string tempPath, string path, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
             try
             {
                 System.IO.File.Move(tempPath, path, overwrite: true);
-                return;
+                return true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -116,7 +147,7 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
                 }
                 _logger.LogWarning(ex, "Could not store image variant {Path}; it is served uncached.", path);
                 TryDeleteTemp(tempPath);
-                return;
+                return false;
             }
         }
     }
@@ -137,28 +168,29 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         }
     }
 
-    // One sweep at a time; a write that finds a sweep running skips it, the running sweep or the
-    // next write brings the total back under the cap.
+    // One sweep at a time; a write that finds a sweep running skips it, and the running sweep or a
+    // later write brings the total back down. A sweep re-counts the tree (correcting any drift) and
+    // evicts down to 90% of the cap so the next writes have room before another sweep is needed.
     private void Sweep()
     {
         if (!_sweepGate.Wait(0)) return;
         try
         {
-            var files = new DirectoryInfo(rootPath)
-                .EnumerateFiles("*", SearchOption.AllDirectories)
-                .Where(f => !f.Name.StartsWith('.'))
-                .ToList();
-            var total = files.Sum(f => f.Length);
+            var files = ListVariants();
+            var total = files.Sum(v => v.Length);
+            Interlocked.Exchange(ref _totalBytes, total);
             if (total <= maxBytes) return;
 
-            foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
+            var lowWater = maxBytes - maxBytes / 10;
+            foreach (var file in files.OrderBy(v => v.LastWriteTimeUtc))
             {
-                if (total <= maxBytes) break;
+                if (total <= lowWater) break;
                 var length = file.Length;
                 try
                 {
                     file.Delete();
                     total -= length;
+                    Interlocked.Add(ref _totalBytes, -length);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

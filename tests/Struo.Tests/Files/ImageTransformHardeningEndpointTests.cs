@@ -31,7 +31,9 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     private static Task<string> UploadPng(HttpClient c, int w, int h) =>
         Upload(c, Image.Black(w, h).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png"), "image/png", "img.png");
 
-    private HttpClient HostWith(IImageTransformer transformer, int maxConcurrent, int timeoutSeconds) =>
+    private HttpClient HostWith(
+        IImageTransformer transformer, int maxConcurrent, int timeoutSeconds,
+        Action<IServiceCollection>? configure = null) =>
         factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
@@ -39,7 +41,11 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
                 ["Struo:Files:ImageTransform:MaxConcurrentTransforms"] = maxConcurrent.ToString(),
                 ["Struo:Files:ImageTransform:QueueTimeoutSeconds"] = timeoutSeconds.ToString(),
             }));
-            b.ConfigureTestServices(s => s.AddSingleton(transformer));
+            b.ConfigureTestServices(s =>
+            {
+                s.AddSingleton(transformer);
+                configure?.Invoke(s);
+            });
         }).CreateClient();
 
     [Fact]
@@ -88,7 +94,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         var resp = await c.GetAsync($"/api/files/{id}/content?width=300&height=200&fit=cover&format=png");
 
         using var img = Image.NewFromBuffer(await resp.Content.ReadAsByteArrayAsync());
-        (img.Width, img.Height).Should().Be((320, 213));
+        (img.Width, img.Height).Should().Be((320, 216));
     }
 
     [Fact]
@@ -140,6 +146,69 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
 
         // The slot is free again afterwards.
         (await host.GetAsync($"/api/files/{id}/content?width=480&format=png")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task The_cache_is_checked_again_after_the_slot_is_acquired()
+    {
+        var cache = new MissThenHitCache();
+        var fake = new CountingTransformer(TimeSpan.Zero);
+        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+            s => s.AddSingleton<IImageVariantCache>(cache));
+        var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
+
+        var resp = await host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await resp.Content.ReadAsByteArrayAsync()).Should().Equal(MissThenHitCache.Payload);
+        fake.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_probe_reporting_a_non_positive_size_returns_the_original_bytes()
+    {
+        var fake = new CountingTransformer(TimeSpan.Zero);
+        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+            s => s.AddSingleton<IImageDimensionReader>(new FixedDimensions((0, 10))));
+        var original = Image.Black(50, 50).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png");
+        var id = await Upload(await factory.CreateAuthenticatedClientAsync(), original, "image/png", "z.png");
+
+        var resp = await host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+
+        (await resp.Content.ReadAsByteArrayAsync()).Should().Equal(original);
+        fake.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Retry_after_is_at_least_one_second_when_the_queue_does_not_wait()
+    {
+        var blocking = new BlockingTransformer();
+        var host = HostWith(blocking, maxConcurrent: 1, timeoutSeconds: 0);
+        var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
+
+        var first = host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+        blocking.Entered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+        var second = await host.GetAsync($"/api/files/{id}/content?width=256&format=png");
+
+        second.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        second.Headers.RetryAfter!.Delta.Should().Be(TimeSpan.FromSeconds(1));
+        blocking.Release.Set();
+        await first;
+    }
+
+    private sealed class MissThenHitCache : IImageVariantCache
+    {
+        public static readonly byte[] Payload = [9, 8, 7];
+        private int _gets;
+        public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req) => "ab";
+        public Task<byte[]?> TryGetAsync(string key, CancellationToken ct) =>
+            Task.FromResult(Interlocked.Increment(ref _gets) == 1 ? null : Payload);
+        public Task SetAsync(string key, byte[] bytes, CancellationToken ct) => Task.CompletedTask;
+    }
+
+    private sealed class FixedDimensions((int, int)? size) : IImageDimensionReader
+    {
+        public (int Width, int Height)? TryRead(Stream seekable, string contentType) => size;
     }
 
     private sealed class CountingTransformer(TimeSpan work) : IImageTransformer

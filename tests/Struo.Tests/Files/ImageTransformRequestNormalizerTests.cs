@@ -54,7 +54,9 @@ public class ImageTransformRequestNormalizerTests
 
     [Theory]
     [InlineData(1000, 500, 1024, 512)]
-    [InlineData(300, 200, 320, 213)]
+    [InlineData(300, 200, 320, 216)]
+    [InlineData(300, 250, 320, 264)]
+    [InlineData(333, 100, 480, 144)]
     [InlineData(100, 100, 128, 128)]
     [InlineData(400, 800, 480, 960)]
     public void Cover_snaps_the_width_and_derives_the_height_from_the_requested_ratio(
@@ -74,10 +76,10 @@ public class ImageTransformRequestNormalizerTests
     }
 
     [Fact]
-    public void Cover_derived_height_is_clamped_to_the_configured_maximum_and_at_least_one()
+    public void Cover_derived_height_is_clamped_to_the_configured_maximum_and_at_least_one_unit()
     {
         Ok(100, 100000, fit: "cover").Height.Should().Be(4096);
-        Ok(999999, 1, fit: "cover").Height.Should().Be(1);
+        Ok(999999, 1, fit: "cover").Height.Should().Be(8);
     }
 
     [Fact]
@@ -108,7 +110,7 @@ public class ImageTransformRequestNormalizerTests
     }
 
     [Theory]
-    [InlineData(null, 80)]
+    [InlineData(null, 82)]
     [InlineData(5, 10)]
     [InlineData(14, 10)]
     [InlineData(15, 20)]

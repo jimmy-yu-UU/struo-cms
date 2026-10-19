@@ -79,7 +79,7 @@
 - 圖片轉換的參數會被正規化，轉換本身也有了上限。請求的 `width` 或 `height` 會往上對齊到
   `Struo:Files:ImageTransform:SizeSteps` 的下一個值（預設 64、128、256、320、480、640、768、1024、1280、
   1600、1920、2560、3840、4096），所以 `width=100` 會得到 128 寬的圖。`fit=cover` 只對齊寬度，高度依請求的
-  比例推算。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。`quality` 四捨五入到 10 的倍數，範圍 10 到
+  比例推算並四捨五入到 8 像素的倍數。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。呼叫端給的 `quality` 四捨五入到 10 的倍數，範圍 10 到
   100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、AVIF、GIF）裡的來源會被轉換；對 SVG 帶
   `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣。同時最多
   進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`

@@ -51,6 +51,8 @@ public static class FileStorageServiceCollectionExtensions
         // per-request allocation. DiskImageVariantCache is also stateless beyond its root path.
         services.AddSingleton<IImageTransformer, NetVipsImageTransformer>();
         // libvips loaders flagged untrusted (e.g. ImageMagick, SVG) never run on uploaded content.
+        // Setting it loads native libvips here, even when ImageTransform is disabled, so a host
+        // without a usable libvips fails at startup instead of on the first transform.
         NetVips.NetVips.BlockUntrusted = true;
         services.AddSingleton<IImageVariantCache>(sp =>
         {

@@ -299,7 +299,8 @@ Sizes snap so that the number of distinct variants a caller can create stays sma
 returns a 128-wide image with the default steps, and `width=65` and `width=128` share one cached
 variant. A request above the last step gets the last step. `fit=cover` snaps the width and derives
 the height from the ratio of the requested `width` and `height`, so the crop keeps the proportions
-that were asked for; a request of `width=300&height=200&fit=cover` returns 320×213.
+that were asked for. The derived height is rounded to a multiple of 8 pixels, so a width step has
+a limited set of cover heights; `width=300&height=200&fit=cover` returns 320×216.
 
 `fit=cover` only actually crops to that frame when both dimensions are given; a `cover` with just
 one dimension scales proportionally to fit inside the frame without enlarging. `fit=inside` snaps
@@ -323,7 +324,9 @@ distinguishable from a successful one just by its headers.
 
 Before decoding, the source's width and height are read from its header. A source over
 `MaxSourcePixels`, or one whose header cannot be read, is served as its original bytes, so a small
-upload that declares a huge canvas is never decoded. At most `MaxConcurrentTransforms` transforms
+file whose header declares a huge image is not decoded. For a GIF the size is the canvas its frames
+need, and for an AVIF it is the largest image size the header declares. A client-supplied `quality`
+is rounded to a multiple of 10; the configured `DefaultQuality` is used exactly as written. At most `MaxConcurrentTransforms` transforms
 run at once; a request that waits longer than `QueueTimeoutSeconds` for a slot gets `503` with the
 `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
 

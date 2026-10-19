@@ -116,10 +116,16 @@ public sealed class FilesController(
             using var lease = await images.Gate.TryEnterAsync(ct);
             if (lease is null)
             {
-                Response.Headers.RetryAfter = imageTransform.QueueTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+                Response.Headers.RetryAfter = Math.Max(1, imageTransform.QueueTimeoutSeconds)
+                    .ToString(CultureInfo.InvariantCulture);
                 return ApiResults.Fail(StatusCodes.Status503ServiceUnavailable, ErrorCodes.ImageTransformBusy,
                     "Image transforms are busy; retry shortly.");
             }
+
+            // A request that waited here may find the variant stored by the one it queued behind.
+            cached = await images.Cache.TryGetAsync(key, ct);
+            if (cached is not null)
+                return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
 
             byte[] sourceBytes;
             await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
@@ -134,7 +140,8 @@ public sealed class FilesController(
             using (var probe = new MemoryStream(sourceBytes, writable: false))
             {
                 var dims = images.Dimensions.TryRead(probe, row.ContentType);
-                if (dims is null || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
+                if (dims is not { Width: > 0, Height: > 0 }
+                    || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
                     return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
             }
 
@@ -154,6 +161,8 @@ public sealed class FilesController(
                 return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
             }
 
+            // The slot is released before the cache write, whose size sweep must not hold it.
+            lease.Dispose();
             await images.Cache.SetAsync(key, result.Bytes, ct);
             return File(result.Bytes, result.ContentType);
         }

@@ -233,11 +233,13 @@ The keys below bound what one caller can make the server compute and store.
   A request that finds every slot busy waits up to `QueueTimeoutSeconds` (`0` or more; `0` does not
   wait) and then gets `503` `IMAGE_TRANSFORM_BUSY` with a `Retry-After` header.
 - `CacheMaxBytes`: the size cap of the variant cache on disk. When a write leaves the cache above
-  it, the least recently read variants are deleted until it fits. `0` or less removes the cap. A
-  deletion that fails is logged and never fails the request.
+  it, the least recently read variants are deleted until the cache is at 90% of the cap, so the
+  next writes do not sweep again. `0` or less removes the cap. A deletion that fails is logged and
+  never fails the request.
 - `MaxSourcePixels`: the largest source, width times height, that is decoded (at least `1`). The
-  size is read from the file header; a larger source, or one whose header cannot be read, is
-  served as its original bytes.
+  size is read from the file header without decoding; a larger source, or one whose header cannot
+  be read, is served as its original bytes. For a GIF the size is the canvas its frames need; for an
+  AVIF it is the largest image size the header declares.
 
 `MaxConcurrentTransforms`, `QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps`
 are validated at startup.

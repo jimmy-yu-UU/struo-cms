@@ -27,6 +27,49 @@ public class ImageDimensionReaderTests
     }
 
     [Fact]
+    public void Avif_reports_the_largest_ispe_so_a_small_tile_cannot_hide_a_large_grid()
+    {
+        byte[] avif =
+        [
+            0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0,
+            0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0,
+            0, 0, 0, 64, 0, 0, 0, 64,
+            0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0,
+            0, 0, 0x1F, 0x40, 0, 0, 0x17, 0x70
+        ];
+        new ImageDimensionReader().TryRead(new MemoryStream(avif), "image/avif").Should().Be((8000, 6000));
+    }
+
+    private static byte[] GifWithFrame(int screenW, int screenH, int left, int frameW, int frameH)
+    {
+        var ms = new MemoryStream();
+        void W(params byte[] b) => ms.Write(b);
+        W((byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'9', (byte)'a');
+        W((byte)screenW, (byte)(screenW >> 8), (byte)screenH, (byte)(screenH >> 8), 0x80, 0, 0);
+        W(0, 0, 0, 255, 255, 255);
+        W(0x21, 0xF9, 4, 0, 0, 0, 0, 0);
+        W(0x2C, (byte)left, (byte)(left >> 8), 0, 0,
+            (byte)frameW, (byte)(frameW >> 8), (byte)frameH, (byte)(frameH >> 8), 0);
+        W(2, 2, 0x44, 0x01, 0);
+        W(0x3B);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Gif_reports_the_canvas_libvips_builds_when_a_frame_exceeds_the_logical_screen()
+    {
+        var gif = GifWithFrame(screenW: 1, screenH: 1, left: 0, frameW: 1000, frameH: 1000);
+        new ImageDimensionReader().TryRead(new MemoryStream(gif), "image/gif").Should().Be((1000, 1000));
+    }
+
+    [Fact]
+    public void Gif_canvas_includes_the_frame_offset()
+    {
+        var gif = GifWithFrame(screenW: 1, screenH: 1, left: 500, frameW: 10, frameH: 10);
+        new ImageDimensionReader().TryRead(new MemoryStream(gif), "image/gif").Should().Be((510, 10));
+    }
+
+    [Fact]
     public void Reads_gif_dimensions()
     {
         // GIF89a header, logical screen 3x2 (little-endian uint16), then trailing bytes.

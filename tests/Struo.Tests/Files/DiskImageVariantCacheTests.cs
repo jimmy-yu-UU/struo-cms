@@ -82,6 +82,44 @@ public class DiskImageVariantCacheTests
     }
 
     [Fact]
+    public async Task Rewriting_one_key_does_not_count_its_bytes_twice()
+    {
+        var c = new DiskImageVariantCache(Root(), maxBytes: 250);
+        var key = Key(c, 1);
+        for (var i = 0; i < 10; i++) await c.SetAsync(key, new byte[100], default);
+
+        (await c.TryGetAsync(key, default)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Variants_already_on_disk_count_towards_the_cap()
+    {
+        var root = Root();
+        var first = new DiskImageVariantCache(root, maxBytes: 250);
+        for (var i = 0; i < 2; i++) await first.SetAsync(Key(first, i), new byte[100], default);
+        await Task.Delay(30);
+
+        var second = new DiskImageVariantCache(root, maxBytes: 250);
+        await second.SetAsync(Key(second, 9), new byte[100], default);
+
+        TotalBytes(root).Should().BeLessThanOrEqualTo(250);
+    }
+
+    [Fact]
+    public async Task Eviction_goes_below_the_cap_so_the_next_write_does_not_sweep_again()
+    {
+        var root = Root();
+        var c = new DiskImageVariantCache(root, maxBytes: 1000);
+        for (var i = 0; i < 11; i++)
+        {
+            await c.SetAsync(Key(c, i), new byte[100], default);
+            await Task.Delay(15);
+        }
+
+        TotalBytes(root).Should().BeLessThanOrEqualTo(900);
+    }
+
+    [Fact]
     public async Task Zero_cap_means_unbounded()
     {
         var root = Root();

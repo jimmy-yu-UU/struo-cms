@@ -16,7 +16,7 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         {
             if (seekable.CanSeek) seekable.Position = 0;
             var b = ReadHeader(seekable, 64 * 1024);
-            return Png(b) ?? Gif(b) ?? Webp(b) ?? Jpeg(b) ?? Avif(b);
+            return Png(b) ?? Gif(b, seekable) ?? Webp(b) ?? Jpeg(b) ?? Avif(b);
         }
         catch
         {
@@ -47,12 +47,54 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         return (Be32(b, 16), Be32(b, 20));
     }
 
-    // GIF: "GIF87a"/"GIF89a", logical screen width/height as little-endian uint16 at 6/8.
-    private static (int, int)? Gif(byte[] b)
+    // GIF: "GIF87a"/"GIF89a", logical screen width/height as little-endian uint16 at 6/8. libvips
+    // sizes the canvas to fit every frame, so the result is the largest of the logical screen and each
+    // image descriptor's offset plus size. Blocks are skipped, never decoded.
+    private static (int, int)? Gif(byte[] b, Stream s)
     {
         if (b.Length < 10) return null;
         if (b[0] != (byte)'G' || b[1] != (byte)'I' || b[2] != (byte)'F') return null;
-        return (b[6] | (b[7] << 8), b[8] | (b[9] << 8));
+        int w = b[6] | (b[7] << 8), h = b[8] | (b[9] << 8);
+        if (b.Length < 13) return (w, h);
+
+        s.Position = 13;
+        if ((b[10] & 0x80) != 0 && !Skip(s, 3L << ((b[10] & 7) + 1))) return (w, h);
+        var desc = new byte[9];
+        while (true)
+        {
+            var block = s.ReadByte();
+            if (block == 0x21)
+            {
+                if (s.ReadByte() < 0 || !SkipSubBlocks(s)) break;
+            }
+            else if (block == 0x2C)
+            {
+                if (s.Read(desc, 0, 9) < 9) break;
+                w = Math.Max(w, (desc[0] | (desc[1] << 8)) + (desc[4] | (desc[5] << 8)));
+                h = Math.Max(h, (desc[2] | (desc[3] << 8)) + (desc[6] | (desc[7] << 8)));
+                if ((desc[8] & 0x80) != 0 && !Skip(s, 3L << ((desc[8] & 7) + 1))) break;
+                if (s.ReadByte() < 0 || !SkipSubBlocks(s)) break;   // LZW minimum code size, then data
+            }
+            else break;   // trailer, end of stream or an unknown block
+        }
+        return (w, h);
+    }
+
+    private static bool Skip(Stream s, long count)
+    {
+        s.Seek(count, SeekOrigin.Current);
+        return s.Position <= s.Length;
+    }
+
+    private static bool SkipSubBlocks(Stream s)
+    {
+        while (true)
+        {
+            var size = s.ReadByte();
+            if (size < 0) return false;
+            if (size == 0) return true;
+            if (!Skip(s, size)) return false;
+        }
     }
 
     // WebP: "RIFF"<size>"WEBP"<fourcc>... — handles lossy (VP8 ), lossless (VP8L), extended (VP8X).
@@ -108,7 +150,7 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         return null;
     }
 
-    // AVIF (ISO BMFF): an "ftyp" box with an avif brand, then the "ispe" property box whose payload is
+    // AVIF (ISO BMFF): an "ftyp" box with an avif brand, then "ispe" property boxes whose payload is
     // 4 bytes version/flags followed by width and height as big-endian uint32.
     private static (int, int)? Avif(byte[] b)
     {
@@ -116,13 +158,25 @@ public sealed class ImageDimensionReader : IImageDimensionReader
             return null;
         var brand = System.Text.Encoding.ASCII.GetString(b, 8, 4);
         if (brand is not ("avif" or "avis")) return null;
+        // A grid image carries one ispe per tile plus one for the whole grid; the largest area is the
+        // size a decoder may produce.
+        (int, int)? largest = null;
+        long largestArea = -1;
         for (var i = 8; i + 16 <= b.Length; i++)
         {
-            if (b[i] == (byte)'i' && b[i + 1] == (byte)'s' && b[i + 2] == (byte)'p' && b[i + 3] == (byte)'e')
-                return (Be32(b, i + 8), Be32(b, i + 12));
+            if (b[i] != (byte)'i' || b[i + 1] != (byte)'s' || b[i + 2] != (byte)'p' || b[i + 3] != (byte)'e')
+                continue;
+            var w = (int)Math.Min(BeU32(b, i + 8), int.MaxValue);
+            var h = (int)Math.Min(BeU32(b, i + 12), int.MaxValue);
+            if ((long)w * h <= largestArea) continue;
+            largestArea = (long)w * h;
+            largest = (w, h);
         }
-        return null;
+        return largest;
     }
+
+    private static long BeU32(byte[] b, int o) =>
+        ((long)b[o] << 24) | ((long)b[o + 1] << 16) | ((long)b[o + 2] << 8) | b[o + 3];
 
     private static int Be32(byte[] b, int o) =>
         (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];

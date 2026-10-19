@@ -10,6 +10,9 @@ public static class ImageTransformRequestNormalizer
     public const string FitInside = "inside";
     public const string FitCover = "cover";
 
+    /// <summary>Granularity, in pixels, of the height derived for <c>fit=cover</c>.</summary>
+    public const int CoverHeightUnit = 8;
+
     public static bool TryNormalize(
         int? width, int? height, string? format, string? fit, int? quality,
         FileStorageOptions.ImageTransformOptions options,
@@ -37,7 +40,7 @@ public static class ImageTransformRequestNormalizer
             w, h,
             format is null ? null : normalizedFormat,
             normalizedFit,
-            NormalizeQuality(quality ?? options.DefaultQuality));
+            quality is null ? Math.Clamp(options.DefaultQuality, 1, 100) : NormalizeQuality(quality.Value));
         return true;
     }
 
@@ -47,12 +50,14 @@ public static class ImageTransformRequestNormalizer
         var w = width is null ? (int?)null : Snap(width.Value, options.MaxWidth, options.SizeSteps);
 
         // cover crops to a box, which needs both sides; the height then follows the requested aspect
-        // ratio so snapping the width cannot distort it.
+        // ratio so snapping the width cannot distort it. The height rounds to a multiple of
+        // CoverHeightUnit, which bounds the cover variants per width step.
         if (cover && width is not null && height is not null)
         {
             var ratio = (double)Math.Max(height.Value, 1) / Math.Max(width.Value, 1);
             var derived = (int)Math.Round(w!.Value * ratio, MidpointRounding.AwayFromZero);
-            return (w, Math.Clamp(derived, 1, options.MaxHeight));
+            var unit = (int)Math.Round(derived / (double)CoverHeightUnit, MidpointRounding.AwayFromZero);
+            return (w, Math.Min(Math.Max(unit, 1) * CoverHeightUnit, options.MaxHeight));
         }
 
         var h = height is null ? (int?)null : Snap(height.Value, options.MaxHeight, options.SizeSteps);
