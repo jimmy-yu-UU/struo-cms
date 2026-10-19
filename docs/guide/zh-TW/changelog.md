@@ -11,6 +11,9 @@
   `new EntityAccessors(...)`。
 - `GraphQlQueryBuilder.BuildQuery` 接受一個 `GraphQlQueryArgs`（篩選、排序、分頁、搜尋、`deep`、facets、
   aggregate），後面接 `collection` 與 `relationTarget`。直接呼叫它的程式要改成先建 `GraphQlQueryArgs`。
+- `FileService` 的建構函式以一個 `FileServiceCollaborators`（`Repository`、`Languages`、`CurrentUser`）
+  取代 `storage` 之後的三個參數，後面接選用的 `notifier`、`logger` 與 `references`（`ItemPurgePipeline`）。
+  依賴注入會自動解析；自己手動建構 `FileService` 的 fork，要改成傳 `new FileServiceCollaborators(...)`。
 - `SchemaTypeMapper.TagItemInputName` 是常數，不是方法。把 `TagItemInputName()` 改成 `TagItemInputName`。
 - 範本不再附帶 bootstrap 管理員密碼。`appsettings.json` 裡的 `Auth:BootstrapAdmin:Password` 是 `""`，
   `docker-compose.yml` 的 `STRUO_ADMIN_PASSWORD` 預設為空。密碼留空時，建立管理員的那次執行會隨機產生

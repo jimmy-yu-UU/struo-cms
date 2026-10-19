@@ -12,6 +12,10 @@
 - `GraphQlQueryBuilder.BuildQuery` takes a `GraphQlQueryArgs` (filter, sort, paging, search, `deep`,
   facets, aggregate), followed by `collection` and `relationTarget`. Code that calls it directly must
   build a `GraphQlQueryArgs` first.
+- The `FileService` constructor takes one `FileServiceCollaborators` (`Repository`, `Languages`,
+  `CurrentUser`) in place of the three parameters after `storage`, followed by the optional `notifier`,
+  `logger` and `references` (an `ItemPurgePipeline`). Dependency injection resolves it; a fork that
+  constructs `FileService` by hand must pass `new FileServiceCollaborators(...)`.
 - `SchemaTypeMapper.TagItemInputName` is a constant, not a method. Change `TagItemInputName()` to
   `TagItemInputName`.
 - The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
