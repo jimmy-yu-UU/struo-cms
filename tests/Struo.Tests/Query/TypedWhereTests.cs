@@ -18,7 +18,8 @@ public sealed class TypedWhereTests : IDisposable
 {
     private static readonly Guid Tester = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    // Id, FK and a plain column all map to reserved words, so every typed WHERE must quote them.
+    // The FK ("order") and a plain column ("group") map to reserved words: the FK is quoted in the purge WHERE,
+    // both are quoted in the update SET list.
     [SugarTable("typed_where_reserved")]
     [CmsCollection("Reserved")]
     public sealed class Reserved : AuditableEntity, ISoftDeletable
@@ -151,7 +152,7 @@ public sealed class TypedWhereTests : IDisposable
     }
 
     [Fact]
-    public async Task Reserved_word_columns_work_for_update_trash_restore_and_purge()
+    public async Task Reserved_word_columns_work_for_update_trash_restore_and_the_purge_filter()
     {
         var target = Guid.CreateVersion7();
         var id = SeedReserved(target);

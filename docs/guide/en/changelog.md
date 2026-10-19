@@ -120,6 +120,12 @@
   message `A record with the same unique value already exists.` on REST and GraphQL, on every supported
   backend; it returned a 500. The message never names the index or column.
 
+- Purging an item sets the foreign key to null on every row that references it, and that statement now quotes
+  the column name. A relation field whose column name is a reserved word (`order`, `user`, `group`) made the
+  purge fail with a SQL syntax error, and a mixed-case custom column name did not match on PostgreSQL. The
+  optimistic-lock update and the trash and restore guards already filtered on the `id`, `version` and
+  `deletedat` columns, so they are unaffected; they now use the same typed filter.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from
