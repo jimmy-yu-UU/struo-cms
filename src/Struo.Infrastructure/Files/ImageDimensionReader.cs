@@ -61,7 +61,7 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
 
     // GIF: "GIF87a"/"GIF89a", logical screen width/height as little-endian uint16 at 6/8. libvips
     // sizes the canvas to fit every frame, so the result is the largest of the logical screen and each
-    // image descriptor's offset plus size. Blocks are skipped, never decoded.
+    // image descriptor's offset plus size. Blocks are skipped by reading, never decoded or seeked past, so a stream that is only partly buffered works.
     private static (int, int)? Gif(byte[] b, Stream s)
     {
         if (b.Length < 10) return null;
@@ -70,7 +70,7 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
         if (b.Length < 13) return (w, h);
 
         s.Position = 13;
-        if ((b[10] & 0x80) != 0 && !Skip(s, 3L << ((b[10] & 7) + 1))) return (w, h);
+        if ((b[10] & 0x80) != 0 && !SkipByReading(s, 3 << ((b[10] & 7) + 1))) return (w, h);
         var desc = new byte[9];
         while (true)
         {
@@ -84,18 +84,12 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
                 if (s.Read(desc, 0, 9) < 9) break;
                 w = Math.Max(w, (desc[0] | (desc[1] << 8)) + (desc[4] | (desc[5] << 8)));
                 h = Math.Max(h, (desc[2] | (desc[3] << 8)) + (desc[6] | (desc[7] << 8)));
-                if ((desc[8] & 0x80) != 0 && !Skip(s, 3L << ((desc[8] & 7) + 1))) break;
+                if ((desc[8] & 0x80) != 0 && !SkipByReading(s, 3 << ((desc[8] & 7) + 1))) break;
                 if (s.ReadByte() < 0 || !SkipSubBlocks(s)) break;   // LZW minimum code size, then data
             }
             else break;   // trailer, end of stream or an unknown block
         }
         return (w, h);
-    }
-
-    private static bool Skip(Stream s, long count)
-    {
-        s.Seek(count, SeekOrigin.Current);
-        return s.Position <= s.Length;
     }
 
     private static bool SkipSubBlocks(Stream s)
@@ -105,7 +99,7 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
             var size = s.ReadByte();
             if (size < 0) return false;
             if (size == 0) return true;
-            if (!Skip(s, size)) return false;
+            if (!SkipByReading(s, size)) return false;
         }
     }
 

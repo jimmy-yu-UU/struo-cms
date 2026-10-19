@@ -169,6 +169,35 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(gif), "image/gif").Should().Be((510, 10));
     }
 
+    // A first frame whose data runs well past the 64 KB header read, then a larger second frame.
+    private static byte[] GifWithLargeFirstFrame()
+    {
+        var ms = new MemoryStream();
+        void W(params byte[] b) => ms.Write(b);
+        W((byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'9', (byte)'a');
+        W(1, 0, 1, 0, 0x80, 0, 0);
+        W(0, 0, 0, 255, 255, 255);
+        W(0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0);
+        W(2);
+        var block = new byte[256];
+        block[0] = 255;
+        for (var i = 0; i < 400; i++) ms.Write(block);   // 400 sub-blocks of 255 bytes, about 100 KB
+        W(0);
+        W(0x2C, 0, 0, 0, 0, 0xE8, 0x03, 0xD0, 0x07, 0);
+        W(2, 2, 0x44, 0x01, 0);
+        W(0x3B);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Gif_walk_works_on_a_stream_that_is_not_fully_buffered()
+    {
+        using var buffered = new Microsoft.AspNetCore.WebUtilities.FileBufferingReadStream(
+            new MemoryStream(GifWithLargeFirstFrame()), memoryThreshold: 4096);
+
+        new ImageDimensionReader().TryRead(buffered, "image/gif").Should().Be((1000, 2000));
+    }
+
     [Fact]
     public void Reads_gif_dimensions()
     {

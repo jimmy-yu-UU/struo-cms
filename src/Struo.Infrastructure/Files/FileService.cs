@@ -71,12 +71,12 @@ public sealed class FileService(
             !fileOptions.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
-        // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
-        // small uploads (<= 64KB) stay in memory, but anything larger spills to a temp file,
-        // bounding memory so N concurrent large uploads cannot amplify it by up to MaxUploadBytes
-        // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
-        // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
-        // the stream is fully drained once (line ~55) before the save read so Length is the true total.
+        // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream:
+        // small uploads (<= 64KB) stay in memory, larger ones spill to a temp file, so concurrent
+        // large uploads do not each hold up to MaxUploadBytes in memory. The header sniff and the
+        // image probe rewind to offsets already read and only read forward past them (the stream
+        // cannot seek past what it has buffered); the AVIF probe reads the whole upload into memory.
+        // The stream is then fully drained once before the save read so Length is the true total.
         //
         // `length` above is the client-DECLARED size (from Content-Length) — a client that
         // lies (declares small, streams large) would otherwise sail past that guard and spool
