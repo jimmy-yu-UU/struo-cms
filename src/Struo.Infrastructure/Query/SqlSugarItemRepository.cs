@@ -173,11 +173,10 @@ public sealed class SqlSugarItemRepository(
         {
             var expected = ae.Version;
             ae.Version = expected + 1;
-            var idColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Id));
-            var versionColumn = db.EntityMaintenance.GetDbColumnName<T>(nameof(Struo.Domain.Auditing.AuditableEntity.Version));
             var affected = await db.Updateable((T)entity)
-                .Where($"{idColumn} = @__ocId AND {versionColumn} = @__ocVersion",
-                    new { __ocId = ae.Id, __ocVersion = expected })
+                .Where(TypedPredicates.EqualAndEqual<T>(
+                    nameof(Struo.Domain.Auditing.AuditableEntity.Id), ae.Id,
+                    nameof(Struo.Domain.Auditing.AuditableEntity.Version), expected))
                 .ExecuteCommandAsync(ct);
             if (affected == 0)
                 throw new Struo.Domain.Query.ConcurrencyConflictException(
