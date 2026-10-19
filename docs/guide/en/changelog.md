@@ -189,6 +189,10 @@
   the original. The reader follows the JPEG segment lengths up to the frame header; a truncated file, or one
   whose segment length runs past the end, still reports no dimensions.
 
+- An upload whose database write fails (an outage, a cancelled request) removes the file content it had
+  already stored and returns the original error. A failure while removing that content is logged as a
+  warning with the storage key; it never replaces the upload's error.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from

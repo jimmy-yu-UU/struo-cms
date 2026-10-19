@@ -154,6 +154,27 @@ public sealed class FileService(
         var key = StorageKey.Create(fileName);
         await blobs.SaveAsync(key, buffer, contentType, ct);
 
+        // The blob is stored before the row; any failure from here to the commit (cancellation
+        // included) removes it again and rethrows the original exception.
+        File entity;
+        try
+        {
+            entity = await InsertRowsAsync(buffer, fileName, contentType, dims, folderId, key, ct);
+        }
+        catch
+        {
+            await BlobCleanup.TryDeleteAsync(blobs, key, log);
+            throw;
+        }
+
+        await NotifyAsync(entity.Id, ItemChangeKind.Created);
+        return entity;
+    }
+
+    private async Task<File> InsertRowsAsync(
+        Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
+        Guid? folderId, string key, CancellationToken ct)
+    {
         var entity = new File
         {
             Id = Guid.NewGuid(),
@@ -191,7 +212,6 @@ public sealed class FileService(
             await db.Insertable(entity).ExecuteCommandAsync(ct);
             await db.Insertable(translation).ExecuteCommandAsync(ct);
         }, ct);
-        await NotifyAsync(entity.Id, ItemChangeKind.Created);
         return entity;
     }
 
