@@ -177,6 +177,7 @@ export default {
     statusPublished: 'Published',
     statusPublishedHint: 'Anyone with the file link can open it.',
     statusDraftHint: 'Only signed-in users who can edit files can open it.',
+    statusUnsaved: 'Not saved yet. Press Save to apply this change.',
     save: 'Save',
     saving: 'Saving…',
     delete: 'Delete file',

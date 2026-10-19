@@ -62,6 +62,7 @@ const uploadedText = computed(() =>
 // `published` = anyone holding the file id can read it; `draft` = file writers only. The switch
 // edits the form's status and the existing Save persists it with the version guard.
 const isPublished = computed(() => model.value.shared.status === 'published')
+const statusUnsaved = computed(() => model.value.shared.status !== raw.value?.status)
 const fileUrl = computed(() => (props.file ? filesApi.contentUrl(props.file.id) : ''))
 
 const activeValues = computed<Record<string, unknown>>({
@@ -182,7 +183,7 @@ async function onCopyUrl(): Promise<void> {
 
 watch(() => props.file?.id, (id) => { if (id) void load() }, { immediate: true })
 
-defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, error, saveLabel, onLocaleToggle, setPublished, isPublished })
+defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, error, saveLabel, onLocaleToggle, setPublished, isPublished, statusUnsaved })
 </script>
 
 <template>
@@ -254,6 +255,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
               />
             </div>
             <p class="md-hint text-muted-foreground">{{ isPublished ? $t('media.statusPublishedHint') : $t('media.statusDraftHint') }}</p>
+            <p v-if="statusUnsaved" class="md-hint md-unsaved" role="status">{{ $t('media.statusUnsaved') }}</p>
           </div>
 
           <label class="md-field">
@@ -305,6 +307,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-kv b { color: var(--fg); font-weight: 600; }
 .md-url { display: flex; gap: 6px; align-items: center; }
 .md-hint { margin: 0; font-size: .75rem; }
+.md-unsaved { color: var(--warn); }
 .md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }
 .md-error { margin: 0; color: var(--danger); font-size: .85rem; }
 @media (max-width: 640px) { .md-grid { grid-template-columns: 1fr; } }

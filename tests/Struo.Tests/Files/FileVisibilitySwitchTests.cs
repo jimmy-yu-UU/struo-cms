@@ -29,7 +29,7 @@ public class FileVisibilitySwitchTests(ApiFactory factory)
         return Root(await up.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
     }
 
-    private static Task<HttpResponseMessage> SetStatusAsync(HttpClient client, string id, string status) =>
+    private static Task<HttpResponseMessage> SetStatusAsync(HttpClient client, string id, string? status) =>
         client.PutAsJsonAsync($"/api/items/file/{id}", new { status });
 
     [Fact]
@@ -76,6 +76,7 @@ public class FileVisibilitySwitchTests(ApiFactory factory)
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadAsync(admin);
         (await SetStatusAsync(admin, id, "archived")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SetStatusAsync(admin, id, null)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -86,7 +87,7 @@ public class FileVisibilitySwitchTests(ApiFactory factory)
         var (reader, _) = await _factory.CreateEditorClientAsync(readCollections: ["file"], writeCollections: ["article"]);
 
         var resp = await SetStatusAsync(reader, id, "draft");
-        ((int)resp.StatusCode).Should().BeOneOf(403, 404);
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await _factory.CreateClient().GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

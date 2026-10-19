@@ -111,6 +111,9 @@
   items API refuses a file `status` other than those two with `400`. `Struo:Files:DefaultStatus`
   (`published` or `draft`, default `published`) sets the status of a new upload; any other value fails
   startup. A published file stays readable by anyone who has its id. Chapter 15 describes the model.
+  A file row whose stored `status` is neither value is refused with `400` on any update that sends
+  `status`, which includes saving its title or alt text in the admin UI; send a valid `status`
+  through `PUT /api/items/file/{id}` or correct the column directly to repair such a row.
 
 ### Security
 

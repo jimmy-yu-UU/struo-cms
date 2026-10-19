@@ -270,6 +270,10 @@ public sealed class ItemService(
             pi.SetValue(existing, pi.GetValue(incoming));
         }
 
+        if (IsFileCollection(collection) && bodyKeys.Contains("status")
+            && d.FieldToProperty.TryGetValue("status", out var statusProp))
+            EnsureFileStatus(d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) as string);
+
         // Required check runs here — against the MERGED entity, after both overlay loops above —
         // rather than while deserializing `incoming`: an omitted Required field keeps whatever
         // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
@@ -280,10 +284,6 @@ public sealed class ItemService(
         // can differ from what CREATE (Required checked first) would report for the identical shape.
         // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
         // the same values a full PUT would.
-        if (IsFileCollection(collection) && bodyKeys.Contains("status")
-            && d.FieldToProperty.TryGetValue("status", out var statusProp)
-            && d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) is string fileStatus)
-            EnsureFileStatus(fileStatus);
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
         if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
             await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
@@ -428,7 +428,7 @@ public sealed class ItemService(
     }
 
     // A file is either published (readable by anyone with its id) or draft (file writers only).
-    private static void EnsureFileStatus(string status)
+    private static void EnsureFileStatus(string? status)
     {
         if (status is not (FileStorageOptions.PublishedStatus or FileStorageOptions.DraftStatus))
             throw new QueryException(

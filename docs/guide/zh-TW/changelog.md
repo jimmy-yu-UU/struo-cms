@@ -89,6 +89,8 @@
   以外的檔案 `status` 回 `400`。`Struo:Files:DefaultStatus`（`published` 或 `draft`，預設
   `published`）決定新上傳檔案的狀態，其他值會讓啟動失敗。已發布的檔案仍然任何持有其 id 的人都能讀取。
   模型說明見第 15 章。
+  若某個檔案資料列儲存的 `status` 兩者皆非，任何帶有 `status` 的更新都會回 `400`，管理介面儲存標題或替代文字也
+  包含在內；用 `PUT /api/items/file/{id}` 送出有效的 `status`，或直接修正該欄位，即可修復這類資料列。
 
 ### 安全性
 

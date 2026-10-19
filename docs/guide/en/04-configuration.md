@@ -145,9 +145,9 @@ reported.
 
 `Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
 startup: an unrecognized value fails startup immediately, and the required fields of whichever
-backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`, `AllowedContentTypes`,
-`PresignedRedirect`, and the whole `ImageTransform` section have no validation rule — a correctly
-typed value is never checked further.
+backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`,
+`AllowedContentTypes`, `PresignedRedirect`, and the whole `ImageTransform` section have no
+validation rule — a correctly typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
   about the length is still limited.

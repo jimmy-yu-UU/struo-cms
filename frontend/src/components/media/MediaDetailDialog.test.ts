@@ -21,7 +21,7 @@ const i18n = createI18n({
     detailDescription: "Review this file's preview and metadata, and edit its title or alt text.",
     fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL',
-    statusPublished: 'Published', statusPublishedHint: 'Anyone with the link', statusDraftHint: 'Writers only',
+    statusPublished: 'Published', statusPublishedHint: 'Anyone with the link', statusDraftHint: 'Writers only', statusUnsaved: 'Not saved yet',
     save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
@@ -516,10 +516,12 @@ describe('MediaDetailDialog', () => {
       const w = mountDialog()
       await flushPromises()
       expect(findSwitch(w).attributes('aria-checked')).toBe('true')
+      expect(w.text()).not.toContain('Not saved yet')
       await findSwitch(w).trigger('click')
       await flushPromises()
       expect(findSwitch(w).attributes('aria-checked')).toBe('false')
-      await (w.vm as unknown as { onSave: () => Promise<void> }).onSave()
+      expect(w.text()).toContain('Not saved yet')
+      await w.findAll('button').find((b) => b.text() === 'Save')!.trigger('click')
       await flushPromises()
       expect(update).toHaveBeenCalledWith('file', 'f1', expect.objectContaining({ status: 'draft', version: 3 }))
     })
@@ -529,6 +531,7 @@ describe('MediaDetailDialog', () => {
       const w = mountDialog({ canWrite: false })
       await flushPromises()
       expect(findSwitch(w).attributes('disabled')).toBeDefined()
+      expect(w.findAll('button').some((b) => b.text() === 'Save')).toBe(false)
     })
   })
 })

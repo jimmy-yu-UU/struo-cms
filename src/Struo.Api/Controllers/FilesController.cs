@@ -59,7 +59,7 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // A non-published file requires a genuine per-collection read grant, not merely a
+        // A non-published file needs a signed-in caller holding the file write grant, not merely a
         // logged-in session (a role-less JIT/SSO user could otherwise fetch any draft). 404 (not 403)
         // so existence isn't leaked.
         if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
@@ -80,8 +80,8 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // Same gate as Get above: a non-published file requires a genuine per-collection read grant,
-        // not merely a logged-in session. 404 (not 403) so existence isn't leaked.
+        // Same gate as Get above: a non-published file needs a signed-in caller holding the file write
+        // grant, not merely a logged-in session. 404 (not 403) so existence isn't leaked.
         if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
 
         // On-the-fly image transform. Only when the caller actually asked for one (at least one
