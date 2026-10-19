@@ -13,7 +13,11 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 {
     private int _whereInCalls;
     public int WhereInCalls => _whereInCalls;
-    public void ResetCount() => _whereInCalls = 0;
+    private int _rootReads;
+
+    // Root-row reads (QueryAsync and GetByIdAsync); WhereIn expansion lookups are counted apart.
+    public int RootReads => _rootReads;
+    public void ResetCount() { _whereInCalls = 0; _rootReads = 0; }
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
@@ -41,12 +45,18 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     // Delegate every other member straight through (no counting).
     public Task<QueryResult> QueryAsync(
         string collection, QueryModel query, IReadOnlyList<string> searchableFields,
-        string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
-        inner.QueryAsync(collection, query, searchableFields, queryLocale, deleted, ct);
+        string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
+    {
+        System.Threading.Interlocked.Increment(ref _rootReads);
+        return inner.QueryAsync(collection, query, searchableFields, queryLocale, deleted, ct);
+    }
 
     public Task<object?> GetByIdAsync(string collection, string id,
-        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
-        inner.GetByIdAsync(collection, id, deleted, ct);
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
+    {
+        System.Threading.Interlocked.Increment(ref _rootReads);
+        return inner.GetByIdAsync(collection, id, deleted, ct);
+    }
 
     public Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default) =>
         inner.CreateAsync(collection, entity, ct);

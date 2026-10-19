@@ -9,10 +9,10 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Validates the requested deep relations against the relationship graph and the
-/// configured <see cref="StruoQueryOptions.MaxRelationDepth"/>, then nests the expanded
-/// (batched) relation rows into each projected parent dictionary. No-op when
-/// <c>deep</c> is null/empty or there are no parent rows.
+/// Validates the requested deep relations against the relationship graph and the configured
+/// <see cref="StruoQueryOptions.MaxRelationDepth"/> (<see cref="Prepare"/>), then nests the
+/// expanded (batched) relation rows into each projected parent dictionary
+/// (<see cref="ExpandPreparedAsync"/>). Both are no-ops when <c>deep</c> is null/empty.
 /// </summary>
 public sealed class DeepExpansionCoordinator(
     StruoQueryOptions options,
@@ -23,26 +23,51 @@ public sealed class DeepExpansionCoordinator(
     ItemProjector projector,
     IPermissionService permissions)
 {
-    /// <inheritdoc cref="DeepExpansionCoordinator"/>
-    public async Task ExpandAsync(
-        string collection, DeepSpec? deep,
-        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, CancellationToken ct, FilterBudget? budget = null)
+    /// <summary>
+    /// Prunes the requested relations to the readable ones and validates the whole nested tree
+    /// (nesting depth, relation names, per-level filter/sort/limit/offset, the shared filter
+    /// <paramref name="budget"/>). Throws <see cref="QueryException"/> on a violation. Needs no
+    /// rows, so callers run it before the first query and the verdict never depends on row count.
+    /// Returns null when nothing remains to expand.
+    /// </summary>
+    public DeepSpec? Prepare(string collection, DeepSpec? deep, FilterBudget? budget)
     {
-        if (deep is null || deep.Relations.Count == 0) return;
+        if (deep is null || deep.Relations.Count == 0) return null;
 
         // Pruning precedes validation on purpose: a nested filter/sort on an unreadable relation is
         // never validated against that collection's metadata, so its error messages cannot be used
         // to probe which fields exist there.
         var visible = PruneUnreadable(collection, deep);
-        if (visible.Relations.Count == 0) return;
+        if (visible.Relations.Count == 0) return null;
 
-        // Validate the whole nested tree: nesting depth <= MaxRelationDepth, and every relation
-        // name resolves against its own level's collection. Runs before any query executes,
-        // and independent of row count — an over-depth/unknown-relation request must be
-        // rejected even when the parent query matched zero rows.
         var nodes = 0;
         ValidateDeepTree(collection, visible, depth: 1, budget ?? new FilterBudget(), ref nodes);
+        return visible;
+    }
+
+    /// <summary>
+    /// <see cref="Prepare"/> followed by <see cref="ExpandPreparedAsync"/>, for callers that have
+    /// not validated yet.
+    /// </summary>
+    public async Task ExpandAsync(
+        string collection, DeepSpec? deep,
+        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        string? locale, FilterBudget? budget, CancellationToken ct)
+    {
+        var visible = Prepare(collection, deep, budget);
+        if (visible is not null)
+            await ExpandPreparedAsync(collection, visible, entities, rows, locale, ct);
+    }
+
+    /// <summary>
+    /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
+    /// each projected parent dictionary. No-op when there are no parent rows.
+    /// </summary>
+    public async Task ExpandPreparedAsync(
+        string collection, DeepSpec visible,
+        IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        string? locale, CancellationToken ct)
+    {
         if (entities.Count == 0) return;
 
         var parentDesc = registry.Get(collection)!;

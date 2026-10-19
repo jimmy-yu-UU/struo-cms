@@ -20,10 +20,11 @@ public static class DomainErrorMap
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
     /// yields <see cref="ErrorCodes.Forbidden"/>. Mapped domain exceptions surface their
-    /// client-safe <see cref="System.Exception.Message"/> verbatim — except
-    /// <see cref="SearchUnavailableException"/>, which is the deliberate exception to "verbatim": its
-    /// message may name a provider's internal host and is replaced with the FIXED
-    /// <see cref="SearchUnavailableMessage"/>. Any unmapped type collapses to
+    /// client-safe <see cref="System.Exception.Message"/> verbatim. Two cases carry a fixed message
+    /// instead, because the exception's own text names internals:
+    /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
+    /// host) and a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
+    /// constraint, index or column). Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
     /// </summary>
