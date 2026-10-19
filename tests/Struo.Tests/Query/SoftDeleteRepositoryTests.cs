@@ -142,7 +142,7 @@ public class SoftDeleteRepositoryTests
 
         var afterFirst = (AuditableEntity)(await h.Repository.GetByIdAsync(
             "article", id.ToString(), DeletedFilter.Exclude, default))!;
-        var revisionsAfterFirst = await h.Service.ListRevisionsAsync("article", id.ToString(), default);
+        var revisionsAfterFirst = (await h.Service.ListRevisionsAsync("article", id.ToString(), default))!;
         Assert.Equal(2, revisionsAfterFirst.Count);
 
         // Second restore of the now-live row: still succeeds (idempotent 200, not an error) but must
@@ -152,7 +152,7 @@ public class SoftDeleteRepositoryTests
 
         var afterSecond = (AuditableEntity)(await h.Repository.GetByIdAsync(
             "article", id.ToString(), DeletedFilter.Exclude, default))!;
-        var revisionsAfterSecond = await h.Service.ListRevisionsAsync("article", id.ToString(), default);
+        var revisionsAfterSecond = (await h.Service.ListRevisionsAsync("article", id.ToString(), default))!;
 
         Assert.Equal(afterFirst.Version, afterSecond.Version);
         Assert.Equal(revisionsAfterFirst.Count, revisionsAfterSecond.Count);

@@ -70,13 +70,15 @@ for sessions to survive a process restart, it has to be set.
 
 Without it, every restart forces every user to log in again, and multiple replicas each keep their
 own copy — the same user hitting a different replica looks like they were never logged in. With
-Redis set, this counter is shared across every replica, but it isn't a guaranteed ceiling —
-`IDistributedCache` has no atomic read-modify-write, so concurrent failed attempts can occasionally
-undercount.
+Redis set, the login-attempt counter is one atomic Redis counter shared by every replica, and a
+login fails with a 5xx error while Redis is unreachable. Without Redis, each process keeps its own
+counter and counts every attempt under a per-account lock before the password is verified, so one
+replica never undercounts, but replicas do not see each other's attempts.
 
 ### Cookies come back only over HTTPS
 
-In a Production environment, the authentication cookie is only sent back on requests over HTTPS;
+Outside Development, the authentication cookie is only sent back on requests over HTTPS
+(`Auth:Cookie:RequireSecure` overrides this; set it to `false` only for a host with no TLS in front);
 sending traffic in without terminating TLS first makes the login response look normal (it comes
 back with `Set-Cookie`), but the browser never attaches the cookie again afterward, and the caller
 ends up stuck in a "logged in, yet asked to log in again" loop. How the security policy decides
@@ -85,10 +87,10 @@ this, and what extra rules apply once CORS is enabled, are in [Chapter 16](16-au
 The one exception is `http://localhost`: browsers treat it as a secure context and send the cookie
 back, which is how the local Compose stack at the end of this chapter logs in without TLS.
 
-### Scalar/OpenAPI are off in Production
+### Scalar/OpenAPI are off outside Development
 
-`GET /scalar` and `/openapi/v1.json` are only registered outside Production; at Production
-startup, these two routes don't exist at all.
+`GET /scalar` and `/openapi/v1.json` are only registered in Development unless `OpenApi:Enabled`
+is `true`; at Production startup, these two routes don't exist at all.
 
 The neighboring GraphQL schema-exposure route is controlled separately by
 `GraphQl:ExposeSchema`, whose default value of `null` likewise only opens it in Development — the
@@ -358,7 +360,7 @@ that's genuinely missing turns into an error, rather than an endless reload.
   relies on the S3-compatible bucket's own versioning or replication; backing up only the database
   silently misses every uploaded file.
 - **Redis needs none** — Redis (or its in-process substitute) holds only short-lived state: the
-  ticket behind a cookie session, account login-failure counters, and session revocation records.
+  ticket behind a cookie session, account login-attempt counters, and session revocation records.
   Losing it only forces every logged-in user to log in again and resets the login counters; it
   isn't an authoritative source and needs no separate backup.
 - **Migrations and configuration** — the fork's own migration classes, `appsettings.*`, and the

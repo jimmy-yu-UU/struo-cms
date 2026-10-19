@@ -52,12 +52,14 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 留空時，工作階段狀態（cookie 對應的 ticket、`RateLimiting:LoginAccount` 的計數）全部退回行程
 內的快取。只有一個副本、也不在乎重啟就丟掉所有工作階段，留空沒關係；有一個以上的副本，或需要
 工作階段撐過行程重啟，就得設定它。不設，每次重啟都逼所有使用者重新登入，多副本則各自有各自
-的一份，同一個使用者打到不同副本會看起來像沒登入過。設了 Redis，這個計數是所有副本共用的，但
-不是保證上限——`IDistributedCache` 沒有原子的讀改寫，同時打進來的失敗有機會少算一次。
+的一份，同一個使用者打到不同副本會看起來像沒登入過。設了 Redis，登入嘗試計數是所有副本共用的
+Redis 原子計數器，Redis 連不上時登入會回 5xx。沒設 Redis 時，每個行程各自計數，並在驗證密碼之前
+於帳號層級的鎖內把每次嘗試算進去，所以單一副本不會少算，但副本之間看不到彼此的嘗試。
 
 ### Cookie 只在 HTTPS 下送回
 
-Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回；沒有先終結 TLS 就把流量送進
+Development 之外的環境，認證 cookie 只有透過 HTTPS 的請求才會被送回（`Auth:Cookie:RequireSecure`
+可覆寫，只有前面沒有 TLS 的主機才該設成 `false`）；沒有先終結 TLS 就把流量送進
 來，登入回應看起來正常（帶著 `Set-Cookie`），但瀏覽器往後不會再帶著這個 cookie，呼叫端等於卡
 在「登入了卻又要登入」的迴圈。安全政策怎麼判斷、CORS 開了之後多出哪些規則，見
 [第 16 章](16-authentication.md)。
@@ -65,9 +67,9 @@ Production 環境下，認證 cookie 只有透過 HTTPS 的請求才會被送回
 唯一的例外是 `http://localhost`：瀏覽器把它當成安全來源，照樣送回 cookie。本章最後的本機
 Compose 環境就是靠這點，不架 TLS 也能登入。
 
-### Scalar／OpenAPI 在 Production 關閉
+### Scalar／OpenAPI 在 Development 之外關閉
 
-`GET /scalar` 與 `/openapi/v1.json` 只在非 Production 環境註冊，Production 啟動時這兩個路由
+`GET /scalar` 與 `/openapi/v1.json` 只在 Development 註冊（除非 `OpenApi:Enabled` 為 `true`），Production 啟動時這兩個路由
 完全不存在。
 
 相鄰的 GraphQL schema 揭露路由另外由 `GraphQl:ExposeSchema` 控制，預設值 `null`
@@ -298,7 +300,7 @@ Healthy
   份 `Local:RootPath` 那個目錄，`s3` 模式靠 S3 相容儲存桶自己的版本控制或複寫；只備份資料
   庫，會悄悄漏掉每一個上傳過的檔案。
 - **Redis 不需要**——Redis（或行程內的替代品）裡只有短命狀態：cookie 工作階段的 ticket、帳
-  號登入失敗計數、工作階段撤銷紀錄。丟了它只會逼每個已登入的使用者重新登入，並把登入計數歸
+  號登入嘗試計數、工作階段撤銷紀錄。丟了它只會逼每個已登入的使用者重新登入，並把登入計數歸
   零，它不是權威來源，不需要另外備份。
 - **Migration 與設定**——fork 自己的 migration 類別、`appsettings.*`、環境變數或密鑰管理系統
   裡的值，是一般的原始碼或部署管線產物，跟其餘部署一起備份即可。

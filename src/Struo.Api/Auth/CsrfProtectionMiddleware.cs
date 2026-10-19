@@ -26,7 +26,7 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (RequiresCsrfHeader(context.Request))
+        if (RequiresCsrfHeader(context))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             // This middleware runs before MVC, so EnvelopeResultFilter never sees this
@@ -43,15 +43,18 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
         await next(context);
     }
 
-    private static bool RequiresCsrfHeader(HttpRequest request)
+    private static bool RequiresCsrfHeader(HttpContext context)
     {
+        var request = context.Request;
         if (SafeMethods.Contains(request.Method)) return false;
 
         // Bearer-authenticated requests carry no ambient browser credential, so they cannot be forged.
         if (AuthSchemes.HasBearerHeader(request)) return false;
 
-        // Only requests riding on the session cookie need the guard.
-        if (!request.Cookies.ContainsKey(AuthSchemes.SessionCookieName)) return false;
+        // Only requests riding on the session cookie need the guard (SessionRotationMiddleware hides the
+        // cookie on sign-in requests, so its recorded copy counts too).
+        if (!request.Cookies.ContainsKey(AuthSchemes.SessionCookieName)
+            && SessionRotation.PresentedCookie(context) is null) return false;
 
         return !request.Headers.ContainsKey(HeaderName);
     }

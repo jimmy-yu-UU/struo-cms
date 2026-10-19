@@ -115,6 +115,7 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
     public async Task<IActionResult> Revisions(string collection, string id, CancellationToken ct)
     {
         var list = await items.ListRevisionsAsync(collection, id, ct);
+        if (list is null) return NotFound();
         return Ok(list);   // EnvelopeResultFilter wraps -> { success, data: [ { revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber } ] }
     }
 

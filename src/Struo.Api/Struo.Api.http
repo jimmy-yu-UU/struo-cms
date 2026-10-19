@@ -10,5 +10,5 @@ GET {{Struo.Api_HostAddress}}/health/live
 ### Readiness probe (checks DB connectivity)
 GET {{Struo.Api_HostAddress}}/health/ready
 
-### API reference (Scalar, non-production only)
+### API reference (Scalar, Development only unless OpenApi:Enabled is set)
 GET {{Struo.Api_HostAddress}}/scalar

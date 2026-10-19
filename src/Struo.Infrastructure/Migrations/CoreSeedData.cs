@@ -57,7 +57,7 @@ public sealed record CoreSeedData(
         if (generated is null && hasAdmin) RefuseWeakPassword(plain!, effectivePolicy);
         return new CoreSeedData(
             languages,
-            hasAdmin ? email : null,
+            hasAdmin ? EmailAddress.Normalize(email!) : null,
             plain is null ? null : hasher.Hash(plain),
             publicRead.Distinct(StringComparer.Ordinal).ToList())
         { GeneratedPassword = generated };

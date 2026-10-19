@@ -1,6 +1,7 @@
 // src/Struo.Infrastructure/Identity/SqlSugarPermissionGrantStore.cs
 using SqlSugar;
 using Struo.Application.Security;
+using Struo.Infrastructure.Query;
 
 namespace Struo.Infrastructure.Identity;
 
@@ -18,7 +19,7 @@ public sealed class SqlSugarPermissionGrantStore(ISqlSugarClient db) : IPermissi
     }
 
     /// <summary>
-    /// Delete-all + insert-all in one transaction. Observably identical to upsert-plus-prune and
+    /// Delete-all + insert-all in one transaction, joining the caller's transaction when one is open. Observably identical to upsert-plus-prune and
     /// simpler: <c>Permission</c> rows are a hidden implementation detail, so their identity is not
     /// part of any contract and reusing ids buys nothing.
     /// </summary>
@@ -35,18 +36,10 @@ public sealed class SqlSugarPermissionGrantStore(ISqlSugarClient db) : IPermissi
             CanDelete = g.CanDelete,
         }).ToList();
 
-        // BeginTranAsync has no CancellationToken overload (same note as SqlSugarItemRepository).
-        try
+        await new TransactionRunner(db).InTransactionAsync(async () =>
         {
-            await db.Ado.BeginTranAsync();
             await db.Deleteable<Permission>().Where(p => p.RoleId == roleId).ExecuteCommandAsync(ct);
             if (rows.Count > 0) await db.Insertable(rows).ExecuteCommandAsync(ct);
-            await db.Ado.CommitTranAsync();
-        }
-        catch
-        {
-            await db.Ado.RollbackTranAsync();
-            throw;
-        }
+        }, ct);
     }
 }

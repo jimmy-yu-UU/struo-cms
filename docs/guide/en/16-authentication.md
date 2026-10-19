@@ -79,8 +79,9 @@ configuration keys are in the `RateLimiting` section of
 ## Login and the session cookie
 
 A request that carries no `Authorization: Bearer …` header always goes through the cookie: named
-`struo.session`, `HttpOnly`, `SameSite` defaulting to `Lax`. In production the `Secure` policy is
-fixed to `Always`; every other environment follows the request itself.
+`struo.session`, `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
+`Auth:Cookie:RequireSecure`; left unset, it is `Always` in every environment except Development, which
+follows the request itself.
 
 As soon as any CORS origin is configured at all, both the `Secure` policy and `SameSite` switch to
 `Always`/`None`, because a browser only accepts `SameSite=None` under `Secure` — meaning a
@@ -167,6 +168,12 @@ one write per token per minute, so a busy integration doesn't turn every call in
 the account itself is deactivated, authentication fails regardless of whether the token is
 otherwise still valid, and this flag is re-checked on every request.
 
+Each user has at most one token. Changing a password revokes that user's sessions but never the
+token, so a password change does not cut off an integration that authenticates with a token; if a
+token may have leaked, revoke it or issue a new one instead. The last-used time lives in the
+database alone: the API and the admin UI do not show it, so finding stale tokens means reading it
+from the users data directly.
+
 Bearer counts on every endpoint, including the read endpoints that declare no scheme — it
 isn't only write actions that recognize it; a bearer caller's permissions are its own role's
 grants, not anonymous. A bearer call needs no CSRF header; the full selection rule and CSRF detail
@@ -200,26 +207,38 @@ environment's `article` collection doesn't grant anonymous read — the authoriz
 ## Login rate limiting
 
 Every anonymous login attempt, whatever the outcome, runs one full Argon2id verification; left
-unchecked, brute-forcing passwords doubles as a CPU-exhaustion attack. Two independent layers of
-defense guard against it, and neither can substitute for the other.
+unchecked, brute-forcing passwords doubles as a CPU-exhaustion attack. Three independent layers of
+defense guard against it, and none can substitute for the others.
 
 Per-account throttling (`RateLimiting:LoginAccount`) is on by default, partitioning by the account
-in the request body (keyed on a hash of the email, never the plain text), checked before the
-password is verified — a request it blocks costs no Argon2id computation at all. This
-layer is a fixed window, not a sliding one: the window starts counting once, and further failures
-during it never push the end time back; once the window passes, the next failure starts a new one.
+in the request body (keyed on a hash of the email, never the plain text). The attempt is counted
+before the password is verified, so parallel guesses cannot all slip past the limit, and a request
+it blocks costs no Argon2id computation at all. This layer is a fixed window, not a sliding one:
+the window starts counting once, and further attempts during it never push the end time back; once
+the window passes, the next attempt starts a new one.
 
-A missing account, a wrong password, and a deactivated account all count alike as one failure, and
+A missing account, a wrong password, and a deactivated account all count alike as one attempt, and
 a blocked request always returns the same `429`, so the throttle itself can't be turned into a
 tool for guessing whether an account exists; a successful login clears that account's count.
+
+The count is shared by every replica when `Redis:ConnectionString` is set, and a login fails with a
+5xx error while Redis is unreachable. Without Redis each replica counts on its own.
+
+Counting every attempt has a cost: whoever knows an account's email can use up its limit and keep
+that account locked out of password sign-in until the window ends. This is a deliberate trade-off;
+SSO sign-in is unaffected.
+
+A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
+password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
+protects CPU and memory from a flood of parallel attempts whatever their source.
 
 Per-caller-IP throttling (`RateLimiting:Login`) is the opposite: off by default, and it protects
 only the login endpoint — logout, `me`, and the OIDC challenge are all unaffected by it.
 Why it's off by default, and when it's appropriate to turn on, is in the `RateLimiting` section of
 [Chapter 4: Configuration Reference](04-configuration.md).
 
-Both layers return `429` when they block, with the envelope code always `TOO_MANY_REQUESTS` and
-`Retry-After` always present, so the caller can't tell the two apart. The transcript below sends
+Every layer returns `429` when it blocks, with the envelope code always `TOO_MANY_REQUESTS` and
+`Retry-After` always present, so the caller can't tell them apart. The transcript below sends
 ten failed logins in a row against the same never-used email, and the eleventh trips the
 throttle — the response shown is one more request sent after the throttle engaged:
 

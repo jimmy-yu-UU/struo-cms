@@ -34,6 +34,7 @@ public static class DomainErrorMap
             CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
             FileBlobNotFoundException => (ErrorCodes.NotFound, exception.Message),
             ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
+            ConflictException => (ErrorCodes.Conflict, exception.Message),
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),

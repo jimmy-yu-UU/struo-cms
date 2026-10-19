@@ -46,7 +46,9 @@ public sealed class ItemService(
     // Trailing and optional like searchProvider/notifier: tests that construct ItemService directly
     // keep compiling; DI injects the AddStruoData registration. null means the language collection's
     // invariants are not enforced (only direct construction in tests).
-    ILanguageCollectionRules? languageRules = null) : IItemUseCases
+    ILanguageCollectionRules? languageRules = null,
+    // Trailing and optional like the others: backs the User collection's email uniqueness check.
+    IUserCredentialStore? userCredentials = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
 
@@ -56,6 +58,7 @@ public sealed class ItemService(
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
+    private readonly UserEmailRules userEmailRules = new(userCredentials);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
     private readonly TranslationOverlay overlay =
@@ -174,6 +177,8 @@ public sealed class ItemService(
             throw new QueryException("Request body must be a JSON object.");
         var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
+        if (UserEmailRules.AppliesTo(collection))
+            await userEmailRules.NormalizeAndCheckAsync(d, entity, ct);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
@@ -266,6 +271,8 @@ public sealed class ItemService(
         // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
         // the same values a full PUT would.
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
+        if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
+            await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
@@ -527,14 +534,25 @@ public sealed class ItemService(
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
-    /// non-revisioned collection.</summary>
-    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>> ListRevisionsAsync(
+    /// non-revisioned collection; null (→ 404) for an unknown item or a trashed item the caller lacks
+    /// delete permission to see.</summary>
+    public async Task<IReadOnlyList<Struo.Application.Revisions.RevisionInfo>?> ListRevisionsAsync(
         string collection, string id, CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return [];
+        if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         return await revisions.ListAsync(collection, id, ct);
+    }
+
+    /// <summary>True when the item exists and is either live or trashed with the caller holding
+    /// delete permission. Hides trashed items' history from read-only callers as not-found.</summary>
+    private async Task<bool> IsItemVisibleForRevisionsAsync(string collection, string id, CancellationToken ct)
+    {
+        var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (entity is null) return false;
+        return entity is not ISoftDeletable { DeletedAt: not null } || permissions.CanDelete(collection);
     }
 
     /// <summary>A single revision incl. its snapshot. Requires read permission. Null for an
@@ -552,6 +570,7 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         if (!meta.Revisions) return null;
+        if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
         return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };

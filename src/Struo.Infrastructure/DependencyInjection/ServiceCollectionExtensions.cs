@@ -34,8 +34,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Struo.Application.Security.IExternalLoginService, Struo.Application.Security.ExternalLoginService>();
         services.AddScoped<Struo.Application.Security.IUserSessionStore, Identity.SqlSugarUserSessionStore>();
         services.AddScoped<Struo.Application.Security.IUserSessionRevocationService, Identity.UserSessionRevocationService>();
-        // Stateless besides the injected IDistributedCache/IOptions (both already singleton-safe) —
-        // registered singleton like IPasswordHasher above, not per-request.
+        // Default throttle; AuthWiring replaces it with the Redis-backed one when Redis:ConnectionString is
+        // set. Singleton: its per-account locks are shared process-wide.
         services.AddSingleton<Struo.Application.Security.ILoginAttemptThrottle, Identity.DistributedCacheLoginAttemptThrottle>();
 
         services.AddSingleton(sp =>

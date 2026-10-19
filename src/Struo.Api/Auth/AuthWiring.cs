@@ -3,9 +3,14 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Struo.Api.Http;
 using Struo.Application.Abstractions;
+using Struo.Application.Configuration;
+using Struo.Infrastructure.Identity;
 using Struo.Application.Security;
 
 namespace Struo.Api.Auth;
@@ -30,13 +35,20 @@ public static class AuthWiring
         else
             services.AddDistributedMemoryCache();
 
-        services.AddSingleton<DistributedCacheTicketStore>();
+        // Redis (when configured) counts login attempts with an atomic INCR shared by every instance;
+        // otherwise the distributed-cache throttle registered by AddStruoInfrastructure serves. The
+        // connection string is read when the throttle is first resolved, so late configuration counts.
+        services.Replace(ServiceDescriptor.Singleton<ILoginAttemptThrottle>(sp =>
+        {
+            var connection = sp.GetRequiredService<IConfiguration>().GetValue<string>("Redis:ConnectionString");
+            var accountOptions = sp.GetRequiredService<IOptions<LoginAccountRateLimitOptions>>();
+            return string.IsNullOrWhiteSpace(connection)
+                ? new DistributedCacheLoginAttemptThrottle(sp.GetRequiredService<IDistributedCache>(), accountOptions)
+                : new RedisLoginAttemptThrottle(connection, accountOptions);
+        }));
 
-        // In production HTTPS is enforced at the reverse proxy; in development/test the test host
-        // runs over HTTP so SecurePolicy.Always would prevent the cookie from being sent back.
-        var securePolicy = env.IsProduction()
-            ? CookieSecurePolicy.Always
-            : CookieSecurePolicy.SameAsRequest;
+        services.AddSingleton<DistributedCacheTicketStore>();
+        services.AddSingleton<SessionRotation>();
 
         services.AddAuthentication(AuthSchemes.Adaptive)
             // The header alone decides — the cookie is never consulted here. A caller presenting
@@ -53,12 +65,14 @@ public static class AuthWiring
                     AuthSchemes.HasBearerHeader(context.Request)
                         ? AuthSchemes.Bearer
                         : AuthSchemes.Cookie)
-            .AddCookie(AuthSchemes.Cookie, options => ConfigureCookieOptions(options, securePolicy))
+            .AddCookie(AuthSchemes.Cookie, options => ConfigureCookieOptions(options))
             .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BearerTokenAuthenticationHandler>(
                 AuthSchemes.Bearer, _ => { });
 
-        // Cross-origin mode (SPA on a different origin) requires SameSite=None, which browsers
-        // only honor alongside Secure — so cross-origin also forces the secure policy on.
+        // The Secure policy follows Auth:Cookie:RequireSecure, else the environment (Always outside
+        // Development, SameAsRequest in Development). Cross-origin mode (SPA on a different origin)
+        // requires SameSite=None, which browsers only honor alongside Secure — so cross-origin also
+        // forces the secure policy on.
         // Resolved lazily via IConfiguration from DI (not the `config` parameter captured above)
         // so that test hosts which append configuration after service registration (e.g.
         // WebApplicationFactory.ConfigureAppConfiguration) are still honored: CookieAuthenticationOptions
@@ -66,6 +80,9 @@ public static class AuthWiring
         services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie)
             .Configure<IConfiguration>((options, resolvedConfig) =>
             {
+                options.Cookie.SecurePolicy = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
+                    ? CookieSecurePolicy.Always
+                    : CookieSecurePolicy.SameAsRequest;
                 if (!CorsWiring.HasConfiguredOrigins(resolvedConfig)) return;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.None;
@@ -80,11 +97,23 @@ public static class AuthWiring
         return services;
     }
 
-    private static void ConfigureCookieOptions(CookieAuthenticationOptions options, CookieSecurePolicy securePolicy)
+    /// <summary>
+    /// Logs one warning when Production runs without Redis: sessions and the login throttle then live
+    /// in process memory, so only a single replica works and a restart signs everyone out.
+    /// </summary>
+    public static void WarnIfSessionsAreInMemory(IConfiguration config, IHostEnvironment env, ILogger logger)
+    {
+        if (!env.IsProduction() || !string.IsNullOrWhiteSpace(config.GetValue<string>("Redis:ConnectionString")))
+            return;
+        logger.LogWarning(
+            "Redis:ConnectionString is empty in Production: sessions and login throttling are kept in process memory. " +
+            "Run a single replica only; every restart signs all users out. Set Redis:ConnectionString for multi-instance or durable sessions.");
+    }
+
+    private static void ConfigureCookieOptions(CookieAuthenticationOptions options)
     {
         options.Cookie.Name = AuthSchemes.SessionCookieName;
         options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = securePolicy;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = AuthSchemes.SessionLifetime;
