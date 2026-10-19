@@ -30,12 +30,7 @@ public static class MetadataServiceCollectionExtensions
         services.AddSingleton<IEntityRegistry>(new EntityRegistry(descriptors));
 
         // Build camelName → Type map for the relationship graph constructor
-        var collectionTypes = allTypes
-            .Where(t => t.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsCollectionAttribute>() is not null)
-            .ToDictionary(
-                MetadataScanner.CollectionNameOf,
-                t => t,
-                StringComparer.OrdinalIgnoreCase);
+        var collectionTypes = MetadataScanner.CollectionTypeMap(allTypes);
 
         // Register graph as IRelationshipGraph, IM2MDescriptorSource, and the concrete RelationshipGraph
         var graph = new RelationshipGraph(collections, collectionTypes);

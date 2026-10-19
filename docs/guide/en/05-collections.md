@@ -100,7 +100,9 @@ reverse, forcing a column to be non-nullable, needs an explicit `[SugarColumn(Is
 stored in permission grants, revisions and other rows. Left unset, it is the camelCased class name,
 so renaming the class silently orphans that data. A fork should set `Name` on each of its collections
 before they hold data. It must match `^[a-z][A-Za-z0-9]*$` and be unique across all collections,
-framework ones included; anything else throws `MetadataException` at startup.
+framework ones included; anything else throws `MetadataException` at startup. `Name` does not
+change the translation sidecar convention: a sidecar's foreign key property is still `{ClassName}Id`,
+so it must be renamed together with the class.
 
 `DefaultDisplayField` must name a real field — the match is against the camelCased field name — and
 a name that doesn't resolve throws `MetadataException` at startup.

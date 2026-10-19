@@ -90,7 +90,8 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 `Name` 是集合的身分：REST 路由片段、GraphQL 名稱，以及存在權限授予、版本紀錄與其他資料列裡的值。
 沒設時就是 camelCase 的類別名稱，所以重新命名類別會讓那些資料無聲地失去對應。fork 應該在集合有資料之前，
 替自己的每個集合設好 `Name`。名稱必須符合 `^[a-z][A-Za-z0-9]*$`，且在所有集合（含框架內建的）之間不可
-重複；不符合就在啟動時丟出 `MetadataException`。
+重複；不符合就在啟動時丟出 `MetadataException`。`Name` 不影響翻譯 sidecar 的慣例：sidecar 的外鍵屬性仍叫
+`{類別名稱}Id`，所以重新命名類別時要一起改。
 
 `DefaultDisplayField` 名稱要對得上某個欄位，比對時看 camelCase 之後的名字，對不上就在啟動時
 丟出 `MetadataException`。

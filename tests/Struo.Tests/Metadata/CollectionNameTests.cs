@@ -23,6 +23,38 @@ public class CollectionNameTests
         public CnDerived? Derived { get; set; }
     }
 
+    [CmsCollection("Target", Name = "pinnedTarget")]
+    private sealed class CnPinnedTarget
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string Title { get; set; } = "";
+    }
+
+    [CmsCollection("Source")]
+    private sealed class CnSource
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid? CnPinnedTargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(CnPinnedTargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        public CnPinnedTarget? Target { get; set; }
+
+        [Navigate(typeof(CnPinnedLink), nameof(CnPinnedLink.CnSourceId), nameof(CnPinnedLink.CnPinnedTargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<CnPinnedTarget> Targets { get; set; } = [];
+    }
+
+    [CmsCollection("Link", Name = "pinnedLink", Hidden = true)]
+    private sealed class CnPinnedLink
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Uuid)] public Guid CnSourceId { get; set; }
+        [CmsField(Interface = FieldInterface.Uuid)] public Guid CnPinnedTargetId { get; set; }
+        [CmsField(Interface = FieldInterface.Text)] public string? Note { get; set; }
+    }
+
     [CmsCollection("Derived")]
     private sealed class CnDerived
     {
@@ -38,6 +70,9 @@ public class CollectionNameTests
 
     [CmsCollection("Bad", Name = "")]
     private sealed class CnBadEmpty { }
+
+    [CmsCollection("Bad", Name = "abc\n")]
+    private sealed class CnBadNewline { }
 
     [CmsCollection("Bad", Name = "1abc")]
     private sealed class CnBadDigit { }
@@ -77,20 +112,32 @@ public class CollectionNameTests
         descriptors["legacyArticle"].EntityType.Should().Be(typeof(CnPinnedArticle));
     }
 
+    private static readonly Type[] RelationTypes = [typeof(CnSource), typeof(CnPinnedTarget), typeof(CnPinnedLink)];
+
     [Fact]
-    public void Relations_target_a_collection_by_its_explicit_name()
+    public void Relations_target_a_collection_and_junction_by_explicit_name()
     {
-        var meta = MetadataScanner.ScanTypes([typeof(CnDerived), typeof(CnPinnedArticle)]);
-        var types = new Dictionary<string, Type>
-        {
-            ["legacyArticle"] = typeof(CnPinnedArticle),
-            ["cnDerived"] = typeof(CnDerived)
-        };
+        var meta = MetadataScanner.ScanTypes(RelationTypes);
+        var source = meta.Single(c => c.Name == "cnSource");
 
-        var graph = new RelationshipGraph(meta, types);
+        source.Relations.Single(r => r.Name == "target").TargetCollection.Should().Be("pinnedTarget");
+        var m2m = source.Relations.Single(r => r.Name == "targets");
+        m2m.TargetCollection.Should().Be("pinnedTarget");
+        m2m.JunctionCollection.Should().Be("pinnedLink");
+        m2m.JunctionPayloadFields.Should().Equal("note");
+    }
 
-        graph.Relations("legacyArticle").Single().TargetCollection.Should().Be("cnDerived");
-        MetadataScanner.CollectionNameOf(typeof(CnPinnedArticle)).Should().Be("legacyArticle");
+    [Fact]
+    public void Relationship_graph_builds_from_the_collection_type_map_used_at_startup()
+    {
+        var meta = MetadataScanner.ScanTypes(RelationTypes);
+
+        var graph = new RelationshipGraph(meta, MetadataScanner.CollectionTypeMap(RelationTypes));
+
+        MetadataScanner.CollectionTypeMap(RelationTypes).Keys
+            .Should().BeEquivalentTo("cnSource", "pinnedTarget", "pinnedLink");
+        graph.Relations("cnSource").Select(r => r.TargetCollection).Should().OnlyContain(t => t == "pinnedTarget");
+        graph.M2MDescriptors("cnSource").Single().JunctionCollection.Should().Be("pinnedLink");
     }
 
     [Fact]
@@ -109,6 +156,7 @@ public class CollectionNameTests
     [InlineData(typeof(CnBadUpper), "Upper")]
     [InlineData(typeof(CnBadEmpty), "")]
     [InlineData(typeof(CnBadDigit), "1abc")]
+    [InlineData(typeof(CnBadNewline), "abc\n")]
     public void Invalid_name_names_the_type_and_the_rule(Type type, string name)
     {
         var act = () => MetadataScanner.ScanTypes([type]);

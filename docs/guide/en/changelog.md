@@ -85,7 +85,7 @@
 
 - `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
   grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
-  freely. It must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a
+  without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a
   `MetadataException` naming both types. Without `Name` the collection keeps the camel-cased class name.
 
 ### Security

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SqlSugar;
 using Struo.Application.Metadata;
 using Struo.Domain.Auditing;
@@ -296,8 +297,17 @@ public static class MetadataScanner
 
     private static string Camel(string name) => JsonNamingPolicy.CamelCase.ConvertName(name);
 
-    private static readonly System.Text.RegularExpressions.Regex ExplicitNamePattern =
-        new("^[a-z][A-Za-z0-9]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly Regex ExplicitNamePattern =
+        new(@"\A[a-z][A-Za-z0-9]*\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// Collection name to CLR type for every <c>[CmsCollection]</c> type in <paramref name="types"/>;
+    /// the map <see cref="RelationshipGraph"/> is built from.
+    /// </summary>
+    public static Dictionary<string, Type> CollectionTypeMap(IEnumerable<Type> types) =>
+        types
+            .Where(t => t.GetCustomAttribute<CmsCollectionAttribute>() is not null)
+            .ToDictionary(CollectionNameOf, t => t, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The collection name of a <c>[CmsCollection]</c> type: the attribute's explicit
