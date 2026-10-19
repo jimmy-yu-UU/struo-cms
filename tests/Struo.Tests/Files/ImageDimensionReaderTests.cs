@@ -181,6 +181,131 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(gif), "image/gif").Should().Be((3, 2));
     }
 
+    // Builds a JPEG from marker segments; a segment's payload is zero-filled to the requested size.
+    internal static byte[] Jpeg(params (byte Marker, int Payload)[] segments)
+    {
+        var ms = new MemoryStream();
+        ms.Write([0xFF, 0xD8]);
+        foreach (var (marker, payload) in segments)
+        {
+            ms.Write([0xFF, marker, (byte)((payload + 2) >> 8), (byte)(payload + 2)]);
+            ms.Write(new byte[payload]);
+        }
+        return ms.ToArray();
+    }
+
+    private static byte[] WithSof(byte[] prefix, byte marker, int width, int height)
+    {
+        var ms = new MemoryStream();
+        ms.Write(prefix);
+        ms.Write([0xFF, marker, 0, 11, 8, (byte)(height >> 8), (byte)height, (byte)(width >> 8), (byte)width, 1, 1, 0x11, 0]);
+        return ms.ToArray();
+    }
+
+    internal static byte[] JpegWithLargeMetadata(int width, int height, byte sof = 0xC0) =>
+        WithSof(
+            Jpeg((0xE0, 14), (0xE1, 60_000), (0xE1, 60_000), (0xE1, 60_000), (0xE1, 20_000),
+                (0xE2, 65_000), (0xE2, 5_000)),
+            sof, width, height);
+
+    [Fact]
+    public void Jpeg_dimensions_are_read_past_large_exif_and_icc_segments()
+    {
+        var jpeg = JpegWithLargeMetadata(4000, 3000);
+        jpeg.Length.Should().BeGreaterThan(270_000);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((4000, 3000));
+    }
+
+    [Fact]
+    public void Progressive_jpeg_dimensions_are_read()
+    {
+        var jpeg = JpegWithLargeMetadata(640, 480, sof: 0xC2);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((640, 480));
+    }
+
+    [Fact]
+    public void Jpeg_reader_skips_fill_bytes_and_standalone_markers()
+    {
+        var prefix = Jpeg((0xE0, 14)).Concat(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0xFF, 0xD0 }).ToArray();
+        var jpeg = WithSof(prefix, 0xC0, 320, 200);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((320, 200));
+    }
+
+    [Fact]
+    public void Jpeg_dht_marker_is_not_mistaken_for_a_frame_header()
+    {
+        var jpeg = WithSof(Jpeg((0xC4, 20), (0xCC, 4)), 0xC1, 50, 40);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((50, 40));
+    }
+
+    [Fact]
+    public void Jpeg_truncated_inside_a_segment_is_unknown_and_does_not_throw()
+    {
+        var jpeg = JpegWithLargeMetadata(4000, 3000);
+        var cut = jpeg[..100_000];
+        new ImageDimensionReader().TryRead(new MemoryStream(cut), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Jpeg_truncated_inside_the_frame_header_is_unknown()
+    {
+        var jpeg = WithSof(Jpeg((0xE0, 14)), 0xC0, 100, 100);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg[..^6]), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Jpeg_segment_length_beyond_the_end_of_the_stream_is_unknown()
+    {
+        var jpeg = Jpeg((0xE1, 10));
+        jpeg[4] = 0xFF;   // segment length 0xFFxx, far past the end
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Jpeg_without_a_frame_header_before_the_scan_is_unknown()
+    {
+        var jpeg = Jpeg((0xE0, 14), (0xDA, 10));
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Jpeg_with_a_zero_dimension_is_unknown()
+    {
+        var jpeg = WithSof(Jpeg((0xE0, 14)), 0xC0, 0, 100);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Jpeg_with_an_invalid_segment_length_is_unknown()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0];
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
+    }
+
+    [Fact]
+    public void Reads_a_real_encoder_jpeg()
+    {
+        var bytes = NetVips.Image.Black(64, 48).Cast(NetVips.Enums.BandFormat.Uchar).WriteToBuffer(".jpg");
+
+        new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/jpeg").Should().Be((64, 48));
+    }
+
+    [Fact]
+    public void A_stream_that_fails_while_reading_is_unknown_and_does_not_throw()
+    {
+        using var failing = new FailingStream(JpegWithLargeMetadata(10, 10), failAfter: 70_000);
+        new ImageDimensionReader().TryRead(failing, "image/jpeg").Should().BeNull();
+    }
+
+    private sealed class FailingStream(byte[] data, int failAfter) : MemoryStream(data)
+    {
+        public override int Read(byte[] buffer, int offset, int count) =>
+            Position >= failAfter ? throw new IOException("read failed") : base.Read(buffer, offset, count);
+
+        public override int ReadByte() =>
+            Position >= failAfter ? throw new IOException("read failed") : base.ReadByte();
+    }
+
     [Fact]
     public void Returns_null_for_non_image()
     {

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Struo.Application.Files;
 
 namespace Struo.Infrastructure.Files;
@@ -8,8 +10,9 @@ namespace Struo.Infrastructure.Files;
 /// common web raster formats (PNG, JPEG, GIF, WebP, AVIF); returns null for anything else. Format is
 /// detected by magic bytes, not the supplied content type.
 /// </summary>
-public sealed class ImageDimensionReader : IImageDimensionReader
+public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = null) : IImageDimensionReader
 {
+    private readonly ILogger logger = (ILogger?)log ?? NullLogger.Instance;
 
     public (int Width, int Height)? TryRead(Stream seekable, string contentType)
     {
@@ -17,10 +20,18 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         {
             if (seekable.CanSeek) seekable.Position = 0;
             var b = ReadHeader(seekable, 64 * 1024);
-            return Png(b) ?? Gif(b, seekable) ?? Webp(b) ?? Jpeg(b) ?? Avif(b, seekable);
+            return Png(b) ?? Gif(b, seekable) ?? Webp(b) ?? Jpeg(b, seekable) ?? Avif(b, seekable);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidDataException)
         {
+            // Truncated or unreadable input: the dimensions are unknown.
+            logger.LogDebug(ex, "Image dimensions could not be read");
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A parser fault must not turn an upload or a transform probe into a 500.
+            logger.LogWarning(ex, "Image dimension reader failed unexpectedly");
             return null;
         }
         finally
@@ -122,33 +133,55 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         }
     }
 
-    // JPEG: FF D8, then marker segments; the SOF marker carries height/width as big-endian uint16.
-    private static (int, int)? Jpeg(byte[] b)
+    // JPEG: FF D8, then marker segments walked by their length field up to the first SOFn, which
+    // carries height/width as big-endian uint16. Segments are skipped, never decoded, and the walk ends
+    // at SOS/EOI or the end of the stream. Reads only, so a stream that cannot report its length works.
+    private static (int, int)? Jpeg(byte[] b, Stream s)
     {
         if (b.Length < 4 || b[0] != 0xFF || b[1] != 0xD8) return null;
-        int i = 2;
-        while (i + 9 < b.Length)
+        s.Position = 2;
+        var frame = new byte[5];
+        while (true)
         {
-            if (b[i] != 0xFF) { i++; continue; }
-            byte marker = b[i + 1];
-            // Standalone markers (no length payload): TEM(01), RSTn(D0-D7), SOI(D8), EOI(D9).
-            if (marker == 0x01 || marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7))
-            { i += 2; continue; }
-            int len = (b[i + 2] << 8) | b[i + 3];
+            var c = s.ReadByte();
+            if (c < 0) return null;
+            if (c != 0xFF) continue;
+
+            int marker;
+            do marker = s.ReadByte(); while (marker == 0xFF);   // 0xFF fill bytes may precede a marker
+            if (marker < 0) return null;
+            if (marker == 0x00 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) continue;   // stuffed byte, TEM, RSTn, SOI
+            if (marker == 0xD9 || marker == 0xDA) return null;   // EOI, SOS: no frame header before the scan
+
+            var hi = s.ReadByte();
+            var lo = s.ReadByte();
+            if (lo < 0) return null;
+            var len = (hi << 8) | lo;
             if (len < 2) return null;
+
             // SOF0-15 carry dimensions, EXCEPT DHT(C4), JPG(C8), DAC(CC).
-            bool isSof = marker >= 0xC0 && marker <= 0xCF
-                         && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
-            if (isSof)
+            var isSof = marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+            if (!isSof)
             {
-                if (i + 8 >= b.Length) return null;
-                int h = (b[i + 5] << 8) | b[i + 6];
-                int w = (b[i + 7] << 8) | b[i + 8];
-                return (w, h);
+                if (!SkipByReading(s, len - 2)) return null;
+                continue;
             }
-            i += 2 + len;
+            if (len < 7 || s.Read(frame, 0, 5) < 5) return null;
+            int h = (frame[1] << 8) | frame[2], w = (frame[3] << 8) | frame[4];
+            return w > 0 && h > 0 ? (w, h) : null;
         }
-        return null;
+    }
+
+    private static bool SkipByReading(Stream s, int count)
+    {
+        var scratch = new byte[Math.Min(count, 8192)];
+        while (count > 0)
+        {
+            var read = s.Read(scratch, 0, Math.Min(count, scratch.Length));
+            if (read <= 0) return false;
+            count -= read;
+        }
+        return true;
     }
 
     // AVIF (ISO BMFF): an "ftyp" box with an avif brand, then "ispe" property boxes whose payload is

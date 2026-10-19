@@ -102,6 +102,28 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
     }
 
     [Fact]
+    public async Task Upload_of_a_jpeg_with_large_exif_and_icc_segments_records_its_dimensions()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["file"] = typeof(File), ["mediafolder"] = typeof(MediaFolder),
+        });
+        var repo = new SqlSugarItemRepository(
+            _db, new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)])),
+            graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
+        var svc = new FileService(
+            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()),
+            repo, _languages, new TestCurrentUserAccessor(Tester));
+        var jpeg = ImageDimensionReaderTests.JpegWithLargeMetadata(4000, 3000);
+
+        var file = await svc.UploadAsync(new MemoryStream(jpeg), "phone.jpg", "image/jpeg", length: jpeg.Length);
+
+        file.Width.Should().Be(4000);
+        file.Height.Should().Be(3000);
+    }
+
+    [Fact]
     public async Task Upload_dotfile_falls_back_to_full_name()
     {
         var file = await _svc.UploadAsync(

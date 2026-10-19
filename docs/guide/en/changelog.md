@@ -184,6 +184,11 @@
   behind, and a storage failure while deleting the blob is logged as a warning with the storage key instead
   of being ignored.
 
+- A JPEG that carries more than 64 KB of EXIF or ICC metadata ahead of its frame header (typical for phone
+  photos) gets its width and height on upload, and the image-transform endpoint resizes it instead of serving
+  the original. The reader follows the JPEG segment lengths up to the frame header; a truncated file, or one
+  whose segment length runs past the end, still reports no dimensions.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from
