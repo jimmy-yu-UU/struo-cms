@@ -116,6 +116,10 @@
   user out. Replacing a role's permission grants joins a transaction the caller already opened instead of
   committing its own. Chapter 16 states that an API access token survives a password change.
 
+- A write that hits a database unique key (a duplicate role name, for example) returns `409 CONFLICT` with the
+  message `A record with the same unique value already exists.` on REST and GraphQL, on every supported
+  backend; it returned a 500. The message never names the index or column.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from

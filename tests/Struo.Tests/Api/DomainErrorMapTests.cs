@@ -48,6 +48,19 @@ public class DomainErrorMapTests
         message.Should().Be("rel");
     }
 
+    [Fact]
+    public void A_wrapped_unique_violation_is_CONFLICT_with_the_fixed_message()
+    {
+        var wrapped = new InvalidOperationException(
+            "UNIQUE constraint failed: roles.name (ux_roles_name)",
+            new Microsoft.Data.Sqlite.SqliteException("constraint failed", 19, 2067));
+
+        var (code, message) = DomainErrorMap.Map(wrapped, authenticated: true);
+
+        code.Should().Be("CONFLICT");
+        message.Should().Be(DomainErrorMap.UniqueViolationMessage);
+    }
+
     // Optimistic-lock (CAS miss) is split out from generic CONFLICT so the frontend's
     // "changed by someone else" recovery banner keys on VERSION_CONFLICT alone and is not tripped
     // by any other 409 (e.g. duplicate email). RelationConflict above stays CONFLICT.

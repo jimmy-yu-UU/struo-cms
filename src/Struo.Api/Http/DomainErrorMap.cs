@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Struo.Application.Security;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Api.Http;
 
@@ -40,6 +41,7 @@ public static class DomainErrorMap
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
+            _ when UniqueViolation.IsMatch(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
@@ -49,6 +51,12 @@ public static class DomainErrorMap
     /// host — that detail only ever reaches the Warning-level server log.
     /// </summary>
     public const string SearchUnavailableMessage = "Search is temporarily unavailable.";
+
+    /// <summary>
+    /// Fixed client-facing message for a database unique-key violation. Never the provider's own
+    /// message, which names the constraint, index or column.
+    /// </summary>
+    public const string UniqueViolationMessage = "A record with the same unique value already exists.";
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the
