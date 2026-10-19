@@ -165,13 +165,11 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         // early must not hide the real one.
         s.Position = 0;
         b = ReadHeader(s, int.MaxValue);
-        // A grid image carries one ispe per tile plus one for the whole grid; the largest area is the
-        // size a decoder may produce.
+        if (HasDerivedImage(b)) return null;
         (int, int)? largest = null;
         long largestArea = -1;
         for (var i = 8; i + 16 <= b.Length; i++)
         {
-            if (IsGridInfe(b, i)) return null;
             if (b[i] != (byte)'i' || b[i + 1] != (byte)'s' || b[i + 2] != (byte)'p' || b[i + 3] != (byte)'e')
                 continue;
             var w = (int)Math.Min(BeU32(b, i + 8), int.MaxValue);
@@ -183,18 +181,11 @@ public sealed class ImageDimensionReader : IImageDimensionReader
         return largest;
     }
 
-    // A derived grid image is sized by its grid descriptor, which is not read here, so an item entry
-    // ("infe", version 2 or 3: version/flags, item_ID, protection index, then the 4-byte item type)
-    // of type "grid" makes the file not safely sizable.
-    private static bool IsGridInfe(byte[] b, int i)
-    {
-        if (b[i] != (byte)'i' || b[i + 1] != (byte)'n' || b[i + 2] != (byte)'f' || b[i + 3] != (byte)'e')
-            return false;
-        var typeAt = b[i + 4] switch { 2 => i + 12, 3 => i + 14, _ => -1 };
-        return typeAt > 0 && typeAt + 4 <= b.Length
-            && b[typeAt] == (byte)'g' && b[typeAt + 1] == (byte)'r'
-            && b[typeAt + 2] == (byte)'i' && b[typeAt + 3] == (byte)'d';
-    }
+    // A derived image (grid or overlay) is sized by item data, not by any ispe, so the mere presence
+    // of its item type or the "dimg" reference makes the file not safely sizable. A chance match in
+    // compressed data only means the original is served.
+    private static bool HasDerivedImage(byte[] b) =>
+        b.AsSpan().IndexOf("grid"u8) >= 0 || b.AsSpan().IndexOf("iovl"u8) >= 0 || b.AsSpan().IndexOf("dimg"u8) >= 0;
 
     private static long BeU32(byte[] b, int o) =>
         ((long)b[o] << 24) | ((long)b[o + 1] << 16) | ((long)b[o + 2] << 8) | b[o + 3];

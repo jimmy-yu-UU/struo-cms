@@ -32,18 +32,21 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         Upload(c, Image.Black(w, h).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png"), "image/png", "img.png");
 
     private HttpClient HostWith(
-        IImageTransformer transformer, int maxConcurrent, int timeoutSeconds,
-        Action<IServiceCollection>? configure = null) =>
+        IImageTransformer? transformer, int maxConcurrent, int timeoutSeconds,
+        Action<IServiceCollection>? configure = null, long? maxSourcePixels = null) =>
         factory.WithWebHostBuilder(b =>
         {
-            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 ["Struo:Files:ImageTransform:MaxConcurrentTransforms"] = maxConcurrent.ToString(),
                 ["Struo:Files:ImageTransform:QueueTimeoutSeconds"] = timeoutSeconds.ToString(),
-            }));
+            };
+            if (maxSourcePixels is not null)
+                settings["Struo:Files:ImageTransform:MaxSourcePixels"] = maxSourcePixels.Value.ToString();
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(settings));
             b.ConfigureTestServices(s =>
             {
-                s.AddSingleton(transformer);
+                if (transformer is not null) s.AddSingleton(transformer);
                 configure?.Invoke(s);
             });
         }).CreateClient();
@@ -95,6 +98,38 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         (await gridResp.Content.ReadAsByteArrayAsync()).Should().Equal(grid);
         using var img = Image.NewFromBuffer(await plainResp.Content.ReadAsByteArrayAsync());
         img.Width.Should().Be(128);
+    }
+
+    [Fact]
+    public async Task Avif_grid_item_with_a_64_bit_box_size_returns_the_original_bytes()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        byte[] grid =
+        [
+            0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0,
+            0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 64,
+            0, 0, 0, 1, (byte)'i', (byte)'n', (byte)'f', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 29,
+            2, 0, 0, 0, 0, 1, 0, 0, (byte)'g', (byte)'r', (byte)'i', (byte)'d'
+        ];
+        var id = await Upload(c, grid, "image/avif", "grid64.avif");
+
+        var resp = await c.GetAsync($"/api/files/{id}/content?width=128&format=png");
+
+        (await resp.Content.ReadAsByteArrayAsync()).Should().Equal(grid);
+    }
+
+    [Fact]
+    public async Task Source_whose_decoded_size_exceeds_the_limit_returns_the_original_bytes_even_when_the_probe_is_small()
+    {
+        var host = HostWith(null, maxConcurrent: 1, timeoutSeconds: 5,
+            s => s.AddSingleton<IImageDimensionReader>(new FixedDimensions((10, 10))), maxSourcePixels: 100_000);
+        var original = Image.Black(600, 600).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png");
+        var id = await Upload(await factory.CreateAuthenticatedClientAsync(), original, "image/png", "y.png");
+
+        var resp = await host.GetAsync($"/api/files/{id}/content?width=128&format=png");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await resp.Content.ReadAsByteArrayAsync()).Should().Equal(original);
     }
 
     [Fact]
@@ -240,7 +275,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         public int Calls => _calls;
         public int MaxConcurrent => _max;
 
-        public ImageTransformResult Transform(ReadOnlySpan<byte> source, ImageTransformRequest req)
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels)
         {
             Interlocked.Increment(ref _calls);
             var now = Interlocked.Increment(ref _current);
@@ -257,7 +292,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         public SemaphoreSlim Entered { get; } = new(0);
         public ManualResetEventSlim Release { get; } = new(false);
 
-        public ImageTransformResult Transform(ReadOnlySpan<byte> source, ImageTransformRequest req)
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels)
         {
             Entered.Release();
             Release.Wait(TimeSpan.FromSeconds(30));

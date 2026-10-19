@@ -88,6 +88,39 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/avif").Should().Be((64, 64));
     }
 
+    private static byte[] AvifWithTrailer(params byte[] trailer)
+    {
+        var ms = new MemoryStream();
+        ms.Write([0, 0, 0, 16, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'a', (byte)'v', (byte)'i', (byte)'f', 0, 0, 0, 0]);
+        ms.Write([0, 0, 0, 20, (byte)'i', (byte)'s', (byte)'p', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 64]);
+        ms.Write(trailer);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Avif_with_a_grid_infe_using_a_64_bit_box_size_is_not_safely_sizable()
+    {
+        // size field 1: an 8-byte largesize sits before the version byte.
+        var bytes = AvifWithTrailer(
+            0, 0, 0, 1, (byte)'i', (byte)'n', (byte)'f', (byte)'e', 0, 0, 0, 0, 0, 0, 0, 29,
+            2, 0, 0, 0, 0, 1, 0, 0, (byte)'g', (byte)'r', (byte)'i', (byte)'d');
+        new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/avif").Should().BeNull();
+    }
+
+    [Fact]
+    public void Avif_with_an_overlay_item_is_not_safely_sizable() =>
+        new ImageDimensionReader().TryRead(new MemoryStream(AvifWithInfe(2, "iovl")), "image/avif")
+            .Should().BeNull();
+
+    [Fact]
+    public void Avif_with_a_derived_image_reference_is_not_safely_sizable()
+    {
+        var bytes = AvifWithTrailer(
+            0, 0, 0, 22, (byte)'i', (byte)'r', (byte)'e', (byte)'f', 0, 0, 0, 0,
+            0, 0, 0, 10, (byte)'d', (byte)'i', (byte)'m', (byte)'g', 0, 1);
+        new ImageDimensionReader().TryRead(new MemoryStream(bytes), "image/avif").Should().BeNull();
+    }
+
     [Fact]
     public void Avif_scan_has_no_fixed_size_cap()
     {

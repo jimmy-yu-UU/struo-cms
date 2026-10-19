@@ -145,10 +145,10 @@ public sealed class FilesController(
                     return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
             }
 
-            ImageTransformResult result;
+            ImageTransformResult? result;
             try
             {
-                result = images.Transformer.Transform(sourceBytes, req);
+                result = images.Transformer.Transform(sourceBytes, req, imageTransform.MaxSourcePixels);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -161,10 +161,14 @@ public sealed class FilesController(
                 return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
             }
 
+            // The decoder's own header size is over the limit (e.g. a derived AVIF the probe misjudged).
+            if (result is not { } transformed)
+                return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
+
             // The slot is released before the cache write, whose size sweep must not hold it.
             lease.Dispose();
-            await images.Cache.SetAsync(key, result.Bytes, ct);
-            return File(result.Bytes, result.ContentType);
+            await images.Cache.SetAsync(key, transformed.Bytes, ct);
+            return File(transformed.Bytes, transformed.ContentType);
         }
 
         // The admin SPA loads thumbnails/previews from this endpoint, so by default the API streams
