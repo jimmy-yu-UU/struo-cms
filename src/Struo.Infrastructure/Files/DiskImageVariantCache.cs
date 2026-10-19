@@ -141,7 +141,8 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
     // cannot be stored is dropped (the cache is an optimization) and logged.
     private async Task<bool> MoveIntoPlaceAsync(string tempPath, string path, CancellationToken ct)
     {
-        for (var attempt = 1; ; attempt++)
+        Exception? last = null;
+        for (var attempt = 1; attempt <= MoveAttempts; attempt++)
         {
             try
             {
@@ -150,16 +151,13 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                if (attempt < MoveAttempts)
-                {
-                    await Task.Delay(MoveRetryDelayMs, ct);
-                    continue;
-                }
-                _logger.LogWarning(ex, "Could not store image variant {Path}; it is served uncached.", path);
-                TryDeleteTemp(tempPath);
-                return false;
+                last = ex;
+                if (attempt < MoveAttempts) await Task.Delay(MoveRetryDelayMs, ct);
             }
         }
+        _logger.LogWarning(last, "Could not store image variant {Path}; it is served uncached.", path);
+        TryDeleteTemp(tempPath);
+        return false;
     }
 
     private static void TryDeleteTemp(string tempPath)
@@ -174,7 +172,8 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         try { System.IO.File.SetLastWriteTimeUtc(path, DateTime.UtcNow); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogDebug(ex, "Could not stamp image variant {Path}.", path);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(ex, "Could not stamp image variant {Path}.", path);
         }
     }
 

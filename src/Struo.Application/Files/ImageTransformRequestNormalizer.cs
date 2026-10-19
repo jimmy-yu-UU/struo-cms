@@ -14,10 +14,11 @@ public static class ImageTransformRequestNormalizer
     public const int CoverHeightUnit = 8;
 
     public static bool TryNormalize(
-        int? width, int? height, string? format, string? fit, int? quality,
+        RawImageTransformQuery query,
         FileStorageOptions.ImageTransformOptions options,
         out ImageTransformRequest request, out string error)
     {
+        var (width, height, format, fit, quality) = query;
         request = default;
         error = "";
 
@@ -80,3 +81,7 @@ public static class ImageTransformRequestNormalizer
     private static int NormalizeQuality(int quality) =>
         Math.Clamp((int)Math.Round(quality / 10.0, MidpointRounding.AwayFromZero) * 10, 10, 100);
 }
+
+/// <summary>The unvalidated transform values exactly as they arrived on the query string.</summary>
+public readonly record struct RawImageTransformQuery(
+    int? Width, int? Height, string? Format, string? Fit, int? Quality);

@@ -326,8 +326,8 @@ blob 與翻譯列都留在原地，等著之後復原。如果被丟進垃圾桶
 /api/files/{id}/restore` 會清掉刪除戳記，跟任何其他可軟刪除集合的復原完全一樣。
 
 `DELETE` 與 `restore` 都要求 `file` 的刪除授權，不是寫入授權，沒有授權會得到 `Delete not
-permitted.`。兩者成功都回 `204`，對象不存在回 `404`，其他項目仍透過 `OnDelete.Restrict` 關聯參照這個檔案時回
-`409` `CONFLICT`。
+permitted.`。兩者成功都回 `204`，對象不存在回 `404`。只有 `DELETE`（丟進垃圾桶與永久刪除）會在其他項目仍透過
+`OnDelete.Restrict` 關聯參照這個檔案時回 `409` `CONFLICT`；`restore` 不檢查參照。
 
 `DELETE /api/files/{id}?purge=true` 才是真正的永久刪除：檔案列、翻譯列與儲存的 blob 全部一
 起清掉。清除遵守跟其他集合一樣的關聯規則：`Restrict` 參照會擋下清除，`OnDelete.SetNull` 的參照會被設為

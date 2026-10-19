@@ -72,8 +72,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), repo, _languages,
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
     }
 
     public void Dispose() => _file.Dispose();
@@ -113,8 +112,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
             _db, new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)])),
             graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
         var svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()),
-            repo, _languages, new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
         var jpeg = ImageDimensionReaderTests.JpegWithLargeMetadata(4000, 3000);
 
         var file = await svc.UploadAsync(new MemoryStream(jpeg), "phone.jpg", "image/jpeg", length: jpeg.Length);

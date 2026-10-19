@@ -21,9 +21,7 @@ namespace Struo.Infrastructure.Files;
 public sealed class FileService(
     ISqlSugarClient db,
     FileStorageServices storage,
-    IItemRepository repository,
-    ILanguageProvider languages,
-    ICurrentUserAccessor currentUser,
+    FileServiceCollaborators collaborators,
     IItemChangeNotifier? notifier = null,
     ILogger<FileService>? logger = null,
     // Reference handling shared with every collection's delete (Restrict guard, SetNull, junctions,
@@ -34,6 +32,9 @@ public sealed class FileService(
     private readonly IFileStorage blobs = storage.Storage;
     private readonly IImageDimensionReader imageReader = storage.Images;
     private readonly FileStorageOptions fileOptions = storage.Options;
+    private readonly IItemRepository repository = collaborators.Repository;
+    private readonly ILanguageProvider languages = collaborators.Languages;
+    private readonly ICurrentUserAccessor currentUser = collaborators.CurrentUser;
 
     // Width of the `filename` and `title` string columns (core migration `AsString(255)`).
     private const int NameColumnWidth = 255;
@@ -54,7 +55,7 @@ public sealed class FileService(
 
     // The brand-logo reference is cleared with an entity-typed SetColumns so the nullable column gets a
     // typed NULL (a plain NULL literal makes Postgres raise 42804). A no-op when the file is not the logo.
-    private Task ClearLogoReferenceAsync(Guid id, CancellationToken ct) =>
+    private Task<int> ClearLogoReferenceAsync(Guid id, CancellationToken ct) =>
         db.Updateable<SiteSettings>()
             .SetColumns(s => new SiteSettings { LogoFileId = null })
             .Where(s => s.LogoFileId == id)

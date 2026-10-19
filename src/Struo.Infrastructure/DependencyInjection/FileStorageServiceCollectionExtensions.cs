@@ -76,6 +76,7 @@ public static class FileStorageServiceCollectionExtensions
         // FileService's trash and purge need the shared reference-handling pipeline; AddStruoData
         // registers the same type, so whichever runs first wins.
         services.TryAddScoped<ItemPurgePipeline>();
+        services.AddScoped<FileServiceCollaborators>();
         services.AddScoped<FileService>();
         services.AddScoped<IFileLifecycle>(sp => sp.GetRequiredService<FileService>());
         return services;

@@ -19,7 +19,7 @@ public class ImageTransformRequestNormalizerTests
         int? w, int? h, string? format = null, string? fit = null, int? quality = null,
         FileStorageOptions.ImageTransformOptions? o = null)
     {
-        ImageTransformRequestNormalizer.TryNormalize(w, h, format, fit, quality, o ?? Defaults(), out var req, out var error)
+        ImageTransformRequestNormalizer.TryNormalize(new RawImageTransformQuery(w, h, format, fit, quality), o ?? Defaults(), out var req, out var error)
             .Should().BeTrue(error);
         return req;
     }
@@ -104,7 +104,7 @@ public class ImageTransformRequestNormalizerTests
     [InlineData("fill")]
     public void Unknown_fit_is_rejected(string fit)
     {
-        ImageTransformRequestNormalizer.TryNormalize(100, null, null, fit, null, Defaults(), out _, out var error)
+        ImageTransformRequestNormalizer.TryNormalize(new RawImageTransformQuery(100, null, null, fit, null), Defaults(), out _, out var error)
             .Should().BeFalse();
         error.Should().Contain("fit");
     }
@@ -126,7 +126,7 @@ public class ImageTransformRequestNormalizerTests
     public void Format_is_lowercased_and_checked_against_the_allowlist()
     {
         Ok(100, null, format: "WEBP").Format.Should().Be("webp");
-        ImageTransformRequestNormalizer.TryNormalize(100, null, "bmp", null, null, Defaults(), out _, out var error)
+        ImageTransformRequestNormalizer.TryNormalize(new RawImageTransformQuery(100, null, "bmp", null, null), Defaults(), out _, out var error)
             .Should().BeFalse();
         error.Should().Contain("bmp");
     }

@@ -140,8 +140,7 @@ public sealed class FileReferenceCleanupTests : IDisposable
         var pipeline = new ItemPurgePipeline(repo, provider, registry, graph, graph, revisions);
 
         _files = new FileService(
-            _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), repo,
-            new StubLanguages(), currentUser,
+            _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, new StubLanguages(), currentUser),
             notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()), references: pipeline);
         _items = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
             graph, new RelationExpander(repo, graph, options), graph, new StubLanguages(), options,

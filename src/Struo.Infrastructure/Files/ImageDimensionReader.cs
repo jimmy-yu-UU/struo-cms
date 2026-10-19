@@ -60,8 +60,9 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
     }
 
     // GIF: "GIF87a"/"GIF89a", logical screen width/height as little-endian uint16 at 6/8. libvips
-    // sizes the canvas to fit every frame, so the result is the largest of the logical screen and each
-    // image descriptor's offset plus size. Blocks are skipped by reading, never decoded or seeked past, so a stream that is only partly buffered works.
+    // sizes the canvas to fit every frame, so the result is the largest of the logical screen and
+    // each image descriptor's offset plus size. Blocks are skipped by reading, never decoded or
+    // seeked past, so a stream that is only partly buffered works.
     private static (int, int)? Gif(byte[] b, Stream s)
     {
         if (b.Length < 10) return null;
@@ -70,26 +71,44 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
         if (b.Length < 13) return (w, h);
 
         s.Position = 13;
-        if ((b[10] & 0x80) != 0 && !SkipByReading(s, 3 << ((b[10] & 7) + 1))) return (w, h);
-        var desc = new byte[9];
+        if (!SkipColorTable(s, b[10])) return (w, h);
+        WalkGifBlocks(s, ref w, ref h);
+        return (w, h);
+    }
+
+    // Skips a colour table when the packed flags announce one.
+    private static bool SkipColorTable(Stream s, int packedFlags) =>
+        (packedFlags & 0x80) == 0 || SkipByReading(s, 3 << ((packedFlags & 7) + 1));
+
+    // Walks blocks until the trailer, an unknown block or a truncated stream.
+    private static void WalkGifBlocks(Stream s, ref int w, ref int h)
+    {
         while (true)
         {
             var block = s.ReadByte();
             if (block == 0x21)
             {
-                if (s.ReadByte() < 0 || !SkipSubBlocks(s)) break;
+                if (!SkipGifExtension(s)) return;
             }
             else if (block == 0x2C)
             {
-                if (s.Read(desc, 0, 9) < 9) break;
-                w = Math.Max(w, (desc[0] | (desc[1] << 8)) + (desc[4] | (desc[5] << 8)));
-                h = Math.Max(h, (desc[2] | (desc[3] << 8)) + (desc[6] | (desc[7] << 8)));
-                if ((desc[8] & 0x80) != 0 && !SkipByReading(s, 3 << ((desc[8] & 7) + 1))) break;
-                if (s.ReadByte() < 0 || !SkipSubBlocks(s)) break;   // LZW minimum code size, then data
+                if (!ReadGifImage(s, ref w, ref h)) return;
             }
-            else break;   // trailer, end of stream or an unknown block
+            else return;
         }
-        return (w, h);
+    }
+
+    private static bool SkipGifExtension(Stream s) => s.ReadByte() >= 0 && SkipSubBlocks(s);
+
+    // Image descriptor: grows the canvas to the frame's offset plus size, then skips the local
+    // colour table, the LZW minimum code size and the data sub-blocks.
+    private static bool ReadGifImage(Stream s, ref int w, ref int h)
+    {
+        var desc = new byte[9];
+        if (s.Read(desc, 0, 9) < 9) return false;
+        w = Math.Max(w, (desc[0] | (desc[1] << 8)) + (desc[4] | (desc[5] << 8)));
+        h = Math.Max(h, (desc[2] | (desc[3] << 8)) + (desc[6] | (desc[7] << 8)));
+        return SkipColorTable(s, desc[8]) && s.ReadByte() >= 0 && SkipSubBlocks(s);
     }
 
     private static bool SkipSubBlocks(Stream s)
@@ -134,36 +153,53 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
     {
         if (b.Length < 4 || b[0] != 0xFF || b[1] != 0xD8) return null;
         s.Position = 2;
-        var frame = new byte[5];
         while (true)
         {
-            var c = s.ReadByte();
-            if (c < 0) return null;
-            if (c != 0xFF) continue;
-
-            int marker;
-            do marker = s.ReadByte(); while (marker == 0xFF);   // 0xFF fill bytes may precede a marker
+            var marker = NextJpegMarker(s);
             if (marker < 0) return null;
-            if (marker == 0x00 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) continue;   // stuffed byte, TEM, RSTn, SOI
+            if (IsStandaloneJpegMarker(marker)) continue;
             if (marker == 0xD9 || marker == 0xDA) return null;   // EOI, SOS: no frame header before the scan
 
-            var hi = s.ReadByte();
-            var lo = s.ReadByte();
-            if (lo < 0) return null;
-            var len = (hi << 8) | lo;
+            var len = ReadJpegSegmentLength(s);
             if (len < 2) return null;
-
-            // SOF0-15 carry dimensions, EXCEPT DHT(C4), JPG(C8), DAC(CC).
-            var isSof = marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
-            if (!isSof)
-            {
-                if (!SkipByReading(s, len - 2)) return null;
-                continue;
-            }
-            if (len < 7 || s.Read(frame, 0, 5) < 5) return null;
-            int h = (frame[1] << 8) | frame[2], w = (frame[3] << 8) | frame[4];
-            return w > 0 && h > 0 ? (w, h) : null;
+            if (IsSofMarker(marker)) return ReadJpegFrameSize(s, len);
+            if (!SkipByReading(s, len - 2)) return null;
         }
+    }
+
+    // Returns the next marker code, or -1 at the end of the stream.
+    private static int NextJpegMarker(Stream s)
+    {
+        int c;
+        do c = s.ReadByte(); while (c >= 0 && c != 0xFF);
+        if (c < 0) return -1;
+        int marker;
+        do marker = s.ReadByte(); while (marker == 0xFF);   // 0xFF fill bytes may precede a marker
+        return marker;
+    }
+
+    // Stuffed byte, TEM, RSTn and SOI have no length field.
+    private static bool IsStandaloneJpegMarker(int marker) =>
+        marker == 0x00 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8);
+
+    // SOF0-15 carry dimensions, EXCEPT DHT(C4), JPG(C8), DAC(CC).
+    private static bool IsSofMarker(int marker) =>
+        marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+
+    // Returns the big-endian segment length, or -1 when the stream ends inside it.
+    private static int ReadJpegSegmentLength(Stream s)
+    {
+        var hi = s.ReadByte();
+        var lo = s.ReadByte();
+        return lo < 0 ? -1 : (hi << 8) | lo;
+    }
+
+    private static (int, int)? ReadJpegFrameSize(Stream s, int segmentLength)
+    {
+        var frame = new byte[5];
+        if (segmentLength < 7 || s.Read(frame, 0, 5) < 5) return null;
+        int h = (frame[1] << 8) | frame[2], w = (frame[3] << 8) | frame[4];
+        return w > 0 && h > 0 ? (w, h) : null;
     }
 
     private static bool SkipByReading(Stream s, int count)

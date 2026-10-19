@@ -86,8 +86,7 @@ public sealed class FileUploadOrphanBlobTests : IDisposable
         });
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), repo,
-            new StubLanguages(), new TestCurrentUserAccessor(Tester), logger: _log);
+            _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)), logger: _log);
     }
 
     public void Dispose() => _file.Dispose();

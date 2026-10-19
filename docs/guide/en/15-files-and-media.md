@@ -409,9 +409,9 @@ transaction also clears that reference, so the public settings endpoint never re
 soft-deletable collection.
 
 Both `DELETE` and `restore` require the `file` delete grant, not the write grant; without it the
-response is `Delete not permitted.`. Both return `204` on success, `404` when the target doesn't
-exist, and `409` `CONFLICT` when another item still references the file through an `OnDelete.Restrict`
-relation.
+response is `Delete not permitted.`. Both return `204` on success and `404` when the target doesn't
+exist. Only `DELETE` (trash and purge) can return `409` `CONFLICT`, when another item still
+references the file through an `OnDelete.Restrict` relation; `restore` never checks references.
 
 `DELETE /api/files/{id}?purge=true` is the actual permanent delete: the file row, the translation
 row and the stored blob are removed together. Purge follows the same relation rules as any other

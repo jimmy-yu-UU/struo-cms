@@ -97,7 +97,7 @@ public sealed class FilesController(
         if (wantsTransform)
         {
             if (!ImageTransformRequestNormalizer.TryNormalize(
-                    width, height, format, fit, quality, imageTransform, out var req, out var requestError))
+                    new RawImageTransformQuery(width, height, format, fit, quality), imageTransform, out var req, out var requestError))
                 return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, requestError);
 
             // Version stamp: row.Version (AuditableEntity's optimistic-concurrency counter) rather than
@@ -112,61 +112,11 @@ public sealed class FilesController(
             if (cached is not null)
                 return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
 
-            // The gate is taken before the source is read so waiting requests hold no source bytes.
-            using var lease = await images.Gate.TryEnterAsync(ct);
-            if (lease is null)
-            {
-                Response.Headers.RetryAfter = Math.Max(1, imageTransform.QueueTimeoutSeconds)
-                    .ToString(CultureInfo.InvariantCulture);
-                return ApiResults.Fail(StatusCodes.Status503ServiceUnavailable, ErrorCodes.ImageTransformBusy,
-                    "Image transforms are busy; retry shortly.");
-            }
+            var gated = await TransformUnderGateAsync(row, key, req, imageTransform, ct);
+            if (gated.Response is not null) return gated.Response;
+            var transformed = gated.Transformed!.Value;
 
-            // A request that waited here may find the variant stored by the one it queued behind.
-            cached = await images.Cache.TryGetAsync(key, ct);
-            if (cached is not null)
-                return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
-
-            byte[] sourceBytes;
-            await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
-            using (var ms = new MemoryStream())
-            {
-                await src.CopyToAsync(ms, ct);
-                sourceBytes = ms.ToArray();
-            }
-
-            // Header-only probe: a source with unreadable or oversized dimensions is served as is
-            // instead of being decoded.
-            using (var probe = new MemoryStream(sourceBytes, writable: false))
-            {
-                var dims = images.Dimensions.TryRead(probe, row.ContentType);
-                if (dims is not { Width: > 0, Height: > 0 }
-                    || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
-                    return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
-            }
-
-            ImageTransformResult? result;
-            try
-            {
-                result = images.Transformer.Transform(sourceBytes, req, imageTransform.MaxSourcePixels);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Never silently swallow: log with enough context to investigate (corrupt upload,
-                // unsupported source encoding, libvips failure, ...), then fall back to serving the
-                // original bytes so the request still succeeds for the caller — a broken thumbnail is
-                // a worse UX than an un-transformed original, but a swallowed error is worse still.
-                logger.LogWarning(ex,
-                    "Image transform failed for file {FileId}; falling back to original bytes.", id);
-                return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
-            }
-
-            // The decoder's own header size is over the limit (e.g. a derived AVIF the probe misjudged).
-            if (result is not { } transformed)
-                return File(sourceBytes, row.ContentType, fileDownloadName: row.FileName);
-
-            // The slot is released before the cache write, whose size sweep must not hold it.
-            lease.Dispose();
+            // The gate slot is already released: the cache write's size sweep must not hold it.
             try
             {
                 await images.Cache.SetAsync(key, transformed.Bytes, ct);
@@ -174,7 +124,7 @@ public sealed class FilesController(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // An unwritable cache (disk full, read-only directory) costs only the caching.
-                logger.LogWarning(ex, "Image variant for file {FileId} could not be cached; serving it uncached.", id);
+                logger.LogWarning(ex, "Image variant {VariantKey} for file {FileId} could not be cached; serving it uncached.", key, id);
             }
             return File(transformed.Bytes, transformed.ContentType);
         }
@@ -191,6 +141,69 @@ public sealed class FilesController(
 
         var stream = await storage.OpenReadAsync(row.StorageKey, ct);
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
+    }
+
+    // Outcome of the gated transform: either a response to return as is, or the transformed image.
+    private readonly record struct GatedTransform(IActionResult? Response, ImageTransformResult? Transformed);
+
+    // Holds one transform slot while the source is read and transformed; the slot is released when
+    // this method returns, before the caller writes the cache.
+    private async Task<GatedTransform> TransformUnderGateAsync(
+        Struo.Infrastructure.Files.File row, string key, ImageTransformRequest req,
+        FileStorageOptions.ImageTransformOptions imageTransform, CancellationToken ct)
+    {
+        // The gate is taken before the source is read so waiting requests hold no source bytes.
+        using var lease = await images.Gate.TryEnterAsync(ct);
+        if (lease is null)
+        {
+            Response.Headers.RetryAfter = Math.Max(1, imageTransform.QueueTimeoutSeconds)
+                .ToString(CultureInfo.InvariantCulture);
+            return new(ApiResults.Fail(StatusCodes.Status503ServiceUnavailable, ErrorCodes.ImageTransformBusy,
+                "Image transforms are busy; retry shortly."), null);
+        }
+
+        // A request that waited here may find the variant stored by the one it queued behind.
+        var cached = await images.Cache.TryGetAsync(key, ct);
+        if (cached is not null)
+            return new(File(cached, ImageContentTypes.ContentTypeFor(req.Format)), null);
+
+        byte[] sourceBytes;
+        await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
+        using (var ms = new MemoryStream())
+        {
+            await src.CopyToAsync(ms, ct);
+            sourceBytes = ms.ToArray();
+        }
+
+        // Header-only probe: a source with unreadable or oversized dimensions is served as is
+        // instead of being decoded.
+        using (var probe = new MemoryStream(sourceBytes, writable: false))
+        {
+            var dims = images.Dimensions.TryRead(probe, row.ContentType);
+            if (dims is not { Width: > 0, Height: > 0 }
+                || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
+                return new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null);
+        }
+
+        ImageTransformResult? result;
+        try
+        {
+            result = images.Transformer.Transform(sourceBytes, req, imageTransform.MaxSourcePixels);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Never silently swallow: log with enough context to investigate (corrupt upload,
+            // unsupported source encoding, libvips failure, ...), then fall back to serving the
+            // original bytes so the request still succeeds for the caller.
+            logger.LogWarning(ex,
+                "Image transform failed for file {FileId}; falling back to original bytes.", row.Id);
+            return new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null);
+        }
+
+        // The decoder's own header size is over the limit (e.g. a derived AVIF the probe misjudged).
+        return result is null
+            ? new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null)
+            : new(null, result);
     }
 
     // Default DELETE is trash (recoverable); ?purge=true is the permanent hard delete

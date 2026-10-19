@@ -255,7 +255,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
               />
             </div>
             <p class="md-hint text-muted-foreground">{{ isPublished ? $t('media.statusPublishedHint') : $t('media.statusDraftHint') }}</p>
-            <p v-if="statusUnsaved" class="md-hint md-unsaved" role="status">{{ $t('media.statusUnsaved') }}</p>
+            <output v-if="statusUnsaved" class="md-hint md-unsaved">{{ $t('media.statusUnsaved') }}</output>
           </div>
 
           <label class="md-field">
@@ -306,7 +306,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-kv { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; }
 .md-kv b { color: var(--fg); font-weight: 600; }
 .md-url { display: flex; gap: 6px; align-items: center; }
-.md-hint { margin: 0; font-size: .75rem; }
+.md-hint { display: block; margin: 0; font-size: .75rem; }
 .md-unsaved { color: var(--warn); }
 .md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }
 .md-error { margin: 0; color: var(--danger); font-size: .85rem; }
