@@ -18,7 +18,7 @@ pnpm dev
 ```
 
 Starts Vite on `http://localhost:5173`. By default the SPA talks to the API through Vite's dev proxy
-(`/api` → `http://localhost:5221`, configured in `vite.config.ts`), so the browser sees the API as
+(`/api` → `http://localhost:5221`, configured in `vite.proxy.ts`), so the browser sees the API as
 same-origin and no CORS setup is required. Start the API separately on port 5221 (chapter 3).
 
 ## Unit / component tests

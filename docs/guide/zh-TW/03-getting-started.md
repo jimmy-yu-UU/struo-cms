@@ -194,7 +194,7 @@ pnpm dev
 
 開發伺服器把 `/api` 轉發到 `http://localhost:5221`，後台與 API 在瀏覽器眼裡是同一個來源，開
 發環境不需要另外設定 CORS。它也會轉發 OIDC 回呼 `/signin-oidc` 與 `/signout-callback-oidc`；要試外部
-登入的話，向提供者登記 `http://localhost:5173/signin-oidc`（第 16 章）。
+登入的話，向提供者登記 `http://localhost:5173/signin-oidc`（[第 16 章](16-authentication.md)）。
 
 ### 6. 第一次登入
 
