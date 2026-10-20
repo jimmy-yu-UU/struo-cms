@@ -256,7 +256,8 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 額度：根層 `filter` 與每個巢狀 `deep` 篩選一起從裡面扣。
 
 `MaxExpandRows` 限制 `deep` 展開一頁資料時，單次關聯讀取最多讀幾列。讀到超過 `MaxExpandRows` 列就回
-400 並點名該關聯，不會截斷結果。`offset` 沒有上限。
+400 並點名該關聯，不會截斷結果。唯一的例外是只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`：
+視窗由資料庫套用，所以不受這個上限限制。`offset` 沒有上限。
 
 `MaxRelationDepth` 算的是路徑裡的關聯跳轉次數，最後一個欄位本身跟 `_junction` 虛擬區段都不算
 在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 回傳了不該回傳的

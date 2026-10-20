@@ -36,6 +36,11 @@
 
 ### 變更
 
+- 一頁只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit` 時，巢狀 `filter`、`sort`、`offset` 與
+  `limit` 改由 SQL 套用。`Query:MaxExpandRows` 不適用於這種情況，所以子列數超過上限的父列，也只回傳
+  所要求的那個視窗。多個父列、沒有 `limit` 的巢狀清單與多對多關聯維持原樣。新增的
+  `IItemRepository.QueryWhereInWindowAsync` 有一個會擲出例外的預設實作，既有的實作仍能編譯；要服務展開器
+  的實作必須覆寫它。
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
 

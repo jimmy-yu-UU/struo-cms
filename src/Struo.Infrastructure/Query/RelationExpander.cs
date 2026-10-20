@@ -99,9 +99,7 @@ public sealed class RelationExpander(
                 case RelationKind.OneToMany:
                 {
                     var ids = parents.Select(parentId).ToList();
-                    var children = EnsureWithinCap(relName, await repository.QueryWhereInFilteredAsync(
-                        rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter, locale,
-                        options.MaxExpandRows + 1, ct), OneToManyCapHint);
+                    var (children, windowed) = await FetchOneToManyAsync(relName, desc, spec, ids, locale, ct);
                     var grouped = children
                         .GroupBy(ch => readProp(ch, desc.ReverseForeignKeyProperty!)!)
                         .ToDictionary(g => g.Key, g => g.ToList());
@@ -110,7 +108,7 @@ public sealed class RelationExpander(
                         var pid = parentId(p);
                         var rows = new List<IReadOnlyDictionary<string, object?>>();
                         if (grouped.TryGetValue(pid, out var lst))
-                            foreach (var ch in ApplyListArgs(lst, spec, readProp))
+                            foreach (var ch in windowed ? lst : ApplyListArgs(lst, spec, readProp))
                             {
                                 var d = (Dictionary<string, object?>)projectTarget(rel.TargetCollection, ch, spec.Fields);
                                 rows.Add(d);
@@ -143,6 +141,31 @@ public sealed class RelationExpander(
         }
 
         return result;
+    }
+
+    // Fetches the O2M children for the expanded parents. With exactly one parent and a nested limit
+    // the nested filter, sort, offset and limit run in SQL and the row cap does not apply, because
+    // only the requested window is read; Windowed is then true and the rows need no further
+    // windowing. Every other shape fetches all matching rows, capped at MaxExpandRows, for the
+    // in-memory per-parent window.
+    private async Task<(IReadOnlyList<object> Rows, bool Windowed)> FetchOneToManyAsync(
+        string relName, RelationDescriptor desc, DeepRelationSpec spec, List<object> ids,
+        string? locale, CancellationToken ct)
+    {
+        var rel = desc.Meta;
+        if (ids.Count == 1 && spec.Limit is > 0)
+        {
+            var window = await repository.QueryWhereInWindowAsync(
+                rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter,
+                spec.Sort ?? [], spec.Offset.GetValueOrDefault(),
+                Math.Min(spec.Limit.Value, options.MaxLimit), locale, ct);
+            if (window is not null) return (window, true);
+        }
+
+        var rows = EnsureWithinCap(relName, await repository.QueryWhereInFilteredAsync(
+            rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter, locale,
+            options.MaxExpandRows + 1, ct), OneToManyCapHint);
+        return (rows, false);
     }
 
     // A relation fetch is requested with MaxExpandRows + 1 rows, so one extra row proves the cap is

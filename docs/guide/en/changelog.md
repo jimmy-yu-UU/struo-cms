@@ -43,6 +43,12 @@
 
 ### Changed
 
+- A page that expands exactly one parent through a one-to-many relation with a nested `limit` now has the
+  nested `filter`, `sort`, `offset` and `limit` applied in SQL. `Query:MaxExpandRows` does not apply to
+  that case, so a parent with more children than the cap answers with just the requested window. Several
+  parents, a nested list without a `limit` and many-to-many relations are unchanged. A new
+  `IItemRepository.QueryWhereInWindowAsync` has a default implementation that throws, so existing
+  implementations still compile; one that serves the expander must override it.
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.

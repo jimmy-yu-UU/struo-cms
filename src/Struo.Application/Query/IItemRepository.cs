@@ -62,6 +62,20 @@ public interface IItemRepository
         FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Like <see cref="QueryWhereInFilteredAsync"/> for a single parent: the filter,
+    /// <paramref name="sort"/> (typed, with the list query's stable id tie-break; empty means the
+    /// default order), <paramref name="offset"/> and <paramref name="limit"/> all run in SQL, so
+    /// only the requested window is read. Returns <c>null</c> when the sort cannot be expressed in
+    /// SQL (a translatable field with no <paramref name="queryLocale"/>); the caller then windows
+    /// in memory.
+    /// </summary>
+    Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
+        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
+        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.QueryWhereInWindowAsync must be overridden by implementations that support nested windows.");
+
+    /// <summary>
     /// Returns all rows of the given CLR <paramref name="entityType"/> (e.g. a junction type)
     /// whose <paramref name="propertyName"/> (a CLR property name) is in <paramref name="values"/>.
     /// Empty <paramref name="values"/> returns an empty list without issuing a query. A non-null

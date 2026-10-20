@@ -47,6 +47,8 @@ public sealed class SqlSugarItemRepository(
     private readonly TransactionRunner transactions = new(db);
     private readonly FilterTranslator filters = new(db, graph, metadata, registry, options);
     private readonly WhereInQueries whereIn = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
+    private readonly WhereInWindowQueries whereInWindow = new(db, registry, metadata,
+        new FilterTranslator(db, graph, metadata, registry, options), new OrderByExpressionBuilder(registry, graph, metadata, options));
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
     private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db), logger);
@@ -233,6 +235,11 @@ public sealed class SqlSugarItemRepository(
         string collection, string property, IReadOnlyList<object> values,
         FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default) =>
         whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
+
+    public Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
+        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
+        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default) =>
+        whereInWindow.QueryAsync(collection, property, values, extraFilter, sort, offset, limit, queryLocale, ct);
 
     public Task SyncManyToManyAsync(
         Type junctionType,
