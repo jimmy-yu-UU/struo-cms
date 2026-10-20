@@ -216,6 +216,10 @@ API 映像先用 `Database__DbType=Sqlite`、
 SARIF 上傳到儲存庫的 Security 分頁（code scanning）；fork 與 Dependabot 的 pull request 因為
 token 沒有寫入權限而略過上傳，但阻擋用的掃描照跑。
 
+SARIF 上傳需要儲存庫啟用 code scanning。沒有 GitHub Advanced Security 的私有儲存庫或 fork
+會讓這一步失敗；請啟用 code scanning，或刪掉「Write the ... scan as SARIF」與「Upload the ...
+scan」這幾個步驟，阻擋用的掃描不受影響。
+
 Compose 那一段跑 `docker compose up --wait`，映像由同樣兩份 Dockerfile 另外建置；接著檢查
 8081 埠上 API 的 `/health/ready`、8080 埠上後台首頁有沒有同一個 `assets/index-` 片段，再透過
 nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --volumes`，有檢查失敗就先

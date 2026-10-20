@@ -257,6 +257,10 @@ act on never blocks a merge. The same results are uploaded as SARIF to the repos
 tab (code scanning), except on fork and Dependabot pull requests, whose token cannot write there;
 the blocking scan still runs on those.
 
+The SARIF upload needs code scanning on the repository. A private repository or fork without
+GitHub Advanced Security fails that step; either enable code scanning or delete the "Write the ...
+scan as SARIF" and "Upload the ... scan" steps, which leaves the blocking scans intact.
+
 The Compose step runs `docker compose up --wait`, which builds its own images from the same two
 Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port
 8080 for the same `assets/index-` fragment, and an anonymous `/api/config` call through nginx. It

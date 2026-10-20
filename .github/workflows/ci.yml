@@ -109,28 +109,34 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - run: docker build --tag struo-api:ci .
-      - run: docker build --tag struo-admin:ci frontend
+      - id: build-api
+        run: docker build --tag struo-api:ci .
+      - id: build-admin
+        run: docker build --tag struo-admin:ci frontend
       # Both images are scanned on every run and fail the job on a HIGH or CRITICAL
       # finding that has an upstream fix. The SARIF copies feed the Security tab; a fork
       # or Dependabot token cannot write security events, so only the upload is skipped there.
       - name: Scan struo-api:ci for fixable HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: struo-api:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+          cache-dir: ${{ runner.temp }}/trivy
       - name: Scan struo-admin:ci for fixable HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: struo-admin:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+          cache-dir: ${{ runner.temp }}/trivy
       - name: Decide whether results can be uploaded to code scanning
         id: sarif-gate
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           ACTOR: ${{ github.actor }}
           EVENT: ${{ github.event_name }}
@@ -143,7 +149,7 @@ jobs:
             echo "upload=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Write the api scan as SARIF
-        if: always() && steps.sarif-gate.outputs.upload == 'true'
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: struo-api:ci
@@ -152,14 +158,15 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           limit-severities-for-sarif: true
+          cache-dir: ${{ runner.temp }}/trivy
       - name: Upload the api scan to code scanning
-        if: always() && steps.sarif-gate.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@48870fdd6b42ee6474ec4207209ff87609271a5e # v4.39.0
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy-api.sarif
           category: trivy-api
       - name: Write the admin scan as SARIF
-        if: always() && steps.sarif-gate.outputs.upload == 'true'
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: struo-admin:ci
@@ -168,9 +175,10 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           limit-severities-for-sarif: true
+          cache-dir: ${{ runner.temp }}/trivy
       - name: Upload the admin scan to code scanning
-        if: always() && steps.sarif-gate.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@48870fdd6b42ee6474ec4207209ff87609271a5e # v4.39.0
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy-admin.sarif
           category: trivy-admin
