@@ -1,11 +1,9 @@
 import { test as base, expect } from '@playwright/test'
 
-// The SPA's UI locale is decided after /api/config resolves: the saved localStorage['struo.uiLocale']
-// wins when it is one of AdminUi:Locales, otherwise AdminUi:DefaultLocale applies (zh-TW as
-// shipped). A fresh Playwright context starts with empty localStorage, so the app boots in
-// Traditional Chinese and every i18n-string selector across the whole suite (Save, History, Search,
-// Unsaved changes, etc.) fails to match. Seed the locale via an init script on the shared `page`
-// fixture so every spec gets it automatically instead of repeating the workaround per-file.
+// The SPA's UI locale is the saved localStorage['struo.uiLocale'] when it names a registered
+// catalog, otherwise the build default (en unless VITE_DEFAULT_UI_LOCALE overrides it). Seed the
+// locale via an init script on the shared `page` fixture so every spec gets English i18n-string
+// selectors (Save, History, Search, Unsaved changes, etc.) even against a build with another default.
 //
 // addInitScript persists for the page's lifetime and re-runs on every navigation/reload, so this
 // single seed covers login's initial goto, page.reload(), and all in-test navigations.

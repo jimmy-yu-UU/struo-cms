@@ -276,17 +276,4 @@ public sealed class OptionsValidationTests
         });
         error.Should().BeNull();
     }
-
-    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
-    public async Task AdminUi_default_locale_outside_the_list_fails_startup()
-    {
-        var error = await StartupErrorAsync(s =>
-        {
-            s["AdminUi:Locales:0"] = "en";
-            s["AdminUi:DefaultLocale"] = "zh-TW";
-        });
-        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
-        ove.Should().NotBeNull();
-        string.Join(" ", ove!.Failures).Should().Contain("DefaultLocale");
-    }
 }

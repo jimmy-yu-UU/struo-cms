@@ -264,11 +264,12 @@ The image listens on `80`, serving Vite's production build through nginx. Unlike
 there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
 `/` directly.
 
-The SPA's API address is baked into the image at build time: `vite build` in production mode reads
+The SPA's API address and default admin-UI language (`VITE_API_BASE_URL`, `VITE_DEFAULT_UI_LOCALE`)
+are baked into the image at build time: `vite build` in production mode reads
 `frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
 exclude such a file from the build context — only the developer's own
 `.env`/`.env.local`/`.env.*.local`. The repository itself carries no `.env.production`, only the
-tracked `frontend/.env.example`. Changing this value only takes effect after rebuilding the image.
+tracked `frontend/.env.example`. Changing these values only takes effect after rebuilding the image.
 
 `API_UPSTREAM` (defaulting to `http://api:8080`) has to be written as `scheme://host:port`, with no
 path or trailing slash: `proxy_pass` takes an nginx variable rather than a literal value, which lets

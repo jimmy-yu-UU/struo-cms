@@ -30,7 +30,6 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
         [FromServices] ISiteSettingsStore settings,
         [FromServices] FileService files,
         [FromServices] IOptions<PasswordPolicyOptions> passwordPolicy,
-        [FromServices] IOptions<AdminUiOptions> adminUi,
         CancellationToken ct)
     {
         // This endpoint is anonymous and was hitting the DB on every request. 30s staleness
@@ -63,10 +62,7 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
             oidcEnabled = oidc.Value.Enabled,
             brandName = name,
             brandLogoUrl = logoUrl,
-            passwordMinLength = passwordPolicy.Value.MinLength,
-            // Startup-bound like passwordMinLength; the 30s cache is irrelevant to it.
-            uiLocales = adminUi.Value.EffectiveLocales,
-            uiDefaultLocale = adminUi.Value.DefaultLocale
+            passwordMinLength = passwordPolicy.Value.MinLength
         };
         cache.Set(CacheKey, payload, CacheDuration);
         return Ok(payload);

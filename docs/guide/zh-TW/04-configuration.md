@@ -414,19 +414,6 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 可以改某一項或往後新增（`Localization__Languages__2__Code=ja`），
 但刪不掉既有的項目；要拿掉語言，直接改 `appsettings.json`（這個檔案由 fork 擁有）。
 
-## AdminUi
-
-| 鍵 | 型別 | 預設值 |
-|---|---|---|
-| `AdminUi:Locales` | 字串陣列 | `["zh-TW", "en"]` |
-| `AdminUi:DefaultLocale` | 字串 | `zh-TW` |
-
-後台介面提供哪些語言、預設哪一個，與內容語言無關。`GET /api/config` 以 `uiLocales` 與
-`uiDefaultLocale` 送給後台；後台只保留自己有打包的訊息目錄（目前是 `zh-TW` 與 `en`），沒有對應
-目錄的代碼會被丟掉並在瀏覽器主控台記一筆錯誤。只啟用一個語言時，語言切換器不會出現。啟動時驗
-證每個代碼的格式與唯一，以及 `DefaultLocale` 在清單內。新增一份目錄的步驟見
-[第 19 章：後台客製](19-admin-customization.md)。
-
 ## Redis
 
 | 鍵 | 型別 | 預設值 |

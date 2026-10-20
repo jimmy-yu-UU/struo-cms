@@ -23,7 +23,7 @@ describe('UiLanguageSwitcher', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     i18n.global.locale.value = 'zh-TW'
-    useUiLocaleStore().configure(['zh-TW', 'en'], 'zh-TW')
+    useUiLocaleStore().apply('zh-TW')
   })
 
   it('renders both locale options and reflects the current locale', async () => {
@@ -54,13 +54,13 @@ describe('UiLanguageSwitcher', () => {
   })
 
   it('renders nothing when only one locale is enabled', () => {
-    useUiLocaleStore().configure(['zh-TW'], 'zh-TW')
+    useUiLocaleStore().enabled = ['zh-TW']
     const wrapper = mountSwitcher()
     expect(wrapper.find('[role="combobox"]').exists()).toBe(false)
   })
 
-  it('offers only the enabled locales, in configured order', async () => {
-    useUiLocaleStore().configure(['en', 'zh-TW'], 'en')
+  it('offers the enabled locales in order', async () => {
+    useUiLocaleStore().enabled = ['en', 'zh-TW']
     const wrapper = mountSwitcher()
     await openSelect(wrapper)
     expect(wrapper.findAll('[role="option"]').map((o) => o.text())).toEqual(['English', '繁體中文'])
