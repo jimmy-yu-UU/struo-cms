@@ -16,11 +16,16 @@
 #     (e.g. "max-age=31536000; includeSubDomains") when TLS is terminated
 #     here or by a fronting proxy for every request that can reach this
 #     container.
+#     CSP_IMG_EXTRA and CSP_CONNECT_EXTRA extend the Content-Security-Policy's
+#     img-src and connect-src with extra origins (space-separated). They
+#     default to empty (see the Dockerfile ENV lines), so envsubst always
+#     substitutes them and no literal placeholder reaches the header.
 # (c) proxy_pass is given without a URI suffix after the upstream, so the
 #     original request path is forwarded unchanged: a request to /api/foo/bar
 #     reaches the backend as /api/foo/bar. The backend's controllers are
 #     routed at `api/...`, so no rewrite is needed -- the proxy's contract is
-#     a plain /api/* pass-through, nothing more.
+#     a plain pass-through of /api/* and the two OIDC callback paths,
+#     nothing more.
 # (d) proxy_pass takes $upstream (an nginx variable) rather than the
 #     envsubst'd literal directly. With a literal target nginx resolves the
 #     hostname once at config load and refuses to start at all if it isn't
@@ -53,6 +58,15 @@
 resolver ${NGINX_RESOLVER} valid=10s;
 resolver_timeout 5s;
 
+# X-Forwarded-Proto passes through the value a TLS-terminating proxy in front
+# of this container sent, and falls back to this connection's own scheme when
+# none came. The API only acts on it when ForwardedHeaders is enabled and this
+# container is a known proxy.
+map $http_x_forwarded_proto $struo_forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 server {
     listen 80;
     server_name _;
@@ -67,6 +81,8 @@ server {
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
 
     # The SPA's JS/CSS/JSON/SVG payloads compress well; images and fonts
     # under /assets/ are already compressed formats and are left out.
@@ -80,26 +96,94 @@ server {
     # envelope (413) rather than nginx's own HTML error page.
     client_max_body_size 32m;
 
+    # Host and X-Forwarded-Host carry $http_host, the client's Host header
+    # including the port, so the API builds absolute URLs (the OIDC
+    # redirect_uri above all) with the origin the browser actually used.
     location /api/ {
         set $upstream "${API_UPSTREAM}";
         proxy_pass $upstream;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        # The API already sends its own X-Content-Type-Options: nosniff.
-        # Hide it here so the server-level add_header above is the only
-        # copy left on the response -- without this, proxied responses
-        # would carry the header twice.
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $http_host;
+        # This location declares its own add_header, so the server-level
+        # security headers are repeated here. Proxied responses get the
+        # most restrictive policy: they are data or redirects, never a
+        # document.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        # The API's own copies of these headers are dropped so each is sent
+        # exactly once, with the value set here.
         proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header Permissions-Policy;
+    }
+
+    # The OIDC provider redirects the browser to the API's callback paths at
+    # this origin, so they are proxied exactly like /api/. These are the
+    # default Oidc:CallbackPath and the middleware's sign-out callback; a
+    # custom CallbackPath under /api/ is covered by the location above, any
+    # other path needs its own block like these.
+    location = /signin-oidc {
+        set $upstream "${API_UPSTREAM}";
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $http_host;
+        # This location declares its own add_header, so the server-level
+        # security headers are repeated here. Proxied responses get the
+        # most restrictive policy: they are data or redirects, never a
+        # document.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        # The API's own copies of these headers are dropped so each is sent
+        # exactly once, with the value set here.
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header Permissions-Policy;
+    }
+
+    location = /signout-callback-oidc {
+        set $upstream "${API_UPSTREAM}";
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $http_host;
+        # This location declares its own add_header, so the server-level
+        # security headers are repeated here. Proxied responses get the
+        # most restrictive policy: they are data or redirects, never a
+        # document.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        # The API's own copies of these headers are dropped so each is sent
+        # exactly once, with the value set here.
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header Permissions-Policy;
     }
 
     # index.html itself must never be cached long-term: it's the entry point
     # that references the content-hashed bundle under /assets/, and a stale
     # cached copy would keep pointing at files a newer deploy has replaced.
     # nginx's add_header does NOT inherit into a location that declares its
-    # own add_header -- so the four security headers set at server level
+    # own add_header -- so the security headers set at server level
     # above are repeated here explicitly, or this location would silently
     # drop them for every response it serves. This location is also what an
     # SPA-fallback internal redirect from `location /` below lands on: nginx
@@ -112,19 +196,23 @@ server {
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         try_files /index.html =404;
     }
 
     # Vite emits content-hashed filenames under /assets/ (e.g.
     # index-LStR-MxW.js) -- a new build is a new URL, so caching these
     # immutably for a year is safe. Same add_header inheritance caveat as
-    # /index.html above: the four security headers are repeated here too.
+    # /index.html above: the security headers are repeated here too.
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         try_files $uri =404;
     }
 

@@ -12,6 +12,7 @@ using Serilog;
 using SqlSugar;
 using Struo.Api.Auth;
 using Struo.Api.GraphQl;
+using Struo.Api.Http;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
@@ -81,6 +82,7 @@ try
     builder.Services.AddStruoFiles();
     builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
     builder.Services.AddStruoCors(builder.Configuration);
+    builder.Services.AddStruoForwardedHeaders(builder.Configuration);
     builder.Services.AddStruoOidc(builder.Configuration);
     builder.Services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
         .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
@@ -182,10 +184,9 @@ try
             var loginOptions = httpContext.RequestServices
                 .GetRequiredService<IOptions<Struo.Application.Configuration.LoginRateLimitOptions>>().Value;
 
-            // Partition key = client IP. NOTE: behind a reverse proxy, RemoteIpAddress reflects the
-            // proxy's own address unless the proxy is configured to forward the real client IP AND
-            // this host is configured with UseForwardedHeaders (deliberately out of scope here) —
-            // otherwise every login attempt through that proxy shares a single partition/bucket.
+            // Partition key = client IP. Behind a reverse proxy, RemoteIpAddress is the proxy's own
+            // address unless ForwardedHeaders:Enabled trusts that proxy (see UseStruoForwardedHeaders);
+            // otherwise every login attempt through it shares a single partition/bucket.
             var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             // RateLimiting:Login:Enabled toggle (config-driven, see LoginRateLimitOptions): when
@@ -274,6 +275,9 @@ try
         await next();
     });
 
+    // Rewrites the client address, scheme and host from X-Forwarded-* when ForwardedHeaders:Enabled, so it
+    // sits ahead of request logging, authentication, session rotation and the per-IP rate limiter.
+    app.UseStruoForwardedHeaders();
     app.UseSerilogRequestLogging();
     app.UseStruoCors(app.Configuration);
     // Must sit ahead of UseAuthentication: UseExceptionHandler only catches exceptions thrown

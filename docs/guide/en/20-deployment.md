@@ -47,19 +47,40 @@ once the account exists.
 
 Account-layer throttling (`RateLimiting:LoginAccount`) is on by default and blocks brute-force
 attempts against a single account on its own; IP-layer throttling (`RateLimiting:Login`) is off by
-default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse proxy, every client
-appears to come from the proxy's own address, and an office sharing one outbound NAT ends up in
-the same bucket even when the proxy is configured correctly.
+default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse proxy that isn't
+trusted through `ForwardedHeaders`, every client appears to come from the proxy's own address, and
+an office sharing one outbound NAT ends up in the same bucket even when the proxy is configured
+correctly.
 
 How each layer behaves is covered in the "Login rate limiting" section of
 [Chapter 16: Authentication and SSO](16-authentication.md).
 
-### A reverse proxy has to add `UseForwardedHeaders` itself
+### Behind a reverse proxy, enable `ForwardedHeaders`
 
-`Program.cs` deliberately doesn't call `UseForwardedHeaders(...)`. Deploying behind a reverse proxy
-means adding this middleware and listing `KnownProxies`/`KnownNetworks` yourself; without it,
-`Connection.RemoteIpAddress` always sees the proxy's own address — and it's not only the login IP
-rate limit above that breaks, but anything that relies on the client's address.
+The API ignores `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` unless
+`ForwardedHeaders:Enabled` is `true`. Behind a reverse proxy that leaves
+`Connection.RemoteIpAddress` at the proxy's own address, and the request scheme at `http` when TLS
+ends at the proxy. That breaks the login IP rate limit above and anything else that relies on the
+client's address, and it makes OIDC build an `http` redirect URI the provider rejects.
+
+Set `ForwardedHeaders__Enabled=true` and list the proxy in `ForwardedHeaders__KnownProxies__0`
+(an address) or `ForwardedHeaders__KnownNetworks__0` (a CIDR range).
+Only requests from those sources are trusted; with the flag on and both lists empty, or with a
+malformed entry, the host refuses to start and names the key. Leave it off when nothing sits in
+front of the API.
+
+With the admin image in front of the API, the API's proxy is the nginx container: list that
+container's own address, or put the two on a dedicated network and list that network's range. Do not
+trust a whole shared Docker network range: it includes the bridge gateway, and a request to the API's
+published port arrives through that gateway, so it could forge `X-Forwarded-*`. When the API sits
+behind nginx, do not publish its port at all.
+
+When TLS ends at another proxy in front of that container, there are two hops, and the API honours
+only one. The client address it sees is therefore the outer proxy's, so the per-IP login limiter
+puts every client in one bucket; the scheme and host still arrive correctly. That outer proxy must
+set `X-Forwarded-Proto: https`, overwriting rather than appending to any incoming value, because the
+image's nginx passes an incoming value on unchanged and falls back to its own scheme only when none
+arrives.
 
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
@@ -258,10 +279,39 @@ replaces the request's URI instead of being prepended to it.
 whose value is empty; it should only be set once every reachable request has TLS terminated here or
 by an upstream proxy.
 
+The image proxies `/api/*`, `/signin-oidc` and `/signout-callback-oidc` to the API, forwarding the
+client's `Host` header (with its port) as `Host` and `X-Forwarded-Host`, so the API sees the origin
+the browser used. The two callback paths are the OIDC redirect targets; a custom `Oidc:CallbackPath`
+outside `/api/` needs its own `location` block in the template. Chapter 16 covers registering the
+redirect URI.
+
 Regardless of how `HSTS_VALUE` is set, the three headers `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin` are always sent;
 the API's own `nosniff` is stripped from responses proxied to `/api/*`, so this header appears only
 once.
+
+The image also sends a `Content-Security-Policy` and a `Permissions-Policy` on every response:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA};
+  frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+```
+
+Scripts load only from the image itself (the theme bootstrap is the file `theme-init.js`, not an inline
+script), the page cannot be framed, and `<form>` posts, `<base>` and plugins are locked to the same
+origin or off. Responses proxied from `/api/*` and the two OIDC callback paths carry `Content-Security-Policy: default-src 'none';
+frame-ancestors 'none'; sandbox` instead, and any policy the API itself sends there is dropped.
+
+`CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` default to empty. Each takes space-separated origins
+(`https://cdn.example.com`) that are appended to `img-src` and `connect-src`. Set `CSP_IMG_EXTRA` when
+images load from another origin, for example a CDN in front of storage, or a bucket's presigned URL
+when `Struo:Files:PresignedRedirect` is `true` and the browser fetches the file from the bucket
+directly, or when `Branding:LogoUrl` is an absolute URL on another host. Set `CSP_CONNECT_EXTRA`
+when the browser calls another origin, for example an API built into
+the image with `VITE_API_BASE_URL` pointing at a different host. A blocked request shows up as a
+`Content-Security-Policy` violation in the browser console.
 
 Caching rules: `index.html` sends `Cache-Control: no-cache`; `/assets/` sends
 `public, max-age=31536000, immutable` (Vite's filenames carry a content hash).
@@ -281,7 +331,7 @@ yourself — a developer's own `frontend/.env` never makes it into the image.
 ### What's left to do outside the image
 
 The image is only responsible for getting the application running. Terminating TLS, configuring
-`UseForwardedHeaders`, restart policy, horizontal scaling, secret injection, and wiring
+`ForwardedHeaders` for a proxy in front of the API, restart policy, horizontal scaling, secret injection, and wiring
 `/health/live` and `/health/ready` into the orchestrator's own probes are all yours to set up.
 
 ### Verifying both images together

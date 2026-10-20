@@ -368,6 +368,30 @@ schema can be queried (introspection and `GET /graphql?sdl`); `POST /graphql` it
 The built-in Nitro browser IDE separately only recognizes Development, and isn't controlled by this
 key.
 
+## ForwardedHeaders
+
+| Key | Type | Default |
+|---|---|---|
+| `ForwardedHeaders:Enabled` | bool | `false` |
+| `ForwardedHeaders:KnownProxies` | string array (IP addresses) | `[]` |
+| `ForwardedHeaders:KnownNetworks` | string array (CIDR ranges) | `[]` |
+
+Off by default, so the `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` headers are
+ignored and the API sees the address, scheme and host of the connection it actually receives.
+Turn it on when a reverse proxy sits in front of the API and the API has to know the real client:
+the per-IP login limiter buckets by that address, and OIDC builds its redirect URI from the scheme
+and host.
+
+When `Enabled=true`, only a request whose TCP source is listed in `KnownProxies` (single addresses)
+or falls inside a range in `KnownNetworks` (CIDR, for example `172.16.0.0/12`) is trusted; headers
+from anyone else are ignored. At least one entry is required. A value that isn't an IP address or
+CIDR range, or both lists empty, stops the host at startup with an error naming the key, for
+example `ForwardedHeaders:KnownNetworks:0`. While `Enabled=false` the lists are not read.
+
+The middleware runs ahead of request logging, authentication, session rotation and rate limiting,
+and honours one proxy hop. Give the arrays by index in the environment, for example
+`ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`.
+
 ## RateLimiting
 
 | Key | Type | Default |
@@ -392,12 +416,12 @@ returned by the login endpoint itself, with a fixed message.
 
 `Login:*` is a fixed-window limit bucketed by client IP, protecting only `POST /api/auth/login`;
 it's off by default because admin users often share the same outbound IP, and enabling it can lock
-out an entire office, even with `UseForwardedHeaders` configured correctly.
+out an entire office, even with `ForwardedHeaders` configured correctly.
 
-To enable it behind a reverse proxy, you have to add `UseForwardedHeaders` yourself and list
-`KnownProxies`/`KnownNetworks`. This project doesn't register it by default. This limiter's state
-lives in process memory and isn't shared across replicas; a cross-replica IP limit belongs in a
-gateway or WAF in front of the API.
+To enable it behind a reverse proxy, also set `ForwardedHeaders:Enabled` and list the proxy in
+`KnownProxies` or `KnownNetworks` (the `ForwardedHeaders` section above); without that, every
+client shares the proxy's own bucket. This limiter's state lives in process memory and isn't shared
+across replicas; a cross-replica IP limit belongs in a gateway or WAF in front of the API.
 
 `LoginAccount:*` buckets by the email in the request and counts the attempt before the password is
 verified, so a blocked request never spends Argon2id compute and parallel guesses cannot all slip
@@ -493,6 +517,7 @@ login throttle counts in Redis directly.
 | `Oidc:ClientSecret` | string (may be empty) | none |
 | `Oidc:CallbackPath` | string | `"/signin-oidc"` |
 | `Oidc:Scopes` | string array | see below |
+| `Oidc:Prompt` | string (may be empty) | `"select_account"` |
 | `Oidc:ReturnUrlDefault` | string | `"/"` |
 | `Oidc:RequireEmailVerified` | bool | `false` |
 | `Oidc:AllowedTenantId` | string | `"REPLACE_TENANT_ID"` |
@@ -513,6 +538,23 @@ On the first login with an external identity, StruoCMS matches it to an existing
 email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`, and
 `AllowedEmailDomains` all pass their checks. Loosen them, and anyone with a matching email at any
 identity provider can take over a password account.
+
+`ClientSecret` is deliberately absent from `appsettings.json` and must never be committed. Set it with
+the environment variable `Oidc__ClientSecret`, with user-secrets
+(`dotnet user-secrets set "Oidc:ClientSecret" <value> --project src/Struo.Api`), or in a gitignored
+`appsettings.Development.json`.
+
+`Prompt` is sent as the `prompt` parameter of the authorize request. `select_account` (the default)
+always shows the provider's account picker, so nobody signs in silently with whichever account the
+browser happens to hold. `login` forces the user to enter credentials again, `consent` asks for
+consent again, and `none` never shows a page and fails when the user isn't already signed in. Values
+may be combined with a space, such as `login consent`. An empty string sends no prompt, so the
+provider decides; a JSON `null` keeps the default. Any other value fails startup when `Enabled=true`, with an error naming
+`Oidc:Prompt`.
+
+`CallbackPath` is the path the identity provider redirects the browser back to. The redirect URI to
+register with the provider is the origin users reach the admin at plus this path; see
+[Chapter 16](16-authentication.md) for the proxy side.
 
 `RequireEmailVerified` and `AllowedEmailDomains` default to permissive; `AllowedTenantId` doesn't.
 The default value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external

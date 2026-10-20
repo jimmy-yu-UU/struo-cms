@@ -213,8 +213,30 @@ HTTP_STATUS:429
 `oidcEnabled` 這個欄位，讓登入頁在使用者輸入帳密之前，就先知道要不要顯示外部登入的按鈕。
 
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
-叫 userinfo 端點補齊；回呼路徑是 `Oidc:CallbackPath`，預設 `/signin-oidc`，要拿去登記成提供者那
-邊的重新導向網址。要求的 scope 是 `Oidc:Scopes`，預設 `openid`、`email`、`profile`，留空或給空
+叫 userinfo 端點補齊；回呼路徑是 `Oidc:CallbackPath`，預設 `/signin-oidc`。
+
+登入預設一律顯示提供者的帳號挑選畫面（`Oidc:Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
+第 4 章。
+
+要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上這個路徑：
+`https://cms.example.com/signin-oidc`，Compose 堆疊則是 `http://localhost:8080/signin-oidc`。純 `http`
+的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯 cookie 帶
+`Secure`，所以其他來源都要用 `https`。要用
+登出回呼的話，同樣登記 `/signout-callback-oidc`。
+
+管理映像的 nginx 會把 `/signin-oidc` 與 `/signout-callback-oidc` 和 `/api/` 一樣代理給 API，所以提供者
+的重新導向會落回登入當初的那個來源。自訂的 `Oidc:CallbackPath` 只要在 `/api/` 底下，例如
+`/api/signin-oidc`，`/api/` 這條規則就涵蓋了，nginx 不用改。其他自訂路徑要在
+`frontend/nginx/default.conf.template` 另加一個 `location` 區塊，或在你自己的代理加對應規則。
+
+API 用它收到的請求的 scheme 與 host 組出重新導向網址。nginx 會連同埠號原樣帶過用戶端的 `Host`
+標頭，所以 `http://localhost:<port>` 直接可用。對外的 `https` 來源則要 API 也看到 `https`：TLS 在
+管理容器前面的代理終結時，要讓那個代理把 `X-Forwarded-Proto: https` 設成覆寫而不是附加，因為映像的
+nginx 會把收到的值原樣帶給 API（沒收到才用它自己連線的 scheme）。接著在 API 啟用 `ForwardedHeaders`，並把
+nginx 容器自己的位址或專用 network 列為已知代理；不要信任整段共用的 Docker network 範圍，也不要發布 API
+的連接埠（第 20 章），否則 API 會忽略這個標頭，或被騙去採信偽造的值。
+
+要求的 scope 是 `Oidc:Scopes`，預設 `openid`、`email`、`profile`，留空或給空
 陣列都會退回這組預設，不會變成完全不要求 scope。讀取的 claim 有：
 
 - `email`，缺了就退回較長的 email claim 類型，再退回 `preferred_username`；
@@ -247,10 +269,21 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
 空白的值不算已設定。單一 tenant 的 authority，或 OIDC 停用時，都不受影響。
 
-外部登入失敗時，回應是 `401` 加上 `{ "error": { "message": "External login failed." } }`（提供者
-本身回報使用者拒絕時是 `External login denied.`），這個形狀是手寫的，不是每個端點共用的那個標準
-信封。`GET /api/auth/login/oidc` 接受 `returnUrl`，會先淨化成站內路徑才拿去挑戰，留空則退回
-`Oidc:ReturnUrlDefault`。
+外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
+這個參數從網址列移除。代碼是固定的一組，絕不帶例外訊息：
+
+| 代碼 | 原因 |
+|---|---|
+| `external_login_failed` | 提供者或回呼失敗 |
+| `external_login_denied` | 使用者在提供者那邊拒絕 |
+| `external_login_NoEmail` | 身分沒有可用的 email |
+| `external_login_EmailNotVerified` | email 未驗證，且設了 `Oidc:RequireEmailVerified` |
+| `external_login_DomainNotAllowed` | email 網域不在 `Oidc:AllowedEmailDomains` |
+| `external_login_TenantNotAllowed` | tenant 不是 `Oidc:AllowedTenantId` |
+| `external_login_Inactive` | 對應到的本機帳號已停用 |
+
+其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc` 接受 `returnUrl`，會先淨化成站內
+路徑才拿去挑戰，留空則退回 `Oidc:ReturnUrlDefault`。
 
 ## 接下來
 

@@ -274,8 +274,31 @@ offer the external-login button before the user types anything.
 
 External login is the authorization code flow with PKCE. The provider's own token is never
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
-rest. The callback path is `Oidc:CallbackPath`, defaulting to `/signin-oidc`, and that's the
-redirect URL to register with the provider.
+rest. The callback path is `Oidc:CallbackPath`, defaulting to `/signin-oidc`.
+
+Sign-in always shows the provider's account picker by default (`Oidc:Prompt` = `select_account`);
+chapter 4 lists the other values and how to send no prompt.
+
+The redirect URI to register with the provider is the origin users open the admin at plus that
+path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oidc` for the Compose
+stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect
+URIs, and the OIDC correlation cookies are `Secure`, so any other origin needs `https`. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
+
+The admin image's nginx proxies `/signin-oidc` and `/signout-callback-oidc` to the API alongside
+`/api/`, so the provider's redirect lands on the same origin the sign-in started from. A custom
+`Oidc:CallbackPath` under `/api/`, such as `/api/signin-oidc`, is covered by the `/api/` rule with no
+nginx change. Any other custom path needs its own `location` block in
+`frontend/nginx/default.conf.template`, or a matching rule in your own proxy.
+
+The API builds the redirect URI from the scheme and host of the request it receives. nginx passes
+the client's `Host` header through with its port, so `http://localhost:<port>` works as is. A
+public `https` origin needs the API to see `https` as well: when TLS ends at a proxy in front of
+the admin container, make that proxy set `X-Forwarded-Proto: https`, overwriting rather than
+appending, because the image's nginx passes the incoming value to the API unchanged (and uses its
+own scheme only when none arrives). Then enable `ForwardedHeaders` on the API with the nginx
+container's own address, or a dedicated network, as the known proxy; do not trust a whole shared
+Docker network range or publish the API port (Chapter 20), or the API ignores the header or can be
+made to trust a forged one.
 
 The requested scopes are `Oidc:Scopes`, defaulting to `openid`, `email`, `profile` — leaving it
 blank and giving an empty array both fall back to that same default, never to no scope at all. The
@@ -322,11 +345,23 @@ a tenant and present any email), the host fails to start unless `Oidc:AllowedTen
 `Oidc:AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
 A single-tenant authority, or OIDC disabled, is never affected.
 
-A failed external login returns `401` with `{ "error": { "message": "External login failed." } }`
-(`External login denied.` when the provider itself reports that the user declined) — this shape is
-hand-written, not the standard envelope every other endpoint shares. `GET /api/auth/login/oidc`
-accepts a `returnUrl`, sanitized to an in-site path before it's used in the challenge; leaving it
-out falls back to `Oidc:ReturnUrlDefault`.
+A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
+shows a localized message and removes the parameter from the address. The code is one of a fixed
+set and never carries exception text:
+
+| Code | Cause |
+|---|---|
+| `external_login_failed` | The provider or the callback failed |
+| `external_login_denied` | The user declined at the provider |
+| `external_login_NoEmail` | The identity carries no usable email |
+| `external_login_EmailNotVerified` | The email is unverified and `Oidc:RequireEmailVerified` is set |
+| `external_login_DomainNotAllowed` | The email's domain is not in `Oidc:AllowedEmailDomains` |
+| `external_login_TenantNotAllowed` | The tenant is not `Oidc:AllowedTenantId` |
+| `external_login_Inactive` | The matched local account is deactivated |
+
+The login page shows the generic message for any other value. `GET /api/auth/login/oidc` accepts a
+`returnUrl`, sanitized to an in-site path before it's used in the challenge; leaving it out falls
+back to `Oidc:ReturnUrlDefault`.
 
 ## What's next
 
