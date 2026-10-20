@@ -77,7 +77,9 @@ public sealed class FileStorageOptions
         /// as the original bytes. Empty until <see cref="ApplyCollectionDefaults"/> runs.</summary>
         public string[] TransformableContentTypes { get; set; } = [];
 
-        /// <summary>Transforms that may run at the same time across all requests.</summary>
+        /// <summary>Transforms that may run at the same time across all requests, at least 2.
+        /// Anonymous requests may hold at most one slot fewer, so an authenticated request can
+        /// always use the remaining slot.</summary>
         public int MaxConcurrentTransforms { get; set; } = 2;
 
         /// <summary>Seconds a request waits for a free transform slot before answering 503.</summary>
@@ -112,8 +114,8 @@ public sealed class FileStorageOptions
                 throw new InvalidOperationException("Struo:Files:ImageTransform:DefaultQuality must be between 1 and 100.");
             if (SizeSteps.Any(s => s < 1))
                 throw new InvalidOperationException("Struo:Files:ImageTransform:SizeSteps entries must be positive.");
-            if (MaxConcurrentTransforms < 1)
-                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxConcurrentTransforms must be at least 1.");
+            if (MaxConcurrentTransforms < 2)
+                throw new InvalidOperationException("Struo:Files:ImageTransform:MaxConcurrentTransforms must be at least 2.");
             if (QueueTimeoutSeconds < 0)
                 throw new InvalidOperationException("Struo:Files:ImageTransform:QueueTimeoutSeconds must not be negative.");
             if (MaxSourcePixels < 1)

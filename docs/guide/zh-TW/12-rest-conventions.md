@@ -101,8 +101,8 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
   是專屬的。
 - `SEARCH_UNAVAILABLE` 的訊息固定是 `Search is temporarily unavailable.`，提供者自己回報的原因
   只會寫進伺服器端的紀錄。
-- `IMAGE_TRANSFORM_BUSY` 出自 `GET /api/files/{id}/content`：所有轉換名額在
-  `Struo:Files:ImageTransform:QueueTimeoutSeconds` 內一直被占用時回傳；回應帶 `Retry-After` 標頭，值
+- `IMAGE_TRANSFORM_BUSY` 出自 `GET /api/files/{id}/content`：在
+  `Struo:Files:ImageTransform:QueueTimeoutSeconds` 內沒有呼叫端能用的轉換名額空出來時回傳；回應帶 `Retry-After` 標頭，值
   就是那個秒數（見[第 15 章](15-files-and-media.md)）。
 
 `PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的傳超過上限的位元

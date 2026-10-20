@@ -15,6 +15,9 @@
   `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
   fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
   `8080`。
+- `Struo:Files:ImageTransform:MaxConcurrentTransforms` 至少要是 `2`；設成 `1` 會讓啟動失敗，並指出
+  是哪個鍵。匿名請求現在最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以設為 `1` 的 fork
+  要改成 `2` 以上。
 :::
 
 ### 新增
@@ -29,6 +32,10 @@
 
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
+
+- 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已登入的
+  請求仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
+  `IMAGE_TRANSFORM_BUSY`。
 
 ### 安全性
 

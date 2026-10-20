@@ -1,13 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NetVips;
+using Struo.Api.Auth;
 using Struo.Application.Files;
 using Struo.Tests.Support;
 using Xunit;
@@ -34,6 +37,11 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     private HttpClient HostWith(
         IImageTransformer? transformer, int maxConcurrent, int timeoutSeconds,
         Action<IServiceCollection>? configure = null, long? maxSourcePixels = null) =>
+        DerivedHost(transformer, maxConcurrent, timeoutSeconds, configure, maxSourcePixels).CreateClient();
+
+    private WebApplicationFactory<Program> DerivedHost(
+        IImageTransformer? transformer, int maxConcurrent, int timeoutSeconds,
+        Action<IServiceCollection>? configure = null, long? maxSourcePixels = null) =>
         factory.WithWebHostBuilder(b =>
         {
             var settings = new Dictionary<string, string?>
@@ -49,7 +57,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
                 if (transformer is not null) s.AddSingleton(transformer);
                 configure?.Invoke(s);
             });
-        }).CreateClient();
+        });
 
     [Fact]
     public async Task Svg_with_transform_params_returns_the_original_bytes()
@@ -121,7 +129,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Source_whose_decoded_size_exceeds_the_limit_returns_the_original_bytes_even_when_the_probe_is_small()
     {
-        var host = HostWith(null, maxConcurrent: 1, timeoutSeconds: 5,
+        var host = HostWith(null, maxConcurrent: 2, timeoutSeconds: 5,
             s => s.AddSingleton<IImageDimensionReader>(new FixedDimensions((10, 10))), maxSourcePixels: 100_000);
         var original = Image.Black(600, 600).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png");
         var id = await Upload(await factory.CreateAuthenticatedClientAsync(), original, "image/png", "y.png");
@@ -172,7 +180,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     public async Task Identical_cold_requests_both_succeed_and_never_exceed_the_concurrency_cap()
     {
         var fake = new CountingTransformer(TimeSpan.FromMilliseconds(250));
-        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 10);
+        var host = HostWith(fake, maxConcurrent: 2, timeoutSeconds: 10);
         var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
 
         var responses = await Task.WhenAll(
@@ -187,7 +195,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     public async Task A_request_that_cannot_get_a_slot_in_time_is_a_503_envelope()
     {
         var blocking = new BlockingTransformer();
-        var host = HostWith(blocking, maxConcurrent: 1, timeoutSeconds: 1);
+        var host = HostWith(blocking, maxConcurrent: 2, timeoutSeconds: 1);
         var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
 
         var first = host.GetAsync($"/api/files/{id}/content?width=128&format=png");
@@ -207,11 +215,41 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Anonymous_requests_beyond_their_cap_get_a_503_while_an_authenticated_request_is_served()
+    {
+        var blocking = new BlockingTransformer();
+        var derived = DerivedHost(blocking, maxConcurrent: 2, timeoutSeconds: 0);
+        var anonymous = derived.CreateClient();
+        await factory.EnsureAdminSeededAsync();
+        var signedIn = derived.CreateClient();
+        signedIn.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        (await signedIn.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+        var id = await UploadPng(signedIn, 600, 600);
+
+        var first = anonymous.GetAsync($"/api/files/{id}/content?width=128&format=png");
+        blocking.Entered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+
+        var second = await anonymous.GetAsync($"/api/files/{id}/content?width=256&format=png");
+        var authenticated = signedIn.GetAsync($"/api/files/{id}/content?width=480&format=png");
+        var authenticatedServed = blocking.Entered.Wait(TimeSpan.FromSeconds(10));
+
+        second.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        Root(await second.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("IMAGE_TRANSFORM_BUSY");
+        authenticatedServed.Should().BeTrue();
+
+        blocking.Release.Set();
+        (await first).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await authenticated).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task The_cache_is_checked_again_after_the_slot_is_acquired()
     {
         var cache = new MissThenHitCache();
         var fake = new CountingTransformer(TimeSpan.Zero);
-        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+        var host = HostWith(fake, maxConcurrent: 2, timeoutSeconds: 5,
             s => s.AddSingleton<IImageVariantCache>(cache));
         var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
 
@@ -226,7 +264,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     public async Task A_probe_reporting_a_non_positive_size_returns_the_original_bytes()
     {
         var fake = new CountingTransformer(TimeSpan.Zero);
-        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+        var host = HostWith(fake, maxConcurrent: 2, timeoutSeconds: 5,
             s => s.AddSingleton<IImageDimensionReader>(new FixedDimensions((0, 10))));
         var original = Image.Black(50, 50).Cast(Enums.BandFormat.Uchar).WriteToBuffer(".png");
         var id = await Upload(await factory.CreateAuthenticatedClientAsync(), original, "image/png", "z.png");
@@ -241,7 +279,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     public async Task Retry_after_is_at_least_one_second_when_the_queue_does_not_wait()
     {
         var blocking = new BlockingTransformer();
-        var host = HostWith(blocking, maxConcurrent: 1, timeoutSeconds: 0);
+        var host = HostWith(blocking, maxConcurrent: 2, timeoutSeconds: 0);
         var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
 
         var first = host.GetAsync($"/api/files/{id}/content?width=128&format=png");
@@ -266,7 +304,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
             "null" => new NullTransformer(),
             _ => new CountingTransformer(TimeSpan.Zero),
         };
-        var host = HostWith(transformer, maxConcurrent: 1, timeoutSeconds: 1, s =>
+        var host = HostWith(transformer, maxConcurrent: 2, timeoutSeconds: 1, s =>
         {
             if (fallback == "probe") s.AddSingleton<IImageDimensionReader>(new SwitchingDimensions());
         });
@@ -283,7 +321,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
     public async Task A_cache_write_failure_serves_the_transformed_bytes_uncached()
     {
         var fake = new CountingTransformer(TimeSpan.Zero);
-        var host = HostWith(fake, maxConcurrent: 1, timeoutSeconds: 5,
+        var host = HostWith(fake, maxConcurrent: 2, timeoutSeconds: 5,
             s => s.AddSingleton<IImageVariantCache>(new FailingWriteCache()));
         var id = await UploadPng(await factory.CreateAuthenticatedClientAsync(), 600, 600);
 

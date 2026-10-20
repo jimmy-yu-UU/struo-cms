@@ -17,6 +17,9 @@
   `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
   own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
   `8080`.
+- `Struo:Files:ImageTransform:MaxConcurrentTransforms` must be at least `2`; `1` stops startup with an
+  error naming the key. Anonymous requests now hold at most `MaxConcurrentTransforms - 1` transform
+  slots, so a fork that set `1` raises it to `2` or more.
 :::
 
 ### Added
@@ -33,6 +36,10 @@
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
+
+- Anonymous image transforms hold at most `MaxConcurrentTransforms - 1` slots, so a signed-in request
+  can always use the remaining slot while anonymous requests saturate the rest. An anonymous request
+  past that cap waits for `QueueTimeoutSeconds` and then gets `503` `IMAGE_TRANSFORM_BUSY`.
 
 ### Security
 
