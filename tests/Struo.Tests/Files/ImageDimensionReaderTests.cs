@@ -311,6 +311,123 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
     }
 
+    // APP1 segment: "Exif  ", a TIFF header and an IFD0 holding one Orientation entry.
+    internal static byte[] ExifApp1(int orientation, bool bigEndian = false, int entryTag = 0x0112, int entryType = 3)
+    {
+        var ms = new MemoryStream();
+        void U16(int v) { if (bigEndian) ms.Write([(byte)(v >> 8), (byte)v]); else ms.Write([(byte)v, (byte)(v >> 8)]); }
+        void U32(int v) { if (bigEndian) { U16(v >> 16); U16(v & 0xFFFF); } else { U16(v & 0xFFFF); U16(v >> 16); } }
+        ms.Write("Exif  "u8);
+        ms.Write(bigEndian ? "MM"u8 : "II"u8);
+        U16(0x2A);
+        U32(8);
+        U16(1);
+        U16(entryTag);
+        U16(entryType);
+        U32(1);
+        U16(orientation);
+        U16(0);
+        U32(0);
+        var payload = ms.ToArray();
+        var seg = new byte[payload.Length + 4];
+        seg[0] = 0xFF;
+        seg[1] = 0xE1;
+        seg[2] = (byte)((payload.Length + 2) >> 8);
+        seg[3] = (byte)(payload.Length + 2);
+        payload.CopyTo(seg, 4);
+        return seg;
+    }
+
+    private static byte[] JpegWithExif(byte[] app1, int width, int height) =>
+        WithSof([.. Jpeg((0xE0, 14)), .. app1, .. Jpeg((0xE2, 30))[2..]], 0xC0, width, height);
+
+    [Theory]
+    [InlineData(1, 400, 300)]
+    [InlineData(2, 400, 300)]
+    [InlineData(3, 400, 300)]
+    [InlineData(4, 400, 300)]
+    [InlineData(5, 300, 400)]
+    [InlineData(6, 300, 400)]
+    [InlineData(7, 300, 400)]
+    [InlineData(8, 300, 400)]
+    public void Jpeg_dimensions_follow_the_exif_orientation(int orientation, int width, int height)
+    {
+        var jpeg = JpegWithExif(ExifApp1(orientation), 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((width, height));
+    }
+
+    [Fact]
+    public void Jpeg_exif_orientation_is_read_in_big_endian_byte_order()
+    {
+        var jpeg = JpegWithExif(ExifApp1(6, bigEndian: true), 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((300, 400));
+    }
+
+    [Fact]
+    public void Jpeg_without_exif_keeps_its_dimensions()
+    {
+        var jpeg = WithSof(Jpeg((0xE0, 14)), 0xC0, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_exif_orientation_after_large_segments_is_still_applied()
+    {
+        var jpeg = WithSof([.. Jpeg((0xE0, 14), (0xE2, 65_000)), .. ExifApp1(8), .. Jpeg((0xE2, 60_000))[2..]], 0xC0, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((300, 400));
+    }
+
+    [Fact]
+    public void Jpeg_with_an_out_of_range_orientation_keeps_its_dimensions()
+    {
+        var jpeg = JpegWithExif(ExifApp1(9), 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_a_non_short_orientation_entry_keeps_its_dimensions()
+    {
+        var jpeg = JpegWithExif(ExifApp1(6, entryType: 4), 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_an_exif_block_without_the_orientation_tag_keeps_its_dimensions()
+    {
+        var jpeg = JpegWithExif(ExifApp1(6, entryTag: 0x0110), 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_a_truncated_exif_ifd_keeps_its_dimensions()
+    {
+        // The segment ends inside the IFD entry, but its declared length is consistent with its bytes.
+        var full = ExifApp1(6);
+        var cutPayload = full[4..^10];
+        byte[] seg = [0xFF, 0xE1, (byte)((cutPayload.Length + 2) >> 8), (byte)(cutPayload.Length + 2), .. cutPayload];
+        var jpeg = WithSof([.. Jpeg((0xE0, 14)), .. seg], 0xC0, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_an_ifd_offset_beyond_the_segment_keeps_its_dimensions()
+    {
+        var seg = ExifApp1(6);
+        seg[4 + 6 + 4] = 0xFF;   // IFD0 offset (little-endian) now points far past the segment
+        seg[4 + 6 + 5] = 0xFF;
+        var jpeg = JpegWithExif(seg, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_a_bad_tiff_byte_order_mark_keeps_its_dimensions()
+    {
+        var seg = ExifApp1(6);
+        seg[4 + 6] = (byte)'X';
+        var jpeg = JpegWithExif(seg, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
     [Fact]
     public void Reads_a_real_encoder_jpeg()
     {

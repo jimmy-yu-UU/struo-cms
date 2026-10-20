@@ -122,6 +122,30 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
     }
 
     [Fact]
+    public async Task Upload_of_a_rotated_jpeg_stores_the_displayed_width_and_height()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["file"] = typeof(File), ["mediafolder"] = typeof(MediaFolder),
+        });
+        var repo = new SqlSugarItemRepository(
+            _db, new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)])),
+            graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
+        var svc = new FileService(
+            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
+        // A 4000x3000 frame whose Exif orientation is 6 (rotate 90) is displayed as 3000x4000.
+        byte[] sof = [0xFF, 0xC0, 0, 11, 8, 0x0B, 0xB8, 0x0F, 0xA0, 1, 1, 0x11, 0];
+        byte[] jpeg = [.. ImageDimensionReaderTests.Jpeg((0xE0, 14)), .. ImageDimensionReaderTests.ExifApp1(6), .. sof];
+
+        var file = await svc.UploadAsync(new MemoryStream(jpeg), "portrait.jpg", "image/jpeg", length: jpeg.Length);
+
+        var row = await _db.Queryable<File>().Where(f => f.Id == file.Id).FirstAsync();
+        row.Width.Should().Be(3000);
+        row.Height.Should().Be(4000);
+    }
+
+    [Fact]
     public async Task Upload_dotfile_falls_back_to_full_name()
     {
         var file = await _svc.UploadAsync(

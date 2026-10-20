@@ -148,11 +148,14 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
 
     // JPEG: FF D8, then marker segments walked by their length field up to the first SOFn, which
     // carries height/width as big-endian uint16. Segments are skipped, never decoded, and the walk ends
-    // at SOS/EOI or the end of the stream. Reads only, so a stream that cannot report its length works.
+    // at SOS/EOI or the end of the stream. The Exif orientation in an APP1 segment (usually ahead of
+    // the SOFn) is recorded on the way; orientations 5-8 turn the image by 90 degrees, so the stored
+    // width and height are swapped. Reads only, so a stream that cannot report its length works.
     private static (int, int)? Jpeg(byte[] b, Stream s)
     {
         if (!HasJpegSignature(b)) return null;
         s.Position = 2;
+        var orientation = 1;
         while (true)
         {
             var marker = NextJpegMarker(s);
@@ -162,10 +165,68 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
 
             var len = ReadJpegSegmentLength(s);
             if (len < 2) return null;
-            if (IsSofMarker(marker)) return ReadJpegFrameSize(s, len);
-            if (!SkipByReading(s, len - 2)) return null;
+            if (IsSofMarker(marker)) return Oriented(ReadJpegFrameSize(s, len), orientation);
+            if (marker == 0xE1)
+            {
+                var payload = ReadSegmentPayload(s, len - 2);
+                if (payload is null) return null;
+                if (orientation == 1) orientation = ExifOrientation(payload);
+            }
+            else if (!SkipByReading(s, len - 2)) return null;
         }
     }
+
+    // Orientations 5-8 (transpose, rotate 90, transverse, rotate 270) exchange the axes.
+    private static (int, int)? Oriented((int, int)? size, int orientation) =>
+        size is { } d && orientation >= 5 ? (d.Item2, d.Item1) : size;
+
+    // Reads exactly count bytes (a JPEG segment is at most 64 KB), or null when the stream ends first.
+    private static byte[]? ReadSegmentPayload(Stream s, int count)
+    {
+        var payload = new byte[count];
+        var filled = 0;
+        while (filled < count)
+        {
+            var read = s.Read(payload, filled, count - filled);
+            if (read <= 0) return null;
+            filled += read;
+        }
+        return payload;
+    }
+
+    // APP1 "Exif\0\0", a TIFF header (II/MM byte order, 0x002A, IFD0 offset) and IFD0 entries of
+    // 12 bytes each; tag 0x0112 is a SHORT holding 1-8. Anything malformed or out of range means 1
+    // (upright), so a bad EXIF block never fails a read.
+    private static int ExifOrientation(byte[] app1)
+    {
+        if (app1.Length < 14 || !app1.AsSpan(0, 6).SequenceEqual("Exif\0\0"u8)) return 1;
+        const int tiff = 6;
+        var little = app1[tiff] == (byte)'I' && app1[tiff + 1] == (byte)'I';
+        if (!little && !(app1[tiff] == (byte)'M' && app1[tiff + 1] == (byte)'M')) return 1;
+        if (U16(app1, tiff + 2, little) != 0x2A) return 1;
+
+        var ifd = (long)tiff + U32(app1, tiff + 4, little);
+        if (ifd + 2 > app1.Length) return 1;
+        var count = U16(app1, (int)ifd, little);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = ifd + 2 + (long)i * 12;
+            if (entry + 12 > app1.Length) return 1;
+            if (U16(app1, (int)entry, little) != 0x0112) continue;
+            var type = U16(app1, (int)entry + 2, little);
+            var value = U16(app1, (int)entry + 8, little);
+            return type == 3 && value is >= 1 and <= 8 ? value : 1;
+        }
+        return 1;
+    }
+
+    private static int U16(byte[] b, int o, bool little) =>
+        little ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+
+    private static long U32(byte[] b, int o, bool little) =>
+        little
+            ? b[o] | ((long)b[o + 1] << 8) | ((long)b[o + 2] << 16) | ((long)b[o + 3] << 24)
+            : BeU32(b, o);
 
     private static bool HasJpegSignature(byte[] b) => b.Length >= 4 && b[0] == 0xFF && b[1] == 0xD8;
 

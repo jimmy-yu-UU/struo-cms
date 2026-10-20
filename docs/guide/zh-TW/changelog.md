@@ -36,6 +36,11 @@
   請求（session cookie 或 bearer token）仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
   `IMAGE_TRANSFORM_BUSY`。
 
+### 修正
+
+- JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
+  照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
+
 ### 安全性
 
 - `Directory.Packages.props` 不再抑制 GHSA-2m69-gcr7-jv3q；`SQLitePCLRaw` 已是 2.1.12，

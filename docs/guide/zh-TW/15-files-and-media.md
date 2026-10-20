@@ -37,7 +37,8 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 `fileName` 是上傳當下記下的原始檔名，也是這個集合唯一自己宣告 `Searchable` 的欄位。超過 255
 個 UTF-16 編碼單位的檔名會縮短到欄寬，保留副檔名，也不會切開一個代理對（surrogate pair）。
 `contentType` 是驗證過的 MIME 類型；`size` 是實際存下的位元組數。`width`／`height` 只有在標
-頭讀得出尺寸時才會填上，其餘上傳不管是不是圖片，兩者都留白。`status` 是唯一可寫的自有欄
+頭讀得出尺寸時才會填上，其餘上傳不管是不是圖片，兩者都留白。JPEG 的尺寸會跟著 Exif 方向：標成轉 90 度的照片，存下
+的寬與高會對調，和顯示出來的樣子一致。WebP 與 AVIF 維持編碼尺寸，這個行為之前上傳的資料列也維持原本存下的尺寸。`status` 是唯一可寫的自有欄
 位，也是決定誰讀得到這一列與它的位元組的關鍵，下一節細講。
 
 `folderId` 不是 `[CmsField]`，而是宣告成 `[CmsRelation]` 的多對一關聯，指到 `mediaFolder`，

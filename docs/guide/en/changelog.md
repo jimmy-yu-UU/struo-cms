@@ -41,6 +41,13 @@
   saturate the rest. An anonymous request past that cap waits for `QueueTimeoutSeconds` and then gets
   `503` `IMAGE_TRANSFORM_BUSY`.
 
+### Fixed
+
+- A JPEG's stored `width` and `height` now follow its Exif orientation: orientations 5 to 8 (a 90 degree
+  turn) swap the two, so a portrait photo that a phone saved sideways reports the size it is displayed
+  at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored
+  with, and WebP and AVIF files still report their coded size.
+
 ### Security
 
 - `Directory.Packages.props` no longer suppresses GHSA-2m69-gcr7-jv3q; `SQLitePCLRaw` is 2.1.12 and
