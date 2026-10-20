@@ -37,6 +37,12 @@ Each command is the first argument to `Struo.Api`:
 | `migrate:baseline` | Records every migration as applied, runs nothing |
 | `make:migration` | Writes a new migration file |
 
+A seventh command, `files:sweep`, is not about the schema: it removes orphaned blobs from file
+storage. It is a dry run unless `--apply` is given, `--force` lets `--apply` delete when over half the
+blobs are orphans, and `--min-age-hours N` sets the grace period (default 24). Its exit codes are the
+ones below plus `3`, a refusal by that 50% safeguard. See
+[Removing orphaned blobs](20-deployment.md#removing-orphaned-blobs).
+
 In the repository, use `dotnet run --project src/Struo.Api -- <command>`. That applies the `http`
 launch profile, so the environment is Development and your `appsettings.Development.json` is read.
 A published build uses `dotnet Struo.Api.dll <command>`; that is the API image's entrypoint, so

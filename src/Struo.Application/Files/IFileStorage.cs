@@ -25,6 +25,8 @@ public interface IFileStorage
     /// <summary>
     /// Streams every stored blob (key and last-modified time) without materialising the whole listing:
     /// the local backend enumerates lazily, S3 pages through <c>ListObjectsV2</c>. The order is unspecified.
+    /// <see cref="StoredBlob.LastModifiedUtc"/> is UTC; a backend that cannot report a time returns
+    /// <see cref="DateTime.MaxValue"/>, which no age cutoff ever reaches.
     /// </summary>
     IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default);
 

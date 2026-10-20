@@ -17,6 +17,12 @@
   `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
   own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
   `8080`.
+- `IFileStorage` has a new member, `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`. A fork's
+  own storage implementation must add it, or the project no longer compiles. It returns every stored
+  blob as a `StoredBlob(Key, LastModifiedUtc)`: the key as passed to `SaveAsync`, and the last-modified
+  time in UTC (`DateTime.MaxValue` if the backend cannot report one, which keeps the blob safe from an
+  age-based sweep). Stream the listing page by page instead of materialising it; the sweep reads it
+  once or twice per run.
 :::
 
 ### Added
@@ -24,7 +30,7 @@
 - `files:sweep` removes orphaned blobs from the local or S3 store. It is a dry run that lists the
   orphans unless `--apply` is given, never touches a blob younger than `--min-age-hours` (default 24),
   and treats a blob referenced by a trashed `files` row as in use. `IFileStorage` gains
-  `ListAsync`, which a fork's own storage implementation must provide. The command first prints its
+  `ListAsync` (see the breaking change above). The command first prints its
   storage and database targets (never credentials), and `--apply` refuses with exit code `3` when more
   than 50% of the eligible blobs are orphans unless `--force` is given. See
   [Removing orphaned blobs](20-deployment.md#removing-orphaned-blobs).

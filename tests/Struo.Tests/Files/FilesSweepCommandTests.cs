@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -42,11 +41,8 @@ public sealed class FilesSweepCommandTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
-        {
-            await Task.CompletedTask;
-            foreach (var (key, modified) in Blobs.ToArray()) yield return new StoredBlob(key, modified);
-        }
+        public IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default) =>
+            Blobs.ToArray().Select(b => new StoredBlob(b.Key, b.Value)).ToAsyncEnumerable();
 
         public bool SupportsPresignedUrls => false;
         public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
@@ -153,6 +149,17 @@ public sealed class FilesSweepCommandTests : IDisposable
 
         var (_, output, _) = await Run("--min-age-hours", "1");
         output.Should().Contain(Key(1));
+    }
+
+    [Fact]
+    public async Task A_blob_with_an_unknown_age_is_kept()
+    {
+        _storage.Blobs[Key(1)] = DateTime.MaxValue;
+
+        var (_, output, _) = await Run("--apply", "--force");
+
+        output.Should().Contain("0 of 0 eligible").And.Contain("1 younger");
+        _storage.Blobs.Should().ContainKey(Key(1));
     }
 
     [Fact]
@@ -344,6 +351,8 @@ public sealed class FilesSweepCommandTests : IDisposable
     [InlineData("--min-age-hours")]
     [InlineData("--min-age-hours", "abc")]
     [InlineData("--min-age-hours", "-1")]
+    [InlineData("--min-age-hours", "99999999")]
+    [InlineData("--min-age-hours", "2147483647")]
     [InlineData("--bogus")]
     [InlineData("stray")]
     public async Task Bad_arguments_are_a_usage_error(params string[] args)

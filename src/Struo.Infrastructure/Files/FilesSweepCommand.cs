@@ -21,6 +21,7 @@ internal static class FilesSweepCommand
     private const int LookupBatchSize = 500;
 
     private const int MaxOrphanPercent = 50;
+    private const int MaxMinAgeHours = 87_600; // ten years
 
     private enum ScanMode { Count, Report, Delete }
 
@@ -72,6 +73,9 @@ internal static class FilesSweepCommand
                 }
             }
 
+            // The count pass above and this pass list the store separately. The cutoff is fixed, so a blob
+            // uploaded in between is younger than it and untouched; only a row purged in between can add an
+            // orphan, which is acceptable without re-checking the ratio here.
             var tally = await scan.RunAsync(options.Apply ? ScanMode.Delete : ScanMode.Report, stdout, stderr, ct);
             await WriteSummaryAsync(options, tally, stdout);
             return tally.Failed > 0 ? MigrationCli.Failure : MigrationCli.Success;
@@ -164,9 +168,9 @@ internal static class FilesSweepCommand
             else if (arg.StartsWith("--min-age-hours=", StringComparison.Ordinal)) value = arg["--min-age-hours=".Length..];
             else { error = $"Unexpected argument '{arg}'. Usage: files:sweep [--apply [--force]] [--min-age-hours N]."; return false; }
 
-            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out minAge))
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out minAge) || minAge > MaxMinAgeHours)
             {
-                error = "--min-age-hours needs a whole number of hours, 0 or greater.";
+                error = $"--min-age-hours needs a whole number of hours from 0 to {MaxMinAgeHours}.";
                 return false;
             }
         }

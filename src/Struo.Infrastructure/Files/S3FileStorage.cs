@@ -82,10 +82,19 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
             var page = await _client.ListObjectsV2Async(
                 new ListObjectsV2Request { BucketName = _bucket, ContinuationToken = token }, ct);
             foreach (var o in page.S3Objects ?? [])
-                yield return new StoredBlob(o.Key, DateTime.SpecifyKind(o.LastModified ?? DateTime.MinValue, DateTimeKind.Utc));
+                yield return new StoredBlob(o.Key, ToUtc(o.LastModified));
             token = page.IsTruncated == true ? page.NextContinuationToken : null;
         } while (token is not null);
     }
+
+    // S3 reports object times in UTC, so an unlabelled value is UTC. A missing time maps to MaxValue: the
+    // blob is never older than any cutoff, so an age-based sweep keeps it.
+    private static DateTime ToUtc(DateTime? modified) => modified switch
+    {
+        null => DateTime.MaxValue,
+        { Kind: DateTimeKind.Local } local => local.ToUniversalTime(),
+        { } other => DateTime.SpecifyKind(other, DateTimeKind.Utc),
+    };
 
     public bool SupportsPresignedUrls => true;
 

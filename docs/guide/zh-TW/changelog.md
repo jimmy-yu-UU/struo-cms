@@ -15,13 +15,17 @@
   `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
   fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
   `8080`。
+- `IFileStorage` 新增成員 `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`。fork 自己的儲存
+  實作必須補上，否則專案無法編譯。它要回傳每一個已儲存的 blob，型別是 `StoredBlob(Key, LastModifiedUtc)`：
+  鍵就是傳給 `SaveAsync` 的那個，修改時間用 UTC（後端無法回報時給 `DateTime.MaxValue`，這樣依時間清理
+  的流程一定會保留它）。請一頁一頁串流回傳，不要先整批載入；清除命令每次執行會讀它一到兩次。
 :::
 
 ### 新增
 
 - `files:sweep` 清除本機或 S3 儲存裡的孤兒 blob。不加 `--apply` 只是試跑並列出孤兒，絕不碰修改時間
   比 `--min-age-hours`（預設 24）還新的 blob，垃圾桶裡的 `files` 列所參照的 blob 視為使用中。
-  `IFileStorage` 新增 `ListAsync`，fork 自己的儲存實作必須提供。命令一開始會先印出儲存與資料庫目標
+  `IFileStorage` 新增 `ListAsync`（見上面的破壞性變更）。命令一開始會先印出儲存與資料庫目標
   （不含憑證），而且孤兒超過符合資格 blob 的 50% 時，`--apply` 會以結束代碼 `3` 拒絕，除非加 `--force`。見
   [清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
 - [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、

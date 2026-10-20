@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Struo.Application.Files;
 using Struo.Domain.Query;
 
@@ -57,9 +56,12 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default) =>
+        EnumerateBlobs(ct).ToAsyncEnumerable();
+
+    // Lazy: the directory walk advances one file per MoveNext, so the listing is never held in memory.
+    private IEnumerable<StoredBlob> EnumerateBlobs(CancellationToken ct)
     {
-        await Task.CompletedTask;
         var root = Path.GetFullPath(Root);
         if (!Directory.Exists(root)) yield break;
 

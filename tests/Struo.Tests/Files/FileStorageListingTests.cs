@@ -57,7 +57,7 @@ public sealed class FileStorageListingTests : IDisposable
         }
     }
 
-    private static ListObjectsV2Response Page(string? next, params (string Key, DateTime Modified)[] objects) =>
+    private static ListObjectsV2Response Page(string? next, params (string Key, DateTime? Modified)[] objects) =>
         new()
         {
             HttpStatusCode = HttpStatusCode.OK,
@@ -84,4 +84,35 @@ public sealed class FileStorageListingTests : IDisposable
         blobs[2].LastModifiedUtc.Should().Be(t.AddHours(2));
         client.Tokens.Should().Equal(null, "p2", "p3");
     }
+
+    private static async Task<StoredBlob> ListOne(DateTime? modified)
+    {
+        var client = new PagedS3Client(new() { [""] = Page(null, ("2026/09/a.png", modified)) });
+        using var storage = new S3FileStorage(client, "bucket");
+        return (await Collect(storage)).Single();
+    }
+
+    [Fact]
+    public async Task S3_listing_converts_a_local_kind_timestamp_to_utc()
+    {
+        var utc = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc);
+
+        var blob = await ListOne(utc.ToLocalTime());
+
+        blob.LastModifiedUtc.Should().Be(utc);
+        blob.LastModifiedUtc.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact]
+    public async Task S3_listing_reads_an_unspecified_kind_timestamp_as_utc()
+    {
+        // S3 reports object times in UTC, so a value the SDK leaves unlabelled is UTC.
+        var blob = await ListOne(new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Unspecified));
+
+        blob.LastModifiedUtc.Should().Be(new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task S3_listing_without_a_timestamp_is_never_older_than_a_cutoff() =>
+        (await ListOne(null)).LastModifiedUtc.Should().Be(DateTime.MaxValue);
 }
