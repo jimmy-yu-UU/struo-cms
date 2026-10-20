@@ -278,7 +278,8 @@ rest. The callback path is `Oidc:CallbackPath`, defaulting to `/signin-oidc`.
 
 The redirect URI to register with the provider is the origin users open the admin at plus that
 path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oidc` for the Compose
-stack. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
+stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect
+URIs, and the OIDC correlation cookies are `Secure`, so any other origin needs `https`. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
 
 The admin image's nginx proxies `/signin-oidc` and `/signout-callback-oidc` to the API alongside
 `/api/`, so the provider's redirect lands on the same origin the sign-in started from. A custom
@@ -289,10 +290,12 @@ nginx change. Any other custom path needs its own `location` block in
 The API builds the redirect URI from the scheme and host of the request it receives. nginx passes
 the client's `Host` header through with its port, so `http://localhost:<port>` works as is. A
 public `https` origin needs the API to see `https` as well: when TLS ends at a proxy in front of
-the admin container, make that proxy send `X-Forwarded-Proto: https`; the image's nginx passes the
-incoming value to the API (and uses its own scheme when none arrives). Then enable
-`ForwardedHeaders` on the API with the nginx container's address or network as a known proxy
-(Chapter 20), or the API ignores the header.
+the admin container, make that proxy set `X-Forwarded-Proto: https`, overwriting rather than
+appending, because the image's nginx passes the incoming value to the API unchanged (and uses its
+own scheme only when none arrives). Then enable `ForwardedHeaders` on the API with the nginx
+container's own address, or a dedicated network, as the known proxy; do not trust a whole shared
+Docker network range or publish the API port (Chapter 20), or the API ignores the header or can be
+made to trust a forged one.
 
 The requested scopes are `Oidc:Scopes`, defaulting to `openid`, `email`, `profile` — leaving it
 blank and giving an empty array both fall back to that same default, never to no scope at all. The

@@ -216,7 +216,9 @@ HTTP_STATUS:429
 叫 userinfo 端點補齊；回呼路徑是 `Oidc:CallbackPath`，預設 `/signin-oidc`。
 
 要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上這個路徑：
-`https://cms.example.com/signin-oidc`，Compose 堆疊則是 `http://localhost:8080/signin-oidc`。要用
+`https://cms.example.com/signin-oidc`，Compose 堆疊則是 `http://localhost:8080/signin-oidc`。純 `http`
+的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯 cookie 帶
+`Secure`，所以其他來源都要用 `https`。要用
 登出回呼的話，同樣登記 `/signout-callback-oidc`。
 
 管理映像的 nginx 會把 `/signin-oidc` 與 `/signout-callback-oidc` 和 `/api/` 一樣代理給 API，所以提供者
@@ -226,9 +228,10 @@ HTTP_STATUS:429
 
 API 用它收到的請求的 scheme 與 host 組出重新導向網址。nginx 會連同埠號原樣帶過用戶端的 `Host`
 標頭，所以 `http://localhost:<port>` 直接可用。對外的 `https` 來源則要 API 也看到 `https`：TLS 在
-管理容器前面的代理終結時，要讓那個代理送 `X-Forwarded-Proto: https`；映像的 nginx 會把收到的值原樣
-帶給 API（沒收到就用它自己連線的 scheme）。接著在 API 啟用 `ForwardedHeaders`，並把 nginx 容器的位址或
-network 列為已知代理（第 20 章），否則 API 會忽略這個標頭。
+管理容器前面的代理終結時，要讓那個代理把 `X-Forwarded-Proto: https` 設成覆寫而不是附加，因為映像的
+nginx 會把收到的值原樣帶給 API（沒收到才用它自己連線的 scheme）。接著在 API 啟用 `ForwardedHeaders`，並把
+nginx 容器自己的位址或專用 network 列為已知代理；不要信任整段共用的 Docker network 範圍，也不要發布 API
+的連接埠（第 20 章），否則 API 會忽略這個標頭，或被騙去採信偽造的值。
 
 要求的 scope 是 `Oidc:Scopes`，預設 `openid`、`email`、`profile`，留空或給空
 陣列都會退回這組預設，不會變成完全不要求 scope。讀取的 claim 有：
@@ -268,7 +271,7 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 
 | 代碼 | 原因 |
 |---|---|
-| `external_login_failed` | 提供者或回呼失敗（回應不正確、驗證失敗、狀態過期） |
+| `external_login_failed` | 提供者或回呼失敗 |
 | `external_login_denied` | 使用者在提供者那邊拒絕 |
 | `external_login_NoEmail` | 身分沒有可用的 email |
 | `external_login_EmailNotVerified` | email 未驗證，且設了 `Oidc:RequireEmailVerified` |

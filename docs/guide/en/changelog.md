@@ -172,9 +172,10 @@
 
 - The admin image sends a `Content-Security-Policy` (scripts from the image only, no framing, no plugins) and a
   `Permissions-Policy` that turns off camera, microphone, geolocation, payment and USB. Proxied `/api/*`
-  responses get `default-src 'none'; frame-ancestors 'none'; sandbox`. The `CSP_IMG_EXTRA` and
-  `CSP_CONNECT_EXTRA` container variables (empty by default) add origins to `img-src` and `connect-src`; a
-  fork whose images or API calls go to another origin must set them (see Breaking). The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
+  responses, and the two OIDC callback paths, get `default-src 'none'; frame-ancestors 'none'; sandbox`.
+  The `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` container variables (empty by default) add origins to
+  `img-src` and `connect-src`; a fork whose images or API calls go to another origin must set them (see
+  Breaking). The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
 
 ### Fixed
 
@@ -261,6 +262,10 @@ If your `.env` was copied from an earlier `.env.example`, it sets `STRUO_ADMIN_P
 it, or set a value that meets `Auth:Password`, before upgrading: the compose `api` service runs
 `Database:MigrateOnStartup` and refuses to start with that value, even on a database that is already
 seeded.
+
+A fork that replaced `frontend/nginx/default.conf.template` must carry over the CSP and
+`Permissions-Policy` headers, the `/signin-oidc` and `/signout-callback-oidc` locations, and `$http_host`
+for `Host` and `X-Forwarded-Host`.
 
 ## 0.10.0 — 2026-10-14
 

@@ -49,13 +49,18 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 還會組出提供者會拒絕的 `http` 重新導向網址。
 
 設 `ForwardedHeaders__Enabled=true`，並把代理列在 `ForwardedHeaders__KnownProxies__0`（位址）或
-`ForwardedHeaders__KnownNetworks__0`（CIDR 範圍，例如 Docker network 的範圍）。只有來自這些來源的
+`ForwardedHeaders__KnownNetworks__0`（CIDR 範圍）。只有來自這些來源的
 請求才受信任；旗標打開卻兩個清單都空，或有格式錯誤的項目，主機會拒絕啟動並點名鍵。API 前面沒有
 代理時就維持關閉。
 
-API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出它的位址或 Docker network 的範圍。TLS 終結在
-那個容器前面的另一個代理時，讓它送 `X-Forwarded-Proto: https`；映像的 nginx 會把收到的值原樣帶過去，
-沒收到才用自己連線的 scheme。
+API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出該容器自己的位址，或把兩者放在專用的 network
+再列出那個 network 的範圍。不要信任整段共用的 Docker network 範圍：它包含 bridge 閘道，而打到 API 已發布
+連接埠的請求會經由這個閘道進來，等於能偽造 `X-Forwarded-*`。API 躲在 nginx 後面時，根本不要發布它的連接埠。
+
+TLS 終結在那個容器前面的另一個代理時，中間有兩跳，API 只採信其中一跳。它看到的用戶端位址因此是外層
+代理的，每個用戶端的每 IP 登入限流都落進同一個桶；scheme 與 host 仍會正確送達。外層代理必須把
+`X-Forwarded-Proto: https` 設成覆寫而不是附加，因為映像的 nginx 會把收到的值原樣帶過去，沒收到才用自己
+連線的 scheme。
 
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 

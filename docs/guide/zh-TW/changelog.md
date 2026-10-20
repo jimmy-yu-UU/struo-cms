@@ -136,10 +136,11 @@
   429 並帶 `Retry-After`。知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼登入；SSO 登入不受影響。
 
 - 管理端映像會送 `Content-Security-Policy`（指令稿只從映像本身載入、不可被嵌入框架、不允許外掛）與
-  `Permissions-Policy`（關閉相機、麥克風、定位、支付與 USB）。代理出去的 `/api/*` 回應帶
-  `default-src 'none'; frame-ancestors 'none'; sandbox`。容器變數 `CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
-  （預設空字串）可為 `img-src` 與 `connect-src` 加入來源；圖片或 API 呼叫走向其他來源（例如 CDN 或 bucket 的
-  presigned URL）的 fork 必須設定它們（見破壞性變更）。主題初始化是檔案 `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
+  `Permissions-Policy`（關閉相機、麥克風、定位、支付與 USB）。代理出去的 `/api/*` 回應與兩條
+  OIDC 回呼路徑帶 `default-src 'none'; frame-ancestors 'none'; sandbox`。容器變數 `CSP_IMG_EXTRA` 與
+  `CSP_CONNECT_EXTRA`（預設空字串）可為 `img-src` 與 `connect-src` 加入來源；圖片或 API 呼叫走向其他來源
+  （例如 CDN 或 bucket 的 presigned URL）的 fork 必須設定它們（見破壞性變更）。主題初始化是檔案
+  `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
 
 ### 修正
 
@@ -209,6 +210,9 @@ libvips 的主機現在會啟動失敗。
 若你的 `.env` 是從較早的 `.env.example` 複製來的，裡面會有 `STRUO_ADMIN_PASSWORD=admin`。升級前請清空它，或改成
 符合 `Auth:Password` 的值：compose 的 `api` 服務會執行 `Database:MigrateOnStartup`，遇到這個值就拒絕啟動，資料庫
 已經植入過也一樣。
+
+若 fork 換掉了 `frontend/nginx/default.conf.template`，請帶過去 CSP 與 `Permissions-Policy` 標頭、`/signin-oidc` 與
+`/signout-callback-oidc` 兩個 location，以及 `Host` 與 `X-Forwarded-Host` 用的 `$http_host`。
 
 ## 0.10.0 — 2026-10-14
 

@@ -64,15 +64,23 @@ ends at the proxy. That breaks the login IP rate limit above and anything else t
 client's address, and it makes OIDC build an `http` redirect URI the provider rejects.
 
 Set `ForwardedHeaders__Enabled=true` and list the proxy in `ForwardedHeaders__KnownProxies__0`
-(an address) or `ForwardedHeaders__KnownNetworks__0` (a CIDR range, such as the Docker network's).
+(an address) or `ForwardedHeaders__KnownNetworks__0` (a CIDR range).
 Only requests from those sources are trusted; with the flag on and both lists empty, or with a
 malformed entry, the host refuses to start and names the key. Leave it off when nothing sits in
 front of the API.
 
-With the admin image in front of the API, the API's proxy is the nginx container: list its address
-or the Docker network's range. When TLS ends at another proxy in front of that container, have it
-send `X-Forwarded-Proto: https`; the image's nginx passes the incoming value on and falls back to
-its own scheme when none arrives.
+With the admin image in front of the API, the API's proxy is the nginx container: list that
+container's own address, or put the two on a dedicated network and list that network's range. Do not
+trust a whole shared Docker network range: it includes the bridge gateway, and a request to the API's
+published port arrives through that gateway, so it could forge `X-Forwarded-*`. When the API sits
+behind nginx, do not publish its port at all.
+
+When TLS ends at another proxy in front of that container, there are two hops, and the API honours
+only one. The client address it sees is therefore the outer proxy's, so the per-IP login limiter
+puts every client in one bucket; the scheme and host still arrive correctly. That outer proxy must
+set `X-Forwarded-Proto: https`, overwriting rather than appending to any incoming value, because the
+image's nginx passes an incoming value on unchanged and falls back to its own scheme only when none
+arrives.
 
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
