@@ -1,0 +1,61 @@
+// tests/Struo.Tests/Template/CiWorkflowConventionTests.cs
+using System.Text.RegularExpressions;
+using AwesomeAssertions;
+using Struo.Tests.Support;
+using Xunit;
+
+namespace Struo.Tests.Template;
+
+/// <summary>
+/// Guards <c>.github/workflows/ci.yml</c>: every job bounds its run time, and no step installs a
+/// tool at an unpinned version. Tools come from <c>.config/dotnet-tools.json</c> (restored with
+/// <c>dotnet tool restore</c>) and from the frontend lockfile, so a new upstream release never
+/// reaches CI unreviewed.
+/// </summary>
+public sealed partial class CiWorkflowConventionTests
+{
+    [GeneratedRegex(@"^  ([A-Za-z0-9_-]+):\s*$")]
+    private static partial Regex JobHeader();
+
+    [GeneratedRegex(@"^    timeout-minutes:\s*\d+\s*$")]
+    private static partial Regex JobTimeout();
+
+    [GeneratedRegex(@"dotnet\s+tool\s+install\s+(--global|-g)\b|\bpnpm\s+dlx\b")]
+    private static partial Regex UnpinnedToolInstall();
+
+    private static string[] WorkflowLines() =>
+        File.ReadAllLines(Path.Combine(RepoRoot.Find(), ".github", "workflows", "ci.yml"));
+
+    [Fact]
+    public void Every_job_sets_timeout_minutes()
+    {
+        var lines = WorkflowLines();
+        var start = Array.FindIndex(lines, l => l.TrimEnd() == "jobs:");
+        start.Should().BeGreaterThanOrEqualTo(0, "ci.yml has a jobs: section");
+
+        var jobs = new List<(string name, bool hasTimeout)>();
+        foreach (var line in lines.Skip(start + 1))
+        {
+            var header = JobHeader().Match(line);
+            if (header.Success) jobs.Add((header.Groups[1].Value, false));
+            else if (jobs.Count > 0 && JobTimeout().IsMatch(line)) jobs[^1] = (jobs[^1].name, true);
+        }
+
+        jobs.Should().NotBeEmpty();
+        jobs.Where(j => !j.hasTimeout).Select(j => j.name).Should().BeEmpty(
+            "every job needs a job-level timeout-minutes so a hung step cannot hold a runner for six hours");
+    }
+
+    [Fact]
+    public void No_step_installs_an_unpinned_tool()
+    {
+        var offenders = WorkflowLines()
+            .Select((line, i) => (line, number: i + 1))
+            .Where(x => !x.line.TrimStart().StartsWith('#') && UnpinnedToolInstall().IsMatch(x.line))
+            .Select(x => $"ci.yml:{x.number}: {x.line.Trim()}")
+            .ToList();
+
+        offenders.Should().BeEmpty(
+            "install .NET tools with `dotnet tool restore` from .config/dotnet-tools.json and run frontend tools with `pnpm exec`");
+    }
+}

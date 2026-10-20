@@ -225,13 +225,14 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 兩個 job 都跳過。Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個
 儲存庫時才跑。
 
-`sonar-backend` 先裝 `dotnet-sonarscanner`、`dotnet-coverage` 兩個 CLI 工具，跑一次
-`dotnet-sonarscanner begin`，接著正常建置，用 `dotnet-coverage collect` 包住 `dotnet test`
-產生 `coverage.xml`，最後 `dotnet-sonarscanner end` 送出分析結果。
+`sonar-backend` 先依 `.config/dotnet-tools.json` 釘住的版本還原 `dotnet-sonarscanner`、
+`dotnet-coverage` 兩個 CLI 工具，跑一次 `dotnet dotnet-sonarscanner begin`，接著正常建置，
+用 `dotnet dotnet-coverage collect` 包住 `dotnet test` 產生 `coverage.xml`，最後
+`dotnet dotnet-sonarscanner end` 送出分析結果。
 
 `sonar-frontend` 則是同一道 `pnpm install --frozen-lockfile --ignore-scripts`、
 `pnpm vitest run --coverage --coverage.reporter=lcov` 先產生涵蓋率報告，再用
-`pnpm dlx sonarqube-scanner` 送出。
+`pnpm exec sonarqube-scanner` 送出，這個套件是 devDependency，版本由 lockfile 釘住。
 
 ## 五個 standing gate
 
