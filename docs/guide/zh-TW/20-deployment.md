@@ -348,6 +348,35 @@ Healthy
 - **Migration 與設定**——fork 自己的 migration 類別、`appsettings.*`、環境變數或密鑰管理系統
   裡的值，是一般的原始碼或部署管線產物，跟其餘部署一起備份即可。
 
+## 清除孤兒 blob
+
+沒有任何 `files` 資料列指向某個儲存鍵的 blob 就是孤兒，例如清除檔案時儲存層出錯，留下了位元組。
+`files:sweep` 會在 `Struo:Files:Backend` 選的那個後端裡找出它們，需要時再刪掉：
+
+```text
+$ dotnet run --project src/Struo.Api -- files:sweep
+orphan 2026/10/00000000000000000000000000000001.png
+1 orphan blob(s) found, 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
+```
+
+不加 `--apply` 就是試跑：每個孤兒印一行 `orphan <key>`，最後一行是摘要，什麼都不刪。看過清單，
+再加上 `--apply` 重跑才會刪除。
+
+| 選項 | 意義 |
+|---|---|
+| `--apply` | 刪除孤兒；不加就什麼都不刪 |
+| `--min-age-hours N` | 略過不到 `N` 小時的 blob（預設 `24`） |
+
+`N` 是 0 或更大的整數。寬限期是保護「blob 已經存了、資料列還沒寫入」的上傳。只要有任何一列 `files` 參照某個 blob，它就
+不是孤兒，垃圾桶裡的列也算。要先清除資料列，blob 才會變成孤兒。
+
+只有形如 `{yyyy}/{MM}/{32 位十六進位}{副檔名}` 的鍵會被考慮，所以變體快取或其他放在儲存根目錄的
+檔案不會被動到。列舉是串流的（S3 用 `ListObjectsV2` 分頁，本機後端惰性走訪根目錄），資料庫查詢
+也分批進行，儲存量再大也不必整批載入記憶體。
+
+跟 migration 命令一樣，它讀的是 API 的設定，所以 S3 或本機的設定與連線字串都要就位。結束代碼
+`0` 是成功，`1` 是失敗（儲存或資料庫連不上，或某次刪除失敗；其餘的刪除仍會執行），`2` 是用法錯誤。
+
 ## 本機的 Compose 環境
 
 `docker compose up -d --build` 用上面兩份 Dockerfile 起 `postgres`、`redis`、`api`、`admin` 四個

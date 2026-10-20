@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Struo.Application.Files;
@@ -72,6 +73,19 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
 
     public async Task DeleteAsync(string key, CancellationToken ct = default) =>
         await _client.DeleteObjectAsync(_bucket, key, ct);
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        string? token = null;
+        do
+        {
+            var page = await _client.ListObjectsV2Async(
+                new ListObjectsV2Request { BucketName = _bucket, ContinuationToken = token }, ct);
+            foreach (var o in page.S3Objects ?? [])
+                yield return new StoredBlob(o.Key, DateTime.SpecifyKind(o.LastModified ?? DateTime.MinValue, DateTimeKind.Utc));
+            token = page.IsTruncated == true ? page.NextContinuationToken : null;
+        } while (token is not null);
+    }
 
     public bool SupportsPresignedUrls => true;
 

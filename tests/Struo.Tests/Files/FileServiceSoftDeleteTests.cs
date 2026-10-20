@@ -32,6 +32,9 @@ public sealed class FileServiceSoftDeleteTests : IDisposable
         public Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) => Task.FromResult<Stream>(new MemoryStream());
         public Task DeleteAsync(string key, CancellationToken ct = default) { Deletes++; return Task.CompletedTask; }
+        public IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public bool SupportsPresignedUrls => false;
         public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult<string?>(null);
     }

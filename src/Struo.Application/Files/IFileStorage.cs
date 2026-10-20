@@ -1,5 +1,8 @@
 namespace Struo.Application.Files;
 
+/// <summary>A blob in the byte store: its key and last-modified time (UTC).</summary>
+public sealed record StoredBlob(string Key, DateTime LastModifiedUtc);
+
 /// <summary>Pluggable byte storage for file assets. Exactly one implementation is registered.</summary>
 public interface IFileStorage
 {
@@ -18,6 +21,12 @@ public interface IFileStorage
     /// </summary>
     Task<Stream> OpenReadAsync(string key, CancellationToken ct = default);
     Task DeleteAsync(string key, CancellationToken ct = default);
+
+    /// <summary>
+    /// Streams every stored blob (key and last-modified time) without materialising the whole listing:
+    /// the local backend enumerates lazily, S3 pages through <c>ListObjectsV2</c>. The order is unspecified.
+    /// </summary>
+    IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default);
 
     /// <summary>True when the backend can mint short-lived direct-download URLs (e.g. S3).</summary>
     bool SupportsPresignedUrls { get; }

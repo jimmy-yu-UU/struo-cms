@@ -19,6 +19,10 @@
 
 ### 新增
 
+- `files:sweep` 清除本機或 S3 儲存裡的孤兒 blob。不加 `--apply` 只是試跑並列出孤兒，絕不碰修改時間
+  比 `--min-age-hours`（預設 24）還新的 blob，垃圾桶裡的 `files` 列所參照的 blob 視為使用中。
+  `IFileStorage` 新增 `ListAsync`，fork 自己的儲存實作必須提供。見
+  [清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
 - [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、
   `UserSecretsId`、Sonar 變數、範例專案、後台語言、`__Host-` cookie 前綴，以及 CSP 與轉送標頭設定。
   根目錄新增 `SECURITY.md`，說明這個模板怎麼私下回報漏洞；fork 要換成自己的版本。

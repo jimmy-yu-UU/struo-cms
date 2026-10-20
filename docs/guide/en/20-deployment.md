@@ -420,6 +420,39 @@ that's genuinely missing turns into an error, rather than an endless reload.
   values in environment variables or a secret manager are ordinary source or deployment-pipeline
   artifacts; back them up along with the rest of the deployment.
 
+## Removing orphaned blobs
+
+A blob is orphaned when no `files` row points at its storage key, for example after a storage-layer
+failure left bytes behind a purge. `files:sweep` finds them in whichever backend `Struo:Files:Backend`
+selects and removes them on request:
+
+```text
+$ dotnet run --project src/Struo.Api -- files:sweep
+orphan 2026/10/00000000000000000000000000000001.png
+1 orphan blob(s) found, 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
+```
+
+Without `--apply` the command is a dry run: it prints one `orphan <key>` line per blob and a summary,
+and deletes nothing. Review the list, then run it again with `--apply` to delete.
+
+| Option | Meaning |
+|---|---|
+| `--apply` | Delete the orphans; without it nothing is deleted |
+| `--min-age-hours N` | Skip blobs newer than `N` hours (default `24`) |
+
+`N` is a whole number, `0` or more. The grace period protects an upload that has stored its blob but not yet written its row. A blob that
+any `files` row references is never an orphan, and that includes rows in the trash. Purge the row
+first and the blob becomes an orphan.
+
+Only keys shaped like `{yyyy}/{MM}/{32 hex digits}{extension}` are considered, so a variant cache or
+any other file that shares the storage root is left alone. The listing is streamed (S3 pages through
+`ListObjectsV2`; the local backend walks the root lazily) and the database lookup runs in batches, so
+a large store does not have to fit in memory.
+
+Like the migration commands, it reads the API's configuration, so the S3 or local settings and the
+connection string must be in place. Exit code `0` is success, `1` a failure (an unreachable store or
+database, or a delete that failed; the other deletes still run), `2` a usage error.
+
 ## The local Compose stack
 
 `docker compose up -d --build` uses the two Dockerfiles above to start four services: `postgres`,

@@ -418,7 +418,8 @@ row and the stored blob are removed together. Purge follows the same relation ru
 collection: a `Restrict` reference blocks it, references with `OnDelete.SetNull` are set to null, and
 many-to-many junction rows pointing at the file are removed. Cleaning up the blob is best-effort and
 happens outside the transaction — the row data is already gone, so at worst a storage-layer failure
-leaves an orphaned blob behind.
+leaves an orphaned blob behind; [`files:sweep`](20-deployment.md#removing-orphaned-blobs) removes
+such blobs.
 
 Purge re-queries the row with the soft-delete filter cleared, so the most common flow — trash
 first, then purge (the default delete already trashes first) — works. Purge clears the brand-logo

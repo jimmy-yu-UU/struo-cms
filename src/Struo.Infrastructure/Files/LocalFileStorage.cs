@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Struo.Application.Files;
 using Struo.Domain.Query;
 
@@ -54,6 +55,20 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
         var path = FullPath(key);
         if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
         return Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        var root = Path.GetFullPath(Root);
+        if (!Directory.Exists(root)) yield break;
+
+        foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            var key = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+            yield return new StoredBlob(key, System.IO.File.GetLastWriteTimeUtc(path));
+        }
     }
 
     public bool SupportsPresignedUrls => false;

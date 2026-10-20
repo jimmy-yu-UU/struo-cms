@@ -122,6 +122,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   translation-sidecar policy.
   On Oracle, `migrate:check` skips the type and length checks with one warning. On SQL Server it warns
   about non-Unicode string columns. Application queries and writes stay on SqlSugar.
+- **`files:sweep` removes orphaned blobs.** It is a command like the migration ones
+  (`MigrationCli` dispatches it; `FilesSweepCommand` implements it): a dry run unless `--apply`,
+  skipping blobs younger than `--min-age-hours` (default 24) and any blob a `files` row references,
+  trashed rows included. It lists through `IFileStorage.ListAsync`. Exit 0 ok, 1 failure, 2 usage.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
