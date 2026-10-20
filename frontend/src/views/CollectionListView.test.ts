@@ -297,6 +297,30 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-create', params: { name: 'article' } })
   })
 
+  it.each(['user', 'file'])('hides the New button for the %s collection (created elsewhere)', async (collection) => {
+    const schema = useSchemaStore()
+    schema.collections = [{ name: collection, label: collection, defaultDisplayField: 'status', fields: [], relations: [] }]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    mockRoute.params.name = collection
+    const w = mountView()
+    await flushPromises()
+    expect((w.vm as any).canWrite).toBe(true)
+    expect(w.text()).not.toContain('New')
+    expect((w.vm as any).canCreate).toBe(false)
+  })
+
+  it('shows the New button for an ordinary collection with write permission', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('New')
+  })
+
   it('shows the trash switch only for a soft-delete collection with delete permission', async () => {
     seedSoftSchema(); seedLanguage()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }

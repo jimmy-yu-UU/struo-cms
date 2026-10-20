@@ -53,6 +53,12 @@ to or deleting from the four built-in collections `permission`, `role`, `user` a
 any junction a fork has marked `AdminOnly`, additionally requires the caller to be a super-admin — a
 delegated collection grant doesn't count.
 
+Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
+Both return `400` `BAD_USER_INPUT`, and GraphQL's `createFile` and `createUser` mutations get the
+same error. A file is created by uploading it to `POST api/files`, and a user by `POST api/users`,
+which sets the password. The user check runs first, so a duplicate email is a `400` there, not a
+`409`. Reading, updating and deleting both collections still go through the generic routes.
+
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md); for a collection with revisions
@@ -130,7 +136,9 @@ permission floor, which differs from omitting the parameter entirely. A malforme
 role id is always rejected, never silently dropped from the count.
 
 Listing, updating and deleting users all go through the generic item API's `user` collection — the
-create response's `Location` points exactly there.
+create response's `Location` points exactly there. Creating a user there is refused with `400`:
+the error message is `Users cannot be created through the generic items API. Create one with
+POST /api/users instead.`
 
 ## Roles `api/roles`
 

@@ -40,6 +40,9 @@
 
 - JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
   照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
+- 透過通用項目 API 建立 `user`（`POST /api/items/user`、GraphQL `createUser`）現在回 `400`
+  `BAD_USER_INPUT` 並指向 `POST /api/users`，跟 `file` 原本的做法一致。過去它插入的資料列沒有密碼，
+  無法登入。後台的使用者與檔案清單也不再顯示「新增」按鈕。
 
 ### 安全性
 

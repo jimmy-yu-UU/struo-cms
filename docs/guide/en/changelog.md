@@ -47,6 +47,10 @@
   turn) swap the two, so a portrait photo that a phone saved sideways reports the size it is displayed
   at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored
   with, and WebP and AVIF files still report their coded size.
+- Creating a `user` through the generic items API (`POST /api/items/user`, GraphQL `createUser`) now
+  returns `400` `BAD_USER_INPUT` pointing at `POST /api/users`, the same way `file` already does. The
+  row it used to insert had no password and could not sign in. The admin UI no longer shows the
+  "New" button on the user and file lists.
 
 ### Security
 

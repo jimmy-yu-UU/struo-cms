@@ -23,7 +23,7 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
-import { LANGUAGE_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, NON_CREATABLE_COLLECTIONS } from '../lib/frameworkCollections'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
 
@@ -42,6 +42,7 @@ const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
+const canCreate = computed(() => canWrite.value && !NON_CREATABLE_COLLECTIONS.has(name.value))
 const mode = ref<'active' | 'trash'>('active')
 const showTrashSwitch = computed(() => !!meta.value?.softDelete && canDelete.value)
 const columns = computed(() => (meta.value ? selectListColumns(meta.value) : []))
@@ -302,7 +303,7 @@ async function onRestore(row: Row): Promise<void> {
 onMounted(loadItems)
 
 defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
-  canWrite, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
+  canWrite, canCreate, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
   error, cellValue, tableState, filters })
 </script>
 
@@ -317,7 +318,7 @@ defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilter
     <template v-else>
       <PageHeader :title="meta.label" :caption="t('collectionList.count', { n: total })">
         <template #actions>
-          <Button v-if="canWrite" @click="onNew">
+          <Button v-if="canCreate" @click="onNew">
             <Plus class="size-4" aria-hidden="true" />
             {{ t('collectionList.new') }}
           </Button>
