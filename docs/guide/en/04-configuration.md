@@ -548,8 +548,8 @@ the environment variable `Oidc__ClientSecret`, with user-secrets
 always shows the provider's account picker, so nobody signs in silently with whichever account the
 browser happens to hold. `login` forces the user to enter credentials again, `consent` asks for
 consent again, and `none` never shows a page and fails when the user isn't already signed in. Values
-may be combined with a space, such as `login consent`. An empty value sends no prompt, so the
-provider decides. Any other value fails startup when `Enabled=true`, with an error naming
+may be combined with a space, such as `login consent`. An empty string sends no prompt, so the
+provider decides; a JSON `null` keeps the default. Any other value fails startup when `Enabled=true`, with an error naming
 `Oidc:Prompt`.
 
 `CallbackPath` is the path the identity provider redirects the browser back to. The redirect URI to

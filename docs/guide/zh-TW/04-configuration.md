@@ -474,8 +474,8 @@ user-secrets（`dotnet user-secrets set "Oidc:ClientSecret" <值> --project src/
 
 `Prompt` 會原樣送成授權請求的 `prompt` 參數。`select_account`（預設）一律顯示提供者的帳號挑選畫面，
 不會有人因為瀏覽器剛好持有某個帳號就被靜默登入。`login` 強制使用者重新輸入帳密，`consent` 重新詢問同意，
-`none` 完全不顯示頁面，使用者尚未登入時會失敗。可以用空格組合多個值，例如 `login consent`。留空就不送
-`prompt`，由提供者決定。其他任何值在 `Enabled=true` 時會讓啟動失敗，錯誤訊息點名 `Oidc:Prompt`。
+`none` 完全不顯示頁面，使用者尚未登入時會失敗。可以用空格組合多個值，例如 `login consent`。設為空字串就不送
+`prompt`，由提供者決定；JSON 的 `null` 則維持預設值。其他任何值在 `Enabled=true` 時會讓啟動失敗，錯誤訊息點名 `Oidc:Prompt`。
 
 `CallbackPath` 是身分提供者把瀏覽器導回來的路徑。要向提供者登記的重新導向網址，是使用者開啟
 管理介面的來源加上這個路徑；代理端的做法見[第 16 章](16-authentication.md)。

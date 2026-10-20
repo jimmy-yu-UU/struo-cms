@@ -63,34 +63,39 @@ public static class OidcWiring
             foreach (var s in opts.Scopes)
                 options.Scope.Add(s);
 
-            var prompt = string.IsNullOrWhiteSpace(opts.Prompt) ? null : opts.Prompt.Trim();
-            options.Events = new OpenIdConnectEvents
-            {
-                OnRedirectToIdentityProvider = ctx =>
-                {
-                    if (prompt is not null) ctx.ProtocolMessage.Prompt = prompt;
-                    return Task.CompletedTask;
-                },
-
-                OnTokenValidated = async ctx =>
-                {
-                    var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
-                    if (principal is null)
-                    {
-                        ctx.Fail($"external_login_{failure}");
-                        return;
-                    }
-
-                    // The handler signs THIS into the cookie SignInScheme (→ Redis ticket store).
-                    ctx.Principal = principal;
-                },
-
-                OnRemoteFailure = OnRemoteFailure,
-                OnAccessDenied = OnAccessDenied
-            };
+            options.Events = BuildEvents(opts.Prompt);
         });
 
         return services;
+    }
+
+    private static OpenIdConnectEvents BuildEvents(string? configuredPrompt)
+    {
+        var prompt = string.IsNullOrWhiteSpace(configuredPrompt) ? null : configuredPrompt.Trim();
+        return new OpenIdConnectEvents
+        {
+            OnRedirectToIdentityProvider = ctx =>
+            {
+                if (prompt is not null) ctx.ProtocolMessage.Prompt = prompt;
+                return Task.CompletedTask;
+            },
+
+            OnTokenValidated = async ctx =>
+            {
+                var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
+                if (principal is null)
+                {
+                    ctx.Fail($"external_login_{failure}");
+                    return;
+                }
+
+                // The handler signs THIS into the cookie SignInScheme (→ Redis ticket store).
+                ctx.Principal = principal;
+            },
+
+            OnRemoteFailure = OnRemoteFailure,
+            OnAccessDenied = OnAccessDenied
+        };
     }
 
     private const string FailedCode = "external_login_failed";
