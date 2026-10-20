@@ -285,6 +285,10 @@ path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oi
 stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect
 URIs, and the OIDC correlation cookies are `Secure`, so any other origin needs `https`. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
 
+For development under `pnpm dev`, register `http://localhost:5173/signin-oidc` and
+`http://localhost:5173/signout-callback-oidc`. The Vite dev server forwards both paths to the API
+and keeps the browser's `Host`, so the API builds that redirect URI.
+
 The admin image's nginx proxies `/signin-oidc` and `/signout-callback-oidc` to the API alongside
 `/api/`, so the provider's redirect lands on the same origin the sign-in started from. A custom
 `Oidc:CallbackPath` under `/api/`, such as `/api/signin-oidc`, is covered by the `/api/` rule with no

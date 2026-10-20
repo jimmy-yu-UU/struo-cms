@@ -55,6 +55,10 @@
   returns `400` `BAD_USER_INPUT` pointing at `POST /api/users`, the same way `file` already does. The
   row it used to insert had no password and could not sign in. The admin UI no longer shows the
   "New" button on the user and file lists.
+- External (OIDC) sign-in now works under `pnpm dev`. The Vite dev server forwards `/signin-oidc` and
+  `/signout-callback-oidc` to the API and keeps the browser's `Host` on every proxied path, so the
+  provider's `redirect_uri` is `http://localhost:5173/signin-oidc` instead of `:5221`. Register that
+  URI (and the sign-out callback) with your provider for development.
 
 ### Security
 

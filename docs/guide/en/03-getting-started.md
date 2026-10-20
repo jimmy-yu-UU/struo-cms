@@ -213,7 +213,9 @@ The banner prints `127.0.0.1` (the dev server binds to IPv4); `http://localhost:
 same server.
 
 The dev server forwards `/api` to `http://localhost:5221`, so the browser sees the admin SPA and the
-API as the same origin — the development environment needs no separate CORS configuration.
+API as the same origin — the development environment needs no separate CORS configuration. It
+also forwards the OIDC callbacks `/signin-oidc` and `/signout-callback-oidc`; to try external login,
+register `http://localhost:5173/signin-oidc` with your provider (Chapter 16).
 
 ### 6. First login
 

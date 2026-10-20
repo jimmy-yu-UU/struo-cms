@@ -46,6 +46,10 @@
 - 透過通用項目 API 建立 `user`（`POST /api/items/user`、GraphQL `createUser`）現在回 `400`
   `BAD_USER_INPUT` 並指向 `POST /api/users`，跟 `file` 原本的做法一致。過去它插入的資料列沒有密碼，
   無法登入。後台的使用者與檔案清單也不再顯示「新增」按鈕。
+- 外部（OIDC）登入現在可以在 `pnpm dev` 下使用。Vite 開發伺服器把 `/signin-oidc` 與
+  `/signout-callback-oidc` 轉發給 API，且所有代理路徑都保留瀏覽器的 `Host`，所以提供者拿到的
+  `redirect_uri` 是 `http://localhost:5173/signin-oidc`，不再是 `:5221`。開發時請向提供者登記這個
+  網址（以及登出回呼）。
 
 ### 安全性
 

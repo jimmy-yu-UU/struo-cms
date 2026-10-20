@@ -225,6 +225,10 @@ HTTP_STATUS:429
 `Secure`，所以其他來源都要用 `https`。要用
 登出回呼的話，同樣登記 `/signout-callback-oidc`。
 
+在 `pnpm dev` 下開發時，登記 `http://localhost:5173/signin-oidc` 與
+`http://localhost:5173/signout-callback-oidc`。Vite 開發伺服器會把這兩個路徑轉發給 API，並保留瀏覽器的
+`Host`，API 就會組出這個重新導向網址。
+
 管理映像的 nginx 會把 `/signin-oidc` 與 `/signout-callback-oidc` 和 `/api/` 一樣代理給 API，所以提供者
 的重新導向會落回登入當初的那個來源。自訂的 `Oidc:CallbackPath` 只要在 `/api/` 底下，例如
 `/api/signin-oidc`，`/api/` 這條規則就涵蓋了，nginx 不用改。其他自訂路徑要在
