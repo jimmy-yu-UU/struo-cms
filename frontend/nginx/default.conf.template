@@ -16,6 +16,10 @@
 #     (e.g. "max-age=31536000; includeSubDomains") when TLS is terminated
 #     here or by a fronting proxy for every request that can reach this
 #     container.
+#     CSP_IMG_EXTRA and CSP_CONNECT_EXTRA extend the Content-Security-Policy's
+#     img-src and connect-src with extra origins (space-separated). They
+#     default to empty (see the Dockerfile ENV lines), so envsubst always
+#     substitutes them and no literal placeholder reaches the header.
 # (c) proxy_pass is given without a URI suffix after the upstream, so the
 #     original request path is forwarded unchanged: a request to /api/foo/bar
 #     reaches the backend as /api/foo/bar. The backend's controllers are
@@ -67,6 +71,8 @@ server {
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
 
     # The SPA's JS/CSS/JSON/SVG payloads compress well; images and fonts
     # under /assets/ are already compressed formats and are left out.
@@ -88,18 +94,27 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-        # The API already sends its own X-Content-Type-Options: nosniff.
-        # Hide it here so the server-level add_header above is the only
-        # copy left on the response -- without this, proxied responses
-        # would carry the header twice.
+        # This location declares its own add_header, so the server-level
+        # security headers are repeated here. Proxied API responses get the
+        # most restrictive policy: they are data, never a document.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        # The API's own copies of these headers are dropped so each is sent
+        # exactly once, with the value set here.
         proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header Permissions-Policy;
     }
 
     # index.html itself must never be cached long-term: it's the entry point
     # that references the content-hashed bundle under /assets/, and a stale
     # cached copy would keep pointing at files a newer deploy has replaced.
     # nginx's add_header does NOT inherit into a location that declares its
-    # own add_header -- so the four security headers set at server level
+    # own add_header -- so the security headers set at server level
     # above are repeated here explicitly, or this location would silently
     # drop them for every response it serves. This location is also what an
     # SPA-fallback internal redirect from `location /` below lands on: nginx
@@ -112,19 +127,23 @@ server {
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         try_files /index.html =404;
     }
 
     # Vite emits content-hashed filenames under /assets/ (e.g.
     # index-LStR-MxW.js) -- a new build is a new URL, so caching these
     # immutably for a year is safe. Same add_header inheritance caveat as
-    # /index.html above: the four security headers are repeated here too.
+    # /index.html above: the security headers are repeated here too.
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         try_files $uri =404;
     }
 

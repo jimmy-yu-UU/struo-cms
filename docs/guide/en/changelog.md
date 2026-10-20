@@ -158,6 +158,13 @@
   once in a process; the rest get 429 with `Retry-After`. Anyone who knows an account's email can keep it
   locked out of password sign-in until the window ends; SSO sign-in is unaffected.
 
+- The admin image sends a `Content-Security-Policy` (scripts from the image only, no framing, no plugins) and a
+  `Permissions-Policy` that turns off camera, microphone, geolocation, payment and USB. Proxied `/api/*`
+  responses get `default-src 'none'; frame-ancestors 'none'; sandbox`. The `CSP_IMG_EXTRA` and
+  `CSP_CONNECT_EXTRA` container variables (empty by default) add origins to `img-src` and `connect-src`; a
+  fork whose images or API calls go to another origin, such as a CDN or presigned bucket URLs, must set
+  them. The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
+
 ### Fixed
 
 - A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the

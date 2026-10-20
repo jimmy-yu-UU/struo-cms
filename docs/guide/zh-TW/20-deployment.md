@@ -214,6 +214,26 @@ SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 productio
 `Referrer-Policy: strict-origin-when-cross-origin` 這三個標頭一律都送；API 自己的
 `nosniff` 在代理到 `/api/*` 的回應上被隱藏掉，讓這個標頭只出現一次。
 
+映像另外在每個回應上送 `Content-Security-Policy` 與 `Permissions-Policy`：
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA};
+  frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+```
+
+指令稿只能從映像本身載入（主題初始化是檔案 `theme-init.js`，不是內嵌指令稿），頁面不能被嵌入框架，
+表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 代理出去的回應改帶
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`，API 自己在那裡送的
+政策會被丟掉。
+
+`CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA` 預設空字串，各自接受以空白分隔的來源（`https://cdn.example.com`），
+會附加到 `img-src` 與 `connect-src`。圖片從別的來源載入時設 `CSP_IMG_EXTRA`，例如儲存體前面的 CDN，或
+`Struo:Files:PresignedRedirect` 為 `true` 而瀏覽器直接向 bucket 取檔時的 presigned URL。瀏覽器要呼叫別的來源時
+設 `CSP_CONNECT_EXTRA`，例如用 `VITE_API_BASE_URL` 建置進映像、指向不同主機的 API。被擋下的請求會在瀏覽器主控台
+顯示 `Content-Security-Policy` 違規。
+
 快取規則：`index.html` 送 `Cache-Control: no-cache`；`/assets/` 送
 `public, max-age=31536000, immutable`（Vite 的檔名帶內容雜湊）。`client_max_body_size` 是
 `32m`，高於後端 `Struo:Files:MaxUploadBytes` 的 25 MiB，讓過大的上傳收到後端自己的 JSON 錯

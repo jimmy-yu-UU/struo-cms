@@ -125,6 +125,12 @@
   （`Enabled` 為 true、`PermitLimit` 4、`QueueLimit` 32）限制單一行程內同時驗證密碼的登入數，其餘回
   429 並帶 `Retry-After`。知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼登入；SSO 登入不受影響。
 
+- 管理端映像會送 `Content-Security-Policy`（指令稿只從映像本身載入、不可被嵌入框架、不允許外掛）與
+  `Permissions-Policy`（關閉相機、麥克風、定位、支付與 USB）。代理出去的 `/api/*` 回應帶
+  `default-src 'none'; frame-ancestors 'none'; sandbox`。容器變數 `CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
+  （預設空字串）可為 `img-src` 與 `connect-src` 加入來源；圖片或 API 呼叫走向其他來源（例如 CDN 或 bucket 的
+  presigned URL）的 fork 必須設定它們。主題初始化是檔案 `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
+
 ### 修正
 
 - `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁

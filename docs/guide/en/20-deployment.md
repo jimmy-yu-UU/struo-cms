@@ -263,6 +263,28 @@ Regardless of how `HSTS_VALUE` is set, the three headers `X-Content-Type-Options
 the API's own `nosniff` is stripped from responses proxied to `/api/*`, so this header appears only
 once.
 
+The image also sends a `Content-Security-Policy` and a `Permissions-Policy` on every response:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA};
+  frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+```
+
+Scripts load only from the image itself (the theme bootstrap is the file `theme-init.js`, not an inline
+script), the page cannot be framed, and `<form>` posts, `<base>` and plugins are locked to the same
+origin or off. Responses proxied from `/api/*` carry `Content-Security-Policy: default-src 'none';
+frame-ancestors 'none'; sandbox` instead, and any policy the API itself sends there is dropped.
+
+`CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` default to empty. Each takes space-separated origins
+(`https://cdn.example.com`) that are appended to `img-src` and `connect-src`. Set `CSP_IMG_EXTRA` when
+images load from another origin, for example a CDN in front of storage, or a bucket's presigned URL
+when `Struo:Files:PresignedRedirect` is `true` and the browser fetches the file from the bucket
+directly. Set `CSP_CONNECT_EXTRA` when the browser calls another origin, for example an API built into
+the image with `VITE_API_BASE_URL` pointing at a different host. A blocked request shows up as a
+`Content-Security-Policy` violation in the browser console.
+
 Caching rules: `index.html` sends `Cache-Control: no-cache`; `/assets/` sends
 `public, max-age=31536000, immutable` (Vite's filenames carry a content hash).
 `client_max_body_size` is `32m`, higher than the backend's `Struo:Files:MaxUploadBytes` of 25 MiB,
