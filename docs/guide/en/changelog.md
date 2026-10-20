@@ -118,9 +118,21 @@
   `ImageTransformResult?`, where `null` means the image the decoder would produce is over that limit. A
   fork that implements the interface must add the parameter and honour the limit, and a fork that calls
   it must pass the limit and handle `null` (serve the original bytes).
+- The admin image's Content-Security-Policy blocks images and API calls to any origin other than its own
+  until `CSP_IMG_EXTRA` / `CSP_CONNECT_EXTRA` list them. A fork that serves files from a CDN or presigned
+  bucket URLs (`Struo:Files:PresignedRedirect`), sets an absolute external `Branding:LogoUrl`, or points
+  `VITE_API_BASE_URL` at another origin loses those images or requests on upgrade until it sets them.
 :::
 
 ### Added
+
+- `ForwardedHeaders:Enabled` (default `false`), `ForwardedHeaders:KnownProxies` and
+  `ForwardedHeaders:KnownNetworks` make the API honour `X-Forwarded-For`, `X-Forwarded-Proto` and
+  `X-Forwarded-Host` from the listed proxies, ahead of authentication, session rotation and rate
+  limiting. A malformed address or CIDR range, or an enabled section with both lists empty, fails startup
+  naming the key. A deployment behind a reverse proxy that wants the real client address (the per-IP login
+  limiter) or an `https` OIDC redirect URI sets it; with it off, nothing changes. Chapters 4 and 20
+  describe it.
 
 - `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
   grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
@@ -135,6 +147,12 @@
   A file row whose stored `status` is neither value is refused with `400` on any update that sends
   `status`, which includes saving its title or alt text in the admin UI; send a valid `status`
   through `PUT /api/items/file/{id}` or correct the column directly to repair such a row.
+
+- `Oidc:Prompt` (default `select_account`) sets the `prompt` parameter of the OIDC authorize request, so
+  the provider always shows its account picker; `login`, `consent` and `none` are also accepted, and an
+  empty value sends no prompt. An existing OIDC deployment sees the account picker at every sign-in
+  after upgrading; set `Oidc:Prompt` to empty to keep the previous silent sign-in. An invalid value fails
+  startup naming `Oidc:Prompt`. Chapters 4 and 16 describe it.
 
 ### Security
 
@@ -158,7 +176,27 @@
   once in a process; the rest get 429 with `Retry-After`. Anyone who knows an account's email can keep it
   locked out of password sign-in until the window ends; SSO sign-in is unaffected.
 
+- The admin image sends a `Content-Security-Policy` (scripts from the image only, no framing, no plugins) and a
+  `Permissions-Policy` that turns off camera, microphone, geolocation, payment and USB. Proxied `/api/*`
+  responses, and the two OIDC callback paths, get `default-src 'none'; frame-ancestors 'none'; sandbox`.
+  The `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` container variables (empty by default) add origins to
+  `img-src` and `connect-src`; a fork whose images or API calls go to another origin must set them (see
+  Breaking). The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
+
 ### Fixed
+
+- OIDC sign-in works behind the shipped admin nginx. The image proxies `/signin-oidc` and
+  `/signout-callback-oidc` to the API like `/api/`, and forwards the client's `Host` header with its port
+  as `Host` and `X-Forwarded-Host` (it sent the host name without the port), so the redirect URI the API
+  builds matches the one registered with the provider. A custom `Oidc:CallbackPath` outside `/api/` needs
+  its own `location` block in `frontend/nginx/default.conf.template`.
+
+- A failed or refused external sign-in (a provider error, a declined consent, a tenant, domain, email or
+  inactive-account refusal) redirects the browser to `/login?error=<code>`, where the login page shows a
+  localized message and then removes the parameter. The browser used to be left on a raw `401` JSON
+  response. The codes are `external_login_failed`, `external_login_denied` and
+  `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`; exception text
+  never reaches the URL. Chapter 16 lists them.
 
 - A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the
   host used to start and serve default pages larger than `MaxLimit`. A `Struo:ContentAssemblies` entry that
@@ -230,6 +268,10 @@ If your `.env` was copied from an earlier `.env.example`, it sets `STRUO_ADMIN_P
 it, or set a value that meets `Auth:Password`, before upgrading: the compose `api` service runs
 `Database:MigrateOnStartup` and refuses to start with that value, even on a database that is already
 seeded.
+
+A fork that replaced `frontend/nginx/default.conf.template` must carry over the CSP and
+`Permissions-Policy` headers, the `/signin-oidc` and `/signout-callback-oidc` locations, and `$http_host`
+for `Host` and `X-Forwarded-Host`.
 
 ## 0.10.0 — 2026-10-14
 

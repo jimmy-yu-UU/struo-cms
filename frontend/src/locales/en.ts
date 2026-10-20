@@ -104,6 +104,12 @@ export default {
     hidePassword: 'Hide password',
     invalidCredentials: 'Email or password is incorrect.',
     accountInactive: 'This account has been deactivated. Please contact an administrator.',
+    ssoFailed: 'External sign-in failed. Please try again.',
+    ssoDenied: 'External sign-in was cancelled or refused.',
+    ssoNoEmail: 'The external account did not provide an email, so it cannot sign in.',
+    ssoEmailNotVerified: "The external account's email is not verified, so it cannot sign in.",
+    ssoDomainNotAllowed: 'This email domain is not allowed.',
+    ssoTenantNotAllowed: 'This organization tenant is not allowed.',
   },
   dashboard: {
     title: 'Dashboard',

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
 using Struo.Application.Security;
@@ -29,6 +30,10 @@ public static class OidcWiring
                 o => !o.Enabled || !o.IsUnpinnedMultiTenant(),
                 "Oidc Authority is multi-tenant (common, organizations or consumers); " +
                 "set Oidc:AllowedTenantId or Oidc:AllowedEmailDomains, or use a single-tenant Authority")
+            .Validate(
+                o => !o.Enabled || o.HasValidPrompt(),
+                "Oidc:Prompt must be empty or space-separated values from: " +
+                string.Join(", ", OidcOptions.AllowedPromptValues))
             .ValidateOnStart();
         services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 
@@ -58,38 +63,67 @@ public static class OidcWiring
             foreach (var s in opts.Scopes)
                 options.Scope.Add(s);
 
-            options.Events = new OpenIdConnectEvents
-            {
-                OnTokenValidated = async ctx =>
-                {
-                    var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
-                    if (principal is null)
-                    {
-                        ctx.Fail($"external_login_{failure}");
-                        return;
-                    }
-
-                    // The handler signs THIS into the cookie SignInScheme (→ Redis ticket store).
-                    ctx.Principal = principal;
-                },
-
-                OnRemoteFailure = ctx =>
-                {
-                    ctx.HandleResponse();
-                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return ctx.Response.WriteAsJsonAsync(new { error = new { message = "External login failed." } });
-                },
-
-                OnAccessDenied = ctx =>
-                {
-                    ctx.HandleResponse();
-                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return ctx.Response.WriteAsJsonAsync(new { error = new { message = "External login denied." } });
-                }
-            };
+            options.Events = BuildEvents(opts.Prompt);
         });
 
         return services;
+    }
+
+    private static OpenIdConnectEvents BuildEvents(string? configuredPrompt)
+    {
+        var prompt = string.IsNullOrWhiteSpace(configuredPrompt) ? null : configuredPrompt.Trim();
+        return new OpenIdConnectEvents
+        {
+            OnRedirectToIdentityProvider = ctx =>
+            {
+                if (prompt is not null) ctx.ProtocolMessage.Prompt = prompt;
+                return Task.CompletedTask;
+            },
+
+            OnTokenValidated = async ctx =>
+            {
+                var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
+                if (principal is null)
+                {
+                    ctx.Fail($"external_login_{failure}");
+                    return;
+                }
+
+                // The handler signs THIS into the cookie SignInScheme (→ Redis ticket store).
+                ctx.Principal = principal;
+            },
+
+            OnRemoteFailure = OnRemoteFailure,
+            OnAccessDenied = OnAccessDenied
+        };
+    }
+
+    private const string FailedCode = "external_login_failed";
+    private const string DeniedCode = "external_login_denied";
+
+    private static readonly HashSet<string> RefusalCodes = Enum.GetNames<ExternalLoginFailure>()
+        .Select(RefusalCode)
+        .ToHashSet(StringComparer.Ordinal);
+
+    private static string RefusalCode(string failure) => $"external_login_{failure}";
+
+    /// <summary>Ends a failed sign-in (provider error, or a refusal raised by OnTokenValidated) on the SPA
+    /// login page. Only a fixed code reaches the URL, never the exception text.</summary>
+    public static Task OnRemoteFailure(RemoteFailureContext ctx)
+    {
+        var message = ctx.Failure?.Message;
+        var code = message is not null && RefusalCodes.Contains(message) ? message : FailedCode;
+        return RedirectToLogin(ctx, code);
+    }
+
+    /// <summary>Ends a sign-in the user declined at the provider on the SPA login page.</summary>
+    public static Task OnAccessDenied(AccessDeniedContext ctx) => RedirectToLogin(ctx, DeniedCode);
+
+    private static Task RedirectToLogin(HandleRequestContext<RemoteAuthenticationOptions> ctx, string code)
+    {
+        ctx.Response.Redirect($"/login?error={Uri.EscapeDataString(code)}");
+        ctx.HandleResponse();
+        return Task.CompletedTask;
     }
 
     /// <summary>Resolves/JIT-provisions the local user for a validated external principal and returns the

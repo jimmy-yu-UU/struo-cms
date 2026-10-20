@@ -91,9 +91,19 @@
 - `IImageTransformer.Transform` 在請求之後多一個 `long maxSourcePixels` 參數，並回傳可為 null 的
   `ImageTransformResult?`，`null` 代表解碼器會產生的影像超過該上限。實作這個介面的 fork 必須加上參數並遵守
   上限，呼叫它的 fork 必須傳入上限並處理 `null`（改回傳原始位元組）。
+- 管理端映像的 Content-Security-Policy 會擋下指向自身以外來源的圖片與 API 呼叫，除非 `CSP_IMG_EXTRA` /
+  `CSP_CONNECT_EXTRA` 列出這些來源。從 CDN 或 presigned bucket URL（`Struo:Files:PresignedRedirect`）提供檔案、
+  設了絕對的外部 `Branding:LogoUrl`，或把 `VITE_API_BASE_URL` 指向其他來源的 fork，升級後這些圖片或請求會失效，
+  需先設定這兩個變數。
 :::
 
 ### 新增
+
+- `ForwardedHeaders:Enabled`（預設 `false`）、`ForwardedHeaders:KnownProxies` 與
+  `ForwardedHeaders:KnownNetworks` 讓 API 認列出的代理送來的 `X-Forwarded-For`、`X-Forwarded-Proto`、
+  `X-Forwarded-Host`，套用在驗證、工作階段輪替與速率限制之前。位址或 CIDR 範圍格式錯誤，或啟用卻兩個清單
+  都空，啟動會失敗並點名鍵。部署在反向代理後面、需要真正的用戶端位址（每個 IP 的登入限流）或 `https`
+  OIDC 重新導向網址的，才需要設定；關閉時一切照舊。第 4、20 章有說明。
 
 - `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
   所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
@@ -106,6 +116,11 @@
   模型說明見第 15 章。
   若某個檔案資料列儲存的 `status` 兩者皆非，任何帶有 `status` 的更新都會回 `400`，管理介面儲存標題或替代文字也
   包含在內；用 `PUT /api/items/file/{id}` 送出有效的 `status`，或直接修正該欄位，即可修復這類資料列。
+
+- `Oidc:Prompt`（預設 `select_account`）設定 OIDC 授權請求的 `prompt` 參數，讓提供者一律顯示帳號挑選畫面；
+  也接受 `login`、`consent`、`none`，留空則不送 `prompt`。既有的 OIDC 部署升級後，每次登入都會看到帳號挑選
+  畫面；要維持原本的靜默登入，把 `Oidc:Prompt` 設為空值。無效的值會讓啟動失敗並點名 `Oidc:Prompt`。
+  第 4、16 章有說明。
 
 ### 安全性
 
@@ -125,7 +140,25 @@
   （`Enabled` 為 true、`PermitLimit` 4、`QueueLimit` 32）限制單一行程內同時驗證密碼的登入數，其餘回
   429 並帶 `Retry-After`。知道某個帳號 email 的人可以讓它在視窗結束前無法用密碼登入；SSO 登入不受影響。
 
+- 管理端映像會送 `Content-Security-Policy`（指令稿只從映像本身載入、不可被嵌入框架、不允許外掛）與
+  `Permissions-Policy`（關閉相機、麥克風、定位、支付與 USB）。代理出去的 `/api/*` 回應與兩條
+  OIDC 回呼路徑帶 `default-src 'none'; frame-ancestors 'none'; sandbox`。容器變數 `CSP_IMG_EXTRA` 與
+  `CSP_CONNECT_EXTRA`（預設空字串）可為 `img-src` 與 `connect-src` 加入來源；圖片或 API 呼叫走向其他來源
+  （例如 CDN 或 bucket 的 presigned URL）的 fork 必須設定它們（見破壞性變更）。主題初始化是檔案
+  `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
+
 ### 修正
+
+- OIDC 登入可以在隨附的管理映像 nginx 後面運作。映像把 `/signin-oidc` 與 `/signout-callback-oidc` 和
+  `/api/` 一樣代理給 API，並把用戶端的 `Host` 標頭連同埠號當作 `Host` 與 `X-Forwarded-Host` 轉送（原本送的是
+  不含埠號的主機名稱），讓 API 組出的重新導向網址與向提供者登記的一致。`/api/` 之外的自訂
+  `Oidc:CallbackPath` 要在 `frontend/nginx/default.conf.template` 另加一個 `location` 區塊。
+
+- 外部登入失敗或被拒絕（提供者錯誤、使用者拒絕同意、tenant、網域、email 或停用帳號的拒絕）時，瀏覽器會被
+  導向 `/login?error=<code>`，登入頁顯示在地化的訊息後移除該參數；原本瀏覽器會停在一段原始的 `401` JSON
+  回應上。代碼是 `external_login_failed`、`external_login_denied`，以及
+  `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`；例外訊息絕不會進到
+  網址。第 16 章列出這些代碼。
 
 - `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁
   的筆數會超過 `MaxLimit`。`Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出
@@ -182,6 +215,9 @@ libvips 的主機現在會啟動失敗。
 若你的 `.env` 是從較早的 `.env.example` 複製來的，裡面會有 `STRUO_ADMIN_PASSWORD=admin`。升級前請清空它，或改成
 符合 `Auth:Password` 的值：compose 的 `api` 服務會執行 `Database:MigrateOnStartup`，遇到這個值就拒絕啟動，資料庫
 已經植入過也一樣。
+
+若 fork 換掉了 `frontend/nginx/default.conf.template`，請帶過去 CSP 與 `Permissions-Policy` 標頭、`/signin-oidc` 與
+`/signout-callback-oidc` 兩個 location，以及 `Host` 與 `X-Forwarded-Host` 用的 `$http_host`。
 
 ## 0.10.0 — 2026-10-14
 
