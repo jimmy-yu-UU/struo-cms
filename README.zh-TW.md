@@ -89,7 +89,8 @@ pnpm dev
 ## 文件
 
 完整手冊放在 `docs/` 之下，以英文與繁體中文逐章對照撰寫，從
-[第 1 章：StruoCMS 是什麼](docs/guide/zh-TW/01-what-is-struocms.md)開始讀。用 AI coding agent 開發這
+[第 1 章：StruoCMS 是什麼](docs/guide/zh-TW/01-what-is-struocms.md)開始讀。剛 fork 完，先照
+[第 25 章：Fork 之後要做的事](docs/guide/zh-TW/25-after-forking.md)走一遍。用 AI coding agent 開發這
 個專案，先讀 [`AGENTS.md`](AGENTS.md)。文件站台是獨立的專案，用以下指令安裝並啟動：
 
 ```bash

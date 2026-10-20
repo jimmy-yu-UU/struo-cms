@@ -404,5 +404,5 @@ not one of the five standing gates, and is not run by CI.
 
 ## Where to read more
 
-- `docs/guide/en/` — the twenty-four-chapter manual (zh-TW parallel at `docs/guide/zh-TW/`).
+- `docs/guide/en/` — the twenty-five-chapter manual (zh-TW parallel at `docs/guide/zh-TW/`).
 - `docs/ai/architecture.md`, `docs/ai/conventions.md`, `docs/ai/task-playbooks.md` — this reference set.
