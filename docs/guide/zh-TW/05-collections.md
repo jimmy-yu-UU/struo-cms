@@ -91,8 +91,8 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 沒設時就是 camelCase 的類別名稱，所以重新命名類別會讓那些資料無聲地失去對應。fork 應該在集合有資料之前，
 替自己的每個集合設好 `Name`。名稱必須符合 `^[a-z][A-Za-z0-9]*$`，且在所有集合（含框架內建的）之間不可
 重複；不符合就在啟動時丟出 `MetadataException`。GraphQL schema 由它衍生出的名稱，也不能跟其他集合或內建
-名稱撞在一起（見[第 14 章：GraphQL](14-graphql.md)），那同樣會讓啟動中止。`Name` 不影響翻譯 sidecar 的慣例：sidecar 的外鍵屬性仍叫
-`{類別名稱}Id`，所以重新命名類別時要一起改。
+名稱撞在一起（見[第 14 章：GraphQL](14-graphql.md)），那同樣會讓啟動中止。`Name` 不影響翻譯 sidecar
+的慣例：sidecar 的外鍵屬性仍叫`{類別名稱}Id`，所以重新命名類別時要一起改。
 
 `DefaultDisplayField` 名稱要對得上某個欄位，比對時看 camelCase 之後的名字，對不上就在啟動時
 丟出 `MetadataException`。

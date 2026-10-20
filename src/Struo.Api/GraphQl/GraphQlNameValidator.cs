@@ -6,7 +6,7 @@ namespace Struo.Api.GraphQl;
 /// <summary>
 /// The GraphQL type names and root field names one collection contributes to the schema.
 /// </summary>
-public sealed record CollectionSurface(
+internal sealed record CollectionSurface(
     string Collection,
     IReadOnlyList<string> TypeNames,
     IReadOnlyList<string> QueryFields,
@@ -18,10 +18,10 @@ public sealed record CollectionSurface(
 /// error during schema build. GraphQL names are case-sensitive, matching HotChocolate's own
 /// duplicate detection.
 /// </summary>
-public static class GraphQlNameValidator
+internal static class GraphQlNameValidator
 {
     /// <summary>Type names the schema always contains, independent of any collection.</summary>
-    public static readonly IReadOnlySet<string> FixedTypeNames = new HashSet<string>(StringComparer.Ordinal)
+    internal static readonly IReadOnlySet<string> FixedTypeNames = new HashSet<string>(StringComparer.Ordinal)
     {
         "Query", "Mutation",
         "String", "Int", "Float", "Boolean", "ID", "Long", "DateTime", "Date", "UUID", "Any",
@@ -31,10 +31,10 @@ public static class GraphQlNameValidator
     };
 
     /// <summary>Root field names the Query and Mutation types always contain.</summary>
-    public static readonly IReadOnlySet<string> FixedRootFields =
+    internal static readonly IReadOnlySet<string> FixedRootFields =
         new HashSet<string>(StringComparer.Ordinal) { "_service" };
 
-    public static void Validate(IReadOnlyList<CollectionSurface> surfaces)
+    internal static void Validate(IReadOnlyList<CollectionSurface> surfaces)
     {
         var problems = new List<string>();
         problems.AddRange(Check("type", surfaces, s => s.TypeNames, FixedTypeNames));
@@ -71,7 +71,7 @@ public static class GraphQlNameValidator
             else if (collections.Distinct(StringComparer.Ordinal).Count() == 1)
                 yield return $"Collection {who} generates the {kind} name '{name}' more than once.";
             else
-                yield return $"Collections {who} both generate the {kind} name '{name}'.";
+                yield return $"Collections {who} {(collections.Count == 2 ? "both" : "all")} generate the {kind} name '{name}'.";
         }
     }
 }

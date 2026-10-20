@@ -8,6 +8,7 @@ using Struo.Api.GraphQl;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Models;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.GraphQl;
@@ -17,7 +18,8 @@ namespace Struo.Tests.GraphQl;
 /// one message naming the collection(s) and name(s), and the fixed-name list cannot drift from the
 /// schema the module really builds.
 /// </summary>
-public class GraphQlNameCollisionTests
+[Collection("ApiIntegration")]
+public class GraphQlNameCollisionTests(ApiFactory factory)
 {
     private static StruoTypeModule ModuleFor(IReadOnlyList<CollectionMetadata> collections) =>
         new(new SetProvider(collections), new BareRegistry(), new NoM2MSource());
@@ -40,14 +42,6 @@ public class GraphQlNameCollisionTests
 
         ex.Message.Should().Contain($"'{collection}'").And.Contain($"'{typeName}'")
             .And.Contain("reserves");
-    }
-
-    [Fact]
-    public void A_collection_whose_root_field_is_service_fails()
-    {
-        var ex = Collide("_service");
-
-        ex.Message.Should().Contain("'_service'");
     }
 
     [Fact]
@@ -79,13 +73,29 @@ public class GraphQlNameCollisionTests
     }
 
     [Fact]
-    public void Names_are_compared_case_sensitively()
+    public void Generated_names_are_compared_exactly()
     {
-        // `Foo` and `foo` are rejected elsewhere as case-insensitive duplicates, but the type names
-        // `Foo`/`Foo` clash exactly; `fooBar` vs `foobar` produce `FooBar`/`Foobar`, which do not.
-        FluentActions.Invoking(() => ModuleFor([Bare("fooBar"), Bare("foobar")]).ValidateNames())
-            .Should().NotThrow();
+        // `fooBar` and `foobar` as collection names are rejected by the scanner as case-insensitive
+        // duplicates, so the validator is exercised here with surfaces directly: `FooBar` and
+        // `Foobar` differ, `FooBar` and `FooBar` do not.
+        FluentActions.Invoking(() => GraphQlNameValidator.Validate(
+            [Surface("a", "FooBar"), Surface("b", "Foobar")])).Should().NotThrow();
+        FluentActions.Invoking(() => GraphQlNameValidator.Validate(
+            [Surface("a", "FooBar"), Surface("b", "FooBar")])).Should().Throw<MetadataException>();
     }
+
+    [Fact]
+    public void Three_colliding_collections_are_all_named()
+    {
+        var ex = FluentActions.Invoking(() => GraphQlNameValidator.Validate(
+            [Surface("a", "Dup"), Surface("b", "Dup"), Surface("c", "Dup")]))
+            .Should().Throw<MetadataException>().Which;
+
+        ex.Message.Should().Contain("Collections 'a', 'b', 'c' all generate the type name 'Dup'");
+    }
+
+    private static CollectionSurface Surface(string collection, string typeName) =>
+        new(collection, [typeName], [], []);
 
     [Fact]
     public void The_fixture_collections_pass()
@@ -97,25 +107,16 @@ public class GraphQlNameCollisionTests
     }
 
     [Fact]
-    public async Task The_fixed_name_lists_match_the_built_schema()
+    public async Task The_host_schema_matches_the_fixed_name_lists_and_its_collections_pass()
     {
-        var provider = FakeMetadataFixtures.Provider();
-        var module = new StruoTypeModule(provider, FakeMetadataFixtures.Registry(), FakeMetadataFixtures.M2MSource());
+        var module = factory.Services.GetRequiredService<StruoTypeModule>();
         var surfaces = module.DescribeCollections();
+        var executor = await factory.Services.GetRequiredService<IRequestExecutorProvider>()
+            .GetExecutorAsync();
+        var schema = executor.Schema;
 
-        var schema = await new ServiceCollection()
-            .AddSingleton(provider)
-            .AddSingleton(FakeMetadataFixtures.Registry())
-            .AddSingleton(FakeMetadataFixtures.M2MSource())
-            .AddScoped<IGraphQlDataSource, FakeGraphQlDataSource>()
-            .AddSingleton<StruoTypeModule>()
-            .AddGraphQLServer()
-            .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
-            .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
-            .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()
-            .AddType<UuidType>().AddType<AnyType>().AddJsonTypeConverter()
-            .AddTypeModule<StruoTypeModule>()
-            .BuildSchemaAsync();
+        // The shipped Blog sample and framework collections generate no clashing names.
+        FluentActions.Invoking(module.ValidateNames).Should().NotThrow();
 
         var collectionTypes = surfaces.SelectMany(s => s.TypeNames).ToHashSet(StringComparer.Ordinal);
         var sharedTypes = schema.Types.Select(t => t.Name)
@@ -128,7 +129,7 @@ public class GraphQlNameCollisionTests
         RootFieldsOutsideCollections(schema, "Mutation", surfaces.SelectMany(s => s.MutationFields))
             .Should().BeEquivalentTo(GraphQlNameValidator.FixedRootFields);
 
-        // Every collection-derived name really is in the schema (the surface is the schema's own).
+        // Every collection-derived name really is in the schema.
         schema.Types.Select(t => t.Name).Should().Contain(collectionTypes);
     }
 

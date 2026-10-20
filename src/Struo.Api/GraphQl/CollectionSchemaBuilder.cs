@@ -35,8 +35,29 @@ internal sealed class CollectionSchemaBuilder(
             | System.Reflection.BindingFlags.IgnoreCase)?.GetValue(parent);
     }
 
-    internal IEnumerable<ITypeSystemMember> Build(CollectionMetadata meta)
+    /// <summary>A collection's built types, with the name each was created under.</summary>
+    internal sealed record BuiltCollection(IReadOnlyList<ITypeSystemMember> Types, IReadOnlyList<string> TypeNames);
+
+    // Every type is created through NewObject/NewInput, which record the type's name here: a type
+    // built with CreateUnsafe has no name until HotChocolate initialises it, so the names the
+    // startup collision check sees are collected at creation instead.
+    private readonly List<string> _createdNames = [];
+
+    private ObjectType NewObject(ObjectTypeConfiguration config)
     {
+        _createdNames.Add(config.Name);
+        return ObjectType.CreateUnsafe(config);
+    }
+
+    private InputObjectType NewInput(InputObjectTypeConfiguration config)
+    {
+        _createdNames.Add(config.Name);
+        return InputObjectType.CreateUnsafe(config);
+    }
+
+    internal BuiltCollection Build(CollectionMetadata meta)
+    {
+        _createdNames.Clear();
         var types = new List<ITypeSystemMember>();
         // M2M relations that carry junction payload — drives the additive <rel>Links/<Rel>Link/
         // <Rel>Junction/<Rel>LinkInput types below. Empty for every payload-free relation, so
@@ -88,57 +109,13 @@ internal sealed class CollectionSchemaBuilder(
 
         types.Add(BuildCreateInput(meta, payloadRelations));       // ArticleCreateInput
         types.Add(BuildUpdateInput(meta, payloadRelations));       // ArticleUpdateInput
-        return types;
+        return new BuiltCollection(types, _createdNames.ToList());
     }
 
     private List<M2MDescriptor> PayloadRelations(CollectionMetadata meta) =>
         m2mSource.M2MDescriptors(meta.Name)
             .Where(d => HasExposablePayload(d, metadataProvider))
             .ToList();
-
-    /// <summary>
-    /// The names of the GraphQL types <see cref="Build"/> emits for <paramref name="meta"/>, listed
-    /// without building them (a built type has no name until HotChocolate initialises it). The
-    /// conditions here mirror <see cref="Build"/> one for one; a test compares this list with the
-    /// types of a schema built from the same metadata.
-    /// </summary>
-    internal IReadOnlyList<string> TypeNames(CollectionMetadata meta)
-    {
-        var payloadRelations = PayloadRelations(meta);
-        var names = new List<string>
-        {
-            SchemaTypeMapper.TypeName(meta.Name),
-            SchemaTypeMapper.ListTypeName(meta.Name),
-            SchemaTypeMapper.FilterInputName(meta.Name),
-            SchemaTypeMapper.CreateInputName(meta.Name),
-            SchemaTypeMapper.UpdateInputName(meta.Name),
-        };
-
-        names.AddRange(meta.Fields
-            .Where(f => !f.Hidden && !SchemaTypeMapper.IsExcluded(f.Interface)
-                && f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
-            .Select(f => SchemaTypeMapper.RepeaterItemTypeName(meta.Name, f.Name)));
-        names.AddRange(meta.Fields
-            .Where(f => f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
-            .Select(f => SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)));
-
-        foreach (var rel in payloadRelations)
-        {
-            names.Add(SchemaTypeMapper.JunctionTypeName(meta.Name, rel.RelationName));
-            names.Add(SchemaTypeMapper.LinkTypeName(meta.Name, rel.RelationName));
-            names.Add(SchemaTypeMapper.LinkInputName(meta.Name, rel.RelationName));
-            names.Add(SchemaTypeMapper.RelationFilterInputName(meta.Name, rel.RelationName));
-            if (BuildJunctionFilterInput(meta, rel) is not null)
-                names.Add(SchemaTypeMapper.JunctionFilterInputName(meta.Name, rel.RelationName));
-        }
-
-        if (meta.Translation is not null)
-        {
-            names.Add(SchemaTypeMapper.TranslationFieldsInputName(meta.Name));
-            names.Add(SchemaTypeMapper.TranslationInputName(meta.Name));
-        }
-        return names;
-    }
 
     private ObjectType BuildObjectType(
         CollectionMetadata meta, List<ITypeSystemMember> sink, IReadOnlyList<M2MDescriptor> payloadRelations)
@@ -192,7 +169,7 @@ internal sealed class CollectionSchemaBuilder(
         if (meta.Translation is not null)
             config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx))));
 
-        return ObjectType.CreateUnsafe(config);
+        return NewObject(config);
     }
 
     // Adds a single relation's read-side field(s) to the collection's object type: a bare object
@@ -234,7 +211,7 @@ internal sealed class CollectionSchemaBuilder(
             ctx => ParentDict(ctx).GetValueOrDefault(rel.Name)));
     }
 
-    private static ObjectType BuildRepeaterItemType(string collection, FieldMetadata repeater)
+    private ObjectType BuildRepeaterItemType(string collection, FieldMetadata repeater)
     {
         // RuntimeType = object (not IReadOnlyDictionary<string,object?>): the real parent at
         // execution time is a POCO (see ReadRepeaterSubField above), mirroring TagItemType.
@@ -247,10 +224,10 @@ internal sealed class CollectionSchemaBuilder(
             if (sdl is null) continue;
             config.Fields.Add(Field(sub.Name, sdl, ctx => ReadRepeaterSubField(ctx.Parent<object>(), sub.Name)));
         }
-        return ObjectType.CreateUnsafe(config);
+        return NewObject(config);
     }
 
-    private static InputObjectType BuildRepeaterItemInputType(string collection, FieldMetadata repeater)
+    private InputObjectType BuildRepeaterItemInputType(string collection, FieldMetadata repeater)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.RepeaterItemInputTypeName(collection, repeater.Name), null,
@@ -263,7 +240,7 @@ internal sealed class CollectionSchemaBuilder(
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
         }
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // <Parent><Rel>Junction: one field per non-hidden payload field of a payload-carrying M2M
@@ -276,7 +253,7 @@ internal sealed class CollectionSchemaBuilder(
             typeof(IReadOnlyDictionary<string, object?>));
         foreach (var (pf, _, sdl) in ExposableJunctionFields(descriptor, metadataProvider))
             config.Fields.Add(Field(pf.Name, sdl, ctx => ParentDict(ctx).GetValueOrDefault(pf.Name)));
-        return ObjectType.CreateUnsafe(config);
+        return NewObject(config);
     }
 
     // Single source of truth for "does this M2M relation's junction have at least one field the
@@ -324,7 +301,7 @@ internal sealed class CollectionSchemaBuilder(
     // through ParentDict, since it is already a full target row. The junction field reads the
     // internal junction key that deep expansion attaches, returning null when the caller lacks the
     // junction read grant, which is why that field's GraphQL type omits the required marker.
-    private static ObjectType BuildLinkType(CollectionMetadata meta, string targetTypeName, M2MDescriptor descriptor)
+    private ObjectType BuildLinkType(CollectionMetadata meta, string targetTypeName, M2MDescriptor descriptor)
     {
         var config = new ObjectTypeConfiguration(
             SchemaTypeMapper.LinkTypeName(meta.Name, descriptor.RelationName), null,
@@ -332,7 +309,7 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(Field("node", $"{targetTypeName}!", ctx => ParentDict(ctx)));
         config.Fields.Add(Field("junction", SchemaTypeMapper.JunctionTypeName(meta.Name, descriptor.RelationName),
             ctx => ParentDict(ctx).GetValueOrDefault("_junction")));
-        return ObjectType.CreateUnsafe(config);
+        return NewObject(config);
     }
 
     // <Parent><Rel>LinkInput: { id: ID!, <writable payload fields> }. JunctionPayload already
@@ -354,7 +331,7 @@ internal sealed class CollectionSchemaBuilder(
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(pf.Name, null, TypeReference.Parse(sdl)));
         }
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // Resolves a junction payload field's FieldInterface from the junction collection's own
@@ -384,11 +361,11 @@ internal sealed class CollectionSchemaBuilder(
             if (sdl is null) continue;
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         }
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // XTranslationInput: one entry = { locale: String!, fields: XTranslationFieldsInput! }.
-    private static InputObjectType BuildTranslationInputType(CollectionMetadata meta)
+    private InputObjectType BuildTranslationInputType(CollectionMetadata meta)
     {
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.TranslationInputName(meta.Name), null,
@@ -396,10 +373,10 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(new InputFieldConfiguration("locale", null, TypeReference.Parse("String!")));
         config.Fields.Add(new InputFieldConfiguration(
             "fields", null, TypeReference.Parse(SchemaTypeMapper.TranslationFieldsInputName(meta.Name) + "!")));
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
-    private static ObjectType BuildListType(CollectionMetadata meta)
+    private ObjectType BuildListType(CollectionMetadata meta)
     {
         var config = new ObjectTypeConfiguration(SchemaTypeMapper.ListTypeName(meta.Name), null, typeof(PagedResultView));
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
@@ -407,7 +384,7 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(Field("total", "Int!", ctx => ctx.Parent<PagedResultView>().Total));
         config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => ctx.Parent<PagedResultView>().Facets));
         config.Fields.Add(Field("aggregate", "Any", ctx => ctx.Parent<PagedResultView>().Aggregate));
-        return ObjectType.CreateUnsafe(config);
+        return NewObject(config);
     }
 
     private InputObjectType BuildFilterInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
@@ -419,7 +396,7 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(new InputFieldConfiguration("some", null, TypeReference.Parse(name)));
         config.Fields.Add(new InputFieldConfiguration("none", null, TypeReference.Parse(name)));
         AddFilterFields(config, meta, payloadRelations);
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // Own-field + relation filter fields shared by BuildFilterInput (meta = the collection itself)
@@ -496,7 +473,7 @@ internal sealed class CollectionSchemaBuilder(
                 "junction", null,
                 TypeReference.Parse(SchemaTypeMapper.JunctionFilterInputName(meta.Name, descriptor.RelationName))));
 
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // <Parent><Rel>JunctionFilterInput: one operator-input field per exposable junction payload
@@ -515,7 +492,7 @@ internal sealed class CollectionSchemaBuilder(
             var opInput = FilterInputTranslator.OperatorInputTypeName(iface, clr);
             config.Fields.Add(new InputFieldConfiguration(pf.Name, null, TypeReference.Parse(opInput)));
         }
-        return config.Fields.Count == 0 ? null : InputObjectType.CreateUnsafe(config);
+        return config.Fields.Count == 0 ? null : NewInput(config);
     }
 
     private InputObjectType BuildCreateInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
@@ -523,7 +500,7 @@ internal sealed class CollectionSchemaBuilder(
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.CreateInputName(meta.Name), null, typeof(IReadOnlyDictionary<string, object?>));
         AddWritableFields(config, meta, payloadRelations);
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     private InputObjectType BuildUpdateInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
@@ -533,7 +510,7 @@ internal sealed class CollectionSchemaBuilder(
         // Optimistic-concurrency token (update-only). Absent -> no protection (backward compatible).
         config.Fields.Add(new InputFieldConfiguration("version", null, TypeReference.Parse("Long")));
         AddWritableFields(config, meta, payloadRelations);
-        return InputObjectType.CreateUnsafe(config);
+        return NewInput(config);
     }
 
     // Shared by create/update inputs: writable own-fields (scalars, File/Image, Files, multi-value,

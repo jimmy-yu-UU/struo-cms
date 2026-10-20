@@ -24,7 +24,6 @@ public sealed class StruoTypeModule(
     public ValueTask<IReadOnlyCollection<ITypeSystemMember>> CreateTypesAsync(
         IDescriptorContext context, CancellationToken cancellationToken)
     {
-        ValidateNames();
         var types = new List<ITypeSystemMember>();
 
         // Shared value types.
@@ -37,6 +36,7 @@ public sealed class StruoTypeModule(
         types.AddRange(SharedFacetTypes.Build());
 
         var collections = BuildCollections();
+        GraphQlNameValidator.Validate(collections.Select(c => c.Surface).ToList());
         foreach (var collection in collections)
             types.AddRange(collection.Types);
 
@@ -48,20 +48,18 @@ public sealed class StruoTypeModule(
     /// <summary>
     /// Fails fast with a <see cref="Struo.Domain.Metadata.MetadataException"/> naming the colliding
     /// collection(s) and GraphQL name(s) when the collection set would generate duplicate names.
-    /// Runs the same builders as the schema build, so it sees exactly the names the schema would get.
+    /// <see cref="CreateTypesAsync"/> runs the same check on the types it is about to register.
     /// </summary>
-    public void ValidateNames() => GraphQlNameValidator.Validate(DescribeCollections());
+    internal void ValidateNames() => GraphQlNameValidator.Validate(DescribeCollections());
 
-    public IReadOnlyList<CollectionSurface> DescribeCollections() =>
+    internal IReadOnlyList<CollectionSurface> DescribeCollections() =>
         BuildCollections().Select(c => c.Surface).ToList();
 
     private sealed record CollectionTypes(
         IReadOnlyList<ITypeSystemMember> Types,
         IReadOnlyList<ObjectFieldConfiguration> QueryFields,
-        IReadOnlyList<ObjectFieldConfiguration> MutationFields)
-    {
-        internal CollectionSurface Surface { get; init; } = null!;
-    }
+        IReadOnlyList<ObjectFieldConfiguration> MutationFields,
+        CollectionSurface Surface);
 
     private List<CollectionTypes> BuildCollections()
     {
@@ -69,17 +67,16 @@ public sealed class StruoTypeModule(
         var result = new List<CollectionTypes>();
         foreach (var meta in metadata.GetCollections())
         {
-            var types = builder.Build(meta).ToList();
+            var built = builder.Build(meta);
             var query = QueryFieldsOf(meta);
             var mutation = MutationFieldsOf(meta);
-            result.Add(new CollectionTypes(types, query, mutation)
-            {
-                Surface = new CollectionSurface(
+            result.Add(new CollectionTypes(
+                built.Types, query, mutation,
+                new CollectionSurface(
                     meta.Name,
-                    builder.TypeNames(meta),
+                    built.TypeNames,
                     query.Select(f => f.Name).ToList(),
-                    mutation.Select(f => f.Name).ToList()),
-            });
+                    mutation.Select(f => f.Name).ToList())));
         }
         return result;
     }

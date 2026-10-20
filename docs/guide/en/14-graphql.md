@@ -37,8 +37,9 @@ collide with another collection's or with a name the schema always contains stop
 when their generated names meet, for example `article` and `articleList` (both produce the type
 `ArticleList`) or `category` and `categories` (both produce the query field `categories`). A
 collection collides with the built-in names when it generates one of them, for example `revision`
-(type `Revision`), `query`, `mutation`, `string` or `tagItem`. GraphQL names are case-sensitive, so
-`fooBar` and `foobar` do not collide. Rename one of the collections; see
+(type `Revision`), `query`, `mutation`, `string` or `tagItem`. The comparison of generated names is exact (GraphQL names are
+case-sensitive), and collection names themselves must already differ ignoring case. Rename one of
+the collections; see
 [Chapter 5: Defining Collections](05-collections.md) for the `Name` rules.
 
 An object type always carries `id: ID!` and `version: Long`, one field for every non-hidden,
