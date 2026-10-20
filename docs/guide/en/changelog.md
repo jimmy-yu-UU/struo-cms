@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0
+## 0.11.0 — 2026-10-20
 
 ::: danger Breaking
 - `Errors` and `Warnings` on `SchemaCheckReport` are methods: `GetErrors()` and `GetWarnings()`. Code that
@@ -21,16 +21,20 @@
 - The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
   `appsettings.json` and `STRUO_ADMIN_PASSWORD` defaults to empty in `docker-compose.yml`. When the
   password is empty, the run that creates the admin generates a random password of at least 24
-  characters and logs it once as a Warning. A configured password that fails `Auth:Password` or equals `admin` in any letter case
-  is refused in every environment: `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start fail
-  with an error naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded, until
-  the value is fixed or removed. The Production-only default-password warning is gone. The Playwright suites read the password from
-  `E2E_PASSWORD`, which is required. A fork that relied on `admin@admin.com` / `admin` must set a
-  password or read the generated one from the `migrate` output.
+  characters and logs it once as a Warning. A configured password that fails `Auth:Password` or equals
+  `admin` in any letter case is refused in
+  every environment: `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start fail with an
+  error naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded, until the
+  value is fixed or removed. The Production-only default-password warning is gone. The Playwright suites
+  read the password from `E2E_PASSWORD`, which is required. A fork that relied on
+  `admin@admin.com` / `admin` must set a password or read the generated one from the `migrate` output.
 - An enabled `Oidc` section whose `Authority` has a path segment of `common`, `organizations` or
-  `consumers` is refused at startup unless `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` is set.
-  The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
+  `consumers`, or is the consumers tenant GUID, is refused at startup unless `Oidc:AllowedTenantId` or
+  `Oidc:AllowedEmailDomains` is set. The error names both keys. A fork with a multi-tenant authority and no pin must set one of them or
   switch to a single-tenant authority.
+- OIDC sign-in now sends `prompt=select_account` by default, so an existing OIDC deployment shows the
+  provider's account picker at every sign-in. Set `Oidc:Prompt` to an empty string to keep the previous
+  behavior (see Added).
 - `GET /api/items/{collection}/{id}/revisions` returns 404 for an unknown item id; it returned an empty
   array. The revisions of a trashed item (list and single revision, REST and GraphQL) need delete
   permission on the collection; a caller without it gets 404 on REST and an empty list or `null` on
@@ -60,8 +64,9 @@
   `ResetAsync` is unchanged. `TryReserveAsync` counts the attempt and reports whether it may proceed,
   and the caller invokes it before verifying the password. A fork that implements the interface must
   provide it, and a fork that calls the old methods must call it instead.
-- Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones, and
-  with `Redis:ConnectionString` set a login fails with a 5xx error while Redis is unreachable.
+- Every login attempt counts against `RateLimiting:LoginAccount:PermitLimit`, not only failed ones (a
+  successful sign-in still resets the count), and with `Redis:ConnectionString` set a login fails with a
+  5xx error while Redis is unreachable.
 - `ILanguageProvider` is asynchronous: `Enabled()`, `DefaultCode()` and `IsEnabled(code)` are replaced by
   `GetEnabledAsync()`, `DefaultCodeAsync()` and `IsEnabledAsync(code)`, and `CanonicalizeAsync(code)`
   returns the configured spelling of an enabled language, or `null`. A fork that implements the
@@ -85,31 +90,34 @@
 - Three new `Query` keys bound the cost of one request. `MaxSortFields` (default 5) caps the fields of a
   top-level sort and of each nested list's `sort`, `MaxDeepRelations` (default 20) caps the relation
   nodes in a `deep` tree, and `MaxExpandRows` (default 1000) caps the rows one relation fetch may read.
+  There is no cap on `offset`.
   `MaxFilterConditions` is now one budget shared by the root filter and every nested `deep` filter, where
   each nested filter used to count on its own. A request over any of these limits is refused with 400;
-  a relation fetch over `MaxExpandRows` is refused, never truncated. `IItemRepository.QueryWhereInFilteredAsync` and
-  `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
+  a relation fetch over `MaxExpandRows` is refused, never truncated.
+  `IItemRepository.QueryWhereInFilteredAsync` and `QueryEntityWhereInAsync` take an optional `int? maxRows` before the cancellation token, so a fork
   that implements the interface must add it, and a call that passed the token positionally must name it
   (`ct: ct`). `QueryValidator.Validate` takes an optional `FilterBudget`.
   `DeepExpansionCoordinator.ExpandAsync` is replaced by `Prepare`, which validates the `deep` tree and
   takes a `FilterBudget?`, and `ExpandPreparedAsync`, which expands the prepared tree; a caller that used
   `ExpandAsync` calls both. `ItemService` validates the `deep` tree before the search lookup or the root
   query, so an over-cap `deep` on a `GET` by id returns 400 even when the id does not exist (it returned
-  404 before). There is no cap on `offset`.
+  404 before).
 - The media library's trash and purge of a file (`DELETE /api/files/{id}`, with `?purge=true`) apply the
   relation rules every other collection's delete applies. A file still referenced through an
   `OnDelete.Restrict` relation returns `409 CONFLICT` on both, where it was trashed or purged. A purge sets
   `OnDelete.SetNull` references to null and removes many-to-many junction rows, where it left them
-  pointing at a missing file. The generic items API and GraphQL delete of a file go through the same path.
+  pointing at a missing file. The generic items API and GraphQL delete of a file go through the same path
+  (see Fixed).
 - Image transform parameters are normalized, and the transform is bounded. A requested `width` or
   `height` snaps up to the next value of `Struo:Files:ImageTransform:SizeSteps` (default 64, 128, 256,
   320, 480, 640, 768, 1024, 1280, 1600, 1920, 2560, 3840, 4096), so `width=100` returns a 128-wide
-  image. With `fit=cover` only the width snaps and the height follows the requested ratio, rounded to a multiple
-  of 8 pixels. `fit` is
-  `inside` or `cover`; any other value is `400`. A client-supplied `quality` rounds to a multiple of 10 within 10 to 100.
-  Only sources in `TransformableContentTypes` (JPEG, PNG, WebP, AVIF, GIF) are transformed; an SVG with
-  `?width=` returns the original bytes, as does a source over `MaxSourcePixels` (50 000 000) or whose
-  header cannot be read, and an AVIF grid or overlay image is never transformed; the size libvips reads is checked against the same limit before decoding. At most `MaxConcurrentTransforms` (2) transforms run at once, and a request
+  image. With `fit=cover` only the width snaps and the height follows the requested ratio, rounded to a
+  multiple of 8 pixels. `fit` is `inside` or `cover`; any other value is `400`. A client-supplied
+  `quality` rounds to a multiple of 10 within 10 to 100. Only sources in `TransformableContentTypes`
+  (JPEG, PNG, WebP, AVIF, GIF) are transformed. An SVG with `?width=` returns the original bytes, as does
+  a source over `MaxSourcePixels` (50 000 000) or whose header cannot be read. An AVIF grid or overlay
+  image is never transformed. The size libvips reads is checked against the same limit before decoding.
+  At most `MaxConcurrentTransforms` (2) transforms run at once, and a request
   that waits longer than `QueueTimeoutSeconds` (10) gets `503` `IMAGE_TRANSFORM_BUSY`. The variant cache
   is capped by `CacheMaxBytes` (2 GB) with least-recently-used eviction. A client that needs an exact
   pixel size must request a size on the list or configure `SizeSteps`, and one that passed another
@@ -118,6 +126,10 @@
   `ImageTransformResult?`, where `null` means the image the decoder would produce is over that limit. A
   fork that implements the interface must add the parameter and honour the limit, and a fork that calls
   it must pass the limit and handle `null` (serve the original bytes).
+- The API host loads native libvips at startup (`NetVips.BlockUntrusted` is set during service
+  registration), even with image transforms disabled. A host without a usable libvips fails to start.
+- `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the host
+  used to start and serve default pages larger than `MaxLimit`.
 - The admin image's Content-Security-Policy blocks images and API calls to any origin other than its own
   until `CSP_IMG_EXTRA` / `CSP_CONNECT_EXTRA` list them. A fork that serves files from a CDN or presigned
   bucket URLs (`Struo:Files:PresignedRedirect`), sets an absolute external `Branding:LogoUrl`, or points
@@ -136,7 +148,7 @@
 
 - `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
   grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
-  without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It
+  without orphaning them (a translation class's foreign key property must still be `{ClassName}Id`). It
   must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a `MetadataException` naming
   both types. Without `Name` the collection keeps the camel-cased class name.
 
@@ -149,10 +161,9 @@
   through `PUT /api/items/file/{id}` or correct the column directly to repair such a row.
 
 - `Oidc:Prompt` (default `select_account`) sets the `prompt` parameter of the OIDC authorize request, so
-  the provider always shows its account picker; `login`, `consent` and `none` are also accepted, and an
-  empty value sends no prompt. An existing OIDC deployment sees the account picker at every sign-in
-  after upgrading; set `Oidc:Prompt` to empty to keep the previous silent sign-in. An invalid value fails
-  startup naming `Oidc:Prompt`. Chapters 4 and 16 describe it.
+  the provider always shows its account picker. The value is one or more of `select_account`, `login`,
+  `consent` and `none`, separated by spaces, and an empty value sends no prompt (the previous silent
+  sign-in). An invalid value fails startup naming `Oidc:Prompt`. Chapters 4 and 16 describe it.
 
 ### Security
 
@@ -171,9 +182,9 @@
 
 - A login attempt is now counted against the account before its password is verified, so parallel
   guesses can no longer all read the same count and slip past `RateLimiting:LoginAccount:PermitLimit`.
-  With `Redis:ConnectionString` set the count is a Redis atomic counter shared by every instance. A new `RateLimiting:LoginConcurrency`
-  section (`Enabled` true, `PermitLimit` 4, `QueueLimit` 32) caps how many logins verify a password at
-  once in a process; the rest get 429 with `Retry-After`. Anyone who knows an account's email can keep it
+  With `Redis:ConnectionString` set the count is a Redis atomic counter shared by every instance. A new
+  `RateLimiting:LoginConcurrency` section (`Enabled` true, `PermitLimit` 4, `QueueLimit` 32) caps how
+  many logins verify a password at once in a process; the rest get 429 with `Retry-After`. Anyone who knows an account's email can keep it
   locked out of password sign-in until the window ends; SSO sign-in is unaffected.
 
 - The admin image sends a `Content-Security-Policy` (scripts from the image only, no framing, no plugins) and a
@@ -198,10 +209,8 @@
   `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`; exception text
   never reaches the URL. Chapter 16 lists them.
 
-- A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the
-  host used to start and serve default pages larger than `MaxLimit`. A `Struo:ContentAssemblies` entry that
-  cannot be loaded still fails startup with a `MetadataException`, which now carries the original load
-  failure as its `InnerException`.
+- A `Struo:ContentAssemblies` entry that cannot be loaded still fails startup with a `MetadataException`,
+  which now carries the original load failure as its `InnerException`.
 
 - The enabled-language list loads with an asynchronous query, and a failed load is not kept for the rest
   of the request: the next access queries again.
@@ -220,9 +229,7 @@
 
 - Purging an item sets the foreign key to null on every row that references it, and that statement now quotes
   the column name. A relation field whose column name is a reserved word (`order`, `user`, `group`) made the
-  purge fail with a SQL syntax error, and a mixed-case custom column name did not match on PostgreSQL. The
-  optimistic-lock update and the trash and restore guards already filtered on the `id`, `version` and
-  `deletedat` columns, so they are unaffected; they now use the same typed filter.
+  purge fail with a SQL syntax error, and a mixed-case custom column name did not match on PostgreSQL.
 
 - Deleting a file through the generic items API (`DELETE /api/items/file/{id}`) or the GraphQL `deleteFile`
   mutation does what the media library does. Trashing clears the brand logo when it was that file; purging
@@ -241,8 +248,9 @@
 
 ### Upgrade notes
 
-The Redis login throttle counts under new keys, so each account's login-attempt count starts from
-zero at upgrade. During a rolling deploy, instances still on 0.10 and instances on 0.11 count under
+The Redis login throttle counts under the new `login-attempts:` key prefix, so each account's
+login-attempt count starts from zero at upgrade; the old `login-throttle:` entries expire on their own.
+During a rolling deploy, instances still on 0.10 and instances on 0.11 count under
 different keys, so an account can receive up to twice its limit in attempts until every instance runs
 0.11.
 
@@ -257,8 +265,7 @@ produce different keys, so those variants are never read again. They still count
 and the first capped write may sweep them. Deleting the `CachePath` directory reclaims the space at once;
 with `CacheMaxBytes` set to `0` (no cap) they stay until you delete them.
 
-The host sets `NetVips.BlockUntrusted` during service registration, which loads native libvips at
-startup even when image transforms are disabled. A host without a usable libvips now fails to start.
+Install libvips on every host before upgrading, because the host now needs it to start (see Breaking).
 
 If OIDC is enabled and `Oidc:Authority` has a path segment `common`, `organizations` or `consumers`
 (or the consumers tenant GUID), set `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` before
