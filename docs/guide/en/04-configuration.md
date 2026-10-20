@@ -480,20 +480,6 @@ blank, `DefaultLanguage` present in the list — any failure stops the host. Env
 (`Localization__Languages__2__Code=ja`) but cannot remove one; to drop a language, edit
 `appsettings.json` itself (the fork owns that file).
 
-## AdminUi
-
-| Key | Type | Default |
-|---|---|---|
-| `AdminUi:Locales` | string array | `["zh-TW", "en"]` |
-| `AdminUi:DefaultLocale` | string | `zh-TW` |
-
-Which languages the admin UI offers and which one it starts in, independent of content languages.
-`GET /api/config` publishes them as `uiLocales` and `uiDefaultLocale`; the SPA keeps only the codes
-for catalogs it ships (`zh-TW` and `en`), dropping the rest with an error in the browser console.
-With a single enabled locale the language switcher is not rendered. Startup validates each code's
-shape and uniqueness and that `DefaultLocale` is in the list. Adding a catalog is described in
-[Chapter 19: Admin Customization](19-admin-customization.md).
-
 ## Redis
 
 | Key | Type | Default |

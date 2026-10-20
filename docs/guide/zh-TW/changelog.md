@@ -1,5 +1,17 @@
 # 版本紀錄
 
+## 0.12.0
+
+::: danger 破壞性變更
+- `appsettings.json` 的 `AdminUi` 區段移除，`AdminUiOptions` 與它的啟動驗證一併移除，
+  `GET /api/config` 不再回傳 `uiLocales` 與 `uiDefaultLocale`。後台介面提供 `frontend/src/locales`
+  裡登錄的每一份訊息目錄，預設語言由 `zh-TW` 改成 `en`。想保留中文為預設，在 `frontend/.env` 設
+  `VITE_DEFAULT_UI_LOCALE=zh-TW` 後重新建置 SPA；使用者在切換器自己選的語言仍然優先。fork 自己的設定
+  裡的 `AdminUi__*` 環境變數與 `AdminUi` 鍵請移除，主機會直接忽略它們。
+- `uiLocaleStore.configure(enabled, default)` 改為 `uiLocaleStore.init()`，`appConfigStore` 不再有
+  `uiLocales` 與 `uiDefaultLocale`。i18n 的 fallback 語言是建置時的預設目錄。
+:::
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger 破壞性變更

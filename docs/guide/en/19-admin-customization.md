@@ -243,7 +243,7 @@ Every file except `tokens.css` is under `frontend/src/components/fields/`.
 ## UI language
 
 The admin UI's own language is independent of content locales; the chosen locale is never sent to
-the API, while the set on offer comes from `GET /api/config` —
+the API, and the set on offer is the registered catalogs, not server configuration —
 see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode; the
 message catalogs are registered in one place, the `catalogs` object in `src/locales/index.ts`, and two
 ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by screen (`nav`,
@@ -251,21 +251,22 @@ ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by 
 `UiLocale` type, the i18n message table, the switcher's options and the key-symmetry test are all
 derived from that registry.
 
-Which catalogs are offered and which is the default come from `AdminUi:Locales` and
-`AdminUi:DefaultLocale` (see [Chapter 4: Configuration Reference](04-configuration.md)), published by
-`GET /api/config`; the SPA keeps only codes present in the registry. The language in effect is decided
-after `/api/config` resolves and before the app mounts: `struo.uiLocale` from `localStorage` when it
-is in the enabled set, otherwise the default; the i18n fallback points at the default too. A Pinia
+Every catalog in the registry is offered. The default is `en`; a build overrides it with
+`VITE_DEFAULT_UI_LOCALE` (a registered code, set in `frontend/.env`), and a value with no catalog
+logs a console warning and falls back to `en`. The language in effect is decided before the app
+mounts: `struo.uiLocale` from `localStorage` when it names a registered catalog, otherwise the
+default; the i18n fallback points at the default too, and `<html lang>` follows the locale. A Pinia
 store's `set()` switches i18n, updates `<html>`'s `lang` attribute, persists the choice, and refuses a
-value outside the enabled set. `UiLanguageSwitcher`, in the app shell, is the only component that
-calls it; its options are the enabled set, and with a single locale the component is not rendered.
+value that has no catalog. `UiLanguageSwitcher`, in the app shell, is the only component that
+calls it; with a single registered catalog the component is not rendered.
 
 Adding an interface language:
 
 1. Add a catalog file with the same key structure as the existing ones.
 2. Register it in `catalogs` in `src/locales/index.ts`.
 3. Add a `lang.<code>` key (the switcher's option text) to every catalog.
-4. Add the code to `AdminUi:Locales`, and to `AdminUi:DefaultLocale` if it should be the default.
+4. Optionally set `VITE_DEFAULT_UI_LOCALE` to the code if it should be the default.
+5. Rebuild the SPA: both the registry and the variable are read at build time.
 
 One unit test compares every registered catalog's key set with the others; a key added to one but
 not the others fails the admin SPA's test suite. A missing key at runtime falls back to the default

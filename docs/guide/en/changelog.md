@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0
+
+::: danger Breaking
+- The `AdminUi` section is removed from `appsettings.json`, together with `AdminUiOptions` and its
+  startup validation, and `GET /api/config` no longer returns `uiLocales` or `uiDefaultLocale`. The
+  admin UI offers every message catalog registered in `frontend/src/locales`, and its default language is
+  now `en` instead of `zh-TW`. To keep Chinese as the default, set `VITE_DEFAULT_UI_LOCALE=zh-TW` in
+  `frontend/.env` and rebuild the SPA; a language a user picked in the switcher still wins. Remove
+  `AdminUi__*` environment variables and `AdminUi` keys from a fork's own configuration; the host
+  ignores them.
+- `uiLocaleStore.configure(enabled, default)` is `uiLocaleStore.init()`, and `appConfigStore` no longer
+  has `uiLocales` or `uiDefaultLocale`. The i18n fallback locale is the build's default catalog.
+:::
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger Breaking

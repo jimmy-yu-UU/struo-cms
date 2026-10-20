@@ -204,27 +204,27 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 
 ## UI 語言
 
-後台介面自己的語言，跟內容語言各自獨立；選定的語言不會送到 API，可選的集合則來自
-`GET /api/config`，見
+後台介面自己的語言，跟內容語言各自獨立；選定的語言不會送到 API，可選的集合是登錄的訊息目錄，而不是伺服器設定，見
 [第 7 章：多語內容](07-i18n.md)。它是 `vue-i18n` 的非 legacy 模式，訊息目錄集中登錄在
 `src/locales/index.ts` 的 `catalogs` 物件裡，出貨兩份：`zh-TW.ts` 與 `en.ts`，各是一個巢狀物件，頂
 層按畫面分命名空間（`nav`、`login`、`itemForm`、`settings` 之類），`fields` 底下另有一個 `richtext`
 子命名空間。`UiLocale` 型別、i18n 的訊息表、切換器的選項、鍵集合對稱的測試，全部從這個登錄表推
 導。
 
-啟用哪些目錄、預設哪一個，由 `AdminUi:Locales` 與 `AdminUi:DefaultLocale` 決定（見
-[第 4 章：設定參考](04-configuration.md)），經 `GET /api/config` 送到前端；前端只保留登錄表裡有的
-代碼。生效的語言在 `/api/config` 回來之後、掛載之前決定：`localStorage` 裡的 `struo.uiLocale` 若在
-啟用集合內就用它，否則用預設；i18n 的 fallback 也指向預設。一個 Pinia store 的 `set()` 同時切換
-i18n、更新 `<html>` 的 `lang` 屬性、把選擇存下來，並拒絕不在啟用集合內的值。App shell 裡的
-`UiLanguageSwitcher` 是唯一會呼叫它的元件，選項就是啟用集合，只有一個語言時整個元件不渲染。
+登錄表裡的每一份目錄都會提供給使用者。預設是 `en`；建置時可用 `VITE_DEFAULT_UI_LOCALE`（填一個已登錄
+的代碼，設在 `frontend/.env`）覆寫，值沒有對應目錄就在主控台記一筆警告並退回 `en`。生效的語言在掛載
+之前決定：`localStorage` 裡的 `struo.uiLocale` 若是已登錄的目錄就用它，否則用預設；i18n 的 fallback 也
+指向預設，`<html lang>` 隨語言更新。一個 Pinia store 的 `set()` 同時切換 i18n、更新 `<html>` 的 `lang`
+屬性、把選擇存下來，並拒絕沒有對應目錄的值。App shell 裡的 `UiLanguageSwitcher` 是唯一會呼叫它的
+元件，只登錄一個目錄時整個元件不渲染。
 
 加一個介面語言：
 
 1. 新增一份跟既有目錄同樣鍵結構的目錄檔。
 2. 在 `src/locales/index.ts` 的 `catalogs` 登錄它。
 3. 在每一份目錄補一個 `lang.<code>` 鍵（切換器的選項文字）。
-4. 把代碼加進 `AdminUi:Locales`，需要的話也設成 `AdminUi:DefaultLocale`。
+4. 需要的話，把 `VITE_DEFAULT_UI_LOCALE` 設成這個代碼，讓它成為預設。
+5. 重新建置 SPA：登錄表與這個變數都是建置期讀取。
 
 有一項單元測試會把登錄表裡**每一份**目錄的鍵集合互相比對，一邊加了鍵另一邊沒跟上就會讓前端測試失
 敗；執行期缺一個鍵則是退回到預設語言的目錄，不會直接壞掉。

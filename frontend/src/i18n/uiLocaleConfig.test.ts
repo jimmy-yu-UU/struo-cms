@@ -1,29 +1,34 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { applyUiLocaleConfig } from './uiLocaleConfig'
+import { resolveDefaultUiLocale } from './uiLocaleConfig'
+import { CATALOG_LOCALES } from '../locales'
 
-describe('applyUiLocaleConfig', () => {
-  afterEach(() => vi.restoreAllMocks())
+describe('resolveDefaultUiLocale', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
 
-  it('keeps the server order and default when every code is a bundled catalog', () => {
-    expect(applyUiLocaleConfig(['en', 'zh-TW'], 'en')).toEqual({ enabled: ['en', 'zh-TW'], defaultLocale: 'en' })
+  it('offers exactly the registered catalogs', () => {
+    expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
-  it('drops codes that are not bundled catalogs', () => {
-    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(applyUiLocaleConfig(['zh-TW', 'ja'], 'zh-TW')).toEqual({ enabled: ['zh-TW'], defaultLocale: 'zh-TW' })
-    expect(err).toHaveBeenCalledOnce()
+  it('defaults to en when nothing is configured', () => {
+    expect(resolveDefaultUiLocale(undefined)).toBe('en')
+    expect(resolveDefaultUiLocale('')).toBe('en')
   })
-  it('falls back to every bundled catalog when nothing survives', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const r = applyUiLocaleConfig(['ja'], 'ja')
-    expect([...r.enabled].sort()).toEqual(['en', 'zh-TW'])
-    expect(r.enabled).toContain(r.defaultLocale)
+  it('honours a registered override, case-insensitively', () => {
+    expect(resolveDefaultUiLocale('zh-TW')).toBe('zh-TW')
+    expect(resolveDefaultUiLocale('zh-tw')).toBe('zh-TW')
   })
-  it('moves the default onto the first enabled locale when it is not enabled', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(applyUiLocaleConfig(['en'], 'zh-TW')).toEqual({ enabled: ['en'], defaultLocale: 'en' })
+  it('falls back to en with a warning for an unknown value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(resolveDefaultUiLocale('ja')).toBe('en')
+    expect(warn).toHaveBeenCalledOnce()
   })
-  it('matches configured codes to catalog keys case-insensitively', () => {
-    expect(applyUiLocaleConfig(['EN'], 'en')).toEqual({ enabled: ['en'], defaultLocale: 'en' })
-    expect(applyUiLocaleConfig(['zh-tw', 'en'], 'ZH-TW')).toEqual({ enabled: ['zh-TW', 'en'], defaultLocale: 'zh-TW' })
+  it('reads VITE_DEFAULT_UI_LOCALE at module load', async () => {
+    vi.stubEnv('VITE_DEFAULT_UI_LOCALE', 'zh-TW')
+    vi.resetModules()
+    const mod = await import('./uiLocaleConfig')
+    expect(mod.DEFAULT_UI_LOCALE).toBe('zh-TW')
   })
 })

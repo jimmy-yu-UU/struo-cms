@@ -3,7 +3,8 @@ import en from './en'
 
 // The one registry every UI-locale decision derives from: the UiLocale type, the i18n messages,
 // the switcher options and the key-symmetry test. Adding a catalog is adding a file and a line here,
-// plus a `lang.<code>` label in every catalog; which catalogs are *offered* is AdminUi:Locales.
+// plus a `lang.<code>` label in every catalog; every registered catalog is offered. The default
+// locale is `en`, overridable at build time with VITE_DEFAULT_UI_LOCALE (see i18n/uiLocaleConfig.ts).
 export const catalogs = { 'zh-TW': zhTW, en } as const
 
 export type UiLocale = keyof typeof catalogs

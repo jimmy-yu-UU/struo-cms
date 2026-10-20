@@ -295,10 +295,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    how to override a component's style without losing a specificity fight. Avoid `!important`.
 3. **i18n**: add the same key to every catalog in the `frontend/src/locales/index.ts` registry
    (`en.ts`, `zh-TW.ts`) under the right namespace (`common`, `nav`, `dashboard`, `collectionList`,
-   `itemForm`, `media`, `revisions`, `rbac`, `settings`, `fields`, ...) — `uiLocaleStore.configure`
-   moves the i18n fallback locale onto whichever catalog `AdminUi:DefaultLocale` names (`zh-TW` in the
-   shipped `appsettings.json`), so a key missing only from a non-default catalog degrades gracefully
-   but one missing from the default catalog does not.
+   `itemForm`, `media`, `revisions`, `rbac`, `settings`, `fields`, ...) — the i18n
+   fallback locale is the build's default catalog (`en`, or `VITE_DEFAULT_UI_LOCALE`), so a key missing
+   only from a non-default catalog degrades gracefully but one missing from the default catalog does not.
 4. **A new view/component**: follow the existing `views/` pattern (one component per route, registered
    in `frontend/src/router/index.ts` as a `() => import()` lazy loader — routed views are code-split,
    and `frontend/tests/codeSplitting.test.ts` enforces it — gated by `frontend/src/router/guard.ts` if
