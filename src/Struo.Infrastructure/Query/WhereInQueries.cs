@@ -62,6 +62,16 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     private static ISugarQueryable<T> Capped<T>(ISugarQueryable<T> query, int? maxRows) =>
         maxRows is { } n ? query.Take(n) : query;
 
+    // The collection's descriptor and the database column of one of its fields (a camelCase field
+    // name, falling back to the raw name, e.g. "id").
+    internal static (EntityDescriptor Descriptor, string Column) ResolveColumn(
+        ISqlSugarClient db, IEntityRegistry registry, string collection, string property)
+    {
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
+        return (d, db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType));
+    }
+
     // `column IN (values)` as a ConditionalModel; shared by the filtered and the windowed fetch.
     internal static ConditionalModel InCondition(string column, IReadOnlyList<object> values) => new()
     {
@@ -76,9 +86,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        var (d, column) = ResolveColumn(db, registry, collection, property);
 
         var conditionals = new List<IConditionalModel> { InCondition(column, values) };
         // AND the extra filter — relation paths/predicates and translatable leaves are pushed down as
@@ -100,9 +108,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
     {
         if (values.Count == 0) return [];
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        var (d, column) = ResolveColumn(db, registry, collection, property);
         return await WhereInWithDeletedDispatcher.For(d.EntityType)(this, column, values, ct);
     }
 

@@ -67,13 +67,13 @@ public interface IItemRepository
     /// default order), <paramref name="offset"/> and <paramref name="limit"/> all run in SQL, so
     /// only the requested window is read. Returns <c>null</c> when the sort cannot be expressed in
     /// SQL (a translatable field with no <paramref name="queryLocale"/>); the caller then windows
-    /// in memory.
+    /// in memory. The default returns <c>null</c>, so an implementation without a SQL window keeps
+    /// the capped in-memory path.
     /// </summary>
     Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
         string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
         IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default) =>
-        throw new NotSupportedException(
-            "IItemRepository.QueryWhereInWindowAsync must be overridden by implementations that support nested windows.");
+        Task.FromResult<IReadOnlyList<object>?>(null);
 
     /// <summary>
     /// Returns all rows of the given CLR <paramref name="entityType"/> (e.g. a junction type)

@@ -51,9 +51,10 @@ public sealed class RelationExpander(
         string? locale = null, Func<string, bool>? canReadJunction = null, CancellationToken ct = default)
     {
         // options.MaxLimit is consumed for the per-parent sort/limit/offset windowing (see
-        // ApplyListArgs below). Guarded here so a null DI registration fails fast. Nested-filter
-        // push-down (O2M/M2M target-side) goes straight through
-        // IItemRepository.QueryWhereInFilteredAsync's FilterTranslator.
+        // ApplyListArgs below, and FetchOneToManyAsync for the single-parent window run in SQL).
+        // Guarded here so a null DI registration fails fast. Nested-filter push-down (O2M/M2M
+        // target-side) goes straight through the FilterTranslator behind
+        // IItemRepository.QueryWhereInFilteredAsync and QueryWhereInWindowAsync.
         ArgumentNullException.ThrowIfNull(options);
 
         var (projectTarget, parentId, readProp) = accessors;

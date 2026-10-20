@@ -5,6 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Domain.Query;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
 using Xunit;
@@ -55,6 +56,8 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         }
     }
 
+    // Mutates the singleton options of the shared ApiFactory; safe only because the serial
+    // "ApiIntegration" collection never runs two tests at once, and the value is restored in finally.
     private async Task<T> WithSmallCap<T>(Func<Task<T>> body)
     {
         var options = _factory.Services.GetRequiredService<StruoQueryOptions>();
@@ -161,21 +164,106 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
     public async Task Many_to_many_with_a_limit_keeps_the_junction_row_cap()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var tagIds = new List<string>();
+        var tagIds = new List<Guid>();
         foreach (var n in new[] { "pw-1", "pw-2", "pw-3", "pw-4" })
         {
             var r = await c.PostAsJsonAsync("/api/items/tag", new { name = n });
             using var d = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-            tagIds.Add(d.RootElement.GetProperty("data").GetProperty("id").GetString()!);
+            tagIds.Add(Guid.Parse(d.RootElement.GetProperty("data").GetProperty("id").GetString()!));
         }
         var created = await c.PostAsJsonAsync("/api/items/article",
             new { status = "draft", translations = new { en = new { title = "PushdownM2M" } }, tags = tagIds });
         using var cd = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var articleId = Guid.Parse(cd.RootElement.GetProperty("data").GetProperty("id").GetString()!);
+        try
+        {
+            var (status, body) = await WithSmallCap(() => Query(c, "article",
+                new { filter = ParentById(articleId), deep = new { tags = new { limit = 2 } } }));
+            status.Should().Be(HttpStatusCode.BadRequest);
+            body.Should().Contain("'tags'").And.Contain("junction rows");
+        }
+        finally
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            await db.Deleteable<ArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
+            await db.Deleteable<Tag>().Where(t => tagIds.Contains(t.Id)).ExecuteCommandAsync();
+            await db.Deleteable<Article>().Where(a => a.Id == articleId).ExecuteCommandAsync();
+        }
+    }
 
-        var (status, body) = await WithSmallCap(() => Query(c, "article",
-            new { filter = ParentById(articleId), deep = new { tags = new { limit = 2 } } }));
-        status.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("'tags'").And.Contain("junction rows");
+    [Fact]
+    public async Task One_parent_with_a_limit_and_no_sort_returns_the_newest_children_first()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var parentId = await SeedParent("newest");
+        try
+        {
+            foreach (var n in new[] { "first", "second", "third", "fourth" })
+            {
+                (await c.PostAsJsonAsync("/api/items/category", new { name = n, parentId }))
+                    .StatusCode.Should().Be(HttpStatusCode.Created);
+                await Task.Delay(30);
+            }
+            var (status, body) = await WithSmallCap(() => Query(c, "category",
+                Envelope(ParentById(parentId), new { limit = 2 })));
+            status.Should().Be(HttpStatusCode.OK);
+            Children(body).Select(e => e.GetProperty("name").GetString()).Should().Equal("fourth", "third");
+        }
+        finally { await DeleteFamilies(parentId); }
+    }
+
+    [Fact]
+    public async Task One_parent_window_still_expands_the_windowed_children_relations()
+    {
+        var parentId = await SeedParent("grand", "a", "b", "c", "d");
+        try
+        {
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+                var first = await db.Queryable<Category>().Where(x => x.ParentId == parentId && x.Name == "a").FirstAsync();
+                await db.Insertable(new Category { Id = Guid.NewGuid(), Name = "a-kid", ParentId = first.Id })
+                    .ExecuteCommandAsync();
+            }
+            var c = await _factory.CreateAuthenticatedClientAsync();
+            var (status, body) = await WithSmallCap(() => Query(c, "category", Envelope(ParentById(parentId),
+                new { sort = SortByName, limit = 2, deep = new { children = new { } } })));
+            status.Should().Be(HttpStatusCode.OK);
+            var window = Children(body);
+            window.Select(e => e.GetProperty("name").GetString()).Should().Equal("a", "b");
+            window[0].GetProperty("children").EnumerateArray()
+                .Select(e => e.GetProperty("name").GetString()).Should().Equal("a-kid");
+            window[1].GetProperty("children").GetArrayLength().Should().Be(0);
+        }
+        finally
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            var childIds = (await db.Queryable<Category>().Where(x => x.ParentId == parentId).ToListAsync())
+                .Select(x => x.Id).ToList();
+            await db.Deleteable<Category>().Where(x => childIds.Contains(x.ParentId!.Value)).ExecuteCommandAsync();
+            await DeleteFamilies(parentId);
+        }
+    }
+
+    // The request locale defaults to the default language, so the fallback is reachable only from
+    // a repository call that carries no locale.
+    [Fact]
+    public async Task A_translatable_sort_without_a_locale_is_not_pushed_down()
+    {
+        using var harness = PurgeIntegrityHarness.Create();
+        var categoryId = Guid.Parse(await harness.CreateCategoryAsync("pw-translatable"));
+        await harness.CreateArticleAsync(categoryId);
+        IReadOnlyList<object> parent = [categoryId];
+        var byTitle = new[] { new SortField("title", false) };
+
+        var withoutLocale = await harness.Repository.QueryWhereInWindowAsync(
+            "article", "categoryId", parent, null, byTitle, 0, 1, null);
+        var withLocale = await harness.Repository.QueryWhereInWindowAsync(
+            "article", "categoryId", parent, null, byTitle, 0, 1, "en");
+
+        withoutLocale.Should().BeNull();
+        withLocale.Should().HaveCount(1);
     }
 }

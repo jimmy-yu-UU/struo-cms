@@ -27,9 +27,7 @@ internal sealed class WhereInWindowQueries(
         if (values.Count == 0) return [];
         if (SortsTranslatableFieldWithoutLocale(collection, sort, queryLocale)) return null;
 
-        var d = RepositoryHelpers.Descriptor(registry, collection);
-        var clrProperty = d.FieldToProperty.TryGetValue(property, out var p) ? p : property;
-        var column = db.EntityMaintenance.GetDbColumnName(clrProperty, d.EntityType);
+        var (d, column) = WhereInQueries.ResolveColumn(db, registry, collection, property);
 
         var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(column, values) };
         if (extraFilter is not null)

@@ -102,7 +102,9 @@ One case skips the cap. When a page expands exactly one parent through a one-to-
 the nested list has a `limit`, the database applies the nested `filter`, `sort`, `offset` and
 `limit`, and only that window is read, so a parent with more than `Query:MaxExpandRows` children
 still answers. The order is the same as a list query's, with the id as the final tie-break, so
-paging through ties neither repeats nor drops a row; with no nested `sort` it is newest first. A
+paging through ties neither repeats nor drops a row; with no nested `sort` it is newest first. Null
+placement and text order are the database's there, while the in-memory sort used for several parents
+puts nulls first, so the same nested `sort` can order differently for one parent than for several. A
 nested `sort` on a translatable field with no locale in the request is not pushed down and stays
 under the cap. With several parents, a nested list without a `limit`, or a many-to-many relation,
 a nested `limit` is applied after the fetch, so it does not lower the count the cap checks.
