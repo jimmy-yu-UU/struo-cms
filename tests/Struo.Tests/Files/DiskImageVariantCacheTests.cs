@@ -131,9 +131,9 @@ public class DiskImageVariantCacheTests
     [Fact]
     public async Task An_evicted_variant_reads_as_a_miss_and_never_throws_under_concurrent_eviction()
     {
-        var c = new DiskImageVariantCache(Root(), maxBytes: 300);
+        var root = Root();
+        var c = new DiskImageVariantCache(root, maxBytes: 300);
         var keys = Enumerable.Range(0, 8).Select(i => Key(c, i)).ToArray();
-        var misses = 0;
 
         var writers = Enumerable.Range(0, 4).Select(w => Task.Run(async () =>
         {
@@ -145,14 +145,23 @@ public class DiskImageVariantCacheTests
             for (var i = 0; i < 80; i++)
             {
                 var hit = await c.TryGetAsync(keys[i % keys.Length], default);
-                if (hit is null) Interlocked.Increment(ref misses);
-                else hit.Length.Should().Be(100);
+                if (hit is not null) hit.Length.Should().Be(100);
             }
         }));
 
         var act = () => Task.WhenAll(writers.Concat(readers));
         await act.Should().NotThrowAsync();
-        misses.Should().BeGreaterThan(0);
+
+        // Whether a reader saw a miss depends on scheduling. Eviction itself is deterministic once the
+        // concurrency stops: ten more sequential writes of new keys push the running total past the cap,
+        // so a sweep runs, and the sweep leaves at most three 100-byte variants, which cannot hold all
+        // eight original keys.
+        for (var i = 8; i < 18; i++) await c.SetAsync(Key(c, i), new byte[100], default);
+
+        TotalBytes(root).Should().BeLessThanOrEqualTo(300);
+        var results = new List<byte[]?>();
+        foreach (var key in keys) results.Add(await c.TryGetAsync(key, default));
+        results.Should().Contain(r => r == null);
     }
 
     [Fact]

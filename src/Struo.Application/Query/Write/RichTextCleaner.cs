@@ -11,7 +11,7 @@ namespace Struo.Application.Query;
 /// to null. Shared by <see cref="ItemDeserializer"/> (parent fields) and
 /// <see cref="ItemService"/>'s translation sync (per-locale fields).
 /// </summary>
-public sealed partial class RichTextCleaner(IHtmlSanitizer sanitizer)
+public sealed class RichTextCleaner(IHtmlSanitizer sanitizer)
 {
     /// <summary>
     /// Sanitizes a RichText field value: null stays null; otherwise the HTML is run through the
@@ -26,8 +26,8 @@ public sealed partial class RichTextCleaner(IHtmlSanitizer sanitizer)
         return IsBlankHtml(clean) ? null : clean;
     }
 
-    [GeneratedRegex("<[^>]+>", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex HtmlTagPattern();
+    private static readonly Regex HtmlTagPattern =
+        new("<[^>]+>", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private static bool IsBlankHtml(string html)
     {
@@ -36,7 +36,7 @@ public sealed partial class RichTextCleaner(IHtmlSanitizer sanitizer)
         if (html.Contains("<img", StringComparison.OrdinalIgnoreCase) ||
             html.Contains("<hr", StringComparison.OrdinalIgnoreCase)) return false;
         // Strip tags and non-breaking spaces; blank if nothing meaningful remains.
-        var text = HtmlTagPattern().Replace(html, string.Empty)
+        var text = HtmlTagPattern.Replace(html, string.Empty)
             .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase);
         return string.IsNullOrWhiteSpace(text);
     }
