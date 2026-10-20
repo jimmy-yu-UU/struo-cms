@@ -58,6 +58,15 @@
 resolver ${NGINX_RESOLVER} valid=10s;
 resolver_timeout 5s;
 
+# X-Forwarded-Proto passes through the value a TLS-terminating proxy in front
+# of this container sent, and falls back to this connection's own scheme when
+# none came. The API only acts on it when ForwardedHeaders is enabled and this
+# container is a known proxy.
+map $http_x_forwarded_proto $struo_forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 server {
     listen 80;
     server_name _;
@@ -96,7 +105,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
         proxy_set_header X-Forwarded-Host $http_host;
         # This location declares its own add_header, so the server-level
         # security headers are repeated here. Proxied responses get the
@@ -126,7 +135,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
         proxy_set_header X-Forwarded-Host $http_host;
         # This location declares its own add_header, so the server-level
         # security headers are repeated here. Proxied responses get the
@@ -151,7 +160,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
         proxy_set_header X-Forwarded-Host $http_host;
         # This location declares its own add_header, so the server-level
         # security headers are repeated here. Proxied responses get the

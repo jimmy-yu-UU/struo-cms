@@ -85,8 +85,15 @@ describe('nginx template API proxying', () => {
     expect(block.body).toContain('set $upstream "${API_UPSTREAM}";')
     expect(block.body).toContain('proxy_set_header Host $http_host;')
     expect(block.body).toContain('proxy_set_header X-Forwarded-Host $http_host;')
-    expect(block.body).toContain('proxy_set_header X-Forwarded-Proto $scheme;')
+    expect(block.body).toContain('proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;')
     expect(block.body).not.toMatch(/\$host/)
+  })
+
+  it('maps the incoming X-Forwarded-Proto, falling back to the connection scheme', () => {
+    const server = blocks().find((b) => b.name === 'server')!.body
+    expect(server).toMatch(/map \$http_x_forwarded_proto \$struo_forwarded_proto \{/)
+    expect(server).toMatch(/default\s+\$http_x_forwarded_proto;/)
+    expect(server).toMatch(/''\s+\$scheme;/)
   })
 
   it('every proxied location is covered', () => {

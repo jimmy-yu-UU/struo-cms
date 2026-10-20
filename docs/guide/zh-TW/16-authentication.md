@@ -226,9 +226,9 @@ HTTP_STATUS:429
 
 API 用它收到的請求的 scheme 與 host 組出重新導向網址。nginx 會連同埠號原樣帶過用戶端的 `Host`
 標頭，所以 `http://localhost:<port>` 直接可用。對外的 `https` 來源則要 API 也看到 `https`：TLS 在
-API 前面的代理終結時，要啟用 `ForwardedHeaders`（第 20 章），並讓那個代理送 `X-Forwarded-Proto`。
-管理映像的 nginx 送出的 `X-Forwarded-Proto` 是它自己收到請求時的 scheme，TLS 終結在它前面時就是
-`http`；這種配置要讓 TLS 代理把 `/api/` 與回呼路徑直接導到 API，或改掉範本裡的那個標頭。
+管理容器前面的代理終結時，要讓那個代理送 `X-Forwarded-Proto: https`；映像的 nginx 會把收到的值原樣
+帶給 API（沒收到就用它自己連線的 scheme）。接著在 API 啟用 `ForwardedHeaders`，並把 nginx 容器的位址或
+network 列為已知代理（第 20 章），否則 API 會忽略這個標頭。
 
 要求的 scope 是 `Oidc:Scopes`，預設 `openid`、`email`、`profile`，留空或給空
 陣列都會退回這組預設，不會變成完全不要求 scope。讀取的 claim 有：

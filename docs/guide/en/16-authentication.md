@@ -289,10 +289,10 @@ nginx change. Any other custom path needs its own `location` block in
 The API builds the redirect URI from the scheme and host of the request it receives. nginx passes
 the client's `Host` header through with its port, so `http://localhost:<port>` works as is. A
 public `https` origin needs the API to see `https` as well: when TLS ends at a proxy in front of
-the API, enable `ForwardedHeaders` (Chapter 20) and make that proxy send `X-Forwarded-Proto`. The
-admin image's nginx sends `X-Forwarded-Proto` with the scheme it received the request on, which is
-`http` when TLS ends in front of it; in that setup route `/api/` and the callback paths from the TLS
-proxy straight to the API, or change that header in the template.
+the admin container, make that proxy send `X-Forwarded-Proto: https`; the image's nginx passes the
+incoming value to the API (and uses its own scheme when none arrives). Then enable
+`ForwardedHeaders` on the API with the nginx container's address or network as a known proxy
+(Chapter 20), or the API ignores the header.
 
 The requested scopes are `Oidc:Scopes`, defaulting to `openid`, `email`, `profile` — leaving it
 blank and giving an empty array both fall back to that same default, never to no scope at all. The

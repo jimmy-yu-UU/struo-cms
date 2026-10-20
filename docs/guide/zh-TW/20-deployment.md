@@ -53,6 +53,10 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 請求才受信任；旗標打開卻兩個清單都空，或有格式錯誤的項目，主機會拒絕啟動並點名鍵。API 前面沒有
 代理時就維持關閉。
 
+API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出它的位址或 Docker network 的範圍。TLS 終結在
+那個容器前面的另一個代理時，讓它送 `X-Forwarded-Proto: https`；映像的 nginx 會把收到的值原樣帶過去，
+沒收到才用自己連線的 scheme。
+
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 
 留空時，工作階段狀態（cookie 對應的 ticket、`RateLimiting:LoginAccount` 的計數）全部退回行程

@@ -69,6 +69,11 @@ Only requests from those sources are trusted; with the flag on and both lists em
 malformed entry, the host refuses to start and names the key. Leave it off when nothing sits in
 front of the API.
 
+With the admin image in front of the API, the API's proxy is the nginx container: list its address
+or the Docker network's range. When TLS ends at another proxy in front of that container, have it
+send `X-Forwarded-Proto: https`; the image's nginx passes the incoming value on and falls back to
+its own scheme when none arrives.
+
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
 Left empty, session state — the ticket a cookie maps to, and the `RateLimiting:LoginAccount`
