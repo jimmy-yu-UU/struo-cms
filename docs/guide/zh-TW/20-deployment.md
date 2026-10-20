@@ -357,10 +357,15 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 網路介面上，同一個網路裡的其他機器就連得到，固定的開發密碼與沒有密碼的 Redis 也跟著公開。
 只在信得過的網路上這樣做。
 
+`api` 服務開出它的埠（`STRUO_API_PORT`，預設 8081）只是為了本機除錯。把 `STRUO_BIND_ADDRESS` 改成
+非 loopback 時，也要把 `docker-compose.yml` 裡 `api` 的 `ports` 對應拿掉：照前面檢查清單的建議，
+從後台 nginx 的 `/api/` 連 API，不要直接開出去。
+
 健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
 `http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，
 從後台的埠打 `/health/...` 拿到的是 SPA 頁面。Compose 替 `api` 另外設了每 5 秒一次的健康檢查，
-`docker compose up --wait` 不必等映像預設的 30 秒間隔。
+`docker compose up --wait` 不必等映像預設的 30 秒間隔。映像的健康檢查與 Compose 的探測都從
+`ASPNETCORE_HTTP_PORTS` 讀埠號（沒設就是 8080；值是以 `;` 分隔的清單時取第一個）。
 
 DataProtection 金鑰掛在 volume `struo-dpkeys`，容器重建也撐得住，但是明文存放：第一次啟動的
 log 會出現一筆 `No XML encryptor configured` 警告。開發與測試這樣就夠了；正式環境要照上面

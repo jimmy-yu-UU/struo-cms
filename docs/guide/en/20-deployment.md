@@ -431,11 +431,17 @@ The PostgreSQL password is a fixed dev value and Redis has no password. Every po
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
 
+The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
+move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as
+well: reach the API through the admin's nginx at `/api/`, as the checklist above advises, instead of
+publishing it.
+
 The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
 `http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only
 `/api/*`, so `/health/...` on the admin port returns the SPA page. Compose gives `api` its own
 health check every 5 seconds, so `docker compose up --wait` doesn't wait out the image's default
-30-second interval.
+30-second interval. Both the image's health check and Compose's probe read the port from
+`ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry when it is a `;`-separated list).
 
 The DataProtection keys live in the `struo-dpkeys` volume and survive rebuilding the container, but
 in plain text: the first start logs a `No XML encryptor configured` warning. That's fine for
