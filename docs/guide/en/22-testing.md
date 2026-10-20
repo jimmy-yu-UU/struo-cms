@@ -266,14 +266,15 @@ the `SONAR_TOKEN` secret and read the organization and project keys from the rep
 without `SONAR_ORGANIZATION` skips both jobs. A Dependabot update always skips them, and a pull
 request only runs them when its source branch and the target are in the same repository.
 
-`sonar-backend` first restores the two `dotnet-sonarscanner` and `dotnet-coverage` CLI tools at the
-versions pinned in `.config/dotnet-tools.json`, runs `dotnet dotnet-sonarscanner begin`, builds normally, wraps `dotnet test` with
-`dotnet dotnet-coverage collect` to produce `coverage.xml`, then sends the analysis with
-`dotnet dotnet-sonarscanner end`.
+`sonar-backend` first restores the two `dotnet-sonarscanner` and `dotnet-coverage` CLI tools at
+the versions pinned in `.config/dotnet-tools.json`, runs `dotnet dotnet-sonarscanner begin`,
+builds normally, wraps `dotnet test` with `dotnet dotnet-coverage collect` to produce
+`coverage.xml`, then sends the analysis with `dotnet dotnet-sonarscanner end`.
 
 `sonar-frontend` starts with the same `pnpm install --frozen-lockfile --ignore-scripts`, then
 `pnpm vitest run --coverage --coverage.reporter=lcov` to produce the coverage report first, then
-sends it with `pnpm exec sonarqube-scanner`, a dev dependency pinned by the lockfile.
+sends it with SonarSource's `sonarqube-scan-action`, pinned by commit SHA and updated by
+Dependabot.
 
 ## The five standing gates
 

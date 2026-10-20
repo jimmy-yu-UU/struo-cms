@@ -131,7 +131,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # Backend versions are centralised in Directory.Packages.props, which is the
-  # file this reads. Leaving NuGet out would not have left the backend
+  # file this reads, together with the tool manifest .config/dotnet-tools.json. Leaving NuGet out would not have left the backend
   # unprotected - Dependabot's security updates cover an ecosystem whether or
   # not it is listed here - but it would have meant the backend moved only when
   # something was found to be vulnerable, and drifted the rest of the time until

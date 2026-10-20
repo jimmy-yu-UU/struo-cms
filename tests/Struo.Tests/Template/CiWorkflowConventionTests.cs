@@ -8,7 +8,7 @@ namespace Struo.Tests.Template;
 
 /// <summary>
 /// Guards <c>.github/workflows/ci.yml</c>: every job bounds its run time, and no step installs a
-/// tool at an unpinned version. Tools come from <c>.config/dotnet-tools.json</c> (restored with
+/// tool or action at an unpinned version. Tools come from <c>.config/dotnet-tools.json</c> (restored with
 /// <c>dotnet tool restore</c>) and from the frontend lockfile, so a new upstream release never
 /// reaches CI unreviewed.
 /// </summary>
@@ -22,6 +22,12 @@ public sealed partial class CiWorkflowConventionTests
 
     [GeneratedRegex(@"dotnet\s+tool\s+install\s+(--global|-g)\b|\bpnpm\s+dlx\b")]
     private static partial Regex UnpinnedToolInstall();
+
+    [GeneratedRegex(@"^\s*-?\s*uses:\s*(\S+)")]
+    private static partial Regex UsesLine();
+
+    [GeneratedRegex(@"@[0-9a-f]{40}$")]
+    private static partial Regex FullShaPin();
 
     private static string[] WorkflowLines() =>
         File.ReadAllLines(Path.Combine(RepoRoot.Find(), ".github", "workflows", "ci.yml"));
@@ -56,6 +62,19 @@ public sealed partial class CiWorkflowConventionTests
             .ToList();
 
         offenders.Should().BeEmpty(
-            "install .NET tools with `dotnet tool restore` from .config/dotnet-tools.json and run frontend tools with `pnpm exec`");
+            "install .NET tools with `dotnet tool restore` from .config/dotnet-tools.json and use a pinned action or a locked dev dependency for anything else");
+    }
+
+    [Fact]
+    public void Every_action_is_pinned_to_a_full_commit_sha()
+    {
+        var offenders = WorkflowLines()
+            .Select((line, i) => (match: UsesLine().Match(line), number: i + 1))
+            .Where(x => x.match.Success && !FullShaPin().IsMatch(x.match.Groups[1].Value))
+            .Select(x => $"ci.yml:{x.number}: {x.match.Groups[1].Value}")
+            .ToList();
+
+        offenders.Should().BeEmpty(
+            "a tag can be moved after review; Dependabot's github-actions entry updates SHA pins");
     }
 }

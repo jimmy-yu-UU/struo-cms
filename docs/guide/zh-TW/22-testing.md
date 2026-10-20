@@ -232,7 +232,7 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 
 `sonar-frontend` 則是同一道 `pnpm install --frozen-lockfile --ignore-scripts`、
 `pnpm vitest run --coverage --coverage.reporter=lcov` 先產生涵蓋率報告，再用
-`pnpm exec sonarqube-scanner` 送出，這個套件是 devDependency，版本由 lockfile 釘住。
+SonarSource 的 `sonarqube-scan-action` 送出，這個 action 以 commit SHA 釘住，由 Dependabot 更新。
 
 ## 五個 standing gate
 

@@ -278,26 +278,36 @@ jobs:
       # records 0% coverage, which is a statement about the report, not the tests.
       - run: pnpm vitest run --coverage --coverage.reporter=lcov
       - name: Resolve branch or pull request arguments
+        id: sonar-args
         env:
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
           REF_NAME: ${{ github.ref_name }}
+          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_FRONTEND_PROJECT_KEY }}
+        # The scan action parses `args` itself instead of handing it to a shell,
+        # so a branch name placed in it cannot inject anything. The project key
+        # and organization come from repository variables;
+        # frontend/sonar-project.properties holds everything else.
         run: |
+          args="-Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.organization=$SONAR_ORG"
           if [ "$EVENT" = pull_request ]; then
-            printf 'SONAR_ARGS=-Dsonar.pullrequest.key=%s -Dsonar.pullrequest.branch=%s -Dsonar.pullrequest.base=%s\n' \
-              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+            args="$args -Dsonar.pullrequest.key=$PR_NUMBER -Dsonar.pullrequest.branch=$HEAD_REF -Dsonar.pullrequest.base=$BASE_REF"
           else
-            printf 'SONAR_ARGS=-Dsonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+            args="$args -Dsonar.branch.name=$REF_NAME"
           fi
+          printf 'args=%s
+' "$args" >> "$GITHUB_OUTPUT"
+      # Pinned by SHA like every other action here; Dependabot's github-actions
+      # entry moves it. projectBaseDir is needed because `defaults.run.working-directory`
+      # applies to `run` steps only.
       - name: Analyze
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
-          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_FRONTEND_PROJECT_KEY }}
-        # The project key and organization come from repository variables;
-        # frontend/sonar-project.properties holds everything else.
-        # $SONAR_ARGS unquoted for the same reason as in sonar-backend.
-        run: pnpm exec sonarqube-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.organization="$SONAR_ORG" $SONAR_ARGS
+        with:
+          projectBaseDir: frontend
+          args: ${{ steps.sonar-args.outputs.args }}
