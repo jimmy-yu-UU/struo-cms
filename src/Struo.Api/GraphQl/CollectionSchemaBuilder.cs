@@ -48,9 +48,7 @@ internal sealed class CollectionSchemaBuilder(
         // taking the whole GraphQL endpoint down. A LinkInput alone would stay valid (it always
         // has `id: ID!`), but a Links input without a Links output is a half-feature, so the
         // entire additive set (read AND write) is skipped together for such a relation.
-        var payloadRelations = m2mSource.M2MDescriptors(meta.Name)
-            .Where(d => HasExposablePayload(d, metadataProvider))
-            .ToList();
+        var payloadRelations = PayloadRelations(meta);
 
         types.Add(BuildObjectType(meta, types, payloadRelations)); // Article + nested repeater item types + <Rel>Link/<Rel>Junction types (added to `types`)
         types.Add(BuildListType(meta));                            // ArticleList { items, total }
@@ -91,6 +89,55 @@ internal sealed class CollectionSchemaBuilder(
         types.Add(BuildCreateInput(meta, payloadRelations));       // ArticleCreateInput
         types.Add(BuildUpdateInput(meta, payloadRelations));       // ArticleUpdateInput
         return types;
+    }
+
+    private List<M2MDescriptor> PayloadRelations(CollectionMetadata meta) =>
+        m2mSource.M2MDescriptors(meta.Name)
+            .Where(d => HasExposablePayload(d, metadataProvider))
+            .ToList();
+
+    /// <summary>
+    /// The names of the GraphQL types <see cref="Build"/> emits for <paramref name="meta"/>, listed
+    /// without building them (a built type has no name until HotChocolate initialises it). The
+    /// conditions here mirror <see cref="Build"/> one for one; a test compares this list with the
+    /// types of a schema built from the same metadata.
+    /// </summary>
+    internal IReadOnlyList<string> TypeNames(CollectionMetadata meta)
+    {
+        var payloadRelations = PayloadRelations(meta);
+        var names = new List<string>
+        {
+            SchemaTypeMapper.TypeName(meta.Name),
+            SchemaTypeMapper.ListTypeName(meta.Name),
+            SchemaTypeMapper.FilterInputName(meta.Name),
+            SchemaTypeMapper.CreateInputName(meta.Name),
+            SchemaTypeMapper.UpdateInputName(meta.Name),
+        };
+
+        names.AddRange(meta.Fields
+            .Where(f => !f.Hidden && !SchemaTypeMapper.IsExcluded(f.Interface)
+                && f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
+            .Select(f => SchemaTypeMapper.RepeaterItemTypeName(meta.Name, f.Name)));
+        names.AddRange(meta.Fields
+            .Where(f => f is { Interface: FieldInterface.Repeater, Fields.Count: > 0 })
+            .Select(f => SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)));
+
+        foreach (var rel in payloadRelations)
+        {
+            names.Add(SchemaTypeMapper.JunctionTypeName(meta.Name, rel.RelationName));
+            names.Add(SchemaTypeMapper.LinkTypeName(meta.Name, rel.RelationName));
+            names.Add(SchemaTypeMapper.LinkInputName(meta.Name, rel.RelationName));
+            names.Add(SchemaTypeMapper.RelationFilterInputName(meta.Name, rel.RelationName));
+            if (BuildJunctionFilterInput(meta, rel) is not null)
+                names.Add(SchemaTypeMapper.JunctionFilterInputName(meta.Name, rel.RelationName));
+        }
+
+        if (meta.Translation is not null)
+        {
+            names.Add(SchemaTypeMapper.TranslationFieldsInputName(meta.Name));
+            names.Add(SchemaTypeMapper.TranslationInputName(meta.Name));
+        }
+        return names;
     }
 
     private ObjectType BuildObjectType(
@@ -165,7 +212,7 @@ internal sealed class CollectionSchemaBuilder(
         }
 
         var field = Field(rel.Name, $"[{target}!]", ctx => ParentDict(ctx).GetValueOrDefault(rel.Name));
-        field.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse($"{target}FilterInput")));
+        field.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse(SchemaTypeMapper.FilterInputName(rel.TargetCollection))));
         field.Arguments.Add(new ArgumentConfiguration("sort", null, TypeReference.Parse("[String!]")));
         field.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
         field.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));
@@ -354,7 +401,7 @@ internal sealed class CollectionSchemaBuilder(
 
     private static ObjectType BuildListType(CollectionMetadata meta)
     {
-        var config = new ObjectTypeConfiguration(SchemaTypeMapper.TypeName(meta.Name) + "List", null, typeof(PagedResultView));
+        var config = new ObjectTypeConfiguration(SchemaTypeMapper.ListTypeName(meta.Name), null, typeof(PagedResultView));
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
             ctx => ctx.Parent<PagedResultView>().Items));
         config.Fields.Add(Field("total", "Int!", ctx => ctx.Parent<PagedResultView>().Total));
@@ -365,7 +412,7 @@ internal sealed class CollectionSchemaBuilder(
 
     private InputObjectType BuildFilterInput(CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
-        var name = SchemaTypeMapper.TypeName(meta.Name) + "FilterInput";
+        var name = SchemaTypeMapper.FilterInputName(meta.Name);
         var config = new InputObjectTypeConfiguration(name, null, typeof(IReadOnlyDictionary<string, object?>));
         config.Fields.Add(new InputFieldConfiguration("and", null, TypeReference.Parse($"[{name}!]")));
         config.Fields.Add(new InputFieldConfiguration("or", null, TypeReference.Parse($"[{name}!]")));
@@ -411,13 +458,13 @@ internal sealed class CollectionSchemaBuilder(
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {
             config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
-            targetFilter = SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
+            targetFilter = SchemaTypeMapper.FilterInputName(rel.TargetCollection);
         }
         else if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)
         {
             targetFilter = rel.Kind == RelationKind.ManyToMany && DescriptorFor(payloadRelations, rel.Name) is not null
                 ? SchemaTypeMapper.RelationFilterInputName(meta.Name, rel.Name)
-                : SchemaTypeMapper.TypeName(rel.TargetCollection) + "FilterInput";
+                : SchemaTypeMapper.FilterInputName(rel.TargetCollection);
         }
 
         if (targetFilter is not null)

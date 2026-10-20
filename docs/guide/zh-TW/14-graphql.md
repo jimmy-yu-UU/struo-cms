@@ -26,6 +26,13 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 | 關聯篩選輸入 | `<X><Rel>RelationFilterInput` | `ArticleTagsRelationFilterInput` |
 | 欄位名稱（junction 讀寫） | `<rel>Links` | `tagsLinks` |
 
+每個產生出來的名稱都必須唯一，主機在啟動時就會檢查。集合的名稱若跟其他集合、或跟 schema 一律存在的
+名稱撞在一起，啟動會以 `MetadataException` 中止，訊息點名相關的集合與撞名的名稱。兩個集合的產生名稱
+相遇就算撞名，例如 `article` 與 `articleList`（都會產生型別 `ArticleList`），或 `category` 與
+`categories`（都會產生查詢欄位 `categories`）。集合若產生出內建名稱也算撞名，例如 `revision`（型別
+`Revision`）、`query`、`mutation`、`string`、`tagItem`。GraphQL 名稱區分大小寫，所以 `fooBar` 與
+`foobar` 不會撞名。改掉其中一個集合的名稱即可；`Name` 的規則見[第 5 章：定義集合](05-collections.md)。
+
 物件型別固定帶 `id: ID!` 與 `version: Long`；每個非隱藏、沒被排除的自有欄位各一個欄位，每個關聯也
 各一個，有翻譯 sidecar 的集合再多一個 `translations: [Translation!]`。`version` 在每個型別上都宣
 告，但只有繼承稽核基底的集合才會真正解析出值，其餘集合這一欄一律是 `null`。

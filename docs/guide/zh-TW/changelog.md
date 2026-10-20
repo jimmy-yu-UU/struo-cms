@@ -38,6 +38,9 @@
 
 ### 修正
 
+- 集合產生的 GraphQL 名稱若跟其他集合或內建名稱撞在一起（`article` 與 `articleList`、`category` 與
+  `categories`、名為 `revision` 的集合），現在啟動會以 `MetadataException` 中止，訊息點名相關集合與撞名
+  的名稱。過去是在 GraphQL schema 建置途中以重複型別的錯誤失敗。
 - JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
   照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
 - 透過通用項目 API 建立 `user`（`POST /api/items/user`、GraphQL `createUser`）現在回 `400`

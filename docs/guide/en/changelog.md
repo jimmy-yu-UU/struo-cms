@@ -43,6 +43,10 @@
 
 ### Fixed
 
+- A collection whose generated GraphQL names collide with another collection's or with a built-in
+  name (`article` with `articleList`, `category` with `categories`, a collection named `revision`)
+  now stops startup with a `MetadataException` that names the collection(s) and the clashing
+  name(s). It used to fail inside the GraphQL schema build with a duplicate-type error.
 - A JPEG's stored `width` and `height` now follow its Exif orientation: orientations 5 to 8 (a 90 degree
   turn) swap the two, so a portrait photo that a phone saved sideways reports the size it is displayed
   at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored

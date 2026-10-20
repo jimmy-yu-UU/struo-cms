@@ -31,6 +31,16 @@ Blog sample's `article` as the example:
 | Relation filter input | `<X><Rel>RelationFilterInput` | `ArticleTagsRelationFilterInput` |
 | Field name (junction read/write) | `<rel>Links` | `tagsLinks` |
 
+Every generated name must be unique, and the host checks that at startup. A collection whose names
+collide with another collection's or with a name the schema always contains stops startup with a
+`MetadataException` that names the collection(s) and the clashing name(s). Two collections collide
+when their generated names meet, for example `article` and `articleList` (both produce the type
+`ArticleList`) or `category` and `categories` (both produce the query field `categories`). A
+collection collides with the built-in names when it generates one of them, for example `revision`
+(type `Revision`), `query`, `mutation`, `string` or `tagItem`. GraphQL names are case-sensitive, so
+`fooBar` and `foobar` do not collide. Rename one of the collections; see
+[Chapter 5: Defining Collections](05-collections.md) for the `Name` rules.
+
 An object type always carries `id: ID!` and `version: Long`, one field for every non-hidden,
 non-excluded own field, one more for every relation, and one more, `translations: [Translation!]`,
 for a collection with a translation sidecar. `version` is declared on every type, but it only
