@@ -7,10 +7,10 @@ using Struo.Infrastructure.Metadata;
 
 namespace Struo.Infrastructure.Migrations.Commands;
 
-/// <summary>The command-line commands (<c>migrate*</c>, <c>make:migration</c>, <c>files:sweep</c>). Exit codes: 0 success, 1 failure, 2 usage error.</summary>
+/// <summary>The command-line commands (<c>migrate*</c>, <c>make:migration</c>, <c>files:sweep</c>). Exit codes: 0 success, 1 failure, 2 usage error, 3 <c>files:sweep --apply</c> refused by its safeguard.</summary>
 public static class MigrationCli
 {
-    public const int Success = 0, Failure = 1, Usage = 2;
+    public const int Success = 0, Failure = 1, Usage = 2, Refused = 3;
     private const string MigrateCommand = "migrate";
     private const string PreviewCommand = "migrate:preview";
     private static readonly string[] Runnable = [MigrateCommand, "migrate:status", PreviewCommand, "migrate:check", "migrate:baseline", "make:migration", FilesSweepCommand.Name];

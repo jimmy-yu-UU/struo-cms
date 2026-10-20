@@ -24,7 +24,9 @@
 - `files:sweep` removes orphaned blobs from the local or S3 store. It is a dry run that lists the
   orphans unless `--apply` is given, never touches a blob younger than `--min-age-hours` (default 24),
   and treats a blob referenced by a trashed `files` row as in use. `IFileStorage` gains
-  `ListAsync`, which a fork's own storage implementation must provide. See
+  `ListAsync`, which a fork's own storage implementation must provide. The command first prints its
+  storage and database targets (never credentials), and `--apply` refuses with exit code `3` when more
+  than 50% of the eligible blobs are orphans unless `--force` is given. See
   [Removing orphaned blobs](20-deployment.md#removing-orphaned-blobs).
 - [Chapter 25: After Forking](25-after-forking.md) lists what a fork changes first: the license
   line, `UserSecretsId`, the Sonar variables, the sample, the admin-UI language, the `__Host-` cookie

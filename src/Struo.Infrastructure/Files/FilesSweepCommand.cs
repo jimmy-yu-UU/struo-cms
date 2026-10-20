@@ -1,6 +1,8 @@
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
+using Microsoft.Extensions.Options;
+using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Domain.Auditing;
 using Struo.Infrastructure.Migrations.Commands;
@@ -18,11 +20,20 @@ internal static class FilesSweepCommand
     private const int DefaultMinAgeHours = 24;
     private const int LookupBatchSize = 500;
 
-    private sealed record Options(bool Apply, int MinAgeHours);
+    private const int MaxOrphanPercent = 50;
+
+    private enum ScanMode { Count, Report, Delete }
+
+    private sealed record Options(bool Apply, bool Force, int MinAgeHours);
 
     private sealed class Tally
     {
-        public int Orphans, Younger, Deleted, Failed;
+        public int Eligible, Orphans, Younger, Deleted, Failed;
+
+        public int Percent => Eligible == 0 ? 0 : (int)Math.Round(Orphans * 100.0 / Eligible);
+
+        // Compared as integers so exactly half is below the threshold.
+        public bool ExceedsThreshold => (long)Orphans * 100 > (long)Eligible * MaxOrphanPercent;
     }
 
     public static async Task<int> RunAsync(
@@ -35,86 +46,123 @@ internal static class FilesSweepCommand
             return MigrationCli.Usage;
         }
 
-        var tally = new Tally();
         try
         {
             using var scope = services.CreateScope();
-            var storage = services.GetRequiredService<IFileStorage>();
-            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            var cutoff = clock.GetUtcNow().UtcDateTime.AddHours(-options.MinAgeHours);
+            await stdout.WriteLineAsync(SweepTargets.Describe(
+                services.GetRequiredService<FileStorageOptions>(),
+                services.GetRequiredService<IOptions<DatabaseOptions>>().Value));
 
-            List<string> batch = [];
-            await foreach (var blob in storage.ListAsync(ct))
+            var scan = new Scan(
+                services.GetRequiredService<IFileStorage>(),
+                scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(),
+                clock.GetUtcNow().UtcDateTime.AddHours(-options.MinAgeHours));
+
+            if (options.Apply && !options.Force)
             {
-                if (!StorageKey.IsStorageKey(blob.Key)) continue;
-                if (blob.LastModifiedUtc > cutoff) { tally.Younger++; continue; }
-                batch.Add(blob.Key);
-                if (batch.Count < LookupBatchSize) continue;
-                await SweepBatchAsync(batch, options, storage, db, stdout, stderr, tally, ct);
-                batch.Clear();
+                var census = await scan.RunAsync(ScanMode.Count, stdout, stderr, ct);
+                if (census.ExceedsThreshold)
+                {
+                    await stderr.WriteLineAsync(
+                        $"{Name}: refusing to delete: {census.Orphans} of {census.Eligible} eligible blobs " +
+                        $"({census.Percent}%) are orphans, more than {MaxOrphanPercent}%. This often means the " +
+                        "configuration points at the wrong storage or database. Check the targets above, " +
+                        "then rerun with --force to delete anyway.");
+                    return MigrationCli.Refused;
+                }
             }
-            if (batch.Count > 0) await SweepBatchAsync(batch, options, storage, db, stdout, stderr, tally, ct);
+
+            var tally = await scan.RunAsync(options.Apply ? ScanMode.Delete : ScanMode.Report, stdout, stderr, ct);
+            await WriteSummaryAsync(options, tally, stdout);
+            return tally.Failed > 0 ? MigrationCli.Failure : MigrationCli.Success;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             await stderr.WriteLineAsync($"{Name} failed: {Innermost(ex).Message.ReplaceLineEndings(" ")}");
             return MigrationCli.Failure;
         }
-
-        await WriteSummaryAsync(options, tally, stdout);
-        return tally.Failed > 0 ? MigrationCli.Failure : MigrationCli.Success;
     }
 
-    private static async Task SweepBatchAsync(
-        List<string> keys, Options options, IFileStorage storage, ISqlSugarClient db,
-        TextWriter stdout, TextWriter stderr, Tally tally, CancellationToken ct)
+    private sealed class Scan(IFileStorage storage, ISqlSugarClient db, DateTime cutoff)
     {
-        var referenced = (await db.Queryable<File>()
-            .ClearFilter<ISoftDeletable>()
-            .In(f => f.StorageKey, keys.ToArray())
-            .Select(f => f.StorageKey)
-            .ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
-
-        foreach (var key in keys.Where(k => !referenced.Contains(k)))
+        public async Task<Tally> RunAsync(ScanMode mode, TextWriter stdout, TextWriter stderr, CancellationToken ct)
         {
-            tally.Orphans++;
-            await stdout.WriteLineAsync($"orphan {key}");
-            if (!options.Apply) continue;
-            try
+            var tally = new Tally();
+            List<string> batch = [];
+            await foreach (var blob in storage.ListAsync(ct))
             {
-                await storage.DeleteAsync(key, ct);
-                tally.Deleted++;
+                if (!StorageKey.IsStorageKey(blob.Key)) continue;
+                if (blob.LastModifiedUtc > cutoff) { tally.Younger++; continue; }
+                tally.Eligible++;
+                batch.Add(blob.Key);
+                if (batch.Count < LookupBatchSize) continue;
+                await SweepBatchAsync(batch, mode, stdout, stderr, tally, ct);
+                batch.Clear();
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            if (batch.Count > 0) await SweepBatchAsync(batch, mode, stdout, stderr, tally, ct);
+            return tally;
+        }
+
+        private async Task SweepBatchAsync(
+            List<string> keys, ScanMode mode, TextWriter stdout, TextWriter stderr, Tally tally, CancellationToken ct)
+        {
+            var referenced = (await db.Queryable<File>()
+                .ClearFilter<ISoftDeletable>()
+                .In(f => f.StorageKey, keys.ToArray())
+                .Select(f => f.StorageKey)
+                .ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var key in keys.Where(k => !referenced.Contains(k)))
             {
-                tally.Failed++;
-                await stderr.WriteLineAsync($"{Name}: deleting {key} failed: {ex.Message.ReplaceLineEndings(" ")}");
+                tally.Orphans++;
+                if (mode == ScanMode.Count) continue;
+                await stdout.WriteLineAsync($"orphan {key}");
+                if (mode == ScanMode.Report) continue;
+                try
+                {
+                    await storage.DeleteAsync(key, ct);
+                    tally.Deleted++;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    tally.Failed++;
+                    await stderr.WriteLineAsync($"{Name}: deleting {key} failed: {ex.Message.ReplaceLineEndings(" ")}");
+                }
             }
         }
     }
 
     private static async Task WriteSummaryAsync(Options options, Tally tally, TextWriter stdout)
     {
-        var found = $"{tally.Orphans} orphan blob(s) found, {tally.Younger} younger than {options.MinAgeHours} hour(s) skipped.";
-        await stdout.WriteLineAsync(options.Apply
-            ? $"{found} {tally.Deleted} deleted, {tally.Failed} failed."
-            : $"{found} Dry run: nothing was deleted; pass --apply to delete.");
+        var found = $"{tally.Orphans} of {tally.Eligible} eligible blobs ({tally.Percent}%) are orphans; " +
+                    $"{tally.Younger} younger than {options.MinAgeHours} hour(s) skipped.";
+        if (options.Apply)
+        {
+            await stdout.WriteLineAsync($"{found} {tally.Deleted} deleted, {tally.Failed} failed.");
+            return;
+        }
+        await stdout.WriteLineAsync($"{found} Dry run: nothing was deleted; pass --apply to delete.");
+        if (tally.ExceedsThreshold)
+            await stdout.WriteLineAsync(
+                $"More than {MaxOrphanPercent}% are orphans, so --apply would need --force. " +
+                "Check the targets above first.");
     }
 
     private static bool TryParse(IReadOnlyList<string> args, out Options options, out string error)
     {
-        options = new Options(false, DefaultMinAgeHours);
+        options = new Options(false, false, DefaultMinAgeHours);
         error = "";
-        var (apply, minAge) = (false, DefaultMinAgeHours);
+        var (apply, force, minAge) = (false, false, DefaultMinAgeHours);
         for (var i = 0; i < args.Count; i++)
         {
             var arg = args[i];
             if (arg == "--apply") { apply = true; continue; }
+            if (arg == "--force") { force = true; continue; }
 
             string? value = null;
             if (arg == "--min-age-hours") value = i + 1 < args.Count ? args[++i] : null;
             else if (arg.StartsWith("--min-age-hours=", StringComparison.Ordinal)) value = arg["--min-age-hours=".Length..];
-            else { error = $"Unexpected argument '{arg}'. Usage: files:sweep [--apply] [--min-age-hours N]."; return false; }
+            else { error = $"Unexpected argument '{arg}'. Usage: files:sweep [--apply [--force]] [--min-age-hours N]."; return false; }
 
             if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out minAge))
             {
@@ -122,7 +170,7 @@ internal static class FilesSweepCommand
                 return false;
             }
         }
-        options = new Options(apply, minAge);
+        options = new Options(apply, force, minAge);
         return true;
     }
 

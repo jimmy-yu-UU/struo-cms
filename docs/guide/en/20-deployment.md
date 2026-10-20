@@ -428,9 +428,21 @@ selects and removes them on request:
 
 ```text
 $ dotnet run --project src/Struo.Api -- files:sweep
+storage:  local, root /srv/struo/uploads
+database: PostgreSQL, database struo
 orphan 2026/10/00000000000000000000000000000001.png
-1 orphan blob(s) found, 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
+1 of 4 eligible blobs (25%) are orphans; 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
 ```
+
+::: warning Check both targets before `--apply`
+The command acts on whatever storage and database the configuration points at, including a
+`appsettings.Development.json` or environment variables you forgot were set. Read the first two
+lines, `storage:` and `database:`, and confirm they are the pair you mean to clean.
+:::
+
+The command always starts by printing those two lines: the storage backend with its target (the local
+root path, or the S3 bucket and the service host) and the database provider and database name.
+Credentials and connection strings are never printed.
 
 Without `--apply` the command is a dry run: it prints one `orphan <key>` line per blob and a summary,
 and deletes nothing. Review the list, then run it again with `--apply` to delete.
@@ -438,11 +450,18 @@ and deletes nothing. Review the list, then run it again with `--apply` to delete
 | Option | Meaning |
 |---|---|
 | `--apply` | Delete the orphans; without it nothing is deleted |
+| `--force` | Let `--apply` delete when over half the blobs are orphans |
 | `--min-age-hours N` | Skip blobs newer than `N` hours (default `24`) |
 
 `N` is a whole number, `0` or more. The grace period protects an upload that has stored its blob but not yet written its row. A blob that
 any `files` row references is never an orphan, and that includes rows in the trash. Purge the row
 first and the blob becomes an orphan.
+
+As a safeguard, `--apply` refuses to delete when more than 50% of the eligible blobs (key-shaped and
+older than the grace period) are orphans. That ratio usually means the configuration points at the
+wrong storage or database, not that half the library is garbage. The refusal prints the counts and
+the targets and exits with `3`; after checking both, add `--force` to delete anyway. The dry run
+shows the same ratio and says when `--apply` would need `--force`.
 
 Only keys shaped like `{yyyy}/{MM}/{32 hex digits}{extension}` are considered, so a variant cache or
 any other file that shares the storage root is left alone. The listing is streamed (S3 pages through
@@ -451,7 +470,8 @@ a large store does not have to fit in memory.
 
 Like the migration commands, it reads the API's configuration, so the S3 or local settings and the
 connection string must be in place. Exit code `0` is success, `1` a failure (an unreachable store or
-database, or a delete that failed; the other deletes still run), `2` a usage error.
+database, or a delete that failed; the other deletes still run), `2` a usage error, `3` a refusal by
+the 50% safeguard.
 
 ## The local Compose stack
 

@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Application.Files;
 using Struo.Infrastructure.Migrations.Commands;
 using Struo.Infrastructure.Persistence;
@@ -61,13 +63,20 @@ public sealed class FilesSweepCommandTests : IDisposable
     {
         _db = SqlSugarClientFactory.Create(_database.Options(), new TestCurrentUserAccessor(Tester));
         _db.CodeFirst.InitTables<File>();
-        _sp = new ServiceCollection()
+        _sp = Services(new FileStorageOptions(), _database.Options());
+        MigrationCli.Clock = new FixedClock();
+    }
+
+    // The sweep reads the options only to describe its targets; the storage and the database client it works
+    // on are the fake and the real test database registered here.
+    private ServiceProvider Services(FileStorageOptions files, DatabaseOptions summaryDb) =>
+        new ServiceCollection()
             .AddSingleton<IFileStorage>(_storage)
+            .AddSingleton(files)
+            .AddSingleton(Options.Create(summaryDb))
             .AddScoped<ISqlSugarClient>(_ => SqlSugarClientFactory.Create(
                 _database.Options(), new TestCurrentUserAccessor(Tester)))
             .BuildServiceProvider();
-        MigrationCli.Clock = new FixedClock();
-    }
 
     public void Dispose()
     {
@@ -103,7 +112,7 @@ public sealed class FilesSweepCommandTests : IDisposable
 
         code.Should().Be(MigrationCli.Success);
         err.Should().BeEmpty();
-        output.Should().Contain(Key(1)).And.Contain("1 orphan");
+        output.Should().Contain(Key(1)).And.Contain("1 of 1 eligible");
         _storage.Blobs.Should().ContainKey(Key(1));
     }
 
@@ -129,7 +138,7 @@ public sealed class FilesSweepCommandTests : IDisposable
         var (code, output, _) = await Run("--apply");
 
         code.Should().Be(MigrationCli.Success);
-        output.Should().Contain("0 orphan").And.Contain("1 younger");
+        output.Should().Contain("0 of 0 eligible").And.Contain("1 younger");
         _storage.Blobs.Should().ContainKey(Key(1));
     }
 
@@ -139,7 +148,7 @@ public sealed class FilesSweepCommandTests : IDisposable
         _storage.Blobs[Key(1)] = Young;
 
         var (_, kept, _) = await Run("--min-age-hours=72", "--apply");
-        kept.Should().Contain("0 orphan");
+        kept.Should().Contain("0 of 0 eligible");
         _storage.Blobs.Should().ContainKey(Key(1));
 
         var (_, output, _) = await Run("--min-age-hours", "1");
@@ -154,7 +163,7 @@ public sealed class FilesSweepCommandTests : IDisposable
 
         var (_, output, _) = await Run("--apply");
 
-        output.Should().Contain("0 orphan");
+        output.Should().Contain("0 of 1 eligible");
         _storage.Blobs.Should().ContainKey(Key(1));
     }
 
@@ -165,11 +174,13 @@ public sealed class FilesSweepCommandTests : IDisposable
         _storage.Blobs[cacheKey] = Old;
         _storage.Blobs["2026/09/readme.txt"] = Old;
         _storage.Blobs[Key(3, "")] = Old;
+        _storage.Blobs[Key(4)] = Old;
+        Row(Key(4));
 
         var (_, output, _) = await Run("--apply");
 
         output.Should().Contain("1 deleted");
-        _storage.Blobs.Keys.Should().BeEquivalentTo([cacheKey, "2026/09/readme.txt"]);
+        _storage.Blobs.Keys.Should().BeEquivalentTo([cacheKey, "2026/09/readme.txt", Key(4)]);
     }
 
     [Fact]
@@ -191,12 +202,142 @@ public sealed class FilesSweepCommandTests : IDisposable
         _storage.Blobs[Key(2)] = Old;
         _storage.FailDelete.Add(Key(1));
 
-        var (code, output, err) = await Run("--apply");
+        var (code, output, err) = await Run("--apply", "--force");
 
         code.Should().Be(MigrationCli.Failure);
         err.Should().Contain(Key(1)).And.Contain("storage offline");
         output.Should().Contain("1 deleted").And.Contain("1 failed");
         _storage.Blobs.Keys.Should().BeEquivalentTo([Key(1)]);
+    }
+
+    private void Seed(int orphans, int referenced)
+    {
+        for (var i = 1; i <= orphans; i++) _storage.Blobs[Key(i)] = Old;
+        for (var i = 1; i <= referenced; i++)
+        {
+            _storage.Blobs[Key(1000 + i)] = Old;
+            Row(Key(1000 + i));
+        }
+    }
+
+    [Fact]
+    public async Task Apply_refuses_when_more_than_half_of_the_eligible_blobs_are_orphans()
+    {
+        Seed(orphans: 3, referenced: 2);
+
+        var (code, output, err) = await Run("--apply");
+
+        code.Should().Be(MigrationCli.Refused);
+        _storage.Blobs.Should().HaveCount(5);
+        err.Should().Contain("3 of 5").And.Contain("--force");
+        output.Should().Contain("storage:").And.Contain("database:");
+    }
+
+    [Fact]
+    public async Task Force_overrides_the_refusal()
+    {
+        Seed(orphans: 3, referenced: 2);
+
+        var (code, output, _) = await Run("--apply", "--force");
+
+        code.Should().Be(MigrationCli.Success);
+        output.Should().Contain("3 deleted");
+        _storage.Blobs.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Exactly_half_is_below_the_threshold()
+    {
+        Seed(orphans: 2, referenced: 2);
+
+        var (code, _, _) = await Run("--apply");
+
+        code.Should().Be(MigrationCli.Success);
+        _storage.Blobs.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Dry_run_reports_the_ratio_and_that_apply_would_need_force()
+    {
+        Seed(orphans: 3, referenced: 1);
+
+        var (code, output, _) = await Run();
+
+        code.Should().Be(MigrationCli.Success);
+        output.Should().Contain("3 of 4").And.Contain("75%").And.Contain("--apply would need --force");
+        _storage.Blobs.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task Dry_run_below_the_threshold_does_not_mention_force()
+    {
+        Seed(orphans: 1, referenced: 3);
+
+        var (_, output, _) = await Run();
+
+        output.Should().NotContain("--force");
+    }
+
+    [Fact]
+    public async Task Both_modes_print_the_local_storage_root_and_the_database_before_the_orphans()
+    {
+        var files = new FileStorageOptions { Backend = "local", Local = { RootPath = "/data/uploads" } };
+        var db = new DatabaseOptions
+            { DbType = StruoDbType.PostgreSQL, ConnectionString = "Host=h;Database=prod_cms;Username=u;Password=pw" };
+        using var sp = Services(files, db);
+        _storage.Blobs[Key(1)] = Old;
+        _storage.Blobs[Key(2)] = Old;
+        Row(Key(2));
+
+        foreach (var mode in new[] { Array.Empty<string>(), ["--apply"] })
+        {
+            var (o, e) = (new StringWriter(), new StringWriter());
+            await MigrationCli.RunAsync(MigrationCli.Parse(["files:sweep", .. mode]), sp, o, e, default);
+            var lines = o.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            lines[0].Should().Contain("storage:").And.Contain("local").And.Contain("uploads");
+            lines[1].Should().Contain("database:").And.Contain("PostgreSQL").And.Contain("prod_cms");
+        }
+    }
+
+    [Fact]
+    public async Task S3_and_connection_secrets_never_reach_the_output()
+    {
+        var files = new FileStorageOptions
+        {
+            Backend = "s3",
+            S3 =
+            {
+                Endpoint = "https://minio.example.test:9443/base", Bucket = "media-bucket",
+                AccessKey = "AKIA-ACCESS-9", SecretKey = "S3-SECRET-7",
+            },
+        };
+        var db = new DatabaseOptions
+        {
+            DbType = StruoDbType.PostgreSQL,
+            ConnectionString = "Host=db.internal;Port=5432;Database=cms_db;Username=cms_user;Password=PG-PASSWORD-5",
+        };
+        using var sp = Services(files, db);
+        _storage.Blobs[Key(1)] = Old;
+
+        var (o, e) = (new StringWriter(), new StringWriter());
+        await MigrationCli.RunAsync(MigrationCli.Parse(["files:sweep", "--apply", "--force"]), sp, o, e, default);
+        var all = o + e.ToString();
+
+        all.Should().Contain("media-bucket").And.Contain("minio.example.test").And.Contain("cms_db");
+        all.Should().NotContain("S3-SECRET-7").And.NotContain("AKIA-ACCESS-9")
+            .And.NotContain("PG-PASSWORD-5").And.NotContain("cms_user").And.NotContain("db.internal");
+    }
+
+    [Fact]
+    public async Task A_sqlite_database_is_named_by_its_file_only()
+    {
+        var db = new DatabaseOptions { DbType = StruoDbType.Sqlite, ConnectionString = "Data Source=/secret/dir/app.db" };
+        using var sp = Services(new FileStorageOptions(), db);
+
+        var (o, e) = (new StringWriter(), new StringWriter());
+        await MigrationCli.RunAsync(MigrationCli.Parse(["files:sweep"]), sp, o, e, default);
+
+        o.ToString().Should().Contain("app.db").And.NotContain("/secret/dir");
     }
 
     [Theory]

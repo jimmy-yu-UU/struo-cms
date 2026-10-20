@@ -355,9 +355,19 @@ Healthy
 
 ```text
 $ dotnet run --project src/Struo.Api -- files:sweep
+storage:  local, root /srv/struo/uploads
+database: PostgreSQL, database struo
 orphan 2026/10/00000000000000000000000000000001.png
-1 orphan blob(s) found, 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
+1 of 4 eligible blobs (25%) are orphans; 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
 ```
+
+::: warning 加 `--apply` 之前，先確認兩個目標
+這個命令會對設定指向的任何儲存與資料庫動手，包括你忘了還在生效的 `appsettings.Development.json`
+或環境變數。看清楚最前面兩行 `storage:` 與 `database:`，確認它們就是你要清理的那一組。
+:::
+
+命令一開始一定先印這兩行：儲存後端與它的目標（本機的根目錄路徑，或 S3 的儲存桶與服務主機），
+以及資料庫的提供者與資料庫名稱。憑證與連線字串一律不會印出來。
 
 不加 `--apply` 就是試跑：每個孤兒印一行 `orphan <key>`，最後一行是摘要，什麼都不刪。看過清單，
 再加上 `--apply` 重跑才會刪除。
@@ -365,17 +375,23 @@ orphan 2026/10/00000000000000000000000000000001.png
 | 選項 | 意義 |
 |---|---|
 | `--apply` | 刪除孤兒；不加就什麼都不刪 |
+| `--force` | 孤兒超過一半時，讓 `--apply` 照刪 |
 | `--min-age-hours N` | 略過不到 `N` 小時的 blob（預設 `24`） |
 
 `N` 是 0 或更大的整數。寬限期是保護「blob 已經存了、資料列還沒寫入」的上傳。只要有任何一列 `files` 參照某個 blob，它就
 不是孤兒，垃圾桶裡的列也算。要先清除資料列，blob 才會變成孤兒。
+
+保險起見，當符合資格的 blob（鍵的格式正確、且超過寬限期）有超過 50% 是孤兒時，`--apply` 會拒絕刪除。
+這種比例通常代表設定指到了錯的儲存或資料庫，而不是媒體庫真有一半是垃圾。拒絕時會印出數量與兩個
+目標，並以 `3` 結束；兩邊都確認過之後，再加 `--force` 才會照刪。試跑也會顯示同樣的比例，並指出
+`--apply` 何時需要 `--force`。
 
 只有形如 `{yyyy}/{MM}/{32 位十六進位}{副檔名}` 的鍵會被考慮，所以變體快取或其他放在儲存根目錄的
 檔案不會被動到。列舉是串流的（S3 用 `ListObjectsV2` 分頁，本機後端惰性走訪根目錄），資料庫查詢
 也分批進行，儲存量再大也不必整批載入記憶體。
 
 跟 migration 命令一樣，它讀的是 API 的設定，所以 S3 或本機的設定與連線字串都要就位。結束代碼
-`0` 是成功，`1` 是失敗（儲存或資料庫連不上，或某次刪除失敗；其餘的刪除仍會執行），`2` 是用法錯誤。
+`0` 是成功，`1` 是失敗（儲存或資料庫連不上，或某次刪除失敗；其餘的刪除仍會執行），`2` 是用法錯誤，`3` 是被 50% 保險機制拒絕。
 
 ## 本機的 Compose 環境
 
