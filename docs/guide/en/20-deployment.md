@@ -281,7 +281,8 @@ frame-ancestors 'none'; sandbox` instead, and any policy the API itself sends th
 (`https://cdn.example.com`) that are appended to `img-src` and `connect-src`. Set `CSP_IMG_EXTRA` when
 images load from another origin, for example a CDN in front of storage, or a bucket's presigned URL
 when `Struo:Files:PresignedRedirect` is `true` and the browser fetches the file from the bucket
-directly. Set `CSP_CONNECT_EXTRA` when the browser calls another origin, for example an API built into
+directly, or when `Branding:LogoUrl` is an absolute URL on another host. Set `CSP_CONNECT_EXTRA`
+when the browser calls another origin, for example an API built into
 the image with `VITE_API_BASE_URL` pointing at a different host. A blocked request shows up as a
 `Content-Security-Policy` violation in the browser console.
 

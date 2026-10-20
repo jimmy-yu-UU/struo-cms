@@ -118,6 +118,10 @@
   `ImageTransformResult?`, where `null` means the image the decoder would produce is over that limit. A
   fork that implements the interface must add the parameter and honour the limit, and a fork that calls
   it must pass the limit and handle `null` (serve the original bytes).
+- The admin image's Content-Security-Policy blocks images and API calls to any origin other than its own
+  until `CSP_IMG_EXTRA` / `CSP_CONNECT_EXTRA` list them. A fork that serves files from a CDN or presigned
+  bucket URLs (`Struo:Files:PresignedRedirect`), sets an absolute external `Branding:LogoUrl`, or points
+  `VITE_API_BASE_URL` at another origin loses those images or requests on upgrade until it sets them.
 :::
 
 ### Added
@@ -162,8 +166,7 @@
   `Permissions-Policy` that turns off camera, microphone, geolocation, payment and USB. Proxied `/api/*`
   responses get `default-src 'none'; frame-ancestors 'none'; sandbox`. The `CSP_IMG_EXTRA` and
   `CSP_CONNECT_EXTRA` container variables (empty by default) add origins to `img-src` and `connect-src`; a
-  fork whose images or API calls go to another origin, such as a CDN or presigned bucket URLs, must set
-  them. The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
+  fork whose images or API calls go to another origin must set them (see Breaking). The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
 
 ### Fixed
 

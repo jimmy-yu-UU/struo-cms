@@ -230,7 +230,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 `CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA` 預設空字串，各自接受以空白分隔的來源（`https://cdn.example.com`），
 會附加到 `img-src` 與 `connect-src`。圖片從別的來源載入時設 `CSP_IMG_EXTRA`，例如儲存體前面的 CDN，或
-`Struo:Files:PresignedRedirect` 為 `true` 而瀏覽器直接向 bucket 取檔時的 presigned URL。瀏覽器要呼叫別的來源時
+`Struo:Files:PresignedRedirect` 為 `true` 而瀏覽器直接向 bucket 取檔時的 presigned URL，或 `Branding:LogoUrl` 是其他主機上的絕對 URL。瀏覽器要呼叫別的來源時
 設 `CSP_CONNECT_EXTRA`，例如用 `VITE_API_BASE_URL` 建置進映像、指向不同主機的 API。被擋下的請求會在瀏覽器主控台
 顯示 `Content-Security-Policy` 違規。
 

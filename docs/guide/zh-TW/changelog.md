@@ -91,6 +91,10 @@
 - `IImageTransformer.Transform` 在請求之後多一個 `long maxSourcePixels` 參數，並回傳可為 null 的
   `ImageTransformResult?`，`null` 代表解碼器會產生的影像超過該上限。實作這個介面的 fork 必須加上參數並遵守
   上限，呼叫它的 fork 必須傳入上限並處理 `null`（改回傳原始位元組）。
+- 管理端映像的 Content-Security-Policy 會擋下指向自身以外來源的圖片與 API 呼叫，除非 `CSP_IMG_EXTRA` /
+  `CSP_CONNECT_EXTRA` 列出這些來源。從 CDN 或 presigned bucket URL（`Struo:Files:PresignedRedirect`）提供檔案、
+  設了絕對的外部 `Branding:LogoUrl`，或把 `VITE_API_BASE_URL` 指向其他來源的 fork，升級後這些圖片或請求會失效，
+  需先設定這兩個變數。
 :::
 
 ### 新增
@@ -129,7 +133,7 @@
   `Permissions-Policy`（關閉相機、麥克風、定位、支付與 USB）。代理出去的 `/api/*` 回應帶
   `default-src 'none'; frame-ancestors 'none'; sandbox`。容器變數 `CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
   （預設空字串）可為 `img-src` 與 `connect-src` 加入來源；圖片或 API 呼叫走向其他來源（例如 CDN 或 bucket 的
-  presigned URL）的 fork 必須設定它們。主題初始化是檔案 `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
+  presigned URL）的 fork 必須設定它們（見破壞性變更）。主題初始化是檔案 `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
 
 ### 修正
 

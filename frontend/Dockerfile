@@ -23,8 +23,9 @@ RUN pnpm build
 
 # Runtime: nginx serves the built dist/ and reverse-proxies /api/ to the
 # backend. See nginx/default.conf.template for the proxy and header
-# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA and CSP_CONNECT_EXTRA are consumed by
-# nginx's own envsubst-on-templates entrypoint at container start.
+# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA and
+# CSP_CONNECT_EXTRA are consumed by nginx's own envsubst-on-templates
+# entrypoint at container start.
 #
 # Two deliberate asymmetries with the API image, neither a behaviour change:
 # - No USER directive: the stock nginx:alpine image's master process needs to
