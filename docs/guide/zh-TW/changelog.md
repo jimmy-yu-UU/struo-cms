@@ -1,5 +1,14 @@
 # 版本紀錄
 
+## 0.12.0
+
+::: danger 破壞性變更
+- 後台映像的容器埠從 `80` 改成 `8080`，nginx 以非 root 使用者執行；映像改建在
+  `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
+  fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
+  `8080`。
+:::
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger 破壞性變更

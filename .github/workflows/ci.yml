@@ -125,7 +125,7 @@ jobs:
       - name: Smoke-test the admin image
         run: |
           trap 'docker rm --force admin' EXIT
-          docker run --detach --name admin --publish 8081:80 struo-admin:ci
+          docker run --detach --name admin --publish 8081:8080 struo-admin:ci
           for _ in $(seq 1 15); do
             if curl --fail --silent http://localhost:8081/ | grep --quiet 'assets/index-'; then exit 0; fi
             sleep 1

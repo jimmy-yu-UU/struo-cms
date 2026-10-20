@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+::: danger Breaking
+- The admin image listens on container port `8080` instead of `80` and runs nginx as a non-root user. It
+  is built on `nginxinc/nginx-unprivileged`. The Compose mapping is now
+  `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
+  own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
+  `8080`.
+:::
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger Breaking

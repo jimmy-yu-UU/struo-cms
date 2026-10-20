@@ -37,6 +37,12 @@ const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
 // Locations that forward to the API: /api/ and the two OIDC callback paths.
 const PROXIED = ['/api/', '= /signin-oidc', '= /signout-callback-oidc']
 
+describe('nginx template listen port', () => {
+  it('listens on the unprivileged port 8080', () => {
+    expect(template).toMatch(/^\s*listen\s+8080;/m)
+  })
+})
+
 describe('nginx template security headers', () => {
   it('finds the server block and the add_header locations', () => {
     const names = withHeaders.map((b) => b.name)

@@ -8,7 +8,7 @@
 # --ignore-scripts on install matches the CI frontend job's reasoning:
 # untrusted package postinstall scripts don't get to run during image build.
 # Node 24 is used to match the CI "frontend" job's runtime.
-FROM node:24-alpine AS build
+FROM node:24.22.0-alpine AS build
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -27,17 +27,17 @@ RUN pnpm build
 # CSP_CONNECT_EXTRA are consumed by nginx's own envsubst-on-templates
 # entrypoint at container start.
 #
-# Two deliberate asymmetries with the API image, neither a behaviour change:
-# - No USER directive: the stock nginx:alpine image's master process needs to
-#   run as root to bind the privileged port 80 (its worker processes still
-#   drop to the unprivileged `nginx` user on their own). Switching to
-#   nginxinc/nginx-unprivileged would drop that root requirement but also
-#   changes the exposed port away from 80, which this image's EXPOSE/runtime
-#   contract does not do.
+# The runtime image is nginxinc/nginx-unprivileged: nginx runs as its
+# non-root `nginx` user (uid 101) and listens on 8080, an unprivileged port, so
+# there is no USER directive to add here. The image's entrypoint renders the
+# template into /etc/nginx/conf.d as that same user, and its pid file and temp
+# directories are under /tmp.
+#
+# One deliberate asymmetry with the API image:
 # - No HEALTHCHECK: unlike the API image, static nginx here has no downstream
 #   dependency to probe (no database, no cache) -- an orchestrator supervising
 #   this container should probe `/` directly instead.
-FROM nginx:alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 ENV API_UPSTREAM=http://api:8080
@@ -45,4 +45,4 @@ ENV HSTS_VALUE=
 ENV CSP_IMG_EXTRA=
 ENV CSP_CONNECT_EXTRA=
 ENV NGINX_RESOLVER=127.0.0.11
-EXPOSE 80
+EXPOSE 8080

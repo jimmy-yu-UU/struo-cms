@@ -211,8 +211,8 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 
 ### 後台 SPA 映像
 
-監聽 `80`，用 nginx 提供 Vite 的 production build。跟 API 映像不同，這裡沒有 `HEALTHCHECK`：
-沒有下游依賴可以探測，要探測就直接打 `/`。
+監聽 `8080`，以非 root 使用者 `nginx` 執行 nginx，提供 Vite 的 production build。跟 API 映像不同，這裡沒有
+`HEALTHCHECK`：沒有下游依賴可以探測，要探測就直接打 `/`。
 
 SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 production 模式下會讀
 `frontend/.env.production`（有這份檔案的話），`frontend/.dockerignore` 也刻意不把它排除在建置範圍
@@ -283,7 +283,7 @@ docker network create struo-verify
 docker volume create struo-verify-data
 docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
-docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
+docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema` 與 `Applied 202610080001  SeedCoreData`。

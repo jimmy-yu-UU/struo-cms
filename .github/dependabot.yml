@@ -89,6 +89,39 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
+  # frontend/Dockerfile pins the Node build stage and the nginx-unprivileged
+  # runtime stage to exact versions, and a pinned tag never moves on its own;
+  # Dependabot rewrites the tag. The root Dockerfile follows the floating mcr
+  # `10.0` tags, which Dependabot leaves alone. Same cooldowns as the other
+  # ecosystems, minor and patch grouped, majors one at a time.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      docker-root-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      docker-frontend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   # Backend versions are centralised in Directory.Packages.props, which is the
   # file this reads. Leaving NuGet out would not have left the backend
   # unprotected - Dependabot's security updates cover an ecosystem whether or

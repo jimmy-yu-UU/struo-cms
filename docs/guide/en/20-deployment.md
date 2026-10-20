@@ -260,9 +260,9 @@ protection as any other secret.
 
 ### The admin SPA image
 
-The image listens on `80`, serving Vite's production build through nginx. Unlike the API image,
-there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
-`/` directly.
+The image listens on `8080` and runs nginx as the non-root user `nginx`, serving Vite's production
+build. Unlike the API image, there's no `HEALTHCHECK` here: there's no downstream dependency to probe,
+so probing means hitting `/` directly.
 
 The SPA's API address is baked into the image at build time: `vite build` in production mode reads
 `frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
@@ -346,7 +346,7 @@ docker network create struo-verify
 docker volume create struo-verify-data
 docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
-docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
+docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema` and
