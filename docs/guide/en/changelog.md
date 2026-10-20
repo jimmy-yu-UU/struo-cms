@@ -36,10 +36,10 @@
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
-
-- Anonymous image transforms hold at most `MaxConcurrentTransforms - 1` slots, so a signed-in request
-  can always use the remaining slot while anonymous requests saturate the rest. An anonymous request
-  past that cap waits for `QueueTimeoutSeconds` and then gets `503` `IMAGE_TRANSFORM_BUSY`.
+- Anonymous image transforms hold at most `MaxConcurrentTransforms - 1` slots, so an authenticated
+  request (session cookie or bearer token) can always use the remaining slot while anonymous requests
+  saturate the rest. An anonymous request past that cap waits for `QueueTimeoutSeconds` and then gets
+  `503` `IMAGE_TRANSFORM_BUSY`.
 
 ### Security
 

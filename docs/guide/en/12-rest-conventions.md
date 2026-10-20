@@ -119,8 +119,9 @@ means the same thing on both protocols:
 - `SEARCH_UNAVAILABLE`'s message is always `Search is temporarily unavailable.`; whatever reason
   the provider itself reports only goes into the server-side log.
 - `IMAGE_TRANSFORM_BUSY` comes from `GET /api/files/{id}/content` when no transform slot
-  the caller may use frees up within `Struo:Files:ImageTransform:QueueTimeoutSeconds`; the response carries a
-  `Retry-After` header with that many seconds (see [Chapter 15](15-files-and-media.md)).
+  the caller may use frees up within `Struo:Files:ImageTransform:QueueTimeoutSeconds`; the
+  response carries a `Retry-After` header with that many seconds (see
+  [Chapter 15](15-files-and-media.md)).
 
 `PAYLOAD_TOO_LARGE` and `SEARCH_UNAVAILABLE` are both hard to trigger on an ordinary host — the
 first needs an upload that genuinely exceeds the cap, and the second needs a search provider that

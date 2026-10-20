@@ -202,7 +202,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 - `TransformableContentTypes`：會被轉換的來源類型，預設是 `image/jpeg`、`image/png`、`image/webp`、
   `image/avif`、`image/gif`。其他圖片（包含 SVG）即使帶了轉換參數，也一律送出原始位元組。
 - `MaxConcurrentTransforms`：所有請求加起來同時進行的轉換數（至少 `2`）。匿名請求最多只能占用總數減
-  一個名額，所以已登入的請求永遠有一個名額可用。請求遇到沒有自己能用的空名額時，最多等
+  一個名額，所以已驗證的請求（session cookie 或 bearer token）永遠有一個名額可用。請求遇到沒有自己能用的空名額時，最多等
   `QueueTimeoutSeconds` 秒（`0` 以上；`0` 代表不等），之後回 `503` `IMAGE_TRANSFORM_BUSY`，並帶
   `Retry-After` 標頭。
 - `CacheMaxBytes`：磁碟上變體快取的容量上限。一次寫入讓快取超過上限時，會從最久沒被讀取的變體開始刪，

@@ -262,7 +262,7 @@ cover 高度。
 解碼之前，會先從標頭讀出來源的寬與高。超過 `MaxSourcePixels` 的來源，或標頭讀不出來的來源，一律
 送出原始位元組，所以標頭宣告了巨大影像的小檔案不會被解碼。GIF 的大小取其影格所需的畫布，AVIF 取
 標頭宣告的最大影像尺寸。衍生的 AVIF 影像（網格 grid 或疊圖 overlay）一律原樣送出，不轉換。libvips 開啟來源時讀到的尺寸，會在解碼任何像素之前再對 `MaxSourcePixels` 檢查一次。呼叫端給的 `quality` 會四捨五入到 10 的倍數；設定的 `DefaultQuality` 則照寫的值使用。同時最多進行 `MaxConcurrentTransforms` 個
-轉換，匿名請求最多只能占用總數減一個名額，所以已登入的請求永遠有一個名額可用。請求等超過
+轉換，匿名請求最多只能占用總數減一個名額，所以已驗證的請求（session cookie 或 bearer token）永遠有一個名額可用。請求等超過
 `QueueTimeoutSeconds` 秒還拿不到自己能用的名額，就回 `503`，代碼是 `IMAGE_TRANSFORM_BUSY`，
 並帶 `Retry-After` 標頭。
 

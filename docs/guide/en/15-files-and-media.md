@@ -331,8 +331,8 @@ need, and for an AVIF it is the largest image size the header declares. A derive
 or an overlay) is served as its original bytes, without transformation. When libvips opens the
 source, the size it reads is checked against `MaxSourcePixels` again before any pixel is decoded. A client-supplied `quality`
 is rounded to a multiple of 10; the configured `DefaultQuality` is used exactly as written. At most `MaxConcurrentTransforms` transforms
-run at once, and anonymous requests may hold at most one slot fewer, so a signed-in request can
-always use the remaining slot. A request that waits longer than `QueueTimeoutSeconds` for a slot it
+run at once, and anonymous requests may hold at most one slot fewer, so an authenticated request
+(session cookie or bearer token) can always use the remaining slot. A request that waits longer than `QueueTimeoutSeconds` for a slot it
 may use gets `503` with the `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
 
 ### Examples

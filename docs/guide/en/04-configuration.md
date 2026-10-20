@@ -232,10 +232,10 @@ The keys below bound what one caller can make the server compute and store.
   `image/jpeg`, `image/png`, `image/webp`, `image/avif` and `image/gif`. Any other image, SVG
   included, is served as its original bytes even when transform parameters are present.
 - `MaxConcurrentTransforms`: how many transforms run at once across all requests (at least `2`).
-  Anonymous requests may hold at most one slot fewer, so a signed-in request can always use the
-  remaining slot. A request that finds no slot it may use free waits up to `QueueTimeoutSeconds`
-  (`0` or more; `0` does not wait) and then gets `503` `IMAGE_TRANSFORM_BUSY` with a `Retry-After`
-  header.
+  Anonymous requests may hold at most one slot fewer, so an authenticated request (session cookie
+  or bearer token) can always use the remaining slot. A request that finds no slot it may use free
+  waits up to `QueueTimeoutSeconds` (`0` or more; `0` does not wait) and then gets `503`
+  `IMAGE_TRANSFORM_BUSY` with a `Retry-After` header.
 - `CacheMaxBytes`: the size cap of the variant cache on disk. When a write leaves the cache above
   it, the least recently read variants are deleted until the cache is at 90% of the cap, so the
   next writes do not sweep again. `0` or less removes the cap. A deletion that fails is logged and
@@ -245,9 +245,9 @@ The keys below bound what one caller can make the server compute and store.
   be read, is served as its original bytes. For a GIF the size is the canvas its frames need; for an
   AVIF it is the largest image size the header declares.
 
-`MaxWidth` and `MaxHeight` (at least `1`), `DefaultQuality` (1 to 100), `MaxConcurrentTransforms` (at least `2`),
-`QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps` are validated at startup;
-a value out of range stops startup with an error naming the key.
+`MaxWidth` and `MaxHeight` (at least `1`), `DefaultQuality` (1 to 100), `MaxConcurrentTransforms`
+(at least `2`), `QueueTimeoutSeconds`, `MaxSourcePixels` and the entries of `SizeSteps` are
+validated at startup; a value out of range stops startup with an error naming the key.
 
 ## Struo:Cors
 

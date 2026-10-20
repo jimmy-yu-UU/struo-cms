@@ -220,11 +220,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         var blocking = new BlockingTransformer();
         var derived = DerivedHost(blocking, maxConcurrent: 2, timeoutSeconds: 0);
         var anonymous = derived.CreateClient();
-        await factory.EnsureAdminSeededAsync();
-        var signedIn = derived.CreateClient();
-        signedIn.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-        (await signedIn.PostAsJsonAsync("/api/auth/login",
-            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+        var signedIn = await SignedInClientAsync(derived);
         var id = await UploadPng(signedIn, 600, 600);
 
         var first = anonymous.GetAsync($"/api/files/{id}/content?width=128&format=png");
@@ -242,6 +238,61 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         blocking.Release.Set();
         (await first).StatusCode.Should().Be(HttpStatusCode.OK);
         (await authenticated).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_bearer_token_request_counts_as_authenticated_for_the_reserved_slot()
+    {
+        var blocking = new BlockingTransformer();
+        var derived = DerivedHost(blocking, maxConcurrent: 2, timeoutSeconds: 0);
+        var anonymous = derived.CreateClient();
+        var signedIn = await SignedInClientAsync(derived);
+        var gen = await signedIn.PostAsync($"/api/users/{factory.AdminUserId}/access-token", null);
+        gen.EnsureSuccessStatusCode();
+        var token = Root(await gen.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("token").GetString()!;
+        var bearer = derived.CreateClient();
+        bearer.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var id = await UploadPng(signedIn, 600, 600);
+
+        var first = anonymous.GetAsync($"/api/files/{id}/content?width=128&format=png");
+        blocking.Entered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+        var authenticated = bearer.GetAsync($"/api/files/{id}/content?width=480&format=png");
+        var authenticatedServed = blocking.Entered.Wait(TimeSpan.FromSeconds(10));
+
+        authenticatedServed.Should().BeTrue();
+        blocking.Release.Set();
+        (await first).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await authenticated).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Authenticated_requests_can_fill_every_slot_and_the_next_one_gets_a_503()
+    {
+        var blocking = new BlockingTransformer();
+        var derived = DerivedHost(blocking, maxConcurrent: 2, timeoutSeconds: 0);
+        var signedIn = await SignedInClientAsync(derived);
+        var id = await UploadPng(signedIn, 600, 600);
+
+        var first = signedIn.GetAsync($"/api/files/{id}/content?width=128&format=png");
+        blocking.Entered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+        var second = signedIn.GetAsync($"/api/files/{id}/content?width=256&format=png");
+        blocking.Entered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+        var third = await signedIn.GetAsync($"/api/files/{id}/content?width=480&format=png");
+
+        third.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        blocking.Release.Set();
+        (await first).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await second).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private async Task<HttpClient> SignedInClientAsync(WebApplicationFactory<Program> derived)
+    {
+        await factory.EnsureAdminSeededAsync();
+        var client = derived.CreateClient();
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        (await client.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+        return client;
     }
 
     [Fact]

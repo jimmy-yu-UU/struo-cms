@@ -32,9 +32,8 @@
 
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
-
-- 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已登入的
-  請求仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
+- 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已驗證的
+  請求（session cookie 或 bearer token）仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
   `IMAGE_TRANSFORM_BUSY`。
 
 ### 安全性
