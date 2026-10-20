@@ -70,6 +70,11 @@ map $http_x_forwarded_proto $struo_forwarded_proto {
 server {
     listen 8080;
     server_name _;
+
+    # Directory redirects (try_files $uri $uri/) stay relative so they do not carry the
+    # container port 8080 when the container is published on another host port or sits
+    # behind a TLS proxy.
+    absolute_redirect off;
     root /usr/share/nginx/html;
     index index.html;
 

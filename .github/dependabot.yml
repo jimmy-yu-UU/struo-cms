@@ -89,11 +89,8 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
-  # frontend/Dockerfile pins the Node build stage and the nginx-unprivileged
-  # runtime stage to exact versions, and a pinned tag never moves on its own;
-  # Dependabot rewrites the tag. The root Dockerfile follows the floating mcr
-  # `10.0` tags, which Dependabot leaves alone. Same cooldowns as the other
-  # ecosystems, minor and patch grouped, majors one at a time.
+  # The root Dockerfile follows the floating mcr `10.0` tags, which stay on .NET
+  # 10: a major bump to 11.0 would break net10.0, so mcr majors are ignored.
   - package-ecosystem: docker
     directory: "/"
     schedule:
@@ -107,7 +104,15 @@ updates:
       docker-root-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
 
+  # frontend/Dockerfile pins the Node build stage and the nginx-unprivileged
+  # runtime stage to exact versions; Dependabot rewrites the tag. Node majors
+  # are ignored here: the Node major moves together with the CI frontend job's
+  # Node version. Same cooldowns as the other ecosystems, minor and patch
+  # grouped.
   - package-ecosystem: docker
     directory: "/frontend"
     schedule:
@@ -121,6 +126,9 @@ updates:
       docker-frontend-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   # Backend versions are centralised in Directory.Packages.props, which is the
   # file this reads. Leaving NuGet out would not have left the backend
