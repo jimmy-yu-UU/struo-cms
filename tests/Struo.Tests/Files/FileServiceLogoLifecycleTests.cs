@@ -75,8 +75,8 @@ public sealed class FileServiceLogoLifecycleTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)),
+            references: FileTestPipeline.Create(repo, provider, registry, graph));
     }
 
     public void Dispose() => _file.Dispose();

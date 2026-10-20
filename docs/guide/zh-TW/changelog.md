@@ -11,6 +11,9 @@
   `new EntityAccessors(...)`。
 - `GraphQlQueryBuilder.BuildQuery` 接受一個 `GraphQlQueryArgs`（篩選、排序、分頁、搜尋、`deep`、facets、
   aggregate），後面接 `collection` 與 `relationTarget`。直接呼叫它的程式要改成先建 `GraphQlQueryArgs`。
+- `FileService` 的建構函式以一個 `FileServiceCollaborators`（`Repository`、`Languages`、`CurrentUser`）
+  取代 `storage` 之後的三個參數，後面接選用的 `notifier`、`logger` 與 `references`（`ItemPurgePipeline`）。
+  依賴注入會自動解析；自己手動建構 `FileService` 的 fork，要改成傳 `new FileServiceCollaborators(...)`。
 - `SchemaTypeMapper.TagItemInputName` 是常數，不是方法。把 `TagItemInputName()` 改成 `TagItemInputName`。
 - 範本不再附帶 bootstrap 管理員密碼。`appsettings.json` 裡的 `Auth:BootstrapAdmin:Password` 是 `""`，
   `docker-compose.yml` 的 `STRUO_ADMIN_PASSWORD` 預設為空。密碼留空時，建立管理員的那次執行會隨機產生
@@ -72,6 +75,22 @@
   （驗證 `deep` 樹，接受 `FilterBudget?`）與 `ExpandPreparedAsync`（展開已準備好的樹）取代，用過
   `ExpandAsync` 的呼叫端要改成兩個都呼叫。`ItemService` 在搜尋查詢或根層查詢之前就驗證 `deep` 樹，所以
   依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。`offset` 沒有上限。
+- 媒體庫對檔案的垃圾桶與清除（`DELETE /api/files/{id}`，清除加 `?purge=true`）改為套用其他集合刪除時
+  一樣的關聯規則。仍被 `OnDelete.Restrict` 關聯參照的檔案，兩者都會回 `409 CONFLICT`，過去會被移到
+  垃圾桶或清除。清除時會把 `OnDelete.SetNull` 的參照設為 null、移除多對多的連接資料列，過去這些參照
+  會留著、指向不存在的檔案。通用項目 API 與 GraphQL 刪除檔案走同一條流程。
+- 圖片轉換的參數會被正規化，轉換本身也有了上限。請求的 `width` 或 `height` 會往上對齊到
+  `Struo:Files:ImageTransform:SizeSteps` 的下一個值（預設 64、128、256、320、480、640、768、1024、1280、
+  1600、1920、2560、3840、4096），所以 `width=100` 會得到 128 寬的圖。`fit=cover` 只對齊寬度，高度依請求的
+  比例推算並四捨五入到 8 像素的倍數。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。呼叫端給的 `quality` 四捨五入到 10 的倍數，範圍 10 到
+  100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、AVIF、GIF）裡的來源會被轉換；對 SVG 帶
+  `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣，AVIF 網格或疊圖影像則一律不轉換；libvips 讀到的尺寸也會在解碼前對同一上限檢查。同時最多
+  進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`
+  `IMAGE_TRANSFORM_BUSY`。變體快取由 `CacheMaxBytes`（2 GB）設上限，並以最久未使用者優先淘汰。需要精確像素
+  尺寸的用戶端，必須請求階梯上的尺寸或自行設定 `SizeSteps`；傳過其他 `fit` 值的用戶端必須改掉。
+- `IImageTransformer.Transform` 在請求之後多一個 `long maxSourcePixels` 參數，並回傳可為 null 的
+  `ImageTransformResult?`，`null` 代表解碼器會產生的影像超過該上限。實作這個介面的 fork 必須加上參數並遵守
+  上限，呼叫它的 fork 必須傳入上限並處理 `null`（改回傳原始位元組）。
 :::
 
 ### 新增
@@ -80,6 +99,13 @@
   所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
   仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
   `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
+
+- 編輯者可以在媒體庫的檔案對話框把檔案切換為 `published` 或 `draft`；項目 API 對 `published`、`draft`
+  以外的檔案 `status` 回 `400`。`Struo:Files:DefaultStatus`（`published` 或 `draft`，預設
+  `published`）決定新上傳檔案的狀態，其他值會讓啟動失敗。已發布的檔案仍然任何持有其 id 的人都能讀取。
+  模型說明見第 15 章。
+  若某個檔案資料列儲存的 `status` 兩者皆非，任何帶有 `status` 的更新都會回 `400`，管理介面儲存標題或替代文字也
+  包含在內；用 `PUT /api/items/file/{id}` 送出有效的 `status`，或直接修正該欄位，即可修復這類資料列。
 
 ### 安全性
 
@@ -123,6 +149,17 @@
   PostgreSQL 上則比對不到。樂觀鎖更新與垃圾桶、還原的防護條件一直是以 `id`、`version`、`deletedat`
   欄位篩選，不受影響；它們現在改用同一種型別化篩選。
 
+- 透過通用項目 API（`DELETE /api/items/file/{id}`）或 GraphQL 的 `deleteFile` 刪除檔案，行為與媒體庫一致。
+  移到垃圾桶時，若該檔案是品牌 Logo 會一併清除這個設定；清除（purge）時還會刪除翻譯、Logo 參照與儲存的檔案
+  內容。清除不再留下檔案內容，刪除檔案內容時儲存端失敗，會以警告記錄並附上儲存鍵，不再被忽略。
+
+- 在影格標頭之前帶有超過 64 KB EXIF 或 ICC 中繼資料的 JPEG（手機照片常見），上傳時會取得寬度與高度，圖片轉換端點
+  也會縮放它，不再直接回傳原圖。讀取器依 JPEG 區段長度一路走到影格標頭；被截斷的檔案，或區段長度超出檔案結尾的檔案，
+  仍回報沒有尺寸。
+
+- 上傳時若資料庫寫入失敗（資料庫中斷、請求被取消），會移除已經儲存的檔案內容，並回傳原本的錯誤。移除檔案內容
+  時若失敗，會以警告記錄並附上儲存鍵，不會取代上傳本身的錯誤。
+
 ### 升級說明
 
 Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入嘗試計數會歸零。滾動式部署期間，仍在 0.10 的實例與
@@ -131,6 +168,13 @@ Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入�
 語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
 語言集合的所有寫入被擋下，直到你修正它為止；若有兩個以上格式不合的資料列，API 既修不了也刪不掉它們。請先檢查
 已儲存的語言資料列裡是否有不符合 `[A-Za-z0-9_-]{1,35}` 的代碼，並在升級前直接在資料庫裡修正或刪除這些資料列。
+
+快取裡既有的圖片變體是依未正規化的參數產生鍵，現在的請求會算出不同的鍵，所以這些變體再也不會被讀到。它們仍
+計入 `CacheMaxBytes`，第一次碰到上限的寫入可能會把它們清掉。刪除 `CachePath` 目錄可以立刻回收空間；
+`CacheMaxBytes` 設為 `0`（不設上限）時，它們會一直留著，直到你自己刪除。
+
+主機在註冊服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生 libvips。沒有可用
+libvips 的主機現在會啟動失敗。
 
 若已啟用 OIDC，且 `Oidc:Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段（或 consumers
 租用戶的 GUID），升級前請先設定 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。

@@ -12,6 +12,10 @@
 - `GraphQlQueryBuilder.BuildQuery` takes a `GraphQlQueryArgs` (filter, sort, paging, search, `deep`,
   facets, aggregate), followed by `collection` and `relationTarget`. Code that calls it directly must
   build a `GraphQlQueryArgs` first.
+- The `FileService` constructor takes one `FileServiceCollaborators` (`Repository`, `Languages`,
+  `CurrentUser`) in place of the three parameters after `storage`, followed by the optional `notifier`,
+  `logger` and `references` (an `ItemPurgePipeline`). Dependency injection resolves it; a fork that
+  constructs `FileService` by hand must pass `new FileServiceCollaborators(...)`.
 - `SchemaTypeMapper.TagItemInputName` is a constant, not a method. Change `TagItemInputName()` to
   `TagItemInputName`.
 - The template no longer ships a bootstrap admin password. `Auth:BootstrapAdmin:Password` is `""` in
@@ -92,6 +96,28 @@
   `ExpandAsync` calls both. `ItemService` validates the `deep` tree before the search lookup or the root
   query, so an over-cap `deep` on a `GET` by id returns 400 even when the id does not exist (it returned
   404 before). There is no cap on `offset`.
+- The media library's trash and purge of a file (`DELETE /api/files/{id}`, with `?purge=true`) apply the
+  relation rules every other collection's delete applies. A file still referenced through an
+  `OnDelete.Restrict` relation returns `409 CONFLICT` on both, where it was trashed or purged. A purge sets
+  `OnDelete.SetNull` references to null and removes many-to-many junction rows, where it left them
+  pointing at a missing file. The generic items API and GraphQL delete of a file go through the same path.
+- Image transform parameters are normalized, and the transform is bounded. A requested `width` or
+  `height` snaps up to the next value of `Struo:Files:ImageTransform:SizeSteps` (default 64, 128, 256,
+  320, 480, 640, 768, 1024, 1280, 1600, 1920, 2560, 3840, 4096), so `width=100` returns a 128-wide
+  image. With `fit=cover` only the width snaps and the height follows the requested ratio, rounded to a multiple
+  of 8 pixels. `fit` is
+  `inside` or `cover`; any other value is `400`. A client-supplied `quality` rounds to a multiple of 10 within 10 to 100.
+  Only sources in `TransformableContentTypes` (JPEG, PNG, WebP, AVIF, GIF) are transformed; an SVG with
+  `?width=` returns the original bytes, as does a source over `MaxSourcePixels` (50 000 000) or whose
+  header cannot be read, and an AVIF grid or overlay image is never transformed; the size libvips reads is checked against the same limit before decoding. At most `MaxConcurrentTransforms` (2) transforms run at once, and a request
+  that waits longer than `QueueTimeoutSeconds` (10) gets `503` `IMAGE_TRANSFORM_BUSY`. The variant cache
+  is capped by `CacheMaxBytes` (2 GB) with least-recently-used eviction. A client that needs an exact
+  pixel size must request a size on the list or configure `SizeSteps`, and one that passed another
+  `fit` value must change it.
+- `IImageTransformer.Transform` takes a `long maxSourcePixels` after the request and returns a nullable
+  `ImageTransformResult?`, where `null` means the image the decoder would produce is over that limit. A
+  fork that implements the interface must add the parameter and honour the limit, and a fork that calls
+  it must pass the limit and handle `null` (serve the original bytes).
 :::
 
 ### Added
@@ -101,6 +127,14 @@
   without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It
   must match `^[a-z][A-Za-z0-9]*$` and be unique; a clash fails startup with a `MetadataException` naming
   both types. Without `Name` the collection keeps the camel-cased class name.
+
+- Editors can switch a file between `published` and `draft` in the media library's file dialog, and the
+  items API refuses a file `status` other than those two with `400`. `Struo:Files:DefaultStatus`
+  (`published` or `draft`, default `published`) sets the status of a new upload; any other value fails
+  startup. A published file stays readable by anyone who has its id. Chapter 15 describes the model.
+  A file row whose stored `status` is neither value is refused with `400` on any update that sends
+  `status`, which includes saving its title or alt text in the admin UI; send a valid `status`
+  through `PUT /api/items/file/{id}` or correct the column directly to repair such a row.
 
 ### Security
 
@@ -152,6 +186,21 @@
   optimistic-lock update and the trash and restore guards already filtered on the `id`, `version` and
   `deletedat` columns, so they are unaffected; they now use the same typed filter.
 
+- Deleting a file through the generic items API (`DELETE /api/items/file/{id}`) or the GraphQL `deleteFile`
+  mutation does what the media library does. Trashing clears the brand logo when it was that file; purging
+  also deletes the translations, the logo reference and the stored blob. A purge no longer leaves the blob
+  behind, and a storage failure while deleting the blob is logged as a warning with the storage key instead
+  of being ignored.
+
+- A JPEG that carries more than 64 KB of EXIF or ICC metadata ahead of its frame header (typical for phone
+  photos) gets its width and height on upload, and the image-transform endpoint resizes it instead of serving
+  the original. The reader follows the JPEG segment lengths up to the frame header; a truncated file, or one
+  whose segment length runs past the end, still reports no dimensions.
+
+- An upload whose database write fails (an outage, a cancelled request) removes the file content it had
+  already stored and returns the original error. A failure while removing that content is logged as a
+  warning with the storage key; it never replaces the upload's error.
+
 ### Upgrade notes
 
 The Redis login throttle counts under new keys, so each account's login-attempt count starts from
@@ -164,6 +213,14 @@ including a delete. A malformed code that is already stored blocks every write t
 until it is corrected, and with two or more malformed rows the API can neither fix nor delete them.
 Check the stored language rows for codes outside `[A-Za-z0-9_-]{1,35}` and correct or delete the
 malformed rows directly in the database before upgrading.
+
+Image variants already in the cache were keyed on parameters that were not normalized, and requests now
+produce different keys, so those variants are never read again. They still count toward `CacheMaxBytes`,
+and the first capped write may sweep them. Deleting the `CachePath` directory reclaims the space at once;
+with `CacheMaxBytes` set to `0` (no cap) they stay until you delete them.
+
+The host sets `NetVips.BlockUntrusted` during service registration, which loads native libvips at
+startup even when image transforms are disabled. A host without a usable libvips now fails to start.
 
 If OIDC is enabled and `Oidc:Authority` has a path segment `common`, `organizations` or `consumers`
 (or the consumers tenant GUID), set `Oidc:AllowedTenantId` or `Oidc:AllowedEmailDomains` before

@@ -198,6 +198,17 @@ public sealed class ShippedConfigurationBindingTests
         // binding), so this compares the shipped 4 entries against a genuinely bound value, not a
         // coincidental match with the default.
         bound.ImageTransform.AllowedFormats.Should().Equal(StringArray(shippedImage.GetProperty("AllowedFormats")));
+
+        // The hardening keys bind to what the file spells, and the array defaults live in C# so the
+        // shipped lists replace rather than append to them.
+        bound.ImageTransform.SizeSteps.Should().Equal(
+            shippedImage.GetProperty("SizeSteps").EnumerateArray().Select(e => e.GetInt32()));
+        bound.ImageTransform.TransformableContentTypes.Should().Equal(
+            StringArray(shippedImage.GetProperty("TransformableContentTypes")));
+        bound.ImageTransform.MaxConcurrentTransforms.Should().Be(shippedImage.GetProperty("MaxConcurrentTransforms").GetInt32());
+        bound.ImageTransform.QueueTimeoutSeconds.Should().Be(shippedImage.GetProperty("QueueTimeoutSeconds").GetInt32());
+        bound.ImageTransform.CacheMaxBytes.Should().Be(shippedImage.GetProperty("CacheMaxBytes").GetInt64());
+        bound.ImageTransform.MaxSourcePixels.Should().Be(shippedImage.GetProperty("MaxSourcePixels").GetInt64());
     }
 
     [Fact]

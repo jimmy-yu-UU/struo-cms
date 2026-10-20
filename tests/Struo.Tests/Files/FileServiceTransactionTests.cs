@@ -76,8 +76,8 @@ public sealed class FileServiceTransactionTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(_repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)),
+            references: FileTestPipeline.Create(_repo, provider, registry, graph));
     }
 
     public void Dispose() => _file.Dispose();
@@ -159,8 +159,7 @@ public sealed class FileServiceTransactionTests : IDisposable
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
         var svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), _repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), new FileServiceCollaborators(_repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)));
         var actualBytes = new byte[64];
 
         var file = await svc.UploadAsync(
@@ -176,8 +175,7 @@ public sealed class FileServiceTransactionTests : IDisposable
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 64 };
         var svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), _repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), new FileServiceCollaborators(_repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)));
         var actualBytes = new byte[65];
 
         var act = async () => await svc.UploadAsync(

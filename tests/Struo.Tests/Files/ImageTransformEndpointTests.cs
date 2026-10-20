@@ -29,12 +29,12 @@ public class ImageTransformEndpointTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadPng(c, 200, 100);           // published by default
-        var resp = await c.GetAsync($"/api/files/{id}/content?width=100&format=png");
+        var resp = await c.GetAsync($"/api/files/{id}/content?width=128&format=png");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var outBytes = await resp.Content.ReadAsByteArrayAsync();
         using var img = Image.NewFromBuffer(outBytes);
-        img.Width.Should().Be(100);
-        img.Height.Should().Be(50);
+        img.Width.Should().Be(128);
+        img.Height.Should().Be(64);
     }
 
     [Fact]

@@ -48,7 +48,10 @@ public sealed class ItemService(
     // invariants are not enforced (only direct construction in tests).
     ILanguageCollectionRules? languageRules = null,
     // Trailing and optional like the others: backs the User collection's email uniqueness check.
-    IUserCredentialStore? userCredentials = null) : IItemUseCases
+    IUserCredentialStore? userCredentials = null,
+    // Trailing and optional like the others: owns the file collection's delete lifecycle (logo
+    // reference, blob); null (direct construction in tests) means the generic pipeline only.
+    IFileLifecycle? fileLifecycle = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
 
@@ -267,6 +270,10 @@ public sealed class ItemService(
             pi.SetValue(existing, pi.GetValue(incoming));
         }
 
+        if (IsFileCollection(collection) && bodyKeys.Contains("status")
+            && d.FieldToProperty.TryGetValue("status", out var statusProp))
+            EnsureFileStatus(d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) as string);
+
         // Required check runs here — against the MERGED entity, after both overlay loops above —
         // rather than while deserializing `incoming`: an omitted Required field keeps whatever
         // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
@@ -348,6 +355,9 @@ public sealed class ItemService(
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
+        if (fileLifecycle is not null && IsFileCollection(collection))
+            return await DeleteFileAsync(collection, id, purge, fileLifecycle, ct);
+
         if (meta.SoftDelete && !purge)
         {
             // Pre-read resolves ONLY unknown-id -> 404 (mirrors RestoreAsync's pre-read below). Whether
@@ -415,6 +425,30 @@ public sealed class ItemService(
             await RevokeSessionsIfUserAsync(collection, id);
         }
         return existed;
+    }
+
+    // A file is either published (readable by anyone with its id) or draft (file writers only).
+    private static void EnsureFileStatus(string? status)
+    {
+        if (status is not (FileStorageOptions.PublishedStatus or FileStorageOptions.DraftStatus))
+            throw new QueryException(
+                $"Field 'status' must be '{FileStorageOptions.PublishedStatus}' or '{FileStorageOptions.DraftStatus}'.");
+    }
+
+    private static bool IsFileCollection(string collection) =>
+        string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase);
+
+    // File deletes run through the file lifecycle, the single path shared with the media library: the
+    // Restrict guard, SetNull and junction cleanup, the brand-logo reference and the stored blob.
+    private async Task<bool> DeleteFileAsync(
+        string collection, string id, bool purge, IFileLifecycle lifecycle, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var fileId)) return false;
+        var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (existing is null) return false;
+        if (purge) return await lifecycle.PurgeAsync(fileId, ct);
+        await lifecycle.TrashAsync(fileId, ct);
+        return true; // an already-trashed file is idempotent success, like the generic trash path
     }
 
     /// <summary>

@@ -55,8 +55,9 @@ API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INP
 `FileTranslation.Title` 也是 `Searchable`，所以對 `file` 下 `search=` 同時比對檔名與各
 locale 的標題。
 
-上傳成功之後，`status` 一律是 `"published"`，即使這個欄位自己宣告的預設值是 `"draft"`——一
-旦 `file` 帶有公開讀取授權，剛上傳的檔案立刻是公開的，不需要另外發布。
+新上傳的檔案採用 `Struo:Files:DefaultStatus` 的值（鍵見[第 4 章](04-configuration.md)）：預設
+是 `published`，也可以設成 `draft`。這個欄位自己宣告的預設值 `"draft"` 不會套用到上傳。預設為
+`published` 時，剛上傳的檔案立刻能被任何持有其 id 的人讀取，不需要另外發布。
 
 ## 上傳
 
@@ -152,9 +153,10 @@ allowed.`。
 `GET /api/files/{id}` 與 `GET /api/files/{id}/content` 完全沒有 `[Authorize]`，匿名請求兩者
 都到得了：已發布檔案的中繼資料與位元組都可以嵌進公開頁面，不需要工作階段。
 
+可見性採「不公開連結」模型：`published` 的檔案，任何持有其 id 的人都能讀取，id 就是唯一的秘密。
 `status` 不是 `published` 的檔案，需要同時滿足兩件事：呼叫端已登入，而且對 `file` 有寫入授
 權。沒有另一個「讀取未發布」的授權旗標，這條規則就是從每個集合都有的那三個既有旗標推出來
-的。
+的。列出媒體庫（`GET /api/items/file`）是另一回事，需要一般的 `file` 讀取授權。
 
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
@@ -186,6 +188,25 @@ presigned 網址；它預設關閉，好讓後台的縮圖不需要任何額外�
 保持私有。`local` 後端上這個設定完全沒有作用，presigned 查詢一律回 null，下載照樣落回串
 流。每個回應都帶 `X-Content-Type-Options: nosniff`，是下載端點附件處置之外再加的一層防線。
 
+### 把檔案設為私有
+
+把檔案的 `status` 設成 `draft`。在管理介面中，到媒體庫開啟該檔案，關掉「已發布」開關後儲存；
+用 API 的話，則是在一般的項目更新帶上 `status`：
+
+```text
+PUT /api/items/file/{id}
+{"status":"draft","version":3}
+```
+
+這需要 `file` 的寫入授權，`version` 是一般的樂觀並行權杖。`published`、`draft` 以外的值一律
+`400`。改回 `published`，任何持有 id 的人又能讀取。想讓每個新上傳一開始就是私有，把
+`Struo:Files:DefaultStatus` 設成 `draft`。
+
+品牌 Logo 必須是 `published`。設定頁拒絕儲存不是 `published` 的 Logo；已儲存的 Logo 之後被改成
+`draft`，就不再解析：公開設定端點會退回預設 Logo。因此 `DefaultStatus` 設成 `draft` 時，從設定頁上傳的
+Logo 必須先在媒體庫發布才能儲存，否則儲存會回 `400`。草稿對匿名頁面與唯讀的媒體庫使用者也是 `404`，
+他們看到的縮圖與圖片會壞掉，直到檔案發布。
+
 ## 媒體資料夾
 
 `MediaFolder` 是第二個框架自帶集合：一棵只拿來分類的樹，自我參照父層，跟儲存 key 完全脫
@@ -199,27 +220,34 @@ referenced by 'file'.`。
 轉換走的是下載端點本身，加上一組查詢參數：`GET /api/files/{id}/content?width=&height=
 &format=&fit=&quality=`。只有三件事同時成立才會真的轉檔：功能本身開著（鍵是
 `Struo:Files:ImageTransform:Enabled`，預設 `true`）、`width`／`height`／`format` 至少給了一
-個，而且這一列的 `contentType` 是以 `image/` 開頭。缺一個條件，請求就直接落回原本的串流或轉
-址，不受影響。
+個，而且這一列的 `contentType` 是 `TransformableContentTypes` 之一（預設是 JPEG、PNG、
+WebP、AVIF、GIF）。缺一個條件，請求就直接落回原本的串流或轉址，不受影響。SVG 是最常見的例子：
+對 SVG 帶 `?width=50`，回的就是那份 SVG 本身。
 
 ### 參數
 
 | 參數 | 值 | 超出範圍時 |
 |---|---|---|
-| `width` | 整數 | 夾進 1–`MaxWidth`；缺省時由另一邊等比推算 |
-| `height` | 整數 | 夾進 1–`MaxHeight`；缺省時由另一邊等比推算 |
+| `width` | 整數 | 夾進 1–`MaxWidth`，再往上對齊到尺寸階梯 |
+| `height` | 整數 | 夾進 1–`MaxHeight`，再往上對齊到尺寸階梯 |
 | `format` | `AllowedFormats` 之一 | 其他值 `400`；缺省退回 WebP，不會保留來源格式 |
-| `fit` | 任意字串 | 缺省 `inside`；只有 `cover` 加寬高才裁切 |
-| `quality` | 整數 | 夾進 1–100；缺省用 `DefaultQuality` |
+| `fit` | `inside` 或 `cover` | 其他值 `400`；缺省是 `inside` |
+| `quality` | 整數 | 四捨五入到 10 的倍數，範圍 10–100；缺省用 `DefaultQuality` |
 
-`MaxWidth`、`MaxHeight`、`AllowedFormats`、`DefaultQuality` 這幾個鍵都在
-[第 4 章](04-configuration.md)。`format` 只有呼叫端明確給了值才會去比對 `AllowedFormats`，
+`MaxWidth`、`MaxHeight`、`AllowedFormats`、`DefaultQuality`、`SizeSteps` 與其他轉換限制的鍵都
+在 [第 4 章](04-configuration.md)。`format` 只有呼叫端明確給了值才會去比對 `AllowedFormats`，
 比對時大小寫不拘，`?format=WEBP` 一樣算數；不在清單裡的值是 `400`，`Unsupported format
 '{x}'.`。省略 `format` 時一律是 WebP，連 `Content-Type` 也一起變成 `image/webp`，不會沿用來
 源檔案自己的編碼。
 
-`fit=cover` 只有寬高兩個維度都給，才會真的裁切成那個框；只給一個維度的 `cover`，或任何其他
-寫法，都是等比縮到框內、不放大。連寬高都沒給，只調格式或品質，轉換會跳過縮圖那一步，直接用
+尺寸會對齊，讓呼叫端能製造出的變體數量維持在小範圍：預設階梯下 `width=100` 會得到 128 寬的圖，
+`width=65` 與 `width=128` 共用同一份快取變體；超過最後一階就取最後一階。`fit=cover` 對齊的是寬度，
+高度則依請求的 `width` 與 `height` 比例推算，所以裁切後仍維持被要求的比例；`width=300&height=200
+&fit=cover` 會得到 320×216。推算出的高度會四捨五入到 8 像素的倍數，所以每個寬度階梯只有有限幾種
+cover 高度。
+
+`fit=cover` 只有寬高兩個維度都給，才會真的裁切成那個框；只給一個維度的 `cover` 是等比縮到框
+內、不放大。`fit=inside` 則把給了的每一邊各自對齊。連寬高都沒給，只調格式或品質，轉換會跳過縮圖那一步，直接用
 原本的解析度重新編碼，沒有框可以縮。只給 `height` 的請求，會先從標頭讀出來源寬度（同樣不解
 碼像素），讓沒被限制的那一邊也能正確縮放。
 
@@ -231,19 +259,13 @@ referenced by 'file'.`。
 出的，所以帶的是這一列自己的內容類型與附件 `Content-Disposition`，轉檔失敗的回應從標頭上就
 看得出來跟成功的不一樣。
 
+解碼之前，會先從標頭讀出來源的寬與高。超過 `MaxSourcePixels` 的來源，或標頭讀不出來的來源，一律
+送出原始位元組，所以標頭宣告了巨大影像的小檔案不會被解碼。GIF 的大小取其影格所需的畫布，AVIF 取
+標頭宣告的最大影像尺寸。衍生的 AVIF 影像（網格 grid 或疊圖 overlay）一律原樣送出，不轉換。libvips 開啟來源時讀到的尺寸，會在解碼任何像素之前再對 `MaxSourcePixels` 檢查一次。呼叫端給的 `quality` 會四捨五入到 10 的倍數；設定的 `DefaultQuality` 則照寫的值使用。同時最多進行 `MaxConcurrentTransforms` 個
+轉換；請求等超過 `QueueTimeoutSeconds` 秒還拿不到名額，就回 `503`，代碼是 `IMAGE_TRANSFORM_BUSY`，
+並帶 `Retry-After` 標頭。
+
 ### 例子
-
-```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=32&format=webp
-HTTP/1.1 200 OK
-Content-Length: 292
-Content-Type: image/webp
-# decoded WebP VP8X: width=32, height=24
-# body: 292 bytes (binary, not shown)
-HTTP_STATUS:200
-```
-
-來源是 64×48 的 PNG，`width=32` 等比縮出 32×24，格式跟 `Content-Type` 都照要求換成 WebP。
 
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
@@ -265,13 +287,17 @@ HTTP_STATUS:200
 錄不同。
 
 快取鍵是一段帶標籤文字的 SHA-256，轉成小寫十六進位：檔案 id、這一列的 `version`，加上
-`width`、`height`、`format`、`fit`、`quality`，各佔一行。改動其中任何一項都會換一把鍵。版
+`width`、`height`、`format`、`fit`、`quality`，各佔一行，取自對齊與四捨五入之後的請求。改動其中任何一項都會換一把鍵。版
 本戳記用的是樂觀並行控制的 `version` 計數器，不是 `UpdatedAt`。這一列任何一次更新都會讓
 `version` 前進，舊的變體就自然作廢，不需要任何機制主動失效。
 
 每一筆快取項目按鍵的前兩個十六進位字元分到一個子目錄，寫入時先寫進同目錄的暫存檔，再搬移
 過去，所以並發的讀取不會看到寫到一半的變體。讀取如果跟一次並發的寫入搶輸了，會被當成沒中快
 取，不是錯誤。
+
+快取容量由 `CacheMaxBytes` 設上限（預設 2 GB）。每次命中都會把該變體標成剛用過；寫入讓快取超過上限
+時，會從最久沒被讀取的變體開始刪，直到快取降到上限的 90%。某個變體在另一個請求讀取它的時候被淘汰，會被當成
+沒中快取，重新轉換一次。
 
 ## NetVips 與 LGPL
 
@@ -286,6 +312,9 @@ LGPL-2.1 只要求重新標明授權聲明、不限制使用者改用另一個�
 cairo、pango、librsvg 等），授權是 MIT、BSD 與 LGPLv3 的混合，各自記在 `NetVips.Native.*`
 套件自己的聲明檔裡。
 
+主機在註冊檔案服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生
+libvips。沒有可用 libvips 的主機會在啟動時失敗，而不是等到第一次轉換才失敗。
+
 ## 檔案的垃圾桶
 
 軟刪除的通用機制，包括底層的查詢過濾、`deleted=` 篩選、版本紀錄的互動，都在
@@ -297,11 +326,13 @@ blob 與翻譯列都留在原地，等著之後復原。如果被丟進垃圾桶
 /api/files/{id}/restore` 會清掉刪除戳記，跟任何其他可軟刪除集合的復原完全一樣。
 
 `DELETE` 與 `restore` 都要求 `file` 的刪除授權，不是寫入授權，沒有授權會得到 `Delete not
-permitted.`。兩者成功都回 `204`，對象不存在回 `404`。
+permitted.`。兩者成功都回 `204`，對象不存在回 `404`。只有 `DELETE`（丟進垃圾桶與永久刪除）會在其他項目仍透過
+`OnDelete.Restrict` 關聯參照這個檔案時回 `409` `CONFLICT`；`restore` 不檢查參照。
 
 `DELETE /api/files/{id}?purge=true` 才是真正的永久刪除：檔案列、翻譯列與儲存的 blob 全部一
-起清掉。blob 的清除是盡力而為，而且在交易之外進行，資料列已經沒了，一次儲存層的失敗頂多留
-下孤兒位元組。
+起清掉。清除遵守跟其他集合一樣的關聯規則：`Restrict` 參照會擋下清除，`OnDelete.SetNull` 的參照會被設為
+null，指向這個檔案的多對多連接資料列會被移除。blob 的清除是盡力而為，而且在交易之外進行，資料列已經沒了，
+一次儲存層的失敗頂多留下孤兒位元組。
 
 清除會用清掉軟刪除過濾的方式重新查這一列，所以先丟進垃圾桶、再清除（預設刪除本來就是先丟垃
 圾桶）這條最常見的流程走得通。清除品牌標誌參照的方式跟丟進垃圾桶一樣。
@@ -318,9 +349,14 @@ HTTP_STATUS:400
 `?purge=true`。
 
 上傳、丟進垃圾桶、復原、清除這四條檔案自己的寫入路徑，各自會發出自己的寫入通知（見
-[第 18 章：擴充點：搜尋提供者與寫入通知](18-extension-points.md)），因為 `FileService` 完全
-繞過 `ItemService`，必須自己補上這一段。清掉品牌標誌參照不會另外算成一次站台設定的變更，回
-報的只有檔案本身這一筆。
+[第 18 章：擴充點：搜尋提供者與寫入通知](18-extension-points.md)），因為 `FileService` 自己處理檔案的寫入。
+一次清除只會回報一批通知：檔案本身是 `Purged`，參照被設為 null 的每個存活項目，以及失去連接資料列的每個
+父項，都是 `Updated`。
+
+項目 API（`DELETE /api/items/file/{id}`）與 GraphQL 的刪除檔案，會交給跟媒體庫同一條檔案生命週期，行為
+完全一致，包括 `409`。
+
+清掉品牌標誌參照不會另外算成一次站台設定的變更，回報的只有檔案本身這一筆。
 
 ## 接下來
 

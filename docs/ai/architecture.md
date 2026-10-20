@@ -540,7 +540,11 @@ notification per write rather than sharing `ItemService`'s call sites, immediate
 commits (`RestoreAsync` in particular has no `InTransactionAsync` wrapper of its own — it is a single
 atomic `UPDATE`, and the notification follows straight after it):
 `UploadAsync` → `Created`, `TrashAsync` → `Trashed` (only when the atomic trash `UPDATE` affected a
-row), `RestoreAsync` → `Restored` (same gate), `DeleteAsync` (purge) → `Purged`.
+row), `RestoreAsync` → `Restored` (same gate), `DeleteAsync` (purge) → the pipeline's whole change set
+(see below): `Purged` for the file plus `Updated` for the `SetNull` children and junction parents.
+`ItemService.DeleteAsync` delegates the `file` collection to `IFileLifecycle` (implemented by
+`FileService`), so the items API, GraphQL and the media library share one delete path, Restrict guard
+included.
 
 A purge's cascade is the one path that raises more than a single-item change, collected by
 `ItemPurgePipeline.PurgeCoreAsync`'s `changes` parameter — one `ItemChangeSet`

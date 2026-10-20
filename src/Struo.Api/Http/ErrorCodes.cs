@@ -51,6 +51,10 @@ public static class ErrorCodes
     // name hosts, only goes to the Warning log.
     public const string SearchUnavailable = "SEARCH_UNAVAILABLE";
 
+    // Every image-transform slot stayed busy for the whole queue timeout
+    // (Struo:Files:ImageTransform:QueueTimeoutSeconds); retry shortly.
+    public const string ImageTransformBusy = "IMAGE_TRANSFORM_BUSY";
+
     public static string ForStatus(int status) => status switch
     {
         400 => BadUserInput,

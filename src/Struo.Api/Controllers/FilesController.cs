@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Struo.Api.Auth;
@@ -15,7 +16,7 @@ namespace Struo.Api.Controllers;
 [Route("api/files")]
 public sealed class FilesController(
     FileService files, IFileStorage storage, FileStorageOptions options, IFileAccessPolicy access,
-    IImageTransformer transformer, IImageVariantCache variantCache, ILogger<FilesController> logger)
+    ImageTransformServices images, ILogger<FilesController> logger)
     : ControllerBase
 {
     // The media library is the "file" collection. Mutations go through the dedicated file storage
@@ -59,7 +60,7 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // A non-published file requires a genuine per-collection read grant, not merely a
+        // A non-published file needs a signed-in caller holding the file write grant, not merely a
         // logged-in session (a role-less JIT/SSO user could otherwise fetch any draft). 404 (not 403)
         // so existence isn't leaked.
         if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
@@ -80,32 +81,24 @@ public sealed class FilesController(
     {
         var row = await files.GetAsync(id, ct);
         if (row is null) return NotFound();
-        // Same gate as Get above: a non-published file requires a genuine per-collection read grant,
-        // not merely a logged-in session. 404 (not 403) so existence isn't leaked.
+        // Same gate as Get above: a non-published file needs a signed-in caller holding the file write
+        // grant, not merely a logged-in session. 404 (not 403) so existence isn't leaked.
         if (row.Status != "published" && !access.CanReadUnpublished()) return NotFound();
 
         // On-the-fly image transform. Only when the caller actually asked for one (at least one
-        // of width/height/format present), the content behind this row is an image, and the feature is
-        // enabled. Otherwise fall straight through to the existing passthrough behavior below —
+        // of width/height/format present), the content behind this row is a transformable image type, and
+        // the feature is enabled. Otherwise fall straight through to the existing passthrough behavior below —
         // unchanged for every non-image file and for image requests with no transform params.
         var imageTransform = options.ImageTransform;
         var wantsTransform = imageTransform.Enabled
             && (width is not null || height is not null || format is not null)
-            && row.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            && imageTransform.TransformableContentTypes.Contains(row.ContentType, StringComparer.OrdinalIgnoreCase);
 
         if (wantsTransform)
         {
-            var normalizedFormat = (format ?? "").ToLowerInvariant();
-            if (format is not null && !imageTransform.AllowedFormats.Contains(normalizedFormat))
-                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                    $"Unsupported format '{format}'.");
-
-            var req = new ImageTransformRequest(
-                Width: width is null ? null : Math.Clamp(width.Value, 1, imageTransform.MaxWidth),
-                Height: height is null ? null : Math.Clamp(height.Value, 1, imageTransform.MaxHeight),
-                Format: format is null ? null : normalizedFormat,
-                Fit: string.IsNullOrEmpty(fit) ? "inside" : fit,
-                Quality: Math.Clamp(quality ?? imageTransform.DefaultQuality, 1, 100));
+            if (!ImageTransformRequestNormalizer.TryNormalize(
+                    new RawImageTransformQuery(width, height, format, fit, quality), imageTransform, out var req, out var requestError))
+                return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, requestError);
 
             // Version stamp: row.Version (AuditableEntity's optimistic-concurrency counter) rather than
             // UpdatedAt, because UpdatedAt is a non-nullable DateTime here (no "unset" sentinel to
@@ -113,39 +106,27 @@ public sealed class FilesController(
             // counter — it increments on every update, including a future re-upload/replace, so stale
             // variants naturally miss instead of serving bytes from a since-replaced file.
             var fileVersion = row.Version.ToString();
-            var key = variantCache.DeriveKey(id, fileVersion, req);
+            var key = images.Cache.DeriveKey(id, fileVersion, req);
 
-            var cached = await variantCache.TryGetAsync(key, ct);
+            var cached = await images.Cache.TryGetAsync(key, ct);
             if (cached is not null)
                 return File(cached, ImageContentTypes.ContentTypeFor(req.Format));
 
-            byte[] sourceBytes;
-            await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
-            using (var ms = new MemoryStream())
-            {
-                await src.CopyToAsync(ms, ct);
-                sourceBytes = ms.ToArray();
-            }
+            var gated = await TransformUnderGateAsync(row, key, req, imageTransform, ct);
+            if (gated.Response is not null) return gated.Response;
+            var transformed = gated.Transformed!.Value;
 
-            ImageTransformResult result;
+            // The gate slot is already released: the cache write's size sweep must not hold it.
             try
             {
-                result = transformer.Transform(sourceBytes, req);
+                await images.Cache.SetAsync(key, transformed.Bytes, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Never silently swallow: log with enough context to investigate (corrupt upload,
-                // unsupported source encoding, libvips failure, ...), then fall back to serving the
-                // original bytes so the request still succeeds for the caller — a broken thumbnail is
-                // a worse UX than an un-transformed original, but a swallowed error is worse still.
-                logger.LogWarning(ex,
-                    "Image transform failed for file {FileId}; falling back to original bytes.", id);
-                var fallback = await storage.OpenReadAsync(row.StorageKey, ct);
-                return File(fallback, row.ContentType, fileDownloadName: row.FileName);
+                // An unwritable cache (disk full, read-only directory) costs only the caching.
+                logger.LogWarning(ex, "Image variant {VariantKey} for file {FileId} could not be cached; serving it uncached.", key, id);
             }
-
-            await variantCache.SetAsync(key, result.Bytes, ct);
-            return File(result.Bytes, result.ContentType);
+            return File(transformed.Bytes, transformed.ContentType);
         }
 
         // The admin SPA loads thumbnails/previews from this endpoint, so by default the API streams
@@ -162,9 +143,73 @@ public sealed class FilesController(
         return File(stream, row.ContentType, fileDownloadName: row.FileName);
     }
 
+    // Outcome of the gated transform: either a response to return as is, or the transformed image.
+    private readonly record struct GatedTransform(IActionResult? Response, ImageTransformResult? Transformed);
+
+    // Holds one transform slot while the source is read and transformed; the slot is released when
+    // this method returns, before the caller writes the cache.
+    private async Task<GatedTransform> TransformUnderGateAsync(
+        Struo.Infrastructure.Files.File row, string key, ImageTransformRequest req,
+        FileStorageOptions.ImageTransformOptions imageTransform, CancellationToken ct)
+    {
+        // The gate is taken before the source is read so waiting requests hold no source bytes.
+        using var lease = await images.Gate.TryEnterAsync(ct);
+        if (lease is null)
+        {
+            Response.Headers.RetryAfter = Math.Max(1, imageTransform.QueueTimeoutSeconds)
+                .ToString(CultureInfo.InvariantCulture);
+            return new(ApiResults.Fail(StatusCodes.Status503ServiceUnavailable, ErrorCodes.ImageTransformBusy,
+                "Image transforms are busy; retry shortly."), null);
+        }
+
+        // A request that waited here may find the variant stored by the one it queued behind.
+        var cached = await images.Cache.TryGetAsync(key, ct);
+        if (cached is not null)
+            return new(File(cached, ImageContentTypes.ContentTypeFor(req.Format)), null);
+
+        byte[] sourceBytes;
+        await using (var src = await storage.OpenReadAsync(row.StorageKey, ct))
+        using (var ms = new MemoryStream())
+        {
+            await src.CopyToAsync(ms, ct);
+            sourceBytes = ms.ToArray();
+        }
+
+        // Header-only probe: a source with unreadable or oversized dimensions is served as is
+        // instead of being decoded.
+        using (var probe = new MemoryStream(sourceBytes, writable: false))
+        {
+            var dims = images.Dimensions.TryRead(probe, row.ContentType);
+            if (dims is not { Width: > 0, Height: > 0 }
+                || (long)dims.Value.Width * dims.Value.Height > imageTransform.MaxSourcePixels)
+                return new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null);
+        }
+
+        ImageTransformResult? result;
+        try
+        {
+            result = images.Transformer.Transform(sourceBytes, req, imageTransform.MaxSourcePixels);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Never silently swallow: log with enough context to investigate (corrupt upload,
+            // unsupported source encoding, libvips failure, ...), then fall back to serving the
+            // original bytes so the request still succeeds for the caller.
+            logger.LogWarning(ex,
+                "Image transform failed for file {FileId}; falling back to original bytes.", row.Id);
+            return new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null);
+        }
+
+        // The decoder's own header size is over the limit (e.g. a derived AVIF the probe misjudged).
+        return result is null
+            ? new(File(sourceBytes, row.ContentType, fileDownloadName: row.FileName), null)
+            : new(null, result);
+    }
+
     // Default DELETE is trash (recoverable); ?purge=true is the permanent hard delete
     // (FileService.DeleteAsync — row + sidecar translations + blob + any `SiteSettings.LogoFileId`
-    // reference).
+    // reference + the relation rules: Restrict guard, SetNull of referencing keys, junction rows). Trash
+    // applies the Restrict guard and clears the logo reference.
     [HttpDelete("{id:guid}")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Delete(Guid id, [FromQuery] bool purge = false, CancellationToken ct = default)

@@ -72,8 +72,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), repo, _languages,
-            new TestCurrentUserAccessor(Tester));
+            _db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
     }
 
     public void Dispose() => _file.Dispose();
@@ -99,6 +98,27 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
         rows[0].Locale.Should().Be(await _languages.DefaultCodeAsync());
         rows[0].Title.Should().Be("photo-01");
         rows[0].Alt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Upload_of_a_jpeg_with_large_exif_and_icc_segments_records_its_dimensions()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["file"] = typeof(File), ["mediafolder"] = typeof(MediaFolder),
+        });
+        var repo = new SqlSugarItemRepository(
+            _db, new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)])),
+            graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
+        var svc = new FileService(
+            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
+        var jpeg = ImageDimensionReaderTests.JpegWithLargeMetadata(4000, 3000);
+
+        var file = await svc.UploadAsync(new MemoryStream(jpeg), "phone.jpg", "image/jpeg", length: jpeg.Length);
+
+        file.Width.Should().Be(4000);
+        file.Height.Should().Be(3000);
     }
 
     [Fact]

@@ -38,7 +38,7 @@ public sealed class FileServiceCancellationTests : IDisposable
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")));
         _db.CodeFirst.InitTables<File>();
-        _svc = new FileService(_db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), null!, null!, null!);
+        _svc = new FileService(_db, new FileStorageServices(new NoopStorage(), new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(null!, null!, null!));
     }
 
     public void Dispose() => _file.Dispose();

@@ -105,6 +105,7 @@ means the same thing on both protocols:
 | `ACCOUNT_INACTIVE` | 401 | Correct password, deactivated account |
 | `SESSION_REVOCATION_FAILED` | 500 | Revocation failure after password change or user delete |
 | `SEARCH_UNAVAILABLE` | 503 | The registered search provider's own failure to respond |
+| `IMAGE_TRANSFORM_BUSY` | 503 | No image-transform slot freed within the queue timeout |
 
 - `CONFLICT` covers a delete blocked by a relation, a duplicate email, a database unique-key
   violation, and any other plain 409.
@@ -117,6 +118,9 @@ means the same thing on both protocols:
   and message stay specific to it.
 - `SEARCH_UNAVAILABLE`'s message is always `Search is temporarily unavailable.`; whatever reason
   the provider itself reports only goes into the server-side log.
+- `IMAGE_TRANSFORM_BUSY` comes from `GET /api/files/{id}/content` when every transform slot
+  stays busy for `Struo:Files:ImageTransform:QueueTimeoutSeconds`; the response carries a
+  `Retry-After` header with that many seconds (see [Chapter 15](15-files-and-media.md)).
 
 `PAYLOAD_TOO_LARGE` and `SEARCH_UNAVAILABLE` are both hard to trigger on an ordinary host — the
 first needs an upload that genuinely exceeds the cap, and the second needs a search provider that

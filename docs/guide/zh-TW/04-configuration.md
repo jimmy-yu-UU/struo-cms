@@ -17,9 +17,10 @@
 的區段會在啟動時失敗，其他區段大多要到第一次用到時才會出錯。
 
 陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短預設設定檔已經填滿的陣列，沒被覆
-寫的索引維持原值。預設設定檔填滿的四個陣列是 `Oidc:Scopes`、
-`Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:AllowedContentTypes`、
-`Serilog:WriteTo`；前兩個即使整段刪掉，啟動時也會補回內建預設值。陣列元素用索引：
+寫的索引維持原值。預設設定檔填滿的六個陣列是 `Oidc:Scopes`、
+`Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:ImageTransform:SizeSteps`、
+`Struo:Files:ImageTransform:TransformableContentTypes`、`Struo:Files:AllowedContentTypes`、
+`Serilog:WriteTo`；前四個即使整段刪掉，啟動時也會補回內建預設值。陣列元素用索引：
 `Oidc__Scopes__0=openid`；要縮短陣列就改設定檔本身。
 
 | 鍵 | 型別 | 預設值 |
@@ -122,14 +123,19 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:Backend` | 字串 | `"local"` |
 | `Struo:Files:MaxUploadBytes` | 長整數（bytes） | `26214400` |
 | `Struo:Files:AllowedContentTypes` | 字串陣列 | `[]` |
+| `Struo:Files:DefaultStatus` | 字串 | `"published"` |
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
-`Backend` 是這個區段裡唯一在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
+`Backend` 與 `DefaultStatus` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
 要欄位（見下面 Local／S3）也一併驗證。`MaxUploadBytes`、`AllowedContentTypes`、
-`PresignedRedirect` 跟整個 `ImageTransform` 都沒有驗證規則：型別正確的值不會被檢查。
+`PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
 - `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
+- `DefaultStatus`：新上傳檔案的狀態，`"published"` 或 `"draft"`；其他值會讓啟動失敗，錯誤訊息指出
+  `Struo:Files:DefaultStatus`。已發布的檔案任何持有 id 的人都能讀取；草稿只有已登入且有 `file` 寫入
+  授權的呼叫端能讀取。編輯者之後可以切換狀態（見[第 15 章](15-files-and-media.md)）。設成 `draft` 時，從設定頁上傳的
+  Logo 必須先發布才能儲存，否則儲存回 `400`；匿名頁面與唯讀的媒體庫使用者讀這個檔案會得到 `404`。
 - `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
   由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
 
@@ -167,6 +173,12 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:ImageTransform:AllowedFormats` | 字串陣列 | 見下文 |
 | `Struo:Files:ImageTransform:DefaultQuality` | 整數 | `82` |
 | `Struo:Files:ImageTransform:CachePath` | 字串 | `"App_Data/image-cache"` |
+| `Struo:Files:ImageTransform:SizeSteps` | 整數陣列 | 見下文 |
+| `Struo:Files:ImageTransform:TransformableContentTypes` | 字串陣列 | 見下文 |
+| `Struo:Files:ImageTransform:MaxConcurrentTransforms` | 整數 | `2` |
+| `Struo:Files:ImageTransform:QueueTimeoutSeconds` | 整數 | `10` |
+| `Struo:Files:ImageTransform:CacheMaxBytes` | 整數（位元組） | `2147483648` |
+| `Struo:Files:ImageTransform:MaxSourcePixels` | 整數 | `50000000` |
 
 以下是實際值，不是 `appsettings.json` 的巢狀寫法：
 ```text
@@ -175,11 +187,31 @@ Struo:Files:ImageTransform:AllowedFormats = ["webp", "jpeg", "png", "avif"]
 
 `AllowedFormats` 留空或整段刪掉，啟動時都會補回內建的 `webp`／`jpeg`／`png`／`avif`，所以設不出「一
 種格式都不允許」的狀態；而且這份清單只在呼叫端明確指定 `format` 時才檢查。要完全關掉轉換，
-用 `Enabled=false`。轉換只在呼叫端要求寬、高或格式其中一項、該筆檔案本身是圖片，而且 `Enabled`
-為 `true` 時才會發生，否則直接串流原始檔案。
+用 `Enabled=false`。轉換只在呼叫端要求寬、高或格式其中一項、該筆檔案的內容類型在 `TransformableContentTypes` 裡，而且
+`Enabled` 為 `true` 時才會發生，否則直接串流原始檔案。
 
 `CachePath` 是相對路徑時，是相對於應用程式的 content root，不是行程當下的工作目錄——用
 systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落在哪裡。
+
+下面這幾個鍵限制單一呼叫端能讓伺服器計算與儲存多少東西。
+
+- `SizeSteps`：請求能拿到的輸出寬高。請求的 `width` 或 `height` 會往上對齊到下一個階梯；超過最後
+  一階就用最後一階（`MaxWidth`／`MaxHeight` 仍然封頂）。預設是 `[64, 128, 256, 320, 480, 640, 768,
+  1024, 1280, 1600, 1920, 2560, 3840, 4096]`。階梯越少，快取的變體越少。留空會補回預設值；每個元素都
+  必須是正數。
+- `TransformableContentTypes`：會被轉換的來源類型，預設是 `image/jpeg`、`image/png`、`image/webp`、
+  `image/avif`、`image/gif`。其他圖片（包含 SVG）即使帶了轉換參數，也一律送出原始位元組。
+- `MaxConcurrentTransforms`：所有請求加起來同時進行的轉換數（至少 `1`）。請求遇到每個名額都被占用時，
+  最多等 `QueueTimeoutSeconds` 秒（`0` 以上；`0` 代表不等），之後回 `503` `IMAGE_TRANSFORM_BUSY`，並帶
+  `Retry-After` 標頭。
+- `CacheMaxBytes`：磁碟上變體快取的容量上限。一次寫入讓快取超過上限時，會從最久沒被讀取的變體開始刪，
+  直到快取降到上限的 90%，讓接下來的寫入不必再次清理。設成 `0` 或更小代表不設上限。刪除失敗會記錄下來，不會讓請求失敗。
+- `MaxSourcePixels`：會被解碼的來源大小上限，寬乘高（至少 `1`）。大小從檔案標頭讀出；超過上限的來源，
+  或標頭讀不出來的來源，一律送出原始位元組。大小是不解碼、只讀標頭得到的；GIF 取其影格所需的畫布大小，
+  AVIF 取標頭宣告的最大影像尺寸。
+
+`MaxWidth` 與 `MaxHeight`（至少 `1`）、`DefaultQuality`（1 到 100）、`MaxConcurrentTransforms`、
+`QueueTimeoutSeconds`、`MaxSourcePixels` 與 `SizeSteps` 的各個元素在啟動時驗證；值超出範圍會讓啟動失敗，並指出是哪個鍵。
 
 ## Struo:Cors
 

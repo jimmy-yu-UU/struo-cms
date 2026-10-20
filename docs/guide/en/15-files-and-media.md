@@ -67,9 +67,10 @@ UTF-16 units, again without splitting a surrogate pair.
 someone writes one by hand. `FileTranslation.Title` is also `Searchable`, so `search=` on `file`
 matches both the filename and every locale's title.
 
-Once an upload succeeds, `status` is always `"published"`, even though the field's own declared
-default is `"draft"` — as soon as `file` carries a public read grant, a freshly uploaded file is
-immediately public, with no separate publish step needed.
+A new upload takes the status in `Struo:Files:DefaultStatus` (key in
+[Chapter 4](04-configuration.md)): `published` by default, or `draft`. The field's own declared
+default of `"draft"` is never what an upload gets. With the default `published`, a freshly uploaded
+file is readable at once by anyone who has its id, with no separate publish step.
 
 ## Uploading
 
@@ -187,9 +188,12 @@ that can't be found is a clean `404` to the caller, never a `500`.
 anonymous request reaches both: a published file's metadata and bytes can be embedded in a public
 page with no session needed.
 
-A file whose `status` isn't `published` needs both conditions at once: the caller is signed in, and
-holds a write grant on `file`. There's no separate "read unpublished" grant flag — this rule is
-derived from the same three grant flags every collection already has.
+Visibility follows an unlisted-link model: a `published` file is readable by anyone who has its id,
+and the id is the only secret. A file whose `status` isn't `published` needs both conditions at
+once: the caller is signed in, and holds a write grant on `file`. There's no separate "read
+unpublished" grant flag — this rule is derived from the same three grant flags every collection
+already has. Listing the library (`GET /api/items/file`) is a separate matter and needs the
+ordinary `file` read grant.
 
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
@@ -231,6 +235,27 @@ the download falls back to streaming as usual.
 Every response carries `X-Content-Type-Options: nosniff`, one more layer of defense on top of the
 download endpoint's own attachment disposition.
 
+### Making a file private
+
+Set the file's `status` to `draft`. In the admin UI, open the file in the media library and turn
+off the Published switch, then save; over the API, send `status` on an ordinary item update:
+
+```text
+PUT /api/items/file/{id}
+{"status":"draft","version":3}
+```
+
+This needs the `file` write grant, and `version` is the usual optimistic-concurrency token. Any
+value other than `published` or `draft` is `400`. Switching back to `published` makes the file
+readable by anyone with its id again. To make every new upload private from the start, set
+`Struo:Files:DefaultStatus` to `draft`.
+
+A brand logo must be `published`. Settings refuse to save a logo that isn't, and a saved logo that is
+later switched to `draft` stops resolving: the public settings endpoint falls back to the default
+logo. With `DefaultStatus` set to `draft`, a logo uploaded from Settings therefore has to be published
+in the media library before the save, or the save returns `400`. A draft also gives anonymous pages and
+read-only library users a `404`, so their thumbnails and images are broken until it is published.
+
 ## Media folders
 
 `MediaFolder` is the second framework-provided collection: a tree that exists purely to categorize,
@@ -248,32 +273,40 @@ The transform runs through the download endpoint itself, driven by a set of quer
 `GET /api/files/{id}/content?width=&height=&format=&fit=&quality=`. A request only actually
 transforms when three things are true at once: the feature itself is on (key
 `Struo:Files:ImageTransform:Enabled`, default `true`), at least one of `width`/`height`/`format`
-was given, and this row's `contentType` starts with `image/`.
+was given, and this row's `contentType` is one of `TransformableContentTypes` (JPEG, PNG, WebP,
+AVIF and GIF by default).
 
 If any one condition is missing, the request falls straight back to the original stream or
-redirect, unaffected.
+redirect, unaffected. An SVG is the common case: `?width=50` on an SVG returns the SVG itself.
 
 ### Parameters
 
 | Parameter | Value | Out of range |
 |---|---|---|
-| `width` | Integer | Clamped 1–`MaxWidth`; missing derives proportionally |
-| `height` | Integer | Clamped 1–`MaxHeight`; missing derives proportionally |
+| `width` | Integer | Clamped 1–`MaxWidth`, then snapped up to a size step |
+| `height` | Integer | Clamped 1–`MaxHeight`, then snapped up to a size step |
 | `format` | One of `AllowedFormats` | Other values `400`; missing gives WebP, not source format |
-| `fit` | Any string | Defaults `inside`; `cover` crops only with both |
-| `quality` | Integer | Clamped 1–100; missing uses `DefaultQuality` |
+| `fit` | `inside` or `cover` | Other values `400`; missing is `inside` |
+| `quality` | Integer | Rounded to a multiple of 10, 10–100; missing: `DefaultQuality` |
 
-`MaxWidth`, `MaxHeight`, `AllowedFormats` and `DefaultQuality` are all in
-[Chapter 4](04-configuration.md). `format` is only checked against `AllowedFormats` when the caller
+`MaxWidth`, `MaxHeight`, `AllowedFormats`, `DefaultQuality`, `SizeSteps` and the other transform
+limits are all in [Chapter 4](04-configuration.md). `format` is only checked against `AllowedFormats` when the caller
 explicitly gives a value, matched case-insensitively — `?format=WEBP` counts just the same; a value
 not on the list is `400`, `Unsupported format '{x}'.`.
 
 Omitting `format` always means WebP, and `Content-Type` changes to `image/webp` right along with
 it — it never carries over the source file's own encoding.
 
+Sizes snap so that the number of distinct variants a caller can create stays small: `width=100`
+returns a 128-wide image with the default steps, and `width=65` and `width=128` share one cached
+variant. A request above the last step gets the last step. `fit=cover` snaps the width and derives
+the height from the ratio of the requested `width` and `height`, so the crop keeps the proportions
+that were asked for. The derived height is rounded to a multiple of 8 pixels, so a width step has
+a limited set of cover heights; `width=300&height=200&fit=cover` returns 320×216.
+
 `fit=cover` only actually crops to that frame when both dimensions are given; a `cover` with just
-one dimension, or any other spelling, scales proportionally to fit inside the frame without
-enlarging. With neither dimension given, and only format or quality adjusted, the transform skips
+one dimension scales proportionally to fit inside the frame without enlarging. `fit=inside` snaps
+each given side on its own. With neither dimension given, and only format or quality adjusted, the transform skips
 the resizing step entirely and re-encodes at the original resolution, since there's no frame to fit.
 
 A request giving only `height` reads the source width from the header first (again without
@@ -291,20 +324,17 @@ Those original bytes go out the same way an ordinary download does, so they carr
 content type and attachment `Content-Disposition` — a failed transform's response is
 distinguishable from a successful one just by its headers.
 
+Before decoding, the source's width and height are read from its header. A source over
+`MaxSourcePixels`, or one whose header cannot be read, is served as its original bytes, so a small
+file whose header declares a huge image is not decoded. For a GIF the size is the canvas its frames
+need, and for an AVIF it is the largest image size the header declares. A derived AVIF image (a grid
+or an overlay) is served as its original bytes, without transformation. When libvips opens the
+source, the size it reads is checked against `MaxSourcePixels` again before any pixel is decoded. A client-supplied `quality`
+is rounded to a multiple of 10; the configured `DefaultQuality` is used exactly as written. At most `MaxConcurrentTransforms` transforms
+run at once; a request that waits longer than `QueueTimeoutSeconds` for a slot gets `503` with the
+`IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
+
 ### Examples
-
-```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=32&format=webp
-HTTP/1.1 200 OK
-Content-Length: 292
-Content-Type: image/webp
-# decoded WebP VP8X: width=32, height=24
-# body: 292 bytes (binary, not shown)
-HTTP_STATUS:200
-```
-
-The source is a 64×48 PNG; `width=32` scales proportionally to 32×24, with both the format and
-`Content-Type` changed to WebP as requested.
 
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
@@ -327,8 +357,8 @@ Transformed variants are stored on disk, at the path set by
 here resolves against the application's content root, unlike `local`'s own root.
 
 The cache key is a SHA-256 of a labeled text block, lowercased to hex: the file id, this row's
-`version`, plus `width`, `height`, `format`, `fit` and `quality`, one per line. Changing any one of
-them produces a different key. The version stamp used is the optimistic-concurrency `version`
+`version`, plus `width`, `height`, `format`, `fit` and `quality`, one per line, taken from the request after
+snapping and rounding. Changing any one of them produces a different key. The version stamp used is the optimistic-concurrency `version`
 counter, not `UpdatedAt`. Any update to this row advances `version`, which naturally invalidates
 old variants with no active invalidation mechanism needed.
 
@@ -336,6 +366,11 @@ Each cache entry is bucketed into a subdirectory by the key's first two hex char
 goes to a temp file in the same directory first and is then moved into place, so a concurrent read
 never sees a half-written variant. A read that loses a race against a concurrent write is treated
 as a cache miss, not an error.
+
+The cache is size-capped by `CacheMaxBytes` (2 GB by default). Every hit stamps the variant as
+recently used; when a write leaves the cache over the cap, the variants that were read least
+recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A variant evicted while another request is reading it is read
+as a miss and transformed again.
 
 ## NetVips and LGPL
 
@@ -354,6 +389,10 @@ several of libvips's optional dependencies (mozjpeg, libpng, libwebp, cairo, pan
 others), under a mix of MIT, BSD and LGPLv3 licenses, each recorded in the `NetVips.Native.*`
 package's own notice file.
 
+The host sets `NetVips.BlockUntrusted` while it registers the file services, which loads native libvips
+at startup even when transforms are disabled. A host without a usable libvips fails to start instead of
+failing on the first transform.
+
 ## Trash for files
 
 The general soft-delete mechanism — the underlying query filter, the `deleted=` filter, and how it
@@ -370,13 +409,16 @@ transaction also clears that reference, so the public settings endpoint never re
 soft-deletable collection.
 
 Both `DELETE` and `restore` require the `file` delete grant, not the write grant; without it the
-response is `Delete not permitted.`. Both return `204` on success, and `404` when the target
-doesn't exist.
+response is `Delete not permitted.`. Both return `204` on success and `404` when the target doesn't
+exist. Only `DELETE` (trash and purge) can return `409` `CONFLICT`, when another item still
+references the file through an `OnDelete.Restrict` relation; `restore` never checks references.
 
 `DELETE /api/files/{id}?purge=true` is the actual permanent delete: the file row, the translation
-row and the stored blob are removed together. Cleaning up the blob is best-effort and happens
-outside the transaction — the row data is already gone, so at worst a storage-layer failure leaves
-an orphaned blob behind.
+row and the stored blob are removed together. Purge follows the same relation rules as any other
+collection: a `Restrict` reference blocks it, references with `OnDelete.SetNull` are set to null, and
+many-to-many junction rows pointing at the file are removed. Cleaning up the blob is best-effort and
+happens outside the transaction — the row data is already gone, so at worst a storage-layer failure
+leaves an orphaned blob behind.
 
 Purge re-queries the row with the soft-delete filter cleared, so the most common flow — trash
 first, then purge (the default delete already trashes first) — works. Purge clears the brand-logo
@@ -397,7 +439,12 @@ field. The correct form is `?purge=true`.
 Upload, trash, restore and purge — the four write paths specific to files — each emit their own
 change notification (see
 [Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md)),
-because `FileService` bypasses `ItemService` entirely and has to add this itself.
+because `FileService` handles file writes itself. A purge reports one batch: `Purged` for the file,
+and `Updated` for every live item whose reference was set to null and every parent that lost a
+junction row.
+
+The items API (`DELETE /api/items/file/{id}`) and the GraphQL file delete hand off to the same file
+lifecycle as the media library, so they behave identically, including the `409`.
 
 Clearing the brand-logo reference doesn't separately count as a site-settings change; only the file
 itself gets reported.

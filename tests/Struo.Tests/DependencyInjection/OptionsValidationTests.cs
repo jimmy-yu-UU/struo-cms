@@ -88,6 +88,15 @@ public sealed class OptionsValidationTests
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Invalid_files_default_status_fails_startup()
+    {
+        var error = await StartupErrorAsync(s => s["Struo:Files:DefaultStatus"] = "archived");
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull("an unknown Struo:Files:DefaultStatus must fail fast at startup");
+        string.Join(" ", ove!.Failures).Should().Contain("Struo:Files:DefaultStatus");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Query_max_limit_zero_fails_startup()
     {
         var error = await StartupErrorAsync(s => s["Query:MaxLimit"] = "0");

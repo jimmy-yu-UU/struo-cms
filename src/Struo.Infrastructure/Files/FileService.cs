@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
@@ -11,22 +13,28 @@ using Struo.Infrastructure.Settings;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a published
-/// <see cref="File"/> row) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
+/// Orchestrates file uploads (validate → store bytes → extract image dimensions → insert a
+/// <see cref="File"/> row with the configured default status) and file lookup/trash/restore/purge. Lives in Infrastructure so it can
 /// reference the framework <see cref="File"/> entity directly. Bypasses <c>ItemService</c>, so each
 /// write path raises its own post-commit <see cref="IItemChangeNotifier"/> notification.
 /// </summary>
 public sealed class FileService(
     ISqlSugarClient db,
     FileStorageServices storage,
-    IItemRepository repository,
-    ILanguageProvider languages,
-    ICurrentUserAccessor currentUser,
-    IItemChangeNotifier? notifier = null)
+    FileServiceCollaborators collaborators,
+    IItemChangeNotifier? notifier = null,
+    ILogger<FileService>? logger = null,
+    // Reference handling shared with every collection's delete (Restrict guard, SetNull, junctions,
+    // translations). DI always supplies it; only upload-only test harnesses leave it null.
+    ItemPurgePipeline? references = null) : IFileLifecycle
 {
+    private readonly ILogger log = logger ?? NullLogger<FileService>.Instance;
     private readonly IFileStorage blobs = storage.Storage;
     private readonly IImageDimensionReader imageReader = storage.Images;
     private readonly FileStorageOptions fileOptions = storage.Options;
+    private readonly IItemRepository repository = collaborators.Repository;
+    private readonly ILanguageProvider languages = collaborators.Languages;
+    private readonly ICurrentUserAccessor currentUser = collaborators.CurrentUser;
 
     // Width of the `filename` and `title` string columns (core migration `AsString(255)`).
     private const int NameColumnWidth = 255;
@@ -34,11 +42,24 @@ public sealed class FileService(
     // U5b: post-commit, best-effort, CancellationToken.None (the write already committed).
     private Task NotifyAsync(Guid id, ItemChangeKind kind)
     {
-        if (notifier is null) return Task.CompletedTask;
         var set = new ItemChangeSet();
         set.Add(FileCollection.Name, id.ToString(), kind);
-        return notifier.NotifyAsync(set.ToList(), CancellationToken.None);
+        return NotifyAsync(set);
     }
+
+    private Task NotifyAsync(ItemChangeSet set) =>
+        notifier is null ? Task.CompletedTask : notifier.NotifyAsync(set.ToList(), CancellationToken.None);
+
+    private ItemPurgePipeline References =>
+        references ?? throw new InvalidOperationException("FileService was built without reference handling.");
+
+    // The brand-logo reference is cleared with an entity-typed SetColumns so the nullable column gets a
+    // typed NULL (a plain NULL literal makes Postgres raise 42804). A no-op when the file is not the logo.
+    private Task<int> ClearLogoReferenceAsync(Guid id, CancellationToken ct) =>
+        db.Updateable<SiteSettings>()
+            .SetColumns(s => new SiteSettings { LogoFileId = null })
+            .Where(s => s.LogoFileId == id)
+            .ExecuteCommandAsync(ct);
 
     public async Task<File> UploadAsync(
         Stream content, string fileName, string contentType, long length, Guid? folderId = null,
@@ -51,12 +72,12 @@ public sealed class FileService(
             !fileOptions.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
 
-        // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream —
-        // small uploads (<= 64KB) stay in memory, but anything larger spills to a temp file,
-        // bounding memory so N concurrent large uploads cannot amplify it by up to MaxUploadBytes
-        // each. Access below mixes sequential forward reads (which pull more from `content` on demand)
-        // and backward seeks to already-read offsets; the header sniff + image probe seek freely, then
-        // the stream is fully drained once (line ~55) before the save read so Length is the true total.
+        // Spool through a FileBufferingReadStream instead of an unconditional MemoryStream:
+        // small uploads (<= 64KB) stay in memory, larger ones spill to a temp file, so concurrent
+        // large uploads do not each hold up to MaxUploadBytes in memory. The header sniff and the
+        // image probe rewind to offsets already read and only read forward past them (the stream
+        // cannot seek past what it has buffered); the AVIF probe reads the whole upload into memory.
+        // The stream is then fully drained once before the save read so Length is the true total.
         //
         // `length` above is the client-DECLARED size (from Content-Length) — a client that
         // lies (declares small, streams large) would otherwise sail past that guard and spool
@@ -134,6 +155,27 @@ public sealed class FileService(
         var key = StorageKey.Create(fileName);
         await blobs.SaveAsync(key, buffer, contentType, ct);
 
+        // The blob is stored before the row; any failure from here to the commit (cancellation
+        // included) removes it again and rethrows the original exception.
+        File entity;
+        try
+        {
+            entity = await InsertRowsAsync(buffer, fileName, contentType, dims, folderId, key, ct);
+        }
+        catch
+        {
+            await BlobCleanup.TryDeleteAsync(blobs, key, log);
+            throw;
+        }
+
+        await NotifyAsync(entity.Id, ItemChangeKind.Created);
+        return entity;
+    }
+
+    private async Task<File> InsertRowsAsync(
+        Stream buffer, string fileName, string contentType, (int Width, int Height)? dims,
+        Guid? folderId, string key, CancellationToken ct)
+    {
         var entity = new File
         {
             Id = Guid.NewGuid(),
@@ -147,7 +189,7 @@ public sealed class FileService(
             Size = buffer.Length,
             Width = dims?.Width,
             Height = dims?.Height,
-            Status = "published",
+            Status = fileOptions.DefaultStatus,
             FolderId = folderId,
         };
 
@@ -171,7 +213,6 @@ public sealed class FileService(
             await db.Insertable(entity).ExecuteCommandAsync(ct);
             await db.Insertable(translation).ExecuteCommandAsync(ct);
         }, ct);
-        await NotifyAsync(entity.Id, ItemChangeKind.Created);
         return entity;
     }
 
@@ -188,40 +229,26 @@ public sealed class FileService(
         var row = await db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).FirstAsync(ct);
         if (row is null) return false;
 
-        var fkCol = db.EntityMaintenance.GetDbColumnName<FileTranslation>(nameof(FileTranslation.FileId));
-        // Delete the sidecar translations + the file row through the nesting-safe repository
-        // helper (join-if-active), so composing this inside a larger unit-of-work joins that outer
-        // transaction instead of opening — and prematurely committing — its own inner one.
-        await repository.InTransactionAsync(async () =>
+        // One transaction: the shared purge pipeline (Restrict guard, SetNull of referencing rows, junction
+        // rows, translations, the row) plus the logo reference. Nesting-safe, so it joins an outer unit of work.
+        var changes = new ItemChangeSet();
+        var purged = await repository.InTransactionAsync(async () =>
         {
-            await db.Deleteable<FileTranslation>()
-                .Where(new List<IConditionalModel>
-                {
-                    new ConditionalModel
-                    {
-                        FieldName = fkCol, ConditionalType = ConditionalType.In, FieldValue = id.ToString()
-                    }
-                }).ExecuteCommandAsync(ct);
-            await db.Deleteable<File>().In(id).ExecuteCommandAsync(ct);
-
-            // SettingsController only validates the logo file is published at SAVE
-            // time (TOCTOU) — if this deleted file was the current brand logo, clear the reference
-            // now rather than leaving `SiteSettings.LogoFileId` dangling. Entity-typed SetColumns
-            // (see SqlSugarSiteSettingsStore.UpdateRowAsync) so the nullable column gets a typed
-            // NULL, avoiding the Postgres 42804 error a plain NULL literal triggers via SqlSugar's
-            // untyped SetColumns overload. A no-op (0 rows affected) when this file was never the
-            // logo, or when no `SiteSettings` row exists yet.
-            await db.Updateable<SiteSettings>()
-                .SetColumns(s => new SiteSettings { LogoFileId = null })
-                .Where(s => s.LogoFileId == id)
-                .ExecuteCommandAsync(ct);
+            var removed = await References.PurgeCoreAsync(
+                FileCollection.Name, id.ToString(), new HashSet<(string Collection, string Id)>(), changes, ct);
+            if (removed) await ClearLogoReferenceAsync(id, ct);
+            return removed;
         }, ct);
+        // A concurrent purge that won between the pre-read and the transaction leaves nothing to announce.
+        if (!purged) return false;
 
-        await NotifyAsync(id, ItemChangeKind.Purged);
-        // storage.DeleteAsync stays outside the transaction: best-effort (row gone, bytes orphaned).
-        try { await blobs.DeleteAsync(row.StorageKey, ct); } catch { /* best-effort: row gone, bytes orphaned */ }
+        await NotifyAsync(changes);
+        // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
+        await BlobCleanup.TryDeleteAsync(blobs, row.StorageKey, log);
         return true;
     }
+
+    public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
 
     // Default "delete" for the media library is trash, not purge. Reuses the same atomic
     // repository primitive ItemService uses for every other soft-deletable collection (WHERE
@@ -230,16 +257,13 @@ public sealed class FileService(
     {
         var trashed = await repository.InTransactionAsync(async () =>
         {
+            await References.CheckRestrictAsync(FileCollection.Name, id.ToString(), ct);
             var trashedNow = await repository.SoftDeleteAsync(
                 FileCollection.Name, id.ToString(), DateTime.UtcNow, currentUser.GetCurrentUserId(), ct);
             if (!trashedNow) return false;
-            // A trashed file is filtered out of every read; if it is the current brand logo, clear the
-            // reference now so ConfigController stops resolving it into a dead /content URL (mirrors
-            // the logo-clear step in DeleteAsync/purge above).
-            await db.Updateable<SiteSettings>()
-                .SetColumns(s => new SiteSettings { LogoFileId = null })
-                .Where(s => s.LogoFileId == id)
-                .ExecuteCommandAsync(ct);
+            // A trashed file is filtered out of every read; a trashed brand logo would resolve into a dead
+            // /content URL, so the reference is cleared with the trash.
+            await ClearLogoReferenceAsync(id, ct);
             return true;
         }, ct);
         if (trashed) await NotifyAsync(id, ItemChangeKind.Trashed);

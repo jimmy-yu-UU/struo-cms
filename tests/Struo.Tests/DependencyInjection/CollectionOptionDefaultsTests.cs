@@ -83,6 +83,23 @@ public sealed class CollectionOptionDefaultsTests
             .Equal(FileStorageOptions.ImageTransformOptions.DefaultAllowedFormats);
     }
 
+    [Fact]
+    public void Narrowing_size_steps_and_transformable_types_replaces_the_defaults()
+    {
+        var bound = Bind<FileStorageOptions>(
+            new Dictionary<string, string?>
+            {
+                ["Struo:Files:Backend"] = "local",
+                ["Struo:Files:Local:RootPath"] = "App_Data/uploads",
+                ["Struo:Files:ImageTransform:SizeSteps:0"] = "200",
+                ["Struo:Files:ImageTransform:TransformableContentTypes:0"] = "image/png"
+            },
+            (services, _) => services.AddStruoFiles());
+
+        bound.ImageTransform.SizeSteps.Should().Equal(200);
+        bound.ImageTransform.TransformableContentTypes.Should().Equal("image/png");
+    }
+
     /// <summary>
     /// Binds through <c>AddStruoOidc</c> with OIDC enabled and resolves the actual
     /// <see cref="OpenIdConnectOptions"/> the handler runs with — the object <c>opts.Scopes</c> (the

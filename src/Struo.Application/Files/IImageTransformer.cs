@@ -27,5 +27,9 @@ public readonly record struct ImageTransformResult(byte[] Bytes, string ContentT
 /// </summary>
 public interface IImageTransformer
 {
-    ImageTransformResult Transform(ReadOnlySpan<byte> source, ImageTransformRequest req);
+    /// <summary>
+    /// Returns null, without decoding any pixels, when the image the decoder would produce has more than
+    /// <paramref name="maxSourcePixels"/> pixels.
+    /// </summary>
+    ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels);
 }

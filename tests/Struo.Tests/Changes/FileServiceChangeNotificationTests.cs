@@ -59,6 +59,8 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
     private readonly RecordingItemChangeListener _listener = new();
     private readonly FileService _svc;
 
+    private readonly ItemPurgePipeline _refs;
+
     public FileServiceChangeNotificationTests()
     {
         _db = SqlSugarClientFactory.Create(
@@ -79,9 +81,10 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
-        _svc = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester),
-            notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()));
+        _refs = FileTestPipeline.Create(_repo, provider, registry, graph);
+        _svc = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(_repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)),
+            notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()),
+            references: _refs);
     }
 
     public void Dispose() => _file.Dispose();
@@ -137,8 +140,7 @@ public sealed class FileServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Without_a_notifier_the_service_behaves_as_before()
     {
-        var plain = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), _repo, new StubLanguages(),
-            new TestCurrentUserAccessor(Tester));
+        var plain = new FileService(_db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(_repo, new StubLanguages(), new TestCurrentUserAccessor(Tester)), references: _refs);
         var f = await plain.UploadAsync(new MemoryStream([1]), "b.bin", "application/octet-stream", 1);
         (await plain.TrashAsync(f.Id)).Should().BeTrue();
         _listener.Calls.Should().BeEmpty();
