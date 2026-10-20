@@ -269,7 +269,7 @@ are baked into the image at build time: `vite build` in production mode reads
 `frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
 exclude such a file from the build context — only the developer's own
 `.env`/`.env.local`/`.env.*.local`. The repository itself carries no `.env.production`, only the
-tracked `frontend/.env.example`. Changing this value only takes effect after rebuilding the image.
+tracked `frontend/.env.example`. Changing these values only takes effect after rebuilding the image.
 
 `API_UPSTREAM` (defaulting to `http://api:8080`) has to be written as `scheme://host:port`, with no
 path or trailing slash: `proxy_pass` takes an nginx variable rather than a literal value, which lets

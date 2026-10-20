@@ -204,16 +204,17 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 
 ## UI 語言
 
-後台介面自己的語言，跟內容語言各自獨立；選定的語言不會送到 API，可選的集合是登錄的訊息目錄，而不是伺服器設定，見
-[第 7 章：多語內容](07-i18n.md)。它是 `vue-i18n` 的非 legacy 模式，訊息目錄集中登錄在
-`src/locales/index.ts` 的 `catalogs` 物件裡，出貨兩份：`zh-TW.ts` 與 `en.ts`，各是一個巢狀物件，頂
-層按畫面分命名空間（`nav`、`login`、`itemForm`、`settings` 之類），`fields` 底下另有一個 `richtext`
-子命名空間。`UiLocale` 型別、i18n 的訊息表、切換器的選項、鍵集合對稱的測試，全部從這個登錄表推
-導。
+後台介面自己的語言，跟內容語言各自獨立；選定的語言不會送到 API，可選的集合是登錄的訊息目錄，
+而不是伺服器設定，見[第 7 章：多語內容](07-i18n.md)。它是 `vue-i18n` 的非 legacy 模式，訊息
+目錄集中登錄在 `src/locales/index.ts` 的 `catalogs` 物件裡，出貨兩份：`zh-TW.ts` 與 `en.ts`，
+各是一個巢狀物件，頂層按畫面分命名空間（`nav`、`login`、`itemForm`、`settings` 之類），
+`fields` 底下另有一個 `richtext` 子命名空間。`UiLocale` 型別、i18n 的訊息表、切換器的選項、
+鍵集合對稱的測試，全部從這個登錄表推導。
 
 登錄表裡的每一份目錄都會提供給使用者。預設是 `en`；建置時可用 `VITE_DEFAULT_UI_LOCALE`（填一個已登錄
 的代碼；dev server 讀 `frontend/.env`，映像建置讀你提交的 `frontend/.env.production`）覆寫，值沒有
-對應目錄就在主控台記一筆警告並退回 `en`。生效的語言在掛載之前決定：`localStorage` 裡的
+對應目錄就在主控台記一筆警告並退回 `en`。`en` 是退回用的目錄，要一直留在登錄表裡：拿掉它，型別檢查
+不會通過。生效的語言在掛載之前決定：`localStorage` 裡的
 `struo.uiLocale` 若是已登錄的目錄就用它，否則用預設；i18n 的 fallback 也指向預設，`<html lang>`
 隨語言更新。一個 Pinia store 的 `set()` 同時切換 i18n、更新 `<html>` 的 `lang` 屬性、把選擇存下來，
 並拒絕沒有對應目錄的值。App shell 裡的 `UiLanguageSwitcher` 是唯一會呼叫它的元件，只登錄一個目錄時

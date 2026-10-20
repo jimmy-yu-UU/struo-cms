@@ -254,12 +254,13 @@ derived from that registry.
 Every catalog in the registry is offered. The default is `en`; a build overrides it with
 `VITE_DEFAULT_UI_LOCALE` (a registered code; a dev server reads `frontend/.env`, an image build
 reads a committed `frontend/.env.production`), and a value with no catalog logs a console warning
-and falls back to `en`. The language in effect is decided before the app
-mounts: `struo.uiLocale` from `localStorage` when it names a registered catalog, otherwise the
-default; the i18n fallback points at the default too, and `<html lang>` follows the locale. A Pinia
-store's `set()` switches i18n, updates `<html>`'s `lang` attribute, persists the choice, and refuses a
-value that has no catalog. `UiLanguageSwitcher`, in the app shell, is the only component that
-calls it; with a single registered catalog the component is not rendered.
+and falls back to `en`. `en` is the fallback catalog and must stay registered: removing it fails the
+type check. The language in effect is decided before the app mounts: `struo.uiLocale` from
+`localStorage` when it names a registered catalog, otherwise the default; the i18n fallback points
+at the default too, and `<html lang>` follows the locale. A Pinia store's `set()` switches i18n,
+updates `<html>`'s `lang` attribute, persists the choice, and refuses a value that has no catalog.
+`UiLanguageSwitcher`, in the app shell, is the only component that calls it; with a single
+registered catalog the component is not rendered.
 
 Adding an interface language:
 
