@@ -15,8 +15,6 @@
   `8080`, so a fork that changes the listening port keeps a working probe.
 - `Directory.Packages.props` no longer suppresses GHSA-2m69-gcr7-jv3q; `SQLitePCLRaw` is 2.1.12 and
   `dotnet list package --vulnerable` reports nothing.
-- Chapter 20 states that Compose publishes the API port on loopback for local debugging, and that moving
-  `STRUO_BIND_ADDRESS` off loopback also means removing the `api` port mapping.
 
 ## 0.11.0 — 2026-10-20
 

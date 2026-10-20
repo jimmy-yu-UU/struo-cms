@@ -212,8 +212,10 @@ volume mounted on any of them starts writable.
 Only `/app/App_Data` is also declared as a `VOLUME`, so even a `docker run` with no
 `--mount`/`-v` at all still gets an anonymous volume here.
 
-`HEALTHCHECK` hits `http://localhost:8080/health/live` every 30 seconds (5-second timeout, a
-30-second start period, 3 retries) — that's liveness, not `/health/ready`. The health status
+`HEALTHCHECK` hits `/health/live` on `localhost` every 30 seconds (5-second timeout, a 30-second
+start period, 3 retries). It takes the port from `ASPNETCORE_HTTP_PORTS` (the first entry of a
+`;`-separated list, 8080 when unset) and does not read `ASPNETCORE_URLS`, so set the port through
+`ASPNETCORE_HTTP_PORTS`. That's liveness, not `/health/ready`. The health status
 `docker ps`/`docker inspect` shows therefore means only "the process is still responding," not that
 the database or cache is reachable.
 

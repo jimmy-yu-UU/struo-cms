@@ -80,7 +80,7 @@ services:
     # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the
     # API is live; start_period leaves room for the first start's migrations.
     healthcheck:
-      test: ["CMD-SHELL", "p=$${ASPNETCORE_HTTP_PORTS:-8080}; curl --fail --silent http://localhost:$${p%%;*}/health/live || exit 1"]
+      test: ["CMD-SHELL", "p=$${ASPNETCORE_HTTP_PORTS:-8080}; curl --fail --silent \"http://localhost:$${p%%;*}/health/live\" || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5

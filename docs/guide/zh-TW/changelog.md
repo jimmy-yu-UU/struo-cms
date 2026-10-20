@@ -13,8 +13,6 @@
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
 - `Directory.Packages.props` 不再抑制 GHSA-2m69-gcr7-jv3q；`SQLitePCLRaw` 已是 2.1.12，
   `dotnet list package --vulnerable` 查不到任何漏洞。
-- 第 20 章寫明 Compose 把 API 的埠開在 loopback 供本機除錯，且把 `STRUO_BIND_ADDRESS` 改成非 loopback
-  時要一併拿掉 `api` 的埠對應。
 
 ## 0.11.0 — 2026-10-20
 
