@@ -36,5 +36,5 @@ USER app
 EXPOSE 8080
 VOLUME ["/app/App_Data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl --fail --silent http://localhost:8080/health/live || exit 1
+  CMD p=${ASPNETCORE_HTTP_PORTS:-8080}; curl --fail --silent "http://localhost:${p%%;*}/health/live" || exit 1
 ENTRYPOINT ["dotnet", "Struo.Api.dll"]
