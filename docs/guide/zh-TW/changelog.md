@@ -117,6 +117,11 @@
   若某個檔案資料列儲存的 `status` 兩者皆非，任何帶有 `status` 的更新都會回 `400`，管理介面儲存標題或替代文字也
   包含在內；用 `PUT /api/items/file/{id}` 送出有效的 `status`，或直接修正該欄位，即可修復這類資料列。
 
+- `Oidc:Prompt`（預設 `select_account`）設定 OIDC 授權請求的 `prompt` 參數，讓提供者一律顯示帳號挑選畫面；
+  也接受 `login`、`consent`、`none`，留空則不送 `prompt`。既有的 OIDC 部署升級後，每次登入都會看到帳號挑選
+  畫面；要維持原本的靜默登入，把 `Oidc:Prompt` 設為空值。無效的值會讓啟動失敗並點名 `Oidc:Prompt`。
+  第 4、16 章有說明。
+
 ### 安全性
 
 - 在 MySQL 與 MariaDB 上，語言代碼可以透過翻譯欄位的排序注入 SQL。用 `"Code"` 這種 JSON 鍵（而不是

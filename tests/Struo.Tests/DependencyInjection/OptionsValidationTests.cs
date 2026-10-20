@@ -138,6 +138,22 @@ public sealed class OptionsValidationTests
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_invalid_prompt_fails_startup()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Oidc:Enabled"] = "true";
+            s["Oidc:Authority"] = "https://login.microsoftonline.com/tenant-1/v2.0";
+            s["Oidc:ClientId"] = "client";
+            s["Oidc:ClientSecret"] = "test-secret";
+            s["Oidc:Prompt"] = "pick_one";
+        });
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull();
+        string.Join(" ", ove!.Failures).Should().Contain("Oidc:Prompt");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Oidc_multi_tenant_authority_with_a_domain_pin_starts()
     {
         var error = await StartupErrorAsync(s =>

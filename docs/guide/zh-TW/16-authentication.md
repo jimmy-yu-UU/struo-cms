@@ -215,6 +215,9 @@ HTTP_STATUS:429
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
 叫 userinfo 端點補齊；回呼路徑是 `Oidc:CallbackPath`，預設 `/signin-oidc`。
 
+登入預設一律顯示提供者的帳號挑選畫面（`Oidc:Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
+第 4 章。
+
 要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上這個路徑：
 `https://cms.example.com/signin-oidc`，Compose 堆疊則是 `http://localhost:8080/signin-oidc`。純 `http`
 的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯 cookie 帶

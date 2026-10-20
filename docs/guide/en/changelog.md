@@ -148,6 +148,12 @@
   `status`, which includes saving its title or alt text in the admin UI; send a valid `status`
   through `PUT /api/items/file/{id}` or correct the column directly to repair such a row.
 
+- `Oidc:Prompt` (default `select_account`) sets the `prompt` parameter of the OIDC authorize request, so
+  the provider always shows its account picker; `login`, `consent` and `none` are also accepted, and an
+  empty value sends no prompt. An existing OIDC deployment sees the account picker at every sign-in
+  after upgrading; set `Oidc:Prompt` to empty to keep the previous silent sign-in. An invalid value fails
+  startup naming `Oidc:Prompt`. Chapters 4 and 16 describe it.
+
 ### Security
 
 - On MySQL and MariaDB, a language code could inject SQL through a sort on a translatable field. A

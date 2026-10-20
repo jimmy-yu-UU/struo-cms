@@ -517,6 +517,7 @@ login throttle counts in Redis directly.
 | `Oidc:ClientSecret` | string (may be empty) | none |
 | `Oidc:CallbackPath` | string | `"/signin-oidc"` |
 | `Oidc:Scopes` | string array | see below |
+| `Oidc:Prompt` | string (may be empty) | `"select_account"` |
 | `Oidc:ReturnUrlDefault` | string | `"/"` |
 | `Oidc:RequireEmailVerified` | bool | `false` |
 | `Oidc:AllowedTenantId` | string | `"REPLACE_TENANT_ID"` |
@@ -537,6 +538,19 @@ On the first login with an external identity, StruoCMS matches it to an existing
 email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`, and
 `AllowedEmailDomains` all pass their checks. Loosen them, and anyone with a matching email at any
 identity provider can take over a password account.
+
+`ClientSecret` is deliberately absent from `appsettings.json` and must never be committed. Set it with
+the environment variable `Oidc__ClientSecret`, with user-secrets
+(`dotnet user-secrets set "Oidc:ClientSecret" <value> --project src/Struo.Api`), or in a gitignored
+`appsettings.Development.json`.
+
+`Prompt` is sent as the `prompt` parameter of the authorize request. `select_account` (the default)
+always shows the provider's account picker, so nobody signs in silently with whichever account the
+browser happens to hold. `login` forces the user to enter credentials again, `consent` asks for
+consent again, and `none` never shows a page and fails when the user isn't already signed in. Values
+may be combined with a space, such as `login consent`. An empty value sends no prompt, so the
+provider decides. Any other value fails startup when `Enabled=true`, with an error naming
+`Oidc:Prompt`.
 
 `CallbackPath` is the path the identity provider redirects the browser back to. The redirect URI to
 register with the provider is the origin users reach the admin at plus this path; see

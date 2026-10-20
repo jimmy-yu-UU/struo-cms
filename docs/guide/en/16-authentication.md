@@ -276,6 +276,9 @@ External login is the authorization code flow with PKCE. The provider's own toke
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
 rest. The callback path is `Oidc:CallbackPath`, defaulting to `/signin-oidc`.
 
+Sign-in always shows the provider's account picker by default (`Oidc:Prompt` = `select_account`);
+chapter 4 lists the other values and how to send no prompt.
+
 The redirect URI to register with the provider is the origin users open the admin at plus that
 path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oidc` for the Compose
 stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect

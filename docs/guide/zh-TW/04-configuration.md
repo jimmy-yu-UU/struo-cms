@@ -448,6 +448,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 | `Oidc:ClientSecret` | 字串（可留空） | 無 |
 | `Oidc:CallbackPath` | 字串 | `"/signin-oidc"` |
 | `Oidc:Scopes` | 字串陣列 | 見下文 |
+| `Oidc:Prompt` | 字串（可留空） | `"select_account"` |
 | `Oidc:ReturnUrlDefault` | 字串 | `"/"` |
 | `Oidc:RequireEmailVerified` | 布林 | `false` |
 | `Oidc:AllowedTenantId` | 字串 | `"REPLACE_TENANT_ID"` |
@@ -466,6 +467,15 @@ Oidc:Scopes = ["openid", "email", "profile"]
 第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；`AllowedTenantId`、
 `RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
 身分提供者裡 email 對得上的人都能接管一個密碼帳號。
+
+`ClientSecret` 刻意不放在 `appsettings.json`，也絕不能提交進版本庫。用環境變數 `Oidc__ClientSecret`、
+user-secrets（`dotnet user-secrets set "Oidc:ClientSecret" <值> --project src/Struo.Api`），或不納入版控的
+`appsettings.Development.json` 設定。
+
+`Prompt` 會原樣送成授權請求的 `prompt` 參數。`select_account`（預設）一律顯示提供者的帳號挑選畫面，
+不會有人因為瀏覽器剛好持有某個帳號就被靜默登入。`login` 強制使用者重新輸入帳密，`consent` 重新詢問同意，
+`none` 完全不顯示頁面，使用者尚未登入時會失敗。可以用空格組合多個值，例如 `login consent`。留空就不送
+`prompt`，由提供者決定。其他任何值在 `Enabled=true` 時會讓啟動失敗，錯誤訊息點名 `Oidc:Prompt`。
 
 `CallbackPath` 是身分提供者把瀏覽器導回來的路徑。要向提供者登記的重新導向網址，是使用者開啟
 管理介面的來源加上這個路徑；代理端的做法見[第 16 章](16-authentication.md)。

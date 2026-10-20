@@ -19,6 +19,20 @@ public sealed class OidcOptions
     public static readonly string[] DefaultScopes = ["openid", "email", "profile"];
 
     public string[] Scopes { get; set; } = [];
+
+    /// <summary>The prompt values an authorize request may carry.</summary>
+    public static readonly string[] AllowedPromptValues = ["select_account", "login", "consent", "none"];
+
+    /// <summary>Value of the authorize request's <c>prompt</c> parameter: one or more space-separated
+    /// entries of <see cref="AllowedPromptValues"/>. Blank sends no prompt.</summary>
+    public string? Prompt { get; set; } = "select_account";
+
+    /// <summary>True when <see cref="Prompt"/> is blank or every space-separated entry is allowed.</summary>
+    public bool HasValidPrompt() =>
+        string.IsNullOrWhiteSpace(Prompt)
+        || Prompt.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .All(p => AllowedPromptValues.Contains(p, StringComparer.Ordinal));
+
     public string ReturnUrlDefault { get; set; } = "/";
     // An external identity links to a local account by email equality, so these guards pin trust.
     // They default to off, except that an enabled multi-tenant Authority needs a tenant or domain pin

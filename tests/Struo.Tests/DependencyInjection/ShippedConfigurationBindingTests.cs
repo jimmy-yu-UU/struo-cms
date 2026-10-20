@@ -240,6 +240,7 @@ public sealed class ShippedConfigurationBindingTests
         bound.Enabled.Should().Be(shipped.GetProperty("Enabled").GetBoolean());
         bound.CallbackPath.Should().Be(shipped.GetProperty("CallbackPath").GetString());
         bound.ReturnUrlDefault.Should().Be(shipped.GetProperty("ReturnUrlDefault").GetString());
+        bound.Prompt.Should().Be(shipped.GetProperty("Prompt").GetString());
         bound.RequireEmailVerified.Should().Be(shipped.GetProperty("RequireEmailVerified").GetBoolean());
         bound.AllowedEmailDomains.Should().Equal(StringArray(shipped.GetProperty("AllowedEmailDomains")));
 

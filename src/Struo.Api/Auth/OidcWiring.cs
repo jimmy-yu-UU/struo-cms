@@ -30,6 +30,10 @@ public static class OidcWiring
                 o => !o.Enabled || !o.IsUnpinnedMultiTenant(),
                 "Oidc Authority is multi-tenant (common, organizations or consumers); " +
                 "set Oidc:AllowedTenantId or Oidc:AllowedEmailDomains, or use a single-tenant Authority")
+            .Validate(
+                o => !o.Enabled || o.HasValidPrompt(),
+                "Oidc:Prompt must be empty or space-separated values from: " +
+                string.Join(", ", OidcOptions.AllowedPromptValues))
             .ValidateOnStart();
         services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 
@@ -59,8 +63,15 @@ public static class OidcWiring
             foreach (var s in opts.Scopes)
                 options.Scope.Add(s);
 
+            var prompt = string.IsNullOrWhiteSpace(opts.Prompt) ? null : opts.Prompt.Trim();
             options.Events = new OpenIdConnectEvents
             {
+                OnRedirectToIdentityProvider = ctx =>
+                {
+                    if (prompt is not null) ctx.ProtocolMessage.Prompt = prompt;
+                    return Task.CompletedTask;
+                },
+
                 OnTokenValidated = async ctx =>
                 {
                     var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
