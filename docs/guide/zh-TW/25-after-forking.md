@@ -71,8 +71,9 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 也會跟著變。先知道三件事：
 
 - 前綴要求 `Secure`，但只有面對瀏覽器的來源必須是 HTTPS。Development 之外，不論 API 自己看到的是
-  什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。把
-  `Auth:Cookie:RequireSecure` 設成 `false` 的環境，瀏覽器會直接拒收這個 cookie。
+  什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。
+  `RequireSecure=false` 等於 `SameAsRequest`：只有 API 自己看到的是純 http（例如前面沒有 TLS 的
+  主機），cookie 才不帶 `Secure`，瀏覽器也才會拒收帶前綴的 cookie。
 - 這個常數在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
   `SameAsRequest`：在 `http://localhost` 上 cookie 沒有 `Secure`，瀏覽器拒收，本機登入與 e2e 測試
   都會失敗。本機執行與 e2e 的主機要設 `Auth__Cookie__RequireSecure=true`，cookie 就會帶
@@ -87,8 +88,8 @@ presigned URL、另一個主機上的 `Branding:LogoUrl`）時，瀏覽器會擋
 API 也一樣。
 
 容器啟動時，用環境變數 `CSP_IMG_EXTRA`（附加到 `img-src`）與 `CSP_CONNECT_EXTRA`（附加到
-`connect-src`）補上，nginx 範本在那時才渲染，不必重新建置映像，值是以空白分隔的來源，例如 `https://cdn.example.com`。完整說明見
-[第 20 章：部署](20-deployment.md)的〈後台 SPA 映像〉。
+`connect-src`）補上。nginx 範本在那時才渲染，不必重新建置映像。值是以空白分隔的來源，例如
+`https://cdn.example.com`。完整說明見[第 20 章：部署](20-deployment.md)的〈後台 SPA 映像〉。
 
 ## 9. 後台前面還有一層反向代理：`ForwardedHeaders`
 

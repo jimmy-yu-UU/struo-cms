@@ -81,8 +81,9 @@ things to know first:
 
 - The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
   Development the cookie is `Secure` whatever scheme the API itself sees, so nginx can still talk to
-  the API over plain http. A setup with `Auth:Cookie:RequireSecure` set to `false` has its cookie
-  rejected by the browser.
+  the API over plain http. `RequireSecure=false` means `SameAsRequest`: the cookie loses `Secure`
+  only when the API itself sees plain http, as on a host with no TLS in front, and the browser then
+  rejects the prefixed cookie.
 - The constant applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
   `SameAsRequest`: over `http://localhost` the cookie carries no `Secure`, the browser rejects it, and
   local login and the e2e suite fail. Set `Auth__Cookie__RequireSecure=true` for local runs and the
@@ -97,9 +98,10 @@ somewhere else (a CDN, a bucket's presigned URL, a `Branding:LogoUrl` on another
 blocks them. It also blocks the SPA when it calls an API on another origin directly.
 
 Add the origins with the environment variables `CSP_IMG_EXTRA` (appended to `img-src`) and
-`CSP_CONNECT_EXTRA` (appended to `connect-src`) when the container starts; the nginx template is rendered at that point, so no rebuild is needed. The value is
-space-separated origins such as `https://cdn.example.com`. The full description is in "The admin SPA
-image" in [Chapter 20: Deployment](20-deployment.md).
+`CSP_CONNECT_EXTRA` (appended to `connect-src`) when the container starts. The nginx template is
+rendered at that point, so no rebuild is needed. The value is space-separated origins such as
+`https://cdn.example.com`. The full description is in "The admin SPA image" in
+[Chapter 20: Deployment](20-deployment.md).
 
 ## 9. A reverse proxy in front of the admin nginx: `ForwardedHeaders`
 
