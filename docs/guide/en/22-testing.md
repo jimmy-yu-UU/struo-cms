@@ -254,12 +254,13 @@ nginx.
 Right after the builds, Trivy scans both images and fails the job on any HIGH or CRITICAL
 vulnerability that has an upstream fix. Findings with no fix yet are ignored, so a CVE you cannot
 act on never blocks a merge. The same results are uploaded as SARIF to the repository's Security
-tab (code scanning), except on fork and Dependabot pull requests, whose token cannot write there;
-the blocking scan still runs on those.
+tab (code scanning), except where that upload is skipped (see below);
+the blocking scan still runs everywhere.
 
-The SARIF upload needs code scanning on the repository. A private repository or fork without
-GitHub Advanced Security fails that step; either enable code scanning or delete the "Write the ...
-scan as SARIF" and "Upload the ... scan" steps, which leaves the blocking scans intact.
+The SARIF upload runs only on the public repository's pushes and same-repository pull requests.
+It is skipped on private repositories, because code scanning there needs GitHub Advanced Security
+and the upload would fail without it. A private repository with code scanning enabled can drop the
+`github.event.repository.private` condition from the `sarif-gate` step.
 
 The Compose step runs `docker compose up --wait`, which builds its own images from the same two
 Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port

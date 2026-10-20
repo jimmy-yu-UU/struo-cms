@@ -13,6 +13,8 @@
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
+- The `docker` CI job scans the API and admin images with Trivy and fails on any HIGH or CRITICAL
+  vulnerability that has an upstream fix. Results appear in Code scanning on the public repository.
 - `Directory.Packages.props` no longer suppresses GHSA-2m69-gcr7-jv3q; `SQLitePCLRaw` is 2.1.12 and
   `dotnet list package --vulnerable` reports nothing.
 

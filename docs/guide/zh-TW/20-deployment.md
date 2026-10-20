@@ -175,8 +175,9 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 
 `HEALTHCHECK` 每 30 秒打一次 `localhost` 上的 `/health/live`（5 秒逾時、30 秒啟動寬限、3 次
 重試）。埠號取自 `ASPNETCORE_HTTP_PORTS`（值是以 `;` 分隔的清單時取第一個，沒設是 8080），
-不讀 `ASPNETCORE_URLS`，所以要改埠請用 `ASPNETCORE_HTTP_PORTS`。打的是 liveness，不是 `/health/ready`。`docker ps`／`docker inspect` 看到的
-健康狀態，因此只代表「行程還在回應」，不代表資料庫或快取連得上。
+不讀 `ASPNETCORE_URLS`，所以要改埠請用 `ASPNETCORE_HTTP_PORTS`。打的是 liveness，不是
+`/health/ready`。`docker ps`／`docker inspect` 看到的健康狀態，因此只代表「行程還在回應」，
+不代表資料庫或快取連得上。
 
 ### 啟動這個映像至少要給什麼
 

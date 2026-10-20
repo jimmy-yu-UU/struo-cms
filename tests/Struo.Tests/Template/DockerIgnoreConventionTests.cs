@@ -11,8 +11,8 @@ namespace Struo.Tests.Template;
 /// build context. Every pattern therefore has to satisfy one of these rules:
 /// <list type="number">
 /// <item>it starts with <c>**/</c>, so it matches at every depth;</item>
-/// <item>it names an explicit path (a <c>/</c> before its last character) such as <c>frontend/</c> or
-/// <c>.github/</c>, which only exists at the context root;</item>
+/// <item>it is one of the known root directories (<c>frontend/</c>, <c>.github/</c>, ...), or names an
+/// explicit inner path (a <c>/</c> before its last character) such as <c>src/Struo.Api/bin/</c>;</item>
 /// <item>the comment line directly above it contains <c>root-only</c> and says why.</item>
 /// </list>
 /// Negations (<c>!</c>) are checked on the pattern after the <c>!</c>.

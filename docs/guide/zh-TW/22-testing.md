@@ -213,12 +213,12 @@ API 映像先用 `Database__DbType=Sqlite`、
 
 建置完成後，Trivy 會立刻掃描兩個映像；只要有上游已提供修補版本的 HIGH 或 CRITICAL 漏洞，job
 就會失敗。尚無修補版本的項目會被忽略，所以你無從處理的 CVE 不會擋住合併。同一份結果也會以
-SARIF 上傳到儲存庫的 Security 分頁（code scanning）；fork 與 Dependabot 的 pull request 因為
-token 沒有寫入權限而略過上傳，但阻擋用的掃描照跑。
+SARIF 上傳到儲存庫的 Security 分頁（code scanning）；有些情況會略過上傳（見下），但阻擋用的
+掃描到處都會跑。
 
-SARIF 上傳需要儲存庫啟用 code scanning。沒有 GitHub Advanced Security 的私有儲存庫或 fork
-會讓這一步失敗；請啟用 code scanning，或刪掉「Write the ... scan as SARIF」與「Upload the ...
-scan」這幾個步驟，阻擋用的掃描不受影響。
+SARIF 上傳只在公開儲存庫的 push 與同儲存庫的 pull request 上執行。私有儲存庫會略過，因為那裡的
+code scanning 需要 GitHub Advanced Security，沒有的話上傳會失敗。已啟用 code scanning 的私有儲存庫
+可以把 `sarif-gate` 步驟裡的 `github.event.repository.private` 條件拿掉。
 
 Compose 那一段跑 `docker compose up --wait`，映像由同樣兩份 Dockerfile 另外建置；接著檢查
 8081 埠上 API 的 `/health/ready`、8080 埠上後台首頁有沒有同一個 `assets/index-` 片段，再透過

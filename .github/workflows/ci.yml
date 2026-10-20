@@ -114,8 +114,8 @@ jobs:
       - id: build-admin
         run: docker build --tag struo-admin:ci frontend
       # Both images are scanned on every run and fail the job on a HIGH or CRITICAL
-      # finding that has an upstream fix. The SARIF copies feed the Security tab; a fork
-      # or Dependabot token cannot write security events, so only the upload is skipped there.
+      # finding that has an upstream fix. The SARIF copies feed the Security tab; only the upload
+      # is skipped for Dependabot, fork PRs and private repositories, where code scanning may be off.
       - name: Scan struo-api:ci for fixable HIGH and CRITICAL vulnerabilities
         if: ${{ !cancelled() && steps.build-api.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -141,9 +141,10 @@ jobs:
           ACTOR: ${{ github.actor }}
           EVENT: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PRIVATE_REPO: ${{ github.event.repository.private }}
           THIS_REPO: ${{ github.repository }}
         run: |
-          if [ "$ACTOR" != "dependabot[bot]" ] && { [ "$EVENT" != "pull_request" ] || [ "$HEAD_REPO" = "$THIS_REPO" ]; }; then
+          if [ "$PRIVATE_REPO" != "true" ] && [ "$ACTOR" != "dependabot[bot]" ] && { [ "$EVENT" != "pull_request" ] || [ "$HEAD_REPO" = "$THIS_REPO" ]; }; then
             echo "upload=true" >> "$GITHUB_OUTPUT"
           else
             echo "upload=false" >> "$GITHUB_OUTPUT"

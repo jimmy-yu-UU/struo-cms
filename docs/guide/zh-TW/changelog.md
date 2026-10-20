@@ -11,6 +11,8 @@
 
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
+- CI 的 `docker` job 用 Trivy 掃描 API 與後台映像，只要有上游已提供修補版本的 HIGH 或 CRITICAL 漏洞
+  就會失敗；結果顯示在公開儲存庫的 Code scanning。
 - `Directory.Packages.props` 不再抑制 GHSA-2m69-gcr7-jv3q；`SQLitePCLRaw` 已是 2.1.12，
   `dotnet list package --vulnerable` 查不到任何漏洞。
 
