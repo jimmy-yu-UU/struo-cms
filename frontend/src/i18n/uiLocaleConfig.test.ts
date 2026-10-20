@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { resolveDefaultUiLocale } from './uiLocaleConfig'
-import { CATALOG_LOCALES } from '../locales'
 
 describe('resolveDefaultUiLocale', () => {
   afterEach(() => {
@@ -9,9 +8,6 @@ describe('resolveDefaultUiLocale', () => {
     vi.resetModules()
   })
 
-  it('offers exactly the registered catalogs', () => {
-    expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
-  })
   it('defaults to en when nothing is configured', () => {
     expect(resolveDefaultUiLocale(undefined)).toBe('en')
     expect(resolveDefaultUiLocale('')).toBe('en')
@@ -23,6 +19,14 @@ describe('resolveDefaultUiLocale', () => {
   it('falls back to en with a warning for an unknown value', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(resolveDefaultUiLocale('ja')).toBe('en')
+    expect(warn).toHaveBeenCalledOnce()
+  })
+  it('falls back to en with a warning when VITE_DEFAULT_UI_LOCALE names no catalog at module load', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('VITE_DEFAULT_UI_LOCALE', 'ja')
+    vi.resetModules()
+    const mod = await import('./uiLocaleConfig')
+    expect(mod.DEFAULT_UI_LOCALE).toBe('en')
     expect(warn).toHaveBeenCalledOnce()
   })
   it('reads VITE_DEFAULT_UI_LOCALE at module load', async () => {

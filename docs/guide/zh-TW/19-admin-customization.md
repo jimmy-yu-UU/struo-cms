@@ -212,11 +212,12 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 導。
 
 登錄表裡的每一份目錄都會提供給使用者。預設是 `en`；建置時可用 `VITE_DEFAULT_UI_LOCALE`（填一個已登錄
-的代碼，設在 `frontend/.env`）覆寫，值沒有對應目錄就在主控台記一筆警告並退回 `en`。生效的語言在掛載
-之前決定：`localStorage` 裡的 `struo.uiLocale` 若是已登錄的目錄就用它，否則用預設；i18n 的 fallback 也
-指向預設，`<html lang>` 隨語言更新。一個 Pinia store 的 `set()` 同時切換 i18n、更新 `<html>` 的 `lang`
-屬性、把選擇存下來，並拒絕沒有對應目錄的值。App shell 裡的 `UiLanguageSwitcher` 是唯一會呼叫它的
-元件，只登錄一個目錄時整個元件不渲染。
+的代碼；dev server 讀 `frontend/.env`，映像建置讀你提交的 `frontend/.env.production`）覆寫，值沒有
+對應目錄就在主控台記一筆警告並退回 `en`。生效的語言在掛載之前決定：`localStorage` 裡的
+`struo.uiLocale` 若是已登錄的目錄就用它，否則用預設；i18n 的 fallback 也指向預設，`<html lang>`
+隨語言更新。一個 Pinia store 的 `set()` 同時切換 i18n、更新 `<html>` 的 `lang` 屬性、把選擇存下來，
+並拒絕沒有對應目錄的值。App shell 裡的 `UiLanguageSwitcher` 是唯一會呼叫它的元件，只登錄一個目錄時
+整個元件不渲染。
 
 加一個介面語言：
 

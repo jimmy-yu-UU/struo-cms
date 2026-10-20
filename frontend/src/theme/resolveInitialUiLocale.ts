@@ -10,7 +10,7 @@ export function readSavedUiLocale(): string | null {
   }
 }
 
-// Pure: the saved value wins only when it is one of the enabled locales; otherwise the configured default.
+// Pure: the saved value wins only when it is one of the enabled locales; otherwise the build default.
 export function resolveInitialUiLocale(
   saved: string | null,
   enabled: readonly UiLocale[],

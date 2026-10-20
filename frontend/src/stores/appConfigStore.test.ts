@@ -15,7 +15,7 @@ describe('appConfigStore', () => {
     expect(store.brandLogoUrl).toBeNull()
   })
 
-  it('load() tolerates a config without the removed uiLocales fields', async () => {
+  it('load() ignores fields it does not know in /api/config', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
       oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 8,
     })

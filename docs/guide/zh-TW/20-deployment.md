@@ -214,7 +214,7 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 監聽 `80`，用 nginx 提供 Vite 的 production build。跟 API 映像不同，這裡沒有 `HEALTHCHECK`：
 沒有下游依賴可以探測，要探測就直接打 `/`。
 
-SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 production 模式下會讀
+SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI_LOCALE`）是建置期就烤進映像裡的：`vite build` 在 production 模式下會讀
 `frontend/.env.production`（有這份檔案的話），`frontend/.dockerignore` 也刻意不把它排除在建置範圍
 之外，只排除開發者自己的 `.env`／`.env.local`／`.env.*.local`。儲存庫本身沒有附
 `.env.production`，只有追蹤中的 `frontend/.env.example`。改了這個值，要重新建置映像才會生效。

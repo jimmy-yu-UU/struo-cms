@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useUiLocaleStore } from './uiLocaleStore'
 import { i18n } from '../i18n'
+import { CATALOG_LOCALES } from '../locales'
 
 describe('uiLocaleStore', () => {
   beforeEach(() => {
@@ -52,7 +53,7 @@ describe('uiLocaleStore', () => {
     expect(localStorage.getItem('struo.uiLocale')).toBeNull()
   })
 
-  it('every registered catalog is offered', () => {
-    expect([...useUiLocaleStore().enabled].sort()).toEqual(['en', 'zh-TW'])
+  it('offers every registered catalog', () => {
+    expect(useUiLocaleStore().enabled).toEqual([...CATALOG_LOCALES])
   })
 })

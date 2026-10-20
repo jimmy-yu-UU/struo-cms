@@ -264,7 +264,7 @@ The image listens on `80`, serving Vite's production build through nginx. Unlike
 there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
 `/` directly.
 
-The SPA's API address is baked into the image at build time: `vite build` in production mode reads
+The SPA's API address and default admin-UI language (`VITE_API_BASE_URL`, `VITE_DEFAULT_UI_LOCALE`) are baked into the image at build time: `vite build` in production mode reads
 `frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
 exclude such a file from the build context — only the developer's own
 `.env`/`.env.local`/`.env.*.local`. The repository itself carries no `.env.production`, only the
