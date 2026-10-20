@@ -12,6 +12,12 @@
   `uiLocales` 與 `uiDefaultLocale`。i18n 的 fallback 語言是建置時的預設目錄。
 :::
 
+### 新增
+
+- [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、
+  `UserSecretsId`、Sonar 變數、範例專案、後台語言、`__Host-` cookie 前綴，以及 CSP 與轉送標頭設定。
+  根目錄新增 `SECURITY.md`，說明這個模板怎麼私下回報漏洞；fork 要換成自己的版本。
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger 破壞性變更

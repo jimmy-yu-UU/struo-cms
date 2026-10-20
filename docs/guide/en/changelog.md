@@ -14,6 +14,13 @@
   has `uiLocales` or `uiDefaultLocale`. The i18n fallback locale is the build's default catalog.
 :::
 
+### Added
+
+- [Chapter 25: After Forking](25-after-forking.md) lists what a fork changes first: the license
+  line, `UserSecretsId`, the Sonar variables, the sample, the admin-UI language, the `__Host-` cookie
+  prefix, the CSP and forwarded-header settings. A root `SECURITY.md` describes private vulnerability
+  reporting for this template; a fork replaces it with its own.
+
 ## 0.11.0 — 2026-10-20
 
 ::: danger Breaking

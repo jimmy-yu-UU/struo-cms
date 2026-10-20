@@ -8,7 +8,7 @@ fork 要換成自己的。每一項都寫了做什麼、為什麼、怎麼做，
 根目錄的 `LICENSE` 是 MIT。MIT 要求每一份副本都附上原本的著作權聲明與授權全文，所以不要刪掉
 原來那一行。
 
-在原有的 `Copyright (c) …` 之下加一行自己的，例如 `Copyright (c) 2027 Your Name`。fork 加進
+在原有的 `Copyright (c) …` 之下加一行自己的，例如 `Copyright (c) <year> Your Name`。fork 加進
 來的程式碼是你的，原本的部分仍屬於原作者。
 
 ## 2. `UserSecretsId`：重新產生
@@ -34,7 +34,7 @@ secret `SONAR_TOKEN`。變數與 secret 都在儲存庫的 Settings → Secrets 
 它，就要把另外三個一起設齊，否則 job 會在缺值的情況下失敗。fork 的 pull request 與 Dependabot
 的 pull request 讀不到 secret，這兩種情況 job 一律跳過。
 
-## 4. `samples/Blog`：刪掉
+## 4. `samples/Struo.Sample.Blog`：刪掉
 
 `samples/Struo.Sample.Blog` 是學習用的範例，不是你的專案的一部分。看完就刪；它不只是一個目錄，
 測試專案也拿它的集合當 fixture，所以要按清單清乾淨。完整步驟在
@@ -66,11 +66,18 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 有名稱。
 
 名稱是 `src/Struo.Api/Auth/AuthSchemes.cs` 裡的常數 `SessionCookieName`，沒有設定鍵。把它改成
-`__Host-struo.session` 即可；CSRF 與 session 輪替的 middleware 讀的是同一個常數。有兩件事要先
-知道：
+`__Host-struo.session` 即可；CSRF 與 session 輪替的 middleware 讀的是同一個常數。
+[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)裡寫的字面 `struo.session`
+也會跟著變。先知道三件事：
 
-- 前綴要求 `Secure`，所以整條路都要走 HTTPS。把 `Auth:Cookie:RequireSecure` 設成 `false` 的環境
-  （見[第 20 章](20-deployment.md)〈Cookie 只在 HTTPS 下送回〉）瀏覽器會直接拒收這個 cookie。
+- 前綴要求 `Secure`，但只有面對瀏覽器的來源必須是 HTTPS。Development 之外，不論 API 自己看到的是
+  什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。把
+  `Auth:Cookie:RequireSecure` 設成 `false` 的環境，瀏覽器會直接拒收這個 cookie。
+- 這個常數在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
+  `SameAsRequest`：在 `http://localhost` 上 cookie 沒有 `Secure`，瀏覽器拒收，本機登入與 e2e 測試
+  都會失敗。本機執行與 e2e 的主機要設 `Auth__Cookie__RequireSecure=true`，cookie 就會帶
+  `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的瀏覽器（Safari）
+  本機就得走 HTTPS。
 - cookie 改名之後，所有已登入的人都會被登出一次。
 
 ## 8. 圖片或 API 在另一個來源：`CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
@@ -79,17 +86,18 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 presigned URL、另一個主機上的 `Branding:LogoUrl`）時，瀏覽器會擋掉；SPA 直接呼叫另一個來源的
 API 也一樣。
 
-映像建置之後，用環境變數 `CSP_IMG_EXTRA`（附加到 `img-src`）與 `CSP_CONNECT_EXTRA`（附加到
-`connect-src`）補上，值是以空白分隔的來源，例如 `https://cdn.example.com`。完整說明見
+容器啟動時，用環境變數 `CSP_IMG_EXTRA`（附加到 `img-src`）與 `CSP_CONNECT_EXTRA`（附加到
+`connect-src`）補上，nginx 範本在那時才渲染，不必重新建置映像，值是以空白分隔的來源，例如 `https://cdn.example.com`。完整說明見
 [第 20 章：部署](20-deployment.md)的〈後台 SPA 映像〉。
 
 ## 9. 後台前面還有一層反向代理：`ForwardedHeaders`
 
-API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`。API 前面有反向代理
-時，API 看到的客戶端位址就是代理自己，登入的 IP 限流因此失效，OIDC 在 TLS 於代理終止時也會組出
+API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`。不信任的話，API 看到的
+客戶端位址就是直接呼叫它的那一端，啟用登入的 IP 限流時會因此失準，TLS 在代理終止時 OIDC 也會組出
 `http` 的 redirect URI。
 
 設 `ForwardedHeaders__Enabled=true`，並用 `ForwardedHeaders__KnownProxies__0` 或
-`ForwardedHeaders__KnownNetworks__0` 列出你的代理。後台映像裡的 nginx 本身就是一層代理，再往前
-加一層時有兩跳，API 只認其中一跳，細節與外層代理要設的標頭見
+`ForwardedHeaders__KnownNetworks__0` 列出 API 自己的那一層代理。API 前面是後台映像時，那一層就是
+後台 nginx 容器：API 看到的客戶端是那個容器，所以要列容器的位址（或專用網路的範圍），而不是你外層的
+代理。外層代理多出來的是第二跳，API 不會採信。細節與外層代理要設的標頭見
 [第 20 章：部署](20-deployment.md)的〈反向代理後面要啟用 `ForwardedHeaders`〉那一節。

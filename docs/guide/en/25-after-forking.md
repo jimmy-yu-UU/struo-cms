@@ -9,7 +9,7 @@ what to do, why, and how. They don't depend on each other, so do the ones that a
 The `LICENSE` at the repository root is MIT. MIT requires every copy to carry the original copyright
 notice and the license text, so don't remove the existing line.
 
-Add your own line below the existing `Copyright (c) …`, for example `Copyright (c) 2027 Your Name`.
+Add your own line below the existing `Copyright (c) …`, for example `Copyright (c) <year> Your Name`.
 The code your fork adds is yours; the original parts stay with the original author.
 
 ## 2. `UserSecretsId`: regenerate it
@@ -38,7 +38,7 @@ nothing to do. Once you set it, set the other three too, or the jobs fail on the
 Pull requests from forks and from Dependabot can't read the secret, so the jobs are always skipped
 for them.
 
-## 4. `samples/Blog`: delete it
+## 4. `samples/Struo.Sample.Blog`: delete it
 
 `samples/Struo.Sample.Blog` is a learning aid, not part of your project. Delete it once you've read
 it. It reaches beyond its own directory, because the test project uses its collections as a fixture,
@@ -75,32 +75,42 @@ cookie is already `Path=/` with no `Domain`; only the name is missing.
 
 The name is the constant `SessionCookieName` in `src/Struo.Api/Auth/AuthSchemes.cs`, with no
 configuration key. Change it to `__Host-struo.session`; the CSRF and session-rotation middleware read
-the same constant. Two things to know first:
+the same constant. The literal `struo.session` shown in
+[Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
+things to know first:
 
-- The prefix requires `Secure`, so every hop must be HTTPS. A setup with `Auth:Cookie:RequireSecure`
-  set to `false` (see "Cookies come back only over HTTPS" in
-  [Chapter 20](20-deployment.md)) has its cookie rejected by the browser.
+- The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
+  Development the cookie is `Secure` whatever scheme the API itself sees, so nginx can still talk to
+  the API over plain http. A setup with `Auth:Cookie:RequireSecure` set to `false` has its cookie
+  rejected by the browser.
+- The constant applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
+  `SameAsRequest`: over `http://localhost` the cookie carries no `Secure`, the browser rejects it, and
+  local login and the e2e suite fail. Set `Auth__Cookie__RequireSecure=true` for local runs and the
+  e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
+  `http://localhost`. A browser that doesn't (Safari) needs HTTPS locally.
 - Renaming the cookie signs everyone out once.
 
 ## 8. Images or the API on another origin: `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA`
 
 The `Content-Security-Policy` the admin image sends allows only its own origin. When images come from
 somewhere else (a CDN, a bucket's presigned URL, a `Branding:LogoUrl` on another host), the browser
-blocks them; so it does when the SPA calls an API on another origin directly.
+blocks them. It also blocks the SPA when it calls an API on another origin directly.
 
 Add the origins with the environment variables `CSP_IMG_EXTRA` (appended to `img-src`) and
-`CSP_CONNECT_EXTRA` (appended to `connect-src`) when the container starts. The value is
+`CSP_CONNECT_EXTRA` (appended to `connect-src`) when the container starts; the nginx template is rendered at that point, so no rebuild is needed. The value is
 space-separated origins such as `https://cdn.example.com`. The full description is in "The admin SPA
 image" in [Chapter 20: Deployment](20-deployment.md).
 
 ## 9. A reverse proxy in front of the admin nginx: `ForwardedHeaders`
 
 The API doesn't trust `X-Forwarded-For`, `X-Forwarded-Proto` or `X-Forwarded-Host` by default.
-With a reverse proxy in front, the client address the API sees is the proxy's own, the login IP rate
-limit stops working, and OIDC builds an `http` redirect URI when TLS ends at the proxy.
+Without that, the client address the API sees is its direct caller's, which breaks the login IP rate
+limit if you enable it, and OIDC builds an `http` redirect URI when TLS ends at a proxy.
 
-Set `ForwardedHeaders__Enabled=true` and list your proxy in `ForwardedHeaders__KnownProxies__0` or
-`ForwardedHeaders__KnownNetworks__0`. The nginx in the admin image is itself a proxy; adding another
-in front of it makes two hops and the API honours only one. The details, and the headers the outer
+Set `ForwardedHeaders__Enabled=true` and list the API's own proxy in
+`ForwardedHeaders__KnownProxies__0` or `ForwardedHeaders__KnownNetworks__0`. With the admin image in
+front of the API, that proxy is the admin nginx container: the API sees that container as its
+client, so list the container's address (or a dedicated network's range), not your outer proxy. The
+outer proxy adds a second hop that the API doesn't honour. The details, and the headers the outer
 proxy has to set, are in "Behind a reverse proxy, enable `ForwardedHeaders`" in
 [Chapter 20: Deployment](20-deployment.md).
