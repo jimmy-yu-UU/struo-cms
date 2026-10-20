@@ -5,17 +5,17 @@ frontend/
 docs/
 .git/
 .github/
-*.log
-App_Data/
-TestResults/
-.sonarqube/
-.scannerwork/
+**/*.log
+**/App_Data/
+**/TestResults/
+**/.sonarqube/
+**/.scannerwork/
 **/appsettings.Development.json
 .claude/
 .superpowers/
-.idea/
-.env
-dist/
+**/.idea/
+**/.env
+**/dist/
 # samples/ is deliberately NOT excluded here: the ch.23 sample opt-in adds a
 # ProjectReference into samples/, so excluding it would break `docker build .`
 # for exactly the forks that opted into the sample.
