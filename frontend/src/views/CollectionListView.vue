@@ -12,6 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import DataTable, { type DataTableColumn, type DataTableState, toSortParam } from '@/components/data/DataTable.vue'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import FilterBuilder, { type FilterField } from '@/components/data/FilterBuilder.vue'
+import CreateUserDialog from '@/components/account/CreateUserDialog.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
@@ -23,7 +24,8 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
-import { LANGUAGE_COLLECTION, NON_CREATABLE_COLLECTIONS } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, NON_CREATABLE_COLLECTIONS, USER_COLLECTION } from '../lib/frameworkCollections'
+import type { CreatedUser } from '@/api/usersApi'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
 
@@ -42,7 +44,15 @@ const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
-const canCreate = computed(() => canWrite.value && !NON_CREATABLE_COLLECTIONS.has(name.value))
+// Users are created through a dialog backed by POST /api/users (super-admin only), not the generic
+// item form, so `user` is creatable for super-admins alone.
+const isUserCollection = computed(() => name.value === USER_COLLECTION)
+const canCreate = computed(() => canWrite.value && (
+  isUserCollection.value
+    ? auth.user?.isSuperAdmin === true
+    : !NON_CREATABLE_COLLECTIONS.has(name.value)
+))
+const createUserOpen = ref(false)
 const mode = ref<'active' | 'trash'>('active')
 const showTrashSwitch = computed(() => !!meta.value?.softDelete && canDelete.value)
 const columns = computed(() => (meta.value ? selectListColumns(meta.value) : []))
@@ -251,7 +261,16 @@ function onEdit(row: Row): void {
 }
 
 function onNew(): void {
+  if (isUserCollection.value) {
+    createUserOpen.value = true
+    return
+  }
   router.push({ name: 'collection-create', params: { name: name.value } })
+}
+
+async function onUserCreated(created: CreatedUser): Promise<void> {
+  await loadItems()
+  router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
 }
 
 function setMode(m: 'active' | 'trash'): void {
@@ -303,7 +322,7 @@ async function onRestore(row: Row): Promise<void> {
 onMounted(loadItems)
 
 defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
-  canWrite, canCreate, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
+  canWrite, canCreate, createUserOpen, onUserCreated, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
   error, cellValue, tableState, filters })
 </script>
 
@@ -347,6 +366,8 @@ defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilter
         <Trash2 class="size-4" aria-hidden="true" />
         {{ t('collectionList.trashNotice') }}
       </p>
+
+      <CreateUserDialog v-if="isUserCollection && canCreate" v-model:open="createUserOpen" @created="onUserCreated" />
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 

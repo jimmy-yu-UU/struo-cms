@@ -44,8 +44,9 @@
 - JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
   照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
 - 透過通用項目 API 建立 `user`（`POST /api/items/user`、GraphQL `createUser`）現在回 `400`
-  `BAD_USER_INPUT` 並指向 `POST /api/users`，跟 `file` 原本的做法一致。過去它插入的資料列沒有密碼，
-  無法登入。後台的使用者與檔案清單也不再顯示「新增」按鈕。
+  `BAD_USER_INPUT` 並指向 `POST /api/users`，跟 `file` 原本的做法一致：建立使用者需要密碼雜湊與密碼
+  原則，只有這個端點會套用。後台由超級管理員在使用者清單按「新增」，開啟背後呼叫 `POST /api/users`
+  的對話框來建立使用者；檔案清單沒有「新增」按鈕。
 - 外部（OIDC）登入現在可以在 `pnpm dev` 下使用。Vite 開發伺服器把 `/signin-oidc` 與
   `/signout-callback-oidc` 轉發給 API，且所有代理路徑都保留瀏覽器的 `Host`，所以提供者拿到的
   `redirect_uri` 是 `http://localhost:5173/signin-oidc`，不再是 `:5221`。開發時請向提供者登記這個

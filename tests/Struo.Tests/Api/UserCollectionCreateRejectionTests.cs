@@ -7,9 +7,9 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-// User rows carry a password hash and sessions, which only POST /api/users sets up. The generic
-// create path would insert a user nobody can sign in as, so it is refused on both surfaces, before
-// any duplicate-email check.
+// Creating a user needs the password hashing and password policy that only POST /api/users
+// applies, so the generic create path is refused on both surfaces, before any duplicate-email
+// check.
 [Collection("ApiIntegration")]
 public class UserCollectionCreateRejectionTests(ApiFactory factory)
 {

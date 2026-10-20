@@ -297,19 +297,57 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-create', params: { name: 'article' } })
   })
 
-  it.each(['user', 'file'])('hides the New button for the %s collection (created elsewhere)', async (collection) => {
+  function seedCollection(collection: string) {
     const schema = useSchemaStore()
     schema.collections = [{ name: collection, label: collection, defaultDisplayField: 'status', fields: [], relations: [] }]
     schema.loaded = true
     seedLanguage()
-    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
     mockRoute.params.name = collection
+  }
+
+  it('hides the New button for the file collection (created by upload)', async () => {
+    seedCollection('file')
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const w = mountView()
     await flushPromises()
     expect((w.vm as any).canWrite).toBe(true)
     expect(w.text()).not.toContain('New')
     expect((w.vm as any).canCreate).toBe(false)
+  })
+
+  it('hides the New button on user for a non-super-admin with a write grant', async () => {
+    seedCollection('user')
+    useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true } } } as any
+    const w = mountView()
+    await flushPromises()
+    expect((w.vm as any).canWrite).toBe(true)
+    expect(w.text()).not.toContain('New')
+    expect((w.vm as any).canCreate).toBe(false)
+  })
+
+  it('shows New on user for a super-admin and opens the create-user dialog instead of the item form', async () => {
+    seedCollection('user')
+    pushMock.mockClear()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('New')
+    const vm: any = w.vm
+    expect(vm.canCreate).toBe(true)
+    vm.onNew()
+    expect(vm.createUserOpen).toBe(true)
+    expect(pushMock).not.toHaveBeenCalled()
+  })
+
+  it('navigates to the new user edit page after the dialog creates one', async () => {
+    seedCollection('user')
+    pushMock.mockClear()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    await (w.vm as any).onUserCreated({ id: 'new-id', email: 'a@b.c' })
+    expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'user', id: 'new-id' } })
   })
 
   it('shows the New button for an ordinary collection with write permission', async () => {

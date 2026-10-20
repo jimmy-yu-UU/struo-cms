@@ -181,9 +181,9 @@ public sealed class ItemService(
         if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
             throw new QueryException(
                 "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
-        // User rows need a password hash and credential bookkeeping that only POST /api/users sets
-        // up; a generically created user could never sign in. Checked before any email rule, so a
-        // duplicate address is a 400 as well. Reads, updates and deletes are unaffected.
+        // Creating a user needs the password hashing and password policy that only POST /api/users
+        // applies. Checked before any email rule, so a duplicate address is a 400 as well. Reads,
+        // updates and deletes are unaffected.
         if (string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase))
             throw new QueryException(
                 "Users cannot be created through the generic items API. Create one with POST /api/users instead.");

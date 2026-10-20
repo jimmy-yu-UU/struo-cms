@@ -52,9 +52,10 @@
   at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored
   with, and WebP and AVIF files still report their coded size.
 - Creating a `user` through the generic items API (`POST /api/items/user`, GraphQL `createUser`) now
-  returns `400` `BAD_USER_INPUT` pointing at `POST /api/users`, the same way `file` already does. The
-  row it used to insert had no password and could not sign in. The admin UI no longer shows the
-  "New" button on the user and file lists.
+  returns `400` `BAD_USER_INPUT` pointing at `POST /api/users`, the same way `file` already does:
+  creating a user needs the password hashing and password policy that only that endpoint applies.
+  In the admin UI, a super-admin creates users from the "New" button on the user list, which opens a
+  dialog backed by `POST /api/users`; the file list has no "New" button.
 - External (OIDC) sign-in now works under `pnpm dev`. The Vite dev server forwards `/signin-oidc` and
   `/signout-callback-oidc` to the API and keeps the browser's `Host` on every proxied path, so the
   provider's `redirect_uri` is `http://localhost:5173/signin-oidc` instead of `:5221`. Register that
