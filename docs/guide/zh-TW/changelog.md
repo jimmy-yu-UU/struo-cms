@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.11.0
+## 0.11.0 — 2026-10-20
 
 ::: danger 破壞性變更
 - `SchemaCheckReport` 的 `Errors` 與 `Warnings` 是方法：`GetErrors()` 與 `GetWarnings()`。呼叫它們的程式

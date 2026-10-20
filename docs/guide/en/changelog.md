@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0
+## 0.11.0 — 2026-10-20
 
 ::: danger Breaking
 - `Errors` and `Warnings` on `SchemaCheckReport` are methods: `GetErrors()` and `GetWarnings()`. Code that
