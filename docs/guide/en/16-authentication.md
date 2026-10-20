@@ -50,9 +50,9 @@ are deliberately indistinguishable. Success returns `200` with `{ id }` and no o
 `POST /api/users` creates a user, and only a super-admin can call it: success returns `201` with a
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
 route, since there's no dedicated `GET /api/users/{id}`. The generic `POST /api/items/user` refuses
-to create a user (`400`), because only this endpoint sets the password. An email already in use returns `409`
-`CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the configuration
-keys, are in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md).
+to create a user (`400`), because only this endpoint sets the password. An email already in use
+returns `409` `CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the
+configuration keys, are in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
 Changing a password goes through `PUT /api/users/{id}/password`: the caller is either a
 super-admin, or the account owner supplying `currentPassword` — the owner's own change always
