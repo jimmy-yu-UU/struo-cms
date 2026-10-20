@@ -27,7 +27,7 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 | 欄位名稱（junction 讀寫） | `<rel>Links` | `tagsLinks` |
 
 每個產生出來的名稱都必須唯一，主機在啟動時就會檢查。集合的名稱若跟其他集合、或跟 schema 一律存在的
-名稱撞在一起，啟動會以 `MetadataException` 中止，訊息點名相關的集合與撞名的名稱。兩個集合的產生名稱
+名稱撞在一起，啟動會中止，原因鏈裡有一個 `MetadataException`，訊息點名相關的集合與撞名的名稱。兩個集合的產生名稱
 相遇就算撞名，例如 `article` 與 `articleList`（都會產生型別 `ArticleList`），或 `category` 與
 `categories`（都會產生查詢欄位 `categories`）。集合若產生出內建名稱也算撞名，例如 `revision`（型別
 `Revision`）、`query`、`mutation`、`string`、`tagItem`。產生名稱是逐字比對的（GraphQL 名稱區分大小

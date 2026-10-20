@@ -268,8 +268,8 @@ function onNew(): void {
   router.push({ name: 'collection-create', params: { name: name.value } })
 }
 
-async function onUserCreated(created: CreatedUser): Promise<void> {
-  await loadItems()
+// The edit page replaces this view, so there is no list to refresh before navigating.
+function onUserCreated(created: CreatedUser): void {
   router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
 }
 

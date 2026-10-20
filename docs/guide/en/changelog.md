@@ -19,7 +19,9 @@
   `8080`.
 - `Struo:Files:ImageTransform:MaxConcurrentTransforms` must be at least `2`; `1` stops startup with an
   error naming the key. Anonymous requests now hold at most `MaxConcurrentTransforms - 1` transform
-  slots, so a fork that set `1` raises it to `2` or more.
+  slots, so a fork that set `1` raises it to `2` or more. With the shipped default of `2`, anonymous
+  cold transforms run one at a time; a fork that serves public images and wants more of them in
+  parallel raises the setting.
 :::
 
 ### Added
@@ -45,8 +47,9 @@
 
 - A collection whose generated GraphQL names collide with another collection's or with a built-in
   name (`article` with `articleList`, `category` with `categories`, a collection named `revision`)
-  now stops startup with a `MetadataException` that names the collection(s) and the clashing
-  name(s). It used to fail inside the GraphQL schema build with a duplicate-type error.
+  now stops startup with an error whose cause chain carries a `MetadataException` naming the
+  collection(s) and the clashing name(s). It used to fail inside the GraphQL schema build with a
+  duplicate-type error.
 - A JPEG's stored `width` and `height` now follow its Exif orientation: orientations 5 to 8 (a 90 degree
   turn) swap the two, so a portrait photo that a phone saved sideways reports the size it is displayed
   at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored

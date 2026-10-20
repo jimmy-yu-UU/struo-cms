@@ -17,7 +17,8 @@
   `8080`。
 - `Struo:Files:ImageTransform:MaxConcurrentTransforms` 至少要是 `2`；設成 `1` 會讓啟動失敗，並指出
   是哪個鍵。匿名請求現在最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以設為 `1` 的 fork
-  要改成 `2` 以上。
+  要改成 `2` 以上。出廠預設值是 `2`，此時匿名的冷轉換一次只跑一個；對外提供公開圖片、想讓匿名請求有
+  更多並行的 fork，請調高這個設定。
 :::
 
 ### 新增

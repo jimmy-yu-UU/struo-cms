@@ -32,8 +32,8 @@ Blog sample's `article` as the example:
 | Field name (junction read/write) | `<rel>Links` | `tagsLinks` |
 
 Every generated name must be unique, and the host checks that at startup. A collection whose names
-collide with another collection's or with a name the schema always contains stops startup with a
-`MetadataException` that names the collection(s) and the clashing name(s). Two collections collide
+collide with another collection's or with a name the schema always contains stops startup; the
+cause chain carries a `MetadataException` that names the collection(s) and the clashing name(s). Two collections collide
 when their generated names meet, for example `article` and `articleList` (both produce the type
 `ArticleList`) or `category` and `categories` (both produce the query field `categories`). A
 collection collides with the built-in names when it generates one of them, for example `revision`

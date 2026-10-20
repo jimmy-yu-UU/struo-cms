@@ -26,12 +26,14 @@ const emailError = ref('')
 const passwordError = ref('')
 const submitting = ref(false)
 
+// Reset in both directions: opening starts clean, and closing (cancel, Esc, success) drops the
+// typed passwords instead of keeping them in a component that stays mounted with the list.
 watch(() => props.open, (open) => {
+  password.value = ''
+  confirmPassword.value = ''
   if (!open) return
   email.value = ''
   name.value = ''
-  password.value = ''
-  confirmPassword.value = ''
   emailError.value = ''
   passwordError.value = ''
 })
@@ -81,9 +83,10 @@ function handleFailure(e: unknown): void {
       return
     }
     if (e.code === 'BAD_USER_INPUT') {
-      // The server's message names the actual rule (policy, max length, missing email); it is the
-      // only place that reason lives, so show it rather than composing a guess.
-      passwordError.value = e.message
+      // The server's message names the actual password rule (policy, max length); the maximum is
+      // never published to this client, so that message is the only place the reason lives. Fall
+      // back to the composed minimum-length text only if it ever arrives empty.
+      passwordError.value = e.message || t('password.tooShort', { min: appConfig.passwordMinLength })
       return
     }
     if (e.code === 'FORBIDDEN') {

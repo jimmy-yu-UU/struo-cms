@@ -100,4 +100,23 @@ describe('CreateUserDialog', () => {
     await fillAndSubmit(w, ['a@b.c', '', 'longenough1', 'longenough1'])
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.createUser.failed }))
   })
+
+  it('falls back to the minimum-length text when a 400 carries no message', async () => {
+    vi.mocked(usersApi.create).mockRejectedValue(new ApiError(400, '', 'BAD_USER_INPUT'))
+    const w = mountDialog()
+    await fillAndSubmit(w, ['a@b.c', '', 'longenough1', 'longenough1'])
+    expect(w.text()).toContain('at least 8')
+  })
+
+  it('clears both password fields when the dialog closes', async () => {
+    const w = mountDialog()
+    const inputs = w.findAll('input')
+    await inputs[2].setValue('longenough1')
+    await inputs[3].setValue('longenough1')
+    const state = w.vm as unknown as { password: string; confirmPassword: string }
+    expect(state.password).toBe('longenough1')
+    await w.setProps({ open: false })
+    expect(state.password).toBe('')
+    expect(state.confirmPassword).toBe('')
+  })
 })

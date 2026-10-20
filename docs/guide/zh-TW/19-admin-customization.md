@@ -273,8 +273,9 @@ loopback，Vite 因此只綁 `[::1]`，不釘的話瀏覽器打 `http://localhos
 [第 3 章：快速開始](03-getting-started.md)的走法完全不用另外設定 CORS，瀏覽器眼裡只有
 Vite 這一個來源。
 
-想讓 dev SPA 接另一個 API 實例，改 `frontend/vite.proxy.ts` 的 `target` 就好，同源這個模式沒有另一個前端專屬
-的 base URL 設定。
+想讓 dev SPA 接另一個 API 實例，改 `frontend/vite.proxy.ts` 的 `API_TARGET`，同源這個模式沒有另一個前端專屬
+的 base URL 設定。依主機名稱路由的遠端 API 還要在 `/api` 加上 `changeOrigin: true`，否則瀏覽器的
+`localhost:5173` `Host` 對不上。這會讓 OIDC 的 `redirect_uri` 離開 `:5173`，改向提供者註冊那個主機的回呼網址。
 
 真要讓 SPA 部署在跟 API 不同的來源，才需要在 `frontend/.env`（從追蹤中的
 `frontend/.env.example` 複製）設 `VITE_API_BASE_URL` 為 API 的完整來源。這個變數只在三

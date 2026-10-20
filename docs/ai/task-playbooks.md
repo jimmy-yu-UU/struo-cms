@@ -129,8 +129,9 @@ picker instead of a plain text input) — frontend-only, no backend change:
    surfaces as a misleading `ObjectDisposedException` on `IServiceProvider` (from
    `WebApplicationFactory` tearing down a host that never finished starting), not as an error naming
    `SchemaTypeMapper` or the new enum member at all. Name collisions between collections are a
-   different case: `GraphQlNameValidator` checks them at startup and throws a `MetadataException`
-   naming the collections and the names (its fixed-name lists are kept in step with the built schema
+   different case: `GraphQlNameValidator` checks them at startup and the failure's cause chain
+   carries a `MetadataException` naming the collections and the names (under `WebApplicationFactory`
+   the same `ObjectDisposedException` masking applies) (its fixed-name lists are kept in step with the built schema
    by `GraphQlNameCollisionTests`; a new shared GraphQL type or root field goes into those lists).
 4. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
    JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set

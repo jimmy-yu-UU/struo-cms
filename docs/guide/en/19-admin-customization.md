@@ -322,8 +322,11 @@ browser's `Host` and builds the OIDC redirect URI on `:5173`. That same-origin s
 [Chapter 3: Getting Started](03-getting-started.md)'s walkthrough needs no separate CORS
 configuration at all — the browser sees only Vite as its one origin.
 
-Pointing the dev SPA at a different API instance is just a matter of changing `target` in
-`frontend/vite.proxy.ts`; this same-origin pattern has no admin-SPA-specific base-URL setting.
+Pointing the dev SPA at a different API instance means changing `API_TARGET` in
+`frontend/vite.proxy.ts`; this same-origin pattern has no admin-SPA-specific base-URL setting. A
+remote API that routes by host name also needs `changeOrigin: true` on `/api`, because the
+browser's `localhost:5173` `Host` would not match it. That moves the OIDC `redirect_uri` off
+`:5173`, so register that host's callback with the provider instead.
 
 `VITE_API_BASE_URL` is needed only when the SPA runs on a different origin from the API; set it in
 `frontend/.env` (copied from the tracked `frontend/.env.example`) to the API's full origin. This

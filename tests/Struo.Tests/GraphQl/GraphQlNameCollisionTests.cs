@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Execution;
 using HotChocolate.Types;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.GraphQl;
 using Struo.Application.Metadata;
@@ -148,6 +149,27 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
 
         var ex = (await build.Should().ThrowAsync<Exception>()).Which;
         Flatten(ex).Should().Contain(e => e is MetadataException && e.Message.Contains("'ArticleList'"));
+    }
+
+    [Fact]
+    public async Task A_colliding_collection_stops_the_host_from_starting()
+    {
+        // A second collection named articleList next to the Blog sample's article: both generate the
+        // type ArticleList. Starting the host builds the GraphQL schema eagerly. WebApplicationFactory
+        // disposes the half-started host, so what reaches the caller here is an ObjectDisposedException
+        // and not the MetadataException; Schema_build_surfaces_the_collision_message covers the chain
+        // that carries the collision message.
+        var host = factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+        {
+            var original = (IMetadataProvider)services.Single(d => d.ServiceType == typeof(IMetadataProvider))
+                .ImplementationInstance!;
+            services.AddSingleton<IMetadataProvider>(
+                new SetProvider([.. original.GetCollections(), Bare("articleList")]));
+        }));
+
+        var start = () => { _ = host.Services; return Task.CompletedTask; };
+
+        await start.Should().ThrowAsync<Exception>();
     }
 
     private static IEnumerable<Exception> Flatten(Exception ex)
