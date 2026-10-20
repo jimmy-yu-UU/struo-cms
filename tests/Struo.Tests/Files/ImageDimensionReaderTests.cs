@@ -311,13 +311,13 @@ public class ImageDimensionReaderTests
         new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().BeNull();
     }
 
-    // APP1 segment: "Exif  ", a TIFF header and an IFD0 holding one Orientation entry.
+    // APP1 segment: "Exif\0\0", a TIFF header and an IFD0 holding one Orientation entry.
     internal static byte[] ExifApp1(int orientation, bool bigEndian = false, int entryTag = 0x0112, int entryType = 3)
     {
         var ms = new MemoryStream();
         void U16(int v) { if (bigEndian) ms.Write([(byte)(v >> 8), (byte)v]); else ms.Write([(byte)v, (byte)(v >> 8)]); }
         void U32(int v) { if (bigEndian) { U16(v >> 16); U16(v & 0xFFFF); } else { U16(v & 0xFFFF); U16(v >> 16); } }
-        ms.Write("Exif  "u8);
+        ms.Write("Exif\0\0"u8);
         ms.Write(bigEndian ? "MM"u8 : "II"u8);
         U16(0x2A);
         U32(8);
@@ -416,6 +416,31 @@ public class ImageDimensionReaderTests
         seg[4 + 6 + 4] = 0xFF;   // IFD0 offset (little-endian) now points far past the segment
         seg[4 + 6 + 5] = 0xFF;
         var jpeg = JpegWithExif(seg, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_with_an_ifd_offset_of_0xFFFFFFFF_keeps_its_dimensions()
+    {
+        var seg = ExifApp1(6);
+        for (var i = 4 + 6 + 4; i < 4 + 6 + 8; i++) seg[i] = 0xFF;
+        var jpeg = JpegWithExif(seg, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
+    }
+
+    [Fact]
+    public void Jpeg_xmp_app1_before_the_exif_app1_does_not_hide_the_orientation()
+    {
+        var xmp = "http://ns.adobe.com/xap/1.0/ <x:xmpmeta/>"u8.ToArray();
+        byte[] xmpSegment = [0xFF, 0xE1, (byte)((xmp.Length + 2) >> 8), (byte)(xmp.Length + 2), .. xmp];
+        var jpeg = WithSof([.. Jpeg((0xE0, 14)), .. xmpSegment, .. ExifApp1(6)], 0xC0, 400, 300);
+        new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((300, 400));
+    }
+
+    [Fact]
+    public void Jpeg_first_valid_exif_orientation_wins_over_a_later_app1()
+    {
+        var jpeg = WithSof([.. Jpeg((0xE0, 14)), .. ExifApp1(1), .. ExifApp1(6)], 0xC0, 400, 300);
         new ImageDimensionReader().TryRead(new MemoryStream(jpeg), "image/jpeg").Should().Be((400, 300));
     }
 

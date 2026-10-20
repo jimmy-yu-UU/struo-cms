@@ -47,8 +47,7 @@ MIME type; `size` is the actual number of bytes stored.
 `width` and `height` are filled in only when the dimensions can be read from the header —
 every other upload, image or not, leaves both blank. For a JPEG they follow the Exif orientation:
 a photo tagged as turned by 90 degrees is stored with width and height swapped, matching how it is
-displayed. WebP and AVIF keep their coded size, and rows uploaded before this behaviour keep the
-dimensions they were stored with. `status` is the only one of its own fields
+displayed. WebP and AVIF keep their coded size. `status` is the only one of its own fields
 that's writable, and it decides who can read this row and its bytes, covered in the next section.
 
 `folderId` isn't a `[CmsField]` — it's a many-to-one relation declared with `[CmsRelation]`,

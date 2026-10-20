@@ -100,8 +100,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
         rows[0].Alt.Should().BeNull();
     }
 
-    [Fact]
-    public async Task Upload_of_a_jpeg_with_large_exif_and_icc_segments_records_its_dimensions()
+    private FileService ServiceWithRealImageReader()
     {
         var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
@@ -113,6 +112,13 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
             graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
         var svc = new FileService(
             _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
+        return svc;
+    }
+
+    [Fact]
+    public async Task Upload_of_a_jpeg_with_large_exif_and_icc_segments_records_its_dimensions()
+    {
+        var svc = ServiceWithRealImageReader();
         var jpeg = ImageDimensionReaderTests.JpegWithLargeMetadata(4000, 3000);
 
         var file = await svc.UploadAsync(new MemoryStream(jpeg), "phone.jpg", "image/jpeg", length: jpeg.Length);
@@ -124,16 +130,7 @@ public sealed class FileUploadFolderAndTitleTests : IDisposable
     [Fact]
     public async Task Upload_of_a_rotated_jpeg_stores_the_displayed_width_and_height()
     {
-        var collections = MetadataScanner.ScanTypes([typeof(File), typeof(MediaFolder)]);
-        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["file"] = typeof(File), ["mediafolder"] = typeof(MediaFolder),
-        });
-        var repo = new SqlSugarItemRepository(
-            _db, new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(File), typeof(MediaFolder)])),
-            graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
-        var svc = new FileService(
-            _db, new FileStorageServices(new NoopStorage(), new ImageDimensionReader(), new FileStorageOptions()), new FileServiceCollaborators(repo, _languages, new TestCurrentUserAccessor(Tester)));
+        var svc = ServiceWithRealImageReader();
         // A 4000x3000 frame whose Exif orientation is 6 (rotate 90) is displayed as 3000x4000.
         byte[] sof = [0xFF, 0xC0, 0, 11, 8, 0x0B, 0xB8, 0x0F, 0xA0, 1, 1, 0x11, 0];
         byte[] jpeg = [.. ImageDimensionReaderTests.Jpeg((0xE0, 14)), .. ImageDimensionReaderTests.ExifApp1(6), .. sof];

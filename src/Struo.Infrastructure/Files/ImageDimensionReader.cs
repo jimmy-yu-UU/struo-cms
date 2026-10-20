@@ -155,7 +155,7 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
     {
         if (!HasJpegSignature(b)) return null;
         s.Position = 2;
-        var orientation = 1;
+        var orientation = 0;   // 0: no valid Exif orientation seen yet
         while (true)
         {
             var marker = NextJpegMarker(s);
@@ -166,11 +166,11 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
             var len = ReadJpegSegmentLength(s);
             if (len < 2) return null;
             if (IsSofMarker(marker)) return Oriented(ReadJpegFrameSize(s, len), orientation);
-            if (marker == 0xE1)
+            if (marker == 0xE1 && orientation == 0)
             {
                 var payload = ReadSegmentPayload(s, len - 2);
                 if (payload is null) return null;
-                if (orientation == 1) orientation = ExifOrientation(payload);
+                orientation = ExifOrientation(payload);
             }
             else if (!SkipByReading(s, len - 2)) return null;
         }
@@ -195,29 +195,29 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
     }
 
     // APP1 "Exif\0\0", a TIFF header (II/MM byte order, 0x002A, IFD0 offset) and IFD0 entries of
-    // 12 bytes each; tag 0x0112 is a SHORT holding 1-8. Anything malformed or out of range means 1
-    // (upright), so a bad EXIF block never fails a read.
+    // 12 bytes each; tag 0x0112 is a SHORT holding 1-8. Anything malformed or out of range means
+    // 0 (no orientation), so a bad EXIF block never fails a read and a later APP1 may still supply one.
     private static int ExifOrientation(byte[] app1)
     {
-        if (app1.Length < 14 || !app1.AsSpan(0, 6).SequenceEqual("Exif\0\0"u8)) return 1;
+        if (app1.Length < 14 || !app1.AsSpan(0, 6).SequenceEqual("Exif\0\0"u8)) return 0;
         const int tiff = 6;
         var little = app1[tiff] == (byte)'I' && app1[tiff + 1] == (byte)'I';
-        if (!little && !(app1[tiff] == (byte)'M' && app1[tiff + 1] == (byte)'M')) return 1;
-        if (U16(app1, tiff + 2, little) != 0x2A) return 1;
+        if (!little && !(app1[tiff] == (byte)'M' && app1[tiff + 1] == (byte)'M')) return 0;
+        if (U16(app1, tiff + 2, little) != 0x2A) return 0;
 
         var ifd = (long)tiff + U32(app1, tiff + 4, little);
-        if (ifd + 2 > app1.Length) return 1;
+        if (ifd + 2 > app1.Length) return 0;
         var count = U16(app1, (int)ifd, little);
         for (var i = 0; i < count; i++)
         {
             var entry = ifd + 2 + (long)i * 12;
-            if (entry + 12 > app1.Length) return 1;
+            if (entry + 12 > app1.Length) return 0;
             if (U16(app1, (int)entry, little) != 0x0112) continue;
             var type = U16(app1, (int)entry + 2, little);
             var value = U16(app1, (int)entry + 8, little);
-            return type == 3 && value is >= 1 and <= 8 ? value : 1;
+            return type == 3 && value is >= 1 and <= 8 ? value : 0;
         }
-        return 1;
+        return 0;
     }
 
     private static int U16(byte[] b, int o, bool little) =>
