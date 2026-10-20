@@ -68,6 +68,32 @@ public sealed partial class CiWorkflowConventionTests
             "install .NET tools with `dotnet tool restore` from .config/dotnet-tools.json and use a pinned action or a locked dev dependency for anything else");
     }
 
+    [Theory]
+    [InlineData("struo-api:ci")]
+    [InlineData("struo-admin:ci")]
+    public void Docker_job_fails_on_a_fixable_high_or_critical_finding_in_each_image(string image)
+    {
+        var lines = WorkflowLines();
+        var start = Array.FindIndex(lines, l => l.TrimEnd() == "  docker:");
+        start.Should().BeGreaterThanOrEqualTo(0, "ci.yml has a docker job");
+        var jobLines = lines.Skip(start + 1).TakeWhile(l => !JobHeader().IsMatch(l));
+
+        var steps = new List<List<string>>();
+        foreach (var line in jobLines)
+        {
+            if (line.StartsWith("      - ", StringComparison.Ordinal)) steps.Add([]);
+            steps.LastOrDefault()?.Add(line.Trim());
+        }
+
+        var gate = steps.Where(s => s.Any(l => l.Contains("aquasecurity/trivy-action@") && l.Contains("uses:")))
+            .Where(s => s.Any(l => l == $"image-ref: {image}"))
+            .ToList();
+
+        gate.Should().Contain(
+            s => s.Contains("exit-code: '1'") && s.Contains("ignore-unfixed: true") && s.Contains("severity: HIGH,CRITICAL"),
+            "a gating Trivy scan must fail the job on fixable HIGH/CRITICAL findings, ignoring ones with no upstream fix");
+    }
+
     [Fact]
     public void Every_action_is_pinned_to_a_full_commit_sha()
     {

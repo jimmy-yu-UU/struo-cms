@@ -251,6 +251,12 @@ named volume `struo-ci-data`; the API then starts on the same volume and is poll
 `assets/index-` fragment in the response, proving the built assets are actually reachable through
 nginx.
 
+Right after the builds, Trivy scans both images and fails the job on any HIGH or CRITICAL
+vulnerability that has an upstream fix. Findings with no fix yet are ignored, so a CVE you cannot
+act on never blocks a merge. The same results are uploaded as SARIF to the repository's Security
+tab (code scanning), except on fork and Dependabot pull requests, whose token cannot write there;
+the blocking scan still runs on those.
+
 The Compose step runs `docker compose up --wait`, which builds its own images from the same two
 Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port
 8080 for the same `assets/index-` fragment, and an anonymous `/api/config` call through nginx. It

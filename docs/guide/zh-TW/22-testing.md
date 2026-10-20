@@ -211,6 +211,11 @@ API 映像先用 `Database__DbType=Sqlite`、
 `/health/ready` 直到健康；SPA 映像啟動後，輪詢首頁並確認回應裡有 `assets/index-` 這個片段，
 證明建置出來的資源真的能透過 nginx 拿到。
 
+建置完成後，Trivy 會立刻掃描兩個映像；只要有上游已提供修補版本的 HIGH 或 CRITICAL 漏洞，job
+就會失敗。尚無修補版本的項目會被忽略，所以你無從處理的 CVE 不會擋住合併。同一份結果也會以
+SARIF 上傳到儲存庫的 Security 分頁（code scanning）；fork 與 Dependabot 的 pull request 因為
+token 沒有寫入權限而略過上傳，但阻擋用的掃描照跑。
+
 Compose 那一段跑 `docker compose up --wait`，映像由同樣兩份 Dockerfile 另外建置；接著檢查
 8081 埠上 API 的 `/health/ready`、8080 埠上後台首頁有沒有同一個 `assets/index-` 片段，再透過
 nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --volumes`，有檢查失敗就先
