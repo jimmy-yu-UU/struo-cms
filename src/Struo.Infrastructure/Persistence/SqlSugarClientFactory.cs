@@ -84,6 +84,8 @@ public static class SqlSugarClientFactory
         // (config, Action<SqlSugarClient>) runs for EVERY inner context SqlSugarScope creates, which
         // is the semantically safe choice — confirmed by the full existing suite (soft-delete,
         // audit-field, revisions-transaction tests) staying green with this shape.
+        // The per-request cost of this scope is recorded in
+        // docs/ai/decisions/sqlsugarscope-per-request-cost.md.
         var client = new SqlSugarScope(config, db =>
         {
             // Soft-delete floor. Every Queryable over an ISoftDeletable entity excludes
