@@ -126,6 +126,14 @@
 
 ### Added
 
+- `ForwardedHeaders:Enabled` (default `false`), `ForwardedHeaders:KnownProxies` and
+  `ForwardedHeaders:KnownNetworks` make the API honour `X-Forwarded-For`, `X-Forwarded-Proto` and
+  `X-Forwarded-Host` from the listed proxies, ahead of authentication, session rotation and rate
+  limiting. A malformed address or CIDR range, or an enabled section with both lists empty, fails startup
+  naming the key. A deployment behind a reverse proxy that wants the real client address (the per-IP login
+  limiter) or an `https` OIDC redirect URI sets it; with it off, nothing changes. Chapters 4 and 20
+  describe it.
+
 - `[CmsCollection(Name = "...")]` pins a collection's name. The name is the key stored in permission
   grants, revisions and other rows, so a fork that sets it before it holds data can rename the C# class
   without orphaning them (a translation sidecar's foreign key property must still be `{ClassName}Id`). It
@@ -169,6 +177,19 @@
   fork whose images or API calls go to another origin must set them (see Breaking). The theme bootstrap is the file `theme-init.js`, not an inline script in `index.html`.
 
 ### Fixed
+
+- OIDC sign-in works behind the shipped admin nginx. The image proxies `/signin-oidc` and
+  `/signout-callback-oidc` to the API like `/api/`, and forwards the client's `Host` header with its port
+  as `Host` and `X-Forwarded-Host` (it sent the host name without the port), so the redirect URI the API
+  builds matches the one registered with the provider. A custom `Oidc:CallbackPath` outside `/api/` needs
+  its own `location` block in `frontend/nginx/default.conf.template`.
+
+- A failed or refused external sign-in (a provider error, a declined consent, a tenant, domain, email or
+  inactive-account refusal) redirects the browser to `/login?error=<code>`, where the login page shows a
+  localized message and then removes the parameter. The browser used to be left on a raw `401` JSON
+  response. The codes are `external_login_failed`, `external_login_denied` and
+  `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`; exception text
+  never reaches the URL. Chapter 16 lists them.
 
 - A `Query:DefaultLimit` larger than `Query:MaxLimit` fails startup with an error naming both keys; the
   host used to start and serve default pages larger than `MaxLimit`. A `Struo:ContentAssemblies` entry that

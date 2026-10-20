@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ const submitting = ref(false)
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const { t } = useI18n()
 const appConfig = useAppConfigStore()
 const { brandName, oidcEnabled } = storeToRefs(appConfig)
@@ -55,6 +56,27 @@ function loginErrorMessage(e: unknown): string {
     default: return t('login.failed')
   }
 }
+
+// The API ends a failed or refused external sign-in with /login?error=<code>. The code is looked up,
+// never displayed: an unknown value gets the generic message. Inactive reuses the password-login text.
+const SSO_ERROR_KEYS: Record<string, string> = {
+  external_login_failed: 'login.ssoFailed',
+  external_login_denied: 'login.ssoDenied',
+  external_login_NoEmail: 'login.ssoNoEmail',
+  external_login_EmailNotVerified: 'login.ssoEmailNotVerified',
+  external_login_DomainNotAllowed: 'login.ssoDomainNotAllowed',
+  external_login_TenantNotAllowed: 'login.ssoTenantNotAllowed',
+  external_login_Inactive: 'login.accountInactive',
+}
+
+onMounted(() => {
+  const code = route.query.error
+  if (code === undefined) return
+  const key = typeof code === 'string' && Object.hasOwn(SSO_ERROR_KEYS, code) ? SSO_ERROR_KEYS[code] : undefined
+  error.value = t(key ?? 'login.ssoFailed')
+  // Drop the param so a refresh does not show the message again.
+  router.replace({ name: 'login' })
+})
 
 function onSso() {
   window.location.href = `${apiBaseUrl}/auth/login/oidc?returnUrl=/`

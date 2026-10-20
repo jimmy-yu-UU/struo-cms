@@ -34,11 +34,13 @@ function blocks(): Block[] {
 }
 
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
+// Locations that forward to the API: /api/ and the two OIDC callback paths.
+const PROXIED = ['/api/', '= /signin-oidc', '= /signout-callback-oidc']
 
 describe('nginx template security headers', () => {
   it('finds the server block and the add_header locations', () => {
     const names = withHeaders.map((b) => b.name)
-    expect(names).toEqual(expect.arrayContaining(['server', '= /index.html', '/assets/']))
+    expect(names).toEqual(expect.arrayContaining(['server', '= /index.html', '/assets/', ...PROXIED]))
   })
 
   it.each(withHeaders.map((b) => [b.name, b] as const))(
@@ -49,24 +51,47 @@ describe('nginx template security headers', () => {
     },
   )
 
-  it.each(withHeaders.filter((b) => b.name !== '/api/').map((b) => [b.name, b] as const))(
+  it.each(withHeaders.filter((b) => !PROXIED.includes(b.name)).map((b) => [b.name, b] as const))(
     'block %s carries the application policy',
     (_name, b) => {
       expect(b.body).toContain(`add_header ${APP_CSP} always;`)
     },
   )
 
-  it('the /api/ location carries the sandbox policy and hides the upstream CSP', () => {
-    const api = blocks().find((b) => b.name === '/api/')!
-    expect(api.body).toContain(`add_header ${API_CSP} always;`)
-    expect(api.body).toContain('proxy_hide_header Content-Security-Policy;')
+  it.each(PROXIED)('the %s location carries the sandbox policy and hides the upstream CSP', (name) => {
+    const block = blocks().find((b) => b.name === name)!
+    expect(block.body).toContain(`add_header ${API_CSP} always;`)
+    expect(block.body).toContain('proxy_hide_header Content-Security-Policy;')
   })
 
-  it('the /api/ location repeats the other security headers', () => {
-    const api = blocks().find((b) => b.name === '/api/')!
+  it.each(PROXIED)('the %s location repeats the other security headers', (name) => {
+    const block = blocks().find((b) => b.name === name)!
     for (const h of ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Strict-Transport-Security']) {
-      expect(api.body).toContain(`add_header ${h} `)
+      expect(block.body).toContain(`add_header ${h} `)
     }
+  })
+})
+
+describe('nginx template API proxying', () => {
+  it('proxies the OIDC callback paths as exact-match locations', () => {
+    const names = blocks().map((b) => b.name)
+    expect(names).toContain('= /signin-oidc')
+    expect(names).toContain('= /signout-callback-oidc')
+  })
+
+  it.each(PROXIED)('the %s location proxies to the upstream and keeps the client host with its port', (name) => {
+    const block = blocks().find((b) => b.name === name)!
+    expect(block.body).toContain('proxy_pass $upstream;')
+    expect(block.body).toContain('set $upstream "${API_UPSTREAM}";')
+    expect(block.body).toContain('proxy_set_header Host $http_host;')
+    expect(block.body).toContain('proxy_set_header X-Forwarded-Host $http_host;')
+    expect(block.body).toContain('proxy_set_header X-Forwarded-Proto $scheme;')
+    expect(block.body).not.toMatch(/\$host/)
+  })
+
+  it('every proxied location is covered', () => {
+    const proxyPassBlocks = blocks().filter((b) => /proxy_pass/.test(b.body)).map((b) => b.name)
+    expect(proxyPassBlocks.sort()).toEqual([...PROXIED].sort())
   })
 })
 

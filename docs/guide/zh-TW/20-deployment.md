@@ -38,14 +38,20 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 
 帳號層的節流（`RateLimiting:LoginAccount`）預設開著，能單獨擋下針對單一帳號的暴力嘗試；IP 層
 的節流（`RateLimiting:Login`）預設關閉，因為它依 `Connection.RemoteIpAddress` 分桶：反向代理
-後面每個人看起來都是代理自己的位址，而共用一條對外 NAT 的辦公室即使代理設定正確，也一樣擠在
-同一個桶裡。兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
+後面（沒有透過 `ForwardedHeaders` 信任的代理）每個人看起來都是代理自己的位址，而共用一條對外 NAT
+的辦公室即使代理設定正確，也一樣擠在同一個桶裡。兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
 
-### 反向代理要自己加 `UseForwardedHeaders`
+### 反向代理後面要啟用 `ForwardedHeaders`
 
-`Program.cs` 沒有呼叫 `UseForwardedHeaders(...)`，是刻意的決定。部署在反向代理後面，要自己加
-上這個中介軟體並列出 `KnownProxies`／`KnownNetworks`；不加，`Connection.RemoteIpAddress` 看到
-的一律是代理自己的位址，不只是上面的登入 IP 限流，任何依賴用戶端位址的行為都會被打亂。
+除非 `ForwardedHeaders:Enabled` 是 `true`，API 一律忽略 `X-Forwarded-For`、`X-Forwarded-Proto`、
+`X-Forwarded-Host`。在反向代理後面，`Connection.RemoteIpAddress` 會停在代理自己的位址，TLS 在代理
+終結時請求的 scheme 也會停在 `http`。上面的登入 IP 限流、任何依賴用戶端位址的行為都會被打亂，OIDC
+還會組出提供者會拒絕的 `http` 重新導向網址。
+
+設 `ForwardedHeaders__Enabled=true`，並把代理列在 `ForwardedHeaders__KnownProxies__0`（位址）或
+`ForwardedHeaders__KnownNetworks__0`（CIDR 範圍，例如 Docker network 的範圍）。只有來自這些來源的
+請求才受信任；旗標打開卻兩個清單都空，或有格式錯誤的項目，主機會拒絕啟動並點名鍵。API 前面沒有
+代理時就維持關閉。
 
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 
@@ -208,6 +214,11 @@ SPA 的 API 位址是建置期就烤進映像裡的：`vite build` 在 productio
 線：`proxy_pass` 吃的是一個 nginx 變數，不是字面值，所以容器就算 API 還沒起來也能先啟動，代
 價是變數裡任何路徑片段都會取代請求的 URI，而不是被當成前綴接上去。
 
+映像會把 `/api/*`、`/signin-oidc` 與 `/signout-callback-oidc` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
+當作 `Host` 與 `X-Forwarded-Host` 轉送，讓 API 看到瀏覽器實際使用的來源。兩個回呼路徑是 OIDC 的重新導向
+目標；`/api/` 之外的自訂 `Oidc:CallbackPath` 要在範本另加一個 `location` 區塊。登記重新導向網址的做法見
+第 16 章。
+
 `HSTS_VALUE` 預設空字串，nginx 遇到值是空字串的 `add_header` 就完全不送這個標頭；只有在這裡
 或前面的代理已經終結 TLS 的每一個可觸達請求上，才該把它設起來。不管 `HSTS_VALUE` 怎麼設，
 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
@@ -224,7 +235,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 ```
 
 指令稿只能從映像本身載入（主題初始化是檔案 `theme-init.js`，不是內嵌指令稿），頁面不能被嵌入框架，
-表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 代理出去的回應改帶
+表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 與這兩個 OIDC 回呼路徑代理出去的回應改帶
 `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`，API 自己在那裡送的
 政策會被丟掉。
 
@@ -249,7 +260,7 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 
 ### 映像之外還要自己做的事
 
-映像只負責把應用程式跑起來。終結 TLS、設定 `UseForwardedHeaders`、重啟策略、水平擴展、密鑰
+映像只負責把應用程式跑起來。終結 TLS、API 前有代理時設定 `ForwardedHeaders`、重啟策略、水平擴展、密鑰
 注入，以及把 `/health/live` 與 `/health/ready` 接到編排系統自己的探針上，都要自己接。
 
 ### 兩個映像一起驗證

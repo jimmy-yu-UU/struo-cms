@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
 using Struo.Application.Security;
@@ -73,23 +74,40 @@ public static class OidcWiring
                     ctx.Principal = principal;
                 },
 
-                OnRemoteFailure = ctx =>
-                {
-                    ctx.HandleResponse();
-                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return ctx.Response.WriteAsJsonAsync(new { error = new { message = "External login failed." } });
-                },
-
-                OnAccessDenied = ctx =>
-                {
-                    ctx.HandleResponse();
-                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return ctx.Response.WriteAsJsonAsync(new { error = new { message = "External login denied." } });
-                }
+                OnRemoteFailure = OnRemoteFailure,
+                OnAccessDenied = OnAccessDenied
             };
         });
 
         return services;
+    }
+
+    private const string FailedCode = "external_login_failed";
+    private const string DeniedCode = "external_login_denied";
+
+    private static readonly HashSet<string> RefusalCodes = Enum.GetNames<ExternalLoginFailure>()
+        .Select(RefusalCode)
+        .ToHashSet(StringComparer.Ordinal);
+
+    private static string RefusalCode(string failure) => $"external_login_{failure}";
+
+    /// <summary>Ends a failed sign-in (provider error, or a refusal raised by OnTokenValidated) on the SPA
+    /// login page. Only a fixed code reaches the URL, never the exception text.</summary>
+    public static Task OnRemoteFailure(RemoteFailureContext ctx)
+    {
+        var message = ctx.Failure?.Message;
+        var code = message is not null && RefusalCodes.Contains(message) ? message : FailedCode;
+        return RedirectToLogin(ctx, code);
+    }
+
+    /// <summary>Ends a sign-in the user declined at the provider on the SPA login page.</summary>
+    public static Task OnAccessDenied(AccessDeniedContext ctx) => RedirectToLogin(ctx, DeniedCode);
+
+    private static Task RedirectToLogin(HandleRequestContext<RemoteAuthenticationOptions> ctx, string code)
+    {
+        ctx.Response.Redirect($"/login?error={Uri.EscapeDataString(code)}");
+        ctx.HandleResponse();
+        return Task.CompletedTask;
     }
 
     /// <summary>Resolves/JIT-provisions the local user for a validated external principal and returns the

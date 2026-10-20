@@ -7,8 +7,12 @@ import { useAppConfigStore } from '../stores/appConfigStore'
 import { i18n } from '../i18n'
 import { ApiError } from '../api/apiClient'
 
-const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+const { push, replace, route } = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  route: { query: {} as Record<string, unknown> },
+}))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: () => route }))
 
 const mountLogin = () => mount(LoginView, { global: { plugins: [i18n] } })
 
@@ -16,6 +20,7 @@ describe('LoginView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    route.query = {}
     i18n.global.locale.value = 'zh-TW'
   })
 
@@ -109,6 +114,51 @@ describe('LoginView', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(wrapper.text()).toContain('登入失敗,請稍後再試。') // t('login.failed')
     expect(wrapper.text()).not.toContain('Something broke.')
+  })
+
+  // ---- external-login failure redirected here by the API as /login?error=<code> ----
+
+  it.each([
+    ['external_login_failed', '外部登入失敗,請再試一次。'],
+    ['external_login_denied', '外部登入已取消或遭拒絕。'],
+    ['external_login_NoEmail', '外部帳號未提供 Email,無法登入。'],
+    ['external_login_EmailNotVerified', '外部帳號的 Email 尚未驗證,無法登入。'],
+    ['external_login_DomainNotAllowed', '此 Email 網域不在允許的範圍內。'],
+    ['external_login_TenantNotAllowed', '此組織租用戶不在允許的範圍內。'],
+    ['external_login_Inactive', '此帳號已停用,請聯絡管理者。'],
+  ])('shows the localized message for ?error=%s', async (code, message) => {
+    route.query = { error: code }
+    const wrapper = mountLogin()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="alert"]').text()).toBe(message)
+  })
+
+  it('shows the same messages in English', async () => {
+    i18n.global.locale.value = 'en'
+    route.query = { error: 'external_login_denied' }
+    const wrapper = mountLogin()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="alert"]').text()).toBe('External sign-in was cancelled or refused.')
+  })
+
+  it('falls back to a generic message for an unknown ?error= code (even an inherited property name) and never echoes it', async () => {
+    route.query = { error: 'constructor' }
+    const wrapper = mountLogin()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="alert"]').text()).toBe('外部登入失敗,請再試一次。')
+    expect(wrapper.html()).not.toContain('constructor')
+  })
+
+  it('removes the error query param after showing it so a refresh does not repeat it', async () => {
+    route.query = { error: 'external_login_failed' }
+    mountLogin()
+    expect(replace).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  it('shows no alert and leaves the URL alone without ?error=', () => {
+    const wrapper = mountLogin()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(replace).not.toHaveBeenCalled()
   })
 
   it('hides the SSO button when oidc is disabled', () => {

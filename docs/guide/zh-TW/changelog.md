@@ -99,6 +99,12 @@
 
 ### 新增
 
+- `ForwardedHeaders:Enabled`（預設 `false`）、`ForwardedHeaders:KnownProxies` 與
+  `ForwardedHeaders:KnownNetworks` 讓 API 認列出的代理送來的 `X-Forwarded-For`、`X-Forwarded-Proto`、
+  `X-Forwarded-Host`，套用在驗證、工作階段輪替與速率限制之前。位址或 CIDR 範圍格式錯誤，或啟用卻兩個清單
+  都空，啟動會失敗並點名鍵。部署在反向代理後面、需要真正的用戶端位址（每個 IP 的登入限流）或 `https`
+  OIDC 重新導向網址的，才需要設定；關閉時一切照舊。第 4、20 章有說明。
+
 - `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
   所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
   仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
@@ -136,6 +142,17 @@
   presigned URL）的 fork 必須設定它們（見破壞性變更）。主題初始化是檔案 `theme-init.js`，不再是 `index.html` 裡的內嵌指令稿。
 
 ### 修正
+
+- OIDC 登入可以在隨附的管理映像 nginx 後面運作。映像把 `/signin-oidc` 與 `/signout-callback-oidc` 和
+  `/api/` 一樣代理給 API，並把用戶端的 `Host` 標頭連同埠號當作 `Host` 與 `X-Forwarded-Host` 轉送（原本送的是
+  不含埠號的主機名稱），讓 API 組出的重新導向網址與向提供者登記的一致。`/api/` 之外的自訂
+  `Oidc:CallbackPath` 要在 `frontend/nginx/default.conf.template` 另加一個 `location` 區塊。
+
+- 外部登入失敗或被拒絕（提供者錯誤、使用者拒絕同意、tenant、網域、email 或停用帳號的拒絕）時，瀏覽器會被
+  導向 `/login?error=<code>`，登入頁顯示在地化的訊息後移除該參數；原本瀏覽器會停在一段原始的 `401` JSON
+  回應上。代碼是 `external_login_failed`、`external_login_denied`，以及
+  `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`；例外訊息絕不會進到
+  網址。第 16 章列出這些代碼。
 
 - `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁
   的筆數會超過 `MaxLimit`。`Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出

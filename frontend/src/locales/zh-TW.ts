@@ -104,6 +104,12 @@ export default {
     hidePassword: '隱藏密碼',
     invalidCredentials: 'Email 或密碼不正確。',
     accountInactive: '此帳號已停用,請聯絡管理者。',
+    ssoFailed: '外部登入失敗,請再試一次。',
+    ssoDenied: '外部登入已取消或遭拒絕。',
+    ssoNoEmail: '外部帳號未提供 Email,無法登入。',
+    ssoEmailNotVerified: '外部帳號的 Email 尚未驗證,無法登入。',
+    ssoDomainNotAllowed: '此 Email 網域不在允許的範圍內。',
+    ssoTenantNotAllowed: '此組織租用戶不在允許的範圍內。',
   },
   dashboard: {
     title: '儀表板',

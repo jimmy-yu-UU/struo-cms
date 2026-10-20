@@ -318,6 +318,26 @@ Development 之外打開之前，前面要自己加一層驗證。
 查詢（introspection 與 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器
 IDE 另外只認開發環境，不受這個鍵控制。
 
+## ForwardedHeaders
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `ForwardedHeaders:Enabled` | 布林 | `false` |
+| `ForwardedHeaders:KnownProxies` | 字串陣列（IP 位址） | `[]` |
+| `ForwardedHeaders:KnownNetworks` | 字串陣列（CIDR 範圍） | `[]` |
+
+預設關閉，`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host` 都會被忽略，API 看到的是它實際
+收到的那條連線的位址、scheme 與 host。反向代理擋在 API 前面、而 API 需要知道真正的用戶端時才打開：
+每個 IP 的登入限流依這個位址分桶，OIDC 也靠 scheme 與 host 組出重新導向網址。
+
+`Enabled=true` 時，只有 TCP 來源列在 `KnownProxies`（單一位址）、或落在 `KnownNetworks`（CIDR，例如
+`172.16.0.0/12`）某個範圍內的請求才受信任，其他來源送的標頭一律忽略。至少要有一筆。值不是 IP 位址或
+CIDR 範圍，或兩個清單都空，主機會在啟動時拒絕，並在錯誤訊息點名鍵，例如
+`ForwardedHeaders:KnownNetworks:0`。`Enabled=false` 時不會讀這兩個清單。
+
+這個中介軟體排在請求記錄、驗證、工作階段輪替與速率限制之前，只認一層代理。環境變數用索引給陣列，
+例如 `ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`。
+
 ## RateLimiting
 
 | 鍵 | 型別 | 預設值 |
@@ -340,12 +360,12 @@ IDE 另外只認開發環境，不受這個鍵控制。
 自己回，訊息固定。
 
 `Login:*` 是以用戶端 IP 分桶的固定視窗限制，只保護 `POST /api/auth/login`；預設關閉，因為後
-台使用者常共用同一個對外 IP，開啟後容易連坐擋下整個辦公室，即使 `UseForwardedHeaders` 設定正
+台使用者常共用同一個對外 IP，開啟後容易連坐擋下整個辦公室，即使 `ForwardedHeaders` 設定正
 確也一樣。
 
-要在反向代理後面啟用，得先自己加上 `UseForwardedHeaders` 並列出
-`KnownProxies`／`KnownNetworks`——這個專案預設沒有註冊它。這層狀態留在行程記憶體，不會跨副本
-共用；跨副本的 IP 限制要放在前面的閘道或 WAF。
+要在反向代理後面啟用，也要設 `ForwardedHeaders:Enabled`，並把代理列在 `KnownProxies` 或
+`KnownNetworks`（上面的 `ForwardedHeaders` 一節）；不設，所有用戶端都擠在代理自己的那個桶裡。
+這層狀態留在行程記憶體，不會跨副本共用；跨副本的 IP 限制要放在前面的閘道或 WAF。
 
 `LoginAccount:*` 依請求帶的 email 分桶，在驗證密碼之前就先把這次嘗試記上，被擋下的請求不會消耗
 Argon2id 運算，同時發出的猜測也不可能一起溜過上限；登入成功會清空該帳號的計數。不論帳號存不存
@@ -446,6 +466,9 @@ Oidc:Scopes = ["openid", "email", "profile"]
 第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；`AllowedTenantId`、
 `RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
 身分提供者裡 email 對得上的人都能接管一個密碼帳號。
+
+`CallbackPath` 是身分提供者把瀏覽器導回來的路徑。要向提供者登記的重新導向網址，是使用者開啟
+管理介面的來源加上這個路徑；代理端的做法見[第 16 章](16-authentication.md)。
 
 `RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的；`AllowedTenantId` 不是，預設
 值是打不中任何 tenant 的 `REPLACE_TENANT_ID`，在替換之前會擋掉所有外部登入。正式環境啟用
