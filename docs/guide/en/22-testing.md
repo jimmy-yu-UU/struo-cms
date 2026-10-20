@@ -251,6 +251,17 @@ named volume `struo-ci-data`; the API then starts on the same volume and is poll
 `assets/index-` fragment in the response, proving the built assets are actually reachable through
 nginx.
 
+Right after the builds, Trivy scans both images and fails the job on any HIGH or CRITICAL
+vulnerability that has an upstream fix. Findings with no fix yet are ignored, so a CVE you cannot
+act on never blocks a merge. The same results are uploaded as SARIF to the repository's Security
+tab (code scanning), except where that upload is skipped (see below);
+the blocking scan still runs everywhere.
+
+The SARIF upload runs only on the public repository's pushes and same-repository pull requests.
+It is skipped on private repositories, because code scanning there needs GitHub Advanced Security
+and the upload would fail without it. A private repository with code scanning enabled can drop the
+`github.event.repository.private` condition from the `sarif-gate` step.
+
 The Compose step runs `docker compose up --wait`, which builds its own images from the same two
 Dockerfiles. It then checks the API's `/health/ready` on port 8081, the admin home page on port
 8080 for the same `assets/index-` fragment, and an anonymous `/api/config` call through nginx. It
@@ -266,14 +277,15 @@ the `SONAR_TOKEN` secret and read the organization and project keys from the rep
 without `SONAR_ORGANIZATION` skips both jobs. A Dependabot update always skips them, and a pull
 request only runs them when its source branch and the target are in the same repository.
 
-`sonar-backend` first installs the two `dotnet-sonarscanner` and `dotnet-coverage` CLI tools,
-runs `dotnet-sonarscanner begin`, builds normally, wraps `dotnet test` with
-`dotnet-coverage collect` to produce `coverage.xml`, then sends the analysis with
-`dotnet-sonarscanner end`.
+`sonar-backend` first restores the two `dotnet-sonarscanner` and `dotnet-coverage` CLI tools at
+the versions pinned in `.config/dotnet-tools.json`, runs `dotnet dotnet-sonarscanner begin`,
+builds normally, wraps `dotnet test` with `dotnet dotnet-coverage collect` to produce
+`coverage.xml`, then sends the analysis with `dotnet dotnet-sonarscanner end`.
 
 `sonar-frontend` starts with the same `pnpm install --frozen-lockfile --ignore-scripts`, then
 `pnpm vitest run --coverage --coverage.reporter=lcov` to produce the coverage report first, then
-sends it with `pnpm dlx sonarqube-scanner`.
+sends it with SonarSource's `sonarqube-scan-action`, pinned by commit SHA and updated by
+Dependabot.
 
 ## The five standing gates
 

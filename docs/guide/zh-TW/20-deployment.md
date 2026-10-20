@@ -173,9 +173,11 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 只有 `/app/App_Data` 另外宣告成 `VOLUME`，就算 `docker run` 完全不帶 `--mount`／`-v`，這裡也
 會拿到一個匿名 volume。
 
-`HEALTHCHECK` 每 30 秒打一次 `http://localhost:8080/health/live`（5 秒逾時、30 秒啟動寬
-限、3 次重試），打的是 liveness，不是 `/health/ready`。`docker ps`／`docker inspect` 看到的
-健康狀態，因此只代表「行程還在回應」，不代表資料庫或快取連得上。
+`HEALTHCHECK` 每 30 秒打一次 `localhost` 上的 `/health/live`（5 秒逾時、30 秒啟動寬限、3 次
+重試）。埠號取自 `ASPNETCORE_HTTP_PORTS`（值是以 `;` 分隔的清單時取第一個，沒設是 8080），
+不讀 `ASPNETCORE_URLS`，所以要改埠請用 `ASPNETCORE_HTTP_PORTS`。打的是 liveness，不是
+`/health/ready`。`docker ps`／`docker inspect` 看到的健康狀態，因此只代表「行程還在回應」，
+不代表資料庫或快取連得上。
 
 ### 啟動這個映像至少要給什麼
 
@@ -211,8 +213,8 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 
 ### 後台 SPA 映像
 
-監聽 `80`，用 nginx 提供 Vite 的 production build。跟 API 映像不同，這裡沒有 `HEALTHCHECK`：
-沒有下游依賴可以探測，要探測就直接打 `/`。
+監聽 `8080`，以非 root 使用者 `nginx` 執行 nginx，提供 Vite 的 production build。跟 API 映像不同，這裡沒有
+`HEALTHCHECK`：沒有下游依賴可以探測，要探測就直接打 `/`。
 
 SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI_LOCALE`）是建置期就烤進映像
 裡的：`vite build` 在 production 模式下會讀 `frontend/.env.production`（有這份檔案的話），
@@ -284,7 +286,7 @@ docker network create struo-verify
 docker volume create struo-verify-data
 docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
-docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
+docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema` 與 `Applied 202610080001  SeedCoreData`。
@@ -358,10 +360,15 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 網路介面上，同一個網路裡的其他機器就連得到，固定的開發密碼與沒有密碼的 Redis 也跟著公開。
 只在信得過的網路上這樣做。
 
+`api` 服務開出它的埠（`STRUO_API_PORT`，預設 8081）只是為了本機除錯。把 `STRUO_BIND_ADDRESS` 改成
+非 loopback 時，也要把 `docker-compose.yml` 裡 `api` 的 `ports` 對應拿掉：照前面檢查清單的建議，
+從後台 nginx 的 `/api/` 連 API，不要直接開出去。
+
 健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
 `http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，
 從後台的埠打 `/health/...` 拿到的是 SPA 頁面。Compose 替 `api` 另外設了每 5 秒一次的健康檢查，
-`docker compose up --wait` 不必等映像預設的 30 秒間隔。
+`docker compose up --wait` 不必等映像預設的 30 秒間隔。映像的健康檢查與 Compose 的探測都從
+`ASPNETCORE_HTTP_PORTS` 讀埠號（沒設就是 8080；值是以 `;` 分隔的清單時取第一個）。
 
 DataProtection 金鑰掛在 volume `struo-dpkeys`，容器重建也撐得住，但是明文存放：第一次啟動的
 log 會出現一筆 `No XML encryptor configured` 警告。開發與測試這樣就夠了；正式環境要照上面

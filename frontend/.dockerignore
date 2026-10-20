@@ -4,20 +4,21 @@
 # the build context, that reference resolves to nothing and vue-tsc fails
 # with TS18003 ("No inputs were found"). e2e/ below is safe to exclude only
 # because no tsconfig in this project references it at all.
-node_modules/
-dist/
-coverage/
-test-results/
-playwright-report/
-blob-report/
+**/node_modules/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+# root-only: e2e/ exists only at the frontend root.
 e2e/
-*.log
+**/*.log
 # Vite's local, gitignored env files are excluded here -- .env is a developer's
 # own uncommitted file (Vite still loads it in production mode, so it would
 # otherwise reach the build), and .env.local/.env.*.local are its per-mode
 # equivalents. A frontend/.env.production you add and commit yourself
 # (VITE_API_BASE_URL and friends, see frontend/.env.example) is NOT excluded
 # and still reaches the image build.
-.env
-.env.local
-.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local

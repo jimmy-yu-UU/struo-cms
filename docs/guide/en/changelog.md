@@ -12,6 +12,11 @@
   variables and `AdminUi` keys from a fork's own configuration; the host ignores them.
 - `uiLocaleStore.configure(enabled, default)` is `uiLocaleStore.init()`, and `appConfigStore` no longer
   has `uiLocales` or `uiDefaultLocale`. The i18n fallback locale is the build's default catalog.
+- The admin image listens on container port `8080` instead of `80` and runs nginx as a non-root user. It
+  is built on `nginxinc/nginx-unprivileged`. The Compose mapping is now
+  `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
+  own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
+  `8080`.
 :::
 
 ### Added
@@ -20,6 +25,19 @@
   line, `UserSecretsId`, the Sonar variables, the sample, the admin-UI language, the `__Host-` cookie
   prefix, the CSP and forwarded-header settings. A root `SECURITY.md` describes private vulnerability
   reporting for this template; a fork replaces it with its own.
+- The `docker` CI job scans the API and admin images with Trivy and fails on any HIGH or CRITICAL
+  vulnerability that has an upstream fix. Results appear in Code scanning on the public repository.
+
+### Changed
+
+- The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
+  `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
+  `8080`, so a fork that changes the listening port keeps a working probe.
+
+### Security
+
+- `Directory.Packages.props` no longer suppresses GHSA-2m69-gcr7-jv3q; `SQLitePCLRaw` is 2.1.12 and
+  `dotnet list package --vulnerable` reports nothing.
 
 ## 0.11.0 — 2026-10-20
 

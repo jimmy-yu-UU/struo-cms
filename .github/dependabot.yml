@@ -89,10 +89,52 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
+  # The root Dockerfile follows the floating mcr `10.0` tags, which stay on .NET
+  # 10: a major bump to 11.0 would break net10.0, so mcr majors are ignored.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      docker-root-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
+
+  # frontend/Dockerfile pins the Node build stage and the nginx-unprivileged
+  # runtime stage to exact versions; Dependabot rewrites the tag. Node majors
+  # are ignored here: the Node major moves together with the CI frontend job's
+  # Node version. Same cooldowns as the other ecosystems, minor and patch
+  # grouped.
+  - package-ecosystem: docker
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      docker-frontend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
   # Backend versions are centralised in Directory.Packages.props, which is the
-  # file this reads. Leaving NuGet out would not have left the backend
-  # unprotected - Dependabot's security updates cover an ecosystem whether or
-  # not it is listed here - but it would have meant the backend moved only when
+  # file this reads, together with the tool manifest .config/dotnet-tools.json.
+  # Leaving NuGet out would not have left the backend unprotected - Dependabot's
+  # security updates cover an ecosystem whether or not it is listed here - but it
+  # would have meant the backend moved only when
   # something was found to be vulnerable, and drifted the rest of the time until
   # an upgrade spanned several majors at once. HtmlSanitizer sat pinned to a
   # beta for weeks and it took a manual audit to notice; that is the class of

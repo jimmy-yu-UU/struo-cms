@@ -16,6 +16,7 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -27,6 +28,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -58,6 +60,7 @@ jobs:
   # few seconds of work in total.
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: docs
@@ -100,10 +103,86 @@ jobs:
   # If the entry chunk is ever renamed, update the grep to match.
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - run: docker build --tag struo-api:ci .
-      - run: docker build --tag struo-admin:ci frontend
+      - id: build-api
+        run: docker build --tag struo-api:ci .
+      - id: build-admin
+        run: docker build --tag struo-admin:ci frontend
+      # Both images are scanned on every run and fail the job on a HIGH or CRITICAL
+      # finding that has an upstream fix. The SARIF copies feed the Security tab; only the upload
+      # is skipped for Dependabot, fork PRs and private repositories, where code scanning may be off.
+      - name: Scan struo-api:ci for fixable HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: struo-api:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          cache-dir: ${{ runner.temp }}/trivy
+      - name: Scan struo-admin:ci for fixable HIGH and CRITICAL vulnerabilities
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: struo-admin:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          cache-dir: ${{ runner.temp }}/trivy
+      - name: Decide whether results can be uploaded to code scanning
+        id: sarif-gate
+        if: ${{ !cancelled() }}
+        env:
+          ACTOR: ${{ github.actor }}
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PRIVATE_REPO: ${{ github.event.repository.private }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$PRIVATE_REPO" != "true" ] && [ "$ACTOR" != "dependabot[bot]" ] && { [ "$EVENT" != "pull_request" ] || [ "$HEAD_REPO" = "$THIS_REPO" ]; }; then
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Write the api scan as SARIF
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: struo-api:ci
+          format: sarif
+          output: trivy-api.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          limit-severities-for-sarif: true
+          cache-dir: ${{ runner.temp }}/trivy
+      - name: Upload the api scan to code scanning
+        if: ${{ !cancelled() && steps.build-api.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+      - name: Write the admin scan as SARIF
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: struo-admin:ci
+          format: sarif
+          output: trivy-admin.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          limit-severities-for-sarif: true
+          cache-dir: ${{ runner.temp }}/trivy
+      - name: Upload the admin scan to code scanning
+        if: ${{ !cancelled() && steps.build-admin.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-admin.sarif
+          category: trivy-admin
       # The named volume is created from the image's /app/App_Data, so the non-root `app`
       # user can write the SQLite file in both containers.
       - name: Smoke-test the API image against SQLite
@@ -125,7 +204,7 @@ jobs:
       - name: Smoke-test the admin image
         run: |
           trap 'docker rm --force admin' EXIT
-          docker run --detach --name admin --publish 8081:80 struo-admin:ci
+          docker run --detach --name admin --publish 8081:8080 struo-admin:ci
           for _ in $(seq 1 15); do
             if curl --fail --silent http://localhost:8081/ | grep --quiet 'assets/index-'; then exit 0; fi
             sleep 1
@@ -166,6 +245,7 @@ jobs:
   # without SONAR_ORGANIZATION skips them.
   sonar-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: >-
       vars.SONAR_ORGANIZATION != ''
       && github.actor != 'dependabot[bot]'
@@ -184,8 +264,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - run: dotnet tool install --global dotnet-sonarscanner
-      - run: dotnet tool install --global dotnet-coverage
+      # Versions come from .config/dotnet-tools.json, so a new release of either tool
+      # reaches CI only through a reviewed change to that file.
+      - run: dotnet tool restore
       - name: Resolve branch or pull request arguments
         env:
           EVENT: ${{ github.event_name }}
@@ -220,7 +301,7 @@ jobs:
         # and no coverage file is produced, so excluding them from coverage
         # here is what keeps the gate honest.
         run: >
-          dotnet-sonarscanner begin
+          dotnet dotnet-sonarscanner begin
           /k:"$SONAR_PROJECT_KEY"
           /o:"$SONAR_ORG"
           /d:sonar.host.url="https://sonarcloud.io"
@@ -233,14 +314,15 @@ jobs:
       # analyzers during compilation, which is why no snippet-level tool can
       # analyse this codebase.
       - run: dotnet build StruoCMS.slnx --configuration Release
-      - run: dotnet-coverage collect "dotnet test StruoCMS.slnx --no-build --configuration Release" -f xml -o coverage.xml
+      - run: dotnet dotnet-coverage collect "dotnet test StruoCMS.slnx --no-build --configuration Release" -f xml -o coverage.xml
       - name: End analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet-sonarscanner end
+        run: dotnet dotnet-sonarscanner end
 
   sonar-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: >-
       vars.SONAR_ORGANIZATION != ''
       && github.actor != 'dependabot[bot]'
@@ -271,26 +353,35 @@ jobs:
       # records 0% coverage, which is a statement about the report, not the tests.
       - run: pnpm vitest run --coverage --coverage.reporter=lcov
       - name: Resolve branch or pull request arguments
+        id: sonar-args
         env:
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
           REF_NAME: ${{ github.ref_name }}
+          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_FRONTEND_PROJECT_KEY }}
+        # The scan action parses `args` itself instead of handing it to a shell,
+        # so a branch name placed in it cannot inject anything. The project key
+        # and organization come from repository variables;
+        # frontend/sonar-project.properties holds everything else.
         run: |
+          args="-Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.organization=$SONAR_ORG"
           if [ "$EVENT" = pull_request ]; then
-            printf 'SONAR_ARGS=-Dsonar.pullrequest.key=%s -Dsonar.pullrequest.branch=%s -Dsonar.pullrequest.base=%s\n' \
-              "$PR_NUMBER" "$HEAD_REF" "$BASE_REF" >> "$GITHUB_ENV"
+            args="$args -Dsonar.pullrequest.key=$PR_NUMBER -Dsonar.pullrequest.branch=$HEAD_REF -Dsonar.pullrequest.base=$BASE_REF"
           else
-            printf 'SONAR_ARGS=-Dsonar.branch.name=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+            args="$args -Dsonar.branch.name=$REF_NAME"
           fi
+          printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
+      # Pinned by SHA like every other action here; Dependabot's github-actions
+      # entry moves it. projectBaseDir is needed because `defaults.run.working-directory`
+      # applies to `run` steps only.
       - name: Analyze
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
-          SONAR_ORG: ${{ vars.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_FRONTEND_PROJECT_KEY }}
-        # The project key and organization come from repository variables;
-        # frontend/sonar-project.properties holds everything else.
-        # $SONAR_ARGS unquoted for the same reason as in sonar-backend.
-        run: pnpm dlx sonarqube-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.organization="$SONAR_ORG" $SONAR_ARGS
+        with:
+          projectBaseDir: frontend
+          args: ${{ steps.sonar-args.outputs.args }}

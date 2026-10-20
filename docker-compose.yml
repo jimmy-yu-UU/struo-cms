@@ -80,7 +80,7 @@ services:
     # Same probe as the image's HEALTHCHECK, polled more often so `up --wait` returns soon after the
     # API is live; start_period leaves room for the first start's migrations.
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live || exit 1"]
+      test: ["CMD-SHELL", "p=$${ASPNETCORE_HTTP_PORTS:-8080}; curl --fail --silent \"http://localhost:$${p%%;*}/health/live\" || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -97,7 +97,7 @@ services:
     environment:
       API_UPSTREAM: http://api:8080
     ports:
-      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_ADMIN_PORT:-8080}:80"
+      - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_ADMIN_PORT:-8080}:8080"
 
   # S3-compatible object storage. Only needed when Struo:Files:Backend is "s3";
   # the default "local" backend writes to App_Data/uploads and needs no container. Behind the

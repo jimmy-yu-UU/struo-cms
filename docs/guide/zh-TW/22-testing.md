@@ -211,6 +211,15 @@ API 映像先用 `Database__DbType=Sqlite`、
 `/health/ready` 直到健康；SPA 映像啟動後，輪詢首頁並確認回應裡有 `assets/index-` 這個片段，
 證明建置出來的資源真的能透過 nginx 拿到。
 
+建置完成後，Trivy 會立刻掃描兩個映像；只要有上游已提供修補版本的 HIGH 或 CRITICAL 漏洞，job
+就會失敗。尚無修補版本的項目會被忽略，所以你無從處理的 CVE 不會擋住合併。同一份結果也會以
+SARIF 上傳到儲存庫的 Security 分頁（code scanning）；有些情況會略過上傳（見下），但阻擋用的
+掃描到處都會跑。
+
+SARIF 上傳只在公開儲存庫的 push 與同儲存庫的 pull request 上執行。私有儲存庫會略過，因為那裡的
+code scanning 需要 GitHub Advanced Security，沒有的話上傳會失敗。已啟用 code scanning 的私有儲存庫
+可以把 `sarif-gate` 步驟裡的 `github.event.repository.private` 條件拿掉。
+
 Compose 那一段跑 `docker compose up --wait`，映像由同樣兩份 Dockerfile 另外建置；接著檢查
 8081 埠上 API 的 `/health/ready`、8080 埠上後台首頁有沒有同一個 `assets/index-` 片段，再透過
 nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --volumes`，有檢查失敗就先
@@ -225,13 +234,15 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 兩個 job 都跳過。Dependabot 送來的更新一律跳過，pull request 也只有在來源分支跟目標在同一個
 儲存庫時才跑。
 
-`sonar-backend` 先裝 `dotnet-sonarscanner`、`dotnet-coverage` 兩個 CLI 工具，跑一次
-`dotnet-sonarscanner begin`，接著正常建置，用 `dotnet-coverage collect` 包住 `dotnet test`
-產生 `coverage.xml`，最後 `dotnet-sonarscanner end` 送出分析結果。
+`sonar-backend` 先依 `.config/dotnet-tools.json` 釘住的版本還原 `dotnet-sonarscanner`、
+`dotnet-coverage` 兩個 CLI 工具，跑一次 `dotnet dotnet-sonarscanner begin`，接著正常建置，
+用 `dotnet dotnet-coverage collect` 包住 `dotnet test` 產生 `coverage.xml`，最後
+`dotnet dotnet-sonarscanner end` 送出分析結果。
 
 `sonar-frontend` 則是同一道 `pnpm install --frozen-lockfile --ignore-scripts`、
 `pnpm vitest run --coverage --coverage.reporter=lcov` 先產生涵蓋率報告，再用
-`pnpm dlx sonarqube-scanner` 送出。
+SonarSource 的 `sonarqube-scan-action` 送出，這個 action 以 commit SHA 釘住，
+由 Dependabot 更新。
 
 ## 五個 standing gate
 

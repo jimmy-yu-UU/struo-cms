@@ -212,8 +212,10 @@ volume mounted on any of them starts writable.
 Only `/app/App_Data` is also declared as a `VOLUME`, so even a `docker run` with no
 `--mount`/`-v` at all still gets an anonymous volume here.
 
-`HEALTHCHECK` hits `http://localhost:8080/health/live` every 30 seconds (5-second timeout, a
-30-second start period, 3 retries) — that's liveness, not `/health/ready`. The health status
+`HEALTHCHECK` hits `/health/live` on `localhost` every 30 seconds (5-second timeout, a 30-second
+start period, 3 retries). It takes the port from `ASPNETCORE_HTTP_PORTS` (the first entry of a
+`;`-separated list, 8080 when unset) and does not read `ASPNETCORE_URLS`, so set the port through
+`ASPNETCORE_HTTP_PORTS`. That's liveness, not `/health/ready`. The health status
 `docker ps`/`docker inspect` shows therefore means only "the process is still responding," not that
 the database or cache is reachable.
 
@@ -260,9 +262,9 @@ protection as any other secret.
 
 ### The admin SPA image
 
-The image listens on `80`, serving Vite's production build through nginx. Unlike the API image,
-there's no `HEALTHCHECK` here: there's no downstream dependency to probe, so probing means hitting
-`/` directly.
+The image listens on `8080` and runs nginx as the non-root user `nginx`, serving Vite's production
+build. Unlike the API image, there's no `HEALTHCHECK` here: there's no downstream dependency to probe,
+so probing means hitting `/` directly.
 
 The SPA's API address and default admin-UI language (`VITE_API_BASE_URL`, `VITE_DEFAULT_UI_LOCALE`)
 are baked into the image at build time: `vite build` in production mode reads
@@ -347,7 +349,7 @@ docker network create struo-verify
 docker volume create struo-verify-data
 docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
-docker run --detach --name admin --network struo-verify --publish 8081:80 struo-admin:local
+docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema` and
@@ -432,11 +434,17 @@ The PostgreSQL password is a fixed dev value and Redis has no password. Every po
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
 
+The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
+move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as
+well: reach the API through the admin's nginx at `/api/`, as the checklist above advises, instead of
+publishing it.
+
 The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
 `http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only
 `/api/*`, so `/health/...` on the admin port returns the SPA page. Compose gives `api` its own
 health check every 5 seconds, so `docker compose up --wait` doesn't wait out the image's default
-30-second interval.
+30-second interval. Both the image's health check and Compose's probe read the port from
+`ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry when it is a `;`-separated list).
 
 The DataProtection keys live in the `struo-dpkeys` volume and survive rebuilding the container, but
 in plain text: the first start logs a `No XML encryptor configured` warning. That's fine for

@@ -37,6 +37,26 @@ const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
 // Locations that forward to the API: /api/ and the two OIDC callback paths.
 const PROXIED = ['/api/', '= /signin-oidc', '= /signout-callback-oidc']
 
+describe('nginx template listen port', () => {
+  it('listens on the unprivileged port 8080', () => {
+    expect(template).toMatch(/^\s*listen\s+8080;/m)
+  })
+
+  it('does not put the listen port into directory redirects', () => {
+    expect(template).toMatch(/^\s*absolute_redirect\s+off;/m)
+  })
+
+  it('agrees with the Dockerfile, Compose and CI admin port', () => {
+    const repo = resolve(root, '..')
+    const read = (rel: string) => readFileSync(resolve(repo, rel), 'utf8')
+    expect(read('frontend/Dockerfile')).toMatch(/^EXPOSE 8080\s*$/m)
+    const compose = read('docker-compose.yml')
+    const admin = compose.slice(compose.indexOf('  admin:'))
+    expect(admin).toMatch(/STRUO_ADMIN_PORT:-\d+\}:8080"/)
+    expect(read('.github/workflows/ci.yml')).toMatch(/--name admin --publish \d+:8080 /)
+  })
+})
+
 describe('nginx template security headers', () => {
   it('finds the server block and the add_header locations', () => {
     const names = withHeaders.map((b) => b.name)
