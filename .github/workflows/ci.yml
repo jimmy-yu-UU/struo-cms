@@ -298,8 +298,7 @@ jobs:
           else
             args="$args -Dsonar.branch.name=$REF_NAME"
           fi
-          printf 'args=%s
-' "$args" >> "$GITHUB_OUTPUT"
+          printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
       # Pinned by SHA like every other action here; Dependabot's github-actions
       # entry moves it. projectBaseDir is needed because `defaults.run.working-directory`
       # applies to `run` steps only.

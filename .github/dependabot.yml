@@ -131,9 +131,10 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # Backend versions are centralised in Directory.Packages.props, which is the
-  # file this reads, together with the tool manifest .config/dotnet-tools.json. Leaving NuGet out would not have left the backend
-  # unprotected - Dependabot's security updates cover an ecosystem whether or
-  # not it is listed here - but it would have meant the backend moved only when
+  # file this reads, together with the tool manifest .config/dotnet-tools.json.
+  # Leaving NuGet out would not have left the backend unprotected - Dependabot's
+  # security updates cover an ecosystem whether or not it is listed here - but it
+  # would have meant the backend moved only when
   # something was found to be vulnerable, and drifted the rest of the time until
   # an upgrade spanned several majors at once. HtmlSanitizer sat pinned to a
   # beta for weeks and it took a manual audit to notice; that is the class of

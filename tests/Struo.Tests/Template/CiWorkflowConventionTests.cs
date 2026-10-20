@@ -29,6 +29,9 @@ public sealed partial class CiWorkflowConventionTests
     [GeneratedRegex(@"@[0-9a-f]{40}$")]
     private static partial Regex FullShaPin();
 
+    private static bool IsLocalOrDocker(string reference) =>
+        reference.StartsWith("./", StringComparison.Ordinal) || reference.StartsWith("docker://", StringComparison.Ordinal);
+
     private static string[] WorkflowLines() =>
         File.ReadAllLines(Path.Combine(RepoRoot.Find(), ".github", "workflows", "ci.yml"));
 
@@ -70,7 +73,7 @@ public sealed partial class CiWorkflowConventionTests
     {
         var offenders = WorkflowLines()
             .Select((line, i) => (match: UsesLine().Match(line), number: i + 1))
-            .Where(x => x.match.Success && !FullShaPin().IsMatch(x.match.Groups[1].Value))
+            .Where(x => x.match.Success && !IsLocalOrDocker(x.match.Groups[1].Value) && !FullShaPin().IsMatch(x.match.Groups[1].Value))
             .Select(x => $"ci.yml:{x.number}: {x.match.Groups[1].Value}")
             .ToList();
 
