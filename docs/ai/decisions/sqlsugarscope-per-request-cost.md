@@ -1,60 +1,73 @@
-# SqlSugarScope costs 50 to 100 microseconds per request, and the factory keeps it
+# SqlSugarScope adds about 70 microseconds per awaited call and retains memory per request
 
 ## Decision
 
-`SqlSugarClientFactory.Create` keeps returning a `SqlSugarScope`, built per request, with the
-soft-delete filter, `AuditAop` and `CancellationAop` attached in the configure action. Nothing is
-optimised. The measured overhead sits inside SqlSugar's own inner-client creation, which this
-repository's code does not control. The only lever is a plain `SqlSugarClient`, and that brings back
-the races the scope exists to prevent.
+Pending maintainer decision. `SqlSugarClientFactory.Create` returns a `SqlSugarScope` built per
+request, with the soft-delete filter, `AuditAop` and `CancellationAop` attached in the configure
+action. That shape is unchanged. The measurements below say it is not free: on SQLite it is above the
+5% bar, on PostgreSQL it sits at the bar, and it leaves a few hundred bytes of static state behind per
+request. No optimisation is chosen here.
 
 ## Why
 
-`Create` itself is cheap: 0.09 microseconds and 880 bytes, because the scope builds no inner client
-until the first query. The cost is paid at that first query, where SqlSugar builds an inner client and
-re-runs the configure action.
+A scope builds no inner client at construction (`Create` costs 90 ns). `SqlSugarScope.GetContext`
+picks the inner client on every member access:
 
-Measured against a plain `SqlSugarClient` on the same `ConnectionConfig`, with the same filter and
-audit attachments, one single-item read through `SqlSugarItemRepository.GetByIdAsync` costs more:
+- It builds a `StackTrace` with file info and scans up to 35 frames. If a frame is an async state
+  machine, the client lives in `CallContextAsync` (an `AsyncLocal`); otherwise in a `ThreadLocal`.
+- A client created inside an awaited `async` callee is discarded when that callee returns. Every
+  awaited repository call that is the first to touch the scope in its flow builds a new inner client
+  and re-runs the configure action. `Dispose` from the request flow builds one more, to dispose it.
+- Child flows inherit the client their parent already created, so a parent that touched the scope
+  hands all its children one shared connection.
 
-| Backend | Plain client | Scope | Difference | Share of the scope request |
-|---|---|---|---|---|
-| SQLite | 126 us / 54.7 KB | 176 us / 75.1 KB | +50 us / +20 KB | 28% |
-| PostgreSQL | 1259 us / 57.2 KB | 1324 us / 76.9 KB | +65 us / +20 KB | 4.9% (inside noise) |
+So the cost is per inner client, and a request creates several: one per awaited call, plus one at
+`Dispose`. Measured with 3 awaited `GetByIdAsync` calls and `Dispose`, 3 inner clients are created
+during the calls and a fourth at `Dispose`.
 
-Per request the scope adds about 50 to 100 microseconds and 20 KB. On PostgreSQL the confidence
-intervals of the two rows overlap, so the share is an upper estimate. On SQLite the share is above
-5%, but a read from a local file is the cheapest read a request can contain. The repository call is
-also a lower bound of a request: Kestrel, authentication, serialization and the response body are
-not in it. At 50 to 100 microseconds, the scope stays under 5% of any request that takes more than
-about 1 to 2 milliseconds.
+| Request of 3 awaited reads + Dispose | Plain client | Scope | Difference |
+|---|---|---|---|
+| SQLite | 352 us / 155 KB | 552 us / 238 KB | +200 us (36% of the scope request) |
+| PostgreSQL | 3764 us / 163 KB | 3987 us / 336 KB | +223 us (5.6%) |
 
-Additional async flows in one scope cost about 60 KB each, the same as a separate plain client, and
-about 35 microseconds each on SQLite against 19 for a plain client per flow. The rows are in the
-numbers below.
+A request with one awaited read shows +75 us on SQLite and +148 us on PostgreSQL (noisy). That is
+about 70 us and 30 KB per awaited call. A real request touches the scope from more flows than these
+three reads (permission resolution, session stores, language lookup), and also spends time outside
+the database, so the share on a live host falls between the two columns above.
 
-Replacing the scope with a plain client would save the difference and lose the guarantee in the
-factory comment: sibling GraphQL resolvers on separate threads each get their own inner client.
-`AuditAop` reads `ICurrentUserAccessor` per inner client, so any replacement would have to attach it
-to every client it hands out.
+Retained memory is separate from time. SqlSugar keeps one entry per scope in a static dictionary and
+never removes it. Over 10 000 request-shaped scopes the dictionary grew by 10 000 keys and the heap by
+about 145 B per request, on both backends. A plain client retained nothing. That is about 145 MB per
+million requests. The readiness shape (`DbReadinessCheck`: a synchronous lambda in `Task.Run`, which
+takes the `ThreadLocal` path) retained about 2.4 KB per call.
+
+Levers, none chosen:
+
+| Lever | Effect | Constraints |
+|---|---|---|
+| Keep the per-request scope | The measured cost above | None |
+| One singleton `SqlSugarScope` (SqlSugar's intended pattern) | One dictionary key; no per-request config and no `Dispose` client. Measured 3-read request: SQLite 525 us against 552, PostgreSQL within noise. Per-call inner clients and per-access `StackTrace` remain | `AuditAop` captures `ICurrentUserAccessor` at configure time, so it would have to resolve the user per call; a touch from the host's start-up flow would be inherited by every request; the DI lifetime of `ISqlSugarClient` changes |
+| Plain `SqlSugarClient` | No scope overhead | Loses the per-flow isolation the factory comment relies on for parallel GraphQL root fields |
+
+The filter and `CancellationAop` attach to the client, not to a request, so the singleton shape
+leaves them unchanged.
 
 ## Evidence
 
 ### Method
 
-A throwaway BenchmarkDotNet 0.15.8 project outside the repository, a Release build, referencing
+A throwaway BenchmarkDotNet 0.15.8 project outside the repository, Release build, referencing
 `Struo.Infrastructure` and `Struo.Sample.Blog` by project path. It is not committed.
 
-- Entity: the sample `Category`. Read: `GetByIdAsync("category", id)` on a repository built per call
-  over the client under test, the single-item read a request makes.
-- SQLite: a temporary file, one seeded row. PostgreSQL: the `web-struo-cms-test-db` database on a
-  local server, read-only queries, Npgsql pooling on, which is the production default.
-- Every process-wide cache (entity info, row binders, JIT) is warmed before measuring.
-- Scope path: `SqlSugarClientFactory.Create`. Plain path: `new SqlSugarClient(config)` on the
-  scope's own `ConnectionConfig`, plus the soft-delete filter and `AuditAop`. `CancellationAop` is
-  a no-op outside SQL Server.
-- Flows: N parallel `Task.Run` flows, each running the same read, on one scope, against N separate
-  plain clients, which is the lower bound a scope can reach.
+- Read: `SqlSugarItemRepository.GetByIdAsync("category", id)` on a repository built per call over the
+  client under test. Request shapes are `async` methods that await it 1 or 3 times, then `Dispose`.
+- Plain path: `new SqlSugarClient(config)` on the scope's `ConnectionConfig`, with the same filter and
+  `AuditAop`. `CancellationAop` is a no-op outside SQL Server.
+- Flows: N `Task.Run(async () => await read)` flows on one scope, against N separate plain clients.
+- Inner clients were counted with a scope built from the same config and a counting configure action.
+  Retained memory is `GC.GetTotalMemory(true)` after 10 000 iterations, minus a warmed baseline.
+- SQLite: a temporary file. PostgreSQL: `web-struo-cms-test-db` on a local server, read-only
+  queries, Npgsql pooling on.
 - 5 warm-up and 20 measured iterations, `MemoryDiagnoser`.
 
 Machine: AMD Ryzen 9 9900X (24 logical cores), Windows 11, .NET 10.0.13, SqlSugarCore 5.1.4.221.
@@ -63,31 +76,29 @@ Machine: AMD Ryzen 9 9900X (24 logical cores), Windows 11, .NET 10.0.13, SqlSuga
 
 | Measurement | SQLite | PostgreSQL |
 |---|---|---|
-| `Create` only, scope | 93 ns / 872 B | 89 ns / 880 B |
-| `Create` only, plain | 920 ns / 1.7 KB | 875 ns / 1.8 KB |
-| Create + first query, scope | 219 us / 71.6 KB | 1351 us / 74.0 KB |
-| Create + first query, plain | 116 us / 53.5 KB | 1211 us / 55.8 KB |
-| Query on an already-used scope | 145 us / 66.8 KB | 1277 us / 69.3 KB |
-| 1 flow, scope / plain clients | 222 / 163 us | 1277 / 1226 us |
-| 4 flows, scope / plain clients | 376 / 283 us | 2274 / 2285 us |
-| 16 flows, scope / plain clients | 739 / 445 us | not measured / 7304 us |
+| 1 awaited read + `Dispose`, plain / scope | 126 / 201 us | 1268 / 1417 us |
+| 3 awaited reads + `Dispose`, plain / scope | 352 / 552 us | 3764 / 3987 us |
+| 3 awaited reads, singleton scope | 525 us / 219 KB | 4068 us / 286 KB |
+| 1 flow, scope / plain clients | 208 / 164 us | 1326 / 1299 us |
+| 4 flows, scope / plain clients | 325 / 279 us | 2409 / 2326 us |
+| 16 flows, scope / plain clients | 498 / 442 us | 7702 / 7534 us |
+| Retained per request-shaped scope | 144 B | 145 B |
+| Retained per readiness-shaped scope | 2406 B | 2403 B |
 
-The 16-flow scope row on PostgreSQL has no figure. Under BenchmarkDotNet that case threw
-`ObjectDisposedException` from Npgsql. Outside it, a loop of 16 parallel flows on a fresh scope per
-round hung once in 155 rounds and once in 380 rounds, with pooling on. 4 flows ran 1500 rounds
-clean, 16 plain clients ran 1500 rounds clean, and 16 flows on a scope ran 400 rounds clean with
-pooling off. The cause is not established here.
+The scope's extra time stays nearly flat from 1 to 16 flows on SQLite (44 to 56 us) and its extra
+allocation grows by about 10 KB per flow. The PostgreSQL differences are inside noise. The `Create`-only figure is 93 ns against 920 ns for a plain client, and the cost lands at
+the first member access.
 
 ## Unknowns
 
-- The 16-flow PostgreSQL hang above. It is separate from the cost question and needs its own look
-  before anything relies on 16 concurrent flows on one scope.
-- A scope whose request flow has already used it synchronously hands that same inner client to child
-  tasks, because the flow's `AsyncLocal` value is inherited. Parallel children then share one
-  connection and fail with "Connection already open". A scope untouched by the parent gave every child
-  its own inner client.
-- SQL Server, MySQL and MariaDB were not measured. The per-request cost is inside SqlSugar's client
-  creation, which does not depend on the provider, but the share does depend on the query time.
+- SQL Server, MySQL and MariaDB were not measured. The cost sits in SqlSugar's client creation, so it
+  should not depend on the provider, but the share depends on the query time.
+- The singleton figures come from a bench that supplies a fixed current user. The cost of resolving
+  the user per call from the HTTP context is not measured.
+- Today no request path touches the scope in a parent flow and then runs database work concurrently:
+  every touch in the pipeline sits inside an awaited `async` callee. The guarantee is a convention. A
+  non-async `Task`-returning store method called before `next()` would make parallel GraphQL root
+  fields share one connection.
 
 ## Referenced from
 

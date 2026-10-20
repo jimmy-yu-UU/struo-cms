@@ -70,7 +70,10 @@ public static class SqlSugarClientFactory
         // bare SqlSugarClient is not thread-safe for that — concurrent ADO operations on the shared
         // connection intermittently throw ("connection already open") or otherwise fail.
         // SqlSugarScope is SqlSugar's official thread-safe wrapper: it manages a distinct inner
-        // SqlSugarClient per logical async flow (AsyncLocal-keyed), and it still implements
+        // SqlSugarClient per logical async flow (AsyncLocal-keyed when an async frame is on the
+        // stack, thread-local otherwise). A child flow inherits the client its parent already
+        // created; a client created inside an awaited async callee is discarded when it returns.
+        // It still implements
         // ISqlSugarClient, so this is a drop-in fix at the factory boundary — DI registration
         // (AddScoped<ISqlSugarClient>) and every call site are unchanged.
         //
