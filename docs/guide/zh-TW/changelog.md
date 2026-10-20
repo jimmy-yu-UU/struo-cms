@@ -23,8 +23,10 @@
   預設密碼警告已移除。Playwright 測試從 `E2E_PASSWORD` 讀密碼，這個變數是必填。原本依賴
   `admin@admin.com` / `admin` 的 fork，必須自己設定密碼，或從 `migrate` 的輸出讀產生的密碼。
 - 已啟用的 `Oidc` 區段，若 `Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段，
-  除非設定了 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則啟動時會被拒絕，錯誤訊息點名這兩個鍵。
+  或是 consumers 租用戶的 GUID，除非設定了 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則啟動時會被拒絕，錯誤訊息點名這兩個鍵。
   使用多租用戶 authority 又沒有設定限制的 fork，必須設定其中一個，或改用單一 tenant 的 authority。
+- OIDC 登入現在預設送出 `prompt=select_account`，所以既有的 OIDC 部署在每次登入時都會看到提供者的帳號挑選
+  畫面。把 `Oidc:Prompt` 設為空字串，即可維持原本的行為（見「新增」）。
 - `GET /api/items/{collection}/{id}/revisions` 對未知的項目 id 回 404，原本回空陣列。垃圾桶中項目的版本紀錄
   （列表與單筆，REST 與 GraphQL）需要該集合的刪除授權；沒有的呼叫端在 REST 收到 404，在 GraphQL 收到空清單
   或 `null`。`IItemUseCases.ListRevisionsAsync` 與 `IGraphQlDataSource.ListRevisionsAsync` 改回傳可為 null 的
@@ -33,7 +35,7 @@
 - `/openapi/v1.json` 與 `/scalar` 只在 Development 註冊，session cookie 在 Development 之外的所有環境一律帶
   `Secure`；兩者原本只看 Production，所以類 Staging 環境（Staging、UAT 等）會公開 API 規格，並讓 cookie 走純
   HTTP。新增的 `OpenApi:Enabled` 與 `Auth:Cookie:RequireSecure` 可分別覆寫預設值。在 Development 之外對外提供
-  OpenAPI 的 fork，必須設定 `OpenApi__Enabled=true`；跑在 HTTP 上的 fork，必須設定
+  OpenAPI 的 fork，必須設定 `OpenApi__Enabled=true`；在 Development 之外跑在 HTTP 上的 fork，必須設定
   `Auth__Cookie__RequireSecure=false`。
 - 每個 GraphQL mutation 都需要已登入的呼叫端。就算 `public` 角色在該集合上有寫入授權，匿名 mutation 也會被以
   `UNAUTHORIZED` 拒絕；查詢不受影響。這與 REST 的寫入端點一致，那邊本來就要求登入。原本不帶 session cookie
@@ -47,8 +49,8 @@
 - `ILoginAttemptThrottle` 以 `TryReserveAsync` 取代 `CheckAsync` 與 `RecordFailureAsync`；`ResetAsync` 不變。
   `TryReserveAsync` 會把這次嘗試算進去並回報是否可以繼續，呼叫端要在驗證密碼之前呼叫它。實作這個介面的
   fork 必須提供它，呼叫舊方法的 fork 必須改呼叫它。
-- 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的；設了 `Redis:ConnectionString`
-  時，Redis 連不上期間登入會回 5xx。
+- 每次登入嘗試都計入 `RateLimiting:LoginAccount:PermitLimit`，不只失敗的（登入成功仍會重設計數）；設了
+  `Redis:ConnectionString` 時，Redis 連不上期間登入會回 5xx。
 - `ILanguageProvider` 改為非同步：`Enabled()`、`DefaultCode()`、`IsEnabled(code)` 由 `GetEnabledAsync()`、
   `DefaultCodeAsync()`、`IsEnabledAsync(code)` 取代，另新增 `CanonicalizeAsync(code)`，回傳已啟用語言設定的
   寫法，未啟用則回 `null`。實作這個介面的 fork 必須改這些簽章並加上 `CanonicalizeAsync`，呼叫舊方法的 fork
@@ -67,30 +69,36 @@
   帶有 `Database:TablePrefix`（預設 `struo_`）；你自己的資料表維持你取的名稱。
 - 新增三個 `Query` 鍵來限制單一請求的成本。`MaxSortFields`（預設 5）限制頂層排序與每個巢狀清單 `sort`
   的欄位數，`MaxDeepRelations`（預設 20）限制 `deep` 樹的關聯節點數，`MaxExpandRows`（預設 1000）限制
-  單次關聯讀取最多讀的列數。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
+  單次關聯讀取最多讀的列數。`offset` 沒有上限。`MaxFilterConditions` 現在是根層篩選與每個巢狀 `deep` 篩選共用的一份額度，
   過去每個巢狀篩選各自計算。超過任一上限的請求回 400；關聯讀取超過 `MaxExpandRows` 時直接拒絕，不會
   截斷。`IItemRepository.QueryWhereInFilteredAsync` 與 `QueryEntityWhereInAsync` 在取消權杖之前多了選用的
   `int? maxRows`，實作這個介面的 fork 必須加上，以位置傳入權杖的呼叫必須改成具名（`ct: ct`）。
   `QueryValidator.Validate` 多了選用的 `FilterBudget`。`DeepExpansionCoordinator.ExpandAsync` 由 `Prepare`
   （驗證 `deep` 樹，接受 `FilterBudget?`）與 `ExpandPreparedAsync`（展開已準備好的樹）取代，用過
   `ExpandAsync` 的呼叫端要改成兩個都呼叫。`ItemService` 在搜尋查詢或根層查詢之前就驗證 `deep` 樹，所以
-  依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。`offset` 沒有上限。
+  依 id 的 `GET` 帶超限的 `deep` 時，即使該 id 不存在也回 400（以前回 404）。
 - 媒體庫對檔案的垃圾桶與清除（`DELETE /api/files/{id}`，清除加 `?purge=true`）改為套用其他集合刪除時
   一樣的關聯規則。仍被 `OnDelete.Restrict` 關聯參照的檔案，兩者都會回 `409 CONFLICT`，過去會被移到
   垃圾桶或清除。清除時會把 `OnDelete.SetNull` 的參照設為 null、移除多對多的連接資料列，過去這些參照
-  會留著、指向不存在的檔案。通用項目 API 與 GraphQL 刪除檔案走同一條流程。
+  會留著、指向不存在的檔案。通用項目 API 與 GraphQL 刪除檔案走同一條流程（見「修正」）。
 - 圖片轉換的參數會被正規化，轉換本身也有了上限。請求的 `width` 或 `height` 會往上對齊到
   `Struo:Files:ImageTransform:SizeSteps` 的下一個值（預設 64、128、256、320、480、640、768、1024、1280、
   1600、1920、2560、3840、4096），所以 `width=100` 會得到 128 寬的圖。`fit=cover` 只對齊寬度，高度依請求的
-  比例推算並四捨五入到 8 像素的倍數。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。呼叫端給的 `quality` 四捨五入到 10 的倍數，範圍 10 到
-  100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、AVIF、GIF）裡的來源會被轉換；對 SVG 帶
-  `?width=` 會回原始位元組，超過 `MaxSourcePixels`（50 000 000）或標頭讀不出來的來源也一樣，AVIF 網格或疊圖影像則一律不轉換；libvips 讀到的尺寸也會在解碼前對同一上限檢查。同時最多
+  比例推算並四捨五入到 8 像素的倍數。`fit` 只能是 `inside` 或 `cover`，其他值回 `400`。呼叫端給的
+  `quality` 四捨五入到 10 的倍數，範圍 10 到 100。只有 `TransformableContentTypes`（JPEG、PNG、WebP、
+  AVIF、GIF）裡的來源會被轉換。對 SVG 帶 `?width=` 會回原始位元組，超過 `MaxSourcePixels`
+  （50 000 000）或標頭讀不出來的來源也一樣。AVIF 網格或疊圖影像一律不轉換。libvips 讀到的尺寸也會在
+  解碼前對同一上限檢查。同時最多
   進行 `MaxConcurrentTransforms`（2）個轉換，請求等超過 `QueueTimeoutSeconds`（10）秒就回 `503`
   `IMAGE_TRANSFORM_BUSY`。變體快取由 `CacheMaxBytes`（2 GB）設上限，並以最久未使用者優先淘汰。需要精確像素
   尺寸的用戶端，必須請求階梯上的尺寸或自行設定 `SizeSteps`；傳過其他 `fit` 值的用戶端必須改掉。
 - `IImageTransformer.Transform` 在請求之後多一個 `long maxSourcePixels` 參數，並回傳可為 null 的
   `ImageTransformResult?`，`null` 代表解碼器會產生的影像超過該上限。實作這個介面的 fork 必須加上參數並遵守
   上限，呼叫它的 fork 必須傳入上限並處理 `null`（改回傳原始位元組）。
+- API 主機啟動時就會載入原生 libvips（`NetVips.BlockUntrusted` 在服務註冊時設定），即使停用圖片轉換也一樣。
+  沒有可用 libvips 的主機會啟動失敗。
+- `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁的
+  筆數會超過 `MaxLimit`。
 - 管理端映像的 Content-Security-Policy 會擋下指向自身以外來源的圖片與 API 呼叫，除非 `CSP_IMG_EXTRA` /
   `CSP_CONNECT_EXTRA` 列出這些來源。從 CDN 或 presigned bucket URL（`Struo:Files:PresignedRedirect`）提供檔案、
   設了絕對的外部 `Branding:LogoUrl`，或把 `VITE_API_BASE_URL` 指向其他來源的 fork，升級後這些圖片或請求會失效，
@@ -106,7 +114,7 @@
   OIDC 重新導向網址的，才需要設定；關閉時一切照舊。第 4、20 章有說明。
 
 - `[CmsCollection(Name = "...")]` 可以固定集合名稱。這個名稱是權限授予、版本紀錄與其他資料列裡存的鍵，
-  所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯 sidecar 的外鍵屬性
+  所以 fork 在資料出現之前先設好，之後重新命名 C# 類別就不會讓這些資料失去對應（翻譯類別的外鍵屬性
   仍須叫 `{類別名稱}Id`）。名稱必須符合 `^[a-z][A-Za-z0-9]*$` 且不可重複；重複時啟動會丟出
   `MetadataException` 並指出兩個型別。沒設 `Name` 時，集合仍沿用 camelCase 的類別名稱。
 
@@ -117,9 +125,9 @@
   若某個檔案資料列儲存的 `status` 兩者皆非，任何帶有 `status` 的更新都會回 `400`，管理介面儲存標題或替代文字也
   包含在內；用 `PUT /api/items/file/{id}` 送出有效的 `status`，或直接修正該欄位，即可修復這類資料列。
 
-- `Oidc:Prompt`（預設 `select_account`）設定 OIDC 授權請求的 `prompt` 參數，讓提供者一律顯示帳號挑選畫面；
-  也接受 `login`、`consent`、`none`，留空則不送 `prompt`。既有的 OIDC 部署升級後，每次登入都會看到帳號挑選
-  畫面；要維持原本的靜默登入，把 `Oidc:Prompt` 設為空值。無效的值會讓啟動失敗並點名 `Oidc:Prompt`。
+- `Oidc:Prompt`（預設 `select_account`）設定 OIDC 授權請求的 `prompt` 參數，讓提供者一律顯示帳號挑選畫面。
+  值可以是 `select_account`、`login`、`consent`、`none` 的一個或多個，以空格分隔；留空則不送 `prompt`
+  （也就是原本的靜默登入）。無效的值會讓啟動失敗並點名 `Oidc:Prompt`。
   第 4、16 章有說明。
 
 ### 安全性
@@ -160,9 +168,8 @@
   `external_login_<NoEmail|EmailNotVerified|DomainNotAllowed|TenantNotAllowed|Inactive>`；例外訊息絕不會進到
   網址。第 16 章列出這些代碼。
 
-- `Query:DefaultLimit` 大於 `Query:MaxLimit` 時啟動失敗，錯誤訊息點名這兩個鍵；過去主機照常啟動，預設分頁
-  的筆數會超過 `MaxLimit`。`Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出
-  `MetadataException`，現在它的 `InnerException` 帶著原始的載入失敗。
+- `Struo:ContentAssemblies` 裡載入不了的項目仍會讓啟動失敗並丟出 `MetadataException`，現在它的
+  `InnerException` 帶著原始的載入失敗。
 
 - 已啟用語言清單以非同步查詢載入，載入失敗時不會留到請求結束：下一次存取會重新查詢。
 
@@ -179,8 +186,7 @@
 
 - 清除（purge）項目時，會把所有參照它的資料列的外鍵設為 null，這個陳述式現在會為欄位名稱加上引號。關聯欄位的
   欄位名稱若是保留字（`order`、`user`、`group`），清除會因 SQL 語法錯誤而失敗；混合大小寫的自訂欄位名稱在
-  PostgreSQL 上則比對不到。樂觀鎖更新與垃圾桶、還原的防護條件一直是以 `id`、`version`、`deletedat`
-  欄位篩選，不受影響；它們現在改用同一種型別化篩選。
+  PostgreSQL 上則比對不到。
 
 - 透過通用項目 API（`DELETE /api/items/file/{id}`）或 GraphQL 的 `deleteFile` 刪除檔案，行為與媒體庫一致。
   移到垃圾桶時，若該檔案是品牌 Logo 會一併清除這個設定；清除（purge）時還會刪除翻譯、Logo 參照與儲存的檔案
@@ -195,7 +201,8 @@
 
 ### 升級說明
 
-Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入嘗試計數會歸零。滾動式部署期間，仍在 0.10 的實例與
+Redis 登入節流改用新的 `login-attempts:` 鍵前綴計數，所以升級時每個帳號的登入嘗試計數會歸零；舊的
+`login-throttle:` 項目會自行過期。滾動式部署期間，仍在 0.10 的實例與
 0.11 的實例各用不同的鍵計數，帳號在所有實例都升到 0.11 之前，可能收到上限兩倍的嘗試次數。
 
 語言代碼的格式規則在每次寫入語言集合（包括刪除）時，檢查該集合的每一個資料列。已經存在的格式不合的代碼，會讓
@@ -206,8 +213,7 @@ Redis 登入節流改用新的鍵計數，所以升級時每個帳號的登入�
 計入 `CacheMaxBytes`，第一次碰到上限的寫入可能會把它們清掉。刪除 `CachePath` 目錄可以立刻回收空間；
 `CacheMaxBytes` 設為 `0`（不設上限）時，它們會一直留著，直到你自己刪除。
 
-主機在註冊服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生 libvips。沒有可用
-libvips 的主機現在會啟動失敗。
+升級前請在每台主機安裝 libvips，因為主機現在需要它才能啟動（見破壞性變更）。
 
 若已啟用 OIDC，且 `Oidc:Authority` 的路徑含有 `common`、`organizations` 或 `consumers` 其中一段（或 consumers
 租用戶的 GUID），升級前請先設定 `Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機會拒絕啟動。
