@@ -3,6 +3,15 @@
 ## 0.12.0
 
 ::: danger Breaking
+- The `AdminUi` section is removed from `appsettings.json`, together with `AdminUiOptions` and its
+  startup validation, and `GET /api/config` no longer returns `uiLocales` or `uiDefaultLocale`. The
+  admin UI offers every message catalog registered in `frontend/src/locales`, and its default language
+  is now `en` instead of `zh-TW`. To keep Chinese as the default, set `VITE_DEFAULT_UI_LOCALE=zh-TW`
+  in `frontend/.env` (dev server) or a committed `frontend/.env.production` (image build) and rebuild
+  the SPA; a language a user picked in the switcher still wins. Remove `AdminUi__*` environment
+  variables and `AdminUi` keys from a fork's own configuration; the host ignores them.
+- `uiLocaleStore.configure(enabled, default)` is `uiLocaleStore.init()`, and `appConfigStore` no longer
+  has `uiLocales` or `uiDefaultLocale`. The i18n fallback locale is the build's default catalog.
 - The admin image listens on container port `8080` instead of `80` and runs nginx as a non-root user. It
   is built on `nginxinc/nginx-unprivileged`. The Compose mapping is now
   `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
@@ -10,11 +19,23 @@
   `8080`.
 :::
 
+### Added
+
+- [Chapter 25: After Forking](25-after-forking.md) lists what a fork changes first: the license
+  line, `UserSecretsId`, the Sonar variables, the sample, the admin-UI language, the `__Host-` cookie
+  prefix, the CSP and forwarded-header settings. A root `SECURITY.md` describes private vulnerability
+  reporting for this template; a fork replaces it with its own.
+- The `docker` CI job scans the API and admin images with Trivy and fails on any HIGH or CRITICAL
+  vulnerability that has an upstream fix. Results appear in Code scanning on the public repository.
+
+### Changed
+
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
-- The `docker` CI job scans the API and admin images with Trivy and fails on any HIGH or CRITICAL
-  vulnerability that has an upstream fix. Results appear in Code scanning on the public repository.
+
+### Security
+
 - `Directory.Packages.props` no longer suppresses GHSA-2m69-gcr7-jv3q; `SQLitePCLRaw` is 2.1.12 and
   `dotnet list package --vulnerable` reports nothing.
 

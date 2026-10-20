@@ -3,16 +3,35 @@
 ## 0.12.0
 
 ::: danger 破壞性變更
+- `appsettings.json` 的 `AdminUi` 區段移除，`AdminUiOptions` 與它的啟動驗證一併移除，
+  `GET /api/config` 不再回傳 `uiLocales` 與 `uiDefaultLocale`。後台介面提供 `frontend/src/locales`
+  裡登錄的每一份訊息目錄，預設語言由 `zh-TW` 改成 `en`。想保留中文為預設，在 `frontend/.env`
+  （dev server）或提交的 `frontend/.env.production`（映像建置）設
+  `VITE_DEFAULT_UI_LOCALE=zh-TW` 後重新建置 SPA；使用者在切換器自己選的語言仍然優先。fork 自己的
+  設定裡的 `AdminUi__*` 環境變數與 `AdminUi` 鍵請移除，主機會直接忽略它們。
+- `uiLocaleStore.configure(enabled, default)` 改為 `uiLocaleStore.init()`，`appConfigStore` 不再有
+  `uiLocales` 與 `uiDefaultLocale`。i18n 的 fallback 語言是建置時的預設目錄。
 - 後台映像的容器埠從 `80` 改成 `8080`，nginx 以非 root 使用者執行；映像改建在
   `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
   fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
   `8080`。
 :::
 
-- API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
-  值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
+### 新增
+
+- [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、
+  `UserSecretsId`、Sonar 變數、範例專案、後台語言、`__Host-` cookie 前綴，以及 CSP 與轉送標頭設定。
+  根目錄新增 `SECURITY.md`，說明這個模板怎麼私下回報漏洞；fork 要換成自己的版本。
 - CI 的 `docker` job 用 Trivy 掃描 API 與後台映像，只要有上游已提供修補版本的 HIGH 或 CRITICAL 漏洞
   就會失敗；結果顯示在公開儲存庫的 Code scanning。
+
+### 變更
+
+- API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
+  值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
+
+### 安全性
+
 - `Directory.Packages.props` 不再抑制 GHSA-2m69-gcr7-jv3q；`SQLitePCLRaw` 已是 2.1.12，
   `dotnet list package --vulnerable` 查不到任何漏洞。
 

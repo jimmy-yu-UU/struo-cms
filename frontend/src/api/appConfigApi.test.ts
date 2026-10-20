@@ -11,8 +11,6 @@ describe('appConfigApi', () => {
       brandName: 'Acme',
       brandLogoUrl: 'https://x/logo.svg',
       passwordMinLength: 8,
-      uiLocales: ['zh-TW', 'en'],
-      uiDefaultLocale: 'zh-TW',
     }
     const spy = vi.spyOn(apiClient, 'get').mockResolvedValue(payload)
     const result = await getAppConfig()

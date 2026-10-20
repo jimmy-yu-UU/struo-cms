@@ -102,7 +102,8 @@ The backend has four projects (`Struo.Domain`, `Struo.Application`, `Struo.Infra
 ## Documentation
 
 The full manual lives under `docs/`, in English and 繁體中文, chapter-for-chapter; start at
-[Chapter 1: What StruoCMS Is](docs/guide/en/01-what-is-struocms.md). If you develop this project
+[Chapter 1: What StruoCMS Is](docs/guide/en/01-what-is-struocms.md). Right after forking, work through
+[Chapter 25: After Forking](docs/guide/en/25-after-forking.md). If you develop this project
 with an AI coding agent, read [`AGENTS.md`](AGENTS.md) first. The documentation site is its own
 project; install and run it with:
 

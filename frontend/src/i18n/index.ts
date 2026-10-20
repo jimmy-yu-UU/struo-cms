@@ -1,12 +1,12 @@
 import { createI18n } from 'vue-i18n'
-import { catalogs, CATALOG_LOCALES } from '../locales'
+import { catalogs } from '../locales'
+import { DEFAULT_UI_LOCALE } from './uiLocaleConfig'
 
-// Both locale and fallbackLocale start on the first bundled catalog. uiLocaleStore.configure() runs
-// before the app mounts: it moves the fallback to the server's AdminUi default and the locale to the
-// saved choice when that is enabled, otherwise to the same default.
+// Locale and fallback both start on the build's default; uiLocaleStore.init() moves the locale
+// onto the user's saved choice before the app mounts.
 export const i18n = createI18n({
   legacy: false,
-  locale: CATALOG_LOCALES[0],
-  fallbackLocale: CATALOG_LOCALES[0],
+  locale: DEFAULT_UI_LOCALE,
+  fallbackLocale: DEFAULT_UI_LOCALE,
   messages: catalogs,
 })
