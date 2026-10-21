@@ -10,10 +10,12 @@
 
 ### Fixed
 
-- Some admin UI text stayed in English when the interface language was Chinese: the Yes/No and
-  item-count values in list columns, the related-items messages, the upload-failed message and the
-  rich-text colour buttons now follow the chosen language. The browser tab title reads "StruoCMS"
-  before the site name loads.
+- Some admin UI text stayed in English when the interface language was Chinese. The Yes/No and
+  item-count values in list columns, the related-items messages, the upload-failed message, the
+  rich-text colour menu (button, swatches, custom colour and clear), the screen-reader "Close" label
+  on dialogs and drawers, the mobile sidebar's screen-reader title and description, and the generic
+  "Request failed" message shown when the server returns no readable error now follow the chosen
+  language. The browser tab title reads "StruoCMS" before the site name loads.
 - A failed logout request left the user stranded in the admin. Logout now always ends on the login
   page, clears the per-user data held in the browser, and shows a warning when the server could not
   confirm the sign-out; a `401` (no session left to end) counts as success.

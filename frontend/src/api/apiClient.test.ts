@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiClient, ApiError } from './apiClient'
+import { i18n } from '../i18n'
 
 function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -82,6 +83,20 @@ describe('ApiClient', () => {
     expect(err.status).toBe(500)
     expect(err.message).toBe('Request failed (500)')
     expect(err.code).toBeUndefined()
+  })
+
+  it('words the generic failure message in the UI locale', async () => {
+    i18n.global.locale.value = 'zh-TW'
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        status: 502, ok: false, headers: { get: () => null },
+        json: async () => { throw new Error('not json') }, text: async () => '<html>',
+      } as unknown as Response))
+      const err = await new ApiClient('/api').get('/x').catch((e) => e) as ApiError
+      expect(err.message).toBe('請求失敗（502）')
+    } finally {
+      i18n.global.locale.value = 'en'
+    }
   })
 
   it('invokes the unauthorized handler on 401', async () => {

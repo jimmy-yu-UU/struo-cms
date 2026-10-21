@@ -43,6 +43,8 @@ describe('RichTextColorMenu', () => {
       expect(w.get('[data-cmd="color"]').attributes('aria-label')).toBe('文字顏色')
       await w.get('[data-cmd="color"]').trigger('click')
       expect(w.get('[data-cmd="colorClear"]').text()).toBe('清除顏色')
+      expect(w.get('[data-color="#dc2626"]').attributes('aria-label')).toBe('顏色 #dc2626')
+      expect(w.text()).toContain('自訂…')
     } finally {
       i18n.global.locale.value = 'en'
     }

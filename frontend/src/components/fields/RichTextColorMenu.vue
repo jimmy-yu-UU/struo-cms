@@ -46,11 +46,11 @@ function clear(): void {
     <PopoverContent class="w-auto p-3">
       <div class="grid grid-cols-5 gap-1.5">
         <button v-for="c in PALETTE" :key="c" type="button" class="size-[22px] rounded border" :data-color="c"
-          :style="{ background: c }" :aria-label="`Colour ${c}`" @click="pick(c)" />
+          :style="{ background: c }" :aria-label="t('fields.richtext.colorSwatch', { color: c })" @click="pick(c)" />
       </div>
       <label class="mt-2 flex items-center gap-1.5 text-sm cursor-pointer">
         <input type="color" data-cmd="colorFree" class="h-6 w-8 cursor-pointer" @change="onFreePick">
-        Custom…
+        {{ t('fields.richtext.customColor') }}
       </label>
       <Button type="button" variant="outline" size="sm" data-cmd="colorClear" class="mt-2 w-full" @click="clear">{{ t('fields.richtext.clearColor') }}</Button>
     </PopoverContent>

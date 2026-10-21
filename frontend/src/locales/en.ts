@@ -8,6 +8,8 @@ export default {
     search: 'Search',
     loading: 'Loading…',
     logout: 'Log out',
+    close: 'Close',
+    requestFailed: 'Request failed ({status})',
     yes: 'Yes',
     no: 'No',
     loadFailed: 'Failed to load.',
@@ -56,6 +58,8 @@ export default {
     mainNav: 'Main navigation',
     brandHome: 'Back to dashboard',
     version: 'Admin console',
+    mobileNav: 'Sidebar',
+    mobileNavDescription: 'Displays the mobile sidebar.',
   },
   user: {
     account: 'Account',
@@ -341,7 +345,7 @@ export default {
     selectAnItem: 'Select an item',
     noRelatedItems: 'No related items.',
     richtext: {
-      textColor: 'Text colour', clearColor: 'Clear colour',
+      textColor: 'Text colour', colorSwatch: 'Colour {color}', customColor: 'Custom…', clearColor: 'Clear colour',
       bold: 'Bold', italic: 'Italic', strikethrough: 'Strikethrough',
       alignLeft: 'Align left', alignCenter: 'Align center', alignRight: 'Align right', alignJustify: 'Justify',
       heading2: 'Heading 2', heading3: 'Heading 3',

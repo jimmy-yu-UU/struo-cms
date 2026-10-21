@@ -1,3 +1,5 @@
+import { i18n } from '../i18n'
+
 export type ValidationDetail = { field: string; message: string }
 
 // The shape of the server's error envelope body.
@@ -114,7 +116,7 @@ export class ApiClient {
           : undefined
       throw new ApiError(
         res.status,
-        errBody?.message ?? `Request failed (${res.status})`,
+        errBody?.message ?? i18n.global.t('common.requestFailed', { status: res.status }),
         errBody?.code,
         errBody?.details,
         retryAfterSeconds,
