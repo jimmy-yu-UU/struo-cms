@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import { authGuard } from './guard'
+import { authGuard, createRouteGuard } from './guard'
 // AppShell stays a static import: every authenticated route (everything but /login) renders
 // inside it, so it is loaded eagerly.
 import AppShell from '../layouts/AppShell.vue'
@@ -26,7 +26,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  return authGuard({ name: to.name as string, meta: to.meta, fullPath: to.fullPath }, auth.isAuthenticated)
+  const allowed = authGuard({ name: to.name as string, meta: to.meta, fullPath: to.fullPath }, auth.isAuthenticated)
+  if (allowed !== true) return allowed
+  return createRouteGuard({ name: to.name as string, params: to.params })
 })
 
 export default router

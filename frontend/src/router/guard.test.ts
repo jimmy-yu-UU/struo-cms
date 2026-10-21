@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { authGuard } from './guard'
+import { authGuard, createRouteGuard } from './guard'
 
 describe('authGuard', () => {
   it('redirects unauthenticated users on protected routes to login', () => {
@@ -31,5 +31,20 @@ describe('authGuard redirect', () => {
 
   it('omits redirect when the target path is not a same-origin path', () => {
     expect(authGuard({ name: 'x', meta: {}, fullPath: '//evil' }, false)).toEqual({ name: 'login' })
+  })
+})
+
+describe('createRouteGuard', () => {
+  it.each(['user', 'file'])('sends a new %s back to its list', (name) => {
+    expect(createRouteGuard({ name: 'collection-create', params: { name } }))
+      .toEqual({ name: 'collection-list', params: { name } })
+  })
+
+  it('lets other collections open the create form', () => {
+    expect(createRouteGuard({ name: 'collection-create', params: { name: 'article' } })).toBe(true)
+  })
+
+  it('ignores routes other than the create form', () => {
+    expect(createRouteGuard({ name: 'collection-item', params: { name: 'user' } })).toBe(true)
   })
 })

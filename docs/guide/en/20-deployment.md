@@ -316,8 +316,9 @@ when the browser calls another origin, for example an API built into
 the image with `VITE_API_BASE_URL` pointing at a different host. A blocked request shows up as a
 `Content-Security-Policy` violation in the browser console.
 
-Caching rules: `index.html` sends `Cache-Control: no-cache`; `/assets/` sends
-`public, max-age=31536000, immutable` (Vite's filenames carry a content hash).
+Caching rules: `/assets/` sends
+`public, max-age=31536000, immutable` (Vite's filenames carry a content hash); `index.html` and every
+other file, such as `theme-init.js` and `favicon.svg`, send `Cache-Control: no-cache`.
 `client_max_body_size` is `32m`, higher than the backend's `Struo:Files:MaxUploadBytes` of 25 MiB,
 so an oversized upload gets the backend's own JSON error envelope instead of nginx's HTML error
 page.

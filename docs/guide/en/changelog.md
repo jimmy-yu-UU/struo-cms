@@ -42,6 +42,12 @@
   strip tab, carriage return and line feed from a URL, so `/<tab>/evil.example` passed the in-site
   check and then redirected off-site; such a value now falls back to `Oidc:ReturnUrlDefault`. The
   admin's own `?redirect=` check refuses the same characters.
+- The admin image now serves every file outside `/assets/` with `Cache-Control: no-cache`, so
+  `theme-init.js`, `favicon.svg` and similar files are revalidated after an upgrade instead of
+  staying stale in the browser. The hashed files under `/assets/` stay cached immutably.
+- Opening `/collections/user/new` or `/collections/file/new` directly now goes back to that
+  collection's list. Users are created with the create-user dialog and files come from upload, so
+  the generic new-item form never applied to them.
 
 ## 0.12.0 — 2026-10-21
 

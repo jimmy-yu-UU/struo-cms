@@ -33,6 +33,11 @@
 - `GET /api/auth/login/oidc` 不再接受含控制字元的 `returnUrl`。瀏覽器會從網址中移除 tab、歸位與換行字元，
   `/<tab>/evil.example` 因此能通過站內路徑檢查、再被導向站外；這類值現在改為退回
   `Oidc:ReturnUrlDefault`。管理介面自己的 `?redirect=` 檢查也拒絕同樣的字元。
+- 管理介面映像現在對 `/assets/` 以外的所有檔案送 `Cache-Control: no-cache`，`theme-init.js`、
+  `favicon.svg` 等檔案在升級後會重新驗證，不再停在瀏覽器裡的舊版本。`/assets/` 底下帶雜湊的檔案
+  維持永久快取。
+- 直接開啟 `/collections/user/new` 或 `/collections/file/new` 時，現在會回到該集合的列表。使用者
+  由「建立使用者」對話框建立、檔案由上傳而來，通用的新增表單本來就不適用。
 
 ## 0.12.0 — 2026-10-21
 

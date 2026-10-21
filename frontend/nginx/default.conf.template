@@ -221,7 +221,18 @@ server {
         try_files $uri =404;
     }
 
+    # Everything outside /assets/ keeps its name across deploys (theme-init.js,
+    # favicon.svg, the SPA fallback), so it is revalidated on every request.
+    # Same add_header inheritance caveat as /index.html above: the security
+    # headers are repeated here too.
     location / {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${CSP_IMG_EXTRA}; connect-src 'self' ${CSP_CONNECT_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         try_files $uri $uri/ /index.html;
     }
 }

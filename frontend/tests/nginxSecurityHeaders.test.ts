@@ -14,6 +14,10 @@ const APP_CSP =
   'img-src \'self\' data: blob: ${CSP_IMG_EXTRA}; connect-src \'self\' ${CSP_CONNECT_EXTRA}; ' +
   "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'\""
 const API_CSP = "Content-Security-Policy \"default-src 'none'; frame-ancestors 'none'; sandbox\""
+const SECURITY_HEADERS = [
+  'X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy',
+  'Strict-Transport-Security', 'Content-Security-Policy', 'Permissions-Policy',
+]
 const PERMISSIONS =
   'Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"'
 
@@ -84,11 +88,29 @@ describe('nginx template security headers', () => {
     expect(block.body).toContain('proxy_hide_header Content-Security-Policy;')
   })
 
-  it.each(PROXIED)('the %s location repeats the other security headers', (name) => {
-    const block = blocks().find((b) => b.name === name)!
-    for (const h of ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Strict-Transport-Security']) {
-      expect(block.body).toContain(`add_header ${h} `)
-    }
+  it.each(withHeaders.map((b) => [b.name, b] as const))(
+    'block %s sends every security header on every response',
+    (_name, b) => {
+      for (const h of SECURITY_HEADERS) {
+        expect(b.body).toMatch(new RegExp(`add_header ${h} "[^\n]*" always;`))
+      }
+    },
+  )
+})
+
+describe('nginx template cache headers', () => {
+  const body = (name: string) => blocks().find((b) => b.name === name)!.body
+
+  it.each(['= /index.html', '/'])('block %s revalidates on every request', (name) => {
+    expect(body(name)).toContain('add_header Cache-Control "no-cache" always;')
+  })
+
+  it('caches only the content-hashed /assets/ files immutably', () => {
+    expect(body('/assets/')).toContain('add_header Cache-Control "public, max-age=31536000, immutable"')
+  })
+
+  it('leaves the proxied locations without a Cache-Control of their own', () => {
+    for (const name of PROXIED) expect(body(name)).not.toContain('Cache-Control')
   })
 })
 
