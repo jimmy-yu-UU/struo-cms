@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0
+
+### Fixed
+
+- The media details dialog could save one file's title, alt text and status onto another: switching
+  files quickly let a slow earlier load overwrite the form, and Save then targeted the file the
+  dialog pointed at. The form now clears while the next file loads, Save stays disabled until that
+  file is loaded, and the update always targets the loaded file; a version-conflict refresh that
+  finishes after a switch no longer touches the new file.
+- The effective-permissions panel, the file picker, the multi-file field and the related-items list
+  no longer show an earlier, slower response over a newer one, and a stale failure no longer clears
+  the loading state or reports an error.
+
 ## 0.12.0 — 2026-10-21
 
 ::: danger Breaking

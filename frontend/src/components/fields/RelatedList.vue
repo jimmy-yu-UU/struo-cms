@@ -6,6 +6,7 @@ import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
+import { createLatestWins } from '../../lib/latestWins'
 import DataTable, { type DataTableColumn, type DataTableState } from '@/components/data/DataTable.vue'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import { Button } from '@/components/ui/button'
@@ -31,8 +32,10 @@ function camel(s: string): string {
   return s.length ? s[0].toLowerCase() + s.slice(1) : s
 }
 
+const loadGuard = createLatestWins()
 async function load(): Promise<void> {
   if (!props.parentId || !props.relation.foreignKey) return
+  const token = loadGuard.next()
   loading.value = true
   error.value = ''
   try {
@@ -42,6 +45,7 @@ async function load(): Promise<void> {
       locale: langStore.defaultCode || undefined,
       filter: { [camel(props.relation.foreignKey)]: { op: '_eq', value: props.parentId } },
     })
+    if (!loadGuard.isCurrent(token)) return
     const tm = targetMeta.value
     rows.value = res.data.map((r) => ({
       id: String(r.id),
@@ -49,9 +53,10 @@ async function load(): Promise<void> {
     }))
     total.value = res.total
   } catch (e) {
+    if (!loadGuard.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : 'Failed to load related items.'
   } finally {
-    loading.value = false
+    if (loadGuard.isCurrent(token)) loading.value = false
   }
 }
 

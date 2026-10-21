@@ -20,6 +20,7 @@ import { buildItemPayload } from '../../lib/buildItemPayload'
 import { deleteConfirm } from '../../lib/deleteAction'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
+import { createLatestWins } from '../../lib/latestWins'
 import type { FormModel } from '../../types/itemForm'
 
 const props = defineProps<{ file: FileRow | null; canWrite: boolean; canDelete: boolean }>()
@@ -41,6 +42,9 @@ const conflict = ref(false)
 const error = ref('')
 
 const fileMeta = computed(() => schema.get('file'))
+// Save is only offered for the item that is actually loaded: while a switch is loading, or when
+// the loaded item is not the one the dialog now points at, the form belongs to a different file.
+const canSave = computed(() => !loading.value && raw.value !== null && String(raw.value.id) === props.file?.id)
 const locales = computed(() => langStore.languages)
 const localeOptions = computed(() =>
   locales.value.map((l) => ({ label: l.name, value: l.code })),
@@ -88,19 +92,31 @@ function onLocaleToggle(value: unknown): void {
 // swap plus :disabled on the button.
 const saveLabel = computed(() => (saving.value ? t('media.saving') : t('media.save')))
 
+const loadGuard = createLatestWins()
+const recoverGuard = createLatestWins()
+
 async function load(): Promise<void> {
   if (!props.file) return
+  const token = loadGuard.next()
+  // A pending conflict recovery belongs to the previous file; invalidate it.
+  recoverGuard.next()
+  const fileId = props.file.id
+  // Drop the previous file's data first so it can never be shown or saved under the new file.
+  raw.value = null
+  model.value = { shared: {}, translations: {}, relations: {} }
   loading.value = true
   conflict.value = false
   error.value = ''
   try {
     await Promise.all([schema.load(), langStore.load()])
+    if (!loadGuard.isCurrent(token)) return
     activeLocale.value = langStore.defaultCode
     // This dialog does not edit folder assignment (that lives in the media library's
     // drag-and-drop / "Move to…" context menu / batch move), so there is no need for `deep:
     // ['folder']` here -- the items API only projects that relation FK under `deep` expansion, and
     // nothing in this component reads item.folder or item.folderId.
-    const item = await itemsApi.get('file', props.file.id)
+    const item = await itemsApi.get('file', fileId)
+    if (!loadGuard.isCurrent(token)) return
     raw.value = item
     // relations: {} is deliberate, not an oversight: this dialog does not edit any relation, but
     // `file`'s schema still declares the `folder` (manyToOne/treeSelect) relation, and
@@ -113,20 +129,23 @@ async function load(): Promise<void> {
     // fires. Do not "simplify" this back to spreading parseItemToForm's own `relations` output.
     if (fileMeta.value) model.value = { ...parseItemToForm(fileMeta.value, item, locales.value), relations: {} }
   } catch (e) {
+    if (!loadGuard.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
   } finally {
-    loading.value = false
+    if (loadGuard.isCurrent(token)) loading.value = false
   }
 }
 
 async function onSave(): Promise<void> {
-  if (!props.file || !fileMeta.value) return
+  if (!canSave.value || !fileMeta.value || !raw.value) return
+  // The id of the LOADED item, so the update can only ever target the file whose data is in the form.
+  const savedId = String(raw.value.id)
   saving.value = true
   conflict.value = false
   error.value = ''
   try {
     const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update')
-    await itemsApi.update('file', props.file.id, payload)
+    await itemsApi.update('file', savedId, payload)
     emit('saved')
     emit('close')
   } catch (e) {
@@ -134,8 +153,10 @@ async function onSave(): Promise<void> {
       // Optimistic-lock clash: someone else changed the item since we loaded it. Recover by
       // refreshing only the concurrency token, preserving the user's in-progress edits, so the
       // next Save overwrites with the current version instead of 409-ing forever.
-      conflict.value = true
-      await recoverFromConflict()
+      if (raw.value?.id === savedId) {
+        conflict.value = true
+        await recoverFromConflict(savedId)
+      }
     } else {
       error.value = e instanceof Error ? e.message : t('media.saveFailed')
     }
@@ -144,13 +165,15 @@ async function onSave(): Promise<void> {
   }
 }
 
-async function recoverFromConflict(): Promise<void> {
-  if (!props.file) return
+async function recoverFromConflict(fileId: string): Promise<void> {
+  const token = recoverGuard.next()
   try {
-    const fresh = await itemsApi.get('file', props.file.id)
+    const fresh = await itemsApi.get('file', fileId)
+    if (!recoverGuard.isCurrent(token)) return
     const version = typeof fresh.version === 'number' ? (fresh.version as number) : undefined
     model.value = { ...model.value, version }
   } catch (e) {
+    if (!recoverGuard.isCurrent(token)) return
     // The file may have been deleted in the interim: surface via the existing error banner
     // rather than throwing uncaught. conflict stays true so the notice remains visible.
     error.value = e instanceof Error ? e.message : t('media.saveFailed')
@@ -183,7 +206,7 @@ async function onCopyUrl(): Promise<void> {
 
 watch(() => props.file?.id, (id) => { if (id) void load() }, { immediate: true })
 
-defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, error, saveLabel, onLocaleToggle, setPublished, isPublished, statusUnsaved })
+defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setField, error, saveLabel, onLocaleToggle, setPublished, isPublished, statusUnsaved, canSave, loading })
 </script>
 
 <template>
@@ -286,7 +309,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
           <Trash2 aria-hidden="true" />
           {{ $t('media.delete') }}
         </Button>
-        <Button v-if="canWrite" type="button" :disabled="saving" @click="onSave">{{ saveLabel }}</Button>
+        <Button v-if="canWrite" type="button" :disabled="saving || !canSave" @click="onSave">{{ saveLabel }}</Button>
       </DialogFooter>
     </DialogScrollContent>
   </Dialog>
