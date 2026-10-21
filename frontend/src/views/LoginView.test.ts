@@ -317,7 +317,7 @@ describe('LoginView', () => {
     route.query = { reason: 'expired', redirect: '/collections/article/5' }
     const wrapper = mountLogin()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="status"]').text()).toBe('登入已逾時,請重新登入。')
+    expect(wrapper.find('output.notice').text()).toBe('登入已逾時,請重新登入。')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(replace).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/collections/article/5' } })
   })
@@ -326,7 +326,7 @@ describe('LoginView', () => {
     route.query = { reason: 'logout-incomplete' }
     const wrapper = mountLogin()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="status"]').text()).toContain('伺服器未能確認')
+    expect(wrapper.find('output.notice').text()).toContain('伺服器未能確認')
     expect(replace).toHaveBeenCalledWith({ name: 'login' })
   })
 
@@ -339,6 +339,6 @@ describe('LoginView', () => {
   it('shows no notice for an unknown ?reason= value', () => {
     route.query = { reason: 'whatever' }
     const wrapper = mountLogin()
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.find('output.notice').exists()).toBe(false)
   })
 })

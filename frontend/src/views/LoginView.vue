@@ -143,7 +143,7 @@ function onSso() {
 
         <Button type="submit" class="w-full" :disabled="submitting">{{ submitLabel }}</Button>
 
-        <p v-if="notice" class="notice text-muted-foreground" role="status">{{ notice }}</p>
+        <output v-if="notice" class="notice block text-muted-foreground">{{ notice }}</output>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
         <template v-if="oidcEnabled">
