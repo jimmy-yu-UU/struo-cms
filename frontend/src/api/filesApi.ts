@@ -1,6 +1,4 @@
-import { apiClient } from './apiClient'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+import { apiClient, apiBaseUrl } from './apiClient'
 
 export type FileMeta = {
   id: string
@@ -28,6 +26,6 @@ export const filesApi = {
     await apiClient.post<void>(`/files/${id}/restore`)
   },
   contentUrl(id: string): string {
-    return `${API_BASE}/files/${id}/content`
+    return `${apiBaseUrl}/files/${id}/content`
   },
 }

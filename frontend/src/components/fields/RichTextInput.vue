@@ -35,7 +35,7 @@ import { RichTextSlashExtension } from './richTextSlashExtension'
 import type { FileRow } from '../media/FileThumbnail.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
-import { fileContentDisplayUrl, absolutizeImageSrc, relativizeImageSrc } from '../../lib/richTextImages'
+import { fileContentDisplayUrl, absolutizeImageSrc, normalizeForStorage } from '../../lib/richTextImages'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
 import { toFileRows } from '../../lib/toFileRow'
@@ -179,18 +179,6 @@ function runCommand(command: RichTextCommand): void {
   command.run(editor.value, commandContext)
 }
 
-// Re-derive data-file-id from managed src, then relativize before emitting.
-function withFileIds(html: string): string {
-  if (!html) return html
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('img').forEach((img) => {
-    if (img.dataset.fileId) return
-    const m = (img.getAttribute('src') || '').match(/\/files\/([^/]+)\/content/)
-    if (m) img.dataset.fileId = m[1]
-  })
-  return doc.body.innerHTML
-}
-
 // setEditable() always emits 'update' -- even when passed the value the editor already holds --
 // which onUpdate cannot tell apart from a real edit. Bracket every setEditable() call in this flag
 // so it does not emit update:modelValue and fake an unsaved change the user never made.
@@ -199,7 +187,7 @@ let suppressEmit = false
 function emitNormalized(): void {
   if (suppressEmit) return
   const html = editor.value?.getHTML() ?? ''
-  emit('update:modelValue', relativizeImageSrc(withFileIds(html)))
+  emit('update:modelValue', normalizeForStorage(html))
 }
 
 function insertImage(id: string, alt = ''): void {
@@ -304,7 +292,7 @@ watch(locale, () => {
 
 // Keep the editor in sync with external model changes without clobbering the cursor.
 watch(() => props.modelValue, (val) => {
-  const current = relativizeImageSrc(withFileIds(editor.value?.getHTML() ?? ''))
+  const current = normalizeForStorage(editor.value?.getHTML() ?? '')
   if (editor.value && (val || '') !== current) {
     editor.value.commands.setContent(absolutizeImageSrc(val || ''), { emitUpdate: false })
   }

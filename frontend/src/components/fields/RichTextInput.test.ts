@@ -338,12 +338,12 @@ describe('RichTextInput', () => {
     })
     await flushPromises()
     const vm = w.vm as unknown as { insertImage: (id: string, alt?: string) => void }
-    vm.insertImage('abc', 'cat')
+    vm.insertImage('3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b', 'cat')
     await flushPromises()
     const emitted = w.emitted('update:modelValue')
     const html = String(emitted!.at(-1)![0])
-    expect(html).toContain('data-file-id="abc"')
-    expect(html).toContain(`src="${fileContentPath('abc')}"`)
+    expect(html).toContain('data-file-id="3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b"')
+    expect(html).toContain(`src="${fileContentPath('3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b')}"`)
   })
 
   it('serializes an image width set via setImage, so a resized image survives the round trip', async () => {
