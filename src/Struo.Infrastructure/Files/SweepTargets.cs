@@ -15,10 +15,14 @@ internal static class SweepTargets
         if (!string.Equals(files.Backend, "s3", StringComparison.OrdinalIgnoreCase))
             return $"local, root {Path.GetFullPath(files.Local.RootPath)}";
 
-        var host = Uri.TryCreate(files.S3.Endpoint, UriKind.Absolute, out var uri)
-            ? (uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}")
-            : $"AWS region {files.S3.Region}";
-        return $"s3, bucket {files.S3.Bucket}, service {host}";
+        return $"s3, bucket {files.S3.Bucket}, service {DescribeS3Service(files.S3)}";
+    }
+
+    private static string DescribeS3Service(FileStorageOptions.S3Options s3)
+    {
+        if (!Uri.TryCreate(s3.Endpoint, UriKind.Absolute, out var uri))
+            return $"AWS region {s3.Region}";
+        return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
     }
 
     private static string DescribeDatabase(DatabaseOptions database) =>
@@ -37,7 +41,8 @@ internal static class SweepTargets
             if (key is not null)
             {
                 var value = builder[key].ToString();
-                return (isSqlite ? Path.GetFileName(value) : value) is { Length: > 0 } name ? name : "?";
+                var name = isSqlite ? Path.GetFileName(value) : value;
+                return string.IsNullOrEmpty(name) ? "?" : name;
             }
             if (isSqlite) return "?";
         }

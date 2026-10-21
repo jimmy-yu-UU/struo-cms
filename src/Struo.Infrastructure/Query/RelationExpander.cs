@@ -157,9 +157,10 @@ public sealed class RelationExpander(
         if (ids.Count == 1 && spec.Limit is > 0)
         {
             var window = await repository.QueryWhereInWindowAsync(
-                rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter,
-                spec.Sort ?? [], spec.Offset.GetValueOrDefault(),
-                Math.Min(spec.Limit.Value, options.MaxLimit), locale, ct);
+                new WhereInWindowRequest(
+                    rel.TargetCollection, desc.ReverseForeignKeyProperty!, ids, spec.Filter,
+                    spec.Sort ?? [], spec.Offset.GetValueOrDefault(),
+                    Math.Min(spec.Limit.Value, options.MaxLimit), locale), ct);
             if (window is not null) return (window, true);
         }
 

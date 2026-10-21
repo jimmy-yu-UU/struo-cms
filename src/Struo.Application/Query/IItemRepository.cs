@@ -63,16 +63,15 @@ public interface IItemRepository
 
     /// <summary>
     /// Like <see cref="QueryWhereInFilteredAsync"/> for a single parent: the filter,
-    /// <paramref name="sort"/> (typed, with the list query's stable id tie-break; empty means the
-    /// default order), <paramref name="offset"/> and <paramref name="limit"/> all run in SQL, so
+    /// the request's sort (typed, with the list query's stable id tie-break; empty means the
+    /// default order), offset and limit (all in <paramref name="request"/>) all run in SQL, so
     /// only the requested window is read. Returns <c>null</c> when the sort cannot be expressed in
-    /// SQL (a translatable field with no <paramref name="queryLocale"/>); the caller then windows
+    /// SQL (a translatable field with no query locale); the caller then windows
     /// in memory. The default returns <c>null</c>, so an implementation without a SQL window keeps
     /// the capped in-memory path.
     /// </summary>
     Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
-        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
-        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default) =>
+        WhereInWindowRequest request, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<object>?>(null);
 
     /// <summary>

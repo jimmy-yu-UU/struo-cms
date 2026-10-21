@@ -238,9 +238,8 @@ public sealed class SqlSugarItemRepository(
         whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
 
     public Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
-        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
-        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default) =>
-        whereInWindow.QueryAsync(collection, property, values, extraFilter, sort, offset, limit, queryLocale, ct);
+        WhereInWindowRequest request, CancellationToken ct = default) =>
+        whereInWindow.QueryAsync(request, ct);
 
     public Task SyncManyToManyAsync(
         Type junctionType,

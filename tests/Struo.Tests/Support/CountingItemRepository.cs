@@ -43,11 +43,10 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     }
 
     public Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
-        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
-        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct = default)
+        WhereInWindowRequest request, CancellationToken ct = default)
     {
         System.Threading.Interlocked.Increment(ref _whereInCalls);
-        return inner.QueryWhereInWindowAsync(collection, property, values, extraFilter, sort, offset, limit, queryLocale, ct);
+        return inner.QueryWhereInWindowAsync(request, ct);
     }
 
     // Delegate every other member straight through (no counting).

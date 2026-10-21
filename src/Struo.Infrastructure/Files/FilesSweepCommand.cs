@@ -60,7 +60,7 @@ internal static class FilesSweepCommand
 
             if (options.Apply && !options.Force)
             {
-                var census = await scan.RunAsync(ScanMode.Count, stdout, stderr, ct);
+                var census = await scan.ScanAsync(ScanMode.Count, stdout, stderr, ct);
                 if (census.ExceedsThreshold)
                 {
                     await stderr.WriteLineAsync(
@@ -75,7 +75,7 @@ internal static class FilesSweepCommand
             // The count pass above and this pass list the store separately. The cutoff is fixed, so a blob
             // uploaded in between is younger than it and untouched; only a row purged in between can add an
             // orphan, which is acceptable without re-checking the ratio here.
-            var tally = await scan.RunAsync(options.Apply ? ScanMode.Delete : ScanMode.Report, stdout, stderr, ct);
+            var tally = await scan.ScanAsync(options.Apply ? ScanMode.Delete : ScanMode.Report, stdout, stderr, ct);
             await WriteSummaryAsync(options, tally, stdout);
             return tally.Failed > 0 ? MigrationCli.Failure : MigrationCli.Success;
         }
@@ -88,7 +88,7 @@ internal static class FilesSweepCommand
 
     private sealed class Scan(IFileStorage storage, ISqlSugarClient db, DateTime cutoff)
     {
-        public async Task<Tally> RunAsync(ScanMode mode, TextWriter stdout, TextWriter stderr, CancellationToken ct)
+        public async Task<Tally> ScanAsync(ScanMode mode, TextWriter stdout, TextWriter stderr, CancellationToken ct)
         {
             var tally = new Tally();
             List<string> batch = [];
@@ -156,14 +156,14 @@ internal static class FilesSweepCommand
         options = new Options(false, false, DefaultMinAgeHours);
         error = "";
         var (apply, force, minAge) = (false, false, DefaultMinAgeHours);
-        for (var i = 0; i < args.Count; i++)
+        var pending = new Queue<string>(args);
+        while (pending.TryDequeue(out var arg))
         {
-            var arg = args[i];
             if (arg == "--apply") { apply = true; continue; }
             if (arg == "--force") { force = true; continue; }
 
             string? value = null;
-            if (arg == "--min-age-hours") value = i + 1 < args.Count ? args[++i] : null;
+            if (arg == "--min-age-hours") pending.TryDequeue(out value);
             else if (arg.StartsWith("--min-age-hours=", StringComparison.Ordinal)) value = arg["--min-age-hours=".Length..];
             else { error = $"Unexpected argument '{arg}'. Usage: files:sweep [--apply [--force]] [--min-age-hours N]."; return false; }
 

@@ -68,11 +68,11 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
         (SqlSugarStaticContext.ThreadKeys - threadBefore).Should().Be(0);
     }
 
-    private static async Task Drive(IReadOnlyList<Func<Task<HttpResponseMessage>>> requests, int count)
+    private static async Task Drive(Func<Task<HttpResponseMessage>>[] requests, int count)
     {
         for (var i = 0; i < count; i++)
         {
-            using var response = await requests[i % requests.Count]();
+            using var response = await requests[i % requests.Length]();
             var body = await response.Content.ReadAsStringAsync();
             response.IsSuccessStatusCode.Should().BeTrue(body);
             if (response.RequestMessage?.RequestUri?.AbsolutePath == "/graphql")

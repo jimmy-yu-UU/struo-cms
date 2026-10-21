@@ -2,6 +2,7 @@
 using System.Linq.Expressions;
 using SqlSugar;
 using Struo.Application.Metadata;
+using Struo.Application.Query;
 using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
@@ -20,10 +21,9 @@ internal sealed class WhereInWindowQueries(
         new(typeof(WhereInWindowQueries), nameof(WindowGenericAsync),
             [typeof(List<IConditionalModel>), typeof(IReadOnlyList<OrderTerm>), typeof(int), typeof(int), typeof(CancellationToken)]);
 
-    public async Task<IReadOnlyList<object>?> QueryAsync(
-        string collection, string property, IReadOnlyList<object> values, FilterNode? extraFilter,
-        IReadOnlyList<SortField> sort, int offset, int limit, string? queryLocale, CancellationToken ct)
+    public async Task<IReadOnlyList<object>?> QueryAsync(WhereInWindowRequest request, CancellationToken ct)
     {
+        var (collection, property, values, extraFilter, sort, offset, limit, queryLocale) = request;
         if (values.Count == 0) return [];
         if (SortsTranslatableFieldWithoutLocale(collection, sort, queryLocale)) return null;
 

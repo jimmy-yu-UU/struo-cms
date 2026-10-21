@@ -5,6 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Sample.Blog;
 using Struo.Tests.Support;
@@ -67,7 +68,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         finally { options.MaxExpandRows = original; }
     }
 
-    private static IReadOnlyList<JsonElement> Children(string body, int parentIndex = 0)
+    private static List<JsonElement> Children(string body, int parentIndex = 0)
     {
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.GetProperty("data")[parentIndex].GetProperty("children")
@@ -259,9 +260,9 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         var byTitle = new[] { new SortField("title", false) };
 
         var withoutLocale = await harness.Repository.QueryWhereInWindowAsync(
-            "article", "categoryId", parent, null, byTitle, 0, 1, null);
+            new WhereInWindowRequest("article", "categoryId", parent, null, byTitle, 0, 1, null));
         var withLocale = await harness.Repository.QueryWhereInWindowAsync(
-            "article", "categoryId", parent, null, byTitle, 0, 1, "en");
+            new WhereInWindowRequest("article", "categoryId", parent, null, byTitle, 0, 1, "en"));
 
         withoutLocale.Should().BeNull();
         withLocale.Should().HaveCount(1);
