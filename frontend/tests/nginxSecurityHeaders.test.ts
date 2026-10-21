@@ -23,23 +23,74 @@ const PERMISSIONS =
 
 interface Block { name: string; body: string }
 
-// Splits the server block into its own directives and each `location` body.
-function blocks(): Block[] {
+// Splits a masked template into the server's own directives and one block per `location`.
+// Braces are counted rather than matched with a pattern, so an `if { }` or a regex quantifier
+// inside a location cannot cut its body short; a location nested in another throws.
+function parseBlocks(text: string): Block[] {
   const result: Block[] = []
-  const locationRe = /^\s*location\s+([^{]+)\{([^}]*)\}/gm
+  let rest = text
+  const headRe = /^[ \t]*location\s+(.+?)\s*\{[ \t]*$/m
   let m: RegExpExecArray | null
-  let rest = template
-  while ((m = locationRe.exec(template)) !== null) {
-    result.push({ name: m[1].trim(), body: unmask(m[2]) })
-    rest = rest.replace(m[0], '')
+  while ((m = headRe.exec(rest)) !== null) {
+    const start = m.index + m[0].length
+    let depth = 1
+    let i = start
+    for (; i < rest.length && depth > 0; i++) {
+      if (rest[i] === '{') depth++
+      else if (rest[i] === '}') depth--
+    }
+    if (depth !== 0) throw new Error(`unterminated location ${m[1]}`)
+    const body = rest.slice(start, i - 1)
+    if (/^[ \t]*location\s/m.test(body)) throw new Error(`nested location inside ${m[1]}`)
+    result.push({ name: m[1].trim(), body: unmask(body) })
+    rest = rest.slice(0, m.index) + rest.slice(i)
   }
   result.push({ name: 'server', body: unmask(rest) })
   return result
 }
 
+function blocks(): Block[] {
+  return parseBlocks(template)
+}
+
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
 // Locations that forward to the API: /api/ and the two OIDC callback paths.
 const PROXIED = ['/api/', '= /signin-oidc', '= /signout-callback-oidc']
+
+describe('nginx template parser', () => {
+  it('keeps an if block inside its location body', () => {
+    const parsed = parseBlocks(`location /x {
+  if ($a) {
+    return 403;
+  }
+  add_header X-A "1" always;
+}
+server_tokens off;`)
+    expect(parsed.find((b) => b.name === '/x')!.body).toContain('add_header X-A')
+    expect(parsed.find((b) => b.name === 'server')!.body).not.toContain('add_header')
+  })
+
+  it('keeps a regex quantifier inside the location head', () => {
+    const parsed = parseBlocks(`location ~ ^/f{2}$ {
+  add_header X-A "1" always;
+}`)
+    expect(parsed.find((b) => b.name === '~ ^/f{2}$')!.body).toContain('add_header X-A')
+  })
+
+  it('rejects a nested location', () => {
+    expect(() => parseBlocks(`location /a {
+  location /b {
+    add_header X-A "1";
+  }
+}`)).toThrow(/nested/)
+  })
+
+  it('leaves no location in the real template unparsed', () => {
+    const server = blocks().find((b) => b.name === 'server')!.body
+    expect(server).not.toMatch(/^\s*location\b/m)
+    for (const b of blocks().filter((x) => x.name !== 'server')) expect(b.body.replace(/\$\{\w+\}/g, '')).not.toMatch(/[{}]/)
+  })
+})
 
 describe('nginx template listen port', () => {
   it('listens on the unprivileged port 8080', () => {

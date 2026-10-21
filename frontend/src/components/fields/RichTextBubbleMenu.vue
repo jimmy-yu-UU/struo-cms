@@ -77,9 +77,10 @@ function appendBubbleMenuTo(): HTMLElement {
   return bubbleMenuContainer
 }
 
-// BubbleMenuView.destroy() does not cancel its own debounced update or focus timers, so one armed
-// just before unmount still calls the show predicate afterwards. Once unmounted the predicate
-// answers false without reading the page.
+// BubbleMenuView.destroy() does not cancel its debounced update timer or its focus timer, so one
+// armed just before unmount still calls the show predicate afterwards. Once unmounted the predicate
+// answers false without reading the page. The resize timer does not go through the predicate and
+// is not covered.
 let unmounted = false
 
 function shouldShow(args: BubbleMenuShouldShowArgs): boolean {
