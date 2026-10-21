@@ -54,7 +54,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     if (!loadGuard.isCurrent(token)) return
-    error.value = e instanceof Error ? e.message : 'Failed to load related items.'
+    error.value = e instanceof Error ? e.message : t('fields.relatedLoadFailed')
   } finally {
     if (loadGuard.isCurrent(token)) loading.value = false
   }
@@ -111,7 +111,7 @@ defineExpose({ load, onPage, rows, total, loading, error })
 
 <template>
   <div class="related-list">
-    <p v-if="!parentId" class="hint">Visible after saving.</p>
+    <p v-if="!parentId" class="hint">{{ t('fields.visibleAfterSaving') }}</p>
     <template v-else>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <DataTable

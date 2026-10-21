@@ -18,12 +18,13 @@ import JsonField from '../../components/fields/JsonField.vue'
 import KeyValueField from '../../components/fields/KeyValueField.vue'
 import FilesField from '../../components/fields/FilesField.vue'
 import RepeaterField from '../../components/fields/RepeaterField.vue'
+import { i18n } from '../../i18n'
 import { formatDateTime } from '../formatDateTime'
 import { toDisplayString } from '../toDisplayString'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => toDisplayString(v) }
-const asYesNo: ListColumn = { format: (v) => (v ? 'Yes' : 'No') }
+const asYesNo: ListColumn = { format: (v) => i18n.global.t(v ? 'common.yes' : 'common.no') }
 const asDate: ListColumn = {
   format: (v) => {
     const s = formatDateTime(toDisplayString(v))
@@ -151,7 +152,7 @@ const keyValueDef: FieldTypeDef = {
 }
 
 const asItemCount: ListColumn = {
-  format: (v) => (Array.isArray(v) ? `${v.length} items` : toDisplayString(v)),
+  format: (v) => (Array.isArray(v) ? i18n.global.t('fields.itemCount', v.length) : toDisplayString(v)),
 }
 
 function isBlankRow(row: unknown, subFields: FieldMeta[]): boolean {

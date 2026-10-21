@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
+import { i18n } from '../../i18n'
 import { getFieldType, registry } from './registry'
 import { ALL_FIELD_INTERFACES } from './types'
 import type { FieldMeta } from '../../types/schema'
@@ -183,5 +184,28 @@ describe('repeaterDef', () => {
 
   it('list column shows the count', () => {
     expect(registry.repeater.listColumn?.format([{ x: 1 }, { x: 2 }], field)).toBe('2 items')
+  })
+})
+
+describe('list column wording follows the UI locale', () => {
+  afterEach(() => { i18n.global.locale.value = 'en' })
+
+  it('boolean column renders per locale', () => {
+    const bool = field({ interface: 'boolean' })
+    const fmt = getFieldType('boolean').listColumn!.format
+    expect(fmt(true, bool)).toBe('Yes')
+    expect(fmt(false, bool)).toBe('No')
+    i18n.global.locale.value = 'zh-TW'
+    expect(fmt(true, bool)).toBe('是')
+    expect(fmt(false, bool)).toBe('否')
+  })
+
+  it('array count column pluralises in en and renders per locale', () => {
+    const rep = field({ interface: 'repeater' })
+    const fmt = registry.repeater.listColumn!.format
+    expect(fmt([{ x: 1 }], rep)).toBe('1 item')
+    expect(fmt([{ x: 1 }, { x: 2 }], rep)).toBe('2 items')
+    i18n.global.locale.value = 'zh-TW'
+    expect(fmt([{ x: 1 }, { x: 2 }], rep)).toBe('2 項')
   })
 })
