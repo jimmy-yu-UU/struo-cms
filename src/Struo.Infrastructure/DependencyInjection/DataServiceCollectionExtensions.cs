@@ -44,7 +44,7 @@ public static class DataServiceCollectionExtensions
         services.AddScoped<OrderByExpressionBuilder>();
         services.AddScoped<IItemRepository, SqlSugarItemRepository>();
         services.AddScoped<IRelationExpander, RelationExpander>();
-        // Scoped to match ISqlSugarClient's lifetime (the cache is per-request).
+        // Scoped: the language cache lives for one request.
         services.AddScoped<ILanguageProvider, LanguageProvider>();
         services.AddScoped<ILanguageCollectionRules, SqlSugarLanguageCollectionRules>();
         services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();

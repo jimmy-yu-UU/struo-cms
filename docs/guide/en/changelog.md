@@ -30,6 +30,12 @@
   parallel raises the setting.
 - `POST /api/items/user` and the GraphQL `createUser` mutation now return `400` `BAD_USER_INPUT`.
   Create users with `POST /api/users`, or with the admin UI's "New" dialog on the user list.
+- `ISqlSugarClient` is a singleton, one `SqlSugarScope` for the whole process, instead of one per
+  request. Each async flow still gets its own connection and transaction, but database work must run in
+  async methods (no DB access from a sync lambda in `Task.Run`, a timer callback or a sync job), and
+  `CopyNew()` skips audit stamping and SQL Server cancellation translation. A fork that overrides the
+  registration as scoped, or relies on the client being disposed at the end of a request, behaves
+  differently. An `ICurrentUserAccessor` a fork registers must be a singleton.
 :::
 
 ### Added
@@ -69,6 +75,9 @@
 
 ### Fixed
 
+- Memory no longer grows with every request. SqlSugar keeps a scope's clients in static dictionaries that
+  are never emptied, and a scope per request added an entry each time: about 150 bytes per request, and
+  about 2.5 KB per `/health/ready` call. The single shared scope adds none.
 - A collection whose generated GraphQL names collide with another collection's or with a built-in
   name (`article` with `articleList`, `category` with `categories`, a collection named `revision`)
   now stops startup with an error whose cause chain carries a `MetadataException` naming the

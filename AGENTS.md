@@ -110,6 +110,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   SQL outside the three exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
+- **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
+  DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
+  parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no audit
+  stamping, no SQL Server cancellation translation, a shared soft-delete filter provider), so use it
+  only for AOP-free work such as a connection ping. A fork's `ICurrentUserAccessor` must be a singleton.
+  See `docs/ai/decisions/sqlsugarscope-per-request-cost.md`.
 - **Schema changes are FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
   `MigrationHost` runs them and records them in `{TablePrefix}schema_versions`. The commands are
   `migrate`, `migrate:status`, `migrate:preview`, `migrate:baseline`, `make:migration` and

@@ -64,31 +64,28 @@ public static class SqlSugarClientFactory
             }
         };
 
-        // GraphQL pins query/mutation roots to DependencyInjectionScope.Request
-        // (GraphQlServiceCollectionExtensions), so HotChocolate can run sibling root-field
-        // resolvers on separate threads that all share this one request-scoped ISqlSugarClient. A
-        // bare SqlSugarClient is not thread-safe for that — concurrent ADO operations on the shared
-        // connection intermittently throw ("connection already open") or otherwise fail.
-        // SqlSugarScope is SqlSugar's official thread-safe wrapper: it manages a distinct inner
-        // SqlSugarClient per logical async flow (AsyncLocal-keyed when an async frame is on the
-        // stack, thread-local otherwise). A child flow inherits the client its parent already
-        // created; a client created inside an awaited async callee is discarded when it returns.
-        // It still implements
-        // ISqlSugarClient, so this is a drop-in fix at the factory boundary — DI registration
-        // (AddScoped<ISqlSugarClient>) and every call site are unchanged.
+        // The result is registered as a singleton (SqlSugar's official pattern for SqlSugarScope; a scope
+        // per request would grow SqlSugar's static client registries without bound). The scope keeps a
+        // separate inner SqlSugarClient, with its own connection and transaction, for each logical async
+        // flow, so GraphQL can run sibling root-field resolvers in parallel on it. A child flow inherits
+        // the client its parent already created; a client created inside an awaited async callee is
+        // discarded when it returns.
+        //
+        // Rules that follow from that, also in AGENTS.md:
+        // - Database work runs in async methods. A member access with no async frame on the stack (a
+        //   sync lambda in Task.Run, a timer callback) falls back to a thread-local client that
+        //   outlives the request.
+        // - CopyNew() builds a bare client without this configure action: no audit stamping, no
+        //   cancellation translation, and the soft-delete filter provider is shared. Use it only for
+        //   work that needs none of those, such as a connection ping.
         //
         // The soft-delete query filter and the AuditAop stamping must be attached via the ctor's configure
         // action, NOT via `client.QueryFilter.AddTableFilter(...)` / `AuditAop.Register(client, ...)`
-        // called on the SqlSugarScope instance after construction. Post-construction attachment on
-        // SqlSugarScope only reaches whichever single inner context is current at that moment; every
-        // *other* inner context SqlSugarScope creates later (e.g. on another thread/async flow) is a
-        // fresh SqlSugarClient that never saw that call, so the floor and audit stamping would
-        // silently stop applying under concurrency. The configure-action overload
-        // (config, Action<SqlSugarClient>) runs for EVERY inner context SqlSugarScope creates, which
-        // is the semantically safe choice — confirmed by the full existing suite (soft-delete,
-        // audit-field, revisions-transaction tests) staying green with this shape.
-        // The per-request cost of this scope is recorded in
-        // docs/ai/decisions/sqlsugarscope-per-request-cost.md.
+        // called on the SqlSugarScope instance after construction: that only reaches whichever single
+        // inner client is current at that moment. The configure action runs for EVERY inner client the
+        // scope creates. AuditAop resolves the current user on each call, so the accessor it captures
+        // must not be scoped.
+        // Measurements and the decision are in docs/ai/decisions/sqlsugarscope-per-request-cost.md.
         var client = new SqlSugarScope(config, db =>
         {
             // Soft-delete floor. Every Queryable over an ISoftDeletable entity excludes

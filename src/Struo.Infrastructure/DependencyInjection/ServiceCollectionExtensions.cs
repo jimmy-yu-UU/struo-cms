@@ -49,7 +49,9 @@ public static class ServiceCollectionExtensions
                 : TranslationSidecarIndexPolicy.FromMetadata(metadata.GetCollections());
         });
 
-        services.AddScoped<ISqlSugarClient>(sp =>
+        // One SqlSugarScope for the whole process: SqlSugar keeps a scope's inner clients in static
+        // registries that are never emptied, so a scope per request would grow them without bound.
+        services.AddSingleton<ISqlSugarClient>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
             var currentUser = sp.GetRequiredService<ICurrentUserAccessor>();

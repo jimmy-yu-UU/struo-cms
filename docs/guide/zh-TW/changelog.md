@@ -25,6 +25,10 @@
   更多並行的 fork，請調高這個設定。
 - `POST /api/items/user` 與 GraphQL 的 `createUser` 現在回 `400` `BAD_USER_INPUT`。建立使用者請用
   `POST /api/users`，或用後台使用者清單上「新增」開啟的對話框。
+- `ISqlSugarClient` 改為單例：整個行程共用一個 `SqlSugarScope`，不再每個請求建一個。每個非同步流程
+  仍有自己的連線與交易，但資料庫工作必須在 async 方法裡執行（不要在 `Task.Run` 的同步 lambda、計時器
+  回呼或同步工作中存取資料庫），而且 `CopyNew()` 不會做稽核欄位寫入與 SQL Server 取消轉譯。fork 若把這個註冊覆寫成 scoped，或依賴請求結束時釋放 client，行為會不同。
+  fork 自己註冊的 `ICurrentUserAccessor` 必須是單例。
 :::
 
 ### 新增
@@ -57,6 +61,8 @@
 
 ### 修正
 
+- 記憶體不再隨請求數增長。SqlSugar 把 scope 的 client 存在永不清空的靜態字典裡，每個請求建一個 scope，
+  字典就多一筆：每個請求約 150 位元組，每次 `/health/ready` 約 2.5 KB。共用單一 scope 後不再增加。
 - 集合產生的 GraphQL 名稱若跟其他集合或內建名稱撞在一起（`article` 與 `articleList`、`category` 與
   `categories`、名為 `revision` 的集合），現在啟動會中止，原因鏈裡有一個 `MetadataException`，訊息點名相關集合與撞名
   的名稱。過去是在 GraphQL schema 建置途中以重複型別的錯誤失敗。
