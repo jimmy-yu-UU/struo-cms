@@ -276,14 +276,14 @@ partition key is the account, not the caller's IP.
 
 ## OIDC external login
 
-Each external identity provider is one entry under `Oidc:Providers:{id}`. A provider that is
-disabled, or whose `Authority` is blank, registers no authentication scheme. `GET /api/auth/login/oidc/{provider}` returns `404` for an unknown or disabled provider, so with no
-usable provider it returns `404` for every id. Which keys are required to enable a provider, and what happens when one is
+Each external identity provider is one entry under `Oidc:Providers:{id}`. A disabled provider
+registers no authentication scheme. `GET /api/auth/login/oidc/{provider}` returns `404` for an
+unknown or disabled provider, so with no enabled provider it returns `404` for every id. Which keys are required to enable a provider, and what happens when one is
 missing, is in the `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
 An anonymous `GET /api/config` returns `oidcProviders`, an array of `{ id, displayName, icon }` in
 button order (`Order` ascending, then id). The login page draws one full-width button per entry,
-labelled with `displayName`, before the user types anything. An empty array means no SSO buttons.
+labelled "Sign in with" plus `displayName`, before the user types anything. An empty array means no SSO buttons.
 The response never carries a secret.
 
 External login is the authorization code flow with PKCE. The provider's own token is never
@@ -302,8 +302,8 @@ chapter 4 lists the other values and how to send no prompt.
 case. An empty or unknown token shows a generic key icon.
 
 To add a brand mark in a fork, add an entry to the `ICONS` table in that file, keyed by a lowercase
-name, and set the name as the provider's `Icon`. Then rebuild the admin. Marks are inline SVG only,
-because the admin's content security policy allows no remote images.
+name, and set the name as the provider's `Icon`. Then rebuild the admin. `Icon` never takes a URL; each
+mark is an SVG component in that table.
 
 ### Setting up Microsoft Entra
 
@@ -402,7 +402,7 @@ existing password account. How to configure those guards for a production enviro
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
 One combination is refused at startup. When a provider is enabled and its `Authority` has a path segment
-of `common`, `organizations` or `consumers` (an Entra multi-tenant endpoint, where anyone can create
+of `common`, `organizations`, `consumers` or the consumers tenant GUID (an Entra multi-tenant endpoint, where anyone can create
 a tenant and present any email), the host fails to start unless that provider's `AllowedTenantId` or
 `AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
 A single-tenant authority, or a disabled provider, is never affected.

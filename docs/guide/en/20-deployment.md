@@ -124,10 +124,10 @@ The three checks are set per provider, under `Oidc:Providers:{id}`. In the shipp
 replaced with a real tenant, external login through it fails for everyone. The `google` entry has no
 tenant to pin and ships with `RequireEmailVerified` on.
 
-With a real tenant in place, `RequireEmailVerified` (not required by default) and
-`AllowedEmailDomains` (an empty list by default, meaning unrestricted) are both checks that
-permit by default; pin down all three for every enabled provider in production, or the only remaining
-gate is email equality. The order these checks run in is covered in [Chapter 16](16-authentication.md).
+`RequireEmailVerified` (not required by default) and `AllowedEmailDomains` (an empty list by
+default, meaning unrestricted) are both checks that permit by default. In production, pin every check
+that applies to each enabled provider (a tenant where the provider has one, plus those two), or the
+only remaining gate is email equality. The order these checks run in is covered in [Chapter 16](16-authentication.md).
 
 ### Security response headers: the API only sends nosniff
 

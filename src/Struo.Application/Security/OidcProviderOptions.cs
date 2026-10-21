@@ -9,7 +9,7 @@ public sealed class OidcProviderOptions
     /// <summary>Label of the provider's sign-in button.</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>Icon token the admin UI maps to a glyph; blank shows no icon.</summary>
+    /// <summary>Icon token the admin UI maps to a glyph; blank or unknown shows a generic key icon.</summary>
     public string? Icon { get; set; }
 
     /// <summary>Sort key of the sign-in buttons, ascending; ties fall back to the provider id.

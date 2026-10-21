@@ -550,8 +550,8 @@ entries, `microsoft` and `google`, each with its own values filled in:
 }
 ```
 
-The file also lists `Scopes`, `Prompt` and `AllowedEmailDomains` for both entries; they are left out
-above because they equal the defaults.
+The file also lists `Scopes`, `Prompt`, `AllowedEmailDomains` and the other keys that equal their
+defaults (`microsoft`'s `RequireEmailVerified`, `google`'s `AllowedTenantId`); they are left out above.
 
 A disabled provider is never validated, so a placeholder entry can stay in the file. Each enabled
 provider must have a `DisplayName`, `Authority`, `ClientId` and `ClientSecret`, or startup fails with
@@ -559,7 +559,7 @@ an error naming that provider's key. The same applies to these rules:
 
 - `CallbackPath`, when set, starts with `/`.
 - `Prompt` is empty or valid (see below).
-- A multi-tenant Entra `Authority` (`common`, `organizations` or `consumers`) comes with an
+- A multi-tenant Entra `Authority` (`common`, `organizations`, `consumers` or the consumers tenant GUID) comes with an
   `AllowedTenantId` or `AllowedEmailDomains`.
 - No two enabled providers share a path. Each provider also owns two sign-out paths derived from its
   id, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; they are not configurable, and a custom
@@ -603,8 +603,9 @@ register with the provider is the origin users reach the admin at plus this path
 `RequireEmailVerified` and `AllowedEmailDomains` default to permissive. In the shipped file, the
 `microsoft` entry carries `AllowedTenantId: "REPLACE_TENANT_ID"`, which matches no real tenant and so
 blocks every external login until you replace it; the `google` entry has no tenant to pin and ships
-with `RequireEmailVerified` on. When you enable a provider in Production, set all three checks
-explicitly rather than relying on the defaults.
+with `RequireEmailVerified` on. When you enable a provider in Production, pin every check that
+applies to it rather than relying on the defaults: a tenant where the provider has one, plus
+`RequireEmailVerified` and `AllowedEmailDomains`.
 
 ## Serilog
 

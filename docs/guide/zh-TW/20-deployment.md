@@ -96,9 +96,9 @@ Compose 環境就是靠這點，不架 TLS 也能登入。
 `AllowedTenantId` 是打不中任何 tenant 的佔位字串，換成真正的 tenant 之前，經由它的外部登入對任何人都會
 失敗。`google` 項目沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`。
 
-換上真正的 tenant 之後，`RequireEmailVerified`（預設不要求）
-與 `AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查，正式環境每個啟用的提供者都該把三個
-釘死，否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章](16-authentication.md)。
+`RequireEmailVerified`（預設不要求）與 `AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查。
+正式環境每個啟用的提供者，都該把適用於它的檢查釘死（有 tenant 的提供者釘 tenant，再加上這兩個），
+否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章](16-authentication.md)。
 
 ### 安全回應標頭：API 只送 nosniff
 

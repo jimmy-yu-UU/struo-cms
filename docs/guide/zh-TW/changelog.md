@@ -8,7 +8,8 @@
   `DisplayName`、`Icon`、`Order`、`Authority`、`ClientId`、`ClientSecret`、`CallbackPath`、`Scopes`、
   `Prompt`、`RequireEmailVerified`、`AllowedTenantId`、`AllowedEmailDomains`。請把原本的設定移到某個
   提供者 id 底下，密鑰的環境變數也照樣改名（`Oidc__ClientSecret` 變成
-  `Oidc__Providers__microsoft__ClientSecret`）。
+  `Oidc__Providers__microsoft__ClientSecret`；user-secrets 或 `appsettings.Development.json` 裡的
+  `Oidc:ClientSecret` 變成 `Oidc:Providers:microsoft:ClientSecret`）。
   改之前：
 
   ```json
@@ -36,6 +37,10 @@
     }
   }
   ```
+- 針對編譯依賴它們的 fork，程式碼層級的更名：`appConfigStore.oidcEnabled` 改為 `oidcProviders`；
+  `AuthSchemes.Oidc` 改為 `AuthSchemes.OidcFor(id)`，scheme 名稱成為 `oidc-{id}`；`OidcOptions` 的平面屬性
+  移到 `OidcOptions.Providers` 底下的 `OidcProviderOptions`；`OidcWiring.ResolveLocalPrincipalAsync`
+  多了 `providerId` 參數。
 - `GET /api/auth/login/oidc` 改為 `GET /api/auth/login/oidc/{provider}`，提供者不存在或已停用時回 `404`。
 - `GET /api/config` 不再回傳 `oidcEnabled`，改回傳 `oidcProviders`，是依按鈕順序排列的
   `{ id, displayName, icon }` 陣列。

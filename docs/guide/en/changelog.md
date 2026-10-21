@@ -8,7 +8,8 @@
   The per-provider keys are `Enabled`, `DisplayName`, `Icon`, `Order`, `Authority`, `ClientId`,
   `ClientSecret`, `CallbackPath`, `Scopes`, `Prompt`, `RequireEmailVerified`, `AllowedTenantId` and
   `AllowedEmailDomains`. Move your settings under a provider id, and rename the secret's environment
-  variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`).
+  variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`; the user-secrets or
+  `appsettings.Development.json` key `Oidc:ClientSecret` becomes `Oidc:Providers:microsoft:ClientSecret`).
   Before:
 
   ```json
@@ -36,6 +37,10 @@
     }
   }
   ```
+- Code-level renames for forks that compile against them: `appConfigStore.oidcEnabled` becomes
+  `oidcProviders`; `AuthSchemes.Oidc` becomes `AuthSchemes.OidcFor(id)`, so scheme names are
+  `oidc-{id}`; the flat properties of `OidcOptions` move to `OidcProviderOptions` under
+  `OidcOptions.Providers`; `OidcWiring.ResolveLocalPrincipalAsync` takes a `providerId` argument.
 - `GET /api/auth/login/oidc` is replaced by `GET /api/auth/login/oidc/{provider}`, which returns `404`
   for an unknown or disabled provider.
 - `GET /api/config` no longer returns `oidcEnabled`; it returns `oidcProviders`, an array of

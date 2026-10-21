@@ -215,14 +215,14 @@ HTTP_STATUS:429
 
 ## OIDC 外部登入
 
-每個外部身分提供者是 `Oidc:Providers:{id}` 底下的一筆。提供者停用，或 `Authority` 留空時，不會註冊
+每個外部身分提供者是 `Oidc:Providers:{id}` 底下的一筆。提供者停用時，不會註冊
 認證 scheme。`GET /api/auth/login/oidc/{provider}` 對不存在或已停用的提供者回 `404`，所以沒有任何可用的提供者時，
 任何 id 都回 `404`。啟用時要給哪些鍵、少了會怎麼樣，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
 
 匿名呼叫 `GET /api/config` 會拿到 `oidcProviders`，是 `{ id, displayName, icon }` 的陣列，順序就是按鈕
 順序（`Order` 由小到大，相同時依 id）。登入頁在使用者輸入帳密之前，就依這份陣列為每個提供者畫一顆滿版
-按鈕，文字是 `displayName`。陣列為空就不顯示 SSO 按鈕。回應裡不會有任何密鑰。
+按鈕，文字是「使用 {displayName} 登入」。陣列為空就不顯示 SSO 按鈕。回應裡不會有任何密鑰。
 
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
 叫 userinfo 端點補齊。每個提供者有自己的回呼路徑，預設 `/signin-oidc-{id}`，用 `CallbackPath` 可以改；
@@ -238,7 +238,7 @@ HTTP_STATUS:429
 的代號有 `microsoft` 與 `google`，比對不分大小寫。代號留空或不認得時，顯示通用的鑰匙圖示。
 
 fork 想加自己的品牌圖示，就在該檔的 `ICONS` 表加一筆，鍵用小寫名稱，再把這個名稱設成提供者的
-`Icon`，然後重新建置後台。圖示只能是內嵌 SVG，因為後台的內容安全政策不允許遠端圖片。
+`Icon`，然後重新建置後台。`Icon` 不接受網址；每個圖示都是那張表裡的一個 SVG 元件。
 
 ### 設定 Microsoft Entra
 
@@ -316,8 +316,8 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 上都能接管一個既有的密碼帳號；正式環境該怎麼設定這幾道關卡，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
 
-有一種組合會在啟動時被拒絕：某個提供者已啟用，而且它的 `Authority` 的路徑含有 `common`、`organizations`
-或 `consumers` 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
+有一種組合會在啟動時被拒絕：某個提供者已啟用，而且它的 `Authority` 的路徑含有 `common`、`organizations`、
+`consumers` 或 consumers tenant 的 GUID 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
 該提供者的 `AllowedTenantId` 或 `AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
 空白的值不算已設定。單一 tenant 的 authority，或提供者停用時，都不受影響。
 
