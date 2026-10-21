@@ -59,7 +59,9 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
         // minimum length is discoverable by trying, and the SPA needs it before anyone signs in.
         var payload = new
         {
-            oidcEnabled = oidc.Value.Enabled,
+            oidcProviders = oidc.Value.EnabledProviders()
+                .Select(p => new { p.Id, p.Options.DisplayName, Icon = NullIfBlank(p.Options.Icon) })
+                .ToList(),
             brandName = name,
             brandLogoUrl = logoUrl,
             passwordMinLength = passwordPolicy.Value.MinLength
@@ -67,4 +69,6 @@ public sealed class ConfigController(IMemoryCache cache) : ControllerBase
         cache.Set(CacheKey, payload, CacheDuration);
         return Ok(payload);
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }

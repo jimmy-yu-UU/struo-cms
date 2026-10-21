@@ -6,35 +6,22 @@ using Struo.Application.Security;
 
 namespace Struo.Api.Auth;
 
-/// <summary>Registers the external OIDC scheme when configured (else a no-op, so password login is
-/// unaffected). Binds <see cref="OidcOptions"/>. On a validated token it resolves/JIT-provisions a
-/// local user and replaces the principal with a Cookie identity so the existing cookie SignInScheme
-/// (Redis-backed) persists the session. Must be called AFTER AddStruoAuth (which registers the
-/// Cookie scheme used as SignInScheme).</summary>
+/// <summary>Registers one external OIDC scheme per enabled provider under <c>Oidc:Providers</c> (none
+/// when nothing is enabled, so password login is unaffected). Binds <see cref="OidcOptions"/>. On a
+/// validated token it resolves/JIT-provisions a local user under that provider's trust policy and
+/// replaces the principal with a Cookie identity so the existing cookie SignInScheme (Redis-backed)
+/// persists the session. Must be called AFTER AddStruoAuth (which registers the Cookie scheme used as
+/// SignInScheme).</summary>
 public static class OidcWiring
 {
     public static IServiceCollection AddStruoOidc(this IServiceCollection services, IConfiguration config)
     {
-        // Fail fast at boot. When OIDC is disabled validation always passes; when enabled it
-        // requires Authority/ClientId/ClientSecret to be present (a half-configured external login
-        // would otherwise only fail at the first sign-in attempt).
+        // Fail fast at boot: a half-configured enabled provider would otherwise only fail at the first
+        // sign-in attempt. Disabled providers are never validated.
         services.AddOptions<OidcOptions>()
             .BindConfiguration(OidcOptions.SectionName)
-            .Validate(
-                o => !o.Enabled ||
-                     (!string.IsNullOrWhiteSpace(o.Authority)
-                      && !string.IsNullOrWhiteSpace(o.ClientId)
-                      && !string.IsNullOrWhiteSpace(o.ClientSecret)),
-                "Oidc enabled requires Authority, ClientId, ClientSecret")
-            .Validate(
-                o => !o.Enabled || !o.IsUnpinnedMultiTenant(),
-                "Oidc Authority is multi-tenant (common, organizations or consumers); " +
-                "set Oidc:AllowedTenantId or Oidc:AllowedEmailDomains, or use a single-tenant Authority")
-            .Validate(
-                o => !o.Enabled || o.HasValidPrompt(),
-                "Oidc:Prompt must be empty or space-separated values from: " +
-                string.Join(", ", OidcOptions.AllowedPromptValues))
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<OidcOptions>, OidcOptionsValidator>();
         services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 
         // AddOptions above only normalizes the container-resolved copy. This second bind is a SEPARATE
@@ -43,33 +30,40 @@ public static class OidcWiring
         // PostConfigure on the container registration alone would never touch it.
         var opts = config.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
         opts.ApplyCollectionDefaults();
-        if (!opts.Enabled || string.IsNullOrWhiteSpace(opts.Authority))
-            return services; // scheme not registered → /api/auth/login/oidc returns 404
 
-        services.AddAuthentication().AddOpenIdConnect(AuthSchemes.Oidc, options =>
-        {
-            options.Authority = opts.Authority;
-            options.ClientId = opts.ClientId;
-            options.ClientSecret = opts.ClientSecret;
-            options.CallbackPath = opts.CallbackPath;
-            options.ResponseType = "code";
-            options.UsePkce = true;
-            options.SaveTokens = false;
-            options.MapInboundClaims = false;          // keep short JWT claim names for OidcClaimsMapper
-            options.SignInScheme = AuthSchemes.Cookie;  // the handler persists our rebuilt principal here
-            options.GetClaimsFromUserInfoEndpoint = true;
+        // A provider with a blank Authority is skipped here; the validator fails startup for it.
+        var enabled = opts.EnabledProviders().Where(p => !string.IsNullOrWhiteSpace(p.Options.Authority)).ToList();
+        if (enabled.Count == 0)
+            return services; // no scheme registered → /api/auth/login/oidc/{provider} returns 404
 
-            options.Scope.Clear();
-            foreach (var s in opts.Scopes)
-                options.Scope.Add(s);
-
-            options.Events = BuildEvents(opts.Prompt);
-        });
+        var auth = services.AddAuthentication();
+        foreach (var (id, provider) in enabled)
+            auth.AddOpenIdConnect(AuthSchemes.OidcFor(id), options => ConfigureScheme(options, id, provider));
 
         return services;
     }
 
-    private static OpenIdConnectEvents BuildEvents(string? configuredPrompt)
+    private static void ConfigureScheme(OpenIdConnectOptions options, string id, OidcProviderOptions provider)
+    {
+        options.Authority = provider.Authority;
+        options.ClientId = provider.ClientId;
+        options.ClientSecret = provider.ClientSecret;
+        options.CallbackPath = provider.EffectiveCallbackPath(id);
+        options.ResponseType = "code";
+        options.UsePkce = true;
+        options.SaveTokens = false;
+        options.MapInboundClaims = false;          // keep short JWT claim names for OidcClaimsMapper
+        options.SignInScheme = AuthSchemes.Cookie;  // the handler persists our rebuilt principal here
+        options.GetClaimsFromUserInfoEndpoint = true;
+
+        options.Scope.Clear();
+        foreach (var s in provider.Scopes)
+            options.Scope.Add(s);
+
+        options.Events = BuildEvents(id, provider.Prompt);
+    }
+
+    private static OpenIdConnectEvents BuildEvents(string providerId, string? configuredPrompt)
     {
         var prompt = string.IsNullOrWhiteSpace(configuredPrompt) ? null : configuredPrompt.Trim();
         return new OpenIdConnectEvents
@@ -82,7 +76,7 @@ public static class OidcWiring
 
             OnTokenValidated = async ctx =>
             {
-                var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!);
+                var (principal, failure) = await ResolveLocalPrincipalAsync(ctx.HttpContext, ctx.Principal!, providerId);
                 if (principal is null)
                 {
                     ctx.Fail($"external_login_{failure}");
@@ -127,13 +121,19 @@ public static class OidcWiring
     }
 
     /// <summary>Resolves/JIT-provisions the local user for a validated external principal and returns the
-    /// local Cookie principal that replaces it, revoking the session the request presented. Returns a null
-    /// principal and the failure reason when the external login is refused.</summary>
+    /// local Cookie principal that replaces it, revoking the session the request presented. The trust
+    /// policy is the one of <paramref name="providerId"/>. Returns a null principal and the failure reason
+    /// when the external login is refused; a provider that is not enabled is refused as
+    /// <see cref="ExternalLoginFailure.Inactive"/>.</summary>
     public static async Task<(ClaimsPrincipal? Principal, ExternalLoginFailure? Failure)> ResolveLocalPrincipalAsync(
-        HttpContext http, ClaimsPrincipal external)
+        HttpContext http, ClaimsPrincipal external, string providerId)
     {
+        var oidc = http.RequestServices.GetRequiredService<IOptions<OidcOptions>>().Value;
+        if (!oidc.TryGetEnabled(providerId, out var provider))
+            return (null, ExternalLoginFailure.Inactive);
+
         var svc = http.RequestServices.GetRequiredService<IExternalLoginService>();
-        var policy = http.RequestServices.GetRequiredService<IOptions<OidcOptions>>().Value.ToPolicy();
+        var policy = provider.ToPolicy();
 
         var identity = OidcClaimsMapper.Map(external);
         var result = await svc.ResolveOrProvisionAsync(identity, policy, http.RequestAborted);

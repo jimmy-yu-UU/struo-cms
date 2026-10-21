@@ -24,9 +24,8 @@ public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<Oid
         var path = (request.Path.Value ?? "").TrimEnd('/');
         if (HttpMethods.IsPost(request.Method) && path.Equals(LoginPath, StringComparison.OrdinalIgnoreCase))
             return true;
-        var o = oidc.Value;
-        return o.Enabled && !string.IsNullOrEmpty(o.CallbackPath)
-            && path.Equals(o.CallbackPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+        return oidc.Value.EnabledProviders().Any(p =>
+            path.Equals(p.Options.EffectiveCallbackPath(p.Id).TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
     }
 
     private static void HidePresentedCookie(HttpRequest request, HttpContext context)

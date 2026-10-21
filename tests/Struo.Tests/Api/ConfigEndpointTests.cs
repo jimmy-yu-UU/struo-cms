@@ -40,7 +40,8 @@ public class ConfigEndpointTests(ApiFactory factory)
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
         var data = doc.RootElement.GetProperty("data");
-        data.GetProperty("oidcEnabled").GetBoolean().Should().BeFalse();
+        data.GetProperty("oidcProviders").GetArrayLength().Should().Be(0);
+        data.TryGetProperty("oidcEnabled", out _).Should().BeFalse();
         data.GetProperty("brandName").GetString().Should().Be("StruoCMS");
         data.GetProperty("brandLogoUrl").ValueKind.Should().Be(JsonValueKind.Null);
         data.TryGetProperty("uiLocales", out _).Should().BeFalse();
@@ -66,21 +67,37 @@ public class ConfigEndpointTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Config_reflects_oidc_enabled()
+    public async Task Config_lists_enabled_oidc_providers_in_Order_without_secrets()
     {
         var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Oidc:Enabled"] = "true",
-                ["Oidc:Authority"] = "https://login.example.com",
-                ["Oidc:ClientId"] = "test-client",
-                ["Oidc:ClientSecret"] = "test-secret",
+                ["Oidc:Providers:microsoft:Enabled"] = "true",
+                ["Oidc:Providers:microsoft:DisplayName"] = "Microsoft 365",
+                ["Oidc:Providers:microsoft:Icon"] = "microsoft",
+                ["Oidc:Providers:microsoft:Authority"] = "https://login.example.com/tenant/v2.0",
+                ["Oidc:Providers:microsoft:ClientId"] = "ms-client",
+                ["Oidc:Providers:microsoft:ClientSecret"] = "ms-secret",
+                ["Oidc:Providers:microsoft:Order"] = "2",
+                ["Oidc:Providers:google:Enabled"] = "true",
+                ["Oidc:Providers:google:DisplayName"] = "Google",
+                ["Oidc:Providers:google:Icon"] = "google",
+                ["Oidc:Providers:google:Authority"] = "https://accounts.example.com",
+                ["Oidc:Providers:google:ClientId"] = "g-client",
+                ["Oidc:Providers:google:ClientSecret"] = "g-secret",
+                ["Oidc:Providers:google:Order"] = "1",
             })));
         var response = await f.CreateClient().GetAsync("/api/config");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        doc.RootElement.GetProperty("data").GetProperty("oidcEnabled").GetBoolean().Should().BeTrue();
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain("secret").And.NotContain("client");
+        using var doc = JsonDocument.Parse(body);
+        var providers = doc.RootElement.GetProperty("data").GetProperty("oidcProviders").EnumerateArray().ToList();
+        providers.Select(p => p.GetProperty("id").GetString()).Should().Equal("google", "microsoft");
+        providers[0].GetProperty("displayName").GetString().Should().Be("Google");
+        providers[1].GetProperty("icon").GetString().Should().Be("microsoft");
+        providers[0].EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "displayName", "icon");
     }
 
     /// <summary><see cref="ISiteSettingsStore"/> itself does not validate

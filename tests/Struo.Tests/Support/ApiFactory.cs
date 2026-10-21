@@ -54,7 +54,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // in the shipped appsettings.json): a developer who uncomments a sample entry there gets
                 // a suite that behaves differently from CI, since that key can't be overridden here (see
                 // ContentAssemblyEnvBootstrap.cs).
-                ["Oidc:Enabled"] = "false",
+                ["Oidc:Providers:microsoft:Enabled"] = "false",
+                ["Oidc:Providers:google:Enabled"] = "false",
                 // The whole suite shares this ApiFactory instance (and its client-IP partition,
                 // since TestServer has a fixed connection IP) across ~55 test classes that each log in
                 // one or more test users via CreateAuthenticatedClientAsync/CreateEditorClientAsync/

@@ -1,73 +1,46 @@
 namespace Struo.Application.Security;
 
-/// <summary>Config-bound OIDC settings. Bound from the <c>Oidc</c> configuration section.
-/// <c>ClientSecret</c> comes from env / user-secrets, never committed.</summary>
+/// <summary>An enabled provider and the id it is configured under.</summary>
+public sealed record OidcProvider(string Id, OidcProviderOptions Options);
+
+/// <summary>Config-bound OIDC settings. Bound from the <c>Oidc</c> configuration section: one entry
+/// per external identity provider under <c>Oidc:Providers:{id}</c>.</summary>
 public sealed class OidcOptions
 {
     public const string SectionName = "Oidc";
 
-    public bool Enabled { get; set; }
-    public string? Authority { get; set; }
-    public string? ClientId { get; set; }
-    public string? ClientSecret { get; set; }
-    public string CallbackPath { get; set; } = "/signin-oidc";
+    /// <summary>Provider ids are lowercase letters, digits and hyphens: they appear in URLs and scheme names.</summary>
+    public const string ProviderIdPattern = "^[a-z0-9-]+$";
 
-    /// <summary>The scopes applied by <see cref="ApplyCollectionDefaults"/> when none are configured.
-    /// Held as a named default rather than a property initializer because ConfigurationBinder APPENDS
-    /// bound array elements to a non-empty collection default instead of replacing it, which made
-    /// narrowing this list impossible.</summary>
-    public static readonly string[] DefaultScopes = ["openid", "email", "profile"];
-
-    public string[] Scopes { get; set; } = [];
-
-    /// <summary>The prompt values an authorize request may carry.</summary>
-    public static readonly string[] AllowedPromptValues = ["select_account", "login", "consent", "none"];
-
-    /// <summary>Value of the authorize request's <c>prompt</c> parameter: one or more space-separated
-    /// entries of <see cref="AllowedPromptValues"/>. Blank sends no prompt.</summary>
-    public string? Prompt { get; set; } = "select_account";
-
-    /// <summary>True when <see cref="Prompt"/> is blank or every space-separated entry is allowed.</summary>
-    public bool HasValidPrompt() =>
-        string.IsNullOrWhiteSpace(Prompt)
-        || Prompt.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .All(p => AllowedPromptValues.Contains(p, StringComparer.Ordinal));
-
+    /// <summary>Where a successful sign-in lands when the request carried no usable <c>returnUrl</c>.</summary>
     public string ReturnUrlDefault { get; set; } = "/";
-    // An external identity links to a local account by email equality, so these guards pin trust.
-    // They default to off, except that an enabled multi-tenant Authority needs a tenant or domain pin
-    // (see IsUnpinnedMultiTenant). See docs/guide/en/16-authentication.md.
-    public bool RequireEmailVerified { get; set; }
-    public string? AllowedTenantId { get; set; }
-    public string[] AllowedEmailDomains { get; set; } = [];
 
-    // The GUID is the Entra consumers tenant, which accepts any personal Microsoft account.
-    private static readonly string[] MultiTenantSegments =
-        ["common", "organizations", "consumers", "9188040d-6c67-4c5b-b112-36a304b66dad"];
+    public Dictionary<string, OidcProviderOptions> Providers { get; set; } = new(StringComparer.Ordinal);
 
-    /// <summary>True when <see cref="Authority"/> is an Entra multi-tenant endpoint (a path segment of
-    /// <c>common</c>, <c>organizations</c>, <c>consumers</c> or the consumers tenant GUID) and neither a tenant nor an email
-    /// domain is pinned.</summary>
-    public bool IsUnpinnedMultiTenant()
+    /// <summary>The enabled providers, sorted by <see cref="OidcProviderOptions.Order"/> then id.</summary>
+    public IReadOnlyList<OidcProvider> EnabledProviders() =>
+        [.. Providers
+            .Where(p => p.Value.Enabled)
+            .OrderBy(p => p.Value.Order)
+            .ThenBy(p => p.Key, StringComparer.Ordinal)
+            .Select(p => new OidcProvider(p.Key, p.Value))];
+
+    /// <summary>Looks up an enabled provider by id; false for an unknown or disabled one.</summary>
+    public bool TryGetEnabled(string id, out OidcProviderOptions options)
     {
-        if (!Uri.TryCreate(Authority, UriKind.Absolute, out var uri)) return false;
-        var multiTenant = uri.AbsolutePath
-            .Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Any(s => MultiTenantSegments.Contains(s, StringComparer.OrdinalIgnoreCase));
-        if (!multiTenant) return false;
-        var pinned = !string.IsNullOrWhiteSpace(AllowedTenantId)
-                     || AllowedEmailDomains.Any(d => !string.IsNullOrWhiteSpace(d));
-        return !pinned;
+        if (Providers.TryGetValue(id, out var found) && found.Enabled)
+        {
+            options = found;
+            return true;
+        }
+        options = null!;
+        return false;
     }
 
-    public ExternalLoginPolicy ToPolicy() =>
-        new(RequireEmailVerified, AllowedTenantId, AllowedEmailDomains);
-
-    /// <summary>Applies defaults that cannot live in a property initializer without
-    /// ConfigurationBinder appending to them. Must run after binding and before the value is
-    /// consumed; both of <c>OidcWiring.AddStruoOidc</c>'s binds call this.</summary>
+    /// <summary>Applies each provider's collection defaults; see
+    /// <see cref="OidcProviderOptions.ApplyCollectionDefaults"/>.</summary>
     public void ApplyCollectionDefaults()
     {
-        if (Scopes.Length == 0) Scopes = [.. DefaultScopes];
+        foreach (var provider in Providers.Values) provider.ApplyCollectionDefaults();
     }
 }
