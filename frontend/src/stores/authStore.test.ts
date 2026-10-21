@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from './authStore'
-import { apiClient } from '../api/apiClient'
+import { apiClient, ApiError } from '../api/apiClient'
 
-vi.mock('../api/apiClient', () => ({
+vi.mock('../api/apiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/apiClient')>()),
   apiClient: { get: vi.fn(), post: vi.fn(), setUnauthorizedHandler: vi.fn() },
 }))
 
@@ -85,5 +86,32 @@ describe('authStore', () => {
     const store = useAuthStore()
     store.user = null
     expect(store.canWrite('article')).toBe(false)
+  })
+
+  it('logout clears the user; a 401 from the server counts as success', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue(new ApiError(401, 'no session'))
+    const store = useAuthStore()
+    store.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
+    await expect(store.logout()).resolves.toBeUndefined()
+    expect(store.user).toBeNull()
+    expect(store.loggingOut).toBe(false)
+  })
+
+  it('logout still clears the user and rethrows a server failure', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue(new ApiError(500, 'boom'))
+    const store = useAuthStore()
+    store.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
+    await expect(store.logout()).rejects.toMatchObject({ status: 500 })
+    expect(store.user).toBeNull()
+    expect(store.loggingOut).toBe(false)
+  })
+
+  it('a successful sign-in clears the session-expired flag', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ id: 'u1' })
+    vi.mocked(apiClient.get).mockResolvedValue({ id: 'u1', isSuperAdmin: false, permissions: {} })
+    const store = useAuthStore()
+    store.sessionExpired = true
+    await store.login('a@b.com', 'pw')
+    expect(store.sessionExpired).toBe(false)
   })
 })

@@ -59,6 +59,7 @@ export default {
     account: '帳戶',
     superAdmin: '超級管理員',
     member: '一般使用者',
+    logoutIncomplete: '已在此處登出,但伺服器未能確認。若這是共用電腦,請關閉瀏覽器。',
   },
   errors: {
     tooManyRequests: '嘗試次數過多,請稍後再試。',
@@ -123,6 +124,7 @@ export default {
     ssoEmailNotVerified: '外部帳號的 Email 尚未驗證,無法登入。',
     ssoDomainNotAllowed: '此 Email 網域不在允許的範圍內。',
     ssoTenantNotAllowed: '此組織租用戶不在允許的範圍內。',
+    sessionExpired: '登入已逾時,請重新登入。',
   },
   dashboard: {
     title: '儀表板',

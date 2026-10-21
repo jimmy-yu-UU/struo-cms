@@ -9,10 +9,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
 import { useAuthStore } from '@/stores/authStore'
+import { resetSessionStores } from '@/stores/resetSessionStores'
+import { useToast } from '@/composables/useToast'
 
 const auth = useAuthStore()
 const router = useRouter()
 const { t } = useI18n()
+const toast = useToast()
 
 const passwordDialogOpen = ref(false)
 
@@ -20,8 +23,14 @@ const roleLabel = computed(() => (auth.user?.isSuperAdmin ? t('user.superAdmin')
 const displayName = computed(() => auth.user?.name || auth.user?.email || roleLabel.value)
 
 async function onLogout(): Promise<void> {
-  await auth.logout()
-  router.push({ name: 'login' })
+  // Always ends on the login page: a failed server-side sign-out is reported, not trapped in.
+  try {
+    await auth.logout()
+  } catch {
+    toast.add({ severity: 'warn', summary: t('user.logoutIncomplete'), life: 6000 })
+  }
+  await router.push({ name: 'login' })
+  resetSessionStores()
 }
 </script>
 

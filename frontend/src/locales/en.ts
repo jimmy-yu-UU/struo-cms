@@ -59,6 +59,7 @@ export default {
     account: 'Account',
     superAdmin: 'Super Admin',
     member: 'Member',
+    logoutIncomplete: 'You were signed out here, but the server could not confirm it. If this is a shared computer, close the browser.',
   },
   errors: {
     tooManyRequests: 'Too many attempts. Please try again later.',
@@ -123,6 +124,7 @@ export default {
     ssoEmailNotVerified: "The external account's email is not verified, so it cannot sign in.",
     ssoDomainNotAllowed: 'This email domain is not allowed.',
     ssoTenantNotAllowed: 'This organization tenant is not allowed.',
+    sessionExpired: 'Your session has expired. Please sign in again.',
   },
   dashboard: {
     title: 'Dashboard',

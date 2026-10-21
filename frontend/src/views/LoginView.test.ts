@@ -14,6 +14,7 @@ const { push, replace, route } = vi.hoisted(() => ({
 }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: () => route }))
 
+const BACKSLASH = String.fromCharCode(92)
 const mountLogin = () => mount(LoginView, { global: { plugins: [i18n] } })
 
 describe('LoginView', () => {
@@ -255,5 +256,81 @@ describe('LoginView', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(submitBtn().text()).toBe('登入')
     expect(submitBtn().attributes('disabled')).toBeUndefined()
+  })
+
+  // ---- ?redirect= and the session-expired notice -------------------------------
+
+  async function submitLogin() {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockResolvedValue()
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+  }
+
+  it('returns to a same-origin ?redirect= path after password sign-in', async () => {
+    route.query = { redirect: '/collections/article/5?tab=2' }
+    await submitLogin()
+    expect(push).toHaveBeenCalledWith('/collections/article/5?tab=2')
+  })
+
+  it.each([['//evil.example'], ['/' + BACKSLASH + 'evil.example'],['https://evil.example'], ['']])(
+    'ignores the unsafe ?redirect=%j and lands on the dashboard',
+    async (bad) => {
+      route.query = { redirect: bad }
+      await submitLogin()
+      expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
+    },
+  )
+
+  it('passes the validated redirect to SSO as an encoded returnUrl', async () => {
+    useAppConfigStore().oidcEnabled = true
+    route.query = { redirect: '/collections/article?page=2&q=a' }
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    try {
+      const wrapper = mountLogin()
+      await wrapper.find('[data-test="sso"]').trigger('click')
+      expect(window.location.href).toBe('/api/auth/login/oidc?returnUrl=/collections/article%3Fpage%3D2%26q%3Da')
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
+  it('passes returnUrl=/ to SSO when the redirect is unsafe', async () => {
+    useAppConfigStore().oidcEnabled = true
+    route.query = { redirect: '//evil.example' }
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    try {
+      const wrapper = mountLogin()
+      await wrapper.find('[data-test="sso"]').trigger('click')
+      expect(window.location.href).toBe('/api/auth/login/oidc?returnUrl=/')
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
+  it('shows the session-expired notice for ?reason=expired and keeps the redirect in the URL', async () => {
+    route.query = { reason: 'expired', redirect: '/collections/article/5' }
+    const wrapper = mountLogin()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="status"]').text()).toBe('登入已逾時,請重新登入。')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(replace).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/collections/article/5' } })
+  })
+
+  it('keeps the redirect when an ?error= code is cleared from the URL', () => {
+    route.query = { error: 'external_login_failed', redirect: '/media' }
+    mountLogin()
+    expect(replace).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/media' } })
+  })
+
+  it('shows no notice for an unknown ?reason= value', () => {
+    route.query = { reason: 'whatever' }
+    const wrapper = mountLogin()
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 })

@@ -3,6 +3,10 @@ import { languagesApi } from '../api/languagesApi'
 import { i18n } from '../i18n'
 import type { LanguageInfo } from '../types/schema'
 
+// Bumped by reset(): a load that started before the reset sees a different value when it settles
+// and discards its result, so a previous session's data can never land in the next one.
+let generation = 0
+
 export const useLanguageStore = defineStore('language', {
   state: () => ({
     languages: [] as LanguageInfo[],
@@ -21,18 +25,30 @@ export const useLanguageStore = defineStore('language', {
       state.languages.find((l) => l.isDefault)?.code ?? state.languages[0]?.code ?? '',
   },
   actions: {
+    // Forgets everything loaded for the previous user; the next load() fetches afresh.
+    reset(): void {
+      generation += 1
+      this.languages = []
+      this.loaded = false
+      this.loadError = ''
+      this.loadPromise = null
+    },
     load(): Promise<void> {
       if (this.loaded) return Promise.resolve()
       if (this.loadPromise) return this.loadPromise
+      const started = generation
       this.loadPromise = (async () => {
         try {
-          this.languages = await languagesApi.getEnabled()
+          const result = await languagesApi.getEnabled()
+          if (started !== generation) return
+          this.languages = result
           this.loaded = true
           this.loadError = ''
         } catch (e) {
+          if (started !== generation) return
           this.loadError = e instanceof Error ? e.message : i18n.global.t('common.loadFailed')
         } finally {
-          this.loadPromise = null
+          if (started === generation) this.loadPromise = null
         }
       })()
       return this.loadPromise

@@ -74,6 +74,7 @@ async function save(): Promise<void> {
 // unsavedConfirm() copy as the item form rather than duplicating an i18n key. require() resolves
 // false on cancel and on dismissal alike, which is the "stay here" outcome either way.
 async function guardLeave(): Promise<boolean> {
+  if (auth.sessionExpired) return true // expired session: unsaved edits are dropped by design
   if (!isAdmin.value || !dirty.value) return true
   return confirm.require(unsavedConfirm(t))
 }

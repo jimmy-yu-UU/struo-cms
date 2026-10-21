@@ -2,8 +2,21 @@
 
 ## 0.13.0
 
+### Added
+
+- After signing in, the admin returns to the page that was requested. Opening a deep link while signed
+  out, or having the session end mid-work, now lands on that page once you sign in again (password
+  or Microsoft 365); only a same-origin path is honoured, anything else falls back to the dashboard.
+
 ### Fixed
 
+- A failed logout request left the user stranded in the admin. Logout now always ends on the login
+  page, clears the per-user data held in the browser, and shows a warning when the server could not
+  confirm the sign-out; a `401` (no session left to end) counts as success.
+- An expired session could trap an open edit form behind its unsaved-changes prompt. When the
+  server rejects a request because the session ended, the admin now goes straight to the login page
+  with a "session expired" notice, dropping unsaved edits instead of asking about them, and returns
+  to the same page after sign-in. A wrong password or a signed-out visit behaves as before.
 - The media details dialog could save one file's title, alt text and status onto another: switching
   files quickly let a slow earlier load overwrite the form, and Save then targeted the file the
   dialog pointed at. The form now clears while the next file loads, Save stays disabled until that

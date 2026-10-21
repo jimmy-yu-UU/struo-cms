@@ -26,7 +26,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  return authGuard({ name: to.name as string, meta: to.meta }, auth.isAuthenticated)
+  return authGuard({ name: to.name as string, meta: to.meta, fullPath: to.fullPath }, auth.isAuthenticated)
 })
 
 export default router

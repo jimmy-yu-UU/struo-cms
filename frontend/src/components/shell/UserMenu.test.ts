@@ -5,9 +5,13 @@ import UserMenu from './UserMenu.vue'
 import ChangePasswordDialog from '../account/ChangePasswordDialog.vue'
 import { useAuthStore } from '../../stores/authStore'
 import { i18n } from '../../i18n'
+import { ApiError } from '../../api/apiClient'
+import { useSchemaStore } from '../../stores/schemaStore'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+const toastAdd = vi.fn()
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
 
 function mountMenu() {
   // reka-ui's DropdownMenu portal is itself named "Teleport" -- see vitest.setup.ts for why
@@ -84,6 +88,56 @@ describe('UserMenu', () => {
     await flushPromises()
 
     expect(logoutSpy).toHaveBeenCalledOnce()
+    expect(push).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  async function clickLogout() {
+    const wrapper = mountMenu()
+    await openMenu(wrapper)
+    const item = wrapper.findAll('[role="menuitem"]').find((el) => el.text().includes('登出'))
+    await item!.trigger('click')
+    await flushPromises()
+  }
+
+  it('logout resets the per-user stores and shows no warning on success', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.spyOn(auth, 'logout').mockResolvedValue()
+    const schema = useSchemaStore()
+    schema.loaded = true
+    await clickLogout()
+    expect(schema.loaded).toBe(false)
+    expect(toastAdd).not.toHaveBeenCalled()
+  })
+
+  it('a 401 from the logout request is a silent success that still ends on login', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.spyOn(auth, 'logout').mockResolvedValue() // the store maps 401 to success (authStore.test.ts)
+    await clickLogout()
+    expect(push).toHaveBeenCalledWith({ name: 'login' })
+    expect(toastAdd).not.toHaveBeenCalled()
+  })
+
+  it('a server failure warns with a toast but still ends on login with the stores reset', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.spyOn(auth, 'logout').mockRejectedValue(new ApiError(500, 'boom'))
+    const schema = useSchemaStore()
+    schema.loaded = true
+    await clickLogout()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn' }))
+    expect(toastAdd.mock.calls[0][0].summary).toBeTruthy()
+    expect(push).toHaveBeenCalledWith({ name: 'login' })
+    expect(schema.loaded).toBe(false)
+  })
+
+  it('a network failure also warns and ends on login', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.spyOn(auth, 'logout').mockRejectedValue(new TypeError('Failed to fetch'))
+    await clickLogout()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn' }))
     expect(push).toHaveBeenCalledWith({ name: 'login' })
   })
 
