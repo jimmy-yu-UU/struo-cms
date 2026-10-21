@@ -15,6 +15,12 @@
   `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
   fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
   `8080`。
+- `Struo:Files:ImageTransform:MaxConcurrentTransforms` 至少要是 `2`；設成 `1` 會讓啟動失敗，並指出
+  是哪個鍵。匿名請求現在最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以設為 `1` 的 fork
+  要改成 `2` 以上。出廠預設值是 `2`，此時匿名的冷轉換一次只跑一個；對外提供公開圖片、想讓匿名請求有
+  更多並行的 fork，請調高這個設定。
+- `POST /api/items/user` 與 GraphQL 的 `createUser` 現在回 `400` `BAD_USER_INPUT`。建立使用者請用
+  `POST /api/users`，或用後台使用者清單上「新增」開啟的對話框。
 :::
 
 ### 新增
@@ -29,6 +35,24 @@
 
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
+- 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已驗證的
+  請求（session cookie 或 bearer token）仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
+  `IMAGE_TRANSFORM_BUSY`。
+
+### 修正
+
+- 集合產生的 GraphQL 名稱若跟其他集合或內建名稱撞在一起（`article` 與 `articleList`、`category` 與
+  `categories`、名為 `revision` 的集合），現在啟動會中止，原因鏈裡有一個 `MetadataException`，訊息點名相關集合與撞名
+  的名稱。過去是在 GraphQL schema 建置途中以重複型別的錯誤失敗。
+- JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
+  照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
+- 通用項目 API 不再建立 `user`，跟它原本就不建立 `file` 一致：建立使用者需要密碼雜湊與密碼原則，只有
+  `POST /api/users` 會套用。後台由超級管理員在使用者清單按「新增」，開啟背後呼叫該端點的對話框來建立
+  使用者；檔案清單沒有「新增」按鈕。
+- 外部（OIDC）登入現在可以在 `pnpm dev` 下使用。Vite 開發伺服器把 `/signin-oidc` 與
+  `/signout-callback-oidc` 轉發給 API，且所有代理路徑都保留瀏覽器的 `Host`，所以提供者拿到的
+  `redirect_uri` 是 `http://localhost:5173/signin-oidc`，不再是 `:5221`。開發時請向提供者登記這個
+  網址（以及登出回呼）。
 
 ### 安全性
 

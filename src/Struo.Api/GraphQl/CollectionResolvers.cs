@@ -34,9 +34,9 @@ internal static class CollectionResolvers
     {
         var config = new ObjectFieldConfiguration(
             SchemaTypeMapper.ListFieldName(collection), null,
-            TypeReference.Parse(SchemaTypeMapper.TypeName(collection) + "List!"),
+            TypeReference.Parse(SchemaTypeMapper.ListTypeName(collection) + "!"),
             resolver: ctx => ResolveList(ctx, collection, metadata));
-        config.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse(SchemaTypeMapper.TypeName(collection) + "FilterInput")));
+        config.Arguments.Add(new ArgumentConfiguration("filter", null, TypeReference.Parse(SchemaTypeMapper.FilterInputName(collection))));
         config.Arguments.Add(new ArgumentConfiguration("sort", null, TypeReference.Parse("[String!]")));
         config.Arguments.Add(new ArgumentConfiguration("limit", null, TypeReference.Parse("Int")));
         config.Arguments.Add(new ArgumentConfiguration("offset", null, TypeReference.Parse("Int")));

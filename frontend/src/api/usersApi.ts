@@ -8,7 +8,16 @@ export type ChangePasswordBody = {
   currentPassword?: string
 }
 
+export type CreateUserBody = { email: string; password: string; name?: string }
+export type CreatedUser = { id: string; email: string; name?: string | null }
+
 export const usersApi = {
+  // POST /api/users (super-admin only): the one endpoint that hashes the password and applies the
+  // password policy when a user row is created. 409 CONFLICT = email already in use.
+  create(body: CreateUserBody): Promise<CreatedUser> {
+    return apiClient.post<CreatedUser>('/users', body)
+  },
+
   // Returns 204: no body. The API decides self-service vs admin-reset from whether {userId} is the
   // caller, so this client does not need (or get) a mode flag.
   changePassword(userId: string, body: ChangePasswordBody): Promise<void> {

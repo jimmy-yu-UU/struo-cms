@@ -4,6 +4,7 @@ using HotChocolate.Types;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
@@ -23,7 +24,6 @@ public sealed class StruoTypeModule(
     public ValueTask<IReadOnlyCollection<ITypeSystemMember>> CreateTypesAsync(
         IDescriptorContext context, CancellationToken cancellationToken)
     {
-        var builder = new CollectionSchemaBuilder(registry, metadata, m2mSource);
         var types = new List<ITypeSystemMember>();
 
         // Shared value types.
@@ -35,13 +35,78 @@ public sealed class StruoTypeModule(
         types.AddRange(SharedFilterTypes.Build());
         types.AddRange(SharedFacetTypes.Build());
 
-        var collections = metadata.GetCollections();
-        foreach (var meta in collections)
-            types.AddRange(builder.Build(meta));
+        var collections = BuildCollections();
+        GraphQlNameValidator.Validate(collections.Select(c => c.Surface).ToList());
+        foreach (var collection in collections)
+            types.AddRange(collection.Types);
 
-        types.Add(BuildQueryExtension(collections.Select(c => c.Name)));
-        types.Add(BuildMutationExtension(collections.Select(c => c.Name)));
+        types.Add(ExtensionOf("Query", collections.SelectMany(c => c.QueryFields)));
+        types.Add(MutationExtension(collections.SelectMany(c => c.MutationFields)));
         return new ValueTask<IReadOnlyCollection<ITypeSystemMember>>(types);
+    }
+
+    /// <summary>
+    /// Fails fast with a <see cref="Struo.Domain.Metadata.MetadataException"/> naming the colliding
+    /// collection(s) and GraphQL name(s) when the collection set would generate duplicate names.
+    /// <see cref="CreateTypesAsync"/> runs the same check on the types it is about to register.
+    /// </summary>
+    internal void ValidateNames() => GraphQlNameValidator.Validate(DescribeCollections());
+
+    internal IReadOnlyList<CollectionSurface> DescribeCollections() =>
+        BuildCollections().Select(c => c.Surface).ToList();
+
+    private sealed record CollectionTypes(
+        IReadOnlyList<ITypeSystemMember> Types,
+        IReadOnlyList<ObjectFieldConfiguration> QueryFields,
+        IReadOnlyList<ObjectFieldConfiguration> MutationFields,
+        CollectionSurface Surface);
+
+    private List<CollectionTypes> BuildCollections()
+    {
+        var builder = new CollectionSchemaBuilder(registry, metadata, m2mSource);
+        var result = new List<CollectionTypes>();
+        foreach (var meta in metadata.GetCollections())
+        {
+            var built = builder.Build(meta);
+            var query = QueryFieldsOf(meta);
+            var mutation = MutationFieldsOf(meta);
+            result.Add(new CollectionTypes(
+                built.Types, query, mutation,
+                new CollectionSurface(
+                    meta.Name,
+                    built.TypeNames,
+                    query.Select(f => f.Name).ToList(),
+                    mutation.Select(f => f.Name).ToList())));
+        }
+        return result;
+    }
+
+    private List<ObjectFieldConfiguration> QueryFieldsOf(CollectionMetadata meta)
+    {
+        var fields = new List<ObjectFieldConfiguration>
+        {
+            CollectionResolvers.SingleField(meta.Name, metadata),
+            CollectionResolvers.ListField(meta.Name, metadata),
+        };
+        if (meta.Revisions)
+        {
+            fields.Add(RevisionResolvers.RevisionsField(meta.Name));
+            fields.Add(RevisionResolvers.RevisionField(meta.Name));
+        }
+        return fields;
+    }
+
+    private List<ObjectFieldConfiguration> MutationFieldsOf(CollectionMetadata meta)
+    {
+        var fields = new List<ObjectFieldConfiguration>
+        {
+            MutationResolvers.CreateField(meta.Name, metadata),
+            MutationResolvers.UpdateField(meta.Name, metadata),
+            MutationResolvers.DeleteField(meta.Name),
+            MutationResolvers.RestoreField(meta.Name),
+        };
+        if (meta.Revisions) fields.Add(MutationResolvers.RevertField(meta.Name));
+        return fields;
     }
 
     private static ObjectType TagItemType()
@@ -84,36 +149,21 @@ public sealed class StruoTypeModule(
         return ObjectType.CreateUnsafe(config);
     }
 
-    private ObjectTypeExtension BuildQueryExtension(IEnumerable<string> collectionNames)
+    private static ObjectTypeExtension ExtensionOf(string rootName, IEnumerable<ObjectFieldConfiguration> fields)
     {
-        var config = new ObjectTypeConfiguration("Query");
-        foreach (var name in collectionNames)
-        {
-            config.Fields.Add(CollectionResolvers.SingleField(name, metadata));
-            config.Fields.Add(CollectionResolvers.ListField(name, metadata));
-            if (metadata.GetCollection(name)?.Revisions == true)
-            {
-                config.Fields.Add(RevisionResolvers.RevisionsField(name));
-                config.Fields.Add(RevisionResolvers.RevisionField(name));
-            }
-        }
+        var config = new ObjectTypeConfiguration(rootName);
+        foreach (var field in fields) config.Fields.Add(field);
         return ObjectTypeExtension.CreateUnsafe(config);
     }
 
-    private ObjectTypeExtension BuildMutationExtension(IEnumerable<string> collectionNames)
+    private static ObjectTypeExtension MutationExtension(IEnumerable<ObjectFieldConfiguration> fields)
     {
         var config = new ObjectTypeConfiguration("Mutation");
-        foreach (var name in collectionNames)
+        foreach (var field in fields)
         {
-            config.Fields.Add(MutationResolvers.CreateField(name, metadata));
-            config.Fields.Add(MutationResolvers.UpdateField(name, metadata));
-            config.Fields.Add(MutationResolvers.DeleteField(name));
-            config.Fields.Add(MutationResolvers.RestoreField(name));
-            if (metadata.GetCollection(name)?.Revisions == true)
-                config.Fields.Add(MutationResolvers.RevertField(name));
-        }
-        foreach (var field in config.Fields)
             field.MiddlewareConfigurations.Add(MutationAuthentication.Configuration);
+            config.Fields.Add(field);
+        }
         return ObjectTypeExtension.CreateUnsafe(config);
     }
 

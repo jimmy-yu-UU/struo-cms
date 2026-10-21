@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import CollectionListView from './CollectionListView.vue'
+import CreateUserDialog from '@/components/account/CreateUserDialog.vue'
 import FilterBuilder from '@/components/data/FilterBuilder.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
@@ -295,6 +296,90 @@ describe('CollectionListView', () => {
     const vm: any = wrapper.vm
     vm.onNew()
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-create', params: { name: 'article' } })
+  })
+
+  function seedCollection(collection: string) {
+    const schema = useSchemaStore()
+    schema.collections = [{ name: collection, label: collection, defaultDisplayField: 'status', fields: [], relations: [] }]
+    schema.loaded = true
+    seedLanguage()
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    mockRoute.params.name = collection
+  }
+
+  it('hides the New button for the file collection (created by upload)', async () => {
+    seedCollection('file')
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    expect((w.vm as any).canWrite).toBe(true)
+    expect(w.text()).not.toContain('New')
+    expect((w.vm as any).canCreate).toBe(false)
+  })
+
+  it('hides the New button on user for a non-super-admin with a write grant', async () => {
+    seedCollection('user')
+    useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true } } } as any
+    const w = mountView()
+    await flushPromises()
+    expect((w.vm as any).canWrite).toBe(true)
+    expect(w.text()).not.toContain('New')
+    expect((w.vm as any).canCreate).toBe(false)
+  })
+
+  it('shows New on user for a super-admin and opens the create-user dialog instead of the item form', async () => {
+    seedCollection('user')
+    pushMock.mockClear()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('New')
+    const vm: any = w.vm
+    expect(vm.canCreate).toBe(true)
+    vm.onNew()
+    expect(vm.createUserOpen).toBe(true)
+    expect(pushMock).not.toHaveBeenCalled()
+  })
+
+  it('mounts the create-user dialog and opens it from the New button', async () => {
+    seedCollection('user')
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    const dialog = w.findComponent(CreateUserDialog)
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props('open')).toBe(false)
+    await w.findAll('button').find((b) => b.text().includes('New'))!.trigger('click')
+    expect(w.findComponent(CreateUserDialog).props('open')).toBe(true)
+  })
+
+  it('does not mount the create-user dialog for other collections', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    mockRoute.params.name = 'article'
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(CreateUserDialog).exists()).toBe(false)
+  })
+
+  it('navigates to the new user edit page after the dialog creates one', async () => {
+    seedCollection('user')
+    pushMock.mockClear()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    ;(w.vm as any).onUserCreated({ id: 'new-id', email: 'a@b.c' })
+    expect(pushMock).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'user', id: 'new-id' } })
+  })
+
+  it('shows the New button for an ordinary collection with write permission', async () => {
+    seedSchema(); seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('New')
   })
 
   it('shows the trash switch only for a soft-delete collection with delete permission', async () => {

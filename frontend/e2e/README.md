@@ -16,7 +16,7 @@ Both suites need, at minimum:
 
 - The API running and reachable at the base URL the specs call (default
   `http://localhost:5221`, the `http` launch profile's `applicationUrl`; override with `E2E_API` — this
-  is separate from the Vite dev-proxy target in `vite.config.ts`, which is not environment-driven).
+  is separate from the Vite dev-proxy target in `vite.proxy.ts`, which is not environment-driven).
 - A reachable, migrated database with the seeded bootstrap admin (`Auth:BootstrapAdmin:Email` /
   `Auth:BootstrapAdmin:Password`). The API refuses to start on an unmigrated database: run
   `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local

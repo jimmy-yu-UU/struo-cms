@@ -38,8 +38,12 @@ email 存不存在。
 
 `POST /api/users` 建立使用者，只有超級管理員能呼叫：成功回 `201`，body 是
 `{ id, email, name }`，`Location` 指向 `/api/items/user/{id}`，這是通用項目路由，因為沒有專屬
-的 `GET /api/users/{id}`；email 已經有人用則回 `409` `CONFLICT` `Email already in use.`。密碼
-要合乎的長度上下限與鍵名，見[第 4 章：設定參考](04-configuration.md)的 `Auth` 一節。
+的 `GET /api/users/{id}`；通用的 `POST /api/items/user` 不會建立使用者（`400`），因為只有這個
+端點會雜湊密碼並套用密碼原則；email 已經有人用則回 `409` `CONFLICT` `Email already in use.`。密碼要合乎的長度
+上下限與鍵名，見[第 4 章：設定參考](04-configuration.md)的 `Auth` 一節。
+
+後台從使用者清單的「新增」按鈕呼叫這個端點，只有超級管理員看得到。對話框要填 email、選填的顯示
+名稱，以及輸入兩次的密碼；它不處理角色，建立完成後會開啟新使用者的頁面，角色在那裡指派。
 
 改密碼走 `PUT /api/users/{id}/password`：呼叫端要嘛是超級管理員，要嘛是本人並附上
 `currentPassword`，本人改密碼一定要驗證目前密碼，超級管理員代改則不用。目前密碼不對回 `400`
@@ -223,6 +227,11 @@ HTTP_STATUS:429
 的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯 cookie 帶
 `Secure`，所以其他來源都要用 `https`。要用
 登出回呼的話，同樣登記 `/signout-callback-oidc`。
+
+在 `pnpm dev` 下開發時，登記 `http://localhost:5173/signin-oidc`；要用登出回呼的話，再登記
+`http://localhost:5173/signout-callback-oidc`。Vite 開發伺服器會把這兩個路徑轉發給 API，並保留瀏覽器的
+`Host`，API 就依你開啟開發伺服器用的主機組出重新導向網址。請開 `http://localhost:5173`，不要開
+`http://127.0.0.1:5173`，才會跟登記的網址一致。
 
 管理映像的 nginx 會把 `/signin-oidc` 與 `/signout-callback-oidc` 和 `/api/` 一樣代理給 API，所以提供者
 的重新導向會落回登入當初的那個來源。自訂的 `Oidc:CallbackPath` 只要在 `/api/` 底下，例如

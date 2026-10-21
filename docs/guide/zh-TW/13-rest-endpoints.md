@@ -44,6 +44,11 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 寫入或刪除 `permission`、`role`、`user`、`userRole` 這四個內建集合，以及任何被 fork 標成
 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
 
+有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
+`BAD_USER_INPUT`，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。檔案要上傳到
+`POST api/files`，使用者要走會設定密碼的 `POST api/users`。使用者的檢查排在最前面，所以重複 email
+在這裡是 `400`，不是 `409`。這兩個集合的讀取、更新與刪除仍然走通用路由。
+
 版本紀錄與垃圾桶的完整規則（`DELETE` 的等冪行為、`?purge=` 的細節、版本快照的欄位形狀）留給
 [第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)；沒有版本紀錄的集合，讀取版本列表會回空
 陣列，不是 404；未知的項目 id，或呼叫端沒有刪除授權的垃圾桶項目，則回 404。
@@ -109,7 +114,9 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 串，預覽的是公開角色的權限下限，跟完全不帶這個參數不一樣；格式錯誤或不存在的角色 id 都會被擋下，
 不會悄悄少算。
 
-使用者的列表、更新與刪除都走通用項目 API 的 `user` 集合——建立回應的 `Location` 就是指向那裡。
+使用者的列表、更新與刪除都走通用項目 API 的 `user` 集合——建立回應的 `Location` 就是指向那裡。在
+那裡建立使用者會被 `400` 擋下，訊息是 `Users cannot be created through the generic items API.
+Create one with POST /api/users instead.`。
 
 ## Roles `api/roles`
 

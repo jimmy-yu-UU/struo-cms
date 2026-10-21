@@ -17,6 +17,13 @@
   `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
   own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
   `8080`.
+- `Struo:Files:ImageTransform:MaxConcurrentTransforms` must be at least `2`; `1` stops startup with an
+  error naming the key. Anonymous requests now hold at most `MaxConcurrentTransforms - 1` transform
+  slots, so a fork that set `1` raises it to `2` or more. With the shipped default of `2`, anonymous
+  cold transforms run one at a time; a fork that serves public images and wants more of them in
+  parallel raises the setting.
+- `POST /api/items/user` and the GraphQL `createUser` mutation now return `400` `BAD_USER_INPUT`.
+  Create users with `POST /api/users`, or with the admin UI's "New" dialog on the user list.
 :::
 
 ### Added
@@ -33,6 +40,30 @@
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
+- Anonymous image transforms hold at most `MaxConcurrentTransforms - 1` slots, so an authenticated
+  request (session cookie or bearer token) can always use the remaining slot while anonymous requests
+  saturate the rest. An anonymous request past that cap waits for `QueueTimeoutSeconds` and then gets
+  `503` `IMAGE_TRANSFORM_BUSY`.
+
+### Fixed
+
+- A collection whose generated GraphQL names collide with another collection's or with a built-in
+  name (`article` with `articleList`, `category` with `categories`, a collection named `revision`)
+  now stops startup with an error whose cause chain carries a `MetadataException` naming the
+  collection(s) and the clashing name(s). It used to fail inside the GraphQL schema build with a
+  duplicate-type error.
+- A JPEG's stored `width` and `height` now follow its Exif orientation: orientations 5 to 8 (a 90 degree
+  turn) swap the two, so a portrait photo that a phone saved sideways reports the size it is displayed
+  at. This applies to JPEG uploads made from now on; existing rows keep the dimensions they were stored
+  with, and WebP and AVIF files still report their coded size.
+- The generic items API refuses to create a `user`, the same way it already refuses a `file`, because
+  creating a user needs the password hashing and password policy that only `POST /api/users` applies.
+  In the admin UI, a super-admin creates users from the "New" button on the user list, which opens a
+  dialog backed by that endpoint; the file list has no "New" button.
+- External (OIDC) sign-in now works under `pnpm dev`. The Vite dev server forwards `/signin-oidc` and
+  `/signout-callback-oidc` to the API and keeps the browser's `Host` on every proxied path, so the
+  provider's `redirect_uri` is `http://localhost:5173/signin-oidc` instead of `:5221`. Register that
+  URI (and the sign-out callback) with your provider for development.
 
 ### Security
 

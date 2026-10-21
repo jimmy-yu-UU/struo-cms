@@ -1,10 +1,10 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
-import http from 'node:http'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { devProxy } from './vite.proxy.ts'
 
 // The sidebar footer shows this; Vite inlines it at build time so the SPA never carries a literal.
 const { version: appVersion } = JSON.parse(
@@ -47,16 +47,8 @@ export default defineConfig({
     // Playwright) navigating to http://localhost:5173 cannot connect. Binding 127.0.0.1
     // explicitly is unambiguous and works everywhere loopback access is needed.
     host: '127.0.0.1',
-    // Same-origin dev/E2E: browser hits /api on the Vite origin, proxied to the API.
-    // Without an agent the proxy opens a new upstream connection with `Connection: close` per
-    // request, and on Windows a share of those end in ECONNRESET ("Failed to fetch").
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5221',
-        changeOrigin: true,
-        agent: new http.Agent({ keepAlive: true }),
-      },
-    },
+    // Same-origin dev/E2E: the browser hits the Vite origin; see vite.proxy.ts.
+    proxy: devProxy,
   },
   test: {
     environment: 'jsdom',

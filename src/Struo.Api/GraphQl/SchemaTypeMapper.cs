@@ -17,6 +17,8 @@ public static class SchemaTypeMapper
     public static bool IsExcluded(FieldInterface iface) => Excluded.Contains(iface);
 
     public static string TypeName(string collection) => Pascal(collection);
+    public static string ListTypeName(string collection) => Pascal(collection) + "List";
+    public static string FilterInputName(string collection) => Pascal(collection) + "FilterInput";
     public static string SingleFieldName(string collection) => Camel(collection);
     public static string ListFieldName(string collection) => Pluralise(Camel(collection));
     public static string RepeaterItemTypeName(string collection, string field) => Pascal(collection) + Pascal(field) + "Item";

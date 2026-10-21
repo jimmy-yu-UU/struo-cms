@@ -45,7 +45,9 @@ width, keeping its extension and never splitting a surrogate pair. `contentType`
 MIME type; `size` is the actual number of bytes stored.
 
 `width` and `height` are filled in only when the dimensions can be read from the header —
-every other upload, image or not, leaves both blank. `status` is the only one of its own fields
+every other upload, image or not, leaves both blank. For a JPEG they follow the Exif orientation:
+a photo tagged as turned by 90 degrees is stored with width and height swapped, matching how it is
+displayed. WebP and AVIF keep their coded size. `status` is the only one of its own fields
 that's writable, and it decides who can read this row and its bytes, covered in the next section.
 
 `folderId` isn't a `[CmsField]` — it's a many-to-one relation declared with `[CmsRelation]`,
@@ -331,8 +333,9 @@ need, and for an AVIF it is the largest image size the header declares. A derive
 or an overlay) is served as its original bytes, without transformation. When libvips opens the
 source, the size it reads is checked against `MaxSourcePixels` again before any pixel is decoded. A client-supplied `quality`
 is rounded to a multiple of 10; the configured `DefaultQuality` is used exactly as written. At most `MaxConcurrentTransforms` transforms
-run at once; a request that waits longer than `QueueTimeoutSeconds` for a slot gets `503` with the
-`IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
+run at once, and anonymous requests may hold at most one slot fewer, so an authenticated request
+(session cookie or bearer token) can always use the remaining slot. A request that waits longer than `QueueTimeoutSeconds` for a slot it
+may use gets `503` with the `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` header.
 
 ### Examples
 

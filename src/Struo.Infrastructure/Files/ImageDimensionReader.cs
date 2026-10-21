@@ -148,24 +148,119 @@ public sealed class ImageDimensionReader(ILogger<ImageDimensionReader>? log = nu
 
     // JPEG: FF D8, then marker segments walked by their length field up to the first SOFn, which
     // carries height/width as big-endian uint16. Segments are skipped, never decoded, and the walk ends
-    // at SOS/EOI or the end of the stream. Reads only, so a stream that cannot report its length works.
+    // at SOS/EOI or the end of the stream. The Exif orientation in an APP1 segment (usually ahead of
+    // the SOFn) is recorded on the way; orientations 5-8 turn the image by 90 degrees, so the stored
+    // width and height are swapped. Reads only, so a stream that cannot report its length works.
     private static (int, int)? Jpeg(byte[] b, Stream s)
     {
         if (!HasJpegSignature(b)) return null;
         s.Position = 2;
+        var orientation = 0;   // 0: no valid Exif orientation seen yet
         while (true)
         {
-            var marker = NextJpegMarker(s);
-            if (marker < 0) return null;
-            if (IsStandaloneJpegMarker(marker)) continue;
-            if (EndsBeforeFrameHeader(marker)) return null;
-
-            var len = ReadJpegSegmentLength(s);
-            if (len < 2) return null;
-            if (IsSofMarker(marker)) return ReadJpegFrameSize(s, len);
-            if (!SkipByReading(s, len - 2)) return null;
+            var step = NextJpegSegment(s, out var marker, out var len);
+            if (step == JpegStep.End) return null;
+            if (step == JpegStep.Standalone) continue;
+            if (IsSofMarker(marker)) return Oriented(ReadJpegFrameSize(s, len), orientation);
+            if (!ConsumeSegment(s, marker, len, ref orientation)) return null;
         }
     }
+
+    private enum JpegStep { Segment, Standalone, End }
+
+    // Reads the next marker and, for a segment that has one, its length. End: the stream ended, the
+    // scan or EOI began, or the length is invalid.
+    private static JpegStep NextJpegSegment(Stream s, out int marker, out int len)
+    {
+        len = 0;
+        marker = NextJpegMarker(s);
+        if (marker < 0 || EndsBeforeFrameHeader(marker)) return JpegStep.End;
+        if (IsStandaloneJpegMarker(marker)) return JpegStep.Standalone;
+        len = ReadJpegSegmentLength(s);
+        return len < 2 ? JpegStep.End : JpegStep.Segment;
+    }
+
+    // Reads the first APP1 segment to find the Exif orientation and skips every other segment.
+    // False when the stream ends inside the segment.
+    private static bool ConsumeSegment(Stream s, int marker, int len, ref int orientation)
+    {
+        if (marker != 0xE1 || orientation != 0) return SkipByReading(s, len - 2);
+        var payload = ReadSegmentPayload(s, len - 2);
+        if (payload is null) return false;
+        orientation = ExifOrientation(payload);
+        return true;
+    }
+
+    // Orientations 5-8 (transpose, rotate 90, transverse, rotate 270) exchange the axes.
+    private static (int, int)? Oriented((int, int)? size, int orientation) =>
+        size is { } d && orientation >= 5 ? (d.Item2, d.Item1) : size;
+
+    // Reads exactly count bytes (a JPEG segment is at most 64 KB), or null when the stream ends first.
+    private static byte[]? ReadSegmentPayload(Stream s, int count)
+    {
+        var payload = new byte[count];
+        var filled = 0;
+        while (filled < count)
+        {
+            var read = s.Read(payload, filled, count - filled);
+            if (read <= 0) return null;
+            filled += read;
+        }
+        return payload;
+    }
+
+    // APP1 "Exif\0\0", a TIFF header (II/MM byte order, 0x002A, IFD0 offset) and IFD0 entries of
+    // 12 bytes each; tag 0x0112 is a SHORT holding 1-8. Anything malformed or out of range means
+    // 0 (no orientation), so a bad EXIF block never fails a read and a later APP1 may still supply one.
+    private static int ExifOrientation(byte[] app1)
+    {
+        if (app1.Length < 14 || !app1.AsSpan(0, 6).SequenceEqual("Exif\0\0"u8)) return 0;
+        var little = TiffIsLittleEndian(app1);
+        return little is null ? 0 : Ifd0Orientation(app1, little.Value);
+    }
+
+    // TIFF header at offset 6: "II" or "MM", then 0x002A. Null when it is neither.
+    private static bool? TiffIsLittleEndian(byte[] app1)
+    {
+        const int tiff = 6;
+        bool? little = (app1[tiff], app1[tiff + 1]) switch
+        {
+            ((byte)'I', (byte)'I') => true,
+            ((byte)'M', (byte)'M') => false,
+            _ => null,
+        };
+        return little is { } l && U16(app1, tiff + 2, l) == 0x2A ? l : null;
+    }
+
+    private static int Ifd0Orientation(byte[] app1, bool little)
+    {
+        const int tiff = 6;
+        var ifd = (long)tiff + U32(app1, tiff + 4, little);
+        if (ifd + 2 > app1.Length) return 0;
+        var count = U16(app1, (int)ifd, little);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = ifd + 2 + (long)i * 12;
+            if (entry + 12 > app1.Length) return 0;
+            if (U16(app1, (int)entry, little) == 0x0112) return OrientationValue(app1, (int)entry, little);
+        }
+        return 0;
+    }
+
+    // The orientation entry must be a SHORT (type 3) holding 1-8.
+    private static int OrientationValue(byte[] app1, int entry, bool little)
+    {
+        var value = U16(app1, entry + 8, little);
+        return U16(app1, entry + 2, little) == 3 && value is >= 1 and <= 8 ? value : 0;
+    }
+
+    private static int U16(byte[] b, int o, bool little) =>
+        little ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+
+    private static long U32(byte[] b, int o, bool little) =>
+        little
+            ? b[o] | ((long)b[o + 1] << 8) | ((long)b[o + 2] << 16) | ((long)b[o + 3] << 24)
+            : BeU32(b, o);
 
     private static bool HasJpegSignature(byte[] b) => b.Length >= 4 && b[0] == 0xFF && b[1] == 0xD8;
 
