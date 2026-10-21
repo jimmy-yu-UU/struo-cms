@@ -75,6 +75,8 @@ watch(
 onMounted(() => resolve(toIds(props.modelValue)))
 
 function commit(next: Row[]): void {
+  // A user edit wins over any resolve still in flight.
+  resolveGuard.next()
   rows.value = next
   emit('update:modelValue', next.map((r) => r.id))
 }

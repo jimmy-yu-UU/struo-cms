@@ -595,11 +595,11 @@ describe('MediaDetailDialog', () => {
 
     it('does not touch the new file when a conflict recovery resolves after a file switch', async () => {
       const recovery = deferred<typeof item>()
+      let getCallsForF1 = 0
       vi.spyOn(itemsApi, 'get').mockImplementation(((_c: string, id: string) => {
         if (id === 'f2') return Promise.resolve(itemB)
         return getCallsForF1++ === 0 ? Promise.resolve(item) : recovery.promise
       }) as never)
-      let getCallsForF1 = 0
       vi.spyOn(itemsApi, 'update').mockRejectedValue(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
       const w = mountDialog()
       await flushPromises()
@@ -613,6 +613,22 @@ describe('MediaDetailDialog', () => {
       await flushPromises()
       expect(vm.model.version).toBe(7)
       expect(vm.model.translations.en.title).toBe('Bee')
+    })
+
+    it('refreshes the list but keeps the dialog open when a save finishes after a file switch', async () => {
+      const upd = deferred<unknown>()
+      vi.spyOn(itemsApi, 'get').mockImplementation(((_c: string, id: string) => Promise.resolve(id === 'f1' ? item : itemB)) as never)
+      vi.spyOn(itemsApi, 'update').mockReturnValue(upd.promise as never)
+      const w = mountDialog()
+      await flushPromises()
+      void (w.vm as unknown as Vm).onSave()
+      await flushPromises()
+      await w.setProps({ file: fileB })
+      await flushPromises()
+      upd.resolve({})
+      await flushPromises()
+      expect(w.emitted('saved')).toBeTruthy()
+      expect(w.emitted('close')).toBeFalsy()
     })
   })
 })

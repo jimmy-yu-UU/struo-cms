@@ -37,4 +37,19 @@ describe('FilesField resolve ordering', () => {
     expect(w.text()).toContain('b.png')
     expect(w.text()).not.toContain('a.png')
   })
+
+  it('keeps a user edit made while an earlier resolve is still pending', async () => {
+    const resolvers: Array<(r: ListResult) => void> = []
+    vi.spyOn(itemsApi, 'list').mockImplementation(() => new Promise<ListResult>((r) => { resolvers.push(r) }) as never)
+    const w = mount(FilesField, {
+      props: { field, modelValue: ['f1'] },
+      global: { plugins: [i18n], stubs: { Dialog: true, MediaGrid: true } },
+    })
+    ;(w.vm as any).onReorder([f2])
+    await flushPromises()
+    resolvers[0]({ data: [f1], total: 1 })
+    await flushPromises()
+    expect(w.text()).toContain('b.png')
+    expect(w.text()).not.toContain('a.png')
+  })
 })

@@ -147,13 +147,14 @@ async function onSave(): Promise<void> {
     const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update')
     await itemsApi.update('file', savedId, payload)
     emit('saved')
-    emit('close')
+    // Only close the dialog this save belongs to; the user may have moved on to another file.
+    if (props.file?.id === savedId) emit('close')
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
       // Optimistic-lock clash: someone else changed the item since we loaded it. Recover by
       // refreshing only the concurrency token, preserving the user's in-progress edits, so the
       // next Save overwrites with the current version instead of 409-ing forever.
-      if (raw.value?.id === savedId) {
+      if (raw.value !== null && String(raw.value.id) === savedId) {
         conflict.value = true
         await recoverFromConflict(savedId)
       }
