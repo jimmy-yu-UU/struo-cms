@@ -119,13 +119,15 @@ mechanism is covered in [Chapter 14: GraphQL API](14-graphql.md).
 
 ### The three OIDC checks need pinning down
 
-`Oidc:AllowedTenantId` defaults to a placeholder string that matches no tenant; until it's
-replaced with a real tenant, external login fails for everyone.
+The three checks are set per provider, under `Oidc:Providers:{id}`. In the shipped file the
+`microsoft` entry's `AllowedTenantId` is a placeholder string that matches no tenant; until it's
+replaced with a real tenant, external login through it fails for everyone. The `google` entry has no
+tenant to pin and ships with `RequireEmailVerified` on.
 
-Once a real tenant is in place, `Oidc:RequireEmailVerified` (not required by default) and
-`Oidc:AllowedEmailDomains` (an empty list by default, meaning unrestricted) are both checks that
-permit by default; all three should be pinned down in production, or the only remaining gate is
-email equality. The order these checks run in is covered in [Chapter 16](16-authentication.md).
+With a real tenant in place, `RequireEmailVerified` (not required by default) and
+`AllowedEmailDomains` (an empty list by default, meaning unrestricted) are both checks that
+permit by default; pin down all three for every enabled provider in production, or the only remaining
+gate is email equality. The order these checks run in is covered in [Chapter 16](16-authentication.md).
 
 ### Security response headers: the API only sends nosniff
 
@@ -145,7 +147,7 @@ to `1` before the process ends. Without this step, the process would exit with c
 orchestrator to mistake it for a successful start — it would neither restart nor alert.
 
 The five settings groups `Database`, `Struo:Files`, `Oidc`, `Query`, and `Auth:Password` are all
-bound with `ValidateOnStart`: a missing `Database:ConnectionString`, `Oidc:Enabled=true` without a
+bound with `ValidateOnStart`: a missing `Database:ConnectionString`, an enabled `Oidc:Providers:{id}` without a
 `ClientId`, or a `Query:MaxLimit` outside its range all throw an `OptionsValidationException` and
 fail startup before the application ever starts accepting requests.
 
@@ -282,9 +284,10 @@ replaces the request's URI instead of being prepended to it.
 whose value is empty; it should only be set once every reachable request has TLS terminated here or
 by an upstream proxy.
 
-The image proxies `/api/*`, `/signin-oidc` and `/signout-callback-oidc` to the API, forwarding the
+The image proxies `/api/*` and the OIDC paths `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
+`/signout-oidc-{id}` to the API, forwarding the
 client's `Host` header (with its port) as `Host` and `X-Forwarded-Host`, so the API sees the origin
-the browser used. The two callback paths are the OIDC redirect targets; a custom `Oidc:CallbackPath`
+the browser used. The callback paths are the OIDC redirect targets; a custom `CallbackPath`
 outside `/api/` needs its own `location` block in the template. Chapter 16 covers registering the
 redirect URI.
 
@@ -304,7 +307,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 Scripts load only from the image itself (the theme bootstrap is the file `theme-init.js`, not an inline
 script), the page cannot be framed, and `<form>` posts, `<base>` and plugins are locked to the same
-origin or off. Responses proxied from `/api/*` and the two OIDC callback paths carry `Content-Security-Policy: default-src 'none';
+origin or off. Responses proxied from `/api/*` and the OIDC callback and sign-out paths carry `Content-Security-Policy: default-src 'none';
 frame-ancestors 'none'; sandbox` instead, and any policy the API itself sends there is dropped.
 
 `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` default to empty. Each takes space-separated origins

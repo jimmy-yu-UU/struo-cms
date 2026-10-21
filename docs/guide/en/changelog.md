@@ -2,11 +2,64 @@
 
 ## 0.13.0
 
+::: danger Breaking
+- The `Oidc` section of `appsettings.json` has a new shape: shared `Oidc:ReturnUrlDefault`, plus one
+  entry per identity provider under `Oidc:Providers:{id}` (id: lowercase letters, digits, hyphens).
+  The per-provider keys are `Enabled`, `DisplayName`, `Icon`, `Order`, `Authority`, `ClientId`,
+  `ClientSecret`, `CallbackPath`, `Scopes`, `Prompt`, `RequireEmailVerified`, `AllowedTenantId` and
+  `AllowedEmailDomains`. Move your settings under a provider id, and rename the secret's environment
+  variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`).
+  Before:
+
+  ```json
+  "Oidc": {
+    "Enabled": true,
+    "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+    "ClientId": "<client-id>",
+    "AllowedTenantId": "<tenant-id>"
+  }
+  ```
+
+  After:
+
+  ```json
+  "Oidc": {
+    "Providers": {
+      "microsoft": {
+        "Enabled": true,
+        "DisplayName": "Microsoft 365",
+        "Icon": "microsoft",
+        "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+        "ClientId": "<client-id>",
+        "AllowedTenantId": "<tenant-id>"
+      }
+    }
+  }
+  ```
+- `GET /api/auth/login/oidc` is replaced by `GET /api/auth/login/oidc/{provider}`, which returns `404`
+  for an unknown or disabled provider.
+- `GET /api/config` no longer returns `oidcEnabled`; it returns `oidcProviders`, an array of
+  `{ id, displayName, icon }` in button order.
+- The default callback path is per provider: `/signin-oidc-{id}` instead of `/signin-oidc`. Register
+  the new redirect URI at the identity provider (for Entra with id `microsoft`:
+  `https://<host>/signin-oidc-microsoft`), or set `CallbackPath` to `/signin-oidc` to keep the
+  registered one. Each provider also gets its own sign-out paths, `/signout-callback-oidc-{id}` and
+  `/signout-oidc-{id}`; register the sign-out callback again if you use it. A reverse proxy in front of
+  the API must forward these paths; the admin image's nginx and the Vite dev server already do.
+:::
+
 ### Added
 
+- Several sign-in providers at once. The login page shows one button per enabled provider, ordered by
+  `Order`, then id, and each button starts that provider's own sign-in.
+- A Google preset: a disabled `google` entry ships in `appsettings.json`, with
+  `Authority` `https://accounts.google.com` and `RequireEmailVerified` on.
+- An SSO icon registry in `frontend/src/lib/ssoIcons.ts`. A provider's `Icon` token selects the mark
+  (`microsoft` and `google` are built in, anything else shows a key icon), and a fork adds its own by
+  editing that file.
 - After signing in, the admin returns to the page that was requested. Opening a deep link while signed
   out, or having the session end mid-work, now lands on that page once you sign in again (password
-  or Microsoft 365); only a same-origin path is honoured, anything else falls back to the dashboard.
+  or an external provider); only a same-origin path is honoured, anything else falls back to the dashboard.
 
 ### Fixed
 

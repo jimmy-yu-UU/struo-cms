@@ -276,37 +276,80 @@ partition key is the account, not the caller's IP.
 
 ## OIDC external login
 
-When `Oidc:Enabled` is `false` (the default) or `Oidc:Authority` is left blank, the external-login
-scheme is never registered, and `GET /api/auth/login/oidc` returns `404`. Which keys are required
-to enable it, and what happens when one is missing, is in the `Oidc` section of
-[Chapter 4: Configuration Reference](04-configuration.md).
+Each external identity provider is one entry under `Oidc:Providers:{id}`. A provider that is
+disabled, or whose `Authority` is blank, registers no authentication scheme. `GET /api/auth/login/oidc/{provider}` returns `404` for an unknown or disabled provider, so with no
+usable provider it returns `404` for every id. Which keys are required to enable a provider, and what happens when one is
+missing, is in the `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
-An anonymous `GET /api/config` exposes an `oidcEnabled` field, so the login page knows whether to
-offer the external-login button before the user types anything.
+An anonymous `GET /api/config` returns `oidcProviders`, an array of `{ id, displayName, icon }` in
+button order (`Order` ascending, then id). The login page draws one full-width button per entry,
+labelled with `displayName`, before the user types anything. An empty array means no SSO buttons.
+The response never carries a secret.
 
 External login is the authorization code flow with PKCE. The provider's own token is never
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
-rest. The callback path is `Oidc:CallbackPath`, defaulting to `/signin-oidc`.
+rest. Each provider has its own callback path, `/signin-oidc-{id}` unless `CallbackPath` sets another,
+and two sign-out paths derived from its id: `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`.
+No two enabled providers may share a path.
 
-Sign-in always shows the provider's account picker by default (`Oidc:Prompt` = `select_account`);
+Sign-in always shows the provider's account picker by default (`Prompt` = `select_account`);
 chapter 4 lists the other values and how to send no prompt.
 
-The redirect URI to register with the provider is the origin users open the admin at plus that
-path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oidc` for the Compose
-stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect
-URIs, and the OIDC correlation cookies are `Secure`, so any other origin needs `https`. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
+### Button icons
 
-For development under `pnpm dev`, register `http://localhost:5173/signin-oidc`, and
-`http://localhost:5173/signout-callback-oidc` if you use the sign-out callback. The Vite dev server
-forwards both paths to the API and keeps the browser's `Host`, so the API builds that redirect URI
-from the host you opened the dev server with. Open `http://localhost:5173`, not
+`Icon` is a token, not a URL. The admin UI maps it to an inline SVG mark in
+`frontend/src/lib/ssoIcons.ts`. The built-in tokens are `microsoft` and `google`; matching ignores
+case. An empty or unknown token shows a generic key icon.
+
+To add a brand mark in a fork, add an entry to the `ICONS` table in that file, keyed by a lowercase
+name, and set the name as the provider's `Icon`. Then rebuild the admin. Marks are inline SVG only,
+because the admin's content security policy allows no remote images.
+
+### Setting up Microsoft Entra
+
+Use the single-tenant authority, `https://login.microsoftonline.com/<tenant-id>/v2.0`, and put the
+same tenant id in `AllowedTenantId`. In the app registration, add a Web redirect URI of the admin's
+origin plus the callback path: `https://cms.example.com/signin-oidc-microsoft`. If you set
+`CallbackPath` to `/signin-oidc`, register `https://cms.example.com/signin-oidc` instead.
+
+### Setting up Google
+
+In the Google Cloud console, create an OAuth client of type Web application and add
+`https://cms.example.com/signin-oidc-google` as an authorized redirect URI. Use
+`https://accounts.google.com` as the `Authority`, the client's id as `ClientId`, and its secret as
+`ClientSecret` through an environment variable or user-secrets. Google has no tenant, so leave
+`AllowedTenantId` empty. The shipped entry has `RequireEmailVerified` on; keep it, and add
+`AllowedEmailDomains` to restrict sign-in to your company's domain.
+
+### Any other OpenID Connect provider
+
+Add an entry with any id that fits `[a-z0-9-]`, the provider's `Authority`, the client id and secret,
+and a `DisplayName`. Register `https://cms.example.com/signin-oidc-<id>` as the redirect URI. Accounts
+are linked by email, so if the provider can issue tokens with an unverified email, turn on
+`RequireEmailVerified` or pin `AllowedEmailDomains`. Otherwise a person who controls a matching
+unverified address can take over an existing account.
+
+### Redirect URIs
+
+The redirect URI to register with the provider is the origin users open the admin at plus the
+provider's callback path: `https://cms.example.com/signin-oidc-google`, or
+`http://localhost:8080/signin-oidc-google` for the Compose stack. A plain `http` redirect URI works
+only on `localhost`: Entra rejects other `http` redirect URIs, and the OIDC correlation cookies are
+`Secure`, so any other origin needs `https`. Register the sign-out callback
+`/signout-callback-oidc-{id}` the same way if you use it.
+
+For development under `pnpm dev`, register `http://localhost:5173/signin-oidc-{id}`, and
+`http://localhost:5173/signout-callback-oidc-{id}` if you use the sign-out callback. The Vite dev
+server forwards these paths to the API and keeps the browser's `Host`, so the API builds that redirect
+URI from the host you opened the dev server with. Open `http://localhost:5173`, not
 `http://127.0.0.1:5173`, to match the registered URI.
 
-The admin image's nginx proxies `/signin-oidc` and `/signout-callback-oidc` to the API alongside
-`/api/`, so the provider's redirect lands on the same origin the sign-in started from. A custom
-`Oidc:CallbackPath` under `/api/`, such as `/api/signin-oidc`, is covered by the `/api/` rule with no
-nginx change. Any other custom path needs its own `location` block in
-`frontend/nginx/default.conf.template`, or a matching rule in your own proxy.
+The admin image's nginx proxies `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
+`/signout-oidc-{id}` to the API alongside `/api/`, so the provider's redirect lands on the same origin
+the sign-in started from. The Vite dev server forwards the same paths. A custom `CallbackPath` under
+`/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
+other custom path needs its own `location` block in `frontend/nginx/default.conf.template`, or a
+matching rule in your own proxy.
 
 The API builds the redirect URI from the scheme and host of the request it receives. nginx passes
 the client's `Host` header through with its port, so `http://localhost:<port>` works as is. A
@@ -318,7 +361,7 @@ container's own address, or a dedicated network, as the known proxy; do not trus
 Docker network range or publish the API port (Chapter 20), or the API ignores the header or can be
 made to trust a forged one.
 
-The requested scopes are `Oidc:Scopes`, defaulting to `openid`, `email`, `profile` — leaving it
+The requested scopes are the provider's `Scopes`, defaulting to `openid`, `email`, `profile` — leaving it
 blank and giving an empty array both fall back to that same default, never to no scope at all. The
 claims it reads:
 
@@ -331,14 +374,15 @@ created on the spot into a local user, then exchanged for a local cookie identit
 that user's id — what lands in session state is the exact same mechanism a password login uses.
 Resolution checks the following in order, and failing any one of them fails the login outright:
 
-- the tenant matches (`Oidc:AllowedTenantId`), case-insensitively; the default value is a
-  placeholder that matches no real tenant, blocking every external login until it's replaced;
-- the email is verified (`Oidc:RequireEmailVerified`, not required by default) — a missing or
+- the tenant matches the provider's `AllowedTenantId`, case-insensitively; a blank value skips this
+  check, and the shipped `microsoft` entry's placeholder matches no real tenant, blocking every
+  external login through it until it's replaced;
+- the email is verified (the provider's `RequireEmailVerified`, not required by default) — a missing or
   unparseable claim counts as unverified either way;
 - the identity carries a usable email at all; without one the login is rejected outright, whatever
   else is configured, since this is the only key this flow can match against a local account;
-- the email's domain is on the allowlist (`Oidc:AllowedEmailDomains`, an empty list by default
-  meaning unrestricted);
+- the email's domain is on the allowlist (the provider's `AllowedEmailDomains`, an empty list by
+  default meaning unrestricted);
 - the matched local account is still active — a deactivated account is never reactivated just
   because an external identity passed validation.
 
@@ -357,11 +401,11 @@ layered on top, anyone whose email matches in any identity provider could in the
 existing password account. How to configure those guards for a production environment is in the
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
-One combination is refused at startup. When OIDC is enabled and `Oidc:Authority` has a path segment
+One combination is refused at startup. When a provider is enabled and its `Authority` has a path segment
 of `common`, `organizations` or `consumers` (an Entra multi-tenant endpoint, where anyone can create
-a tenant and present any email), the host fails to start unless `Oidc:AllowedTenantId` or
-`Oidc:AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
-A single-tenant authority, or OIDC disabled, is never affected.
+a tenant and present any email), the host fails to start unless that provider's `AllowedTenantId` or
+`AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
+A single-tenant authority, or a disabled provider, is never affected.
 
 A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
 shows a localized message and removes the parameter from the address. The code is one of a fixed
@@ -372,12 +416,12 @@ set and never carries exception text:
 | `external_login_failed` | The provider or the callback failed |
 | `external_login_denied` | The user declined at the provider |
 | `external_login_NoEmail` | The identity carries no usable email |
-| `external_login_EmailNotVerified` | The email is unverified and `Oidc:RequireEmailVerified` is set |
-| `external_login_DomainNotAllowed` | The email's domain is not in `Oidc:AllowedEmailDomains` |
-| `external_login_TenantNotAllowed` | The tenant is not `Oidc:AllowedTenantId` |
+| `external_login_EmailNotVerified` | The email is unverified and the provider's `RequireEmailVerified` is set |
+| `external_login_DomainNotAllowed` | The email's domain is not in the provider's `AllowedEmailDomains` |
+| `external_login_TenantNotAllowed` | The tenant is not the provider's `AllowedTenantId` |
 | `external_login_Inactive` | The matched local account is deactivated |
 
-The login page shows the generic message for any other value. `GET /api/auth/login/oidc` accepts a
+The login page shows the generic message for any other value. `GET /api/auth/login/oidc/{provider}` accepts a
 `returnUrl`, sanitized to an in-site path before it's used in the challenge; leaving it out falls
 back to `Oidc:ReturnUrlDefault`.
 

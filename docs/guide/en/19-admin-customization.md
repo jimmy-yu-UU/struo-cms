@@ -316,8 +316,8 @@ runs:
 `host` pins IPv4 loopback because, on some Windows setups, `localhost` resolves to IPv6 loopback
 first and Vite then binds only `[::1]` — without pinning it, a browser hitting
 `http://localhost:5173` can't connect at all. `proxy` is `devProxy` from `frontend/vite.proxy.ts`:
-it forwards the same-origin `/api`, plus the OIDC callbacks `/signin-oidc` and
-`/signout-callback-oidc`, to the API on `:5221`, without `changeOrigin`, so the API sees the
+it forwards the same-origin `/api`, plus each provider's OIDC callback and sign-out paths (`/signin-oidc-{id}`,
+`/signout-callback-oidc-{id}` and `/signout-oidc-{id}`), to the API on `:5221`, without `changeOrigin`, so the API sees the
 browser's `Host` and builds the OIDC redirect URI on `:5173`. That same-origin setup is also why
 [Chapter 3: Getting Started](03-getting-started.md)'s walkthrough needs no separate CORS
 configuration at all — the browser sees only Vite as its one origin.

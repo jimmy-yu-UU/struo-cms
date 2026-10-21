@@ -191,7 +191,7 @@ A `Hidden` field never appears in either response.
 | `POST api/auth/login` | Anonymous | Log in, sets the session cookie |
 | `POST api/auth/logout` | Signed in | Log out, returns `204` |
 | `GET api/auth/me` | Signed in | Read the current caller's identity and permissions |
-| `GET api/auth/login/oidc` | Anonymous | Redirect to the configured OIDC provider |
+| `GET api/auth/login/oidc/{provider}` | Anonymous | Redirect to that OIDC provider |
 
 The login body is `{ email, password }`; success returns `200` with `{ id }` and sets the session
 cookie, and failure returns `401`. Two independent defenses each throttle calls made too often:
@@ -228,7 +228,8 @@ HTTP_STATUS:200
 carrying `path=/`, `samesite=lax`, `httponly`. `me` returns an empty `permissions` for a
 super-admin, because every grant is already implied by that identity.
 
-`login/oidc` returns `404` when OIDC isn't configured, and a `302` redirect when it is, with
+`login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
+disabled provider, and a `302` redirect to that provider when it is enabled, with
 `?returnUrl=` sanitized to an in-site path first; reading `me` right after logging out is `401`
 immediately, with no need to wait for the cookie to expire. The details of the OIDC callback are
 left to the authentication chapter.
@@ -240,8 +241,10 @@ left to the authentication chapter.
 | `GET api/config` | Anonymous | Read public settings, cached for 30 seconds |
 
 This endpoint allows anonymous calls. It returns
-`{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }`, and the response is cached
-server-side for 30 seconds. If a stored logo file is later unpublished or deleted, this still falls
+`{ oidcProviders, brandName, brandLogoUrl, passwordMinLength }`, and the response is cached
+server-side for 30 seconds. `oidcProviders` is an array of `{ id, displayName, icon }`, one per enabled
+OIDC provider in button order, and empty when none is enabled; `icon` is `null` when the provider
+sets none. If a stored logo file is later unpublished or deleted, this still falls
 back to the logo recorded in settings, rather than letting the anonymous login page see a dead URL.
 
 ## Ping `api/ping`

@@ -17,11 +17,11 @@
 的區段會在啟動時失敗，其他區段大多要到第一次用到時才會出錯。
 
 陣列型的鍵要整段換掉：在較高優先層只填前幾個元素，不會縮短預設設定檔已經填滿的陣列，沒被覆
-寫的索引維持原值。預設設定檔填滿的六個陣列是 `Oidc:Scopes`、
+寫的索引維持原值。預設設定檔填滿的六個陣列是 `Oidc:Providers:{id}:Scopes`、
 `Struo:Files:ImageTransform:AllowedFormats`、`Struo:Files:ImageTransform:SizeSteps`、
 `Struo:Files:ImageTransform:TransformableContentTypes`、`Struo:Files:AllowedContentTypes`、
 `Serilog:WriteTo`；前四個即使整段刪掉，啟動時也會補回內建預設值。陣列元素用索引：
-`Oidc__Scopes__0=openid`；要縮短陣列就改設定檔本身。
+`Oidc__Providers__google__Scopes__0=openid`；要縮短陣列就改設定檔本身。
 
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
@@ -429,49 +429,100 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 
 ## Oidc
 
+外部登入以身分提供者為單位設定。`Oidc:ReturnUrlDefault` 對所有提供者通用，每個提供者是
+`Oidc:Providers:{id}` 底下的一筆。id 只能用小寫字母、數字與連字號（`[a-z0-9-]`），因為它會出現在網址
+裡：`microsoft`、`google`、`acme-sso` 可以，`Google`、`acme_sso` 不行。
+
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
-| `Oidc:Enabled` | 布林 | `false` |
-| `Oidc:Authority` | 字串（可留空） | 見下文 |
-| `Oidc:ClientId` | 字串（可留空） | `"REPLACE_ME"` |
-| `Oidc:ClientSecret` | 字串（可留空） | 無 |
-| `Oidc:CallbackPath` | 字串 | `"/signin-oidc"` |
-| `Oidc:Scopes` | 字串陣列 | 見下文 |
-| `Oidc:Prompt` | 字串（可留空） | `"select_account"` |
 | `Oidc:ReturnUrlDefault` | 字串 | `"/"` |
-| `Oidc:RequireEmailVerified` | 布林 | `false` |
-| `Oidc:AllowedTenantId` | 字串 | `"REPLACE_TENANT_ID"` |
-| `Oidc:AllowedEmailDomains` | 字串陣列 | `[]` |
+| `Oidc:Providers:{id}:Enabled` | 布林 | `false` |
+| `Oidc:Providers:{id}:DisplayName` | 字串 | 無 |
+| `Oidc:Providers:{id}:Icon` | 字串 | 無 |
+| `Oidc:Providers:{id}:Order` | 整數 | `0` |
+| `Oidc:Providers:{id}:Authority` | 字串 | 無 |
+| `Oidc:Providers:{id}:ClientId` | 字串 | 無 |
+| `Oidc:Providers:{id}:ClientSecret` | 字串 | 無 |
+| `Oidc:Providers:{id}:CallbackPath` | 字串 | `"/signin-oidc-{id}"` |
+| `Oidc:Providers:{id}:Scopes` | 字串陣列 | `["openid", "email", "profile"]` |
+| `Oidc:Providers:{id}:Prompt` | 字串（可留空） | `"select_account"` |
+| `Oidc:Providers:{id}:RequireEmailVerified` | 布林 | `false` |
+| `Oidc:Providers:{id}:AllowedTenantId` | 字串 | 無 |
+| `Oidc:Providers:{id}:AllowedEmailDomains` | 字串陣列 | `[]` |
 
-以下是實際值，不是 `appsettings.json` 的巢狀寫法：
-```text
-Oidc:Authority = https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0
-Oidc:Scopes = ["openid", "email", "profile"]
+預設值指的是鍵不存在時的行為。隨附的 `appsettings.json` 放了兩筆停用的項目，`microsoft` 與 `google`，
+各自填好自己的值：
+
+```json
+"Oidc": {
+  "ReturnUrlDefault": "/",
+  "Providers": {
+    "microsoft": {
+      "Enabled": false,
+      "DisplayName": "Microsoft 365",
+      "Icon": "microsoft",
+      "Order": 1,
+      "Authority": "https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0",
+      "ClientId": "REPLACE_ME",
+      "AllowedTenantId": "REPLACE_TENANT_ID"
+    },
+    "google": {
+      "Enabled": false,
+      "DisplayName": "Google",
+      "Icon": "google",
+      "Order": 2,
+      "Authority": "https://accounts.google.com",
+      "ClientId": "REPLACE_ME",
+      "RequireEmailVerified": true
+    }
+  }
+}
 ```
 
-`Enabled=true` 時，`Authority`、`ClientId`、`ClientSecret` 都要非空，否則啟動失敗；
-`Enabled=false` 時這條規則永遠通過。但單是 `Enabled=false` 就會讓 OIDC 這個認證 scheme 完全
-不會被註冊，`/api/auth/login/oidc` 會回 404，不是設定錯誤。
+檔案裡兩筆還列了 `Scopes`、`Prompt`、`AllowedEmailDomains`，因為跟預設值相同，上面省略了。
 
-第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；`AllowedTenantId`、
-`RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，任何
-身分提供者裡 email 對得上的人都能接管一個密碼帳號。
+停用的提供者完全不驗證，所以佔位的項目可以留在檔案裡。啟用的提供者必須有 `DisplayName`、`Authority`、
+`ClientId`、`ClientSecret`，少了啟動就失敗，錯誤訊息會點名那個提供者的鍵。下列規則也一樣：
 
-`ClientSecret` 刻意不放在 `appsettings.json`，也絕不能提交進版本庫。用環境變數 `Oidc__ClientSecret`、
-user-secrets（`dotnet user-secrets set "Oidc:ClientSecret" <值> --project src/Struo.Api`），或不納入版控的
-`appsettings.Development.json` 設定。
+- 有設 `CallbackPath` 時，要以 `/` 開頭。
+- `Prompt` 是空字串或合法值（見下文）。
+- 多租用戶的 Entra `Authority`（`common`、`organizations`、`consumers`）要搭配 `AllowedTenantId` 或
+  `AllowedEmailDomains`。
+- 啟用中的提供者之間不能共用路徑。每個提供者還有兩條由 id 推導的登出路徑，
+  `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`，它們不能設定，自訂的 `CallbackPath` 也不能
+  跟其中任何一條相撞。
+
+提供者 id 不符合 id 規則時，不論有沒有啟用，啟動都會失敗。提供者停用或不存在時，
+`/api/auth/login/oidc/{provider}` 回 404，這不是設定錯誤。
+
+`DisplayName` 是該提供者登入按鈕上的文字。`Icon` 是一個代號，由後台介面對應到圖示；內建的代號與新增
+的做法見[第 16 章](16-authentication.md)。按鈕依 `Order` 由小到大排列，相同時依 id。之所以要有
+`Order`，是因為設定不會保留檔案裡鍵的順序。
+
+第一次用外部身分登入時，會用 email 相同去對應既有的本機帳號；該提供者的 `AllowedTenantId`、
+`RequireEmailVerified`、`AllowedEmailDomains` 這三道檢查都通過才會這麼做——放寬了它們，那個身分提供者裡
+email 對得上的人都能接管一個密碼帳號。`AllowedTenantId` 留空會略過 tenant 檢查。提供者若不驗證 email，
+就打開 `RequireEmailVerified`，或用 `AllowedEmailDomains` 釘住網域。
+
+`ClientSecret` 刻意不放在 `appsettings.json`，也絕不能提交進版本庫。用環境變數
+`Oidc__Providers__<id>__ClientSecret`（例如 `Oidc__Providers__google__ClientSecret`）、
+user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <值> --project src/Struo.Api`），
+或不納入版控的 `appsettings.Development.json` 設定。其他鍵也用同樣方式覆寫，例如
+`Oidc__Providers__google__Enabled=true`。
 
 `Prompt` 會原樣送成授權請求的 `prompt` 參數。`select_account`（預設）一律顯示提供者的帳號挑選畫面，
 不會有人因為瀏覽器剛好持有某個帳號就被靜默登入。`login` 強制使用者重新輸入帳密，`consent` 重新詢問同意，
 `none` 完全不顯示頁面，使用者尚未登入時會失敗。可以用空格組合多個值，例如 `login consent`。設為空字串就不送
-`prompt`，由提供者決定；JSON 的 `null` 則維持預設值。其他任何值在 `Enabled=true` 時會讓啟動失敗，錯誤訊息點名 `Oidc:Prompt`。
+`prompt`，由提供者決定；JSON 的 `null` 則維持預設值。其他任何值在提供者啟用時會讓啟動失敗，錯誤訊息點名
+`Oidc:Providers:<id>:Prompt`。
 
 `CallbackPath` 是身分提供者把瀏覽器導回來的路徑。要向提供者登記的重新導向網址，是使用者開啟
 管理介面的來源加上這個路徑；代理端的做法見[第 16 章](16-authentication.md)。
 
-`RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的；`AllowedTenantId` 不是，預設
-值是打不中任何 tenant 的 `REPLACE_TENANT_ID`，在替換之前會擋掉所有外部登入。正式環境啟用
-OIDC，這三個鍵都該明確設定，不要依賴預設值。
+`RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的。隨附檔案的 `microsoft` 項目帶著
+`AllowedTenantId: "REPLACE_TENANT_ID"`，這個值打不中任何 tenant，替換之前會擋掉所有外部登入；`google`
+沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`。正式環境啟用提供者時，這三個檢查都該明確設定，
+不要依賴預設值。
 
 ## Serilog
 

@@ -92,12 +92,13 @@ Compose 環境就是靠這點，不架 TLS 也能登入。
 
 ### OIDC 三個檢查要釘死
 
-`Oidc:AllowedTenantId` 的預設值是一個打不中任何 tenant 的佔位字串，換成真正的 tenant 之前，
-外部登入對任何人都會失敗。
+這三個檢查是依提供者設定的，放在 `Oidc:Providers:{id}` 底下。隨附檔案裡 `microsoft` 項目的
+`AllowedTenantId` 是打不中任何 tenant 的佔位字串，換成真正的 tenant 之前，經由它的外部登入對任何人都會
+失敗。`google` 項目沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`。
 
-換上真正的 tenant 之後，`Oidc:RequireEmailVerified`（預設不要求）
-與 `Oidc:AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查，三個都該在正式環境釘
-死，否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章](16-authentication.md)。
+換上真正的 tenant 之後，`RequireEmailVerified`（預設不要求）
+與 `AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查，正式環境每個啟用的提供者都該把三個
+釘死，否則只剩下 email 相等這一道關卡。檢查順序見[第 16 章](16-authentication.md)。
 
 ### 安全回應標頭：API 只送 nosniff
 
@@ -113,7 +114,7 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 會以代碼 `0` 結束，讓編排工具誤以為啟動成功，既不重啟也不告警。
 
 `Database`、`Struo:Files`、`Oidc`、`Query`、`Auth:Password` 這五組設定都綁了
-`ValidateOnStart`：缺 `Database:ConnectionString`、`Oidc:Enabled=true` 卻沒給 `ClientId`，
+`ValidateOnStart`：缺 `Database:ConnectionString`、某個啟用的 `Oidc:Providers:{id}` 卻沒給 `ClientId`，
 或 `Query:MaxLimit` 超出範圍，都會在應用程式真正開始接受請求之前，就丟出
 `OptionsValidationException` 讓啟動失敗。
 
@@ -226,9 +227,9 @@ SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI
 線：`proxy_pass` 吃的是一個 nginx 變數，不是字面值，所以容器就算 API 還沒起來也能先啟動，代
 價是變數裡任何路徑片段都會取代請求的 URI，而不是被當成前綴接上去。
 
-映像會把 `/api/*`、`/signin-oidc` 與 `/signout-callback-oidc` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
-當作 `Host` 與 `X-Forwarded-Host` 轉送，讓 API 看到瀏覽器實際使用的來源。兩個回呼路徑是 OIDC 的重新導向
-目標；`/api/` 之外的自訂 `Oidc:CallbackPath` 要在範本另加一個 `location` 區塊。登記重新導向網址的做法見
+映像會把 `/api/*` 與 OIDC 路徑 `/signin-oidc-{id}`、`/signout-callback-oidc-{id}`、`/signout-oidc-{id}` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
+當作 `Host` 與 `X-Forwarded-Host` 轉送，讓 API 看到瀏覽器實際使用的來源。回呼路徑是 OIDC 的重新導向
+目標；`/api/` 之外的自訂 `CallbackPath` 要在範本另加一個 `location` 區塊。登記重新導向網址的做法見
 第 16 章。
 
 `HSTS_VALUE` 預設空字串，nginx 遇到值是空字串的 `add_header` 就完全不送這個標頭；只有在這裡
@@ -247,7 +248,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 ```
 
 指令稿只能從映像本身載入（主題初始化是檔案 `theme-init.js`，不是內嵌指令稿），頁面不能被嵌入框架，
-表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 與這兩個 OIDC 回呼路徑代理出去的回應改帶
+表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 與這些 OIDC 回呼、登出路徑代理出去的回應改帶
 `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`，API 自己在那裡送的
 政策會被丟掉。
 

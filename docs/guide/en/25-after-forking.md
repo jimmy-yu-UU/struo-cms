@@ -116,3 +116,22 @@ client, so list the container's address (or a dedicated network's range), not yo
 outer proxy adds a second hop that the API doesn't honour. The details, and the headers the outer
 proxy has to set, are in "Behind a reverse proxy, enable `ForwardedHeaders`" in
 [Chapter 20: Deployment](20-deployment.md).
+
+## 10. Single sign-on providers: add yours and register the redirect URIs
+
+The template ships two disabled entries, `microsoft` and `google`, under `Oidc:Providers` in
+`src/Struo.Api/appsettings.json`. Keep the ones you use, delete the rest, and add one entry for each
+other OpenID Connect provider your users sign in with. Each entry needs its own id, `DisplayName`,
+`Authority`, `ClientId` and `ClientSecret`; set the secret through an environment variable such as
+`Oidc__Providers__<id>__ClientSecret`, never in a committed file.
+
+A provider's button shows the glyph named by its `Icon`. The built-in tokens are `microsoft` and
+`google`. For another brand, add an SVG entry to the `ICONS` table in `frontend/src/lib/ssoIcons.ts`,
+set its name as the entry's `Icon`, and rebuild the admin. Without a matching entry the button shows a
+generic key icon.
+
+Register the redirect URI at each provider's console: your production origin plus the provider's
+callback path, `/signin-oidc-<id>` unless you set `CallbackPath`. Do the same for a staging origin,
+and register `http://localhost:5173/signin-oidc-<id>` for development. A custom `CallbackPath` outside
+`/api/` also needs a `location` block in `frontend/nginx/default.conf.template`. The setup steps per
+provider are in [Chapter 16: Authentication and SSO](16-authentication.md).
