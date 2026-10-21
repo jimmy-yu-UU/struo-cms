@@ -309,18 +309,24 @@ runs:
   server: {
     port: 5173,
     host: '127.0.0.1',
-    proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
+    proxy: devProxy, // from frontend/vite.proxy.ts
   },
 ```
 
 `host` pins IPv4 loopback because, on some Windows setups, `localhost` resolves to IPv6 loopback
 first and Vite then binds only `[::1]` — without pinning it, a browser hitting
-`http://localhost:5173` can't connect at all. `proxy` forwards the same-origin `/api` to the API on
-`:5221`, which is also why [Chapter 3: Getting Started](03-getting-started.md)'s walkthrough needs
-no separate CORS configuration at all — the browser sees only Vite as its one origin.
+`http://localhost:5173` can't connect at all. `proxy` is `devProxy` from `frontend/vite.proxy.ts`:
+it forwards the same-origin `/api`, plus the OIDC callbacks `/signin-oidc` and
+`/signout-callback-oidc`, to the API on `:5221`, without `changeOrigin`, so the API sees the
+browser's `Host` and builds the OIDC redirect URI on `:5173`. That same-origin setup is also why
+[Chapter 3: Getting Started](03-getting-started.md)'s walkthrough needs no separate CORS
+configuration at all — the browser sees only Vite as its one origin.
 
-Pointing the dev SPA at a different API instance is just a matter of changing `target` here; this
-same-origin pattern has no admin-SPA-specific base-URL setting.
+Pointing the dev SPA at a different API instance means changing `API_TARGET` in
+`frontend/vite.proxy.ts`; this same-origin pattern has no admin-SPA-specific base-URL setting. A
+remote API that routes by host name also needs `changeOrigin: true` on `/api`, because the
+browser's `localhost:5173` `Host` would not match it. That moves the OIDC `redirect_uri` off
+`:5173`, so register that host's callback with the provider instead.
 
 `VITE_API_BASE_URL` is needed only when the SPA runs on a different origin from the API; set it in
 `frontend/.env` (copied from the tracked `frontend/.env.example`) to the API's full origin. This

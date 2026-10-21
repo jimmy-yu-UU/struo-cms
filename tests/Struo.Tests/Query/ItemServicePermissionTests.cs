@@ -222,9 +222,9 @@ public sealed class ItemServicePermissionTests : IDisposable
     public async Task AdminOnly_create_allowed_for_superadmin()
     {
         var svc = BuildService(new SuperAdminPermissions());
-        using var body = System.Text.Json.JsonDocument.Parse("""{"email":"admin@example.com","isActive":true}""");
-        var act = async () => await svc.CreateAsync("user", body.RootElement);
-        await act.Should().NotThrowAsync<PermissionDeniedException>();
+        using var body = System.Text.Json.JsonDocument.Parse("""{"name":"editors"}""");
+        var created = await svc.CreateAsync("role", body.RootElement);
+        created["id"].Should().NotBeNull();
     }
 
     // Seeds one category and one article pointing at it, using a super-admin service. Both services

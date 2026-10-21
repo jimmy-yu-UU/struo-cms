@@ -181,14 +181,18 @@ public sealed class ItemService(
         if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
             throw new QueryException(
                 "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
+        // Creating a user needs the password hashing and password policy that only POST /api/users
+        // applies. Checked before any email rule, so a duplicate address is a 400 as well. Reads,
+        // updates and deletes are unaffected.
+        if (string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase))
+            throw new QueryException(
+                "Users cannot be created through the generic items API. Create one with POST /api/users instead.");
         // A non-object top-level body (array or scalar) would reach Deserialize below, which assumes an
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         var entity = deserializer.Deserialize(collection, body, meta);
         var d = registry.Get(collection)!;
-        if (UserEmailRules.AppliesTo(collection))
-            await userEmailRules.NormalizeAndCheckAsync(d, entity, ct);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API

@@ -956,21 +956,6 @@ describe('ItemFormView', () => {
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
   })
 
-  it('hides the reset-password action on the create form', async () => {
-    routeParams = { name: 'user' }; routeName = 'collection-create'
-    const { schema } = setupStores() // superAdmin: true, but create mode has no existing row
-    ;(schema.get as any).mockReturnValue(userMeta)
-    const w = mountView()
-    await w.vm.init()
-    await flushPromises()
-
-    // Positive anchor: proves the create form actually rendered, so the absence below is the guard
-    // excluding create mode, not the view stuck in a loading/error state.
-    expect(w.get('.page-head h1').text()).toBe('New User')
-    expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
-    expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
-  })
-
   it('hides the reset-password action on a non-user collection', async () => {
     routeParams = { name: 'article', id: '5' }; routeName = 'collection-item'
     setupStores() // superAdmin: true, but this is the `article` collection, not `user`

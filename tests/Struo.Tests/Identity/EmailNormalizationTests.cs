@@ -57,19 +57,6 @@ public class EmailNormalizationTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Generic_items_create_of_a_case_variant_returns_409()
-    {
-        var admin = await factory.CreateAuthenticatedClientAsync();
-        var local = Unique("Gen");
-        (await admin.PostAsJsonAsync("/api/users", new { email = $"{local}@X.com", password = Password }))
-            .StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var variant = await admin.PostAsJsonAsync("/api/items/user", new { email = $"{local.ToUpperInvariant()}@x.COM" });
-        variant.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        (await variant.Content.ReadAsStringAsync()).Should().Contain("CONFLICT");
-    }
-
-    [Fact]
     public async Task Generic_items_update_to_case_variant_of_another_users_email_returns_409()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();

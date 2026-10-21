@@ -261,18 +261,21 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
   server: {
     port: 5173,
     host: '127.0.0.1',
-    proxy: { '/api': { target: 'http://localhost:5221', changeOrigin: true } },
+    proxy: devProxy, // from frontend/vite.proxy.ts
   },
 ```
 
 `host` 釘死 IPv4 loopback，是因為某些 Windows 環境下 `localhost` 會先解析成 IPv6
 loopback，Vite 因此只綁 `[::1]`，不釘的話瀏覽器打 `http://localhost:5173` 反而連不上；
-`proxy` 把同源的 `/api` 轉發到 `:5221` 上的 API，這也是為什麼
+`proxy` 是 `frontend/vite.proxy.ts` 的 `devProxy`：它把同源的 `/api`，加上 OIDC 回呼
+`/signin-oidc` 與 `/signout-callback-oidc`，轉發到 `:5221` 上的 API，而且不設 `changeOrigin`，API 看到的是
+瀏覽器原本的 `Host`，組出的 OIDC 重新導向網址就落在 `:5173`。這種同源做法也是為什麼
 [第 3 章：快速開始](03-getting-started.md)的走法完全不用另外設定 CORS，瀏覽器眼裡只有
 Vite 這一個來源。
 
-想讓 dev SPA 接另一個 API 實例，改這裡的 `target` 就好，同源這個模式沒有另一個前端專屬
-的 base URL 設定。
+想讓 dev SPA 接另一個 API 實例，改 `frontend/vite.proxy.ts` 的 `API_TARGET`，同源這個模式沒有另一個前端專屬
+的 base URL 設定。依主機名稱路由的遠端 API 還要在 `/api` 加上 `changeOrigin: true`，否則瀏覽器的
+`localhost:5173` `Host` 對不上。這會讓 OIDC 的 `redirect_uri` 離開 `:5173`，改向提供者註冊那個主機的回呼網址。
 
 真要讓 SPA 部署在跟 API 不同的來源，才需要在 `frontend/.env`（從追蹤中的
 `frontend/.env.example` 複製）設 `VITE_API_BASE_URL` 為 API 的完整來源。這個變數只在三

@@ -37,6 +37,7 @@ public class ImageTransformOptionsTests
 
     [Theory]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxConcurrentTransforms), 0)]
+    [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxConcurrentTransforms), 1)]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.QueueTimeoutSeconds), -1)]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxSourcePixels), 0)]
     [InlineData(nameof(FileStorageOptions.ImageTransformOptions.MaxWidth), 0)]

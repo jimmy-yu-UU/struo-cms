@@ -153,7 +153,8 @@ public sealed class FilesController(
         FileStorageOptions.ImageTransformOptions imageTransform, CancellationToken ct)
     {
         // The gate is taken before the source is read so waiting requests hold no source bytes.
-        using var lease = await images.Gate.TryEnterAsync(ct);
+        var anonymous = User.Identity?.IsAuthenticated != true;
+        using var lease = await images.Gate.TryEnterAsync(anonymous, ct);
         if (lease is null)
         {
             Response.Headers.RetryAfter = Math.Max(1, imageTransform.QueueTimeoutSeconds)

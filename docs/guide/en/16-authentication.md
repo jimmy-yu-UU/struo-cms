@@ -49,9 +49,15 @@ are deliberately indistinguishable. Success returns `200` with `{ id }` and no o
 
 `POST /api/users` creates a user, and only a super-admin can call it: success returns `201` with a
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
-route, since there's no dedicated `GET /api/users/{id}`. An email already in use returns `409`
-`CONFLICT` `Email already in use.`. The password's minimum and maximum length, and the configuration
-keys, are in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md).
+route, since there's no dedicated `GET /api/users/{id}`. The generic `POST /api/items/user` refuses
+to create a user (`400`), because only this endpoint hashes the password and applies the password
+policy. An email already in use returns `409` `CONFLICT` `Email already in use.`. The password's
+minimum and maximum length, and the configuration keys, are in the `Auth` section of
+[Chapter 4: Configuration Reference](04-configuration.md).
+
+The admin UI calls this endpoint from the "New" button on the user list, shown to super-admins only.
+The dialog asks for an email, an optional display name, and a password typed twice; it takes no
+roles, so assign them on the new user's page, which opens once the user is created.
 
 Changing a password goes through `PUT /api/users/{id}/password`: the caller is either a
 super-admin, or the account owner supplying `currentPassword` — the owner's own change always
@@ -283,6 +289,12 @@ The redirect URI to register with the provider is the origin users open the admi
 path: `https://cms.example.com/signin-oidc`, or `http://localhost:8080/signin-oidc` for the Compose
 stack. A plain `http` redirect URI works only on `localhost`: Entra rejects other `http` redirect
 URIs, and the OIDC correlation cookies are `Secure`, so any other origin needs `https`. Register the sign-out callback `/signout-callback-oidc` the same way if you use it.
+
+For development under `pnpm dev`, register `http://localhost:5173/signin-oidc`, and
+`http://localhost:5173/signout-callback-oidc` if you use the sign-out callback. The Vite dev server
+forwards both paths to the API and keeps the browser's `Host`, so the API builds that redirect URI
+from the host you opened the dev server with. Open `http://localhost:5173`, not
+`http://127.0.0.1:5173`, to match the registered URI.
 
 The admin image's nginx proxies `/signin-oidc` and `/signout-callback-oidc` to the API alongside
 `/api/`, so the provider's redirect lands on the same origin the sign-in started from. A custom
