@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
-import { getAppConfig } from '../api/appConfigApi'
+import { getAppConfig, type OidcProviderInfo } from '../api/appConfigApi'
 import { updateBranding, type BrandingUpdate } from '../api/settingsApi'
 
 export const useAppConfigStore = defineStore('appConfig', {
   state: () => ({
-    oidcEnabled: false,
+    oidcProviders: [] as OidcProviderInfo[],
     brandName: 'StruoCMS',
     brandLogoUrl: null as string | null,
     // Matches PasswordPolicyOptions.MinLength's server-side default; only takes effect when
@@ -18,7 +18,7 @@ export const useAppConfigStore = defineStore('appConfig', {
     async load(): Promise<void> {
       try {
         const cfg = await getAppConfig()
-        this.oidcEnabled = cfg.oidcEnabled
+        this.oidcProviders = cfg.oidcProviders ?? []
         this.brandName = cfg.brandName
         this.brandLogoUrl = cfg.brandLogoUrl
         this.passwordMinLength = cfg.passwordMinLength

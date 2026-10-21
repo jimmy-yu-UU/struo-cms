@@ -10,14 +10,14 @@ describe('appConfigStore', () => {
 
   it('has safe defaults', () => {
     const store = useAppConfigStore()
-    expect(store.oidcEnabled).toBe(false)
+    expect(store.oidcProviders).toEqual([])
     expect(store.brandName).toBe('StruoCMS')
     expect(store.brandLogoUrl).toBeNull()
   })
 
   it('load() ignores fields it does not know in /api/config', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
-      oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 8,
+      oidcProviders: [], brandName: 'B', brandLogoUrl: null, passwordMinLength: 8,
     })
     const store = useAppConfigStore()
     await store.load()
@@ -26,11 +26,12 @@ describe('appConfigStore', () => {
 
   it('load() populates state from the API', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
-      oidcEnabled: true, brandName: 'Acme', brandLogoUrl: 'https://x/logo.svg', passwordMinLength: 14,
+      oidcProviders: [{ id: 'microsoft', displayName: 'Microsoft 365', icon: 'microsoft' }, { id: 'google', displayName: 'Google', icon: 'google' }], brandName: 'Acme', brandLogoUrl: 'https://x/logo.svg', passwordMinLength: 14,
     })
     const store = useAppConfigStore()
     await store.load()
-    expect(store.oidcEnabled).toBe(true)
+    expect(store.oidcProviders.map((p) => p.id)).toEqual(['microsoft', 'google'])
+    expect(store.oidcProviders[1]).toEqual({ id: 'google', displayName: 'Google', icon: 'google' })
     expect(store.brandName).toBe('Acme')
     expect(store.brandLogoUrl).toBe('https://x/logo.svg')
   })
@@ -40,12 +41,12 @@ describe('appConfigStore', () => {
     const store = useAppConfigStore()
     await store.load()
     expect(store.brandName).toBe('StruoCMS')
-    expect(store.oidcEnabled).toBe(false)
+    expect(store.oidcProviders).toEqual([])
   })
 
   it('loads passwordMinLength from the config endpoint', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
-      oidcEnabled: false, brandName: 'B', brandLogoUrl: null, passwordMinLength: 14,
+      oidcProviders: [], brandName: 'B', brandLogoUrl: null, passwordMinLength: 14,
     })
     const store = useAppConfigStore()
 

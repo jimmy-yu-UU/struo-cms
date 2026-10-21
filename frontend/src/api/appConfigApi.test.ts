@@ -7,7 +7,7 @@ describe('appConfigApi', () => {
 
   it('fetches /config and returns the parsed config', async () => {
     const payload = {
-      oidcEnabled: true,
+      oidcProviders: [{ id: 'google', displayName: 'Google', icon: 'google' }],
       brandName: 'Acme',
       brandLogoUrl: 'https://x/logo.svg',
       passwordMinLength: 8,

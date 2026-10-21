@@ -1,7 +1,15 @@
 import { apiClient } from './apiClient'
 
+export type OidcProviderInfo = {
+  id: string
+  displayName: string
+  // Name looked up in lib/ssoIcons.ts; empty or unknown falls back to a generic key icon.
+  icon: string
+}
+
 export type AppConfig = {
-  oidcEnabled: boolean
+  // Enabled providers only, in the order the login page shows them.
+  oidcProviders: OidcProviderInfo[]
   brandName: string
   brandLogoUrl: string | null
   // Server-owned password policy minimum. The client validates against it and sizes the admin

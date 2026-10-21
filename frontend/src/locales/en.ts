@@ -118,7 +118,7 @@ export default {
     submit: 'Sign in',
     submitting: 'Signing in…',
     or: 'or',
-    ssoMicrosoft: 'Sign in with Microsoft 365',
+    ssoProvider: 'Sign in with {name}',
     failed: 'Login failed. Please try again.',
     showPassword: 'Show password',
     hidePassword: 'Hide password',

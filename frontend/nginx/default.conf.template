@@ -24,7 +24,7 @@
 #     original request path is forwarded unchanged: a request to /api/foo/bar
 #     reaches the backend as /api/foo/bar. The backend's controllers are
 #     routed at `api/...`, so no rewrite is needed -- the proxy's contract is
-#     a plain pass-through of /api/* and the two OIDC callback paths,
+#     a plain pass-through of /api/* and the OIDC callback paths,
 #     nothing more.
 # (d) proxy_pass takes $upstream (an nginx variable) rather than the
 #     envsubst'd literal directly. With a literal target nginx resolves the
@@ -130,36 +130,13 @@ server {
     }
 
     # The OIDC provider redirects the browser to the API's callback paths at
-    # this origin, so they are proxied exactly like /api/. These are the
-    # default Oidc:CallbackPath and the middleware's sign-out callback; a
-    # custom CallbackPath under /api/ is covered by the location above, any
-    # other path needs its own block like these.
-    location = /signin-oidc {
-        set $upstream "${API_UPSTREAM}";
-        proxy_pass $upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $struo_forwarded_proto;
-        proxy_set_header X-Forwarded-Host $http_host;
-        # This location declares its own add_header, so the server-level
-        # security headers are repeated here. Proxied responses get the
-        # most restrictive policy: they are data or redirects, never a
-        # document.
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "DENY" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Strict-Transport-Security "${HSTS_VALUE}" always;
-        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
-        # The API's own copies of these headers are dropped so each is sent
-        # exactly once, with the value set here.
-        proxy_hide_header X-Content-Type-Options;
-        proxy_hide_header Content-Security-Policy;
-        proxy_hide_header Permissions-Policy;
-    }
-
-    location = /signout-callback-oidc {
+    # this origin, so they are proxied exactly like /api/. Each provider has
+    # its own paths: /signin-oidc-{id}, /signout-callback-oidc-{id} and
+    # /signout-oidc-{id}, with {id} lowercase letters, digits and hyphens. The
+    # bare /signin-oidc, /signout-callback-oidc and /signout-oidc are covered
+    # too. A custom Oidc:Providers:<id>:CallbackPath under /api/ is covered by
+    # the location above; any other path needs its own block like this one.
+    location ~ ^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?$ {
         set $upstream "${API_UPSTREAM}";
         proxy_pass $upstream;
         proxy_http_version 1.1;

@@ -118,7 +118,7 @@ export default {
     submit: '登入',
     submitting: '登入中…',
     or: '或',
-    ssoMicrosoft: '使用 Microsoft 365 登入',
+    ssoProvider: '使用 {name} 登入',
     failed: '登入失敗,請稍後再試。',
     showPassword: '顯示密碼',
     hidePassword: '隱藏密碼',
