@@ -1,44 +1,45 @@
 # 版本紀錄
 
-## 0.12.0
+## 0.12.0 — 2026-10-21
 
 ::: danger 破壞性變更
 - `appsettings.json` 的 `AdminUi` 區段移除，`AdminUiOptions` 與它的啟動驗證一併移除，
   `GET /api/config` 不再回傳 `uiLocales` 與 `uiDefaultLocale`。後台介面提供 `frontend/src/locales`
   裡登錄的每一份訊息目錄，預設語言由 `zh-TW` 改成 `en`。想保留中文為預設，在 `frontend/.env`
-  （dev server）或提交的 `frontend/.env.production`（映像建置）設
-  `VITE_DEFAULT_UI_LOCALE=zh-TW` 後重新建置 SPA；使用者在切換器自己選的語言仍然優先。fork 自己的
-  設定裡的 `AdminUi__*` 環境變數與 `AdminUi` 鍵請移除，主機會直接忽略它們。
+  （dev server）或提交的 `frontend/.env.production`（映像建置）設 `VITE_DEFAULT_UI_LOCALE=zh-TW`
+  後重新建置 SPA；使用者在切換器自己選的語言仍然優先。請從設定移除 `AdminUi__*` 環境變數與
+  `AdminUi` 鍵，主機會直接忽略它們。
 - `uiLocaleStore.configure(enabled, default)` 改為 `uiLocaleStore.init()`，`appConfigStore` 不再有
   `uiLocales` 與 `uiDefaultLocale`。i18n 的 fallback 語言是建置時的預設目錄。
-- 後台映像的容器埠從 `80` 改成 `8080`，nginx 以非 root 使用者執行；映像改建在
-  `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
-  fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
-  `8080`。
-- `IFileStorage` 新增成員 `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`。fork 自己的儲存
-  實作必須補上，否則專案無法編譯。它要回傳每一個已儲存的 blob，型別是 `StoredBlob(Key, LastModifiedUtc)`：
-  鍵就是傳給 `SaveAsync` 的那個，修改時間用 UTC（後端無法回報時給 `DateTime.MaxValue`，這樣依時間清理
-  的流程一定會保留它）。請一頁一頁串流回傳，不要先整批載入；清除命令每次執行會讀它一到兩次。
+- 後台映像改建在 `nginxinc/nginx-unprivileged` 上，nginx 以非 root 使用者執行，容器埠從 `80` 改成
+  `8080`。Compose 的對應是 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變；fork 自己的 manifest、
+  `docker run --publish` 指令或反向代理 upstream 必須改指向容器埠 `8080`。
+- `IFileStorage` 新增成員 `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`，fork 自己的
+  儲存實作必須補上才能編譯。它以 `StoredBlob(Key, LastModifiedUtc)` 回傳每一個已儲存的 blob：鍵就是
+  傳給 `SaveAsync` 的那個，修改時間用 UTC；後端無法回報時給 `DateTime.MaxValue`，依時間清理的流程就會
+  保留它。請一頁一頁串流回傳，不要先整批載入；`files:sweep` 每次執行會讀它一到兩次。
 - `Struo:Files:ImageTransform:MaxConcurrentTransforms` 至少要是 `2`；設成 `1` 會讓啟動失敗，並指出
-  是哪個鍵。匿名請求現在最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以設為 `1` 的 fork
-  要改成 `2` 以上。出廠預設值是 `2`，此時匿名的冷轉換一次只跑一個；對外提供公開圖片、想讓匿名請求有
+  是哪個鍵。匿名請求最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以已驗證的請求（session
+  cookie 或 bearer token）永遠有一個名額可用；超過上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回
+  `503` `IMAGE_TRANSFORM_BUSY`。預設值 `2` 下匿名的冷轉換一次只跑一個；對外提供公開圖片、想讓它們有
   更多並行的 fork，請調高這個設定。
-- `POST /api/items/user` 與 GraphQL 的 `createUser` 現在回 `400` `BAD_USER_INPUT`。建立使用者請用
-  `POST /api/users`，或用後台使用者清單上「新增」開啟的對話框。
-- `ISqlSugarClient` 改為單例：整個行程共用一個 `SqlSugarScope`，不再每個請求建一個。每個非同步流程
-  仍有自己的連線與交易，但資料庫工作必須在 async 方法裡執行（不要在 `Task.Run` 的同步 lambda、
-  計時器回呼或同步工作中存取資料庫），而且 `CopyNew()` 不會做稽核欄位寫入與 SQL Server 取消轉譯。
-  fork 若把這個註冊覆寫成 scoped，或依賴請求結束時釋放 client，行為會不同。fork 自己註冊的
-  `ICurrentUserAccessor` 不可以是 scoped（否則啟動失敗），而且要在每次呼叫時才讀取目前使用者。
+- `POST /api/items/user` 與 GraphQL 的 `createUser` 回 `400` `BAD_USER_INPUT`：建立使用者需要密碼雜湊
+  與密碼原則，只有 `POST /api/users` 會套用。請改用該端點，或由超級管理員在後台使用者清單按「新增」
+  開啟的對話框建立。
+- `ISqlSugarClient` 改為單例：整個行程共用一個 `SqlSugarScope`，不再每個請求建一個，記憶體因此不再
+  隨請求數增長（每個請求約 150 位元組，每次 `/health/ready` 約 2.5 KB）。每個非同步流程仍有自己的
+  連線與交易，但資料庫工作必須在 async 方法裡執行（不要在 `Task.Run` 的同步 lambda、計時器回呼或
+  同步工作中存取資料庫），而且 `CopyNew()` 不會做稽核欄位寫入與 SQL Server 取消轉譯。fork 若把這個
+  註冊覆寫成 scoped，或依賴請求結束時釋放 client，行為會不同。fork 自己註冊的 `ICurrentUserAccessor`
+  不可以是 scoped（否則啟動失敗），而且要在每次呼叫時才讀取目前使用者。
 :::
 
 ### 新增
 
-- `files:sweep` 清除本機或 S3 儲存裡的孤兒 blob。不加 `--apply` 只是試跑並列出孤兒，絕不碰修改時間
-  比 `--min-age-hours`（預設 24）還新的 blob，垃圾桶裡的 `files` 列所參照的 blob 視為使用中。
-  `IFileStorage` 新增 `ListAsync`（見上面的破壞性變更）。命令一開始會先印出儲存與資料庫目標
-  （不含憑證），而且孤兒超過符合資格 blob 的 50% 時，`--apply` 會以結束代碼 `3` 拒絕，除非加 `--force`。見
-  [清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
+- `files:sweep` 清除本機或 S3 儲存裡的孤兒 blob。不加 `--apply` 只是試跑並列出孤兒；它絕不碰比
+  `--min-age-hours`（預設 24）還新的 blob，垃圾桶裡的 `files` 列所參照的 blob 視為使用中。命令會先
+  印出儲存與資料庫目標（不含憑證）；孤兒超過符合資格 blob 的 50% 時，`--apply` 會以結束代碼 `3`
+  拒絕，除非加 `--force`。見[清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
 - [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、
   `UserSecretsId`、Sonar 變數、範例專案、後台語言、`__Host-` cookie 前綴，以及 CSP 與轉送標頭設定。
   根目錄新增 `SECURITY.md`，說明這個模板怎麼私下回報漏洞；fork 要換成自己的版本。
@@ -48,31 +49,23 @@
 ### 變更
 
 - 一頁只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit` 時，巢狀 `sort`、`offset` 與 `limit`
-  改由 SQL 套用，與巢狀 `filter` 一起執行。`Query:MaxExpandRows` 不適用於這種情況，所以子列數超過上限的
-  父列，也只回傳所要求的那個視窗。這條路徑的排序與列表查詢一樣由資料庫決定：null 的位置與文字比對規則
-  都依資料庫，沒有巢狀 `sort` 時最新的子列在前。多個父列、或沒有 `limit` 的巢狀 `sort` 仍在記憶體中
-  排序，null 排在最前面，所以同一個巢狀 `sort` 在一個父列與多個父列之間，順序可能不同。多對多關聯維持
-  原樣。新增的 `IItemRepository.QueryWhereInWindowAsync` 預設回傳 `null`，沒有實作它的類別會留在有上限的
-  記憶體路徑。
-- API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
-  值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
-- 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已驗證的
-  請求（session cookie 或 bearer token）仍然永遠有一個名額可用。超過這個上限的匿名請求會等 `QueueTimeoutSeconds` 秒，之後回 `503`
-  `IMAGE_TRANSFORM_BUSY`。
+  改由 SQL 與巢狀 `filter` 一起套用，`Query:MaxExpandRows` 不適用：子列數超過上限的父列，也只回傳
+  所要求的那個視窗。這條路徑的排序與列表查詢一樣由資料庫決定（null 位置與文字比對規則依資料庫；
+  沒有巢狀 `sort` 時最新的子列在前）。多個父列、或沒有 `limit` 的巢狀 `sort` 仍在記憶體中排序，null
+  在最前面，所以一個父列與多個父列的順序可能不同。多對多關聯不變。新增的
+  `IItemRepository.QueryWhereInWindowAsync` 預設回傳 `null`，沒有實作它的類別會留在有上限的記憶體路徑。
+- API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是
+  8080；以 `;` 分隔的清單取第一個），fork 改了監聽埠後探測仍然有效。
 
 ### 修正
 
-- 記憶體不再隨請求數增長。SqlSugar 把 scope 的 client 存在永不清空的靜態字典裡，每個請求建一個 scope，
-  字典就多一筆：每個請求約 150 位元組，每次 `/health/ready` 約 2.5 KB。共用單一 scope 後不再增加。
 - 集合產生的 GraphQL 名稱若跟其他集合或內建名稱撞在一起（`article` 與 `articleList`、`category` 與
-  `categories`、名為 `revision` 的集合），現在啟動會中止，原因鏈裡有一個 `MetadataException`，訊息點名相關集合與撞名
-  的名稱。過去是在 GraphQL schema 建置途中以重複型別的錯誤失敗。
-- JPEG 存下的 `width`／`height` 現在會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著存下的直幅
-  照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本存下的尺寸，WebP 與 AVIF 仍回報編碼尺寸。
-- 通用項目 API 不再建立 `user`，跟它原本就不建立 `file` 一致：建立使用者需要密碼雜湊與密碼原則，只有
-  `POST /api/users` 會套用。後台由超級管理員在使用者清單按「新增」，開啟背後呼叫該端點的對話框來建立
-  使用者；檔案清單沒有「新增」按鈕。
-- 外部（OIDC）登入現在可以在 `pnpm dev` 下使用。Vite 開發伺服器把 `/signin-oidc` 與
+  `categories`、名為 `revision` 的集合），啟動會中止，原因鏈裡的 `MetadataException` 點名相關集合與
+  撞名的名稱，而不是在 GraphQL schema 建置途中以重複型別錯誤失敗。
+- JPEG 存下的 `width`／`height` 會跟著 Exif 方向：方向 5 到 8（轉 90 度）會把兩者對調，所以手機橫著
+  存下的直幅照片回報的是實際顯示的尺寸。只套用在此後上傳的 JPEG；既有資料列維持原本的尺寸，WebP 與
+  AVIF 仍回報編碼尺寸。
+- 外部（OIDC）登入可以在 `pnpm dev` 下使用。Vite 開發伺服器把 `/signin-oidc` 與
   `/signout-callback-oidc` 轉發給 API，且所有代理路徑都保留瀏覽器的 `Host`，所以提供者拿到的
   `redirect_uri` 是 `http://localhost:5173/signin-oidc`，不再是 `:5221`。開發時請向提供者登記這個
   網址（以及登出回呼）。
