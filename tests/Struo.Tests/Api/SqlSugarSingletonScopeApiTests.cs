@@ -90,8 +90,9 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
                 var okName = $"ok-{marker}-{round}-{k}";
                 work.Add(Task.Run(async () =>
                 {
+                    // A REST write that fails is unexpected, including a deadlock victim: the API masks it
+                    // as a 500, and plain tag inserts do not deadlock.
                     try { acknowledged.Add(Guid.Parse(await CreateAsync(admin, "tag", new { name = okName }))); }
-                    catch (Exception ex) when (IsDeadlock(ex)) { }
                     catch (Exception ex) { unexpected.Add(ex.Message); }
                 }));
             }
@@ -108,6 +109,9 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
         }
 
         unexpected.Should().BeEmpty();
+        // Floors: a run where every rollback flow deadlocked would otherwise pass on empty bags.
+        seenInside.Should().NotBeEmpty();
+        acknowledged.Should().NotBeEmpty();
         seenInside.Should().OnlyContain(count => count == 1);
         leaked.Should().Be(0);
         present.Should().Be(acknowledged.Count);
@@ -167,8 +171,9 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
 
     private sealed class RollbackRequested : Exception;
 
-    // Concurrent writers can be chosen as deadlock victims on SQL Server, MySQL and MariaDB; that is
-    // database behaviour and not what these tests look for.
+    // A direct database call in a rollback flow can be chosen as a deadlock victim on SQL Server,
+    // MySQL and MariaDB; that is database behaviour and not what this test looks for. Nothing else
+    // is tolerated.
     private static bool IsDeadlock(Exception ex) =>
         ex.ToString().Contains("deadlock", StringComparison.OrdinalIgnoreCase);
 

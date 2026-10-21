@@ -35,7 +35,8 @@
   async methods (no DB access from a sync lambda in `Task.Run`, a timer callback or a sync job), and
   `CopyNew()` skips audit stamping and SQL Server cancellation translation. A fork that overrides the
   registration as scoped, or relies on the client being disposed at the end of a request, behaves
-  differently. An `ICurrentUserAccessor` a fork registers must be a singleton.
+  differently. An `ICurrentUserAccessor` a fork registers must not be scoped (startup fails
+  otherwise) and must read the user on each call.
 :::
 
 ### Added

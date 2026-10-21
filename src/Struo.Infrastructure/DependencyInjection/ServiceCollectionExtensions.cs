@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         // registries that are never emptied, so a scope per request would grow them without bound.
         services.AddSingleton<ISqlSugarClient>(sp =>
         {
+            RequireNonScopedCurrentUserAccessor(services);
             var options = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
             var currentUser = sp.GetRequiredService<ICurrentUserAccessor>();
             var sidecarPolicy = sp.GetRequiredService<TranslationSidecarIndexPolicy>();
@@ -60,5 +61,19 @@ public static class ServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    // AuditAop captures the accessor when the singleton client is built, so a scoped one would be
+    // resolved once from the root provider and reused for the life of the process. The last
+    // registration wins, as in the container; the check reads the collection at resolution time so
+    // a registration added after AddStruoInfrastructure (AuthWiring's replacement) is the one seen.
+    private static void RequireNonScopedCurrentUserAccessor(IServiceCollection services)
+    {
+        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(ICurrentUserAccessor));
+        if (descriptor?.Lifetime == ServiceLifetime.Scoped)
+            throw new InvalidOperationException(
+                "ICurrentUserAccessor is registered as Scoped, but ISqlSugarClient is a singleton whose " +
+                "AuditAop captures the accessor once. Register it as Singleton (or Transient) and have it " +
+                "read the current user on each call, for example from IHttpContextAccessor.");
     }
 }

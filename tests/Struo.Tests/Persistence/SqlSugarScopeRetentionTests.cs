@@ -52,14 +52,17 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
         (SqlSugarStaticContext.ThreadKeys - threadBefore).Should().Be(0);
     }
 
+    // A fresh host, baselined before its first readiness call: a singleton scope owns at most one
+    // thread-local registry key, so a shared host that already served readiness would hide a
+    // readiness check that goes back to touching the scope from a sync lambda.
     [Fact]
-    public async Task The_readiness_check_retains_nothing()
+    public async Task The_readiness_check_never_registers_a_client_with_the_singleton_scope()
     {
-        using var anon = factory.CreateClient();
-        await Drive([() => anon.GetAsync("/health/ready")], 20);
+        await using var fresh = new ApiFactory();
+        using var anon = fresh.CreateClient();
         var (asyncBefore, threadBefore) = (SqlSugarStaticContext.AsyncKeys, SqlSugarStaticContext.ThreadKeys);
 
-        await Drive([() => anon.GetAsync("/health/ready")], Requests);
+        await Drive([() => anon.GetAsync("/health/ready")], 200);
 
         (SqlSugarStaticContext.AsyncKeys - asyncBefore).Should().Be(0);
         (SqlSugarStaticContext.ThreadKeys - threadBefore).Should().Be(0);

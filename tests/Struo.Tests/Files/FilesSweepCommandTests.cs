@@ -70,7 +70,7 @@ public sealed class FilesSweepCommandTests : IDisposable
             .AddSingleton<IFileStorage>(_storage)
             .AddSingleton(files)
             .AddSingleton(Options.Create(summaryDb))
-            .AddScoped<ISqlSugarClient>(_ => SqlSugarClientFactory.Create(
+            .AddSingleton<ISqlSugarClient>(_ => SqlSugarClientFactory.Create(
                 _database.Options(), new TestCurrentUserAccessor(Tester)))
             .BuildServiceProvider();
 

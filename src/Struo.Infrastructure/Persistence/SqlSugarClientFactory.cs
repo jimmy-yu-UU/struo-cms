@@ -83,8 +83,8 @@ public static class SqlSugarClientFactory
         // action, NOT via `client.QueryFilter.AddTableFilter(...)` / `AuditAop.Register(client, ...)`
         // called on the SqlSugarScope instance after construction: that only reaches whichever single
         // inner client is current at that moment. The configure action runs for EVERY inner client the
-        // scope creates. AuditAop resolves the current user on each call, so the accessor it captures
-        // must not be scoped.
+        // scope creates. AuditAop reads the current user on each call, so the accessor it captures
+        // must not be scoped (AddStruoInfrastructure refuses a scoped one).
         // Measurements and the decision are in docs/ai/decisions/sqlsugarscope-per-request-cost.md.
         var client = new SqlSugarScope(config, db =>
         {

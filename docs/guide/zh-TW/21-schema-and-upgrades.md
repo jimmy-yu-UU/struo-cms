@@ -164,7 +164,7 @@ public sealed class CreateTags : StruoMigration
 6. **拆分或合併欄位**：一定要寫一支搬資料的 migration。
 
 寫完先用 `migrate:preview` 看 SQL，再對一份你實際用的後端的拋棄式資料庫跑 `migrate` 與
-`migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以呼叫
+`migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以在 `async` 測試方法裡呼叫
 `SchemaChecker.Check`，斷言沒有錯誤。
 
 ## 核心的三個 raw SQL 例外

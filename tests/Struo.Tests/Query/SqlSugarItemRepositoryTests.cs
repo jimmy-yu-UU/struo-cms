@@ -195,7 +195,7 @@ public sealed class SqlSugarItemRepositoryTests : IDisposable
         var act = async () => await _repo.CreateAsync("article", new Article { Status = "draft" }, cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
         // Cancellation must stop the write BEFORE it reaches the DB, not just report afterwards.
-        // (Explicit None: SqlSugar keeps the last token on the scoped client's Ado, so a bare
+        // (Explicit None: SqlSugar keeps the last token on the client's Ado, so a bare
         // CountAsync() would re-observe the cancelled token instead of counting.)
         (await _db.Queryable<Article>().CountAsync(CancellationToken.None)).Should().Be(0);
     }
@@ -227,7 +227,7 @@ public sealed class SqlSugarItemRepositoryTests : IDisposable
             "language", new Struo.Infrastructure.Localization.Language { Code = "en", Name = "English" }, cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
         // Cancellation must stop the write BEFORE it reaches the DB. (Explicit None: SqlSugar keeps
-        // the last token on the scoped client's Ado, so a bare CountAsync() would re-observe the
+        // the last token on the client's Ado, so a bare CountAsync() would re-observe the
         // cancelled token instead of counting.)
         (await _db.Queryable<Struo.Infrastructure.Localization.Language>().CountAsync(CancellationToken.None)).Should().Be(0);
     }

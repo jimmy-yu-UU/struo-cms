@@ -20,8 +20,8 @@ Further constraints:
 - A touch of the scope from a flow that later forks children (the host's start-up flow, a
   `BackgroundService`) hands those children one shared client. HTTP requests do not inherit it.
   Start such work from its own flow, or give it a `CopyNew()`.
-- An `ICurrentUserAccessor` a fork registers must be a singleton, because `AuditAop` captures it when
-  the scope is built.
+- An `ICurrentUserAccessor` a fork registers must not be scoped and must read the user on each call,
+  because `AuditAop` captures it when the scope is built. A scoped registration stops startup.
 - Per-request mutation of the client (`db.Aop.X =`, `db.QueryFilter.Add`, `Ado.CommandTimeOut`) only
   reaches the inner client of the current flow.
 

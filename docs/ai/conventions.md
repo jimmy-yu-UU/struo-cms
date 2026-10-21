@@ -320,6 +320,9 @@ connection and transaction. Two rules keep that true:
   translation: the copy skips the configure action and shares the parent's soft-delete filter provider.
   `DbReadinessCheck` is the in-repo example.
 
+A fork's `ICurrentUserAccessor` must not be scoped and must read the user on each call: `AuditAop`
+captures the accessor when the client is built, and registering it as scoped stops startup.
+
 A flow that touches the scope before it forks children (`Task.WhenAll`, parallel resolvers) hands them
 that one client, so touch it inside the async callee that does the work. The decision and measurements
 are in `docs/ai/decisions/sqlsugarscope-per-request-cost.md`.
