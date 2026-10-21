@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.12.0
+## 0.12.0 — 2026-10-21
 
 ::: danger Breaking
 - The `AdminUi` section is removed from `appsettings.json`, together with `AdminUiOptions` and its

@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.12.0
+## 0.12.0 — 2026-10-21
 
 ::: danger 破壞性變更
 - `appsettings.json` 的 `AdminUi` 區段移除，`AdminUiOptions` 與它的啟動驗證一併移除，
