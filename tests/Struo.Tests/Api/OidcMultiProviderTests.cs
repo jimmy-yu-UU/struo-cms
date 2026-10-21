@@ -111,6 +111,47 @@ public class OidcMultiProviderTests
     }
 
     [Fact]
+    public async Task Each_schemes_TokenValidated_event_applies_its_own_providers_policy()
+    {
+        var login = new RecordingLogin();
+        using var provider = Build(s => s.AddSingleton<IExternalLoginService>(login));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>();
+
+        async Task<ExternalLoginPolicy> PolicyAsync(string id)
+        {
+            var name = AuthSchemes.OidcFor(id);
+            var options = monitor.Get(name);
+            var http = new DefaultHttpContext { RequestServices = provider };
+            var scheme = new AuthenticationScheme(name, name, typeof(OpenIdConnectHandler));
+            var ctx = new TokenValidatedContext(http, scheme, options, new ClaimsPrincipal(new ClaimsIdentity()),
+                new AuthenticationProperties());
+            await options.Events.TokenValidated(ctx);
+            return login.Policy!;
+        }
+
+        var ms = await PolicyAsync("microsoft");
+        ms.AllowedTenantId.Should().Be("tenant-1");
+        ms.RequireEmailVerified.Should().BeFalse();
+        var g = await PolicyAsync("google");
+        g.AllowedTenantId.Should().BeNull();
+        g.RequireEmailVerified.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Schemes_carry_distinct_sign_out_paths()
+    {
+        using var provider = Build();
+        var monitor = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>();
+        var ms = monitor.Get(AuthSchemes.OidcFor("microsoft"));
+        var g = monitor.Get(AuthSchemes.OidcFor("google"));
+
+        ms.SignedOutCallbackPath.Value.Should().Be("/signout-callback-oidc-microsoft");
+        g.SignedOutCallbackPath.Value.Should().Be("/signout-callback-oidc-google");
+        ms.RemoteSignOutPath.Value.Should().Be("/signout-oidc-microsoft");
+        g.RemoteSignOutPath.Value.Should().Be("/signout-oidc-google");
+    }
+
+    [Fact]
     public async Task Token_validation_for_an_unknown_provider_is_refused_without_calling_the_login_service()
     {
         var login = new RecordingLogin();

@@ -49,6 +49,12 @@ public sealed class OidcProviderOptions
     public string EffectiveCallbackPath(string id) =>
         string.IsNullOrWhiteSpace(CallbackPath) ? $"/signin-oidc-{id}" : CallbackPath;
 
+    /// <summary>The path the provider's sign-out callback is served on: <c>/signout-callback-oidc-{id}</c>.</summary>
+    public static string SignedOutCallbackPathFor(string id) => $"/signout-callback-oidc-{id}";
+
+    /// <summary>The path of the provider's remote (front-channel) sign-out endpoint: <c>/signout-oidc-{id}</c>.</summary>
+    public static string RemoteSignOutPathFor(string id) => $"/signout-oidc-{id}";
+
     /// <summary>True when <see cref="Prompt"/> is blank or every space-separated entry is allowed.</summary>
     public bool HasValidPrompt() =>
         string.IsNullOrWhiteSpace(Prompt)

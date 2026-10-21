@@ -17,46 +17,43 @@ public class OidcEndpointTests(ApiFactory factory)
 {
     // Program registers the OpenIdConnect schemes from builder.Configuration BEFORE the factory's
     // ConfigureAppConfiguration overrides are spliced in (see ContentAssemblyEnvBootstrap), so the
-    // providers reach the app through environment variables, set only while the host is built.
+    // providers reach the app as host settings (UseSetting), which are part of the builder's
+    // configuration from the start.
     private static readonly Dictionary<string, string> TwoProviders = new()
     {
-        ["Oidc__Providers__alpha__Enabled"] = "true",
-        ["Oidc__Providers__alpha__DisplayName"] = "Alpha",
-        ["Oidc__Providers__alpha__Authority"] = "https://login.example.test/alpha/v2.0",
-        ["Oidc__Providers__alpha__ClientId"] = "alpha-client",
-        ["Oidc__Providers__alpha__ClientSecret"] = "alpha-secret",
-        ["Oidc__Providers__beta__Enabled"] = "true",
-        ["Oidc__Providers__beta__DisplayName"] = "Beta",
-        ["Oidc__Providers__beta__Authority"] = "https://accounts.example.test",
-        ["Oidc__Providers__beta__ClientId"] = "beta-client",
-        ["Oidc__Providers__beta__ClientSecret"] = "beta-secret",
-        ["Oidc__Providers__off__Enabled"] = "false",
+        ["Oidc:Providers:alpha:Enabled"] = "true",
+        ["Oidc:Providers:alpha:DisplayName"] = "Alpha",
+        ["Oidc:Providers:alpha:Authority"] = "https://login.example.test/alpha/v2.0",
+        ["Oidc:Providers:alpha:ClientId"] = "alpha-client",
+        ["Oidc:Providers:alpha:ClientSecret"] = "alpha-secret",
+        ["Oidc:Providers:beta:Enabled"] = "true",
+        ["Oidc:Providers:beta:DisplayName"] = "Beta",
+        ["Oidc:Providers:beta:Authority"] = "https://accounts.example.test",
+        ["Oidc:Providers:beta:ClientId"] = "beta-client",
+        ["Oidc:Providers:beta:ClientSecret"] = "beta-secret",
+        ["Oidc:Providers:off:Enabled"] = "false",
     };
 
     // The OpenIdConnect handler would fetch discovery metadata from the (fake) authority; a static
     // configuration per scheme keeps the challenge offline.
     private HttpClient TwoProviderClient()
     {
-        var f = factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+        var f = factory.WithWebHostBuilder(b =>
         {
-            foreach (var (id, authority) in new[]
-                     { ("alpha", "https://login.example.test/alpha/v2.0"), ("beta", "https://accounts.example.test") })
+            foreach (var (key, value) in TwoProviders) b.UseSetting(key, value);
+            b.ConfigureTestServices(services =>
             {
-                var cfg = new OpenIdConnectConfiguration { AuthorizationEndpoint = authority + "/authorize" };
-                services.PostConfigure<OpenIdConnectOptions>(AuthSchemes.OidcFor(id),
-                    o => o.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(cfg));
-            }
-        }));
+                foreach (var (id, authority) in new[]
+                         { ("alpha", "https://login.example.test/alpha/v2.0"), ("beta", "https://accounts.example.test") })
+                {
+                    var cfg = new OpenIdConnectConfiguration { AuthorizationEndpoint = authority + "/authorize" };
+                    services.PostConfigure<OpenIdConnectOptions>(AuthSchemes.OidcFor(id),
+                        o => o.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(cfg));
+                }
+            });
+        });
 
-        foreach (var (key, value) in TwoProviders) Environment.SetEnvironmentVariable(key, value);
-        try
-        {
-            return f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        }
-        finally
-        {
-            foreach (var key in TwoProviders.Keys) Environment.SetEnvironmentVariable(key, null);
-        }
+        return f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     [Theory]

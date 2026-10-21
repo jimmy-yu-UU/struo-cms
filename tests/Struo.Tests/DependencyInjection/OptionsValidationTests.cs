@@ -157,6 +157,7 @@ public sealed class OptionsValidationTests
     [InlineData("Beta")]
     [InlineData("a b")]
     [InlineData("a_b")]
+    [InlineData("abc\n")]
     public async Task Oidc_provider_id_must_be_lowercase_letters_digits_and_hyphens(string id)
     {
         var text = await OidcFailureTextAsync(s => ValidProvider(s, id));
@@ -174,6 +175,18 @@ public sealed class OptionsValidationTests
             s["Oidc:Providers:two:CallbackPath"] = "/Signin-Shared/";
         });
         text.Should().Contain("/signin-shared").And.Contain("one").And.Contain("two");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_callback_path_must_not_equal_another_providers_sign_out_path()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "one");
+            ValidProvider(s, "two");
+            s["Oidc:Providers:one:CallbackPath"] = "/signout-callback-oidc-two";
+        });
+        text.Should().Contain("/signout-callback-oidc-two").And.Contain("one").And.Contain("two");
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]

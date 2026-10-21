@@ -7,7 +7,8 @@ namespace Struo.Application.Security;
 /// placeholder entry can stay in the file. Messages name the offending <c>Oidc:Providers:{id}</c> key.</summary>
 public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
 {
-    [GeneratedRegex(OidcOptions.ProviderIdPattern)]
+    // \z, not $: "$" would also accept a trailing newline.
+    [GeneratedRegex(@"^[a-z0-9-]+\z")]
     private static partial Regex ProviderIdRegex();
 
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
@@ -28,11 +29,11 @@ public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
         var key = $"Oidc:Providers:{id}";
         var missing = new[]
             {
-                ("DisplayName", p.DisplayName), ("Authority", p.Authority),
-                ("ClientId", p.ClientId), ("ClientSecret", p.ClientSecret)
+                (Key: "DisplayName", Value: p.DisplayName), (Key: "Authority", Value: p.Authority),
+                (Key: "ClientId", Value: p.ClientId), (Key: "ClientSecret", Value: p.ClientSecret)
             }
-            .Where(f => string.IsNullOrWhiteSpace(f.Item2))
-            .Select(f => f.Item1)
+            .Where(f => string.IsNullOrWhiteSpace(f.Value))
+            .Select(f => f.Key)
             .ToList();
         if (missing.Count > 0)
             failures.Add($"{key} is enabled and requires {string.Join(", ", missing)}");
@@ -49,13 +50,21 @@ public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
                          string.Join(", ", OidcProviderOptions.AllowedPromptValues));
     }
 
+    // The callback, signed-out callback and remote sign-out path of every enabled provider are all served
+    // by the one handler that owns the path, so no two may coincide.
     private static void ValidateUniqueCallbackPaths(OidcOptions options, List<string> failures)
     {
         var groups = options.EnabledProviders()
-            .GroupBy(p => p.Options.EffectiveCallbackPath(p.Id).TrimEnd('/'), StringComparer.OrdinalIgnoreCase)
+            .SelectMany(p => new[]
+            {
+                (p.Id, Path: p.Options.EffectiveCallbackPath(p.Id)),
+                (p.Id, Path: OidcProviderOptions.SignedOutCallbackPathFor(p.Id)),
+                (p.Id, Path: OidcProviderOptions.RemoteSignOutPathFor(p.Id)),
+            })
+            .GroupBy(x => x.Path.TrimEnd('/'), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1);
         foreach (var g in groups)
-            failures.Add($"Oidc providers {string.Join(", ", g.Select(p => p.Id))} share the callback path " +
+            failures.Add($"Oidc providers {string.Join(", ", g.Select(x => x.Id).Distinct())} share the path " +
                          $"'{g.Key}'; give each its own Oidc:Providers:<id>:CallbackPath");
     }
 }

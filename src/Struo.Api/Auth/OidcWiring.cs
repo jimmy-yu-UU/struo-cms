@@ -49,6 +49,8 @@ public static class OidcWiring
         options.ClientId = provider.ClientId;
         options.ClientSecret = provider.ClientSecret;
         options.CallbackPath = provider.EffectiveCallbackPath(id);
+        options.SignedOutCallbackPath = OidcProviderOptions.SignedOutCallbackPathFor(id);
+        options.RemoteSignOutPath = OidcProviderOptions.RemoteSignOutPathFor(id);
         options.ResponseType = "code";
         options.UsePkce = true;
         options.SaveTokens = false;

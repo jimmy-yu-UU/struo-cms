@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Struo.Application.Security;
 
 /// <summary>An enabled provider and the id it is configured under.</summary>
@@ -15,7 +17,7 @@ public sealed class OidcOptions
     /// <summary>Where a successful sign-in lands when the request carried no usable <c>returnUrl</c>.</summary>
     public string ReturnUrlDefault { get; set; } = "/";
 
-    public Dictionary<string, OidcProviderOptions> Providers { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, OidcProviderOptions> Providers { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The enabled providers, sorted by <see cref="OidcProviderOptions.Order"/> then id.</summary>
     public IReadOnlyList<OidcProvider> EnabledProviders() =>
@@ -26,14 +28,14 @@ public sealed class OidcOptions
             .Select(p => new OidcProvider(p.Key, p.Value))];
 
     /// <summary>Looks up an enabled provider by id; false for an unknown or disabled one.</summary>
-    public bool TryGetEnabled(string id, out OidcProviderOptions options)
+    public bool TryGetEnabled(string id, [NotNullWhen(true)] out OidcProviderOptions? options)
     {
         if (Providers.TryGetValue(id, out var found) && found.Enabled)
         {
             options = found;
             return true;
         }
-        options = null!;
+        options = null;
         return false;
     }
 
