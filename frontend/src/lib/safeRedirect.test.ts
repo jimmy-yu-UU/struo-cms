@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { safeRedirect, encodeRedirectParam } from './safeRedirect'
+import { safeRedirect, encodeRedirectParam, loginRedirectQuery } from './safeRedirect'
 
 const BACKSLASH = String.fromCharCode(92)
 
@@ -16,6 +16,10 @@ describe('safeRedirect', () => {
     ['//evil.example'],
     ['/' + BACKSLASH + 'evil.example'],
     ['https://evil.example'],
+    ['/\t/evil.example'],
+    ['/\n/evil.example'],
+    ['/\r/evil.example'],
+    ['/ok\u007f'],
     ['javascript:alert(1)'],
     ['collections/article'],
     [''],
@@ -26,6 +30,17 @@ describe('safeRedirect', () => {
   it.each([[undefined], [null], [42], [['/a']], [{}]])('rejects the non-string %j', (input) => {
     expect(safeRedirect(input)).toBeNull()
   })
+})
+
+describe('loginRedirectQuery', () => {
+  it('carries a normal path', () => {
+    expect(loginRedirectQuery('/media?x=1')).toEqual({ redirect: '/media?x=1' })
+  })
+
+  it.each([['/'], ['/login'], ['/login?reason=expired'], ['//evil'], [undefined]])(
+    'carries nothing for %j',
+    (p) => { expect(loginRedirectQuery(p)).toBeUndefined() },
+  )
 })
 
 describe('encodeRedirectParam', () => {

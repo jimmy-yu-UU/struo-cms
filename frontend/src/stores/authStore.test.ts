@@ -94,7 +94,7 @@ describe('authStore', () => {
     store.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     await expect(store.logout()).resolves.toBeUndefined()
     expect(store.user).toBeNull()
-    expect(store.loggingOut).toBe(false)
+    expect(store.loggingOut).toBe(true) // stays up until the caller's navigation settles
   })
 
   it('logout still clears the user and rethrows a server failure', async () => {
@@ -103,7 +103,19 @@ describe('authStore', () => {
     store.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     await expect(store.logout()).rejects.toMatchObject({ status: 500 })
     expect(store.user).toBeNull()
+    expect(store.loggingOut).toBe(true)
+    store.endLogout()
     expect(store.loggingOut).toBe(false)
+  })
+
+  it('leave guards are skipped while the session is expired or a logout is in progress', () => {
+    const store = useAuthStore()
+    expect(store.skipsLeaveGuards).toBe(false)
+    store.sessionExpired = true
+    expect(store.skipsLeaveGuards).toBe(true)
+    store.sessionExpired = false
+    store.loggingOut = true
+    expect(store.skipsLeaveGuards).toBe(true)
   })
 
   it('a successful sign-in clears the session-expired flag', async () => {

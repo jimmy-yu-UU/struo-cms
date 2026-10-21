@@ -26,6 +26,13 @@
   no longer show an earlier, slower response over a newer one, and a stale failure no longer clears
   the loading state or reports an error.
 
+### Security
+
+- `GET /api/auth/login/oidc` no longer accepts a `returnUrl` containing control characters. Browsers
+  strip tab, carriage return and line feed from a URL, so `/<tab>/evil.example` passed the in-site
+  check and then redirected off-site; such a value now falls back to `Oidc:ReturnUrlDefault`. The
+  admin's own `?redirect=` check refuses the same characters.
+
 ## 0.12.0 — 2026-10-21
 
 ::: danger Breaking

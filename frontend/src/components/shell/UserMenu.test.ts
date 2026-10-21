@@ -5,7 +5,7 @@ import UserMenu from './UserMenu.vue'
 import ChangePasswordDialog from '../account/ChangePasswordDialog.vue'
 import { useAuthStore } from '../../stores/authStore'
 import { i18n } from '../../i18n'
-import { ApiError } from '../../api/apiClient'
+import { ApiError, apiClient } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 
 const push = vi.fn()
@@ -113,8 +113,9 @@ describe('UserMenu', () => {
   it('a 401 from the logout request is a silent success that still ends on login', async () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
-    vi.spyOn(auth, 'logout').mockResolvedValue() // the store maps 401 to success (authStore.test.ts)
+    vi.spyOn(apiClient, 'post').mockRejectedValue(new ApiError(401, 'no session'))
     await clickLogout()
+    expect(auth.user).toBeNull()
     expect(push).toHaveBeenCalledWith({ name: 'login' })
     expect(toastAdd).not.toHaveBeenCalled()
   })
@@ -139,6 +140,17 @@ describe('UserMenu', () => {
     await clickLogout()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn' }))
     expect(push).toHaveBeenCalledWith({ name: 'login' })
+  })
+
+  it('keeps the leave-guard bypass up until the login navigation settles, then clears it', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.spyOn(apiClient, 'post').mockResolvedValue(undefined)
+    let during: boolean | undefined
+    push.mockImplementation(async () => { during = auth.skipsLeaveGuards })
+    await clickLogout()
+    expect(during).toBe(true)
+    expect(auth.skipsLeaveGuards).toBe(false)
   })
 
   it('offers a change-password item that opens the dialog for the signed-in user', async () => {

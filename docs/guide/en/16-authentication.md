@@ -145,7 +145,7 @@ unaffected — a request authenticated only by bearer still gets `204` from this
 its token stays alive. A token can only be revoked through the next section's revocation endpoint,
 or by issuing a new one that overwrites the old hash.
 
-The admin's **Log out** always ends on the login page. If the server cannot confirm the sign-out, a
+The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the server cannot confirm the sign-out, a
 warning says so; a `401` means no session was left to end and counts as success. When a request is
 rejected with `401` while you are signed in, the admin drops any unsaved edits, goes to the login page
 with a "session expired" notice and returns to the page you were on after you sign in again.

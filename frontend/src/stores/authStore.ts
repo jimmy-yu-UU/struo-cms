@@ -16,10 +16,13 @@ export const useAuthStore = defineStore('auth', {
     // Set when a 401 ended a signed-in session; unsaved-changes guards read it to let the
     // redirect to login through. Cleared by the next successful sign-in.
     sessionExpired: false,
-    // True while the logout request is in flight, so its own 401 is not taken for an expiry.
+    // True from the start of a logout until the caller's navigation to login settles: the logout
+    // request's own 401 is not taken for an expiry, and unsaved-changes guards let the logout
+    // through (it drops edits, like an expiry). The caller clears it with endLogout().
     loggingOut: false,
   }),
   getters: {
+    skipsLeaveGuards: (state) => state.sessionExpired || state.loggingOut,
     isAuthenticated: (state) => state.user !== null,
     canRead: (state) => (collection: string): boolean =>
       !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.read === true),
@@ -46,8 +49,10 @@ export const useAuthStore = defineStore('auth', {
         if (!(e instanceof ApiError && e.status === 401)) throw e
       } finally {
         this.user = null
-        this.loggingOut = false
       }
+    },
+    endLogout(): void {
+      this.loggingOut = false
     },
     async fetchCurrentUser(): Promise<void> {
       try {

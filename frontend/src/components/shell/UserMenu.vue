@@ -29,8 +29,12 @@ async function onLogout(): Promise<void> {
   } catch {
     toast.add({ severity: 'warn', summary: t('user.logoutIncomplete'), life: 6000 })
   }
-  await router.push({ name: 'login' })
-  resetSessionStores()
+  try {
+    await router.push({ name: 'login' })
+    resetSessionStores()
+  } finally {
+    auth.endLogout()
+  }
 }
 </script>
 

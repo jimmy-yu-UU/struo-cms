@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { START_LOCATION } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
 import { handleUnauthorized } from './sessionExpiry'
 import { useAuthStore } from '../stores/authStore'
@@ -44,6 +45,21 @@ describe('handleUnauthorized', () => {
     await handleUnauthorized(auth, router as never)
     expect(router.push).toHaveBeenCalledWith({ name: 'login' })
     expect(auth.sessionExpired).toBe(false)
+  })
+
+  it('a bootstrap 401 before the router is installed does nothing, so the guard can keep the deep link', async () => {
+    const auth = useAuthStore()
+    const router = { currentRoute: { value: START_LOCATION }, push: vi.fn() }
+    await handleUnauthorized(auth, router as never)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('omits redirect when the current page is the dashboard', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u', isSuperAdmin: true, permissions: {} }
+    const router = fakeRouter('dashboard', '/')
+    await handleUnauthorized(auth, router as never)
+    expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { reason: 'expired' } })
   })
 
   it('an unauthenticated 401 on the login page (wrong password) does nothing', async () => {
