@@ -183,8 +183,8 @@ An automatic diff cannot see intent, so a change that touches existing data take
 
 Afterwards, read the SQL with `migrate:preview`, then run `migrate` and `migrate:check` against a
 disposable database of the backend you actually use; DDL that SQLite accepts may not be accepted
-elsewhere. Your fork's own tests can call `SchemaChecker.Check`, from an `async` test method, and assert there
-are no errors.
+elsewhere. Your fork's own tests can call `SchemaChecker.Check`, from an `async` test method, and
+assert there are no errors.
 
 ## The three raw-SQL exceptions in core
 

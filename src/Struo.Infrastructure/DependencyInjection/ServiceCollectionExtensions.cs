@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
     // a registration added after AddStruoInfrastructure (AuthWiring's replacement) is the one seen.
     private static void RequireNonScopedCurrentUserAccessor(IServiceCollection services)
     {
-        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(ICurrentUserAccessor));
+        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(ICurrentUserAccessor) && !d.IsKeyedService);
         if (descriptor?.Lifetime == ServiceLifetime.Scoped)
             throw new InvalidOperationException(
                 "ICurrentUserAccessor is registered as Scoped, but ISqlSugarClient is a singleton whose " +

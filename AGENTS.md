@@ -112,10 +112,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   a string.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
-  parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no audit
-  stamping, no SQL Server cancellation translation, a shared soft-delete filter provider), so use it
-  only for AOP-free work such as a connection ping. A fork's `ICurrentUserAccessor` must not be scoped and must read the user on each call; startup fails
-  otherwise.
+  parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no
+  audit stamping, no SQL Server cancellation translation, a shared soft-delete filter provider), so use it
+  only for AOP-free work such as a connection ping. A fork's `ICurrentUserAccessor` must not be scoped
+  and must read the user on each call; startup fails otherwise.
   See `docs/ai/decisions/sqlsugarscope-per-request-cost.md`.
 - **Schema changes are FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
   `MigrationHost` runs them and records them in `{TablePrefix}schema_versions`. The commands are
@@ -133,7 +133,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 - **`files:sweep` removes orphaned blobs.** It is a command like the migration ones
   (`MigrationCli` dispatches it; `FilesSweepCommand` implements it): a dry run unless `--apply`,
   skipping blobs younger than `--min-age-hours` (default 24) and any blob a `files` row references,
-  trashed rows included. It prints its storage and database targets first, and `--apply` refuses (exit 3) when over 50% of the eligible blobs are orphans unless `--force`. It lists through `IFileStorage.ListAsync`. Exit 0 ok, 1 failure, 2 usage.
+  trashed rows included. It prints its storage and database targets first, and `--apply` refuses
+  (exit 3) when over 50% of the eligible blobs are orphans unless `--force`. It lists through
+  `IFileStorage.ListAsync`. Exit 0 ok, 1 failure, 2 usage.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,

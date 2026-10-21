@@ -435,7 +435,7 @@ orphan 2026/10/00000000000000000000000000000001.png
 ```
 
 ::: warning Check both targets before `--apply`
-The command acts on whatever storage and database the configuration points at, including a
+The command acts on whatever storage and database the configuration points at, including an
 `appsettings.Development.json` or environment variables you forgot were set. Read the first two
 lines, `storage:` and `database:`, and confirm they are the pair you mean to clean. A relative
 `Local:RootPath` resolves against the directory you run the command from, and the `storage:` line

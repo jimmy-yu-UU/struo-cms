@@ -164,6 +164,10 @@ Query parameters are validated against metadata by `QueryValidator` before they 
 inside a controller, data access has exactly one path: `IItemRepository` has a single
 implementation, `SqlSugarItemRepository`; no controller touches `ISqlSugarClient` directly.
 
+If your own backend code does touch the database, keep that work in `async` methods:
+`ISqlSugarClient` is one process-wide scope. The rule is in `docs/ai/conventions.md`, "Database access
+and the shared client".
+
 ## What's next
 
 You have seen the layers and the boundaries; next, get the API and admin SPA actually running: read

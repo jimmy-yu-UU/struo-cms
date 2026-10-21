@@ -93,8 +93,8 @@ included) and `SqlSugarSingletonScopeApiTests` (concurrent GraphQL, rollbacks an
   before forking children shares one client; no request path does today.
 - The cost of resolving the current user on each `AuditAop` call from the HTTP context is not
   measured separately; it is inside the request timings above.
-- Concurrent article creation deadlocks on SQL Server, MySQL and MariaDB under load. It is a database
-  behaviour tracked outside this decision.
+- Concurrent article creation deadlocks on SQL Server, MySQL and MariaDB under load. It is a pre-existing database
+  behaviour that this decision does not address.
 
 ## Referenced from
 

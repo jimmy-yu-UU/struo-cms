@@ -46,6 +46,14 @@ public class CurrentUserAccessorLifetimeTests
             .WithMessage("*ICurrentUserAccessor is registered as Scoped*");
     }
 
+    [Fact]
+    public void A_scoped_keyed_accessor_registered_last_is_ignored()
+    {
+        using var provider = Build(s => s.AddKeyedScoped<ICurrentUserAccessor, FixedAccessor>("other"));
+
+        provider.GetRequiredService<ISqlSugarClient>().Should().NotBeNull();
+    }
+
     [Theory]
     [InlineData(ServiceLifetime.Singleton)]
     [InlineData(ServiceLifetime.Transient)]

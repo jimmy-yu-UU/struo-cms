@@ -49,14 +49,13 @@ internal static class FilesSweepCommand
 
         try
         {
-            using var scope = services.CreateScope();
             await stdout.WriteLineAsync(SweepTargets.Describe(
                 services.GetRequiredService<FileStorageOptions>(),
                 services.GetRequiredService<IOptions<DatabaseOptions>>().Value));
 
             var scan = new Scan(
                 services.GetRequiredService<IFileStorage>(),
-                scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(),
+                services.GetRequiredService<ISqlSugarClient>(),
                 clock.GetUtcNow().UtcDateTime.AddHours(-options.MinAgeHours));
 
             if (options.Apply && !options.Force)

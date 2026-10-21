@@ -24,15 +24,22 @@ internal static class SweepTargets
     private static string DescribeDatabase(DatabaseOptions database) =>
         $"{database.DbType}, database {DatabaseName(database)}";
 
+    private static readonly string[] SqliteFileKeys = ["Data Source", "DataSource", "Filename"];
+    private static readonly string[] DatabaseNameKeys = ["Database", "Initial Catalog"];
+
     private static string DatabaseName(DatabaseOptions database)
     {
         try
         {
             var builder = new DbConnectionStringBuilder { ConnectionString = database.ConnectionString };
-            if (database.DbType == StruoDbType.Sqlite)
-                return builder.TryGetValue("Data Source", out var file) ? Path.GetFileName(file.ToString()) ?? "?" : "?";
-            foreach (var key in new[] { "Database", "Initial Catalog" })
-                if (builder.TryGetValue(key, out var name)) return name.ToString() ?? "?";
+            var isSqlite = database.DbType == StruoDbType.Sqlite;
+            var key = (isSqlite ? SqliteFileKeys : DatabaseNameKeys).FirstOrDefault(builder.ContainsKey);
+            if (key is not null)
+            {
+                var value = builder[key].ToString();
+                return (isSqlite ? Path.GetFileName(value) : value) is { Length: > 0 } name ? name : "?";
+            }
+            if (isSqlite) return "?";
         }
         catch (ArgumentException)
         {
