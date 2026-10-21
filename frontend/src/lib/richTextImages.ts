@@ -14,50 +14,51 @@ export function fileContentDisplayUrl(id: string): string {
   return `${apiBaseUrl}/files/${id}/content`
 }
 
-function rewriteImgSrc(html: string, srcFor: (id: string) => string): string {
-  if (!html) return html
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// A managed image src is the stored path or the display URL, optionally followed by a query.
+const MANAGED_SRC = new RegExp(
+  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiBaseUrl)})/files/(${GUID})/content(\\?.*)?$`,
+  'i',
+)
+
+type ManagedImage = { id: string, query: string }
+
+// An img is managed when its src is a managed URL, or when it has no src and a valid data-file-id.
+// A data-file-id on any other src is ignored, so foreign images are never rewritten.
+function managedImage(img: HTMLImageElement): ManagedImage | null {
+  const src = img.getAttribute('src') ?? ''
+  const match = MANAGED_SRC.exec(src)
+  if (match) return { id: match[1], query: match[2] ?? '' }
+  const tagged = img.dataset.fileId
+  if (!src && tagged && GUID_PATTERN.test(tagged)) return { id: tagged, query: '' }
+  return null
+}
+
+function rewriteManagedImages(html: string, srcFor: (image: ManagedImage) => string, tag: boolean): string {
+  if (!html || !/<img/i.test(html)) return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
   doc.querySelectorAll('img').forEach((img) => {
-    const id = img.dataset.fileId
-    if (id) img.setAttribute('src', srcFor(id))
+    const image = managedImage(img)
+    if (!image) return
+    if (tag) img.dataset.fileId = image.id
+    img.setAttribute('src', srcFor(image))
   })
   return doc.body.innerHTML
 }
 
 /** For loading stored HTML into the editor: point each managed img at its display URL. */
 export function absolutizeImageSrc(html: string): string {
-  return rewriteImgSrc(html, fileContentDisplayUrl)
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-// A managed image src is exactly the stored path or the display URL, optionally followed by a query.
-const MANAGED_SRC = new RegExp(
-  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiBaseUrl)})/files/(${GUID})/content(?:\\?.*)?$`,
-  'i',
-)
-
-function managedFileId(img: HTMLImageElement): string | null {
-  const tagged = img.dataset.fileId
-  if (tagged && GUID_PATTERN.test(tagged)) return tagged
-  return MANAGED_SRC.exec(img.getAttribute('src') ?? '')?.[1] ?? null
+  return rewriteManagedImages(html, ({ id, query }) => fileContentDisplayUrl(id) + query, false)
 }
 
 /**
  * For emitting/storing: tag each managed img with its file id and point it at the base-independent
- * path in one parse. Images that are not managed are left as they are; html without an img is
- * returned unchanged.
+ * path in one parse. A query string such as image transform parameters is kept. Images that are not
+ * managed are left as they are; html without an img is returned unchanged.
  */
 export function normalizeForStorage(html: string): string {
-  if (!html || !/<img/i.test(html)) return html
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('img').forEach((img) => {
-    const id = managedFileId(img)
-    if (!id) return
-    img.dataset.fileId = id
-    img.setAttribute('src', fileContentPath(id))
-  })
-  return doc.body.innerHTML
+  return rewriteManagedImages(html, ({ id, query }) => fileContentPath(id) + query, true)
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   fileContentPath, fileContentDisplayUrl, absolutizeImageSrc, normalizeForStorage,
 } from './richTextImages'
@@ -28,15 +28,45 @@ describe('richTextImages', () => {
     expect(out).toContain(`data-file-id="${ID}"`)
   })
 
-  it('keeps a query string out of the id and stores the bare path', () => {
+  it('tags a managed image that has a query string', () => {
     const out = normalizeForStorage(`<img src="/api/files/${ID}/content?w=100">`)
     expect(out).toContain(`data-file-id="${ID}"`)
-    expect(out).toContain(`src="/api/files/${ID}/content"`)
   })
 
-  it('relativizes an image that already carries a valid data-file-id', () => {
-    const out = normalizeForStorage(`<img src="http://localhost:5221/api/files/${ID}/content" data-file-id="${ID}">`)
-    expect(out).toContain(`src="/api/files/${ID}/content"`)
+  it('trusts a data-file-id only on an image with a managed or empty src', () => {
+    const empty = normalizeForStorage(`<img data-file-id="${ID}">`)
+    expect(empty).toContain(`src="/api/files/${ID}/content"`)
+    const foreign = '<img src="https://other.example/api/files/' + ID + '/content" data-file-id="' + ID + '">'
+    expect(normalizeForStorage(foreign)).toBe(foreign)
+    const external = `<img src="https://cdn.example.com/x.png" data-file-id="${ID}">`
+    expect(normalizeForStorage(external)).toBe(external)
+  })
+
+  it('keeps the query of a managed url when storing', () => {
+    const out = normalizeForStorage(`<img src="${fileContentDisplayUrl(ID)}?width=300&amp;format=webp">`)
+    expect(out).toContain(`src="/api/files/${ID}/content?width=300&amp;format=webp"`)
+  })
+
+  it('keeps the query of a managed path when loading', () => {
+    const out = absolutizeImageSrc(`<img src="/api/files/${ID}/content?width=300" data-file-id="${ID}">`)
+    expect(out).toContain(`src="${fileContentDisplayUrl(ID)}?width=300"`)
+  })
+
+  it('absolutizes only managed or empty-src images that carry a guid id', () => {
+    const external = `<img src="https://cdn.example.com/x.png" data-file-id="${ID}">`
+    expect(absolutizeImageSrc(external)).toBe(external)
+    const bad = '<img src="https://cdn.example.com/x.png" data-file-id="nope">'
+    expect(absolutizeImageSrc(bad)).toBe(bad)
+    const nonGuidManaged = '<img src="/api/files/abc/content" data-file-id="abc">'
+    expect(absolutizeImageSrc(nonGuidManaged)).toBe(nonGuidManaged)
+    expect(absolutizeImageSrc(`<img data-file-id="${ID}">`)).toContain(`src="${fileContentDisplayUrl(ID)}"`)
+  })
+
+  it('round-trips load then save for managed and external images', () => {
+    const external = `<img src="https://cdn.example.com/x.png" data-file-id="${ID}">`
+    expect(normalizeForStorage(absolutizeImageSrc(external))).toBe(external)
+    const managed = `<img src="/api/files/${ID}/content?width=300" data-file-id="${ID}">`
+    expect(normalizeForStorage(absolutizeImageSrc(managed))).toBe(managed)
   })
 
   it('leaves an external image whose url contains /files/x/content untouched', () => {
@@ -73,5 +103,23 @@ describe('richTextImages', () => {
   it('leaves images without data-file-id untouched', () => {
     const html = '<img src="http://x/y.png" alt="a">'
     expect(normalizeForStorage(html)).toContain('src="http://x/y.png"')
+  })
+})
+
+describe('richTextImages with an absolute api base', () => {
+  const ID = '3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b'
+
+  it('treats only that base and the stored path as managed', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com/api')
+    vi.resetModules()
+    const lib = await import('./richTextImages')
+    const mine = `<img src="https://api.example.com/api/files/${ID}/content?w=1">`
+    expect(lib.normalizeForStorage(mine)).toContain(`src="/api/files/${ID}/content?w=1"`)
+    const other = `<img src="https://other.example.com/api/files/${ID}/content">`
+    expect(lib.normalizeForStorage(other)).toBe(other)
+    expect(lib.absolutizeImageSrc(`<img src="/api/files/${ID}/content" data-file-id="${ID}">`))
+      .toContain(`src="https://api.example.com/api/files/${ID}/content"`)
+    vi.unstubAllEnvs()
+    vi.resetModules()
   })
 })

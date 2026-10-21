@@ -33,8 +33,8 @@
   the loading state or reports an error.
 - The rich-text editor rewrote external images to a local path. Any `<img>` whose address merely
   contained `/files/…/content` was tagged as a managed file and saved as `/api/files/…/content`, which
-  broke the image. Only an address that is exactly this site's file URL with a valid file id is now
-  treated as a managed file; every other image is saved as typed.
+  broke the image. Only this site's own file URL with a valid file id (optionally with a query string, which is
+  kept) is now treated as a managed file; every other image is saved as typed, on load and on save.
 
 ### Security
 

@@ -331,6 +331,31 @@ describe('RichTextInput', () => {
     expect(vm.editor.isActive('bold')).toBe(true)
   })
 
+  const MANAGED_ID = '3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b'
+
+  async function editAndGetEmit(modelValue: string): Promise<string> {
+    const w = mount(RichTextInput, { props: { modelValue }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { commands: { insertContent: (h: string) => void } } }
+    vm.editor.commands.insertContent('x')
+    await flushPromises()
+    return String(w.emitted('update:modelValue')!.at(-1)![0])
+  }
+
+  it('keeps the stored path and file id of a managed image through load and save', async () => {
+    const html = await editAndGetEmit(
+      `<p><img src="/api/files/${MANAGED_ID}/content?width=300" data-file-id="${MANAGED_ID}"></p>`)
+    expect(html).toContain(`src="/api/files/${MANAGED_ID}/content?width=300"`)
+    expect(html).toContain(`data-file-id="${MANAGED_ID}"`)
+  })
+
+  it('saves an external image whose url contains /files/x/content unchanged', async () => {
+    const html = await editAndGetEmit(
+      '<p><img src="https://cdn.example.com/files/abc/content"></p>')
+    expect(html).toContain('src="https://cdn.example.com/files/abc/content"')
+    expect(html).not.toContain('data-file-id')
+  })
+
   it('inserts a managed image with relative src + data-file-id', async () => {
     const w = mount(RichTextInput, {
       props: { modelValue: '<p>a</p>' },
