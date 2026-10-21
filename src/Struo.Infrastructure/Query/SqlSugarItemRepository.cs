@@ -21,32 +21,35 @@ public sealed class SqlSugarItemRepository(
     ILogger<SqlSugarItemRepository>? logger = null) : IItemRepository
 {
     // This class is a facade over IItemRepository. Two supporting types back it — GenericDispatcher
-    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the ten instance
-    // fields declared next: TransactionRunner, FilterTranslator, WhereInQueries, SoftDeleteOps,
-    // PurgeOps, ManyToManySync, TranslationStore, OrderByExpressionBuilder, FacetQueries and
+    // (the generic-dispatch primitive used below) and RepositoryHelpers — plus the eleven instance
+    // fields declared next: TransactionRunner, FilterTranslator, WhereInQueries, WhereInWindowQueries,
+    // SoftDeleteOps, PurgeOps, ManyToManySync, TranslationStore, OrderByExpressionBuilder, FacetQueries and
     // AggregateQueries. The facade itself still implements Query/GetById/Create/Update/Delete (the
     // optimistic-concurrency check, the identity-PK read-back and the offset/limit paging all live
-    // in this file); every other IItemRepository member just delegates to one of eight fields —
-    // transactions, whereIn, softDelete, purge, manyToMany, translations, facets and aggregates;
+    // in this file); every other IItemRepository member just delegates to one of nine fields —
+    // transactions, whereIn, whereInWindow, softDelete, purge, manyToMany, translations, facets and aggregates;
     // orderByBuilder is not a delegation target, it is used inside QueryAsync
     // (orderByBuilder.BuildOrderBy(...)), and filters is used inline in QueryAsync
-    // (filters.Translate(...)) rather than delegated to. Among the ten fields,
+    // (filters.Translate(...)) rather than delegated to. Among the eleven fields,
     // OrderByExpressionBuilder is the only one registered as a scoped DI service — kept registered
-    // for a future direct consumer, though none exists today. The other nine are not registered:
+    // for a future direct consumer, though none exists today. The other ten are not registered:
     // nothing outside this class needs them, and the test suite constructs SqlSugarItemRepository
     // directly with this exact 5-arg constructor (26 test files do), so any new required
     // constructor parameter is not an option — `logger` above is optional (defaults to null) for
     // exactly that reason. manyToMany, translations and facets take `new TransactionRunner(db)`
     // rather than the `transactions` field below because a field initializer cannot reference another
     // instance field (CS0236); TransactionRunner holds no state beyond `db`, so the second
-    // instance behaves identically to sharing the first. whereIn, facets and aggregates similarly
-    // take a second, separate `new FilterTranslator(...)` rather than the `filters` field below it
-    // for the same CS0236 reason; FilterTranslator holds no state beyond its constructor arguments,
-    // so the second instance behaves identically to sharing the first.
+    // instance behaves identically to sharing the first. whereIn, whereInWindow, facets and
+    // aggregates similarly take a second, separate `new FilterTranslator(...)` rather than the
+    // `filters` field below it for the same CS0236 reason, and whereInWindow likewise takes its own
+    // `new OrderByExpressionBuilder(...)` instead of `orderByBuilder`; both hold no state beyond
+    // their constructor arguments, so the second instance behaves identically to sharing the first.
     private readonly OrderByExpressionBuilder orderByBuilder = new(registry, graph, metadata, options);
     private readonly TransactionRunner transactions = new(db);
     private readonly FilterTranslator filters = new(db, graph, metadata, registry, options);
     private readonly WhereInQueries whereIn = new(db, registry, new FilterTranslator(db, graph, metadata, registry, options));
+    private readonly WhereInWindowQueries whereInWindow = new(db, registry, metadata,
+        new FilterTranslator(db, graph, metadata, registry, options), new OrderByExpressionBuilder(registry, graph, metadata, options));
     private readonly SoftDeleteOps softDelete = new(db, registry);
     private readonly PurgeOps purge = new(db, registry);
     private readonly ManyToManySync manyToMany = new(db, new TransactionRunner(db), logger);
@@ -233,6 +236,10 @@ public sealed class SqlSugarItemRepository(
         string collection, string property, IReadOnlyList<object> values,
         FilterNode? extraFilter, string? queryLocale, int? maxRows = null, CancellationToken ct = default) =>
         whereIn.QueryWhereInFilteredAsync(collection, property, values, extraFilter, queryLocale, maxRows, ct);
+
+    public Task<IReadOnlyList<object>?> QueryWhereInWindowAsync(
+        WhereInWindowRequest request, CancellationToken ct = default) =>
+        whereInWindow.QueryAsync(request, ct);
 
     public Task SyncManyToManyAsync(
         Type junctionType,

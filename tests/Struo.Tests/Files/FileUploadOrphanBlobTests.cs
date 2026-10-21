@@ -42,6 +42,9 @@ public sealed class FileUploadOrphanBlobTests : IDisposable
             Keys.Remove(key);
             return Task.CompletedTask;
         }
+        public IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
 
         public bool SupportsPresignedUrls => false;
         public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult<string?>(null);

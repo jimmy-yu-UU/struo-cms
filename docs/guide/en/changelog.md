@@ -17,6 +17,12 @@
   `${STRUO_ADMIN_PORT:-8080}:8080`; the host port is unchanged. A fork that runs the admin image from its
   own manifest, `docker run --publish` command or reverse-proxy upstream must point at container port
   `8080`.
+- `IFileStorage` has a new member, `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`. A fork's
+  own storage implementation must add it, or the project no longer compiles. It returns every stored
+  blob as a `StoredBlob(Key, LastModifiedUtc)`: the key as passed to `SaveAsync`, and the last-modified
+  time in UTC (`DateTime.MaxValue` if the backend cannot report one, which keeps the blob safe from an
+  age-based sweep). Stream the listing page by page instead of materialising it; the sweep reads it
+  once or twice per run.
 - `Struo:Files:ImageTransform:MaxConcurrentTransforms` must be at least `2`; `1` stops startup with an
   error naming the key. Anonymous requests now hold at most `MaxConcurrentTransforms - 1` transform
   slots, so a fork that set `1` raises it to `2` or more. With the shipped default of `2`, anonymous
@@ -24,10 +30,24 @@
   parallel raises the setting.
 - `POST /api/items/user` and the GraphQL `createUser` mutation now return `400` `BAD_USER_INPUT`.
   Create users with `POST /api/users`, or with the admin UI's "New" dialog on the user list.
+- `ISqlSugarClient` is a singleton, one `SqlSugarScope` for the whole process, instead of one per
+  request. Each async flow still gets its own connection and transaction, but database work must run in
+  async methods (no DB access from a sync lambda in `Task.Run`, a timer callback or a sync job), and
+  `CopyNew()` skips audit stamping and SQL Server cancellation translation. A fork that overrides the
+  registration as scoped, or relies on the client being disposed at the end of a request, behaves
+  differently. An `ICurrentUserAccessor` a fork registers must not be scoped (startup fails
+  otherwise) and must read the user on each call.
 :::
 
 ### Added
 
+- `files:sweep` removes orphaned blobs from the local or S3 store. It is a dry run that lists the
+  orphans unless `--apply` is given, never touches a blob younger than `--min-age-hours` (default 24),
+  and treats a blob referenced by a trashed `files` row as in use. `IFileStorage` gains
+  `ListAsync` (see the breaking change above). The command first prints its
+  storage and database targets (never credentials), and `--apply` refuses with exit code `3` when more
+  than 50% of the eligible blobs are orphans unless `--force` is given. See
+  [Removing orphaned blobs](20-deployment.md#removing-orphaned-blobs).
 - [Chapter 25: After Forking](25-after-forking.md) lists what a fork changes first: the license
   line, `UserSecretsId`, the Sonar variables, the sample, the admin-UI language, the `__Host-` cookie
   prefix, the CSP and forwarded-header settings. A root `SECURITY.md` describes private vulnerability
@@ -37,6 +57,15 @@
 
 ### Changed
 
+- A page that expands exactly one parent through a one-to-many relation with a nested `limit` now has the
+  nested `sort`, `offset` and `limit` applied in SQL, next to the nested `filter`. `Query:MaxExpandRows`
+  does not apply to that case, so a parent with more children than the cap answers with just the
+  requested window. Ordering on that path follows the database, as in a list query: null placement and
+  text collation are the database's, and with no nested `sort` the newest child comes first. A nested
+  `sort` over several parents, or without a `limit`, still sorts in memory with nulls first, so the same
+  nested `sort` can order differently for one parent than for several. Many-to-many relations are
+  unchanged. A new `IItemRepository.QueryWhereInWindowAsync` returns `null` by default, which keeps an
+  implementation without it on the capped in-memory path.
 - The API image's `HEALTHCHECK` and the Compose `api` health check read the port from
   `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry of a `;`-separated list) instead of a fixed
   `8080`, so a fork that changes the listening port keeps a working probe.
@@ -47,6 +76,9 @@
 
 ### Fixed
 
+- Memory no longer grows with every request. SqlSugar keeps a scope's clients in static dictionaries that
+  are never emptied, and a scope per request added an entry each time: about 150 bytes per request, and
+  about 2.5 KB per `/health/ready` call. The single shared scope adds none.
 - A collection whose generated GraphQL names collide with another collection's or with a built-in
   name (`article` with `articleList`, `category` with `categories`, a collection named `revision`)
   now stops startup with an error whose cause chain carries a `MetadataException` naming the

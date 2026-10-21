@@ -52,7 +52,7 @@ public class DistributedCacheTicketStoreTests
             Client.CodeFirst.InitTables<UserSession>();
 
             var services = new ServiceCollection();
-            services.AddScoped<ISqlSugarClient>(_ => Client);
+            services.AddSingleton<ISqlSugarClient>(_ => Client);
             services.AddScoped<IUserSessionStore, SqlSugarUserSessionStore>();
             _provider = services.BuildServiceProvider();
             ScopeFactory = _provider.GetRequiredService<IServiceScopeFactory>();

@@ -9,7 +9,7 @@ public sealed class SqlSugarLanguageCollectionRules(ISqlSugarClient db) : ILangu
 {
     public async Task EnsureInvariantsAsync(CancellationToken ct = default)
     {
-        // Same scoped client as the repository, so this reads the rows the surrounding transaction wrote.
+        // Same client as the repository, so this reads the rows the surrounding transaction wrote.
         // Ordered so the duplicate-code message names the same row on every backend.
         var rows = await db.Queryable<Language>().OrderBy(l => l.Id).ToListAsync(ct);
 

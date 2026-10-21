@@ -149,6 +149,9 @@ API 文件用 Scalar，套用 Mars 主題，預設客戶端是 JavaScript／Axio
 料存取只走一條路：`IItemRepository` 這個介面只有一個實作 `SqlSugarItemRepository`；沒有一
 個 controller 直接碰 `ISqlSugarClient`。
 
+如果你自己的後端程式碼要存取資料庫，請把這些工作放在 `async` 方法裡：`ISqlSugarClient` 是整個行程
+共用的一個 scope。規則寫在 `docs/ai/conventions.md` 的「Database access and the shared client」。
+
 ## 接下來
 
 分層與界線都看過了，接下來把 API 與後台實際跑起來：讀[第 3 章：快速開始](03-getting-started.md)。

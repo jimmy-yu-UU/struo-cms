@@ -37,6 +37,11 @@ Migration 放在三個地方：
 | `migrate:baseline` | 把每支 migration 記成已套用，不執行 |
 | `make:migration` | 產生一個新的 migration 檔 |
 
+第七個命令 `files:sweep` 跟結構無關：它清除檔案儲存裡的孤兒 blob。不加 `--apply` 只是試跑，
+`--force` 讓 `--apply` 在孤兒超過一半時照刪，`--min-age-hours N` 設定寬限期（預設 24）。
+它的結束代碼是下面那幾個再加上 `3`，代表被 50% 保險機制拒絕。見
+[清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
+
 在儲存庫裡用 `dotnet run --project src/Struo.Api -- <命令>`。這會套用 `http` 啟動設定檔，環境是
 Development，讀你的 `appsettings.Development.json`。發佈出去的成品用 `dotnet Struo.Api.dll <命令>`；
 API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>` 也行。
@@ -159,8 +164,8 @@ public sealed class CreateTags : StruoMigration
 6. **拆分或合併欄位**：一定要寫一支搬資料的 migration。
 
 寫完先用 `migrate:preview` 看 SQL，再對一份你實際用的後端的拋棄式資料庫跑 `migrate` 與
-`migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以呼叫
-`SchemaChecker.Check`，斷言沒有錯誤。
+`migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以在 `async` 測試方法裡
+呼叫 `SchemaChecker.Check`，斷言沒有錯誤。
 
 ## 核心的三個 raw SQL 例外
 

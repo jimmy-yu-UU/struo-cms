@@ -46,7 +46,7 @@ namespace Struo.Tests.Migrations
                 .AddSingleton<IEntityTypeCollector>(new StubCollector(types))
                 .AddSingleton(Options.Create(new DatabaseOptions
                     { DbType = StruoDbType.Sqlite, ConnectionString = "Data Source=:memory:", TablePrefix = "mkmig_" }))
-                .AddScoped<ISqlSugarClient>(sp => SqlSugarClientFactory.Create(
+                .AddSingleton<ISqlSugarClient>(sp => SqlSugarClientFactory.Create(
                     sp.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
                 .BuildServiceProvider());
 
@@ -257,7 +257,7 @@ namespace Struo.Tests.Migrations
             var sp = Track(new ServiceCollection()
                 .AddSingleton<IEntityTypeCollector>(new StubCollector(typeof(Revision)))
                 .AddOptions<DatabaseOptions>().Validate(_ => false, "DbType is not configured").Services
-                .AddScoped<ISqlSugarClient>(s => SqlSugarClientFactory.Create(
+                .AddSingleton<ISqlSugarClient>(s => SqlSugarClientFactory.Create(
                     s.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
                 .BuildServiceProvider());
 

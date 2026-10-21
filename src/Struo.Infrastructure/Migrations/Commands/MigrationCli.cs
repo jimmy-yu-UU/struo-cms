@@ -2,17 +2,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 
 namespace Struo.Infrastructure.Migrations.Commands;
 
-/// <summary>The migration commands. Exit codes: 0 success, 1 failure, 2 usage error.</summary>
+/// <summary>The command-line commands (<c>migrate*</c>, <c>make:migration</c>, <c>files:sweep</c>). Exit codes: 0 success, 1 failure, 2 usage error, 3 <c>files:sweep --apply</c> refused by its safeguard.</summary>
 public static class MigrationCli
 {
-    public const int Success = 0, Failure = 1, Usage = 2;
+    public const int Success = 0, Failure = 1, Usage = 2, Refused = 3;
     private const string MigrateCommand = "migrate";
     private const string PreviewCommand = "migrate:preview";
-    private static readonly string[] Runnable = [MigrateCommand, "migrate:status", PreviewCommand, "migrate:check", "migrate:baseline", "make:migration"];
+    private static readonly string[] Runnable = [MigrateCommand, "migrate:status", PreviewCommand, "migrate:check", "migrate:baseline", "make:migration", FilesSweepCommand.Name];
 
     /// <summary>Lets tests adjust the host options, for example to restrict the scanned namespace.</summary>
     internal static Func<MigrationHostOptions, MigrationHostOptions> OptionsOverride { get; set; } = o => o;
@@ -38,7 +39,7 @@ public static class MigrationCli
     }
 
     private static bool IsCommand(string arg) =>
-        arg == MigrateCommand || arg.StartsWith("migrate:", StringComparison.Ordinal) || arg == "make:migration";
+        arg == MigrateCommand || arg.StartsWith("migrate:", StringComparison.Ordinal) || arg == "make:migration" || arg == FilesSweepCommand.Name;
 
     private static readonly string[] HostSwitches = ["--environment", "--contentRoot", "--applicationName", "--urls"];
 
@@ -69,6 +70,9 @@ public static class MigrationCli
 
         if (command == "make:migration")
             return await MakeMigrationCommand.RunAsync(invocation.CommandArgs, services, stdout, stderr, Clock);
+
+        if (command == FilesSweepCommand.Name)
+            return await FilesSweepCommand.RunAsync(invocation.CommandArgs, services, stdout, stderr, Clock, ct);
 
         if (invocation.CommandArgs.Count > 0)
         {

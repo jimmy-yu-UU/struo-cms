@@ -37,7 +37,7 @@ public sealed class MigrateCheckCommandTests : IDisposable
             .AddSingleton<IEntityTypeCollector>(new StubCollector(FrameworkEntityTypes.All))
             .AddSingleton(_ => Options.Create(new DatabaseOptions
                 { DbType = db ?? _database.DbType, ConnectionString = conn ?? _database.ConnectionString, TablePrefix = prefix }))
-            .AddScoped<ISqlSugarClient>(p => SqlSugarClientFactory.Create(
+            .AddSingleton<ISqlSugarClient>(p => SqlSugarClientFactory.Create(
                 p.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
             .BuildServiceProvider();
         _providers.Add(sp);

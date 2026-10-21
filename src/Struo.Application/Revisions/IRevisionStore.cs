@@ -11,7 +11,7 @@ public sealed record RevisionRecord(
 
 /// <summary>
 /// Storage for per-item revision snapshots. Backed by the framework `Revision` table.
-/// Implementations run on the request-scoped SqlSugar client, so <see cref="CaptureAsync"/> called
+/// Implementations run on the shared SqlSugar client, which gives each request its own connection, so <see cref="CaptureAsync"/> called
 /// inside <c>ItemService</c>'s write transaction commits atomically with the write it describes.
 /// </summary>
 public interface IRevisionStore

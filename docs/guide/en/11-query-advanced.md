@@ -95,9 +95,19 @@ responds normally.
 (default 20), siblings and nested levels together: `Too many relations in deep (max 20).`. Each
 relation fetch reads at most `Query:MaxExpandRows` rows (default 1000). A fetch that finds more fails
 with a 400 naming the relation, such as `Relation 'children' has more than 1000 rows to expand; narrow
-the nested filter or expand fewer parent rows.`, and the rows are never truncated. A nested `limit`
-is applied after the fetch, so it does not lower the count the cap checks; narrow with a nested
-`filter` or a smaller `limit` on the parent page.
+the nested filter or expand fewer parent rows.`, and the rows are never truncated. Narrow with a
+nested `filter` or a smaller `limit` on the parent page.
+
+One case skips the cap. When a page expands exactly one parent through a one-to-many relation and
+the nested list has a `limit`, the database applies the nested `filter`, `sort`, `offset` and
+`limit`, and only that window is read, so a parent with more than `Query:MaxExpandRows` children
+still answers. The order is the same as a list query's, with the id as the final tie-break, so
+paging through ties neither repeats nor drops a row; with no nested `sort` it is newest first. Null
+placement and text order are the database's there, while the in-memory sort used for several parents
+puts nulls first, so the same nested `sort` can order differently for one parent than for several. A
+nested `sort` on a translatable field with no locale in the request is not pushed down and stays
+under the cap. With several parents, a nested list without a `limit`, or a many-to-many relation,
+a nested `limit` is applied after the fetch, so it does not lower the count the cap checks.
 
 For a many-to-many relation the count is junction rows: every link between the page's parents and
 their targets, read before the nested `filter` runs. A nested `filter` does not lower it, so the

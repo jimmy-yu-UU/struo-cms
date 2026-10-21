@@ -15,16 +15,30 @@
   `nginxinc/nginx-unprivileged` 上。Compose 的對應改為 `${STRUO_ADMIN_PORT:-8080}:8080`，主機端的埠不變。
   fork 若用自己的 manifest、`docker run --publish` 指令或反向代理 upstream 執行後台映像，必須改指向容器埠
   `8080`。
+- `IFileStorage` 新增成員 `IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken)`。fork 自己的儲存
+  實作必須補上，否則專案無法編譯。它要回傳每一個已儲存的 blob，型別是 `StoredBlob(Key, LastModifiedUtc)`：
+  鍵就是傳給 `SaveAsync` 的那個，修改時間用 UTC（後端無法回報時給 `DateTime.MaxValue`，這樣依時間清理
+  的流程一定會保留它）。請一頁一頁串流回傳，不要先整批載入；清除命令每次執行會讀它一到兩次。
 - `Struo:Files:ImageTransform:MaxConcurrentTransforms` 至少要是 `2`；設成 `1` 會讓啟動失敗，並指出
   是哪個鍵。匿名請求現在最多只占用 `MaxConcurrentTransforms - 1` 個轉換名額，所以設為 `1` 的 fork
   要改成 `2` 以上。出廠預設值是 `2`，此時匿名的冷轉換一次只跑一個；對外提供公開圖片、想讓匿名請求有
   更多並行的 fork，請調高這個設定。
 - `POST /api/items/user` 與 GraphQL 的 `createUser` 現在回 `400` `BAD_USER_INPUT`。建立使用者請用
   `POST /api/users`，或用後台使用者清單上「新增」開啟的對話框。
+- `ISqlSugarClient` 改為單例：整個行程共用一個 `SqlSugarScope`，不再每個請求建一個。每個非同步流程
+  仍有自己的連線與交易，但資料庫工作必須在 async 方法裡執行（不要在 `Task.Run` 的同步 lambda、
+  計時器回呼或同步工作中存取資料庫），而且 `CopyNew()` 不會做稽核欄位寫入與 SQL Server 取消轉譯。
+  fork 若把這個註冊覆寫成 scoped，或依賴請求結束時釋放 client，行為會不同。fork 自己註冊的
+  `ICurrentUserAccessor` 不可以是 scoped（否則啟動失敗），而且要在每次呼叫時才讀取目前使用者。
 :::
 
 ### 新增
 
+- `files:sweep` 清除本機或 S3 儲存裡的孤兒 blob。不加 `--apply` 只是試跑並列出孤兒，絕不碰修改時間
+  比 `--min-age-hours`（預設 24）還新的 blob，垃圾桶裡的 `files` 列所參照的 blob 視為使用中。
+  `IFileStorage` 新增 `ListAsync`（見上面的破壞性變更）。命令一開始會先印出儲存與資料庫目標
+  （不含憑證），而且孤兒超過符合資格 blob 的 50% 時，`--apply` 會以結束代碼 `3` 拒絕，除非加 `--force`。見
+  [清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
 - [第 25 章：Fork 之後要做的事](25-after-forking.md)列出 fork 要先改的東西：授權著作權行、
   `UserSecretsId`、Sonar 變數、範例專案、後台語言、`__Host-` cookie 前綴，以及 CSP 與轉送標頭設定。
   根目錄新增 `SECURITY.md`，說明這個模板怎麼私下回報漏洞；fork 要換成自己的版本。
@@ -33,6 +47,13 @@
 
 ### 變更
 
+- 一頁只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit` 時，巢狀 `sort`、`offset` 與 `limit`
+  改由 SQL 套用，與巢狀 `filter` 一起執行。`Query:MaxExpandRows` 不適用於這種情況，所以子列數超過上限的
+  父列，也只回傳所要求的那個視窗。這條路徑的排序與列表查詢一樣由資料庫決定：null 的位置與文字比對規則
+  都依資料庫，沒有巢狀 `sort` 時最新的子列在前。多個父列、或沒有 `limit` 的巢狀 `sort` 仍在記憶體中
+  排序，null 排在最前面，所以同一個巢狀 `sort` 在一個父列與多個父列之間，順序可能不同。多對多關聯維持
+  原樣。新增的 `IItemRepository.QueryWhereInWindowAsync` 預設回傳 `null`，沒有實作它的類別會留在有上限的
+  記憶體路徑。
 - API 映像的 `HEALTHCHECK` 與 Compose 的 `api` 健康檢查改從 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設是 8080；
   值是以 `;` 分隔的清單時取第一個），不再寫死 `8080`，fork 改了監聽埠後探測仍然有效。
 - 匿名的圖片轉換最多只占用 `MaxConcurrentTransforms - 1` 個名額，所以匿名請求塞滿其餘名額時，已驗證的
@@ -41,6 +62,8 @@
 
 ### 修正
 
+- 記憶體不再隨請求數增長。SqlSugar 把 scope 的 client 存在永不清空的靜態字典裡，每個請求建一個 scope，
+  字典就多一筆：每個請求約 150 位元組，每次 `/health/ready` 約 2.5 KB。共用單一 scope 後不再增加。
 - 集合產生的 GraphQL 名稱若跟其他集合或內建名稱撞在一起（`article` 與 `articleList`、`category` 與
   `categories`、名為 `revision` 的集合），現在啟動會中止，原因鏈裡有一個 `MetadataException`，訊息點名相關集合與撞名
   的名稱。過去是在 GraphQL schema 建置途中以重複型別的錯誤失敗。

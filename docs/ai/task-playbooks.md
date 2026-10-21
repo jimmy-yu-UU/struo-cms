@@ -264,7 +264,7 @@ Background: `docs/guide/en/21-schema-and-upgrades.md`, "Writing a migration"; `A
    on any error, so a migration that drifted from the entity is caught.
 6. **Tests to add**: a migration is code, so apply it in a test against SQLite the way the shipped
    suite does (`tests/Struo.Tests/Migrations/`), and call `SchemaChecker.Check` from your own tests
-   and assert it reports no errors.
+   (from an `async` test method) and assert it reports no errors.
 7. **Gate**: `dotnet build && dotnet test` first. The SQLite suite may accept or reject your DDL
    differently from the backend you actually run, so also apply the migration with `migrate` to a
    disposable instance of that backend and run `migrate:check` against it. A green SQLite or

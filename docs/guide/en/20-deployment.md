@@ -420,6 +420,63 @@ that's genuinely missing turns into an error, rather than an endless reload.
   values in environment variables or a secret manager are ordinary source or deployment-pipeline
   artifacts; back them up along with the rest of the deployment.
 
+## Removing orphaned blobs
+
+A blob is orphaned when no `files` row points at its storage key, for example after a storage-layer
+failure left bytes behind a purge. `files:sweep` finds them in whichever backend `Struo:Files:Backend`
+selects and removes them on request:
+
+```text
+$ dotnet run --project src/Struo.Api -- files:sweep
+storage:  local, root /srv/struo/uploads
+database: PostgreSQL, database struo
+orphan 2026/10/00000000000000000000000000000001.png
+1 of 4 eligible blobs (25%) are orphans; 1 younger than 24 hour(s) skipped. Dry run: nothing was deleted; pass --apply to delete.
+```
+
+::: warning Check both targets before `--apply`
+The command acts on whatever storage and database the configuration points at, including an
+`appsettings.Development.json` or environment variables you forgot were set. Read the first two
+lines, `storage:` and `database:`, and confirm they are the pair you mean to clean. A relative
+`Local:RootPath` resolves against the directory you run the command from, and the `storage:` line
+shows the full path it resolved to.
+:::
+
+The command always starts by printing those two lines: the storage backend with its target (the local
+root path, or the S3 bucket and the service host) and the database provider and database name.
+Credentials and connection strings are never printed.
+
+Without `--apply` the command is a dry run: it prints one `orphan <key>` line per blob and a summary,
+and deletes nothing. Review the list, then run it again with `--apply` to delete.
+
+| Option | Meaning |
+|---|---|
+| `--apply` | Delete the orphans; without it nothing is deleted |
+| `--force` | Let `--apply` delete when over half the blobs are orphans |
+| `--min-age-hours N` | Skip blobs newer than `N` hours (default `24`) |
+
+`N` is a whole number from `0` to `87600`. The grace period protects an upload that has stored its
+blob but not yet written its row. A blob that any `files` row references is never an orphan, and that
+includes rows in the trash. Purge the row first and the blob becomes an orphan. A blob whose storage
+reports no modification time counts as young and is never deleted.
+
+As a safeguard, `--apply` refuses to delete when more than 50% of the eligible blobs (key-shaped and
+older than the grace period) are orphans. That ratio usually means the configuration points at the
+wrong storage or database, not that half the library is garbage. The refusal prints the counts and
+the targets and exits with `3`; after checking both, add `--force` to delete anyway. The dry run
+shows the same ratio and says when `--apply` would need `--force`.
+
+Only keys shaped like `{yyyy}/{MM}/{32 hex digits}{extension}` are considered, so a variant cache or
+any other file that shares the storage root is left alone. The listing is streamed (S3 pages through
+`ListObjectsV2`; the local backend walks the root lazily) and the database lookup runs in batches, so
+a large store does not have to fit in memory. `--apply` without `--force` lists the storage twice: once
+to count for the safeguard, once to delete.
+
+Like the migration commands, it reads the API's configuration, so the S3 or local settings and the
+connection string must be in place. Exit code `0` is success, `1` a failure (an unreachable store or
+database, or a delete that failed; the other deletes still run), `2` a usage error, `3` a refusal by
+the 50% safeguard.
+
 ## The local Compose stack
 
 `docker compose up -d --build` uses the two Dockerfiles above to start four services: `postgres`,

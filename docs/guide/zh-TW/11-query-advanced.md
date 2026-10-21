@@ -78,8 +78,17 @@ HTTP_STATUS:400
 **廣度與列數上限。** 一棵 `deep` 樹最多只能有 `Query:MaxDeepRelations` 個關聯節點（預設 20），同層與
 巢狀層合併計算：`Too many relations in deep (max 20).`。每次關聯讀取最多讀 `Query:MaxExpandRows` 列
 （預設 1000）；讀到更多就回 400 並點名該關聯，例如 `Relation 'children' has more than 1000 rows to
-expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。巢狀 `limit` 是在讀取之後
-才套用，所以不會降低上限檢查的列數；要縮小範圍，用巢狀 `filter`，或減少父頁的 `limit`。
+expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。要縮小範圍，用巢狀
+`filter`，或減少父頁的 `limit`。
+
+有一種情況不受這個上限限制：一頁只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`。這時巢狀
+`filter`、`sort`、`offset` 與 `limit` 都由資料庫執行，只會讀取那個視窗，所以子列超過
+`Query:MaxExpandRows` 的父列也能正常回應。排序與一般列表查詢相同，最後用 id 作為決勝，在排序值相同的
+列之間翻頁不會重複或漏列；沒有巢狀 `sort` 時是最新的在前。這裡 null 的位置與文字順序依資料庫，而
+多個父列使用的記憶體排序把 null 放在最前面，所以同一個巢狀 `sort` 在一個父列與多個父列之間，順序可能
+不同。請求沒有帶 locale 時，對可翻譯欄位做巢狀
+`sort` 不會下推，仍受上限約束。有多個父列、巢狀清單沒有 `limit`，或是多對多關聯時，巢狀 `limit` 還是在
+讀取之後才套用，不會降低上限檢查的列數。
 
 多對多關聯算的是 junction 列：這一頁父列與其目標之間的每一筆連結，都在巢狀 `filter` 執行之前就被讀進來
 計算。巢狀 `filter` 無法降低這個數字，要低於上限只能縮小父頁的 `limit`（或減少每個父列的連結數）。它的

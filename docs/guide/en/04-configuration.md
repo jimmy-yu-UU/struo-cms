@@ -299,7 +299,9 @@ tree. `MaxFilterConditions` is one budget for the whole request: the root `filte
 
 `MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
 finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never
-truncated. There is no cap on `offset`.
+truncated. The one exception is a single parent expanded through a one-to-many relation with a
+nested `limit`: the database applies the window, so the cap does not apply. There is no cap on
+`offset`.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
 `_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate

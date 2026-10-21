@@ -19,7 +19,7 @@ namespace Struo.Api.Auth;
 /// registering it <c>AddScoped</c> instead throws
 /// <c>InvalidOperationException: Cannot resolve scoped service 'DistributedCacheTicketStore' from root
 /// provider</c> the moment a cookie is authenticated) — so index writes, which need a scoped
-/// <see cref="IUserSessionStore"/>/<c>ISqlSugarClient</c>, go through a fresh
+/// <see cref="IUserSessionStore"/> (and through it the shared <c>ISqlSugarClient</c>), go through a fresh
 /// <see cref="IServiceScopeFactory"/> scope per call rather than a constructor-injected dependency.
 /// </para>
 /// </summary>

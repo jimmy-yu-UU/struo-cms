@@ -9,12 +9,10 @@ namespace Struo.Tests.Persistence;
 
 public class SqlSugarClientFactoryTests
 {
-    // GraphQL pins query/mutation roots to DependencyInjectionScope.Request, so HotChocolate
-    // can run sibling root-field resolvers on separate threads that all share one scoped
-    // ISqlSugarClient. Plain SqlSugarClient is not thread-safe (interleaved ADO calls on shared
-    // connection state -> intermittent "connection already open" / 500s under concurrency).
-    // SqlSugarScope is SqlSugar's official thread-safe wrapper (AsyncLocal-managed inner contexts)
-    // and still implements ISqlSugarClient, so this is a drop-in fix at the factory boundary.
+    // GraphQL runs sibling root-field resolvers in parallel on the one registered ISqlSugarClient.
+    // A plain SqlSugarClient is not thread-safe for that (interleaved ADO calls on shared connection
+    // state, intermittent "connection already open" / 500s). SqlSugarScope is SqlSugar's thread-safe
+    // wrapper (one inner client per async flow) and still implements ISqlSugarClient.
     [Fact]
     public void Create_returns_a_thread_safe_SqlSugarScope_not_a_bare_SqlSugarClient()
     {

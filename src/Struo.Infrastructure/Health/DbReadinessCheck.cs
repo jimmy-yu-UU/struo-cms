@@ -10,7 +10,10 @@ public sealed class DbReadinessCheck(ISqlSugarClient db) : IHealthCheck
     {
         try
         {
-            var ok = await Task.Run(() => db.Ado.IsValidConnection(), cancellationToken);
+            // The lambda has no async frame, so SqlSugarScope would park its client on the pool thread
+            // for the life of the process; a private copy keeps the singleton out of it.
+            using var probe = db.CopyNew();
+            var ok = await Task.Run(() => probe.Ado.IsValidConnection(), cancellationToken);
             return ok
                 ? HealthCheckResult.Healthy()
                 : HealthCheckResult.Unhealthy("Database connection is not valid.");

@@ -288,7 +288,7 @@ public class SoftDeleteRepositoryTests
     }
 
     [Fact]
-    public async Task Deleted_filter_scoping_is_per_query_not_sticky_on_the_scoped_client()
+    public async Task Deleted_filter_scoping_is_per_query_not_sticky_on_the_shared_client()
     {
         using var h = SoftDeleteRepositoryHarness.Create();
         var live = await h.InsertArticleAsync(status: "published");
@@ -300,9 +300,9 @@ public class SoftDeleteRepositoryTests
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.With, default);
         with.Rows.Select(SoftDeleteRepositoryHarness.IdOf).Should().Contain([live, trashed]);
 
-        // A SUBSEQUENT call on the SAME client/scoped ISqlSugarClient with Exclude must still filter —
+        // A SUBSEQUENT call on the SAME ISqlSugarClient with Exclude must still filter —
         // proving ClearFilter is applied fresh per Queryable<T>() call (NewQueryable()), not left
-        // dangling/sticky on the shared scoped client from the prior With call.
+        // dangling/sticky on the shared client from the prior With call.
         var excludeAgain = await h.Repository.QueryAsync("article",
             new QueryModel(null, null, [], 100, 0, null), [], null, DeletedFilter.Exclude, default);
         var idsAgain = excludeAgain.Rows.Select(SoftDeleteRepositoryHarness.IdOf).ToList();
@@ -314,7 +314,7 @@ public class SoftDeleteRepositoryTests
 /// <summary>
 /// Mirrors the client/repository construction in <see cref="SqlSugarItemRepositoryTests"/>, but
 /// builds the client via <see cref="SqlSugarClientFactory.Create"/> so the global
-/// soft-delete filter is actually registered on the scoped client under test.
+/// soft-delete filter is actually registered on the client under test.
 /// </summary>
 internal sealed class SoftDeleteRepositoryHarness : IDisposable
 {

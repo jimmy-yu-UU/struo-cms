@@ -56,6 +56,23 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
         return Task.CompletedTask;
     }
 
+    public IAsyncEnumerable<StoredBlob> ListAsync(CancellationToken ct = default) =>
+        EnumerateBlobs(ct).ToAsyncEnumerable();
+
+    // Lazy: the directory walk advances one file per MoveNext, so the listing is never held in memory.
+    private IEnumerable<StoredBlob> EnumerateBlobs(CancellationToken ct)
+    {
+        var root = Path.GetFullPath(Root);
+        if (!Directory.Exists(root)) yield break;
+
+        foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            var key = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+            yield return new StoredBlob(key, System.IO.File.GetLastWriteTimeUtc(path));
+        }
+    }
+
     public bool SupportsPresignedUrls => false;
     public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
         Task.FromResult<string?>(null);

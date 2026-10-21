@@ -256,17 +256,18 @@ calls through `SqlSugarItemRepository` is unaffected.
 `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, and `DeleteAsync` itself (plus the private helpers
 `RunQueryAsync`, `GetByIdGenericAsync`, `CreateGenericAsync`, `UpdateGenericAsync`,
 `DeleteGenericAsync`, and `CloneEntity` those methods use internally), and delegates every other
-`IItemRepository` member to one of eight collaborators — `OrderByExpressionBuilder` and
+`IItemRepository` member to one of nine collaborators — `OrderByExpressionBuilder` and
 `FilterTranslator` are also fields, but are used inline inside `QueryAsync`
-(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all ten
+(`orderByBuilder.BuildOrderBy(...)`, `filters.Translate(...)`) rather than delegated to — all eleven
 in the same `Query/` folder. Each is initialized in a field initializer from the facade's
 primary-constructor parameters rather than injected as its own dependency — only
 `OrderByExpressionBuilder` is also registered scoped in DI. `ManyToManySync` and `TranslationStore`
 each get their own `new TransactionRunner(db)` instance; `FacetQueries` gets one indirectly, via its
 own separate `TranslationStore(db, new TransactionRunner(db))` instance. `WhereInQueries`,
-`FacetQueries`, and `AggregateQueries` each get their own `new FilterTranslator(...)` rather than the
-facade's own `filters` field (a field initializer cannot reference another instance field — CS0236);
-none of these types holds state beyond its constructor arguments, so the extra instances behave
+`WhereInWindowQueries`, `FacetQueries`, and `AggregateQueries` each get their own
+`new FilterTranslator(...)` rather than the facade's own `filters` field (a field initializer cannot
+reference another instance field — CS0236); `WhereInWindowQueries` likewise gets its own
+`new OrderByExpressionBuilder(...)`; none of these types holds state beyond its constructor arguments, so the extra instances behave
 identically to sharing one:
 
 - `OrderByExpressionBuilder` (`OrderByExpressionBuilder.cs`) — builds typed `OrderBy` sort-key lambdas (`OrderTerm`) for the
@@ -274,12 +275,16 @@ identically to sharing one:
   used inline in `QueryAsync`.
 - `FilterTranslator` (`FilterTranslator.cs` + `FilterTranslator.Subquery.cs`) — translates the filter
   DSL into SqlSugar conditionals, pushing relation paths and `_some`/`_none` predicates down as SQL
-  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries`, `FacetQueries`,
-  and `AggregateQueries` each hold their own separate instance (see above; the `FacetQueries`/
+  subqueries. Not a delegation target — used inline in `QueryAsync`; `WhereInQueries`, `WhereInWindowQueries`,
+  `FacetQueries`, and `AggregateQueries` each hold their own separate instance (see above; the `FacetQueries`/
   `AggregateQueries` subsection below covers why).
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
   `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, and `QueryWhereInWithDeletedAsync`.
+- `WhereInWindowQueries` (`WhereInWindowQueries.cs`) — `QueryWhereInWindowAsync`: one batched fetch of a
+  to-many relation's rows for a single parent, with the nested filter, sort, offset and limit applied in
+  SQL. It sorts through its own `OrderByExpressionBuilder`, and returns `null` when it cannot take the
+  window (a translatable sort with no locale), which leaves the caller on the capped in-memory path.
 - `SoftDeleteOps` (`SoftDeleteOps.cs`) — `SoftDeleteAsync`/`RestoreAsync`, the atomic
   `UPDATE ... WHERE deletedat IS [NOT] NULL` with the version bump.
 - `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`
@@ -567,7 +572,8 @@ in it, ends up in the batch once, as `Purged`.
 
 The extension point for file storage backends is `IFileStorage`
 (`src/Struo.Application/Files/IFileStorage.cs`): `SaveAsync`, `OpenReadAsync`, `DeleteAsync`,
-`SupportsPresignedUrls`, `GetPresignedUrlAsync`. Its doc comment states "Exactly one
+`SupportsPresignedUrls`, `GetPresignedUrlAsync`, `ListAsync` (every stored blob as a `StoredBlob`, streamed;
+`files:sweep` reads it). Its doc comment states "Exactly one
 implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
