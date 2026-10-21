@@ -51,6 +51,11 @@ export const useAuthStore = defineStore('auth', {
         this.user = null
       }
     },
+    // A 401 ended a signed-in session: drop the user and let leave guards through.
+    markSessionExpired(): void {
+      this.sessionExpired = true
+      this.user = null
+    },
     endLogout(): void {
       this.loggingOut = false
     },

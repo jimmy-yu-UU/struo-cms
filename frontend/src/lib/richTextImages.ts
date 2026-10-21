@@ -15,12 +15,14 @@ export function fileContentDisplayUrl(id: string): string {
 }
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
+
+const QUERY = String.raw`(\?.*)?`
 
 // A managed image src is the stored path or the display URL, optionally followed by a query.
 const MANAGED_SRC = new RegExp(
-  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiBaseUrl)})/files/(${GUID})/content(\\?.*)?$`,
+  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiBaseUrl)})/files/(${GUID})/content${QUERY}$`,
   'i',
 )
 

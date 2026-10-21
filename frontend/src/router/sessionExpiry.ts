@@ -18,8 +18,7 @@ export async function handleUnauthorized(auth: AuthStore, router: Router): Promi
     if (current !== START_LOCATION && current.name !== 'login') await router.push({ name: 'login' })
     return
   }
-  auth.sessionExpired = true
-  auth.user = null
+  auth.markSessionExpired()
   try {
     await router.push({
       name: 'login',

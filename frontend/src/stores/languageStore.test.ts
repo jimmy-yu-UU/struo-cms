@@ -83,4 +83,17 @@ describe('languageStore', () => {
     expect(spy).toHaveBeenCalledTimes(2) // one for the in-flight load, one for reload's own refetch
     expect(store.languages).toHaveLength(2)
   })
+
+  it('a load that fails after reset() leaves loadError empty and the store retryable', async () => {
+    let rejectFetch!: (e: Error) => void
+    const pending = new Promise<never>((_, reject) => { rejectFetch = reject })
+    vi.spyOn(languagesApi, 'getEnabled').mockReturnValue(pending as never)
+    const store = useLanguageStore()
+    const p = store.load()
+    store.reset()
+    rejectFetch(new Error('late failure'))
+    await p
+    expect(store.loadError).toBe('')
+    expect(store.loadPromise).toBeNull()
+  })
 })

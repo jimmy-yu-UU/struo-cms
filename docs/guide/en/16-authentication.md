@@ -145,11 +145,6 @@ unaffected — a request authenticated only by bearer still gets `204` from this
 its token stays alive. A token can only be revoked through the next section's revocation endpoint,
 or by issuing a new one that overwrites the old hash.
 
-The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the server cannot confirm the sign-out, a
-warning says so; a `401` means no session was left to end and counts as success. When a request is
-rejected with `401` while you are signed in, the admin drops any unsaved edits, goes to the login page
-with a "session expired" notice and returns to the page you were on after you sign in again.
-
 `struo_user_sessions` is a key-to-user index table, and the reason it exists is simple: the distributed
 cache itself has no scan or enumerate operation, so without this index there's no way to answer
 "which sessions does this user currently have alive." It isn't a collection you can browse or edit
@@ -161,6 +156,12 @@ user currently has. A failure in that revocation step doesn't roll back the pass
 reported with its own error code, `SESSION_REVOCATION_FAILED`, because the caller needs to know
 some sessions may still be alive. Deleting a user row (soft-delete or purge) triggers the same
 revocation at the service layer, so GraphQL's delete mutation is covered too.
+
+The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the
+server cannot confirm the sign-out, the login page says so; a `401` means no session was left to end
+and counts as success. When a request is rejected with `401` while you are signed in, the admin drops
+any unsaved edits, goes to the login page with a "session expired" notice and returns to the page you
+were on after you sign in again.
 
 ## Bearer tokens
 

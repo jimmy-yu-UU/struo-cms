@@ -322,6 +322,14 @@ describe('LoginView', () => {
     expect(replace).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/collections/article/5' } })
   })
 
+  it('shows the logout-incomplete notice for ?reason=logout-incomplete', async () => {
+    route.query = { reason: 'logout-incomplete' }
+    const wrapper = mountLogin()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="status"]').text()).toContain('伺服器未能確認')
+    expect(replace).toHaveBeenCalledWith({ name: 'login' })
+  })
+
   it('keeps the redirect when an ?error= code is cleared from the URL', () => {
     route.query = { error: 'external_login_failed', redirect: '/media' }
     mountLogin()

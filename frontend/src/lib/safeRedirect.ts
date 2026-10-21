@@ -1,10 +1,10 @@
-const BACKSLASH = String.fromCharCode(92)
+const BACKSLASH = '\\'
 
 // Browsers strip tab, CR and LF from a URL, so "/<tab>/host" would turn into "//host"; any control
 // character is refused.
 function hasControlChar(value: string): boolean {
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i)
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0
     if (code < 0x20 || code === 0x7f) return true
   }
   return false

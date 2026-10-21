@@ -11,8 +11,8 @@ import {
 } from "reka-ui"
 import { cn } from "@/lib/utils"
 import { i18n } from "@/i18n"
-const t = i18n.global.t
 import DialogOverlay from "./DialogOverlay.vue"
+const t = i18n.global.t
 
 defineOptions({
   inheritAttrs: false,

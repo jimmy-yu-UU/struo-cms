@@ -74,17 +74,24 @@ const SSO_ERROR_KEYS: Record<string, string> = {
   external_login_Inactive: 'login.accountInactive',
 }
 
-// A 401 that ended a signed-in session sends the browser here with ?reason=expired.
-function showExpiredNotice(): boolean {
-  if (route.query.reason !== 'expired') return false
-  notice.value = t('login.sessionExpired')
+// Why the browser was sent here: ?reason=expired after a 401 ended a signed-in session,
+// ?reason=logout-incomplete when the server could not confirm a sign-out. Unknown values are ignored.
+const REASON_NOTICE_KEYS: Record<string, string> = {
+  expired: 'login.sessionExpired',
+  'logout-incomplete': 'user.logoutIncomplete',
+}
+
+function showReasonNotice(): boolean {
+  const reason = route.query.reason
+  if (typeof reason !== 'string' || !Object.hasOwn(REASON_NOTICE_KEYS, reason)) return false
+  notice.value = t(REASON_NOTICE_KEYS[reason])
   return true
 }
 
 onMounted(() => {
   const code = route.query.error
-  const expired = showExpiredNotice()
-  if (code === undefined && !expired) return
+  const hasReason = showReasonNotice()
+  if (code === undefined && !hasReason) return
   if (code !== undefined) {
     const key = typeof code === 'string' && Object.hasOwn(SSO_ERROR_KEYS, code) ? SSO_ERROR_KEYS[code] : undefined
     error.value = t(key ?? 'login.ssoFailed')

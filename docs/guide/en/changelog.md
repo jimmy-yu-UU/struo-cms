@@ -17,8 +17,8 @@
   "Request failed" message shown when the server returns no readable error now follow the chosen
   language. The browser tab title reads "StruoCMS" before the site name loads.
 - A failed logout request left the user stranded in the admin. Logout now always ends on the login
-  page, clears the per-user data held in the browser, and shows a warning when the server could not
-  confirm the sign-out; a `401` (no session left to end) counts as success.
+  page, clears the per-user data held in the browser, and the login page says so when the server
+  could not confirm the sign-out; a `401` (no session left to end) counts as success.
 - An expired session could trap an open edit form behind its unsaved-changes prompt. When the
   server rejects a request because the session ended, the admin now goes straight to the login page
   with a "session expired" notice, dropping unsaved edits instead of asking about them, and returns
@@ -33,8 +33,9 @@
   the loading state or reports an error.
 - The rich-text editor rewrote external images to a local path. Any `<img>` whose address merely
   contained `/files/…/content` was tagged as a managed file and saved as `/api/files/…/content`, which
-  broke the image. Only this site's own file URL with a valid file id (optionally with a query string, which is
-  kept) is now treated as a managed file; every other image is saved as typed, on load and on save.
+  broke the image. Only this site's own file URL with a valid file id (optionally with a query string,
+  which is kept) is now treated as a managed file; every other image is saved as typed, on load and on
+  save.
 - The admin image now serves every file outside `/assets/` with `Cache-Control: no-cache`, so
   `theme-init.js`, `favicon.svg` and similar files are revalidated after an upgrade instead of
   staying stale in the browser. The hashed files under `/assets/` stay cached immutably.
