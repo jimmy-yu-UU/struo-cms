@@ -67,7 +67,7 @@ function matchLocation(path: string): string {
   const regex = names.find((n) => n.startsWith('~ ') && new RegExp(n.slice(2)).test(path))
   if (regex) return regex
   const prefixes = names.filter((n) => !/^[=~]/.test(n) && path.startsWith(n))
-  return prefixes.sort((a, b) => b.length - a.length)[0]
+  return [...prefixes].sort((a, b) => b.length - a.length)[0]
 }
 
 describe('nginx template parser', () => {

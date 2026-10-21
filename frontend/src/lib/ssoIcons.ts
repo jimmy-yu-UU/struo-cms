@@ -8,7 +8,6 @@ import { KeyRound } from '@lucide/vue'
 function svgIcon(name: string, viewBox: string, children: () => ReturnType<typeof h>[]): Component {
   return defineComponent({
     name,
-    inheritAttrs: true,
     setup: () => () => h('svg', { viewBox, 'aria-hidden': 'true' }, children()),
   })
 }

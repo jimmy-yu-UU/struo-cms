@@ -3,7 +3,7 @@ import { devProxy } from '../vite.proxy'
 
 type Entry = { target?: string; changeOrigin?: boolean; agent?: { keepAlive?: boolean } }
 const proxy = devProxy as Record<string, Entry>
-const OIDC_KEY = '^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?$'
+const OIDC_KEY = Object.keys(proxy).find((k) => k.startsWith('^'))!
 const PATHS = ['/api', OIDC_KEY]
 
 describe('vite dev proxy', () => {
@@ -25,11 +25,13 @@ describe('vite dev proxy', () => {
   it.each([
     '/signin-oidc', '/signin-oidc-google', '/signout-callback-oidc', '/signout-callback-oidc-google',
     '/signout-oidc', '/signout-oidc-google',
+    '/signin-oidc-google?code=abc&state=xyz', '/signin-oidc?state=1',
+    '/signout-callback-oidc-google?sid=1&iss=https%3A%2F%2Fidp.example',
   ])('the OIDC key matches %s', (path) => {
     expect(new RegExp(OIDC_KEY).test(path)).toBe(true)
   })
 
-  it.each(['/signin', '/signin-oidcx', '/signin-oidc/', '/signin-oidc-Google', '/login', '/api/x'])(
+  it.each(['/signin', '/signin-oidcx', '/signin-oidc/', '/signin-oidc-Google', '/login', '/api/x', '/signin-oidcx?code=1', '/signin?code=1'])(
     'the OIDC key leaves %s alone',
     (path) => {
       expect(new RegExp(OIDC_KEY).test(path)).toBe(false)

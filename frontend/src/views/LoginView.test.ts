@@ -171,6 +171,7 @@ describe('LoginView', () => {
     setProviders()
     const wrapper = mountLogin()
     expect(wrapper.find('[data-test="sso"]').exists()).toBe(false)
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false)
   })
 
   it('shows the SSO button and navigates on click when oidc is enabled', async () => {
@@ -208,6 +209,7 @@ describe('LoginView', () => {
   it('draws each provider icon from the registry and falls back for an unknown one', () => {
     setProviders(MS, GOOGLE, { id: 'acme', displayName: 'Acme', icon: 'acme-logo' }, { id: 'bare', displayName: 'Bare', icon: '' })
     const btns = mountLogin().findAll('[data-test="sso"]')
+    expect(btns.every((b) => b.find('svg').attributes('aria-hidden') === 'true')).toBe(true)
     expect(btns[0].findAll('rect')).toHaveLength(4)
     expect(btns[1].findAll('path')).toHaveLength(4)
     expect(btns[2].find('svg').classes()).toContain('lucide-key-round')
