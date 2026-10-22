@@ -33,6 +33,7 @@
         "Icon": "microsoft",
         "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
         "ClientId": "<client-id>",
+        "CallbackPath": "/signin-oidc",
         "AllowedTenantId": "<tenant-id>"
       }
     }
@@ -46,10 +47,11 @@
   for an unknown or disabled provider.
 - `GET /api/config` no longer returns `oidcEnabled`; it returns `oidcProviders`, an array of
   `{ id, displayName, icon }` in button order.
-- The default callback path is per provider: `/signin-oidc-{id}` instead of `/signin-oidc`. Register
-  the new redirect URI at the identity provider (for Entra with id `microsoft`:
-  `https://<host>/signin-oidc-microsoft`), or set `CallbackPath` to `/signin-oidc` to keep the
-  registered one. Each provider also gets its own sign-out paths, `/signout-callback-oidc-{id}` and
+- The default callback path is per provider: `/signin-oidc-{id}` instead of `/signin-oidc`. The shipped
+  `microsoft` entry sets `CallbackPath` to `/signin-oidc`, so a registered Entra redirect URI keeps working,
+  and the shipped `google` entry uses `/signin-oidc-google`. A provider entry without `CallbackPath` uses
+  `/signin-oidc-{id}`; register that redirect URI at the identity provider, or set `CallbackPath` to the
+  path already registered. Each provider needs its own path. Each provider also gets its own sign-out paths, `/signout-callback-oidc-{id}` and
   `/signout-oidc-{id}`; register the sign-out callback again if you use it. A reverse proxy in front of
   the API must forward these paths; the admin image's nginx and the Vite dev server already do.
 - An enabled provider whose `Authority` is Google (`https://accounts.google.com`) must set a non-empty

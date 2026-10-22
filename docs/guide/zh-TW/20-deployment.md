@@ -228,7 +228,7 @@ SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI
 線：`proxy_pass` 吃的是一個 nginx 變數，不是字面值，所以容器就算 API 還沒起來也能先啟動，代
 價是變數裡任何路徑片段都會取代請求的 URI，而不是被當成前綴接上去。
 
-映像會把 `/api/*` 與 OIDC 路徑 `/signin-oidc-{id}`、`/signout-callback-oidc-{id}`、`/signout-oidc-{id}` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
+映像會把 `/api/*` 與 OIDC 路徑 `/signin-oidc`、`/signin-oidc-{id}`、`/signout-callback-oidc-{id}`、`/signout-oidc-{id}` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
 當作 `Host` 與 `X-Forwarded-Host` 轉送，讓 API 看到瀏覽器實際使用的來源。回呼路徑是 OIDC 的重新導向
 目標；`/api/` 之外的自訂 `CallbackPath` 要在範本另加一個 `location` 區塊。登記重新導向網址的做法見
 第 16 章。

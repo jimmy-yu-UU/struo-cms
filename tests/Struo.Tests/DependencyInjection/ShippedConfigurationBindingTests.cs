@@ -248,6 +248,8 @@ public sealed class ShippedConfigurationBindingTests
         bound.Providers["google"].Authority.Should().Be("https://accounts.google.com");
         bound.Providers["google"].AllowedTenantId.Should().BeNullOrEmpty();
         bound.Providers["google"].RequireEmailVerified.Should().BeTrue();
+        bound.Providers["microsoft"].CallbackPath.Should().Be("/signin-oidc");
+        bound.Providers["google"].CallbackPath.Should().Be("/signin-oidc-google");
     }
 
     /// <summary>

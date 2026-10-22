@@ -268,7 +268,7 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 `host` 釘死 IPv4 loopback，是因為某些 Windows 環境下 `localhost` 會先解析成 IPv6
 loopback，Vite 因此只綁 `[::1]`，不釘的話瀏覽器打 `http://localhost:5173` 反而連不上；
 `proxy` 是 `frontend/vite.proxy.ts` 的 `devProxy`：它把同源的 `/api`，加上每個提供者的 OIDC 回呼與登出路徑
-（`/signin-oidc-{id}`、`/signout-callback-oidc-{id}`、`/signout-oidc-{id}`），轉發到 `:5221` 上的 API，而且不設 `changeOrigin`，API 看到的是
+（`/signin-oidc`、`/signin-oidc-{id}`、`/signout-callback-oidc-{id}`、`/signout-oidc-{id}`），轉發到 `:5221` 上的 API，而且不設 `changeOrigin`，API 看到的是
 瀏覽器原本的 `Host`，組出的 OIDC 重新導向網址就落在 `:5173`。這種同源做法也是為什麼
 [第 3 章：快速開始](03-getting-started.md)的走法完全不用另外設定 CORS，瀏覽器眼裡只有
 Vite 這一個來源。

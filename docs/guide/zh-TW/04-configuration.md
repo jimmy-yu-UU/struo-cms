@@ -464,6 +464,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
       "Order": 1,
       "Authority": "https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0",
       "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc",
       "AllowedTenantId": "REPLACE_TENANT_ID"
     },
     "google": {
@@ -473,6 +474,7 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
       "Order": 2,
       "Authority": "https://accounts.google.com",
       "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc-google",
       "RequireEmailVerified": true
     }
   }
@@ -519,8 +521,10 @@ user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <�
 `prompt`，由提供者決定；JSON 的 `null` 則維持預設值。其他任何值在提供者啟用時會讓啟動失敗，錯誤訊息點名
 `Oidc:Providers:<id>:Prompt`。
 
-`CallbackPath` 是身分提供者把瀏覽器導回來的路徑。要向提供者登記的重新導向網址，是使用者開啟
-管理介面的來源加上這個路徑；代理端的做法見[第 16 章](16-authentication.md)。
+`CallbackPath` 是身分提供者把瀏覽器導回來的路徑。隨附的項目都明確設了：`microsoft` 是 `/signin-oidc`，`google` 是
+`/signin-oidc-google`；沒設的項目用 `/signin-oidc-{id}`。每個提供者要有自己的路徑，兩個提供者不能共用同一條，
+因為第一個處理程序會接走所有回呼。要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上這個路徑；
+代理端的做法見[第 16 章](16-authentication.md)。
 
 `RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的。隨附檔案的 `microsoft` 項目帶著
 `AllowedTenantId: "REPLACE_TENANT_ID"`，這個值打不中任何 tenant，替換之前會擋掉所有外部登入；`google`

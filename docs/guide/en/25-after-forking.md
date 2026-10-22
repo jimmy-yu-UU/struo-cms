@@ -131,8 +131,8 @@ set its name as the entry's `Icon`, and rebuild the admin. Without a matching en
 generic key icon.
 
 Register the redirect URI at each provider's console: your production origin plus the provider's
-callback path, `/signin-oidc-<id>` unless you set `CallbackPath`. Do the same for a staging origin,
-and register `http://localhost:5173/signin-oidc-<id>` for development. A custom `CallbackPath` outside
+callback path: its `CallbackPath`, or `/signin-oidc-<id>` when the entry has none. Do the same for a
+staging origin, and register `http://localhost:5173` plus the same path for development. A custom `CallbackPath` outside
 `/api/` also needs a `location` block in `frontend/nginx/default.conf.template`, and an entry in
 `frontend/vite.proxy.ts` for the dev server. The setup steps per
 provider are in [Chapter 16: Authentication and SSO](16-authentication.md).

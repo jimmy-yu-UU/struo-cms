@@ -285,7 +285,7 @@ replaces the request's URI instead of being prepended to it.
 whose value is empty; it should only be set once every reachable request has TLS terminated here or
 by an upstream proxy.
 
-The image proxies `/api/*` and the OIDC paths `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
+The image proxies `/api/*` and the OIDC paths `/signin-oidc` and `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
 `/signout-oidc-{id}` to the API, forwarding the
 client's `Host` header (with its port) as `Host` and `X-Forwarded-Host`, so the API sees the origin
 the browser used. The callback paths are the OIDC redirect targets; a custom `CallbackPath`

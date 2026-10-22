@@ -33,6 +33,7 @@
         "Icon": "microsoft",
         "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
         "ClientId": "<client-id>",
+        "CallbackPath": "/signin-oidc",
         "AllowedTenantId": "<tenant-id>"
       }
     }
@@ -45,9 +46,10 @@
 - `GET /api/auth/login/oidc` 改為 `GET /api/auth/login/oidc/{provider}`，提供者不存在或已停用時回 `404`。
 - `GET /api/config` 不再回傳 `oidcEnabled`，改回傳 `oidcProviders`，是依按鈕順序排列的
   `{ id, displayName, icon }` 陣列。
-- 預設回呼路徑改成每個提供者各一條：`/signin-oidc-{id}`，不再是 `/signin-oidc`。請到身分提供者那邊登記
-  新的重新導向網址（Entra、id 為 `microsoft` 時是 `https://<host>/signin-oidc-microsoft`），或把
-  `CallbackPath` 設成 `/signin-oidc` 以沿用已登記的那一個。每個提供者另有自己的登出路徑，
+- 預設回呼路徑改成每個提供者各一條：`/signin-oidc-{id}`，不再是 `/signin-oidc`。隨附的 `microsoft` 項目把
+  `CallbackPath` 設成 `/signin-oidc`，所以已登記的 Entra 重新導向網址照常可用；隨附的 `google` 項目用
+  `/signin-oidc-google`。沒設 `CallbackPath` 的提供者項目用 `/signin-oidc-{id}`，請到身分提供者那邊登記這個
+  重新導向網址，或把 `CallbackPath` 設成已登記的路徑。每個提供者要有自己的路徑。每個提供者另有自己的登出路徑，
   `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`；有用登出回呼的話要重新登記。API 前面的反向代理
   必須轉發這些路徑；後台映像的 nginx 與 Vite 開發伺服器已經會轉發。
 - 啟用中、`Authority` 為 Google（`https://accounts.google.com`）的提供者，必須設定非空的

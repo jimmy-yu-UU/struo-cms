@@ -535,6 +535,7 @@ entries, `microsoft` and `google`, each with its own values filled in:
       "Order": 1,
       "Authority": "https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0",
       "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc",
       "AllowedTenantId": "REPLACE_TENANT_ID"
     },
     "google": {
@@ -544,6 +545,7 @@ entries, `microsoft` and `google`, each with its own values filled in:
       "Order": 2,
       "Authority": "https://accounts.google.com",
       "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc-google",
       "RequireEmailVerified": true
     }
   }
@@ -598,9 +600,11 @@ may be combined with a space, such as `login consent`. An empty string sends no 
 provider decides; a JSON `null` keeps the default. Any other value fails startup when the provider is
 enabled, with an error naming `Oidc:Providers:<id>:Prompt`.
 
-`CallbackPath` is the path the identity provider redirects the browser back to. The redirect URI to
-register with the provider is the origin users reach the admin at plus this path; see
-[Chapter 16](16-authentication.md) for the proxy side.
+`CallbackPath` is the path the identity provider redirects the browser back to. The shipped entries set it
+explicitly: `/signin-oidc` for `microsoft` and `/signin-oidc-google` for `google`. An entry without it uses
+`/signin-oidc-{id}`. Each provider needs its own path: two providers cannot share one, because the first
+handler would take every callback. The redirect URI to register with the provider is the origin users reach
+the admin at plus this path; see [Chapter 16](16-authentication.md) for the proxy side.
 
 `RequireEmailVerified` and `AllowedEmailDomains` default to permissive. In the shipped file, the
 `microsoft` entry carries `AllowedTenantId: "REPLACE_TENANT_ID"`, which matches no real tenant and so

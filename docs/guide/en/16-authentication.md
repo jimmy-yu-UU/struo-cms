@@ -290,8 +290,9 @@ The response never carries a secret.
 
 External login is the authorization code flow with PKCE. The provider's own token is never
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
-rest. Each provider has its own callback path, `/signin-oidc-{id}` unless `CallbackPath` sets another,
-and two sign-out paths derived from its id: `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`.
+rest. Each provider has its own callback path: the shipped `microsoft` entry sets `/signin-oidc`, the
+shipped `google` entry `/signin-oidc-google`, and an entry without `CallbackPath` uses `/signin-oidc-{id}`.
+Each provider also has two sign-out paths derived from its id: `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`.
 No two enabled providers may share a path.
 
 Sign-in always shows the provider's account picker by default (`Prompt` = `select_account`);
@@ -311,8 +312,9 @@ mark is an SVG component in that table.
 
 Use the single-tenant authority, `https://login.microsoftonline.com/<tenant-id>/v2.0`, and put the
 same tenant id in `AllowedTenantId`. In the app registration, add a Web redirect URI of the admin's
-origin plus the callback path: `https://cms.example.com/signin-oidc-microsoft`. If you set
-`CallbackPath` to `/signin-oidc`, register `https://cms.example.com/signin-oidc` instead.
+origin plus the callback path: with the shipped `microsoft` entry, `https://cms.example.com/signin-oidc`.
+If you change `CallbackPath` or use another id without one, register that path instead, such as
+`https://cms.example.com/signin-oidc-<id>`.
 
 ### Setting up Google
 
@@ -337,14 +339,15 @@ unverified address can take over an existing account.
 ### Redirect URIs
 
 The redirect URI to register with the provider is the origin users open the admin at plus the
-provider's callback path: `https://cms.example.com/signin-oidc-google`, or
+provider's callback path: `https://cms.example.com/signin-oidc-google` for the shipped `google` entry, or
 `http://localhost:8080/signin-oidc-google` for the Compose stack. A plain `http` redirect URI works
 only on `localhost`: Entra rejects other `http` redirect URIs, and the OIDC correlation cookies are
 `Secure`, so any other origin needs `https`. Register the sign-out callback
 `/signout-callback-oidc-{id}` the same way if you use it.
 
-For development under `pnpm dev`, register `http://localhost:5173/signin-oidc-{id}`, and
-`http://localhost:5173/signout-callback-oidc-{id}` if you use the sign-out callback. The Vite dev
+For development under `pnpm dev`, register `http://localhost:5173/signin-oidc` for Entra and
+`http://localhost:5173/signin-oidc-google` for Google, and `http://localhost:5173/signout-callback-oidc-{id}`
+if you use the sign-out callback. The Vite dev
 server forwards these paths to the API and keeps the browser's `Host`, so the API builds that redirect
 URI from the host you opened the dev server with. Open `http://localhost:5173`, not
 `http://127.0.0.1:5173`, to match the registered URI.

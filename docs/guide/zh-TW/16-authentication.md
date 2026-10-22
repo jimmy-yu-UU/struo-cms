@@ -226,7 +226,8 @@ HTTP_STATUS:429
 按鈕，文字是「使用 {displayName} 登入」。陣列為空就不顯示 SSO 按鈕。回應裡不會有任何密鑰。
 
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
-叫 userinfo 端點補齊。每個提供者有自己的回呼路徑，預設 `/signin-oidc-{id}`，用 `CallbackPath` 可以改；
+叫 userinfo 端點補齊。每個提供者有自己的回呼路徑：隨附的 `microsoft` 項目設為 `/signin-oidc`，隨附的 `google`
+項目設為 `/signin-oidc-google`，沒設 `CallbackPath` 的項目用 `/signin-oidc-{id}`；
 另外還有兩條由 id 推導的登出路徑：`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`。啟用中的提供者
 之間不能共用路徑。
 
@@ -245,8 +246,8 @@ fork 想加自己的品牌圖示，就在該檔的 `ICONS` 表加一筆，鍵用
 
 用單一 tenant 的 authority，`https://login.microsoftonline.com/<tenant-id>/v2.0`，並把同一個 tenant id
 填進 `AllowedTenantId`。在應用程式註冊裡新增一個 Web 類型的重新導向網址：管理介面的來源加上回呼路徑，
-也就是 `https://cms.example.com/signin-oidc-microsoft`。如果把 `CallbackPath` 設成 `/signin-oidc`，
-就改登記 `https://cms.example.com/signin-oidc`。
+用隨附的 `microsoft` 項目就是 `https://cms.example.com/signin-oidc`。如果改了 `CallbackPath`，
+或用別的 id 又沒設，就改登記那條路徑，例如 `https://cms.example.com/signin-oidc-<id>`。
 
 ### 設定 Google
 
@@ -269,12 +270,13 @@ Google 沒有 tenant，所以 `AllowedTenantId` 留空。隨附的項目已打�
 ### 重新導向網址
 
 要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上該提供者的回呼路徑：
-`https://cms.example.com/signin-oidc-google`，Compose 堆疊則是 `http://localhost:8080/signin-oidc-google`。
+隨附的 `google` 項目是 `https://cms.example.com/signin-oidc-google`，Compose 堆疊則是 `http://localhost:8080/signin-oidc-google`。
 純 `http` 的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯
 cookie 帶 `Secure`，所以其他來源都要用 `https`。要用登出回呼的話，同樣登記
 `/signout-callback-oidc-{id}`。
 
-在 `pnpm dev` 下開發時，登記 `http://localhost:5173/signin-oidc-{id}`；要用登出回呼的話，再登記
+在 `pnpm dev` 下開發時，Entra 登記 `http://localhost:5173/signin-oidc`，Google 登記
+`http://localhost:5173/signin-oidc-google`；要用登出回呼的話，再登記
 `http://localhost:5173/signout-callback-oidc-{id}`。Vite 開發伺服器會把這些路徑轉發給 API，並保留瀏覽器的
 `Host`，API 就依你開啟開發伺服器用的主機組出重新導向網址。請開 `http://localhost:5173`，不要開
 `http://127.0.0.1:5173`，才會跟登記的網址一致。
