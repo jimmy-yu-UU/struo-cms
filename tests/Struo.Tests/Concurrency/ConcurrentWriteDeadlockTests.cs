@@ -54,7 +54,9 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         var itemIds = articles.ToList();
         var translations = await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).ToListAsync();
         translations.Should().HaveCount(Workers);
-        translations.Select(t => t.Title).Should().OnlyContain(t => t.EndsWith($"-{Rounds - 1}"));
+        for (var worker = 0; worker < Workers; worker++)
+            translations.Single(t => t.ArticleId == ids[worker]).Title
+                .Should().Be($"{marker}-{worker}-{Rounds - 1}");
         (await db.Queryable<Revision>()
                 .Where(rv => rv.CollectionName == "article" && itemIds.Contains(rv.ItemId)).CountAsync())
             .Should().Be(Workers * (Rounds + 1));
@@ -69,16 +71,17 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         for (var i = 0; i < 6; i++) tags.Add(await CreateAsync(admin, "tag", new { name = $"{marker}-tag-{i}" }));
 
         var failures = new ConcurrentBag<string>();
-        var created = new ConcurrentBag<Guid>();
+        var created = new ConcurrentDictionary<Guid, string[]>();
         for (var round = 0; round < Rounds; round++)
         {
             var r = round;
             await Task.WhenAll(Enumerable.Range(0, Workers).Select(worker => Task.Run(async () =>
             {
+                var linked = new[] { tags[worker % 6], tags[(worker + 1) % 6], tags[(worker + 2) % 6] };
                 var body = new
                 {
                     status = "draft",
-                    tags = new[] { tags[worker % 6], tags[(worker + 1) % 6], tags[(worker + 2) % 6] },
+                    tags = linked,
                     translations = new { en = new { title = $"{marker}-{r}-{worker}" } }
                 };
                 using var response = await admin.PostAsJsonAsync("/api/items/article", body);
@@ -89,7 +92,7 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
                     return;
                 }
                 using var doc = JsonDocument.Parse(text);
-                created.Add(Guid.Parse(doc.RootElement.GetProperty("data").GetProperty("id").GetString()!));
+                created[Guid.Parse(doc.RootElement.GetProperty("data").GetProperty("id").GetString()!)] = linked;
             })));
         }
 
@@ -98,10 +101,13 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var ids = created.ToList();
+        var ids = created.Keys.ToList();
         var itemIds = ids.Select(id => id.ToString()).ToList();
-        (await db.Queryable<ArticleTag>().Where(l => ids.Contains(l.ArticleId)).CountAsync())
-            .Should().Be(ids.Count * 3);
+        var links = await db.Queryable<ArticleTag>().Where(l => ids.Contains(l.ArticleId)).ToListAsync();
+        links.Should().HaveCount(ids.Count * 3);
+        foreach (var (articleId, expected) in created)
+            links.Where(l => l.ArticleId == articleId).Select(l => l.TagId.ToString()).Should()
+                .BeEquivalentTo(expected);
         (await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).CountAsync())
             .Should().Be(ids.Count);
         (await db.Queryable<Revision>()
