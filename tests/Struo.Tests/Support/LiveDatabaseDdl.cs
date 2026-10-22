@@ -3,13 +3,14 @@ using Microsoft.Data.SqlClient;
 using MySqlConnector;
 using Npgsql;
 using SqlSugar;
-using Struo.Application.Configuration;
 
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Create, drop and list databases on a live test server. The DROP statements below are the only raw
-/// SQL in the test-database lifecycle; every interpolated name passes <see cref="ValidateName"/> first.
+/// Create, drop and list databases on a live test server. The raw SQL in the test-database lifecycle is
+/// the DROP statements and, on SQL Server, the READ_COMMITTED_SNAPSHOT check and ALTER statements. A
+/// name interpolated into a DROP passes <see cref="ValidateName"/> first; the SQL Server ALTERs
+/// bracket-quote the name (doubling any <c>]</c>) and refuse a database whose name lacks "test".
 /// </summary>
 internal static partial class LiveDatabaseDdl
 {
@@ -64,6 +65,7 @@ internal static partial class LiveDatabaseDdl
     /// </summary>
     public static void EnableReadCommittedSnapshot(string sqlServerConnection)
     {
+        LiveDatabases.GuardDisposable(sqlServerConnection);
         var builder = new SqlConnectionStringBuilder(sqlServerConnection);
         var name = builder.InitialCatalog;
         builder.InitialCatalog = "master";
@@ -81,15 +83,10 @@ internal static partial class LiveDatabaseDdl
         alter.ExecuteNonQuery();
     }
 
-    /// <summary><see cref="EnableReadCommittedSnapshot"/> for a live case, when it runs on SQL Server.</summary>
-    internal static void EnableReadCommittedSnapshotIfSqlServer(StruoDbType db, string connection)
-    {
-        if (db == StruoDbType.SqlServer) EnableReadCommittedSnapshot(connection);
-    }
-
     /// <summary>Turns READ_COMMITTED_SNAPSHOT off again, for tests that need a database without it.</summary>
     public static void DisableReadCommittedSnapshot(string sqlServerConnection)
     {
+        LiveDatabases.GuardDisposable(sqlServerConnection);
         var builder = new SqlConnectionStringBuilder(sqlServerConnection);
         var name = builder.InitialCatalog;
         builder.InitialCatalog = "master";

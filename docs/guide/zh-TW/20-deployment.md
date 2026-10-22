@@ -24,8 +24,9 @@ Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正�
 
 ### SQL Server：開啟 `READ_COMMITTED_SNAPSHOT`
 
-SQL Server 資料庫需要開啟 `READ_COMMITTED_SNAPSHOT`。沒開的話，對有翻譯的項目做並行寫入會死結：
-交易自己的讀取會等其他交易尚未提交的資料列，SQL Server 再從每一對互等的交易中擇一中止，錯誤碼 1205。
+SQL Server 資料庫需要開啟 `READ_COMMITTED_SNAPSHOT`。沒開的話，並行寫入有翻譯之集合的不同項目會死結：
+每筆交易的讀取會等其他交易尚未提交的資料列，SQL Server 再從每個死結循環（牽涉兩個以上的連線）中
+擇一中止交易，錯誤碼 1205。
 在沒有其他連線連著這個資料庫時執行一次：
 
 ```sql

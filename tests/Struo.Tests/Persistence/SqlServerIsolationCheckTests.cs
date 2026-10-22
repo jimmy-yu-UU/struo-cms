@@ -19,6 +19,7 @@ public sealed class SqlServerIsolationCheckTests
     [InlineData(StruoDbType.PostgreSQL)]
     [InlineData(StruoDbType.MySql)]
     [InlineData(StruoDbType.Sqlite)]
+    [InlineData(StruoDbType.Oracle)]
     public void Other_backends_run_no_query_and_log_nothing(StruoDbType dbType)
     {
         using var file = TestBackend.CreateSqliteDatabase();
@@ -60,7 +61,7 @@ public sealed class SqlServerIsolationCheckTests
         var entry = logger.Entries.Should().ContainSingle().Which;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Message.Should().Contain("READ_COMMITTED_SNAPSHOT").And.Contain("deadlock")
-            .And.Contain("ALTER DATABASE");
+            .And.Contain("ALTER DATABASE").And.Contain($"[{database.Name}]");
     }
 
     private static bool TryResolve(out TestBackendKind kind)

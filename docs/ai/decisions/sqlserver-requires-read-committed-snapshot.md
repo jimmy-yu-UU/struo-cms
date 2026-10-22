@@ -32,14 +32,15 @@ behaviour PostgreSQL's MVCC gives and the code already relies on there.
 Investigation 2026-10-22 on SQL Server 2025 with 16 parallel creates over 5 rounds:
 
 - Without the setting, 73 to 74 of 80 creates failed with 1205 at the translation read; concurrent
-  updates of different items failed 14 of 16.
+  updates of different items failed 14 to 15 of 16.
 - Skipping the translation read removed the failures, and `ALTER DATABASE … SET
   READ_COMMITTED_SNAPSHOT ON` with no code change removed them too (16 of 16 created, no deadlock
   report, three runs).
 - With 20 000 pre-seeded rows the plan became a seek and the deadlock disappeared, so without the
   setting the failure depends on the plan: young or small tables hit it first.
-- `ConcurrentCreateDeadlockTests` is green on SQL Server, MySQL, MariaDB, PostgreSQL and SQLite with
-  the setting on.
+- `ConcurrentCreateDeadlockTests` is green on SQL Server with the setting on, and on MySQL, MariaDB,
+  PostgreSQL and SQLite. MySQL and MariaDB deadlocked on a separate InnoDB gap-lock cycle until a
+  create stopped deleting translation rows first; PostgreSQL and SQLite were never affected.
 
 ## Why the application does not run the ALTER
 
@@ -62,7 +63,4 @@ reintroduce a deadlock with the setting on is not measured beyond the 16-way cre
 ## Referenced from
 
 - `src/Struo.Infrastructure/Persistence/SqlServerIsolationCheck.cs`
-- `tests/Struo.Tests/Persistence/SqlServerIsolationCheckTests.cs`
-- `tests/Struo.Tests/Support/LiveDatabaseDdl.cs`
 - `AGENTS.md` ("Invariants" and "Verification")
-- `docs/guide/en/20-deployment.md`

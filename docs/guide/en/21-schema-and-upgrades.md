@@ -198,7 +198,7 @@ The invariant that all database access goes through SqlSugar (see
 - **`IndexCatalog`'s index queries**: the read-only catalog queries `migrate:check` uses to read
   indexes; Oracle has none, so the index check is skipped with a warning.
 - **The SQL Server isolation check**: one read-only query at startup that reads whether
-  `READ_COMMITTED_SNAPSHOT` is on; see [Chapter 20](20-deployment.md).
+  `READ_COMMITTED_SNAPSHOT` is on; see [Chapter 20](20-deployment.md#sql-server-turn-on-read-committed-snapshot).
 
 Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
 expressions, and a translated-field sort binds the language code as a SQL parameter.

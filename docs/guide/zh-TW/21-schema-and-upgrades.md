@@ -176,7 +176,7 @@ public sealed class CreateTags : StruoMigration
 - **Migration 鎖 `MigrationLockSql`**：每個後端一組取得與釋放鎖的參數化語句。
 - **`IndexCatalog` 的索引查詢**：`migrate:check` 讀索引用的唯讀系統目錄查詢；Oracle 沒有這支
   查詢，索引檢查以警告跳過。
-- **SQL Server 隔離檢查**：啟動時唯讀查詢一次，看 `READ_COMMITTED_SNAPSHOT` 有沒有開；見[第 20 章](20-deployment.md)。
+- **SQL Server 隔離檢查**：啟動時唯讀查詢一次，看 `READ_COMMITTED_SNAPSHOT` 有沒有開；見[第 20 章](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
 
 排序不組 SQL 文字。欄位、關聯路徑與翻譯欄位三種排序都是型別化的 SqlSugar 運算式，翻譯欄位排序把語言代碼
 當成 SQL 參數綁定。

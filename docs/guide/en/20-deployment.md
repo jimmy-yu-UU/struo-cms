@@ -30,9 +30,10 @@ The commands and the lock are covered in
 
 ### SQL Server: turn on `READ_COMMITTED_SNAPSHOT`
 
-A SQL Server database needs `READ_COMMITTED_SNAPSHOT` on. Without it, concurrent writes to an item
-that has translations deadlock: the transaction's own reads wait on the other transactions'
-uncommitted rows, and SQL Server aborts one of each waiting pair with error 1205. Run this once,
+A SQL Server database needs `READ_COMMITTED_SNAPSHOT` on. Without it, concurrent writes to different
+items of a collection that has translations deadlock: each transaction's reads wait on the other
+transactions' uncommitted rows, and SQL Server aborts one transaction of each deadlock cycle, which
+involves two or more sessions, with error 1205. Run this once,
 with no other connection open to the database:
 
 ```sql
