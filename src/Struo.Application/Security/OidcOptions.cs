@@ -11,8 +11,8 @@ public sealed class OidcOptions
 {
     public const string SectionName = "Oidc";
 
-    /// <summary>Provider ids are lowercase letters, digits and hyphens: they appear in URLs and scheme names.</summary>
-    public const string ProviderIdPattern = "^[a-z0-9-]+$";
+    /// <summary>Provider ids are lowercase letters, digits and hyphens (\z, not $, so a trailing newline fails): they appear in URLs and scheme names.</summary>
+    public const string ProviderIdPattern = @"^[a-z0-9-]+\z";
 
     /// <summary>Where a successful sign-in lands when the request carried no usable <c>returnUrl</c>.</summary>
     public string ReturnUrlDefault { get; set; } = "/";

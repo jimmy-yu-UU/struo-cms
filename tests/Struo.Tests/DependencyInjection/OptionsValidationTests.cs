@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
+using Struo.Application.Security;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Tests.Support;
 using Xunit;
@@ -161,7 +162,7 @@ public sealed class OptionsValidationTests
     public async Task Oidc_provider_id_must_be_lowercase_letters_digits_and_hyphens(string id)
     {
         var text = await OidcFailureTextAsync(s => ValidProvider(s, id));
-        text.Should().Contain("^[a-z0-9-]+$").And.Contain($"'{id}'");
+        text.Should().Contain(OidcOptions.ProviderIdPattern).And.Contain($"'{id}'");
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]

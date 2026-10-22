@@ -219,6 +219,7 @@ HTTP_STATUS:429
 認證 scheme。`GET /api/auth/login/oidc/{provider}` 對不存在或已停用的提供者回 `404`，所以沒有任何可用的提供者時，
 任何 id 都回 `404`。啟用時要給哪些鍵、少了會怎麼樣，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
+直接放在 `Oidc` 底下的鍵（例如 `Oidc:Authority`）會被忽略；啟動記錄會用一則警告列出找到的鍵。
 
 匿名呼叫 `GET /api/config` 會拿到 `oidcProviders`，是 `{ id, displayName, icon }` 的陣列，順序就是按鈕
 順序（`Order` 由小到大，相同時依 id）。登入頁在使用者輸入帳密之前，就依這份陣列為每個提供者畫一顆滿版

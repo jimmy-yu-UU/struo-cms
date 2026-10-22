@@ -7,8 +7,7 @@ namespace Struo.Application.Security;
 /// placeholder entry can stay in the file. Messages name the offending <c>Oidc:Providers:{id}</c> key.</summary>
 public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
 {
-    // \z, not $: "$" would also accept a trailing newline.
-    [GeneratedRegex(@"^[a-z0-9-]+\z")]
+    [GeneratedRegex(OidcOptions.ProviderIdPattern)]
     private static partial Regex ProviderIdRegex();
 
     public ValidateOptionsResult Validate(string? name, OidcOptions options)

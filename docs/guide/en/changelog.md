@@ -10,6 +10,7 @@
   `AllowedEmailDomains`. Move your settings under a provider id, and rename the secret's environment
   variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`; the user-secrets or
   `appsettings.Development.json` key `Oidc:ClientSecret` becomes `Oidc:Providers:microsoft:ClientSecret`).
+  The old flat keys directly under `Oidc` are ignored; a startup warning lists the ones found.
   Before:
 
   ```json

@@ -10,6 +10,7 @@
   提供者 id 底下，密鑰的環境變數也照樣改名（`Oidc__ClientSecret` 變成
   `Oidc__Providers__microsoft__ClientSecret`；user-secrets 或 `appsettings.Development.json` 裡的
   `Oidc:ClientSecret` 變成 `Oidc:Providers:microsoft:ClientSecret`）。
+  直接放在 `Oidc` 底下的舊平面鍵會被忽略，啟動時會用一則警告列出找到的鍵。
   改之前：
 
   ```json

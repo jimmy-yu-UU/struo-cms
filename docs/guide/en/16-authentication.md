@@ -280,6 +280,8 @@ Each external identity provider is one entry under `Oidc:Providers:{id}`. A disa
 registers no authentication scheme. `GET /api/auth/login/oidc/{provider}` returns `404` for an
 unknown or disabled provider, so with no enabled provider it returns `404` for every id. Which keys are required to enable a provider, and what happens when one is
 missing, is in the `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
+Keys placed directly under `Oidc` (such as `Oidc:Authority`) are ignored; the startup log names the ones
+found in a warning.
 
 An anonymous `GET /api/config` returns `oidcProviders`, an array of `{ id, displayName, icon }` in
 button order (`Order` ascending, then id). The login page draws one full-width button per entry,
