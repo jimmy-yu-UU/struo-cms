@@ -423,8 +423,8 @@ set and never carries exception text:
 | `external_login_failed` | The provider or the callback failed |
 | `external_login_denied` | The user declined at the provider |
 | `external_login_NoEmail` | The identity carries no usable email |
-| `external_login_EmailNotVerified` | The email is unverified and the provider's `RequireEmailVerified` is set |
-| `external_login_DomainNotAllowed` | The email's domain is not in the provider's `AllowedEmailDomains` |
+| `external_login_EmailNotVerified` | The email is unverified and `RequireEmailVerified` is on |
+| `external_login_DomainNotAllowed` | The email's domain is not in `AllowedEmailDomains` |
 | `external_login_TenantNotAllowed` | The tenant is not the provider's `AllowedTenantId` |
 | `external_login_Inactive` | The matched local account is deactivated |
 

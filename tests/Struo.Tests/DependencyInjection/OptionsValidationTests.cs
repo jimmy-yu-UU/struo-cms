@@ -266,8 +266,8 @@ public sealed class OptionsValidationTests
         {
             ValidProvider(s, "pinned");
             ValidProvider(s, "loose");
-            foreach (var id in new[] { "pinned", "loose" })
-                s[$"Oidc:Providers:{id}:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:pinned:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:loose:Authority"] = "https://login.microsoftonline.com/common/v2.0";
             s["Oidc:Providers:pinned:AllowedTenantId"] = "tenant-1";
         });
         text.Should().Contain("Oidc:Providers:loose").And.NotContain("Oidc:Providers:pinned:Allowed");
