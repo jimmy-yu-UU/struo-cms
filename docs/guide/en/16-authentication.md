@@ -280,8 +280,8 @@ Each external identity provider is one entry under `Oidc:Providers:{id}`. A disa
 registers no authentication scheme. `GET /api/auth/login/oidc/{provider}` returns `404` for an
 unknown or disabled provider, so with no enabled provider it returns `404` for every id. Which keys are required to enable a provider, and what happens when one is
 missing, is in the `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
-Keys placed directly under `Oidc` (such as `Oidc:Authority`) are ignored; the startup log names the ones
-found in a warning.
+The single-provider keys directly under `Oidc` (such as `Oidc:Authority`) are ignored; the startup log
+names the ones found in a warning.
 
 An anonymous `GET /api/config` returns `oidcProviders`, an array of `{ id, displayName, icon }` in
 button order (`Order` ascending, then id). The login page draws one full-width button per entry,
@@ -320,12 +320,15 @@ In the Google Cloud console, create an OAuth client of type Web application and 
 `https://cms.example.com/signin-oidc-google` as an authorized redirect URI. Use
 `https://accounts.google.com` as the `Authority`, the client's id as `ClientId`, and its secret as
 `ClientSecret` through an environment variable or user-secrets. Google has no tenant, so leave
-`AllowedTenantId` empty. The shipped entry has `RequireEmailVerified` on; keep it, and add
-`AllowedEmailDomains` to restrict sign-in to your company's domain.
+`AllowedTenantId` empty. The shipped entry has `RequireEmailVerified` on; keep it.
+
+An enabled Google provider must also set `AllowedEmailDomains` to your company's domain, or the host
+fails to start. Without it, any Google account in the world could sign in and get a new account with no
+roles. The shipped entry is disabled and has an empty list, so enabling it takes that one extra step.
 
 ### Any other OpenID Connect provider
 
-Add an entry with any id that fits `[a-z0-9-]`, the provider's `Authority`, the client id and secret,
+Add an entry with any id of lowercase letters, digits and hyphens, the provider's `Authority`, the client id and secret,
 and a `DisplayName`. Register `https://cms.example.com/signin-oidc-<id>` as the redirect URI. Accounts
 are linked by email, so if the provider can issue tokens with an unverified email, turn on
 `RequireEmailVerified` or pin `AllowedEmailDomains`. Otherwise a person who controls a matching
@@ -403,11 +406,13 @@ layered on top, anyone whose email matches in any identity provider could in the
 existing password account. How to configure those guards for a production environment is in the
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
-One combination is refused at startup. When a provider is enabled and its `Authority` has a path segment
+Two combinations are refused at startup. When a provider is enabled and its `Authority` has a path segment
 of `common`, `organizations`, `consumers` or the consumers tenant GUID (an Entra multi-tenant endpoint, where anyone can create
 a tenant and present any email), the host fails to start unless that provider's `AllowedTenantId` or
 `AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.
-A single-tenant authority, or a disabled provider, is never affected.
+The second is a Google `Authority` (`https://accounts.google.com`, in any case, with or without a trailing
+slash): the provider needs a non-empty `AllowedEmailDomains`, because Google has no tenant to pin, and the
+error names that key. A single-tenant authority, or a disabled provider, is never affected.
 
 A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
 shows a localized message and removes the parameter from the address. The code is one of a fixed

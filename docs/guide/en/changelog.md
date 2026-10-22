@@ -52,6 +52,9 @@
   registered one. Each provider also gets its own sign-out paths, `/signout-callback-oidc-{id}` and
   `/signout-oidc-{id}`; register the sign-out callback again if you use it. A reverse proxy in front of
   the API must forward these paths; the admin image's nginx and the Vite dev server already do.
+- An enabled provider whose `Authority` is Google (`https://accounts.google.com`) must set a non-empty
+  `Oidc:Providers:{id}:AllowedEmailDomains`, or startup fails with an error naming that key. Google has
+  no tenant to pin, and without a domain any Google account could sign in and get a new account.
 :::
 
 ### Added

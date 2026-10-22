@@ -489,6 +489,8 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 - `Prompt` 是空字串或合法值（見下文）。
 - 多租用戶的 Entra `Authority`（`common`、`organizations`、`consumers` 或 consumers tenant 的 GUID）要搭配 `AllowedTenantId` 或
   `AllowedEmailDomains`。
+- Google 的 `Authority`（`https://accounts.google.com`）要搭配非空的 `AllowedEmailDomains`，因為 Google
+  沒有 tenant 可釘，否則任何 Google 帳號都能登入。
 - 啟用中的提供者之間不能共用路徑。每個提供者還有兩條由 id 推導的登出路徑，
   `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`，它們不能設定，自訂的 `CallbackPath` 也不能
   跟其中任何一條相撞。
@@ -522,7 +524,8 @@ user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <�
 
 `RequireEmailVerified` 跟 `AllowedEmailDomains` 預設是放行的。隨附檔案的 `microsoft` 項目帶著
 `AllowedTenantId: "REPLACE_TENANT_ID"`，這個值打不中任何 tenant，替換之前會擋掉所有外部登入；`google`
-沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`。正式環境啟用提供者時，適用於它的檢查都該釘死，
+沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`，啟用前還要設好 `AllowedEmailDomains`（啟用中的 Google
+提供者清單為空時，啟動會失敗）。正式環境啟用提供者時，適用於它的檢查都該釘死，
 不要依賴預設值：有 tenant 的提供者釘 tenant，再加上 `RequireEmailVerified` 與 `AllowedEmailDomains`。
 
 ## Serilog

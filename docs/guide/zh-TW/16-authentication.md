@@ -219,7 +219,7 @@ HTTP_STATUS:429
 認證 scheme。`GET /api/auth/login/oidc/{provider}` 對不存在或已停用的提供者回 `404`，所以沒有任何可用的提供者時，
 任何 id 都回 `404`。啟用時要給哪些鍵、少了會怎麼樣，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
-直接放在 `Oidc` 底下的鍵（例如 `Oidc:Authority`）會被忽略；啟動記錄會用一則警告列出找到的鍵。
+直接放在 `Oidc` 底下的舊版單一提供者鍵（例如 `Oidc:Authority`）會被忽略；啟動記錄會用一則警告列出找到的鍵。
 
 匿名呼叫 `GET /api/config` 會拿到 `oidcProviders`，是 `{ id, displayName, icon }` 的陣列，順序就是按鈕
 順序（`Order` 由小到大，相同時依 id）。登入頁在使用者輸入帳密之前，就依這份陣列為每個提供者畫一顆滿版
@@ -253,8 +253,11 @@ fork 想加自己的品牌圖示，就在該檔的 `ICONS` 表加一筆，鍵用
 在 Google Cloud 主控台建立「網頁應用程式」類型的 OAuth 用戶端，並把
 `https://cms.example.com/signin-oidc-google` 加進已授權的重新導向 URI。`Authority` 填
 `https://accounts.google.com`，`ClientId` 填用戶端 ID，`ClientSecret` 用環境變數或 user-secrets 提供。
-Google 沒有 tenant，所以 `AllowedTenantId` 留空。隨附的項目已打開 `RequireEmailVerified`，請保留；
-想把登入限制在公司網域，再加上 `AllowedEmailDomains`。
+Google 沒有 tenant，所以 `AllowedTenantId` 留空。隨附的項目已打開 `RequireEmailVerified`，請保留。
+
+啟用 Google 提供者時，還必須把 `AllowedEmailDomains` 設成公司網域，否則主機無法啟動。沒有它的話，全世界
+任何一個 Google 帳號都能登入，並得到一個沒有任何角色的新帳號。隨附的項目是停用的，清單也是空的，所以啟用時
+要多做這一步。
 
 ### 其他 OpenID Connect 提供者
 
@@ -317,10 +320,12 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 上都能接管一個既有的密碼帳號；正式環境該怎麼設定這幾道關卡，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
 
-有一種組合會在啟動時被拒絕：某個提供者已啟用，而且它的 `Authority` 的路徑含有 `common`、`organizations`、
+有兩種組合會在啟動時被拒絕。第一種：某個提供者已啟用，而且它的 `Authority` 的路徑含有 `common`、`organizations`、
 `consumers` 或 consumers tenant 的 GUID 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
 該提供者的 `AllowedTenantId` 或 `AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
-空白的值不算已設定。單一 tenant 的 authority，或提供者停用時，都不受影響。
+空白的值不算已設定。第二種是 Google 的 `Authority`（`https://accounts.google.com`，大小寫不拘，結尾有無斜線皆可）：
+該提供者必須有非空的 `AllowedEmailDomains`，因為 Google 沒有 tenant 可釘，錯誤訊息會點名這個鍵。
+單一 tenant 的 authority，或提供者停用時，都不受影響。
 
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
 這個參數從網址列移除。代碼是固定的一組，絕不帶例外訊息：

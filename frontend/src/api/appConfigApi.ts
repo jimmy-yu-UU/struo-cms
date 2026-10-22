@@ -3,8 +3,8 @@ import { apiClient } from './apiClient'
 export type OidcProviderInfo = {
   id: string
   displayName: string
-  // Name looked up in lib/ssoIcons.ts; empty or unknown falls back to a generic key icon.
-  icon: string
+  // Name looked up in lib/ssoIcons.ts; empty, null or unknown falls back to a generic key icon.
+  icon: string | null
 }
 
 export type AppConfig = {

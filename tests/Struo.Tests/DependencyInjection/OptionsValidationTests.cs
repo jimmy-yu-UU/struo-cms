@@ -162,7 +162,8 @@ public sealed class OptionsValidationTests
     public async Task Oidc_provider_id_must_be_lowercase_letters_digits_and_hyphens(string id)
     {
         var text = await OidcFailureTextAsync(s => ValidProvider(s, id));
-        text.Should().Contain(OidcOptions.ProviderIdPattern).And.Contain($"'{id}'");
+        text.Should().Contain("lowercase letters, digits and hyphens").And.Contain($"'{id}'");
+        text.Should().NotContain(OidcOptions.ProviderIdPattern);
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
@@ -219,6 +220,43 @@ public sealed class OptionsValidationTests
         });
         text.Should().Contain("Oidc:Providers:acme:AllowedTenantId")
             .And.Contain("Oidc:Providers:acme:AllowedEmailDomains");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_without_allowed_email_domains_fails_startup()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "google");
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com/";
+        });
+        text.Should().Contain("Oidc:Providers:google:AllowedEmailDomains").And.Contain("Google");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_with_the_shipped_placeholders_fails_clearly()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            s["Oidc:Providers:google:Enabled"] = "true";
+            s["Oidc:Providers:google:DisplayName"] = "Google";
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com";
+            s["Oidc:Providers:google:ClientId"] = "REPLACE_ME";
+            s["Oidc:Providers:google:ClientSecret"] = "x";
+        });
+        text.Should().Contain("Oidc:Providers:google:AllowedEmailDomains");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_with_an_email_domain_starts()
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            ValidProvider(s, "google");
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com";
+            s["Oidc:Providers:google:AllowedEmailDomains:0"] = "corp.com";
+        });
+        ExceptionChainSearch.FindInner<OptionsValidationException>(error).Should().BeNull();
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]

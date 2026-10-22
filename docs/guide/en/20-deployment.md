@@ -122,7 +122,8 @@ mechanism is covered in [Chapter 14: GraphQL API](14-graphql.md).
 The three checks are set per provider, under `Oidc:Providers:{id}`. In the shipped file the
 `microsoft` entry's `AllowedTenantId` is a placeholder string that matches no tenant; until it's
 replaced with a real tenant, external login through it fails for everyone. The `google` entry has no
-tenant to pin and ships with `RequireEmailVerified` on.
+tenant to pin and ships with `RequireEmailVerified` on, but it needs `AllowedEmailDomains` before it can
+be enabled: an enabled Google provider with an empty list fails startup.
 
 `RequireEmailVerified` (not required by default) and `AllowedEmailDomains` (an empty list by
 default, meaning unrestricted) are both checks that permit by default. In production, pin every check

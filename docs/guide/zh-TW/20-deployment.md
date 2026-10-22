@@ -94,7 +94,8 @@ Compose 環境就是靠這點，不架 TLS 也能登入。
 
 這三個檢查是依提供者設定的，放在 `Oidc:Providers:{id}` 底下。隨附檔案裡 `microsoft` 項目的
 `AllowedTenantId` 是打不中任何 tenant 的佔位字串，換成真正的 tenant 之前，經由它的外部登入對任何人都會
-失敗。`google` 項目沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`。
+失敗。`google` 項目沒有 tenant 可釘，隨附時已打開 `RequireEmailVerified`，但啟用前必須設好 `AllowedEmailDomains`：啟用中的 Google 提供者清單為空時，
+啟動會失敗。
 
 `RequireEmailVerified`（預設不要求）與 `AllowedEmailDomains`（預設空清單即不限制）都是預設放行的檢查。
 正式環境每個啟用的提供者，都該把適用於它的檢查釘死（有 tenant 的提供者釘 tenant，再加上這兩個），

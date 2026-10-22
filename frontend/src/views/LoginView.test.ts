@@ -17,7 +17,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: (
 const BACKSLASH = String.fromCharCode(92)
 const MS = { id: 'microsoft', displayName: 'Microsoft 365', icon: 'microsoft' }
 const GOOGLE = { id: 'google', displayName: 'Google', icon: 'google' }
-const setProviders = (...p: { id: string; displayName: string; icon: string }[]) => {
+const setProviders = (...p: { id: string; displayName: string; icon: string | null }[]) => {
   useAppConfigStore().oidcProviders = p
 }
 const mountLogin = () => mount(LoginView, { global: { plugins: [i18n] } })
@@ -214,6 +214,12 @@ describe('LoginView', () => {
     expect(btns[1].findAll('path')).toHaveLength(4)
     expect(btns[2].find('svg').classes()).toContain('lucide-key-round')
     expect(btns[3].find('svg').classes()).toContain('lucide-key-round')
+  })
+
+  it('falls back to the key icon when the API sends a null icon', () => {
+    setProviders({ id: 'bare', displayName: 'Bare', icon: null })
+    const btn = mountLogin().find('[data-test="sso"]')
+    expect(btn.find('svg').classes()).toContain('lucide-key-round')
   })
 
   it('sends each button to its own provider with the same validated returnUrl', async () => {

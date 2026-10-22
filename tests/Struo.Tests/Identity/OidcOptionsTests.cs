@@ -81,6 +81,33 @@ public class OidcOptionsTests
         o.IsUnpinnedMultiTenant().Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("https://accounts.google.com", true)]
+    [InlineData("https://accounts.google.com/", true)]
+    [InlineData("HTTPS://Accounts.Google.COM/", true)]
+    [InlineData("https://accounts.google.com.evil.example", false)]
+    [InlineData("https://login.microsoftonline.com/tenant-1/v2.0", false)]
+    [InlineData(null, false)]
+    public void IsUnpinnedGoogle_matches_the_Google_authority_host(string? authority, bool expected)
+    {
+        new OidcProviderOptions { Authority = authority }.IsUnpinnedGoogle().Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(" ", true)]
+    [InlineData("corp.com", false)]
+    public void IsUnpinnedGoogle_is_pinned_only_by_an_email_domain(string? domain, bool expected)
+    {
+        var o = new OidcProviderOptions
+        {
+            Authority = "https://accounts.google.com",
+            AllowedTenantId = "tenant-1",
+            AllowedEmailDomains = domain is null ? [] : [domain]
+        };
+        o.IsUnpinnedGoogle().Should().Be(expected);
+    }
+
     [Fact]
     public void EnabledProviders_lists_only_enabled_ones_ordered_by_Order_then_id()
     {

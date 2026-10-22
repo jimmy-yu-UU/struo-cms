@@ -116,5 +116,5 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 
 到每個提供者的主控台登記重新導向網址：你的正式環境來源加上該提供者的回呼路徑，沒設 `CallbackPath` 時
 是 `/signin-oidc-<id>`。測試環境的來源同樣要登記，開發時再登記 `http://localhost:5173/signin-oidc-<id>`。
-`/api/` 之外的自訂 `CallbackPath`，還要在 `frontend/nginx/default.conf.template` 加一個 `location` 區塊。
+`/api/` 之外的自訂 `CallbackPath`，還要在 `frontend/nginx/default.conf.template` 加一個 `location` 區塊，開發伺服器則要在 `frontend/vite.proxy.ts` 加一筆。
 各提供者的設定步驟見[第 16 章：認證與 SSO](16-authentication.md)。

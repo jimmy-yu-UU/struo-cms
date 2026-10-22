@@ -3,10 +3,14 @@ import { devProxy } from '../vite.proxy'
 
 type Entry = { target?: string; changeOrigin?: boolean; agent?: { keepAlive?: boolean } }
 const proxy = devProxy as Record<string, Entry>
-const OIDC_KEY = Object.keys(proxy).find((k) => k.startsWith('^'))!
+const OIDC_KEY = Object.keys(proxy).find((k) => k.startsWith('^')) ?? ''
 const PATHS = ['/api', OIDC_KEY]
 
 describe('vite dev proxy', () => {
+  it('has a regex key for the OIDC paths', () => {
+    expect(OIDC_KEY).not.toBe('')
+  })
+
   it.each(PATHS)('forwards %s to the API', (path) => {
     expect(proxy[path]?.target).toBe('http://localhost:5221')
   })

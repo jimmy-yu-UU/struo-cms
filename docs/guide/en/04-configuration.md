@@ -561,6 +561,8 @@ an error naming that provider's key. The same applies to these rules:
 - `Prompt` is empty or valid (see below).
 - A multi-tenant Entra `Authority` (`common`, `organizations`, `consumers` or the consumers tenant GUID) comes with an
   `AllowedTenantId` or `AllowedEmailDomains`.
+- A Google `Authority` (`https://accounts.google.com`) comes with a non-empty `AllowedEmailDomains`, since
+  Google has no tenant to pin and any Google account could otherwise sign in.
 - No two enabled providers share a path. Each provider also owns two sign-out paths derived from its
   id, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; they are not configurable, and a custom
   `CallbackPath` must not collide with any of them.
@@ -602,8 +604,9 @@ register with the provider is the origin users reach the admin at plus this path
 
 `RequireEmailVerified` and `AllowedEmailDomains` default to permissive. In the shipped file, the
 `microsoft` entry carries `AllowedTenantId: "REPLACE_TENANT_ID"`, which matches no real tenant and so
-blocks every external login until you replace it; the `google` entry has no tenant to pin and ships
-with `RequireEmailVerified` on. When you enable a provider in Production, pin every check that
+blocks every external login until you replace it; the `google` entry has no tenant to pin, ships
+with `RequireEmailVerified` on, and needs `AllowedEmailDomains` before you enable it (an enabled Google
+provider with an empty list fails startup). When you enable a provider in Production, pin every check that
 applies to it rather than relying on the defaults: a tenant where the provider has one, plus
 `RequireEmailVerified` and `AllowedEmailDomains`.
 

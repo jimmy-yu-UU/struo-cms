@@ -40,7 +40,7 @@ public sealed class OidcProviderOptions
 
     // An external identity links to a local account by email equality, so these guards pin trust.
     // They default to off, except that an enabled multi-tenant Authority needs a tenant or domain pin
-    // (see IsUnpinnedMultiTenant). See docs/guide/en/16-authentication.md.
+    // (see IsUnpinnedMultiTenant) and an enabled Google Authority needs a domain pin (see IsUnpinnedGoogle). See docs/guide/en/16-authentication.md.
     public bool RequireEmailVerified { get; set; }
     public string? AllowedTenantId { get; set; }
     public string[] AllowedEmailDomains { get; set; } = [];
@@ -75,10 +75,21 @@ public sealed class OidcProviderOptions
             .Split('/', StringSplitOptions.RemoveEmptyEntries)
             .Any(s => MultiTenantSegments.Contains(s, StringComparer.OrdinalIgnoreCase));
         if (!multiTenant) return false;
-        var pinned = !string.IsNullOrWhiteSpace(AllowedTenantId)
-                     || AllowedEmailDomains.Any(d => !string.IsNullOrWhiteSpace(d));
+        var pinned = !string.IsNullOrWhiteSpace(AllowedTenantId) || HasAllowedEmailDomain();
         return !pinned;
     }
+
+    private const string GoogleAuthorityHost = "accounts.google.com";
+
+    /// <summary>True when <see cref="Authority"/> is Google's (<c>accounts.google.com</c>, any case, with or
+    /// without a trailing slash) and no email domain is pinned. Google has no tenant to pin, so
+    /// <see cref="AllowedTenantId"/> does not count: without a domain, any Google account could sign in.</summary>
+    public bool IsUnpinnedGoogle() =>
+        Uri.TryCreate(Authority, UriKind.Absolute, out var uri)
+        && string.Equals(uri.Host, GoogleAuthorityHost, StringComparison.OrdinalIgnoreCase)
+        && !HasAllowedEmailDomain();
+
+    private bool HasAllowedEmailDomain() => AllowedEmailDomains.Any(d => !string.IsNullOrWhiteSpace(d));
 
     public ExternalLoginPolicy ToPolicy() =>
         new(RequireEmailVerified, AllowedTenantId, AllowedEmailDomains);

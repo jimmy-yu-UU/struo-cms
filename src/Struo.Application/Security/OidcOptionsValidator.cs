@@ -16,7 +16,7 @@ public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
         foreach (var (id, provider) in options.Providers)
         {
             if (!ProviderIdRegex().IsMatch(id))
-                failures.Add($"Oidc:Providers:'{id}' is not a valid provider id; use {OidcOptions.ProviderIdPattern}");
+                failures.Add($"Oidc:Providers:'{id}' is not a valid provider id; use lowercase letters, digits and hyphens");
             if (provider.Enabled) ValidateEnabled(id, provider, failures);
         }
         ValidateUniqueCallbackPaths(options, failures);
@@ -43,6 +43,10 @@ public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
         if (p.IsUnpinnedMultiTenant())
             failures.Add($"{key}:Authority is multi-tenant (common, organizations or consumers); " +
                          $"set {key}:AllowedTenantId or {key}:AllowedEmailDomains, or use a single-tenant Authority");
+
+        if (p.IsUnpinnedGoogle())
+            failures.Add($"{key}:Authority is Google, where any Google account can sign in and get a new account; " +
+                         $"set {key}:AllowedEmailDomains");
 
         if (!p.HasValidPrompt())
             failures.Add($"{key}:Prompt must be empty or space-separated values from: " +

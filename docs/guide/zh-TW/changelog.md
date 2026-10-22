@@ -50,6 +50,9 @@
   `CallbackPath` 設成 `/signin-oidc` 以沿用已登記的那一個。每個提供者另有自己的登出路徑，
   `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`；有用登出回呼的話要重新登記。API 前面的反向代理
   必須轉發這些路徑；後台映像的 nginx 與 Vite 開發伺服器已經會轉發。
+- 啟用中、`Authority` 為 Google（`https://accounts.google.com`）的提供者，必須設定非空的
+  `Oidc:Providers:{id}:AllowedEmailDomains`，否則啟動失敗，錯誤訊息會點名這個鍵。Google 沒有 tenant 可釘，
+  沒有網域的話，任何 Google 帳號都能登入並得到一個新帳號。
 :::
 
 ### 新增
