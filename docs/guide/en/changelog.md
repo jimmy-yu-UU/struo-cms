@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.13.1
+
+### Changed
+
+- A SQL Server database needs `READ_COMMITTED_SNAPSHOT` on. Run
+  `ALTER DATABASE [your_database] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE` once, with
+  no other connection open to the database; Azure SQL Database has it on by default. When it is off,
+  startup logs one warning that names the database and the statement to run. Startup still
+  succeeds. See [Chapter 20](20-deployment.md#sql-server-turn-on-read-committed-snapshot).
+
+### Fixed
+
+- Concurrent creates of an item with translations failed with a deadlock on MySQL, MariaDB and SQL
+  Server, and the API answered 500. A create no longer deletes translation rows before inserting
+  them, which was the cause on MySQL and MariaDB; on SQL Server the cause was the default locking
+  isolation, covered by the setting above.
+- Concurrent updates of different items of a collection with translations failed with a deadlock on
+  SQL Server. They succeed with `READ_COMMITTED_SNAPSHOT` on.
+
 ## 0.13.0 — 2026-10-22
 
 ::: danger Breaking
