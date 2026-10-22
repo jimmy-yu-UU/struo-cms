@@ -406,7 +406,7 @@ layered on top, anyone whose email matches in any identity provider could in the
 existing password account. How to configure those guards for a production environment is in the
 `Oidc` section of [Chapter 4: Configuration Reference](04-configuration.md).
 
-Two combinations are refused at startup. When a provider is enabled and its `Authority` has a path segment
+Two combinations are refused at startup. The first: when a provider is enabled and its `Authority` has a path segment
 of `common`, `organizations`, `consumers` or the consumers tenant GUID (an Entra multi-tenant endpoint, where anyone can create
 a tenant and present any email), the host fails to start unless that provider's `AllowedTenantId` or
 `AllowedEmailDomains` is set. The error names both keys. Blank values don't count as set.

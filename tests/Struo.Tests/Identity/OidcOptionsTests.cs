@@ -85,6 +85,7 @@ public class OidcOptionsTests
     [InlineData("https://accounts.google.com", true)]
     [InlineData("https://accounts.google.com/", true)]
     [InlineData("HTTPS://Accounts.Google.COM/", true)]
+    [InlineData("https://accounts.google.com./", true)]
     [InlineData("https://accounts.google.com.evil.example", false)]
     [InlineData("https://login.microsoftonline.com/tenant-1/v2.0", false)]
     [InlineData(null, false)]

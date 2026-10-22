@@ -86,7 +86,7 @@ public sealed class OidcProviderOptions
     /// <see cref="AllowedTenantId"/> does not count: without a domain, any Google account could sign in.</summary>
     public bool IsUnpinnedGoogle() =>
         Uri.TryCreate(Authority, UriKind.Absolute, out var uri)
-        && string.Equals(uri.Host, GoogleAuthorityHost, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(uri.Host.TrimEnd('.'), GoogleAuthorityHost, StringComparison.OrdinalIgnoreCase)
         && !HasAllowedEmailDomain();
 
     private bool HasAllowedEmailDomain() => AllowedEmailDomains.Any(d => !string.IsNullOrWhiteSpace(d));
