@@ -17,7 +17,9 @@
   them, which was the cause on MySQL and MariaDB; on SQL Server the cause was the default locking
   isolation, covered by the setting above.
 - Concurrent updates of different items of a collection with translations failed with a deadlock on
-  SQL Server. They succeed with `READ_COMMITTED_SNAPSHOT` on.
+  SQL Server, and occasionally on MariaDB. An update now replaces each stored translation row in
+  place, or inserts a row for a new locale, instead of deleting and re-inserting it, which removes the
+  MariaDB case; on SQL Server the updates succeed with `READ_COMMITTED_SNAPSHOT` on.
 
 ## 0.13.0 — 2026-10-22
 

@@ -14,8 +14,9 @@
 - 並行建立有翻譯的項目時，MySQL、MariaDB 與 SQL Server 會發生死結，API 回 500。建立項目時不再先
   刪除翻譯列再寫入，這是 MySQL 與 MariaDB 的成因；SQL Server 的成因是預設的鎖定隔離等級，由上面
   的設定解決。
-- 並行更新有翻譯之集合的不同項目時，SQL Server 會發生死結。開啟 `READ_COMMITTED_SNAPSHOT` 之後
-  更新都能成功。
+- 並行更新有翻譯之集合的不同項目時，SQL Server 會發生死結，MariaDB 偶爾也會。更新時改成就地取代
+  每個已存在的翻譯列，沒有的語系才新增，不再先刪除再重新寫入，MariaDB 的情況就此消除；SQL Server
+  則在開啟 `READ_COMMITTED_SNAPSHOT` 之後更新都能成功。
 
 ## 0.13.0 — 2026-10-22
 

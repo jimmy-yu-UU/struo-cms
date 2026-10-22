@@ -94,9 +94,8 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
                      $"Translation entity '{type.Name}' has no field property '{f}'."),
             StringComparer.OrdinalIgnoreCase);
 
-        // Build the rows + per-locale delete models outside the transaction (reflection only).
-        var inserts = new List<T>(perLocale.Count);
-        var deletes = new List<List<IConditionalModel>>(perLocale.Count);
+        // Build one row per supplied locale outside the transaction (reflection only).
+        var rows = new List<T>(perLocale.Count);
         foreach (var (locale, values) in perLocale)
         {
             var row = new T();
@@ -107,38 +106,58 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
                 if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
                     prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
             }
-            inserts.Add(row);
-
-            // ConditionalType.In on the FK (Postgres-safe), Equal on the string locale.
-            deletes.Add(
-            [
-                new ConditionalModel
-                {
-                    FieldName = fkColumn,
-                    ConditionalType = ConditionalType.In,
-                    FieldValue = parentId.ToString(),
-                    CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
-                },
-                new ConditionalModel
-                {
-                    FieldName = db.EntityMaintenance.GetDbColumnName(localeProperty, type),
-                    ConditionalType = ConditionalType.Equal,
-                    FieldValue = locale
-                }
-            ]);
+            rows.Add(row);
         }
 
         await transactions.InTransactionAsync(async () =>
         {
             // A create inserts under a parent id that is new in this transaction, so there is nothing
-            // to delete; the delete would only take next-key locks that deadlock concurrent creates on InnoDB.
-            if (!isCreate)
+            // to look up.
+            if (isCreate)
             {
-                foreach (var del in deletes)
-                    await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
+                await db.Insertable(rows).ExecuteCommandAsync(ct);
+                return;
             }
-            await db.Insertable(inserts).ExecuteCommandAsync(ct);
+
+            // An update replaces the stored row of each supplied locale in place (by primary key) and
+            // inserts a row for a locale that has none. It issues no DELETE: a delete that matches
+            // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
+            // updates of different items on InnoDB. The existing rows come from a plain consistent read.
+            var existing = await LoadExistingAsync<T>(fkColumn, parentId, ct);
+            var pk = PrimaryKeyOf(type);
+            var updates = new List<T>();
+            var inserts = new List<T>();
+            foreach (var row in rows)
+            {
+                var stored = existing.FirstOrDefault(e => string.Equals(
+                    (string?)localeProp.GetValue(e), (string?)localeProp.GetValue(row), StringComparison.OrdinalIgnoreCase));
+                if (stored is null) { inserts.Add(row); continue; }
+                pk.SetValue(row, pk.GetValue(stored));
+                updates.Add(row);
+            }
+
+            if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
+            if (inserts.Count > 0) await db.Insertable(inserts).ExecuteCommandAsync(ct);
         }, ct);
+    }
+
+    private async Task<List<T>> LoadExistingAsync<T>(string fkColumn, object parentId, CancellationToken ct)
+        where T : class, new() =>
+        await db.Queryable<T>().Where(
+        [
+            new ConditionalModel
+            {
+                FieldName = fkColumn,
+                ConditionalType = ConditionalType.In,
+                FieldValue = parentId.ToString(),
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
+            }
+        ]).ToListAsync(ct);
+
+    private PropertyInfo PrimaryKeyOf(Type type)
+    {
+        var column = db.EntityMaintenance.GetEntityInfo(type).Columns.Single(c => c.IsPrimarykey);
+        return type.GetProperty(column.PropertyName, BindingFlags.Public | BindingFlags.Instance)!;
     }
 
     private static bool TryGetValueCaseInsensitive(

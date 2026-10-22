@@ -123,12 +123,12 @@ public interface IItemRepository
 
     /// <summary>
     /// Upserts translation rows for a single parent. For each entry in <paramref name="perLocale"/>
-    /// (locale → camelField → value), deletes the existing row for that
-    /// <c>(parentId, locale)</c> and inserts a fresh one with <paramref name="fieldProperties"/>
-    /// (CLR property names) set from the provided values. Locales not present in
-    /// <paramref name="perLocale"/> are left untouched (partial updates supported). When
-    /// <paramref name="isCreate"/> is true the parent row was just inserted, so the delete is skipped
-    /// and the rows are only inserted. The whole operation is transaction-wrapped.
+    /// (locale → camelField → value), the stored row for that <c>(parentId, locale)</c> is replaced in
+    /// place — every field in <paramref name="fieldProperties"/> (CLR property names) is set from the
+    /// provided values, so a field not sent is cleared — or a row is inserted when the locale has none.
+    /// Locales not present in <paramref name="perLocale"/> are left untouched (partial updates
+    /// supported), and nothing is deleted. When <paramref name="isCreate"/> is true the parent row was
+    /// just inserted, so the rows are only inserted. The whole operation is transaction-wrapped.
     /// </summary>
     Task SyncTranslationsAsync(
         Type translationType,
