@@ -102,6 +102,8 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 2. `MigrateOnStartup` 為 `true` 就拿鎖、套用 migration；為 `false` 就檢查資料庫，框架資料表存在
    卻沒有版本表，或還有待套用的 migration，都拒絕啟動。
 3. 在 Development，跑一次結構檢查，有錯誤就拒絕啟動。
+4. `DbType` 為 `SqlServer` 時，讀一次資料庫有沒有開 `READ_COMMITTED_SNAPSHOT`，沒開就記一筆警告；這個設定是必要的，見
+   [第 20 章：部署](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
 
 ## Struo:ContentAssemblies
 

@@ -186,10 +186,10 @@ disposable database of the backend you actually use; DDL that SQLite accepts may
 elsewhere. Your fork's own tests can call `SchemaChecker.Check`, from an `async` test method, and
 assert there are no errors.
 
-## The three raw-SQL exceptions in core
+## The four raw-SQL exceptions in core
 
 The invariant that all database access goes through SqlSugar (see
-[Chapter 2: Architecture](02-architecture.md)) has three deliberate exceptions:
+[Chapter 2: Architecture](02-architecture.md)) has four deliberate exceptions:
 
 - **The relation-filter subquery wrapper**: four fixed forms assembled around SQL that SqlSugar
   generated.
@@ -197,6 +197,8 @@ The invariant that all database access goes through SqlSugar (see
   backend.
 - **`IndexCatalog`'s index queries**: the read-only catalog queries `migrate:check` uses to read
   indexes; Oracle has none, so the index check is skipped with a warning.
+- **The SQL Server isolation check**: one read-only query at startup that reads whether
+  `READ_COMMITTED_SNAPSHOT` is on; see [Chapter 20](20-deployment.md).
 
 Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
 expressions, and a translated-field sort binds the language code as a SQL parameter.

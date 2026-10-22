@@ -118,6 +118,9 @@ The database part of startup runs in this order:
    check the database and refuse to start if the framework tables exist without a version table,
    or if migrations are pending.
 3. In Development, run the schema check and refuse to start on errors.
+4. With `DbType` set to `SqlServer`, read whether the database has `READ_COMMITTED_SNAPSHOT` on and log
+   a warning when it does not; the setting is required, see
+   [Chapter 20: Deployment](20-deployment.md#sql-server-turn-on-read-committed-snapshot).
 
 ## Struo:ContentAssemblies
 
