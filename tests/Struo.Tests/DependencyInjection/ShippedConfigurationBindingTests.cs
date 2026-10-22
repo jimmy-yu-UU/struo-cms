@@ -221,33 +221,35 @@ public sealed class ShippedConfigurationBindingTests
             "comparisons below to mean anything");
 
         var shipped = ShippedSection("Oidc");
-        // AddStruoOidc takes IConfiguration as a parameter as well as binding through the container, so
-        // both of its inputs come from the shipped file here — the same pair Program hands it.
         var bound = BindThroughProductionRegistration<OidcOptions>(
             configuration, (services, config) => services.AddStruoOidc(config));
 
-        // Discriminating: all three ship non-null placeholder text against a C# default of null.
-        bound.Authority.Should().Be(shipped.GetProperty("Authority").GetString());
-        bound.ClientId.Should().Be(shipped.GetProperty("ClientId").GetString());
-        bound.AllowedTenantId.Should().Be(shipped.GetProperty("AllowedTenantId").GetString());
-
-        // Equal to their C# defaults today; same reasoning as the Files test above. Enabled is the one
-        // worth naming: shipped false and default false, so this assertion would NOT notice a section
-        // that stopped binding — the placeholders above are what would. AllowedEmailDomains ships []
-        // against a C# default of [] (OidcOptions.cs). It still discriminates on file-side key drift
-        // only: a renamed shipped key makes GetProperty throw before this line runs, rather than this
-        // Equal() catching a binding failure.
-        bound.Enabled.Should().Be(shipped.GetProperty("Enabled").GetBoolean());
-        bound.CallbackPath.Should().Be(shipped.GetProperty("CallbackPath").GetString());
         bound.ReturnUrlDefault.Should().Be(shipped.GetProperty("ReturnUrlDefault").GetString());
-        bound.Prompt.Should().Be(shipped.GetProperty("Prompt").GetString());
-        bound.RequireEmailVerified.Should().Be(shipped.GetProperty("RequireEmailVerified").GetBoolean());
-        bound.AllowedEmailDomains.Should().Equal(StringArray(shipped.GetProperty("AllowedEmailDomains")));
+        bound.Providers.Keys.Should().BeEquivalentTo("microsoft", "google");
+        bound.Providers.Values.Should().OnlyContain(p => !p.Enabled, "no provider ships enabled");
 
-        // Scopes: OidcOptions.Scopes now defaults to [] (ApplyCollectionDefaults supplies DefaultScopes
-        // only when the bound value is still empty), so ConfigurationBinder replaces rather than
-        // appends here and this comparison discriminates cleanly against the shipped 3 entries.
-        bound.Scopes.Should().Equal(StringArray(shipped.GetProperty("Scopes")));
+        var shippedProviders = shipped.GetProperty("Providers");
+        foreach (var (id, provider) in bound.Providers)
+        {
+            var file = shippedProviders.GetProperty(id);
+            provider.DisplayName.Should().Be(file.GetProperty("DisplayName").GetString());
+            provider.Icon.Should().Be(file.GetProperty("Icon").GetString());
+            provider.Authority.Should().Be(file.GetProperty("Authority").GetString());
+            provider.ClientId.Should().Be(file.GetProperty("ClientId").GetString());
+            provider.Prompt.Should().Be(file.GetProperty("Prompt").GetString());
+            provider.RequireEmailVerified.Should().Be(file.GetProperty("RequireEmailVerified").GetBoolean());
+            provider.AllowedEmailDomains.Should().Equal(StringArray(file.GetProperty("AllowedEmailDomains")));
+            provider.Scopes.Should().Equal(StringArray(file.GetProperty("Scopes")));
+            provider.ClientSecret.Should().BeNullOrEmpty("the shipped file never carries a client secret");
+        }
+
+        bound.Providers["microsoft"].AllowedTenantId.Should().Be(
+            shippedProviders.GetProperty("microsoft").GetProperty("AllowedTenantId").GetString());
+        bound.Providers["google"].Authority.Should().Be("https://accounts.google.com");
+        bound.Providers["google"].AllowedTenantId.Should().BeNullOrEmpty();
+        bound.Providers["google"].RequireEmailVerified.Should().BeTrue();
+        bound.Providers["microsoft"].CallbackPath.Should().Be("/signin-oidc");
+        bound.Providers["google"].CallbackPath.Should().Be("/signin-oidc-google");
     }
 
     /// <summary>

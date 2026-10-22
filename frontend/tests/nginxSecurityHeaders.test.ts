@@ -54,8 +54,21 @@ function blocks(): Block[] {
 }
 
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
-// Locations that forward to the API: /api/ and the two OIDC callback paths.
-const PROXIED = ['/api/', '= /signin-oidc', '= /signout-callback-oidc']
+// Locations that forward to the API: /api/ and the per-provider OIDC callback paths.
+const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?$'
+const PROXIED = ['/api/', OIDC_LOCATION]
+
+// Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
+// longest plain prefix; the first matching regex wins over a plain prefix, as in nginx.
+function matchLocation(path: string): string {
+  const names = blocks().map((b) => b.name).filter((n) => n !== 'server')
+  const exact = names.find((n) => n.startsWith('= ') && n.slice(2) === path)
+  if (exact) return exact
+  const regex = names.find((n) => n.startsWith('~ ') && new RegExp(n.slice(2)).test(path))
+  if (regex) return regex
+  const prefixes = names.filter((n) => !/^[=~]/.test(n) && path.startsWith(n))
+  return [...prefixes].sort((a, b) => b.length - a.length)[0]
+}
 
 describe('nginx template parser', () => {
   it('keeps an if block inside its location body', () => {
@@ -166,11 +179,29 @@ describe('nginx template cache headers', () => {
 })
 
 describe('nginx template API proxying', () => {
-  it('proxies the OIDC callback paths as exact-match locations', () => {
-    const names = blocks().map((b) => b.name)
-    expect(names).toContain('= /signin-oidc')
-    expect(names).toContain('= /signout-callback-oidc')
+  it('proxies the OIDC callback paths through one regex location', () => {
+    expect(blocks().map((b) => b.name)).toContain(OIDC_LOCATION)
   })
+
+  it.each([
+    '/signin-oidc',
+    '/signin-oidc-google',
+    '/signin-oidc-my-idp-2',
+    '/signout-callback-oidc',
+    '/signout-callback-oidc-google',
+    '/signout-oidc',
+    '/signout-oidc-google',
+  ])('routes %s to the API', (path) => {
+    expect(matchLocation(path)).toBe(OIDC_LOCATION)
+  })
+
+  it.each(['/signin', '/signin-oidcx', '/signin-oidc/', '/signin-oidc-Google', '/signout', '/signout-oidc-', '/login', '/collections/x'])(
+    'leaves %s to the SPA',
+    (path) => {
+      expect(matchLocation(path)).not.toBe(OIDC_LOCATION)
+      expect(matchLocation(path)).toBe('/')
+    },
+  )
 
   it.each(PROXIED)('the %s location proxies to the upstream and keeps the client host with its port', (name) => {
     const block = blocks().find((b) => b.name === name)!

@@ -11,19 +11,20 @@ using Xunit;
 
 namespace Struo.Tests.Api;
 
-/// <summary>The OIDC authorize redirect carries the configured <c>Oidc:Prompt</c>; blank sends none.</summary>
+/// <summary>The OIDC authorize redirect carries the configured <c>Oidc:Providers:{id}:Prompt</c>; blank sends none.</summary>
 public class OidcPromptTests
 {
     private static async Task<string?> AuthorizePromptAsync(string? prompt, bool setPrompt = true)
     {
         var settings = new Dictionary<string, string?>
         {
-            ["Oidc:Enabled"] = "true",
-            ["Oidc:Authority"] = "https://login.example.test/tenant/v2.0",
-            ["Oidc:ClientId"] = "client",
-            ["Oidc:ClientSecret"] = "secret",
+            ["Oidc:Providers:acme:Enabled"] = "true",
+            ["Oidc:Providers:acme:DisplayName"] = "Acme",
+            ["Oidc:Providers:acme:Authority"] = "https://login.example.test/tenant/v2.0",
+            ["Oidc:Providers:acme:ClientId"] = "client",
+            ["Oidc:Providers:acme:ClientSecret"] = "secret",
         };
-        if (setPrompt) settings["Oidc:Prompt"] = prompt;
+        if (setPrompt) settings["Oidc:Providers:acme:Prompt"] = prompt;
         var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
         var services = new ServiceCollection();
@@ -32,8 +33,8 @@ public class OidcPromptTests
         services.AddStruoOidc(config);
         using var provider = services.BuildServiceProvider();
 
-        var options = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthSchemes.Oidc);
-        var scheme = new AuthenticationScheme(AuthSchemes.Oidc, AuthSchemes.Oidc, typeof(OpenIdConnectHandler));
+        var options = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthSchemes.OidcFor("acme"));
+        var scheme = new AuthenticationScheme(AuthSchemes.OidcFor("acme"), AuthSchemes.OidcFor("acme"), typeof(OpenIdConnectHandler));
         var ctx = new RedirectContext(new DefaultHttpContext(), scheme, options, new AuthenticationProperties())
         {
             ProtocolMessage = new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectMessage(),
@@ -67,9 +68,9 @@ public class OidcPromptTests
     [InlineData("login bogus", false)]
     [InlineData("SELECT_ACCOUNT", false)]
     public void Prompt_validation_accepts_only_known_values(string prompt, bool valid)
-        => new OidcOptions { Prompt = prompt }.HasValidPrompt().Should().Be(valid);
+        => new OidcProviderOptions { Prompt = prompt }.HasValidPrompt().Should().Be(valid);
 
     [Fact]
     public void Prompt_defaults_to_select_account()
-        => new OidcOptions().Prompt.Should().Be("select_account");
+        => new OidcProviderOptions().Prompt.Should().Be("select_account");
 }

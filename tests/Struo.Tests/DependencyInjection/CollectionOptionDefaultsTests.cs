@@ -37,20 +37,20 @@ public sealed class CollectionOptionDefaultsTests
     public void Narrowing_Oidc_scopes_replaces_the_default_instead_of_appending_to_it()
     {
         var bound = Bind<OidcOptions>(
-            new Dictionary<string, string?> { ["Oidc:Scopes:0"] = "openid" },
+            new Dictionary<string, string?> { ["Oidc:Providers:acme:Scopes:0"] = "openid" },
             (services, config) => services.AddStruoOidc(config));
 
-        bound.Scopes.Should().Equal("openid");
+        bound.Providers["acme"].Scopes.Should().Equal("openid");
     }
 
     [Fact]
     public void Omitting_Oidc_scopes_still_yields_the_documented_default()
     {
         var bound = Bind<OidcOptions>(
-            new Dictionary<string, string?> { ["Oidc:Enabled"] = "false" },
+            new Dictionary<string, string?> { ["Oidc:Providers:acme:Enabled"] = "false" },
             (services, config) => services.AddStruoOidc(config));
 
-        bound.Scopes.Should().Equal(OidcOptions.DefaultScopes);
+        bound.Providers["acme"].Scopes.Should().Equal(OidcProviderOptions.DefaultScopes);
     }
 
     [Fact]
@@ -116,10 +116,11 @@ public sealed class CollectionOptionDefaultsTests
     {
         var settings = new Dictionary<string, string?>
         {
-            ["Oidc:Enabled"] = "true",
-            ["Oidc:Authority"] = "https://login.example.com/tenant/v2.0",
-            ["Oidc:ClientId"] = "test-client",
-            ["Oidc:ClientSecret"] = "test-secret"
+            ["Oidc:Providers:acme:Enabled"] = "true",
+            ["Oidc:Providers:acme:DisplayName"] = "Acme",
+            ["Oidc:Providers:acme:Authority"] = "https://login.example.com/tenant/v2.0",
+            ["Oidc:Providers:acme:ClientId"] = "test-client",
+            ["Oidc:Providers:acme:ClientSecret"] = "test-secret"
         };
         foreach (var (key, value) in overrides) settings[key] = value;
 
@@ -130,7 +131,7 @@ public sealed class CollectionOptionDefaultsTests
         services.AddStruoOidc(configuration);
 
         using var provider = services.BuildServiceProvider();
-        return provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthSchemes.Oidc);
+        return provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthSchemes.OidcFor("acme"));
     }
 
     [Fact]
@@ -138,14 +139,14 @@ public sealed class CollectionOptionDefaultsTests
     {
         var handlerOptions = BindOidcHandlerOptions(new Dictionary<string, string?>());
 
-        handlerOptions.Scope.Should().Equal(OidcOptions.DefaultScopes);
+        handlerOptions.Scope.Should().Equal(OidcProviderOptions.DefaultScopes);
     }
 
     [Fact]
     public void Narrowing_Oidc_scopes_configures_the_OpenIdConnect_handler_with_only_the_narrowed_scope()
     {
         var handlerOptions = BindOidcHandlerOptions(
-            new Dictionary<string, string?> { ["Oidc:Scopes:0"] = "openid" });
+            new Dictionary<string, string?> { ["Oidc:Providers:acme:Scopes:0"] = "openid" });
 
         handlerOptions.Scope.Should().Equal("openid");
     }

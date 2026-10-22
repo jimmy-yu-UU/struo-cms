@@ -165,7 +165,7 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 | `POST api/auth/login` | 匿名 | 登入，設定工作階段 cookie |
 | `POST api/auth/logout` | 登入 | 登出，回 204 |
 | `GET api/auth/me` | 登入 | 讀目前登入者的身分與權限 |
-| `GET api/auth/login/oidc` | 匿名 | 導向設定好的 OIDC 提供者 |
+| `GET api/auth/login/oidc/{provider}` | 匿名 | 導向指定的 OIDC 提供者 |
 
 登入 body 是 `{ email, password }`，成功回 `200` 附 `{ id }` 並設定工作階段 cookie，失敗回
 `401`。兩道獨立的防線都會擋下嘗試過於頻繁的呼叫：依帳號節流，預設就開著，在真的驗證密碼之前先
@@ -200,7 +200,7 @@ HTTP_STATUS:200
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
 `me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
 
-`login/oidc` 在 OIDC 沒設定時回 404，有設定時回 302 導向，`?returnUrl=` 會先被淨化成站內路徑；
+`login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，`?returnUrl=` 會先被淨化成站內路徑；
 登出之後立刻讀 `me` 就是 `401`，不必等 cookie 過期。OIDC 回呼的細節留給認證那一章。
 
 ## Config `api/config`
@@ -209,8 +209,9 @@ HTTP_STATUS:200
 |---|---|---|
 | `GET api/config` | 匿名 | 讀公開設定，快取 30 秒 |
 
-這個端點允許匿名呼叫，回傳 `{ oidcEnabled, brandName, brandLogoUrl, passwordMinLength }`，伺服器
-端快取 30 秒。已存的 logo 檔案如果後來被取消發布或刪除，這裡仍然退回設定檔裡的 logo，而不是讓匿
+這個端點允許匿名呼叫，回傳 `{ oidcProviders, brandName, brandLogoUrl, passwordMinLength }`，伺服器
+端快取 30 秒。`oidcProviders` 是 `{ id, displayName, icon }` 的陣列，每個啟用的 OIDC 提供者一筆，依按鈕
+順序排列，沒有啟用任何提供者時是空陣列；提供者沒設圖示時 `icon` 為 `null`。已存的 logo 檔案如果後來被取消發布或刪除，這裡仍然退回設定檔裡的 logo，而不是讓匿
 名的登入頁看到一個死的網址。
 
 ## Ping `api/ping`

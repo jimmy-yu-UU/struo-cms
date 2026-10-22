@@ -137,6 +137,16 @@ public class SessionFixationTests(ApiFactory factory)
         (await client.SendAsync(req)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    private static OidcOptions TwoProviders() => new()
+    {
+        Providers =
+        {
+            ["acme"] = new OidcProviderOptions { Enabled = true },
+            ["other"] = new OidcProviderOptions { Enabled = true, CallbackPath = "/custom-callback" },
+            ["off"] = new OidcProviderOptions { Enabled = false },
+        }
+    };
+
     private static Func<HttpContext, Task> Middleware(OidcOptions oidc) =>
         new SessionRotationMiddleware(_ => Task.CompletedTask, Options.Create(oidc)).InvokeAsync;
 
@@ -153,12 +163,15 @@ public class SessionFixationTests(ApiFactory factory)
     [InlineData("POST", "/api/auth/login", true)]
     [InlineData("GET", "/api/auth/login", false)]
     [InlineData("POST", "/api/auth/login/", true)]
-    [InlineData("GET", "/signin-oidc", true)]
-    [InlineData("GET", "/signin-oidc/", true)]
+    [InlineData("GET", "/signin-oidc-acme", true)]
+    [InlineData("GET", "/signin-oidc-acme/", true)]
+    [InlineData("GET", "/custom-callback", true)]
+    [InlineData("GET", "/signin-oidc-off", false)]
+    [InlineData("GET", "/signin-oidc", false)]
     [InlineData("GET", "/api/auth/me", false)]
     public async Task Middleware_hides_the_session_cookie_only_on_sign_in_requests(string method, string path, bool hidden)
     {
-        var invoke = Middleware(new OidcOptions { Enabled = true, CallbackPath = "/signin-oidc" });
+        var invoke = Middleware(TwoProviders());
         var ctx = Request(method, path, $"other=1; {AuthSchemes.SessionCookieName}=abc; more=2");
 
         await invoke(ctx);
@@ -178,8 +191,8 @@ public class SessionFixationTests(ApiFactory factory)
     [Fact]
     public async Task Middleware_ignores_the_oidc_callback_path_when_oidc_is_disabled()
     {
-        var invoke = Middleware(new OidcOptions { Enabled = false, CallbackPath = "/signin-oidc" });
-        var ctx = Request("GET", "/signin-oidc", $"{AuthSchemes.SessionCookieName}=abc");
+        var invoke = Middleware(TwoProviders());
+        var ctx = Request("GET", "/signin-oidc-off", $"{AuthSchemes.SessionCookieName}=abc");
 
         await invoke(ctx);
 
@@ -196,16 +209,16 @@ public class SessionFixationTests(ApiFactory factory)
     // Runs the callback request through the real middleware, then the production OnTokenValidated logic.
     private async Task<ClaimsPrincipal?> OidcCallbackAsync(TestUser user, string? presentedCookie)
     {
-        var oidc = new OidcOptions { Enabled = true, CallbackPath = "/signin-oidc" };
+        var oidc = TwoProviders();
         var services = new ServiceCollection()
             .AddSingleton<IExternalLoginService>(new FixedExternalLogin(user.Id))
             .AddSingleton(Options.Create(oidc))
             .AddSingleton(factory.Services.GetRequiredService<SessionRotation>())
             .BuildServiceProvider();
-        var ctx = Request("GET", "/signin-oidc", $"{AuthSchemes.SessionCookieName}={presentedCookie}");
+        var ctx = Request("GET", "/signin-oidc-acme", $"{AuthSchemes.SessionCookieName}={presentedCookie}");
         ctx.RequestServices = services;
         await Middleware(oidc)(ctx);
-        return (await OidcWiring.ResolveLocalPrincipalAsync(ctx, new ClaimsPrincipal(new ClaimsIdentity()))).Principal;
+        return (await OidcWiring.ResolveLocalPrincipalAsync(ctx, new ClaimsPrincipal(new ClaimsIdentity()), "acme")).Principal;
     }
 
     [Fact]

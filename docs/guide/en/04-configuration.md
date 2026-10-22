@@ -25,11 +25,11 @@ An array-valued key has to be replaced as a whole: at a higher-precedence layer,
 override keep the value from the layer below, so filling in only the first few elements doesn't
 shorten the array.
 
-The default `appsettings.json` fully populates six arrays: `Oidc:Scopes`,
+The default `appsettings.json` fully populates six arrays: `Oidc:Providers:{id}:Scopes`,
 `Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:ImageTransform:SizeSteps`,
 `Struo:Files:ImageTransform:TransformableContentTypes`, `Struo:Files:AllowedContentTypes`, and
 `Serilog:WriteTo`; the first four fall back to their built-in default even if you delete them
-entirely. Array elements use an index, e.g. `Oidc__Scopes__0=openid`; to shorten an array, edit the
+entirely. Array elements use an index, e.g. `Oidc__Providers__google__Scopes__0=openid`; to shorten an array, edit the
 settings file itself.
 
 | Key | Type | Default |
@@ -499,57 +499,120 @@ login throttle counts in Redis directly.
 
 ## Oidc
 
+External sign-in is configured per identity provider. `Oidc:ReturnUrlDefault` applies to all of
+them, and each provider is one entry under `Oidc:Providers:{id}`. The id is lowercase letters,
+digits and hyphens (`[a-z0-9-]`), because it appears in URLs: `microsoft`, `google` and `acme-sso`
+are valid, `Google` and `acme_sso` are not.
+
 | Key | Type | Default |
 |---|---|---|
-| `Oidc:Enabled` | bool | `false` |
-| `Oidc:Authority` | string (may be empty) | see below |
-| `Oidc:ClientId` | string (may be empty) | `"REPLACE_ME"` |
-| `Oidc:ClientSecret` | string (may be empty) | none |
-| `Oidc:CallbackPath` | string | `"/signin-oidc"` |
-| `Oidc:Scopes` | string array | see below |
-| `Oidc:Prompt` | string (may be empty) | `"select_account"` |
 | `Oidc:ReturnUrlDefault` | string | `"/"` |
-| `Oidc:RequireEmailVerified` | bool | `false` |
-| `Oidc:AllowedTenantId` | string | `"REPLACE_TENANT_ID"` |
-| `Oidc:AllowedEmailDomains` | string array | `[]` |
+| `Oidc:Providers:{id}:Enabled` | bool | `false` |
+| `Oidc:Providers:{id}:DisplayName` | string | none |
+| `Oidc:Providers:{id}:Icon` | string | none |
+| `Oidc:Providers:{id}:Order` | integer | `0` |
+| `Oidc:Providers:{id}:Authority` | string | none |
+| `Oidc:Providers:{id}:ClientId` | string | none |
+| `Oidc:Providers:{id}:ClientSecret` | string | none |
+| `Oidc:Providers:{id}:CallbackPath` | string | `"/signin-oidc-{id}"` |
+| `Oidc:Providers:{id}:Scopes` | string array | `["openid", "email", "profile"]` |
+| `Oidc:Providers:{id}:Prompt` | string (may be empty) | `"select_account"` |
+| `Oidc:Providers:{id}:RequireEmailVerified` | bool | `false` |
+| `Oidc:Providers:{id}:AllowedTenantId` | string | none |
+| `Oidc:Providers:{id}:AllowedEmailDomains` | string array | `[]` |
 
-This is the actual value, not the nested form used in `appsettings.json`:
-```text
-Oidc:Authority = https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0
-Oidc:Scopes = ["openid", "email", "profile"]
+The defaults are what a missing key means. The shipped `appsettings.json` has two disabled
+entries, `microsoft` and `google`, each with its own values filled in:
+
+```json
+"Oidc": {
+  "ReturnUrlDefault": "/",
+  "Providers": {
+    "microsoft": {
+      "Enabled": false,
+      "DisplayName": "Microsoft 365",
+      "Icon": "microsoft",
+      "Order": 1,
+      "Authority": "https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0",
+      "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc",
+      "AllowedTenantId": "REPLACE_TENANT_ID"
+    },
+    "google": {
+      "Enabled": false,
+      "DisplayName": "Google",
+      "Icon": "google",
+      "Order": 2,
+      "Authority": "https://accounts.google.com",
+      "ClientId": "REPLACE_ME",
+      "CallbackPath": "/signin-oidc-google",
+      "RequireEmailVerified": true
+    }
+  }
+}
 ```
 
-When `Enabled=true`, `Authority`, `ClientId`, and `ClientSecret` must all be non-empty, or startup
-fails; with `Enabled=false` that rule always passes. But `Enabled=false` alone leaves the OIDC
-authentication scheme unregistered, and `/api/auth/login/oidc` returns 404. That's not a
+The file also lists `Scopes`, `Prompt`, `AllowedEmailDomains` and the other keys that equal their
+defaults (`microsoft`'s `RequireEmailVerified`, `google`'s `AllowedTenantId`); they are left out above.
+
+A disabled provider is never validated, so a placeholder entry can stay in the file. Each enabled
+provider must have a `DisplayName`, `Authority`, `ClientId` and `ClientSecret`, or startup fails with
+an error naming that provider's key. The same applies to these rules:
+
+- `CallbackPath`, when set, starts with `/`.
+- `Prompt` is empty or valid (see below).
+- A multi-tenant Entra `Authority` (`common`, `organizations`, `consumers` or the consumers tenant GUID) comes with an
+  `AllowedTenantId` or `AllowedEmailDomains`.
+- A Google `Authority` (`https://accounts.google.com`) comes with a non-empty `AllowedEmailDomains`, since
+  Google has no tenant to pin and any Google account could otherwise sign in.
+- No two enabled providers share a path. Each provider also owns two sign-out paths derived from its
+  id, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; they are not configurable, and a custom
+  `CallbackPath` must not collide with any of them.
+
+A provider id that breaks the id rule fails startup, whether or not the provider is enabled. A
+provider that is disabled or absent makes `/api/auth/login/oidc/{provider}` return 404; that is not a
 configuration error.
 
+`DisplayName` is the label on the provider's sign-in button. `Icon` is a token the admin UI maps to a
+glyph; the built-in tokens and how to add one are in [Chapter 16](16-authentication.md). The buttons
+are sorted by `Order` ascending, then by id. `Order` exists because configuration doesn't keep the
+order of keys in the file.
+
 On the first login with an external identity, StruoCMS matches it to an existing local account by
-email; that matching only happens once `AllowedTenantId`, `RequireEmailVerified`, and
-`AllowedEmailDomains` all pass their checks. Loosen them, and anyone with a matching email at any
-identity provider can take over a password account.
+email; that matching only happens when that provider's `AllowedTenantId`, `RequireEmailVerified`, and
+`AllowedEmailDomains` all pass their checks. Loosen them, and anyone with a matching email at that
+identity provider can take over a password account. A blank `AllowedTenantId` skips the tenant
+check. For a provider that doesn't verify emails, turn on `RequireEmailVerified` or pin
+`AllowedEmailDomains`.
 
 `ClientSecret` is deliberately absent from `appsettings.json` and must never be committed. Set it with
-the environment variable `Oidc__ClientSecret`, with user-secrets
-(`dotnet user-secrets set "Oidc:ClientSecret" <value> --project src/Struo.Api`), or in a gitignored
-`appsettings.Development.json`.
+the environment variable `Oidc__Providers__<id>__ClientSecret` (for example
+`Oidc__Providers__google__ClientSecret`), with user-secrets
+(`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <value> --project src/Struo.Api`), or in
+a gitignored `appsettings.Development.json`. Any other key overrides the same way, such as
+`Oidc__Providers__google__Enabled=true`.
 
 `Prompt` is sent as the `prompt` parameter of the authorize request. `select_account` (the default)
 always shows the provider's account picker, so nobody signs in silently with whichever account the
 browser happens to hold. `login` forces the user to enter credentials again, `consent` asks for
 consent again, and `none` never shows a page and fails when the user isn't already signed in. Values
 may be combined with a space, such as `login consent`. An empty string sends no prompt, so the
-provider decides; a JSON `null` keeps the default. Any other value fails startup when `Enabled=true`, with an error naming
-`Oidc:Prompt`.
+provider decides; a JSON `null` keeps the default. Any other value fails startup when the provider is
+enabled, with an error naming `Oidc:Providers:<id>:Prompt`.
 
-`CallbackPath` is the path the identity provider redirects the browser back to. The redirect URI to
-register with the provider is the origin users reach the admin at plus this path; see
-[Chapter 16](16-authentication.md) for the proxy side.
+`CallbackPath` is the path the identity provider redirects the browser back to. The shipped entries set it
+explicitly: `/signin-oidc` for `microsoft` and `/signin-oidc-google` for `google`. An entry without it uses
+`/signin-oidc-{id}`. Each provider needs its own path: two providers cannot share one, because the first
+handler would take every callback. The redirect URI to register with the provider is the origin users reach
+the admin at plus this path; see [Chapter 16](16-authentication.md) for the proxy side.
 
-`RequireEmailVerified` and `AllowedEmailDomains` default to permissive; `AllowedTenantId` doesn't.
-The default value is `REPLACE_TENANT_ID`, which matches no real tenant, so it blocks every external
-login until you replace it. When you enable OIDC in Production, set all three explicitly rather than
-relying on the defaults.
+`RequireEmailVerified` and `AllowedEmailDomains` default to permissive. In the shipped file, the
+`microsoft` entry carries `AllowedTenantId: "REPLACE_TENANT_ID"`, which matches no real tenant and so
+blocks every external login until you replace it; the `google` entry has no tenant to pin, ships
+with `RequireEmailVerified` on, and needs `AllowedEmailDomains` before you enable it (an enabled Google
+provider with an empty list fails startup). When you enable a provider in Production, pin every check that
+applies to it rather than relying on the defaults: a tenant where the provider has one, plus
+`RequireEmailVerified` and `AllowedEmailDomains`.
 
 ## Serilog
 

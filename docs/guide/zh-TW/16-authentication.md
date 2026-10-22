@@ -215,32 +215,77 @@ HTTP_STATUS:429
 
 ## OIDC 外部登入
 
-`Oidc:Enabled` 是 `false`（預設）或 `Oidc:Authority` 留空時，外部登入的 scheme 不會被註冊，
-`GET /api/auth/login/oidc` 回 `404`；啟用時要給哪些鍵、少了會怎麼樣，見
-[第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。匿名呼叫 `GET /api/config` 就能讀到
-`oidcEnabled` 這個欄位，讓登入頁在使用者輸入帳密之前，就先知道要不要顯示外部登入的按鈕。
+每個外部身分提供者是 `Oidc:Providers:{id}` 底下的一筆。提供者停用時，不會註冊
+認證 scheme。`GET /api/auth/login/oidc/{provider}` 對不存在或已停用的提供者回 `404`，所以沒有任何可用的提供者時，
+任何 id 都回 `404`。啟用時要給哪些鍵、少了會怎麼樣，見
+[第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
+直接放在 `Oidc` 底下的舊版單一提供者鍵（例如 `Oidc:Authority`）會被忽略；啟動記錄會用一則警告列出找到的鍵。
+
+匿名呼叫 `GET /api/config` 會拿到 `oidcProviders`，是 `{ id, displayName, icon }` 的陣列，順序就是按鈕
+順序（`Order` 由小到大，相同時依 id）。登入頁在使用者輸入帳密之前，就依這份陣列為每個提供者畫一顆滿版
+按鈕，文字是「使用 {displayName} 登入」。陣列為空就不顯示 SSO 按鈕。回應裡不會有任何密鑰。
 
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
-叫 userinfo 端點補齊；回呼路徑是 `Oidc:CallbackPath`，預設 `/signin-oidc`。
+叫 userinfo 端點補齊。每個提供者有自己的回呼路徑：隨附的 `microsoft` 項目設為 `/signin-oidc`，隨附的 `google`
+項目設為 `/signin-oidc-google`，沒設 `CallbackPath` 的項目用 `/signin-oidc-{id}`；
+另外還有兩條由 id 推導的登出路徑：`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`。啟用中的提供者
+之間不能共用路徑。
 
-登入預設一律顯示提供者的帳號挑選畫面（`Oidc:Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
+登入預設一律顯示提供者的帳號挑選畫面（`Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
 第 4 章。
 
-要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上這個路徑：
-`https://cms.example.com/signin-oidc`，Compose 堆疊則是 `http://localhost:8080/signin-oidc`。純 `http`
-的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯 cookie 帶
-`Secure`，所以其他來源都要用 `https`。要用
-登出回呼的話，同樣登記 `/signout-callback-oidc`。
+### 按鈕圖示
 
-在 `pnpm dev` 下開發時，登記 `http://localhost:5173/signin-oidc`；要用登出回呼的話，再登記
-`http://localhost:5173/signout-callback-oidc`。Vite 開發伺服器會把這兩個路徑轉發給 API，並保留瀏覽器的
+`Icon` 是代號，不是網址。後台介面在 `frontend/src/lib/ssoIcons.ts` 把它對應到一個內嵌的 SVG 圖示。內建
+的代號有 `microsoft` 與 `google`，比對不分大小寫。代號留空或不認得時，顯示通用的鑰匙圖示。
+
+fork 想加自己的品牌圖示，就在該檔的 `ICONS` 表加一筆，鍵用小寫名稱，再把這個名稱設成提供者的
+`Icon`，然後重新建置後台。`Icon` 不接受網址；每個圖示都是那張表裡的一個 SVG 元件。
+
+### 設定 Microsoft Entra
+
+用單一 tenant 的 authority，`https://login.microsoftonline.com/<tenant-id>/v2.0`，並把同一個 tenant id
+填進 `AllowedTenantId`。在應用程式註冊裡新增一個 Web 類型的重新導向網址：管理介面的來源加上回呼路徑，
+用隨附的 `microsoft` 項目就是 `https://cms.example.com/signin-oidc`。如果改了 `CallbackPath`，
+或用別的 id 又沒設，就改登記那條路徑，例如 `https://cms.example.com/signin-oidc-<id>`。
+
+### 設定 Google
+
+在 Google Cloud 主控台建立「網頁應用程式」類型的 OAuth 用戶端，並把
+`https://cms.example.com/signin-oidc-google` 加進已授權的重新導向 URI。`Authority` 填
+`https://accounts.google.com`，`ClientId` 填用戶端 ID，`ClientSecret` 用環境變數或 user-secrets 提供。
+Google 沒有 tenant，所以 `AllowedTenantId` 留空。隨附的項目已打開 `RequireEmailVerified`，請保留。
+
+啟用 Google 提供者時，還必須把 `AllowedEmailDomains` 設成公司網域，否則主機無法啟動。沒有它的話，全世界
+任何一個 Google 帳號都能登入，並得到一個沒有任何角色的新帳號。隨附的項目是停用的，清單也是空的，所以啟用時
+要多做這一步。
+
+### 其他 OpenID Connect 提供者
+
+新增一筆，id 用符合 `[a-z0-9-]` 的任何名稱，填上提供者的 `Authority`、用戶端 ID 與密鑰，以及
+`DisplayName`，再向提供者登記 `https://cms.example.com/signin-oidc-<id>` 當重新導向網址。帳號是靠 email
+串起來的，所以提供者若可能簽出 email 未驗證的 token，就要打開 `RequireEmailVerified`，或用
+`AllowedEmailDomains` 釘住網域；否則控制著某個相符但未驗證的 email 的人，就能接管既有帳號。
+
+### 重新導向網址
+
+要向提供者登記的重新導向網址，是使用者開啟管理介面的來源加上該提供者的回呼路徑：
+隨附的 `google` 項目是 `https://cms.example.com/signin-oidc-google`，Compose 堆疊則是 `http://localhost:8080/signin-oidc-google`。
+純 `http` 的重新導向網址只在 `localhost` 可用：Entra 會拒絕其他 `http` 重新導向網址，而且 OIDC 的關聯
+cookie 帶 `Secure`，所以其他來源都要用 `https`。要用登出回呼的話，同樣登記
+`/signout-callback-oidc-{id}`。
+
+在 `pnpm dev` 下開發時，Entra 登記 `http://localhost:5173/signin-oidc`，Google 登記
+`http://localhost:5173/signin-oidc-google`；要用登出回呼的話，再登記
+`http://localhost:5173/signout-callback-oidc-{id}`。Vite 開發伺服器會把這些路徑轉發給 API，並保留瀏覽器的
 `Host`，API 就依你開啟開發伺服器用的主機組出重新導向網址。請開 `http://localhost:5173`，不要開
 `http://127.0.0.1:5173`，才會跟登記的網址一致。
 
-管理映像的 nginx 會把 `/signin-oidc` 與 `/signout-callback-oidc` 和 `/api/` 一樣代理給 API，所以提供者
-的重新導向會落回登入當初的那個來源。自訂的 `Oidc:CallbackPath` 只要在 `/api/` 底下，例如
-`/api/signin-oidc`，`/api/` 這條規則就涵蓋了，nginx 不用改。其他自訂路徑要在
-`frontend/nginx/default.conf.template` 另加一個 `location` 區塊，或在你自己的代理加對應規則。
+管理映像的 nginx 會把 `/signin-oidc-{id}`、`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}` 和
+`/api/` 一樣代理給 API，所以提供者的重新導向會落回登入當初的那個來源；Vite 開發伺服器轉發的是同一組
+路徑。自訂的 `CallbackPath` 只要在 `/api/` 底下，例如 `/api/signin-oidc-acme`，`/api/` 這條規則就涵蓋了，
+nginx 不用改。其他自訂路徑要在 `frontend/nginx/default.conf.template` 另加一個 `location` 區塊，或在你
+自己的代理加對應規則。
 
 API 用它收到的請求的 scheme 與 host 組出重新導向網址。nginx 會連同埠號原樣帶過用戶端的 `Host`
 標頭，所以 `http://localhost:<port>` 直接可用。對外的 `https` 來源則要 API 也看到 `https`：TLS 在
@@ -249,7 +294,7 @@ nginx 會把收到的值原樣帶給 API（沒收到才用它自己連線的 sch
 nginx 容器自己的位址或專用 network 列為已知代理；不要信任整段共用的 Docker network 範圍，也不要發布 API
 的連接埠（第 20 章），否則 API 會忽略這個標頭，或被騙去採信偽造的值。
 
-要求的 scope 是 `Oidc:Scopes`，預設 `openid`、`email`、`profile`，留空或給空
+要求的 scope 是該提供者的 `Scopes`，預設 `openid`、`email`、`profile`，留空或給空
 陣列都會退回這組預設，不會變成完全不要求 scope。讀取的 claim 有：
 
 - `email`，缺了就退回較長的 email claim 類型，再退回 `preferred_username`；
@@ -260,11 +305,11 @@ nginx 容器自己的位址或專用 network 列為已知代理；不要信任�
 那個使用者 id 的本機 cookie 身分，落進工作階段狀態的，是跟密碼登入完全一樣的那一套機制。解析會
 依序檢查下面幾件事，任何一項沒過，登入就整個失敗：
 
-- tenant 相符（`Oidc:AllowedTenantId`），大小寫不分；預設值是打不中任何 tenant 的佔位字串，替
-  換之前會擋掉所有外部登入；
-- email 已驗證（`Oidc:RequireEmailVerified`，預設不要求），claim 缺失或無法解析都算沒驗證；
+- tenant 與該提供者的 `AllowedTenantId` 相符，大小寫不分；留空會略過這項檢查，隨附的 `microsoft`
+  項目帶的佔位字串打不中任何 tenant，替換之前會擋掉經由它的所有外部登入；
+- email 已驗證（該提供者的 `RequireEmailVerified`，預設不要求），claim 缺失或無法解析都算沒驗證；
 - 身分裡有 email 可用，沒有就直接拒絕，不管其他設定，這是這道流程唯一能拿來比對本機帳號的鍵；
-- email 網域在允許清單裡（`Oidc:AllowedEmailDomains`，預設空清單即不限制）；
+- email 網域在允許清單裡（該提供者的 `AllowedEmailDomains`，預設空清單即不限制）；
 - 比對到的本機帳號仍是啟用狀態，停用的帳號不會因為外部身分通過驗證就被重新啟用。
 
 比對靠的是 email 相等，大小寫不分；比對不到就地建立一個新帳號，這正是「即時建立」的意思，不需要
@@ -277,10 +322,12 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 上都能接管一個既有的密碼帳號；正式環境該怎麼設定這幾道關卡，見
 [第 4 章：設定參考](04-configuration.md)的 `Oidc` 一節。
 
-有一種組合會在啟動時被拒絕：OIDC 已啟用，而且 `Oidc:Authority` 的路徑含有 `common`、`organizations`
-或 `consumers` 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
-`Oidc:AllowedTenantId` 或 `Oidc:AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
-空白的值不算已設定。單一 tenant 的 authority，或 OIDC 停用時，都不受影響。
+有兩種組合會在啟動時被拒絕。第一種：某個提供者已啟用，而且它的 `Authority` 的路徑含有 `common`、`organizations`、
+`consumers` 或 consumers tenant 的 GUID 其中一段（Entra 的多租用戶端點，任何人都能自建 tenant 並送出任意 email），此時必須設定
+該提供者的 `AllowedTenantId` 或 `AllowedEmailDomains`，否則主機無法啟動，錯誤訊息會點名這兩個鍵。
+空白的值不算已設定。第二種是 Google 的 `Authority`（`https://accounts.google.com`，大小寫不拘，結尾有無斜線皆可）：
+該提供者必須有非空的 `AllowedEmailDomains`，因為 Google 沒有 tenant 可釘，錯誤訊息會點名這個鍵。
+單一 tenant 的 authority，或提供者停用時，都不受影響。
 
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
 這個參數從網址列移除。代碼是固定的一組，絕不帶例外訊息：
@@ -290,12 +337,12 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 | `external_login_failed` | 提供者或回呼失敗 |
 | `external_login_denied` | 使用者在提供者那邊拒絕 |
 | `external_login_NoEmail` | 身分沒有可用的 email |
-| `external_login_EmailNotVerified` | email 未驗證，且設了 `Oidc:RequireEmailVerified` |
-| `external_login_DomainNotAllowed` | email 網域不在 `Oidc:AllowedEmailDomains` |
-| `external_login_TenantNotAllowed` | tenant 不是 `Oidc:AllowedTenantId` |
+| `external_login_EmailNotVerified` | email 未驗證，且該提供者設了 `RequireEmailVerified` |
+| `external_login_DomainNotAllowed` | email 網域不在該提供者的 `AllowedEmailDomains` |
+| `external_login_TenantNotAllowed` | tenant 不是該提供者的 `AllowedTenantId` |
 | `external_login_Inactive` | 對應到的本機帳號已停用 |
 
-其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc` 接受 `returnUrl`，會先淨化成站內
+其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`，會先淨化成站內
 路徑才拿去挑戰，留空則退回 `Oidc:ReturnUrlDefault`。
 
 ## 接下來

@@ -2,10 +2,71 @@
 
 ## 0.13.0
 
+::: danger 破壞性變更
+- `appsettings.json` 的 `Oidc` 區段換了新的結構：共用的 `Oidc:ReturnUrlDefault`，加上每個身分提供者
+  各一筆 `Oidc:Providers:{id}`（id 為小寫字母、數字、連字號）。每個提供者的鍵是 `Enabled`、
+  `DisplayName`、`Icon`、`Order`、`Authority`、`ClientId`、`ClientSecret`、`CallbackPath`、`Scopes`、
+  `Prompt`、`RequireEmailVerified`、`AllowedTenantId`、`AllowedEmailDomains`。請把原本的設定移到某個
+  提供者 id 底下，密鑰的環境變數也照樣改名（`Oidc__ClientSecret` 變成
+  `Oidc__Providers__microsoft__ClientSecret`；user-secrets 或 `appsettings.Development.json` 裡的
+  `Oidc:ClientSecret` 變成 `Oidc:Providers:microsoft:ClientSecret`）。
+  直接放在 `Oidc` 底下的舊平面鍵會被忽略，啟動時會用一則警告列出找到的鍵。
+  改之前：
+
+  ```json
+  "Oidc": {
+    "Enabled": true,
+    "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+    "ClientId": "<client-id>",
+    "AllowedTenantId": "<tenant-id>"
+  }
+  ```
+
+  改之後：
+
+  ```json
+  "Oidc": {
+    "Providers": {
+      "microsoft": {
+        "Enabled": true,
+        "DisplayName": "Microsoft 365",
+        "Icon": "microsoft",
+        "Authority": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+        "ClientId": "<client-id>",
+        "CallbackPath": "/signin-oidc",
+        "AllowedTenantId": "<tenant-id>"
+      }
+    }
+  }
+  ```
+- 針對編譯依賴它們的 fork，程式碼層級的更名：`appConfigStore.oidcEnabled` 改為 `oidcProviders`；
+  `AuthSchemes.Oidc` 改為 `AuthSchemes.OidcFor(id)`，scheme 名稱成為 `oidc-{id}`；`OidcOptions` 的平面屬性
+  移到 `OidcOptions.Providers` 底下的 `OidcProviderOptions`；`OidcWiring.ResolveLocalPrincipalAsync`
+  多了 `providerId` 參數。
+- `GET /api/auth/login/oidc` 改為 `GET /api/auth/login/oidc/{provider}`，提供者不存在或已停用時回 `404`。
+- `GET /api/config` 不再回傳 `oidcEnabled`，改回傳 `oidcProviders`，是依按鈕順序排列的
+  `{ id, displayName, icon }` 陣列。
+- 預設回呼路徑改成每個提供者各一條：`/signin-oidc-{id}`，不再是 `/signin-oidc`。隨附的 `microsoft` 項目把
+  `CallbackPath` 設成 `/signin-oidc`，所以已登記的 Entra 重新導向網址照常可用；隨附的 `google` 項目用
+  `/signin-oidc-google`。沒設 `CallbackPath` 的提供者項目用 `/signin-oidc-{id}`，請到身分提供者那邊登記這個
+  重新導向網址，或把 `CallbackPath` 設成已登記的路徑。每個提供者要有自己的路徑。每個提供者另有自己的登出路徑，
+  `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`；有用登出回呼的話要重新登記。API 前面的反向代理
+  必須轉發這些路徑；後台映像的 nginx 與 Vite 開發伺服器已經會轉發。
+- 啟用中、`Authority` 為 Google（`https://accounts.google.com`）的提供者，必須設定非空的
+  `Oidc:Providers:{id}:AllowedEmailDomains`，否則啟動失敗，錯誤訊息會點名這個鍵。Google 沒有 tenant 可釘，
+  沒有網域的話，任何 Google 帳號都能登入並得到一個新帳號。
+:::
+
 ### 新增
 
+- 可以同時有多個登入提供者。登入頁為每個啟用的提供者顯示一顆按鈕，依 `Order`、再依 id 排序，每顆按鈕
+  啟動該提供者自己的登入。
+- Google 預設項目：`appsettings.json` 隨附一筆停用的 `google`，`Authority` 為
+  `https://accounts.google.com`，並已打開 `RequireEmailVerified`。
+- 位於 `frontend/src/lib/ssoIcons.ts` 的 SSO 圖示登錄表。提供者的 `Icon` 代號決定顯示哪個圖示
+  （內建 `microsoft` 與 `google`，其他一律顯示鑰匙圖示），fork 改這個檔案就能加上自己的圖示。
 - 登入後，管理介面會回到原本要開的頁面。未登入時開啟深層連結，或工作到一半工作階段結束，重新登入
-  （密碼或 Microsoft 365）後都會回到那一頁；只接受同源路徑，其他一律退回儀表板。
+  （密碼或外部提供者）後都會回到那一頁；只接受同源路徑，其他一律退回儀表板。
 
 ### 修正
 

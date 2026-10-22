@@ -11,6 +11,11 @@ namespace Struo.Api.Auth;
 /// </summary>
 public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<OidcOptions> oidc)
 {
+    // OIDC options are startup-bound, so the callback paths are computed once.
+    private readonly HashSet<string> _callbackPaths = new(
+        oidc.Value.EnabledProviders().Select(p => p.Options.EffectiveCallbackPath(p.Id).TrimEnd('/')),
+        StringComparer.OrdinalIgnoreCase);
+
     public const string LoginPath = "/api/auth/login";
 
     public Task InvokeAsync(HttpContext context)
@@ -24,9 +29,7 @@ public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<Oid
         var path = (request.Path.Value ?? "").TrimEnd('/');
         if (HttpMethods.IsPost(request.Method) && path.Equals(LoginPath, StringComparison.OrdinalIgnoreCase))
             return true;
-        var o = oidc.Value;
-        return o.Enabled && !string.IsNullOrEmpty(o.CallbackPath)
-            && path.Equals(o.CallbackPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+        return _callbackPaths.Contains(path);
     }
 
     private static void HidePresentedCookie(HttpRequest request, HttpContext context)

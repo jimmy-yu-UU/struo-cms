@@ -11,6 +11,7 @@ import { useAppConfigStore } from '../stores/appConfigStore'
 import { apiBaseUrl, ApiError } from '../api/apiClient'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import { encodeRedirectParam, safeRedirect } from '@/lib/safeRedirect'
+import { resolveSsoIcon } from '@/lib/ssoIcons'
 import BrandMark from '../components/shell/BrandMark.vue'
 
 const email = ref('')
@@ -24,7 +25,7 @@ const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 const appConfig = useAppConfigStore()
-const { brandName, oidcEnabled } = storeToRefs(appConfig)
+const { brandName, oidcProviders } = storeToRefs(appConfig)
 
 // Read once: clearing the notice params below rewrites the query, and sign-in must still return here.
 const redirectTarget = safeRedirect(route.query.redirect)
@@ -100,8 +101,8 @@ onMounted(() => {
   router.replace(redirectTarget ? { name: 'login', query: { redirect: redirectTarget } } : { name: 'login' })
 })
 
-function onSso() {
-  window.location.href = `${apiBaseUrl}/auth/login/oidc?returnUrl=${encodeRedirectParam(redirectTarget ?? '/')}`
+function onSso(providerId: string) {
+  window.location.href = `${apiBaseUrl}/auth/login/oidc/${encodeURIComponent(providerId)}?returnUrl=${encodeRedirectParam(redirectTarget ?? '/')}`
 }
 </script>
 
@@ -146,23 +147,23 @@ function onSso() {
         <output v-if="notice" class="notice block text-muted-foreground">{{ notice }}</output>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-        <template v-if="oidcEnabled">
+        <template v-if="oidcProviders.length > 0">
           <div class="divider text-muted-foreground" role="separator" :aria-label="t('login.or')">{{ t('login.or') }}</div>
-          <Button
-            type="button"
-            variant="secondary"
-            class="sso-btn w-full"
-            data-test="sso"
-            @click="onSso"
-          >
-            <svg width="17" height="17" viewBox="0 0 21 21" aria-hidden="true">
-              <rect width="10" height="10" fill="#f25022" />
-              <rect x="11" width="10" height="10" fill="#7fba00" />
-              <rect y="11" width="10" height="10" fill="#00a4ef" />
-              <rect x="11" y="11" width="10" height="10" fill="#ffb900" />
-            </svg>
-            <span>{{ t('login.ssoMicrosoft') }}</span>
-          </Button>
+          <div class="grid gap-2">
+            <Button
+              v-for="provider in oidcProviders"
+              :key="provider.id"
+              type="button"
+              variant="secondary"
+              class="sso-btn w-full"
+              data-test="sso"
+              :data-provider="provider.id"
+              @click="onSso(provider.id)"
+            >
+              <component :is="resolveSsoIcon(provider.icon)" class="size-[17px]" />
+              <span>{{ t('login.ssoProvider', { name: provider.displayName }) }}</span>
+            </Button>
+          </div>
         </template>
       </form>
     </div>

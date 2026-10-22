@@ -7,7 +7,12 @@ public static class AuthSchemes
     public const string Cookie = "Cookies";
     public const string Bearer = "Bearer";
     public const string CookieOrBearer = "Cookies,Bearer";
-    public const string Oidc = "oidc";
+
+    /// <summary>Prefix of the per-provider OpenIdConnect scheme names; see <see cref="OidcFor"/>.</summary>
+    public const string OidcPrefix = "oidc-";
+
+    /// <summary>The OpenIdConnect scheme name of the provider configured under <c>Oidc:Providers:{id}</c>.</summary>
+    public static string OidcFor(string providerId) => OidcPrefix + providerId;
 
     /// <summary>Forwarding policy scheme registered as the DEFAULT: it forwards to
     /// <see cref="Bearer"/> when the request carries an <c>Authorization: Bearer …</c> header and to

@@ -112,13 +112,13 @@ public sealed class AuthController(
     }
 
     [AllowAnonymous]
-    [HttpGet("login/oidc")]
-    public IActionResult LoginOidc([FromQuery] string? returnUrl, [FromServices] IOptions<OidcOptions> oidc)
+    [HttpGet("login/oidc/{provider}")]
+    public IActionResult LoginOidc(string provider, [FromQuery] string? returnUrl, [FromServices] IOptions<OidcOptions> oidc)
     {
-        if (!oidc.Value.Enabled)
+        if (!oidc.Value.TryGetEnabled(provider, out _))
             return NotFound();
 
         var target = Struo.Api.Auth.LocalRedirect.Sanitize(returnUrl, oidc.Value.ReturnUrlDefault);
-        return Challenge(new AuthenticationProperties { RedirectUri = target }, AuthSchemes.Oidc);
+        return Challenge(new AuthenticationProperties { RedirectUri = target }, AuthSchemes.OidcFor(provider));
     }
 }

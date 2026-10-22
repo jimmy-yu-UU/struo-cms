@@ -214,8 +214,9 @@ same server.
 
 The dev server forwards `/api` to `http://localhost:5221`, so the browser sees the admin SPA and the
 API as the same origin — the development environment needs no separate CORS configuration. It
-also forwards the OIDC callbacks `/signin-oidc` and `/signout-callback-oidc`; to try external login,
-register `http://localhost:5173/signin-oidc` with your provider ([Chapter 16](16-authentication.md)).
+also forwards the OIDC callback and sign-out paths of every provider; to try external login,
+register `http://localhost:5173` plus the provider's callback path with it: `http://localhost:5173/signin-oidc`
+for Entra and `http://localhost:5173/signin-oidc-google` for Google ([Chapter 16](16-authentication.md)).
 
 ### 6. First login
 

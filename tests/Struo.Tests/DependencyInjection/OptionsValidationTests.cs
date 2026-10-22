@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
+using Struo.Application.Security;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Tests.Support;
 using Xunit;
@@ -40,7 +41,7 @@ public sealed class OptionsValidationTests
                 ["Database:ConnectionString"] = db.ConnectionString,
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = filesRoot,
-                ["Oidc:Enabled"] = "false",
+                ["Oidc:Providers:acme:Enabled"] = "false",
                 // Query left at its defaults (all valid) unless mutated.
             };
             mutate?.Invoke(settings);
@@ -105,52 +106,182 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("MaxLimit");
     }
 
-    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
-    public async Task Oidc_enabled_without_client_id_fails_startup()
+    // A valid enabled provider; `mutate` breaks one key. Providers are keyed by id under Oidc:Providers.
+    private static void ValidProvider(Dictionary<string, string?> s, string id = "acme")
     {
-        var error = await StartupErrorAsync(s =>
-        {
-            s["Oidc:Enabled"] = "true";
-            s["Oidc:Authority"] = "https://login.example.com/tenant/v2.0";
-            s["Oidc:ClientId"] = "";
-            s["Oidc:ClientSecret"] = "test-secret";
-        });
+        var p = $"Oidc:Providers:{id}:";
+        s[p + "Enabled"] = "true";
+        s[p + "DisplayName"] = "Acme";
+        s[p + "Authority"] = "https://login.example.com/tenant/v2.0";
+        s[p + "ClientId"] = "client";
+        s[p + "ClientSecret"] = "test-secret";
+    }
+
+    private static async Task<string> OidcFailureTextAsync(Action<Dictionary<string, string?>> mutate)
+    {
+        var error = await StartupErrorAsync(mutate);
         var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
-        ove.Should().NotBeNull("OIDC enabled without ClientId must fail fast at startup");
-        string.Join(" ", ove!.Failures).Should().Contain("Oidc");
+        ove.Should().NotBeNull("the Oidc configuration must fail fast at startup");
+        return string.Join(" ", ove!.Failures);
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_valid_enabled_provider_starts()
+    {
+        var error = await StartupErrorAsync(s => ValidProvider(s));
+        error.Should().BeNull();
+    }
+
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
+    [InlineData("ClientId")]
+    [InlineData("ClientSecret")]
+    [InlineData("Authority")]
+    [InlineData("DisplayName")]
+    public async Task Oidc_enabled_provider_missing_a_required_field_fails_startup(string field)
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s);
+            s[$"Oidc:Providers:acme:{field}"] = "";
+        });
+        text.Should().Contain("Oidc:Providers:acme").And.Contain(field);
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_disabled_provider_is_not_validated()
+    {
+        var error = await StartupErrorAsync(s => s["Oidc:Providers:acme:ClientId"] = "");
+        error.Should().BeNull();
+    }
+
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
+    [InlineData("Beta")]
+    [InlineData("a b")]
+    [InlineData("a_b")]
+    [InlineData("abc\n")]
+    public async Task Oidc_provider_id_must_be_lowercase_letters_digits_and_hyphens(string id)
+    {
+        var text = await OidcFailureTextAsync(s => ValidProvider(s, id));
+        text.Should().Contain("lowercase letters, digits and hyphens").And.Contain($"'{id}'");
+        text.Should().NotContain(OidcOptions.ProviderIdPattern);
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_providers_must_not_share_a_callback_path()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "one");
+            ValidProvider(s, "two");
+            s["Oidc:Providers:one:CallbackPath"] = "/signin-shared";
+            s["Oidc:Providers:two:CallbackPath"] = "/Signin-Shared/";
+        });
+        text.Should().Contain("/signin-shared").And.Contain("one").And.Contain("two");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_callback_path_must_not_equal_another_providers_sign_out_path()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "one");
+            ValidProvider(s, "two");
+            s["Oidc:Providers:one:CallbackPath"] = "/signout-callback-oidc-two";
+        });
+        text.Should().Contain("/signout-callback-oidc-two").And.Contain("one").And.Contain("two");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_two_providers_with_default_callback_paths_start()
+    {
+        var error = await StartupErrorAsync(s => { ValidProvider(s, "one"); ValidProvider(s, "two"); });
+        error.Should().BeNull();
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_callback_path_must_start_with_a_slash()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s);
+            s["Oidc:Providers:acme:CallbackPath"] = "signin";
+        });
+        text.Should().Contain("Oidc:Providers:acme:CallbackPath");
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Oidc_unpinned_multi_tenant_authority_fails_startup()
     {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s);
+            s["Oidc:Providers:acme:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:acme:AllowedTenantId"] = "";
+        });
+        text.Should().Contain("Oidc:Providers:acme:AllowedTenantId")
+            .And.Contain("Oidc:Providers:acme:AllowedEmailDomains");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_without_allowed_email_domains_fails_startup()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "google");
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com/";
+        });
+        text.Should().Contain("Oidc:Providers:google:AllowedEmailDomains").And.Contain("Google");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_with_the_shipped_placeholders_fails_clearly()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            s["Oidc:Providers:google:Enabled"] = "true";
+            s["Oidc:Providers:google:DisplayName"] = "Google";
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com";
+            s["Oidc:Providers:google:ClientId"] = "REPLACE_ME";
+            s["Oidc:Providers:google:ClientSecret"] = "x";
+        });
+        text.Should().Contain("Oidc:Providers:google:AllowedEmailDomains");
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_enabled_google_with_an_email_domain_starts()
+    {
         var error = await StartupErrorAsync(s =>
         {
-            s["Oidc:Enabled"] = "true";
-            s["Oidc:Authority"] = "https://login.microsoftonline.com/common/v2.0";
-            s["Oidc:AllowedTenantId"] = "";
-            s["Oidc:ClientId"] = "client";
-            s["Oidc:ClientSecret"] = "test-secret";
+            ValidProvider(s, "google");
+            s["Oidc:Providers:google:Authority"] = "https://accounts.google.com";
+            s["Oidc:Providers:google:AllowedEmailDomains:0"] = "corp.com";
         });
-        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
-        ove.Should().NotBeNull();
-        var text = string.Join(" ", ove!.Failures);
-        text.Should().Contain("Oidc:AllowedTenantId").And.Contain("Oidc:AllowedEmailDomains");
+        ExceptionChainSearch.FindInner<OptionsValidationException>(error).Should().BeNull();
+    }
+
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Oidc_multi_tenant_pin_on_one_provider_does_not_cover_another()
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            ValidProvider(s, "pinned");
+            ValidProvider(s, "loose");
+            s["Oidc:Providers:pinned:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:loose:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:pinned:AllowedTenantId"] = "tenant-1";
+        });
+        text.Should().Contain("Oidc:Providers:loose").And.NotContain("Oidc:Providers:pinned:Allowed");
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Oidc_invalid_prompt_fails_startup()
     {
-        var error = await StartupErrorAsync(s =>
+        var text = await OidcFailureTextAsync(s =>
         {
-            s["Oidc:Enabled"] = "true";
-            s["Oidc:Authority"] = "https://login.microsoftonline.com/tenant-1/v2.0";
-            s["Oidc:ClientId"] = "client";
-            s["Oidc:ClientSecret"] = "test-secret";
-            s["Oidc:Prompt"] = "pick_one";
+            ValidProvider(s);
+            s["Oidc:Providers:acme:Prompt"] = "pick_one";
         });
-        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
-        ove.Should().NotBeNull();
-        string.Join(" ", ove!.Failures).Should().Contain("Oidc:Prompt");
+        text.Should().Contain("Oidc:Providers:acme:Prompt");
     }
 
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
@@ -158,11 +289,9 @@ public sealed class OptionsValidationTests
     {
         var error = await StartupErrorAsync(s =>
         {
-            s["Oidc:Enabled"] = "true";
-            s["Oidc:Authority"] = "https://login.microsoftonline.com/common/v2.0";
-            s["Oidc:ClientId"] = "client";
-            s["Oidc:ClientSecret"] = "test-secret";
-            s["Oidc:AllowedEmailDomains:0"] = "corp.com";
+            ValidProvider(s);
+            s["Oidc:Providers:acme:Authority"] = "https://login.microsoftonline.com/common/v2.0";
+            s["Oidc:Providers:acme:AllowedEmailDomains:0"] = "corp.com";
         });
         ExceptionChainSearch.FindInner<OptionsValidationException>(error).Should().BeNull();
     }

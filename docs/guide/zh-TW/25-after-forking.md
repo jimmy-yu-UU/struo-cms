@@ -102,3 +102,19 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 後台 nginx 容器：API 看到的客戶端是那個容器，所以要列容器的位址（或專用網路的範圍），而不是你外層的
 代理。外層代理多出來的是第二跳，API 不會採信。細節與外層代理要設的標頭見
 [第 20 章：部署](20-deployment.md)的〈反向代理後面要啟用 `ForwardedHeaders`〉那一節。
+
+## 10. 單一登入提供者：加上你的提供者並登記重新導向網址
+
+範本在 `src/Struo.Api/appsettings.json` 的 `Oidc:Providers` 底下，隨附 `microsoft` 與 `google` 兩筆停用
+的項目。用得到的留著，用不到的刪掉，使用者會用到的其他 OpenID Connect 提供者，每個再加一筆。每一筆都要
+有自己的 id、`DisplayName`、`Authority`、`ClientId` 與 `ClientSecret`；密鑰用
+`Oidc__Providers__<id>__ClientSecret` 這類環境變數提供，絕不寫進提交的檔案。
+
+提供者的按鈕會顯示 `Icon` 指名的圖示，內建的代號是 `microsoft` 與 `google`。要用別的品牌，就在
+`frontend/src/lib/ssoIcons.ts` 的 `ICONS` 表加一筆 SVG，把它的名稱設成該項目的 `Icon`，再重新建置後台。
+沒有對應的項目時，按鈕顯示通用的鑰匙圖示。
+
+到每個提供者的主控台登記重新導向網址：你的正式環境來源加上該提供者的回呼路徑，就是它的 `CallbackPath`，項目沒設時
+是 `/signin-oidc-<id>`。測試環境的來源同樣要登記，開發時再登記 `http://localhost:5173` 加上同一條路徑。
+`/api/` 之外的自訂 `CallbackPath`，還要在 `frontend/nginx/default.conf.template` 加一個 `location` 區塊，開發伺服器則要在 `frontend/vite.proxy.ts` 加一筆。
+各提供者的設定步驟見[第 16 章：認證與 SSO](16-authentication.md)。

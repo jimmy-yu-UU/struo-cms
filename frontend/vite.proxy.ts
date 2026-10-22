@@ -13,6 +13,7 @@ const agent = new http.Agent({ keepAlive: true })
 // browser back to the dev origin, where the callback paths are proxied too.
 export const devProxy: Record<string, ProxyOptions> = {
   '/api': { target: API_TARGET, agent },
-  '/signin-oidc': { target: API_TARGET, agent },
-  '/signout-callback-oidc': { target: API_TARGET, agent },
+  // A key starting with `^` is a regex: the per-provider paths /signin-oidc-{id},
+  // /signout-callback-oidc-{id} and /signout-oidc-{id}, plus the bare forms, with or without a query string.
+  '^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?(?:[?]|$)': { target: API_TARGET, agent },
 }

@@ -15,6 +15,11 @@ const { push, replace, route } = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: () => route }))
 
 const BACKSLASH = String.fromCharCode(92)
+const MS = { id: 'microsoft', displayName: 'Microsoft 365', icon: 'microsoft' }
+const GOOGLE = { id: 'google', displayName: 'Google', icon: 'google' }
+const setProviders = (...p: { id: string; displayName: string; icon: string | null }[]) => {
+  useAppConfigStore().oidcProviders = p
+}
 const mountLogin = () => mount(LoginView, { global: { plugins: [i18n] } })
 
 describe('LoginView', () => {
@@ -163,13 +168,14 @@ describe('LoginView', () => {
   })
 
   it('hides the SSO button when oidc is disabled', () => {
-    useAppConfigStore().oidcEnabled = false
+    setProviders()
     const wrapper = mountLogin()
     expect(wrapper.find('[data-test="sso"]').exists()).toBe(false)
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false)
   })
 
   it('shows the SSO button and navigates on click when oidc is enabled', async () => {
-    useAppConfigStore().oidcEnabled = true
+    setProviders(MS)
     const original = window.location
     Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
     try {
@@ -177,7 +183,56 @@ describe('LoginView', () => {
       const sso = wrapper.find('[data-test="sso"]')
       expect(sso.exists()).toBe(true)
       await sso.trigger('click')
-      expect(window.location.href).toBe('/api/auth/login/oidc?returnUrl=/')
+      expect(window.location.href).toBe('/api/auth/login/oidc/microsoft?returnUrl=/')
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
+  it('renders one stacked button per provider in config order with localized text', () => {
+    setProviders(GOOGLE, MS)
+    const w = mountLogin()
+    const btns = w.findAll('[data-test="sso"]')
+    expect(btns.map((b) => b.attributes('data-provider'))).toEqual(['google', 'microsoft'])
+    expect(btns.map((b) => b.text())).toEqual(['使用 Google 登入', '使用 Microsoft 365 登入'])
+    expect(btns.every((b) => b.classes().includes('w-full'))).toBe(true)
+    expect(btns[0].element.parentElement).toBe(btns[1].element.parentElement)
+    expect(btns[0].element.parentElement!.classList.contains('grid')).toBe(true)
+  })
+
+  it('uses the English template when the locale is en', () => {
+    i18n.global.locale.value = 'en'
+    setProviders(MS)
+    expect(mountLogin().find('[data-test="sso"]').text()).toBe('Sign in with Microsoft 365')
+  })
+
+  it('draws each provider icon from the registry and falls back for an unknown one', () => {
+    setProviders(MS, GOOGLE, { id: 'acme', displayName: 'Acme', icon: 'acme-logo' }, { id: 'bare', displayName: 'Bare', icon: '' })
+    const btns = mountLogin().findAll('[data-test="sso"]')
+    expect(btns.every((b) => b.find('svg').attributes('aria-hidden') === 'true')).toBe(true)
+    expect(btns[0].findAll('rect')).toHaveLength(4)
+    expect(btns[1].findAll('path')).toHaveLength(4)
+    expect(btns[2].find('svg').classes()).toContain('lucide-key-round')
+    expect(btns[3].find('svg').classes()).toContain('lucide-key-round')
+  })
+
+  it('falls back to the key icon when the API sends a null icon', () => {
+    setProviders({ id: 'bare', displayName: 'Bare', icon: null })
+    const btn = mountLogin().find('[data-test="sso"]')
+    expect(btn.find('svg').classes()).toContain('lucide-key-round')
+  })
+
+  it('sends each button to its own provider with the same validated returnUrl', async () => {
+    setProviders(MS, GOOGLE)
+    route.query = { redirect: '/collections/article?page=2' }
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    try {
+      const btns = mountLogin().findAll('[data-test="sso"]')
+      await btns[1].trigger('click')
+      expect(window.location.href).toBe('/api/auth/login/oidc/google?returnUrl=/collections/article%3Fpage%3D2')
+      await btns[0].trigger('click')
+      expect(window.location.href).toBe('/api/auth/login/oidc/microsoft?returnUrl=/collections/article%3Fpage%3D2')
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: original })
     }
@@ -196,11 +251,11 @@ describe('LoginView', () => {
     expect(w.findAll('[data-slot="button"]')).toHaveLength(2)
   })
 
-  it('renders three data-slot="button" hooks when the SSO button also mounts', () => {
-    useAppConfigStore().oidcEnabled = true
+  it('renders one data-slot="button" hook per SSO provider on top of the two base ones', () => {
+    setProviders(MS, GOOGLE)
     const w = mountLogin()
-    // submit + SSO + the PasswordInput toggle.
-    expect(w.findAll('[data-slot="button"]')).toHaveLength(3)
+    // submit + two SSO + the PasswordInput toggle.
+    expect(w.findAll('[data-slot="button"]')).toHaveLength(4)
   })
 
   it('keeps the label associations and forwards id/autocomplete/required through PasswordInput', () => {
@@ -230,7 +285,7 @@ describe('LoginView', () => {
   })
 
   it('types every in-form button so only the submit button submits', () => {
-    useAppConfigStore().oidcEnabled = true
+    setProviders(MS)
     const w = mountLogin()
     const types = w.findAll('form button').map((b) => b.attributes('type'))
     // ui/button injects no type and a bare <button> defaults to type="submit"; exactly one control
@@ -286,28 +341,28 @@ describe('LoginView', () => {
   )
 
   it('passes the validated redirect to SSO as an encoded returnUrl', async () => {
-    useAppConfigStore().oidcEnabled = true
+    setProviders(MS)
     route.query = { redirect: '/collections/article?page=2&q=a' }
     const original = window.location
     Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
     try {
       const wrapper = mountLogin()
       await wrapper.find('[data-test="sso"]').trigger('click')
-      expect(window.location.href).toBe('/api/auth/login/oidc?returnUrl=/collections/article%3Fpage%3D2%26q%3Da')
+      expect(window.location.href).toBe('/api/auth/login/oidc/microsoft?returnUrl=/collections/article%3Fpage%3D2%26q%3Da')
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: original })
     }
   })
 
   it('passes returnUrl=/ to SSO when the redirect is unsafe', async () => {
-    useAppConfigStore().oidcEnabled = true
+    setProviders(MS)
     route.query = { redirect: '//evil.example' }
     const original = window.location
     Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
     try {
       const wrapper = mountLogin()
       await wrapper.find('[data-test="sso"]').trigger('click')
-      expect(window.location.href).toBe('/api/auth/login/oidc?returnUrl=/')
+      expect(window.location.href).toBe('/api/auth/login/oidc/microsoft?returnUrl=/')
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: original })
     }

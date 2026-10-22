@@ -13,7 +13,7 @@ namespace Struo.Tests.Api;
 public class OidcFailureRedirectTests
 {
     private static readonly AuthenticationScheme Scheme =
-        new(AuthSchemes.Oidc, AuthSchemes.Oidc, typeof(OpenIdConnectHandler));
+        new(AuthSchemes.OidcFor("acme"), AuthSchemes.OidcFor("acme"), typeof(OpenIdConnectHandler));
 
     private static async Task<(int Status, string? Location, bool Handled)> RemoteFailureAsync(Exception failure)
     {
