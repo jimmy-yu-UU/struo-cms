@@ -64,6 +64,75 @@ public sealed class SqlServerIsolationCheckTests
             .And.Contain("ALTER DATABASE").And.Contain($"[{database.Name}]");
     }
 
+    [Fact]
+    public async Task Setting_on_logs_nothing()
+    {
+        var logger = new ListLogger();
+
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            StruoDbType.SqlServer, () => Task.FromResult<SqlServerIsolationCheck.SnapshotSetting?>(new(true, "app")), logger);
+
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Setting_off_logs_one_warning_naming_the_database_and_the_statement()
+    {
+        var logger = new ListLogger();
+
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            StruoDbType.SqlServer, () => Task.FromResult<SqlServerIsolationCheck.SnapshotSetting?>(new(false, "my]db")), logger);
+
+        var entry = logger.Entries.Should().ContainSingle().Which;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("READ_COMMITTED_SNAPSHOT").And.Contain("deadlock")
+            .And.Contain("ALTER DATABASE [my]]db] SET READ_COMMITTED_SNAPSHOT ON");
+    }
+
+    [Fact]
+    public async Task No_catalog_row_logs_nothing()
+    {
+        var logger = new ListLogger();
+
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            StruoDbType.SqlServer, () => Task.FromResult<SqlServerIsolationCheck.SnapshotSetting?>(null), logger);
+
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_failing_read_logs_one_warning_without_connection_details_and_does_not_throw()
+    {
+        var logger = new ListLogger();
+
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            StruoDbType.SqlServer,
+            () => throw new InvalidOperationException("Server=secret;Password=hunter2"),
+            logger);
+
+        var entry = logger.Entries.Should().ContainSingle().Which;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("READ_COMMITTED_SNAPSHOT")
+            .And.NotContain("Server=").And.NotContain("Password");
+    }
+
+    [Theory]
+    [InlineData(StruoDbType.PostgreSQL)]
+    [InlineData(StruoDbType.MySql)]
+    [InlineData(StruoDbType.Sqlite)]
+    [InlineData(StruoDbType.Oracle)]
+    public async Task Other_backends_never_invoke_the_read(StruoDbType dbType)
+    {
+        var invoked = false;
+        var logger = new ListLogger();
+
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            dbType, () => { invoked = true; return Task.FromResult<SqlServerIsolationCheck.SnapshotSetting?>(null); }, logger);
+
+        invoked.Should().BeFalse();
+        logger.Entries.Should().BeEmpty();
+    }
+
     private static bool TryResolve(out TestBackendKind kind)
     {
         var live = LiveBackend.Get("SqlServer");
