@@ -121,6 +121,7 @@ public sealed class ItemWriteSideSync(
             tm.Fields,
             parentId,
             perLocale,
+            isCreate,
             ct);
     }
 

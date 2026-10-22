@@ -10,10 +10,10 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, bool, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
-             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(bool), typeof(CancellationToken)]);
 
     public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
@@ -65,10 +65,11 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        bool isCreate,
         CancellationToken ct = default)
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, isCreate, ct);
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
@@ -78,6 +79,7 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        bool isCreate,
         CancellationToken ct) where T : class, new()
     {
         if (perLocale.Count == 0) return;
@@ -128,8 +130,13 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
 
         await transactions.InTransactionAsync(async () =>
         {
-            foreach (var del in deletes)
-                await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
+            // A create inserts under a parent id that is new in this transaction, so there is nothing
+            // to delete; the delete would only take next-key locks that deadlock concurrent creates on InnoDB.
+            if (!isCreate)
+            {
+                foreach (var del in deletes)
+                    await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
+            }
             await db.Insertable(inserts).ExecuteCommandAsync(ct);
         }, ct);
     }

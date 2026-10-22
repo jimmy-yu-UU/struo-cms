@@ -126,8 +126,9 @@ public interface IItemRepository
     /// (locale → camelField → value), deletes the existing row for that
     /// <c>(parentId, locale)</c> and inserts a fresh one with <paramref name="fieldProperties"/>
     /// (CLR property names) set from the provided values. Locales not present in
-    /// <paramref name="perLocale"/> are left untouched (partial updates supported). The whole
-    /// operation is transaction-wrapped.
+    /// <paramref name="perLocale"/> are left untouched (partial updates supported). When
+    /// <paramref name="isCreate"/> is true the parent row was just inserted, so the delete is skipped
+    /// and the rows are only inserted. The whole operation is transaction-wrapped.
     /// </summary>
     Task SyncTranslationsAsync(
         Type translationType,
@@ -136,6 +137,7 @@ public interface IItemRepository
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        bool isCreate,
         CancellationToken ct = default);
 
     // ── Purge referential-integrity primitives ─────────────
