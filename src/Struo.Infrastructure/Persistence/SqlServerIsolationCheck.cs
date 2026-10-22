@@ -12,7 +12,7 @@ namespace Struo.Infrastructure.Persistence;
 /// </summary>
 public static class SqlServerIsolationCheck
 {
-    public static void WarnIfSnapshotIsolationIsOff(ISqlSugarClient db, StruoDbType dbType, ILogger logger)
+    public static async Task WarnIfSnapshotIsolationIsOffAsync(ISqlSugarClient db, StruoDbType dbType, ILogger logger)
     {
         if (dbType != StruoDbType.SqlServer) return;
 
@@ -21,7 +21,7 @@ public static class SqlServerIsolationCheck
         {
             // The one raw-SQL read in the application: SqlSugar has no typed API for the catalog flag.
             // Approved exception: docs/ai/decisions/sqlserver-requires-read-committed-snapshot.md.
-            result = db.Ado.GetDataTable(
+            result = await db.Ado.GetDataTableAsync(
                 "SELECT is_read_committed_snapshot_on, DB_NAME() AS name FROM sys.databases WHERE name = DB_NAME()");
         }
         catch (Exception ex)

@@ -20,7 +20,7 @@ public sealed class SqlServerIsolationCheckTests
     [InlineData(StruoDbType.MySql)]
     [InlineData(StruoDbType.Sqlite)]
     [InlineData(StruoDbType.Oracle)]
-    public void Other_backends_run_no_query_and_log_nothing(StruoDbType dbType)
+    public async Task Other_backends_run_no_query_and_log_nothing(StruoDbType dbType)
     {
         using var file = TestBackend.CreateSqliteDatabase();
         var client = SqlSugarClientFactory.Create(file.Options(), new TestCurrentUserAccessor(Guid.Empty));
@@ -28,27 +28,27 @@ public sealed class SqlServerIsolationCheckTests
         client.Aop.OnLogExecuting = (_, _) => statements++;
         var logger = new ListLogger();
 
-        SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOff(client, dbType, logger);
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(client, dbType, logger);
 
         statements.Should().Be(0);
         logger.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void A_database_with_snapshot_isolation_on_logs_nothing()
+    public async Task A_database_with_snapshot_isolation_on_logs_nothing()
     {
         if (!TryResolve(out var kind)) return;
         using var database = TestBackend.CreateLiveDatabase(kind, "rcsion");
         using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString);
         var logger = new ListLogger();
 
-        SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOff(client, StruoDbType.SqlServer, logger);
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(client, StruoDbType.SqlServer, logger);
 
         logger.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void A_database_with_snapshot_isolation_off_logs_one_warning_with_the_remedy()
+    public async Task A_database_with_snapshot_isolation_off_logs_one_warning_with_the_remedy()
     {
         if (!TryResolve(out var kind)) return;
         using var database = TestBackend.CreateLiveDatabase(kind, "rcsioff");
@@ -56,7 +56,7 @@ public sealed class SqlServerIsolationCheckTests
         using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString);
         var logger = new ListLogger();
 
-        SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOff(client, StruoDbType.SqlServer, logger);
+        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(client, StruoDbType.SqlServer, logger);
 
         var entry = logger.Entries.Should().ContainSingle().Which;
         entry.Level.Should().Be(LogLevel.Warning);

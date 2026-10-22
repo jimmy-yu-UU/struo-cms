@@ -123,13 +123,15 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             // inserts a row for a locale that has none. It issues no DELETE: a delete that matches
             // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
             // updates of different items on InnoDB. The existing rows come from a plain consistent read.
+            // Two concurrent updates of the same item are kept apart by the parent's version check
+            // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
             var existing = await LoadExistingAsync<T>(fkColumn, parentId, ct);
             var pk = PrimaryKeyOf(type);
             var updates = new List<T>();
             var inserts = new List<T>();
             foreach (var row in rows)
             {
-                var stored = existing.FirstOrDefault(e => string.Equals(
+                var stored = existing.Find(e => string.Equals(
                     (string?)localeProp.GetValue(e), (string?)localeProp.GetValue(row), StringComparison.OrdinalIgnoreCase));
                 if (stored is null) { inserts.Add(row); continue; }
                 pk.SetValue(row, pk.GetValue(stored));

@@ -54,8 +54,17 @@ public sealed class TranslationSyncDeleteTests : IDisposable
             isCreate);
     }
 
+    private Task SyncManyAsync(Guid articleId, params (string Locale, string Title)[] locales) =>
+        _repo.SyncTranslationsAsync(
+            typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
+            [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)], articleId,
+            locales.ToDictionary(
+                l => l.Locale,
+                l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title }),
+            isCreate: false);
+
     private bool Deleted() =>
-        _sql.Any(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
+        _sql.Exists(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
 
     private Task<List<ArticleTranslation>> RowsAsync(Guid id) =>
         _db.Queryable<ArticleTranslation>().Where(t => t.ArticleId == id).ToListAsync();
@@ -102,5 +111,36 @@ public sealed class TranslationSyncDeleteTests : IDisposable
         rows.Should().HaveCount(2);
         rows.Single(r => r.Locale == "en").Title.Should().Be("First");
         rows.Single(r => r.Locale == "zh-TW").Title.Should().Be("Zwei");
+    }
+
+    [Fact]
+    public async Task One_update_can_replace_an_existing_locale_and_insert_a_new_one()
+    {
+        var id = Guid.CreateVersion7();
+        await SyncAsync(id, "en", "First", null, isCreate: true);
+        var original = (await RowsAsync(id)).Single();
+        _sql.Clear();
+
+        await SyncManyAsync(id, ("en", "Second"), ("zh-TW", "Zwei"));
+
+        Deleted().Should().BeFalse();
+        var rows = await RowsAsync(id);
+        rows.Should().HaveCount(2);
+        rows.Single(r => r.Locale == "en").Id.Should().Be(original.Id);
+        rows.Single(r => r.Locale == "en").Title.Should().Be("Second");
+        rows.Single(r => r.Locale == "zh-TW").Title.Should().Be("Zwei");
+    }
+
+    [Fact]
+    public async Task A_stored_locale_that_differs_only_in_case_is_updated_not_duplicated()
+    {
+        var id = Guid.CreateVersion7();
+        await _db.Insertable(new ArticleTranslation { ArticleId = id, Locale = "EN", Title = "Stored" })
+            .ExecuteCommandAsync();
+
+        await SyncAsync(id, "en", "Changed", null, isCreate: false);
+
+        var row = (await RowsAsync(id)).Should().ContainSingle().Which;
+        row.Title.Should().Be("Changed");
     }
 }

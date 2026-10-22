@@ -338,7 +338,7 @@ try
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
             CancellationToken.None);
 
-        Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOff(
+        await Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }

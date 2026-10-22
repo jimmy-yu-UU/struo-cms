@@ -39,7 +39,15 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
             var r = round;
             await Task.WhenAll(articles.Select((id, worker) => Task.Run(async () =>
             {
-                var body = new { translations = new { en = new { title = $"{marker}-{worker}-{r}" } } };
+                // Round 0 adds a second locale (the insert branch); later rounds update both rows.
+                var body = new
+                {
+                    translations = new Dictionary<string, object>
+                    {
+                        ["en"] = new { title = $"{marker}-{worker}-{r}" },
+                        ["zh-TW"] = new { title = $"{marker}-{worker}-zh-{r}" },
+                    }
+                };
                 using var response = await admin.PutAsJsonAsync($"/api/items/article/{id}", body);
                 if (response.StatusCode != HttpStatusCode.OK)
                     failures.Add($"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
@@ -53,10 +61,14 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         var ids = articles.Select(Guid.Parse).ToList();
         var itemIds = articles.ToList();
         var translations = await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).ToListAsync();
-        translations.Should().HaveCount(Workers);
+        translations.Should().HaveCount(Workers * 2);
         for (var worker = 0; worker < Workers; worker++)
-            translations.Single(t => t.ArticleId == ids[worker]).Title
+        {
+            translations.Single(t => t.ArticleId == ids[worker] && t.Locale == "en").Title
                 .Should().Be($"{marker}-{worker}-{Rounds - 1}");
+            translations.Single(t => t.ArticleId == ids[worker] && t.Locale == "zh-TW").Title
+                .Should().Be($"{marker}-{worker}-zh-{Rounds - 1}");
+        }
         (await db.Queryable<Revision>()
                 .Where(rv => rv.CollectionName == "article" && itemIds.Contains(rv.ItemId)).CountAsync())
             .Should().Be(Workers * (Rounds + 1));
