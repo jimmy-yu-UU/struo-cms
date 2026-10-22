@@ -122,13 +122,27 @@ public interface IItemRepository
         CancellationToken ct = default);
 
     /// <summary>
-    /// Upserts translation rows for a single parent. For each entry in <paramref name="perLocale"/>
+    /// Inserts one translation row per entry in <paramref name="perLocale"/> (locale → camelField →
+    /// value) for a parent row that was just inserted in the same transaction, so there is nothing to
+    /// look up or replace. Sets <paramref name="fieldProperties"/> (CLR property names) from the provided
+    /// values. The whole operation is transaction-wrapped.
+    /// </summary>
+    Task InsertTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Upserts translation rows for an existing parent. For each entry in <paramref name="perLocale"/>
     /// (locale → camelField → value), the stored row for that <c>(parentId, locale)</c> is replaced in
     /// place — every field in <paramref name="fieldProperties"/> (CLR property names) is set from the
     /// provided values, so a field not sent is cleared — or a row is inserted when the locale has none.
     /// Locales not present in <paramref name="perLocale"/> are left untouched (partial updates
-    /// supported), and nothing is deleted. When <paramref name="isCreate"/> is true the parent row was
-    /// just inserted, so the rows are only inserted. The whole operation is transaction-wrapped.
+    /// supported), and nothing is deleted. The whole operation is transaction-wrapped.
     /// </summary>
     Task SyncTranslationsAsync(
         Type translationType,
@@ -137,7 +151,6 @@ public interface IItemRepository
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        bool isCreate,
         CancellationToken ct = default);
 
     // ── Purge referential-integrity primitives ─────────────

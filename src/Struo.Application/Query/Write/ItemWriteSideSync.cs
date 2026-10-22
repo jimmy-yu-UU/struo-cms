@@ -114,15 +114,14 @@ public sealed class ItemWriteSideSync(
 
         if (perLocale.Count == 0) return;
 
-        await repository.SyncTranslationsAsync(
-            tm.TranslationEntityType,
-            tm.ForeignKeyProperty,
-            tm.LocaleProperty,
-            tm.Fields,
-            parentId,
-            perLocale,
-            isCreate,
-            ct);
+        if (isCreate)
+            await repository.InsertTranslationsAsync(
+                tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields,
+                parentId, perLocale, ct);
+        else
+            await repository.SyncTranslationsAsync(
+                tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields,
+                parentId, perLocale, ct);
     }
 
     /// <summary>

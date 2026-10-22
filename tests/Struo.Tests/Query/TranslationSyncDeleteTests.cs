@@ -47,11 +47,15 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     {
         var values = new Dictionary<string, object?> { ["title"] = title };
         if (body is not null) values["body"] = body;
-        return _repo.SyncTranslationsAsync(
-            typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
-            [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)], articleId,
-            new Dictionary<string, IReadOnlyDictionary<string, object?>> { [locale] = values },
-            isCreate);
+        var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>> { [locale] = values };
+        string[] fields = [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)];
+        return isCreate
+            ? _repo.InsertTranslationsAsync(
+                typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
+                fields, articleId, perLocale)
+            : _repo.SyncTranslationsAsync(
+                typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
+                fields, articleId, perLocale);
     }
 
     private Task SyncManyAsync(Guid articleId, params (string Locale, string Title)[] locales) =>
@@ -60,8 +64,7 @@ public sealed class TranslationSyncDeleteTests : IDisposable
             [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)], articleId,
             locales.ToDictionary(
                 l => l.Locale,
-                l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title }),
-            isCreate: false);
+                l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title }));
 
     private bool Deleted() =>
         _sql.Exists(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));

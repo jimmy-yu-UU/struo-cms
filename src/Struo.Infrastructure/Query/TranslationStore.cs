@@ -10,10 +10,15 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, bool, CancellationToken, Task>> SyncDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
-             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(bool), typeof(CancellationToken)]);
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
+
+    private static readonly GenericDispatcher<Func<TranslationStore, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> InsertDispatcher =
+        new(typeof(TranslationStore), nameof(InsertTranslationsGenericAsync),
+            [typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
 
     public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
@@ -58,6 +63,16 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         return rows.Cast<object>().ToList();
     }
 
+    public async Task InsertTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default) =>
+        await InsertDispatcher.For(translationType)(this, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+
     public async Task SyncTranslationsAsync(
         Type translationType,
         string fkProperty,
@@ -65,11 +80,25 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        bool isCreate,
         CancellationToken ct = default)
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, isCreate, ct);
+        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+    }
+
+    // A create inserts under a parent id that is new in this transaction, so there is nothing to look up.
+    private async Task InsertTranslationsGenericAsync<T>(
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct) where T : class, new()
+    {
+        if (perLocale.Count == 0) return;
+
+        var rows = BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, perLocale);
+        await transactions.InTransactionAsync(async () => await db.Insertable(rows).ExecuteCommandAsync(ct), ct);
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
@@ -79,46 +108,16 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        bool isCreate,
         CancellationToken ct) where T : class, new()
     {
         if (perLocale.Count == 0) return;
 
         var type = typeof(T);
-        var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var fieldProps = fieldProperties.ToDictionary(
-            f => f,
-            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                 ?? throw new InvalidOperationException(
-                     $"Translation entity '{type.Name}' has no field property '{f}'."),
-            StringComparer.OrdinalIgnoreCase);
-
-        // Build one row per supplied locale outside the transaction (reflection only).
-        var rows = new List<T>(perLocale.Count);
-        foreach (var (locale, values) in perLocale)
-        {
-            var row = new T();
-            fkProp.SetValue(row, IdCoercion.Coerce(parentId, fkProp.PropertyType));
-            localeProp.SetValue(row, locale);
-            foreach (var (fieldName, prop) in fieldProps)
-            {
-                if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
-                    prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
-            }
-            rows.Add(row);
-        }
+        var rows = BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, perLocale);
 
         await transactions.InTransactionAsync(async () =>
         {
-            // A create inserts under a parent id that is new in this transaction, so there is nothing
-            // to look up.
-            if (isCreate)
-            {
-                await db.Insertable(rows).ExecuteCommandAsync(ct);
-                return;
-            }
-
             // An update replaces the stored row of each supplied locale in place (by primary key) and
             // inserts a row for a locale that has none. It issues no DELETE: a delete that matches
             // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
@@ -141,6 +140,40 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
             if (inserts.Count > 0) await db.Insertable(inserts).ExecuteCommandAsync(ct);
         }, ct);
+    }
+
+    // One row per supplied locale, built by reflection outside the transaction.
+    private static List<T> BuildRows<T>(
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale) where T : class, new()
+    {
+        var type = typeof(T);
+        var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var fieldProps = fieldProperties.ToDictionary(
+            f => f,
+            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                 ?? throw new InvalidOperationException(
+                     $"Translation entity '{type.Name}' has no field property '{f}'."),
+            StringComparer.OrdinalIgnoreCase);
+
+        var rows = new List<T>(perLocale.Count);
+        foreach (var (locale, values) in perLocale)
+        {
+            var row = new T();
+            fkProp.SetValue(row, IdCoercion.Coerce(parentId, fkProp.PropertyType));
+            localeProp.SetValue(row, locale);
+            foreach (var (fieldName, prop) in fieldProps)
+            {
+                if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
+                    prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
+            }
+            rows.Add(row);
+        }
+        return rows;
     }
 
     private async Task<List<T>> LoadExistingAsync<T>(string fkColumn, object parentId, CancellationToken ct)
