@@ -32,6 +32,8 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
+const string StartupLoggerCategory = "Struo.Startup";
+
 try
 {
     var cli = Struo.Infrastructure.Migrations.Commands.MigrationCli.Parse(args);
@@ -320,11 +322,11 @@ try
         var sp = scope.ServiceProvider;
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
         RemovedDatabaseKeyWarnings.Log(
-            builder.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
+            builder.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
         Struo.Api.Auth.OidcLegacyKeyWarnings.Log(
-            builder.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
+            builder.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
         Struo.Api.Auth.AuthWiring.WarnIfSessionsAreInMemory(
-            builder.Configuration, app.Environment, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
+            builder.Configuration, app.Environment, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());
@@ -337,6 +339,10 @@ try
             sp.GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>().CollectForInitTables(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
             CancellationToken.None);
+
+        await Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
+            sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
     }
 
     await app.RunAsync();

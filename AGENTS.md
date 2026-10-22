@@ -79,12 +79,12 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 
 ## Invariants
 
-- **All database access is through SqlSugar, with three deliberate exceptions for raw SQL.** (Schema
+- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** (Schema
   changes and seed inserts are FluentMigrator migrations, see "Migrations are the only schema source"
   below.) The first assembles portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
   `migrate` runs; the third is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
-  `SchemaChecker.Check`.
+  `SchemaChecker.Check`; the fourth is one read-only catalog query that runs only on SQL Server startup.
   The first is the relation-filter pushdown's subquery wrapper
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
@@ -100,6 +100,10 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   `SchemaChecker.Check`: one catalog query per backend (PostgreSQL, SQL Server, MySQL/MariaDB, SQLite),
   parameterised with `@table`, with no request input and no writes. Oracle has no index query, so the
   index check is skipped with a warning.
+  The fourth is `SqlServerIsolationCheck`'s read of `sys.databases.is_read_committed_snapshot_on`
+  (`src/Struo.Infrastructure/Persistence/SqlServerIsolationCheck.cs`): one parameterless read-only query
+  at SQL Server startup that warns when `READ_COMMITTED_SNAPSHOT` is off; see
+  `docs/ai/decisions/sqlserver-requires-read-committed-snapshot.md`.
   Sorting assembles no SQL text: `OrderByExpressionBuilder` returns typed sort-key lambdas
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`, `SortExpressionFactory.cs`) that
   `SqlSugarItemRepository.RunQueryAsync` chains as typed `OrderBy` calls. A translatable-field sort is a
@@ -107,7 +111,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   and a to-one relation-path sort is one nested typed subquery per hop.
   Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the three exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
@@ -298,7 +302,9 @@ documented divergences each have a decision file:
   `docs/ai/decisions/migrations-are-the-only-schema-source.md`;
 - per-backend column literals — `docs/ai/decisions/column-type-map-per-backend-literals.md`;
 - UTC instants in `TimestampWithTimeZone` columns on PostgreSQL and SQL Server —
-  `docs/ai/decisions/timestamptz-columns-are-utc-instants.md`.
+  `docs/ai/decisions/timestamptz-columns-are-utc-instants.md`;
+- `READ_COMMITTED_SNAPSHOT` on SQL Server databases —
+  `docs/ai/decisions/sqlserver-requires-read-committed-snapshot.md`.
 
 Configure `Testing:PostgresConnection` to a disposable database whose name contains `test`: the migration
 tests write into it directly, and the other live suites use its server and login to create their own

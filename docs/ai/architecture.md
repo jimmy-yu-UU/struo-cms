@@ -291,7 +291,7 @@ identically to sharing one:
   and `DeleteByPropertyAsync`.
 - `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
-  `SyncTranslationsAsync`.
+  `InsertTranslationsAsync` (create), `SyncTranslationsAsync` (update).
 - `FacetQueries` (`FacetQueries.cs` + `FacetQueries.Leaf.cs`) — `FacetAsync`; see the dedicated
   subsection below.
 - `AggregateQueries` (`AggregateQueries.cs`) — `AggregateAsync`; see the dedicated subsection below.

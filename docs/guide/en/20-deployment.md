@@ -28,6 +28,25 @@ Production does not run the schema check at startup; run `migrate:check` yoursel
 The commands and the lock are covered in
 [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
 
+### SQL Server: turn on `READ_COMMITTED_SNAPSHOT`
+
+A SQL Server database needs `READ_COMMITTED_SNAPSHOT` on. Without it, concurrent writes to different
+items of a collection that has translations deadlock: each transaction's reads wait on the other
+transactions' uncommitted rows, and SQL Server aborts one transaction of each deadlock cycle, which
+involves two or more sessions, with error 1205. Run this once,
+with no other connection open to the database:
+
+```sql
+ALTER DATABASE [your_database] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
+```
+
+`WITH ROLLBACK IMMEDIATE` rolls back every open transaction on the database, so run it before the
+API starts or in a maintenance window. Azure SQL Database has the setting on by default.
+
+The API never changes the setting itself. After the migration step it reads the flag once and, when
+it is off, logs one warning that names `READ_COMMITTED_SNAPSHOT` and the statement above. The
+warning does not stop startup, and no other backend runs the check.
+
 ### Choose or capture the bootstrap password at the first `migrate`
 
 `Auth:BootstrapAdmin:Password` seeds the account the first time the core seed migration runs;

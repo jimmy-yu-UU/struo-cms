@@ -167,15 +167,16 @@ public sealed class CreateTags : StruoMigration
 `migrate:check`；SQLite 接受的 DDL，別的後端不一定接受。fork 自己的測試可以在 `async` 測試方法裡
 呼叫 `SchemaChecker.Check`，斷言沒有錯誤。
 
-## 核心的三個 raw SQL 例外
+## 核心的四個 raw SQL 例外
 
-「所有資料庫存取都走 SqlSugar」這條不變式（見[第 2 章：系統架構](02-architecture.md)）有三個
+「所有資料庫存取都走 SqlSugar」這條不變式（見[第 2 章：系統架構](02-architecture.md)）有四個
 刻意的例外：
 
 - **關聯篩選的子查詢包裝**：在 SqlSugar 產生的 SQL 外面組四種固定形式。
 - **Migration 鎖 `MigrationLockSql`**：每個後端一組取得與釋放鎖的參數化語句。
 - **`IndexCatalog` 的索引查詢**：`migrate:check` 讀索引用的唯讀系統目錄查詢；Oracle 沒有這支
   查詢，索引檢查以警告跳過。
+- **SQL Server 隔離檢查**：啟動時唯讀查詢一次，看 `READ_COMMITTED_SNAPSHOT` 有沒有開；見[第 20 章](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
 
 排序不組 SQL 文字。欄位、關聯路徑與翻譯欄位三種排序都是型別化的 SqlSugar 運算式，翻譯欄位排序把語言代碼
 當成 SQL 參數綁定。

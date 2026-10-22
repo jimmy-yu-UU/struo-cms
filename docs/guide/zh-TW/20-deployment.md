@@ -22,6 +22,23 @@ job、init container，或 `docker run --rm … <映像> migrate`。也可以設
 Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
 自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
 
+### SQL Server：開啟 `READ_COMMITTED_SNAPSHOT`
+
+SQL Server 資料庫需要開啟 `READ_COMMITTED_SNAPSHOT`。沒開的話，並行寫入有翻譯之集合的不同項目會死結：
+每筆交易的讀取會等其他交易尚未提交的資料列，SQL Server 再從每個死結循環（牽涉兩個以上的連線）中
+擇一中止交易，錯誤碼 1205。
+在沒有其他連線連著這個資料庫時執行一次：
+
+```sql
+ALTER DATABASE [your_database] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
+```
+
+`WITH ROLLBACK IMMEDIATE` 會回滾該資料庫上所有未完成的交易，所以要在 API 啟動前或維護時段執行。
+Azure SQL Database 預設就是開啟的。
+
+API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，旗標是關的就記一筆警告，內容點出
+`READ_COMMITTED_SNAPSHOT` 與上面那行語句。警告不會讓啟動失敗，其他後端也不做這個檢查。
+
 ### 第一次 `migrate` 時指定或記下 bootstrap 密碼
 
 `Auth:BootstrapAdmin:Password` 在核心的 seed migration 第一次執行時用來植入帳號，之後再怎麼改這個
