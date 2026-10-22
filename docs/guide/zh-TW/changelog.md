@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.13.0
+## 0.13.0 — 2026-10-22
 
 ::: danger 破壞性變更
 - `appsettings.json` 的 `Oidc` 區段換了新的結構：共用的 `Oidc:ReturnUrlDefault`，加上每個身分提供者
@@ -96,9 +96,12 @@
 
 ### 安全性
 
-- `GET /api/auth/login/oidc` 不再接受含控制字元的 `returnUrl`。瀏覽器會從網址中移除 tab、歸位與換行字元，
+- `GET /api/auth/login/oidc/{provider}` 不再接受含控制字元的 `returnUrl`。瀏覽器會從網址中移除 tab、歸位與換行字元，
   `/<tab>/evil.example` 因此能通過站內路徑檢查、再被導向站外；這類值現在改為退回
   `Oidc:ReturnUrlDefault`。管理介面自己的 `?redirect=` 檢查也拒絕同樣的字元。
+- 前端測試工具升到 `vitest` 4.1.12，修正 `@vitest/mocker` 的 GHSA-qxg6-89mg-rqv8 與
+  GHSA-xp26-3454-mjgp。`docs/` 裡 `vitepress` 1.6.4 鎖定的 `vite` 5 另有五則開發伺服器的安全公告，
+  列為接受的風險並記在 `docs/pnpm-workspace.yaml`：`vite` 5 沒有修正版，建置出的網站不受影響。
 
 ## 0.12.0 — 2026-10-21
 
