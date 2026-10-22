@@ -14,10 +14,23 @@ overrides:
 # rule holds. All four are dev-server-only: reachable only while `pnpm dev` runs inside docs/;
 # the static site produced by `pnpm build` is unaffected. Suppression (auditConfig.ignoreGhsas
 # below) is scoped to exactly these four advisory ids.
-# REMOVE THIS once vitepress ships a stable 2.x, or 1.x widens its vite range — re-evaluate then.
+#
+# ACCEPTED RISK (approved 2026-10-22). GHSA-587h-7wmj-h5pm (High), GHSA-r825-w8mm-5pxw
+# (Moderate), GHSA-698v-4r3x-3vcv (Moderate): launch-editor flaws in vite's dev-server
+# open-in-editor handler; GHSA-rq7h-c2jc-7f22 (Moderate): dev-server `server.fs.allow` bypass;
+# GHSA-9jrq-w75r-8gcw (Low): cross-origin script execution through dev-server middleware. All on
+# the same vitepress@1.6.4 > vite@5.4.21 chain. The first fixed vite is 6.4.4 and no 5.x release
+# carries the fixes; vitepress's latest stable is still 1.6.4 (next 2.0.0-alpha.20). Same scope
+# as above: dev server only, the built site is unaffected.
+# REMOVE THESE once vitepress ships a stable 2.x, or 1.x widens its vite range — re-evaluate then.
 auditConfig:
   ignoreGhsas:
     - GHSA-fx2h-pf6j-xcff
     - GHSA-v6wh-96g9-6wx3
     - GHSA-4w7w-66w2-5vf9
     - GHSA-67mh-4wv8-2f99
+    - GHSA-587h-7wmj-h5pm
+    - GHSA-r825-w8mm-5pxw
+    - GHSA-698v-4r3x-3vcv
+    - GHSA-rq7h-c2jc-7f22
+    - GHSA-9jrq-w75r-8gcw

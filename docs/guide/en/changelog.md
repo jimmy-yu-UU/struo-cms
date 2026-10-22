@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0
+## 0.13.0 — 2026-10-22
 
 ::: danger Breaking
 - The `Oidc` section of `appsettings.json` has a new shape: shared `Oidc:ReturnUrlDefault`, plus one
@@ -8,8 +8,9 @@
   The per-provider keys are `Enabled`, `DisplayName`, `Icon`, `Order`, `Authority`, `ClientId`,
   `ClientSecret`, `CallbackPath`, `Scopes`, `Prompt`, `RequireEmailVerified`, `AllowedTenantId` and
   `AllowedEmailDomains`. Move your settings under a provider id, and rename the secret's environment
-  variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`; the user-secrets or
-  `appsettings.Development.json` key `Oidc:ClientSecret` becomes `Oidc:Providers:microsoft:ClientSecret`).
+  variable the same way (`Oidc__ClientSecret` becomes `Oidc__Providers__microsoft__ClientSecret`;
+  the user-secrets or `appsettings.Development.json` key `Oidc:ClientSecret` becomes
+  `Oidc:Providers:microsoft:ClientSecret`).
   The old flat keys directly under `Oidc` are ignored; a startup warning lists the ones found.
   Before:
 
@@ -48,12 +49,13 @@
 - `GET /api/config` no longer returns `oidcEnabled`; it returns `oidcProviders`, an array of
   `{ id, displayName, icon }` in button order.
 - The default callback path is per provider: `/signin-oidc-{id}` instead of `/signin-oidc`. The shipped
-  `microsoft` entry sets `CallbackPath` to `/signin-oidc`, so a registered Entra redirect URI keeps working,
-  and the shipped `google` entry uses `/signin-oidc-google`. A provider entry without `CallbackPath` uses
-  `/signin-oidc-{id}`; register that redirect URI at the identity provider, or set `CallbackPath` to the
-  path already registered. Each provider needs its own path. Each provider also gets its own sign-out paths, `/signout-callback-oidc-{id}` and
-  `/signout-oidc-{id}`; register the sign-out callback again if you use it. A reverse proxy in front of
-  the API must forward these paths; the admin image's nginx and the Vite dev server already do.
+  `microsoft` entry sets `CallbackPath` to `/signin-oidc`, so a registered Entra redirect URI keeps
+  working, and the shipped `google` entry uses `/signin-oidc-google`. A provider entry without
+  `CallbackPath` uses `/signin-oidc-{id}`; register that redirect URI at the identity provider, or set
+  `CallbackPath` to the path already registered. Each provider needs its own path. Each provider also
+  gets its own sign-out paths, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; register the
+  sign-out callback again if you use it. A reverse proxy in front of the API must forward these paths;
+  the admin image's nginx and the Vite dev server already do.
 - An enabled provider whose `Authority` is Google (`https://accounts.google.com`) must set a non-empty
   `Oidc:Providers:{id}:AllowedEmailDomains`, or startup fails with an error naming that key. Google has
   no tenant to pin, and without a domain any Google account could sign in and get a new account.
@@ -69,8 +71,8 @@
   (`microsoft` and `google` are built in, anything else shows a key icon), and a fork adds its own by
   editing that file.
 - After signing in, the admin returns to the page that was requested. Opening a deep link while signed
-  out, or having the session end mid-work, now lands on that page once you sign in again (password
-  or an external provider); only a same-origin path is honoured, anything else falls back to the dashboard.
+  out, or having the session end mid-work, now lands on that page once you sign in again (password or an
+  external provider); only a same-origin path is honoured, anything else falls back to the dashboard.
 
 ### Fixed
 
@@ -109,10 +111,14 @@
 
 ### Security
 
-- `GET /api/auth/login/oidc` no longer accepts a `returnUrl` containing control characters. Browsers
-  strip tab, carriage return and line feed from a URL, so `/<tab>/evil.example` passed the in-site
-  check and then redirected off-site; such a value now falls back to `Oidc:ReturnUrlDefault`. The
-  admin's own `?redirect=` check refuses the same characters.
+- `GET /api/auth/login/oidc/{provider}` no longer accepts a `returnUrl` containing control characters.
+  Browsers strip tab, carriage return and line feed from a URL, so `/<tab>/evil.example` passed the
+  in-site check and then redirected off-site; such a value now falls back to `Oidc:ReturnUrlDefault`.
+  The admin's own `?redirect=` check refuses the same characters.
+- The frontend test tooling is on `vitest` 4.1.12, which fixes GHSA-qxg6-89mg-rqv8 and
+  GHSA-xp26-3454-mjgp in `@vitest/mocker`. In `docs/`, five more dev-server advisories in the
+  `vite` 5 that `vitepress` 1.6.4 pins are accepted and listed in `docs/pnpm-workspace.yaml`: no
+  `vite` 5 release fixes them, and the built site is unaffected.
 
 ## 0.12.0 — 2026-10-21
 
