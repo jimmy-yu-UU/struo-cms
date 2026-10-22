@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using MySqlConnector;
 using Npgsql;
 using SqlSugar;
+using Struo.Application.Configuration;
 
 namespace Struo.Tests.Support;
 
@@ -44,8 +45,62 @@ internal static partial class LiveDatabaseDdl
             database.Dispose();
             throw new InvalidOperationException($"{kind}: database '{name}' is missing after creation.");
         }
+        try
+        {
+            if (kind == TestBackendKind.SqlServer) EnableReadCommittedSnapshot(connection);
+        }
+        catch
+        {
+            database.Dispose();
+            throw;
+        }
         return database;
     }
+
+    /// <summary>
+    /// Turns READ_COMMITTED_SNAPSHOT on for the database the connection string names, as the
+    /// deployment requirement for SQL Server (test-only SQL). Does nothing when it is already on, so a
+    /// shared database is not disturbed by the ROLLBACK IMMEDIATE that the change needs.
+    /// </summary>
+    public static void EnableReadCommittedSnapshot(string sqlServerConnection)
+    {
+        var builder = new SqlConnectionStringBuilder(sqlServerConnection);
+        var name = builder.InitialCatalog;
+        builder.InitialCatalog = "master";
+        using var connection = new SqlConnection(builder.ConnectionString);
+        connection.Open();
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = @name";
+            check.Parameters.AddWithValue("@name", name);
+            if (check.ExecuteScalar() is true) return;
+        }
+
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER DATABASE {QuoteSqlServer(name)} SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE";
+        alter.ExecuteNonQuery();
+    }
+
+    /// <summary><see cref="EnableReadCommittedSnapshot"/> for a live case, when it runs on SQL Server.</summary>
+    internal static void EnableReadCommittedSnapshotIfSqlServer(StruoDbType db, string connection)
+    {
+        if (db == StruoDbType.SqlServer) EnableReadCommittedSnapshot(connection);
+    }
+
+    /// <summary>Turns READ_COMMITTED_SNAPSHOT off again, for tests that need a database without it.</summary>
+    public static void DisableReadCommittedSnapshot(string sqlServerConnection)
+    {
+        var builder = new SqlConnectionStringBuilder(sqlServerConnection);
+        var name = builder.InitialCatalog;
+        builder.InitialCatalog = "master";
+        using var connection = new SqlConnection(builder.ConnectionString);
+        connection.Open();
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER DATABASE {QuoteSqlServer(name)} SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE";
+        alter.ExecuteNonQuery();
+    }
+
+    private static string QuoteSqlServer(string name) => "[" + name.Replace("]", "]]") + "]";
 
     /// <summary>Creates a database with a caller-chosen name; disposing drops it.</summary>
     public static IDisposable CreateNamed(TestBackendKind kind, string name) =>

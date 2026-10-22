@@ -26,6 +26,7 @@ public sealed partial class SqliteTestDatabaseUsageTests
         ["Migrations/CrossProviderStartupGateLiveTests.cs"] = "the SQLite side of the cross-provider gate is SQLite by definition",
         ["Migrations/Schema/IndexCatalogTests.cs"] = "[SqliteOnly] Sqlite_* catalog tests",
         ["Migrations/StruoMigrationTypeTests.cs"] = "[SqliteOnly] SQLite literal test",
+        ["Persistence/SqlServerIsolationCheckTests.cs"] = "the non-SQL Server cases only need a client that counts statements",
     };
 
     [Fact]

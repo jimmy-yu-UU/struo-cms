@@ -337,6 +337,10 @@ try
             sp.GetRequiredService<Struo.Application.Metadata.IEntityTypeCollector>().CollectForInitTables(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Migrations"),
             CancellationToken.None);
+
+        Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOff(
+            sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Struo.Startup"));
     }
 
     await app.RunAsync();
