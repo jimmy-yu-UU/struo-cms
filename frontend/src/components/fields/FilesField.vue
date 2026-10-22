@@ -39,7 +39,9 @@ function currentIds(): string[] {
   return rows.value.map((r) => r.id)
 }
 
+const resolveGuard = createLatestWins()
 async function resolve(ids: string[]): Promise<void> {
+  const token = resolveGuard.next()
   if (ids.length === 0) { rows.value = []; return }
   let found: FileRow[] = []
   try {
@@ -53,6 +55,7 @@ async function resolve(ids: string[]): Promise<void> {
   } catch {
     found = []
   }
+  if (!resolveGuard.isCurrent(token)) return
   const byId = new Map(found.map((f) => [f.id, f]))
   // Preserve model order; a missing id becomes a raw-id fallback row.
   rows.value = ids.map(
@@ -72,6 +75,8 @@ watch(
 onMounted(() => resolve(toIds(props.modelValue)))
 
 function commit(next: Row[]): void {
+  // A user edit wins over any resolve still in flight.
+  resolveGuard.next()
   rows.value = next
   emit('update:modelValue', next.map((r) => r.id))
 }

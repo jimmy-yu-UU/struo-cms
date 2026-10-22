@@ -48,4 +48,17 @@ describe('schemaStore', () => {
     expect(store.loaded).toBe(true)
     expect(schemaApi.getAll).toHaveBeenCalledTimes(2)
   })
+
+  it('a load that fails after reset() leaves loadError empty and the store retryable', async () => {
+    let rejectFetch!: (e: Error) => void
+    const pending = new Promise<never>((_, reject) => { rejectFetch = reject })
+    vi.mocked(schemaApi.getAll).mockReturnValue(pending as never)
+    const store = useSchemaStore()
+    const p = store.load()
+    store.reset()
+    rejectFetch(new Error('late failure'))
+    await p
+    expect(store.loadError).toBe('')
+    expect(store.loadPromise).toBeNull()
+  })
 })

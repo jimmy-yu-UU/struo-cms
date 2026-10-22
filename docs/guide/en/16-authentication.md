@@ -157,6 +157,12 @@ reported with its own error code, `SESSION_REVOCATION_FAILED`, because the calle
 some sessions may still be alive. Deleting a user row (soft-delete or purge) triggers the same
 revocation at the service layer, so GraphQL's delete mutation is covered too.
 
+The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the
+server cannot confirm the sign-out, the login page says so; a `401` means no session was left to end
+and counts as success. When a request is rejected with `401` while you are signed in, the admin drops
+any unsaved edits, goes to the login page with a "session expired" notice and returns to the page you
+were on after you sign in again.
+
 ## Bearer tokens
 
 A bearer token is a separately issued, long-lived credential for a given user, and only a

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Baseline } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -9,6 +10,7 @@ defineOptions({ name: 'RichTextColorMenu' })
 defineProps<{ disabled?: boolean; activeColor?: string | null }>()
 const emit = defineEmits<{ (e: 'pick', color: string): void; (e: 'clear'): void }>()
 
+const { t } = useI18n()
 const open = ref(false)
 
 const PALETTE = [
@@ -37,20 +39,20 @@ function clear(): void {
       <!-- type="button" is explicit even though PopoverTrigger (as-child) already merges its own
            type="button" onto whatever it wraps: this sits inside ItemForm.vue's <form>, so the
            Button doesn't rely on the merge behaviour of the component wrapping it. -->
-      <Button type="button" variant="ghost" size="icon" data-cmd="color" :disabled="disabled" aria-label="Text colour" title="Text colour">
+      <Button type="button" variant="ghost" size="icon" data-cmd="color" :disabled="disabled" :aria-label="t('fields.richtext.textColor')" :title="t('fields.richtext.textColor')">
         <Baseline :style="activeColor ? { color: activeColor } : undefined" />
       </Button>
     </PopoverTrigger>
     <PopoverContent class="w-auto p-3">
       <div class="grid grid-cols-5 gap-1.5">
         <button v-for="c in PALETTE" :key="c" type="button" class="size-[22px] rounded border" :data-color="c"
-          :style="{ background: c }" :aria-label="`Colour ${c}`" @click="pick(c)" />
+          :style="{ background: c }" :aria-label="t('fields.richtext.colorSwatch', { color: c })" @click="pick(c)" />
       </div>
       <label class="mt-2 flex items-center gap-1.5 text-sm cursor-pointer">
         <input type="color" data-cmd="colorFree" class="h-6 w-8 cursor-pointer" @change="onFreePick">
-        Custom…
+        {{ t('fields.richtext.customColor') }}
       </label>
-      <Button type="button" variant="outline" size="sm" data-cmd="colorClear" class="mt-2 w-full" @click="clear">Clear colour</Button>
+      <Button type="button" variant="outline" size="sm" data-cmd="colorClear" class="mt-2 w-full" @click="clear">{{ t('fields.richtext.clearColor') }}</Button>
     </PopoverContent>
   </Popover>
 </template>

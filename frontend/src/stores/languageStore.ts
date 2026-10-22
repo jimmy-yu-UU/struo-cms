@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { languagesApi } from '../api/languagesApi'
 import { i18n } from '../i18n'
+import { createGuardedLoader } from '../lib/guardedLoad'
 import type { LanguageInfo } from '../types/schema'
+
+// reset() invalidates a load still in flight, so a previous session's data can never land in the
+// next one.
+const loader = createGuardedLoader()
 
 export const useLanguageStore = defineStore('language', {
   state: () => ({
@@ -21,20 +26,30 @@ export const useLanguageStore = defineStore('language', {
       state.languages.find((l) => l.isDefault)?.code ?? state.languages[0]?.code ?? '',
   },
   actions: {
+    // Forgets everything loaded for the previous user; the next load() fetches afresh.
+    reset(): void {
+      loader.invalidate()
+      this.languages = []
+      this.loaded = false
+      this.loadError = ''
+      this.loadPromise = null
+    },
     load(): Promise<void> {
       if (this.loaded) return Promise.resolve()
       if (this.loadPromise) return this.loadPromise
-      this.loadPromise = (async () => {
-        try {
-          this.languages = await languagesApi.getEnabled()
+      this.loadPromise = loader.run(() => languagesApi.getEnabled(), {
+        apply: (result) => {
+          this.languages = result
           this.loaded = true
           this.loadError = ''
-        } catch (e) {
+        },
+        fail: (e) => {
           this.loadError = e instanceof Error ? e.message : i18n.global.t('common.loadFailed')
-        } finally {
+        },
+        settle: () => {
           this.loadPromise = null
-        }
-      })()
+        },
+      })
       return this.loadPromise
     },
     // The Language collection is edited through the generic item form; after such a save the

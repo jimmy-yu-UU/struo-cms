@@ -60,15 +60,20 @@ async function loadFolders(): Promise<void> {
   }
 }
 
+const currentLoad = createLatestWins()
 async function resolveCurrent(): Promise<void> {
+  const token = currentLoad.next()
   current.value = null
   missingId.value = null
   if (!props.modelValue) return
+  const id = props.modelValue
   try {
-    const row = await itemsApi.get('file', props.modelValue, { locale: langStore.defaultCode })
+    const row = await itemsApi.get('file', id, { locale: langStore.defaultCode })
+    if (!currentLoad.isCurrent(token)) return
     current.value = row as unknown as FileRow
   } catch {
-    missingId.value = props.modelValue // deleted / inaccessible -> show id
+    if (!currentLoad.isCurrent(token)) return
+    missingId.value = id // deleted / inaccessible -> show id
   }
 }
 

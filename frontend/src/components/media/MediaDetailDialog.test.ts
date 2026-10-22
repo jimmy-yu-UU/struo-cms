@@ -534,4 +534,101 @@ describe('MediaDetailDialog', () => {
       expect(w.findAll('button').some((b) => b.text() === 'Save')).toBe(false)
     })
   })
+
+  describe('out-of-order loads', () => {
+    function deferred<T>() {
+      let resolve!: (v: T) => void
+      let reject!: (e: unknown) => void
+      const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+    const fileB = { id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2048 }
+    const itemB = { ...item, id: 'f2', fileName: 'b.png', version: 7, translations: { en: { title: 'Bee', alt: 'B image' }, 'zh-TW': { title: '', alt: '' } } }
+    type Vm = {
+      model: { version?: number; translations: Record<string, Record<string, unknown>> }
+      onSave: () => Promise<void>
+      canSave: boolean
+      conflict: boolean
+    }
+
+    it('shows the newer file when the earlier load resolves last, and saves onto it', async () => {
+      const a = deferred<typeof item>()
+      const b = deferred<typeof itemB>()
+      vi.spyOn(itemsApi, 'get').mockImplementation((_c: string, id: string) => (id === 'f1' ? a.promise : b.promise) as never)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+      const w = mountDialog()
+      await flushPromises()
+      await w.setProps({ file: fileB })
+      await flushPromises()
+      b.resolve(itemB)
+      await flushPromises()
+      a.resolve(item)
+      await flushPromises()
+      const vm = w.vm as unknown as Vm
+      expect(vm.model.translations.en.title).toBe('Bee')
+      expect(vm.model.version).toBe(7)
+      await vm.onSave()
+      await flushPromises()
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(update).toHaveBeenCalledWith('file', 'f2', expect.objectContaining({ version: 7 }))
+    })
+
+    it('clears the previous file and refuses to save while the next one is loading', async () => {
+      const b = deferred<typeof itemB>()
+      vi.spyOn(itemsApi, 'get').mockImplementation((_c: string, id: string) => (id === 'f1' ? Promise.resolve(item) : b.promise) as never)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+      const w = mountDialog()
+      await flushPromises()
+      const vm = w.vm as unknown as Vm
+      expect(vm.canSave).toBe(true)
+      await w.setProps({ file: fileB })
+      await flushPromises()
+      expect(vm.model.translations.en).toBeUndefined()
+      expect(vm.canSave).toBe(false)
+      expect(w.findAll('button').find((x) => x.text() === 'Save')!.attributes('disabled')).toBeDefined()
+      await vm.onSave()
+      expect(update).not.toHaveBeenCalled()
+      b.resolve(itemB)
+      await flushPromises()
+      expect(vm.canSave).toBe(true)
+    })
+
+    it('does not touch the new file when a conflict recovery resolves after a file switch', async () => {
+      const recovery = deferred<typeof item>()
+      let getCallsForF1 = 0
+      vi.spyOn(itemsApi, 'get').mockImplementation(((_c: string, id: string) => {
+        if (id === 'f2') return Promise.resolve(itemB)
+        return getCallsForF1++ === 0 ? Promise.resolve(item) : recovery.promise
+      }) as never)
+      vi.spyOn(itemsApi, 'update').mockRejectedValue(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+      const w = mountDialog()
+      await flushPromises()
+      const vm = w.vm as unknown as Vm
+      void vm.onSave()
+      await flushPromises()
+      await w.setProps({ file: fileB })
+      await flushPromises()
+      expect(vm.model.version).toBe(7)
+      recovery.resolve({ ...item, version: 99 })
+      await flushPromises()
+      expect(vm.model.version).toBe(7)
+      expect(vm.model.translations.en.title).toBe('Bee')
+    })
+
+    it('refreshes the list but keeps the dialog open when a save finishes after a file switch', async () => {
+      const upd = deferred<unknown>()
+      vi.spyOn(itemsApi, 'get').mockImplementation(((_c: string, id: string) => Promise.resolve(id === 'f1' ? item : itemB)) as never)
+      vi.spyOn(itemsApi, 'update').mockReturnValue(upd.promise as never)
+      const w = mountDialog()
+      await flushPromises()
+      void (w.vm as unknown as Vm).onSave()
+      await flushPromises()
+      await w.setProps({ file: fileB })
+      await flushPromises()
+      upd.resolve({})
+      await flushPromises()
+      expect(w.emitted('saved')).toBeTruthy()
+      expect(w.emitted('close')).toBeFalsy()
+    })
+  })
 })

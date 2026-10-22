@@ -10,11 +10,13 @@ import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
 import { apiBaseUrl, ApiError } from '../api/apiClient'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
+import { encodeRedirectParam, safeRedirect } from '@/lib/safeRedirect'
 import BrandMark from '../components/shell/BrandMark.vue'
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
+const notice = ref('')
 const submitting = ref(false)
 
 const auth = useAuthStore()
@@ -24,6 +26,9 @@ const { t } = useI18n()
 const appConfig = useAppConfigStore()
 const { brandName, oidcEnabled } = storeToRefs(appConfig)
 
+// Read once: clearing the notice params below rewrites the query, and sign-in must still return here.
+const redirectTarget = safeRedirect(route.query.redirect)
+
 const submitLabel = computed(() => (submitting.value ? t('login.submitting') : t('login.submit')))
 
 async function onSubmit() {
@@ -31,7 +36,7 @@ async function onSubmit() {
   submitting.value = true
   try {
     await auth.login(email.value, password.value)
-    router.push({ name: 'dashboard' })
+    router.push(redirectTarget ?? { name: 'dashboard' })
   } catch (e) {
     error.value = loginErrorMessage(e)
   } finally {
@@ -69,17 +74,34 @@ const SSO_ERROR_KEYS: Record<string, string> = {
   external_login_Inactive: 'login.accountInactive',
 }
 
+// Why the browser was sent here: ?reason=expired after a 401 ended a signed-in session,
+// ?reason=logout-incomplete when the server could not confirm a sign-out. Unknown values are ignored.
+const REASON_NOTICE_KEYS: Record<string, string> = {
+  expired: 'login.sessionExpired',
+  'logout-incomplete': 'user.logoutIncomplete',
+}
+
+function showReasonNotice(): boolean {
+  const reason = route.query.reason
+  if (typeof reason !== 'string' || !Object.hasOwn(REASON_NOTICE_KEYS, reason)) return false
+  notice.value = t(REASON_NOTICE_KEYS[reason])
+  return true
+}
+
 onMounted(() => {
   const code = route.query.error
-  if (code === undefined) return
-  const key = typeof code === 'string' && Object.hasOwn(SSO_ERROR_KEYS, code) ? SSO_ERROR_KEYS[code] : undefined
-  error.value = t(key ?? 'login.ssoFailed')
-  // Drop the param so a refresh does not show the message again.
-  router.replace({ name: 'login' })
+  const hasReason = showReasonNotice()
+  if (code === undefined && !hasReason) return
+  if (code !== undefined) {
+    const key = typeof code === 'string' && Object.hasOwn(SSO_ERROR_KEYS, code) ? SSO_ERROR_KEYS[code] : undefined
+    error.value = t(key ?? 'login.ssoFailed')
+  }
+  // Drop the one-shot params so a refresh does not show the message again; the redirect stays.
+  router.replace(redirectTarget ? { name: 'login', query: { redirect: redirectTarget } } : { name: 'login' })
 })
 
 function onSso() {
-  window.location.href = `${apiBaseUrl}/auth/login/oidc?returnUrl=/`
+  window.location.href = `${apiBaseUrl}/auth/login/oidc?returnUrl=${encodeRedirectParam(redirectTarget ?? '/')}`
 }
 </script>
 
@@ -121,6 +143,7 @@ function onSso() {
 
         <Button type="submit" class="w-full" :disabled="submitting">{{ submitLabel }}</Button>
 
+        <output v-if="notice" class="notice block text-muted-foreground">{{ notice }}</output>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
         <template v-if="oidcEnabled">
@@ -195,6 +218,10 @@ function onSso() {
   flex: 1;
   height: 1px;
   background: var(--border);
+}
+.notice {
+  font-size: 0.85rem;
+  margin: 0;
 }
 .error {
   color: var(--danger);

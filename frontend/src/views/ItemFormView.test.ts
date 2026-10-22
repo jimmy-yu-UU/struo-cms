@@ -535,6 +535,30 @@ describe('ItemFormView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
+  it('route-leave guard lets an expired session through without confirming, even when dirty', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { auth } = setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited'
+    auth.sessionExpired = true
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('route-leave guard lets a logout in progress through without confirming, even when dirty', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { auth } = setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'edited'
+    auth.loggingOut = true
+    await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
   it('route-leave guard confirms when dirty; accept resolves true, reject resolves false', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()

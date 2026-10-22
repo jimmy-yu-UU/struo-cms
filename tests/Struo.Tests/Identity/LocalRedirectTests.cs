@@ -19,6 +19,10 @@ public class LocalRedirectTests
     [InlineData("")]
     [InlineData(null)]
     [InlineData("admin")] // not starting with '/'
+    [InlineData("/\t/evil.com")] // browsers strip tab/CR/LF, leaving //evil.com
+    [InlineData("/\n/evil.com")]
+    [InlineData("/\r/evil.com")]
+    [InlineData("/admin\u007f")]
     public void Falls_back_for_non_local_or_empty(string? input) =>
         LocalRedirect.Sanitize(input, "/fallback").Should().Be("/fallback");
 }

@@ -167,6 +167,26 @@ describe('SettingsView', () => {
     expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: 'Unsaved changes' }))
   })
 
+  it('lets an expired session through without confirming, even when dirty', async () => {
+    seedAdmin()
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[data-slot="input"]').setValue('changed')
+    useAuthStore().sessionExpired = true
+    await expect(leaveGuard!()).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  it('lets a logout in progress through without confirming, even when dirty', async () => {
+    seedAdmin()
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[data-slot="input"]').setValue('changed')
+    useAuthStore().loggingOut = true
+    await expect(leaveGuard!()).resolves.toBe(true)
+    expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
   it('allows navigation when the confirmation is accepted', async () => {
     seedAdmin()
     const w = mountView()

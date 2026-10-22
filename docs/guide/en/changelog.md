@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.13.0
+
+### Added
+
+- After signing in, the admin returns to the page that was requested. Opening a deep link while signed
+  out, or having the session end mid-work, now lands on that page once you sign in again (password
+  or Microsoft 365); only a same-origin path is honoured, anything else falls back to the dashboard.
+
+### Fixed
+
+- Some admin UI text stayed in English when the interface language was Chinese. The Yes/No and
+  item-count values in list columns, the related-items messages, the upload-failed message, the
+  rich-text colour menu (button, swatches, custom colour and clear), the screen-reader "Close" label
+  on dialogs and drawers, the mobile sidebar's screen-reader title and description, and the generic
+  "Request failed" message shown when the server returns no readable error now follow the chosen
+  language. The browser tab title reads "StruoCMS" before the site name loads.
+- A failed logout request left the user stranded in the admin. Logout now always ends on the login
+  page, clears the per-user data held in the browser, and the login page says so when the server
+  could not confirm the sign-out; a `401` (no session left to end) counts as success.
+- An expired session could trap an open edit form behind its unsaved-changes prompt. When the
+  server rejects a request because the session ended, the admin now goes straight to the login page
+  with a "session expired" notice, dropping unsaved edits instead of asking about them, and returns
+  to the same page after sign-in. A wrong password or a signed-out visit behaves as before.
+- The media details dialog could save one file's title, alt text and status onto another: switching
+  files quickly let a slow earlier load overwrite the form, and Save then targeted the file the
+  dialog pointed at. The form now clears while the next file loads, Save stays disabled until that
+  file is loaded, and the update always targets the loaded file; a version-conflict refresh that
+  finishes after a switch no longer touches the new file.
+- The effective-permissions panel, the file picker, the multi-file field and the related-items list
+  no longer show an earlier, slower response over a newer one, and a stale failure no longer clears
+  the loading state or reports an error.
+- The rich-text editor rewrote external images to a local path. Any `<img>` whose address merely
+  contained `/files/…/content` was tagged as a managed file and saved as `/api/files/…/content`, which
+  broke the image. Only this site's own file URL with a valid file id (optionally with a query string,
+  which is kept) is now treated as a managed file; every other image is saved as typed, on load and on
+  save.
+- The admin image now serves every file outside `/assets/` with `Cache-Control: no-cache`, so
+  `theme-init.js`, `favicon.svg` and similar files are revalidated after an upgrade instead of
+  staying stale in the browser. The hashed files under `/assets/` stay cached immutably.
+- Opening `/collections/user/new` or `/collections/file/new` directly now goes back to that
+  collection's list. Users are created with the create-user dialog and files come from upload, so
+  the generic new-item form never applied to them.
+
+### Security
+
+- `GET /api/auth/login/oidc` no longer accepts a `returnUrl` containing control characters. Browsers
+  strip tab, carriage return and line feed from a URL, so `/<tab>/evil.example` passed the in-site
+  check and then redirected off-site; such a value now falls back to `Oidc:ReturnUrlDefault`. The
+  admin's own `?redirect=` check refuses the same characters.
+
 ## 0.12.0 — 2026-10-21
 
 ::: danger Breaking

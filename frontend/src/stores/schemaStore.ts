@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { schemaApi } from '../api/schemaApi'
 import { i18n } from '../i18n'
+import { createGuardedLoader } from '../lib/guardedLoad'
 import type { CollectionMeta } from '../types/schema'
+
+// reset() invalidates a load still in flight, so a previous session's data can never land in the
+// next one.
+const loader = createGuardedLoader()
 
 export const useSchemaStore = defineStore('schema', {
   state: () => ({
@@ -14,20 +19,30 @@ export const useSchemaStore = defineStore('schema', {
     loadPromise: null as Promise<void> | null,
   }),
   actions: {
+    // Forgets everything loaded for the previous user; the next load() fetches afresh.
+    reset(): void {
+      loader.invalidate()
+      this.collections = []
+      this.loaded = false
+      this.loadError = ''
+      this.loadPromise = null
+    },
     load(): Promise<void> {
       if (this.loaded) return Promise.resolve()
       if (this.loadPromise) return this.loadPromise
-      this.loadPromise = (async () => {
-        try {
-          this.collections = await schemaApi.getAll()
+      this.loadPromise = loader.run(() => schemaApi.getAll(), {
+        apply: (result) => {
+          this.collections = result
           this.loaded = true
           this.loadError = ''
-        } catch (e) {
+        },
+        fail: (e) => {
           this.loadError = e instanceof Error ? e.message : i18n.global.t('common.loadFailed')
-        } finally {
+        },
+        settle: () => {
           this.loadPromise = null
-        }
-      })()
+        },
+      })
       return this.loadPromise
     },
     get(name: string): CollectionMeta | undefined {

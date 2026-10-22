@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Check } from '@lucide/vue'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type EffectivePermissions } from '../../api/rbacApi'
+import { createLatestWins } from '../../lib/latestWins'
 
 // Read-only preview of a user's merged grants, fed by the same resolver the backend
 // authorizes with. When roleIds is passed, the panel follows the CURRENT (possibly unsaved)
@@ -24,13 +25,18 @@ const rows = computed(() => {
     .sort((a, b) => a.label.localeCompare(b.label))
 })
 
+const reloadGuard = createLatestWins()
 async function reload(): Promise<void> {
+  const token = reloadGuard.next()
   loadFailed.value = false
   try {
-    eff.value = props.roleIds !== undefined
+    const next = props.roleIds !== undefined
       ? await rbacApi.getEffectivePermissions(props.userId, props.roleIds)
       : await rbacApi.getEffectivePermissions(props.userId)
+    if (!reloadGuard.isCurrent(token)) return
+    eff.value = next
   } catch {
+    if (!reloadGuard.isCurrent(token)) return
     loadFailed.value = true
     eff.value = null
   }

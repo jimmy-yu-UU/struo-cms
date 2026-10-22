@@ -10,6 +10,7 @@ import 'vue-sonner/style.css'
 import App from './App.vue'
 import router from './router'
 import { installChunkLoadRecovery } from './router/chunkLoadRecovery'
+import { handleUnauthorized } from './router/sessionExpiry'
 import { apiClient } from './api/apiClient'
 import { useAuthStore } from './stores/authStore'
 import { i18n } from './i18n'
@@ -25,10 +26,7 @@ app.use(i18n)
 useThemeStore(pinia).apply()
 
 const auth = useAuthStore(pinia)
-apiClient.setUnauthorizedHandler(() => {
-  auth.user = null
-  if (router.currentRoute.value.name !== 'login') void router.push({ name: 'login' })
-})
+apiClient.setUnauthorizedHandler(() => { void handleUnauthorized(auth, router) })
 
 // Resolve the public app config (branding + oidc) and any existing session before mount,
 // so the brand renders without a flash. Neither rejection blocks mounting.

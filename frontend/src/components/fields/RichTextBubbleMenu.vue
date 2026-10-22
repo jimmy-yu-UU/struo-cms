@@ -5,7 +5,7 @@ import type { Editor } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import RichTextCommandButton from './RichTextCommandButton.vue'
 import { RICH_TEXT_COMMANDS, type RichTextCommand } from './richTextCommands'
-import { shouldShowBubbleMenu } from './richTextSelection'
+import { shouldShowBubbleMenu, type BubbleMenuShouldShowArgs } from './richTextSelection'
 
 defineOptions({ name: 'RichTextBubbleMenu' })
 
@@ -77,7 +77,18 @@ function appendBubbleMenuTo(): HTMLElement {
   return bubbleMenuContainer
 }
 
+// BubbleMenuView.destroy() does not cancel its debounced update timer or its focus timer, so one
+// armed just before unmount still calls the show predicate afterwards. Once unmounted the predicate
+// answers false without reading the page. The resize timer does not go through the predicate and
+// is not covered.
+let unmounted = false
+
+function shouldShow(args: BubbleMenuShouldShowArgs): boolean {
+  return !unmounted && shouldShowBubbleMenu(args)
+}
+
 onBeforeUnmount(() => {
+  unmounted = true
   bubbleMenuContainer.remove()
 })
 </script>
@@ -96,7 +107,7 @@ onBeforeUnmount(() => {
     ContextMenuContent) -- without it the menu has no z-index at all and Sidebar's fixed z-10 layer
     (Sidebar.vue) paints over it.
   -->
-  <BubbleMenu :editor="editor" :plugin-key="BUBBLE_MENU_PLUGIN_KEY" :should-show="shouldShowBubbleMenu"
+  <BubbleMenu :editor="editor" :plugin-key="BUBBLE_MENU_PLUGIN_KEY" :should-show="shouldShow"
     :append-to="appendBubbleMenuTo"
     class="rich-text__bubble z-50 flex gap-1 rounded-md border bg-popover p-1 shadow-md"
     role="toolbar" :aria-label="t('fields.richtext.selectionToolbar')">

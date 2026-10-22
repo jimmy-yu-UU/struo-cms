@@ -394,4 +394,19 @@ describe('RichTextBubbleMenu', () => {
     elsewhere.remove()
     teardown(w, container)
   })
+
+  // BubbleMenuView.destroy() leaves its 250ms update timer armed, so a selection change made just
+  // before unmount runs the show predicate against a torn-down page. Outside a browser that is a
+  // `document is not defined` thrown after the test environment is gone.
+  it('does not evaluate the show predicate for a timer armed before unmount', async () => {
+    const { w, container } = mountHarness()
+    await flushPromises()
+    selectWord(getEditor(w), 'world')
+    teardown(w, container)
+
+    const activeElement = vi.spyOn(Document.prototype, 'activeElement', 'get')
+    await vi.advanceTimersByTimeAsync(BUBBLE_MENU_SETTLE_MS)
+
+    expect(activeElement).not.toHaveBeenCalled()
+  })
 })

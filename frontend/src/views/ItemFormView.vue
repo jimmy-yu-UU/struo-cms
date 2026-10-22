@@ -325,6 +325,8 @@ function onCancel(): void {
 // synchronously in setup so vue-router picks it up. Returns a Promise the router awaits:
 // resolve(true) allows the navigation, resolve(false) cancels it and keeps the user here.
 function guardLeave(): Promise<boolean> {
+  // An expired session or a logout is heading for login: unsaved edits are dropped by design, not confirmed.
+  if (auth.skipsLeaveGuards) return Promise.resolve(true)
   // Unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
   // grants, so a single confirm covers both instead of two independently-registered guards firing
   // sequentially on the same navigation.
