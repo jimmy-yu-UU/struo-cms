@@ -32,7 +32,7 @@ internal sealed class ItemWriteInterceptors(
 internal sealed class ItemWriteHooks(ItemWriteContext? context, IReadOnlyList<IItemWriteInterceptor> interceptors)
 {
     /// <summary>The hooks of a write no interceptor sees: every method is a no-op.</summary>
-    public static readonly ItemWriteHooks Empty = new(null!, []);
+    public static readonly ItemWriteHooks Empty = new(null, []);
 
     public ItemWriteContext Context =>
         context ?? throw new InvalidOperationException("No interceptor applies to this write.");

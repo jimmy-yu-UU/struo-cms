@@ -403,11 +403,14 @@ only care about real changes.
 Interceptors that apply to the collection run in registration order, the core's first. Within one
 write the hooks run in this order: every interceptor's `BeforeWriteAsync`, the write transaction with
 every `InTransactionAsync` inside it, every `AfterCommitAsync`, then the `IItemChangeListener`
-notification.
+notification. On the delete-handler path below, the handler notifies the listeners itself, so
+`AfterCommitAsync` follows that notification.
 
 A `StruoDomainException` or a `QueryException` thrown from `BeforeWriteAsync` or
-`InTransactionAsync` answers with the 4xx it carries, the same as a thrown validation error. Any other
-exception is a `500`. A throw in `InTransactionAsync` rolls the write back.
+`InTransactionAsync` answers with the 4xx it carries, the same as a thrown validation error. The
+core's own exceptions map as they do anywhere else: a `ConflictException` is a `409`, a
+`PermissionDeniedException` a `401` or `403`, a `QueryException` a `400`. An exception the API does not
+map is a `500`. A throw in `InTransactionAsync` rolls the write back.
 
 `AfterCommitAsync` is different, because the write is committed by then. If one interceptor throws,
 the remaining `AfterCommitAsync` hooks are skipped, the listeners are still notified, and then the
@@ -421,6 +424,9 @@ On create, the body is checked in this order: permission, the `Creatable` check,
 `MaxLength` and per-field validators, then your `BeforeWriteAsync`, then the Required check. A scalar
 Required field is checked after your hook, so a hook can fill it; that is how the slug example below
 works. A list-type Required field is checked before it, and an interceptor cannot fill one.
+
+A value your hook sets is not re-checked for `MaxLength` or by field validators, so the hook must
+produce a valid value; only the scalar Required check sees it.
 
 ### What does not run interceptors
 
@@ -472,15 +478,20 @@ The core's `file` collection uses one.
 It has `AppliesTo(string collection)`, `TrashAsync(string id, CancellationToken ct)` and
 `PurgeAsync(string id, CancellationToken ct)`, each returning true when the row existed. An optional
 `IsValidId(string id)` returns false for an id that cannot name a row, so the delete answers not found
-without reading it. The first registered handler that applies wins.
+without reading it. The first registered handler that applies wins, and the core's `file` handler is
+registered inside `AddStruoCms()`, so a handler of yours for `file` never runs.
 
 `ItemService` checks permissions and that the row exists, runs the interceptors' `BeforeWriteAsync`,
 then calls the handler. From there the handler owns the transaction and the change notification, so no
 `InTransactionAsync` runs. When the handler returns true, `AfterCommitAsync` runs with `Changed` true.
 A handler cannot report that a trash did nothing.
 
+The handler replaces the whole trash or purge, so it must remove the row itself, inside its own
+transaction, and notify the change listeners; `ItemService` does neither afterwards.
+
 ```csharp
-public sealed class AttachmentDeleteHandler(IMyBlobs blobs) : ICollectionDeleteHandler
+public sealed class AttachmentDeleteHandler(
+    IItemRepository repository, IItemChangeNotifier notifier, IMyBlobs blobs) : ICollectionDeleteHandler
 {
     public bool AppliesTo(string collection) => collection == "attachment";
 
@@ -490,13 +501,19 @@ public sealed class AttachmentDeleteHandler(IMyBlobs blobs) : ICollectionDeleteH
 
     public async Task<bool> PurgeAsync(string id, CancellationToken ct)
     {
+        var removed = await repository.InTransactionAsync(
+            () => repository.DeleteAsync("attachment", id, ct), ct);
+        if (!removed) return false;
+
+        await notifier.NotifyAsync([new ItemChange("attachment", id, ItemChangeKind.Purged)], CancellationToken.None);
         await blobs.RemoveAsync(id, ct);
         return true;
     }
 }
 ```
 
-`IMyBlobs` stands for your own storage client. Register the handler the same way:
+`IItemRepository` and `IItemChangeNotifier` (namespace `Struo.Application.Changes`, with `ItemChange`
+and `ItemChangeKind`) are the core's own services. `IMyBlobs` stands for your own storage client. Register the handler the same way:
 
 ```csharp
 builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();

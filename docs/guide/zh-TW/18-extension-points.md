@@ -339,11 +339,13 @@ builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 
 適用於該集合的攔截器按註冊順序執行，核心的排在最前。同一次寫入裡，掛鉤的順序是：每個攔截器的
 `BeforeWriteAsync`、寫入交易（每個 `InTransactionAsync` 在裡面）、每個 `AfterCommitAsync`，最後是
-`IItemChangeListener` 的通知。
+`IItemChangeListener` 的通知。下面的刪除處理器路徑上，是處理器自己通知監聽者，所以 `AfterCommitAsync`
+排在那次通知之後。
 
 `BeforeWriteAsync` 或 `InTransactionAsync` 丟出 `StruoDomainException` 或 `QueryException`，回應
-的是它自己帶的 4xx，跟丟出驗證錯誤一樣；其他例外是 `500`。`InTransactionAsync` 裡丟例外會讓寫入回
-滾。
+的是它自己帶的 4xx，跟丟出驗證錯誤一樣。核心自己的例外對應方式跟其他地方相同：`ConflictException`
+是 `409`，`PermissionDeniedException` 是 `401` 或 `403`，`QueryException` 是 `400`；API 沒有對應的例外
+才是 `500`。`InTransactionAsync` 裡丟例外會讓寫入回滾。
 
 `AfterCommitAsync` 不一樣，因為這時寫入已經 commit 了。某個攔截器丟例外，後面的 `AfterCommitAsync`
 掛鉤就不跑，監聽者仍然會被通知，然後例外才傳回給呼叫端。呼叫端看到錯誤，但資料其實已經存下來了。它
@@ -355,6 +357,9 @@ builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 建立時，body 的檢查順序是：權限、`Creatable` 檢查、body 形狀、`MaxLength` 與各欄位的驗證器，然後是你
 的 `BeforeWriteAsync`，最後才是必填檢查。純量的必填欄位在你的掛鉤之後才檢查，所以掛鉤可以把它填起
 來，下面的 slug 範例靠的就是這點。列表型別的必填欄位在掛鉤之前就檢查了，攔截器填不了它。
+
+掛鉤設進去的值不會再被 `MaxLength` 或欄位驗證器檢查，所以掛鉤得自己產出合法的值；只有純量必填檢查
+看得到它。
 
 ### 哪些不會跑攔截器
 
@@ -404,14 +409,19 @@ builder.Services.AddScoped<IItemWriteInterceptor, ArticleSlugInterceptor>();
 它有 `AppliesTo(string collection)`、`TrashAsync(string id, CancellationToken ct)` 與
 `PurgeAsync(string id, CancellationToken ct)`，後兩者在那一列存在時回傳 true。選用的
 `IsValidId(string id)` 對不可能是列 id 的字串回 false，刪除就直接回找不到，不去讀取。註冊的處理器
-裡，第一個適用的勝出。
+裡，第一個適用的勝出；核心的 `file` 處理器是在 `AddStruoCms()` 裡註冊的，所以你替 `file` 另外註冊
+的處理器永遠不會被執行。
 
 `ItemService` 先檢查權限與那一列是否存在，執行攔截器的 `BeforeWriteAsync`，再呼叫處理器。從這裡開
 始交易與變更通知都歸處理器管，所以不會跑 `InTransactionAsync`。處理器回傳 true 時，
 `AfterCommitAsync` 會以 `Changed` 為 true 執行。處理器沒辦法回報「這次丟進垃圾桶什麼都沒做」。
 
+處理器取代了整個丟進垃圾桶或清除的動作，所以它必須自己在自己的交易裡移除那一列，並通知變更監聽者；
+`ItemService` 之後不會再做這兩件事。
+
 ```csharp
-public sealed class AttachmentDeleteHandler(IMyBlobs blobs) : ICollectionDeleteHandler
+public sealed class AttachmentDeleteHandler(
+    IItemRepository repository, IItemChangeNotifier notifier, IMyBlobs blobs) : ICollectionDeleteHandler
 {
     public bool AppliesTo(string collection) => collection == "attachment";
 
@@ -421,13 +431,19 @@ public sealed class AttachmentDeleteHandler(IMyBlobs blobs) : ICollectionDeleteH
 
     public async Task<bool> PurgeAsync(string id, CancellationToken ct)
     {
+        var removed = await repository.InTransactionAsync(
+            () => repository.DeleteAsync("attachment", id, ct), ct);
+        if (!removed) return false;
+
+        await notifier.NotifyAsync([new ItemChange("attachment", id, ItemChangeKind.Purged)], CancellationToken.None);
         await blobs.RemoveAsync(id, ct);
         return true;
     }
 }
 ```
 
-`IMyBlobs` 代表你自己的儲存客戶端。處理器用同樣的方式註冊：
+`IItemRepository` 與 `IItemChangeNotifier`（命名空間 `Struo.Application.Changes`，連同 `ItemChange`、
+`ItemChangeKind`）是核心自己的服務。`IMyBlobs` 代表你自己的儲存客戶端。處理器用同樣的方式註冊：
 
 ```csharp
 builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();

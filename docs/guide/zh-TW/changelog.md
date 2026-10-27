@@ -14,6 +14,10 @@
   `Items cannot be created in collection '<name>' through the generic items API.`。原本點名
   `POST /api/files` 與 `POST /api/users` 的訊息不見了，拿它們做比對的客戶端要改成比對代碼或新的文
   字。`/api/schema` 在每個集合上多了一個 `creatable` 旗標。
+- 後台的 `NON_CREATABLE_COLLECTIONS` 常數移除了，`createRouteGuard` 多了第二個參數 `creatable`。曾把集
+  合加進該常數的 fork，要改在集合上設 `Creatable = false`。`ItemDeserializer.Deserialize` 也移除了：由
+  `DeserializeForCreate` 取代，它不再檢查純量必填欄位，這項檢查改由 `ItemService` 在 `BeforeWriteAsync`
+  之後執行。直接呼叫過 `Deserialize` 的 fork，要自己補上這項檢查。
 :::
 
 ### 新增

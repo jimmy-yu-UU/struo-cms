@@ -57,7 +57,7 @@ Two collections cannot be created through `POST api/items/{collection}` at all: 
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
 `createFile` and `createUser` mutations get the same error. The refusal comes from the collection's
 `Creatable = false` flag ([Chapter 5](05-collections.md#cmscollection-options)). A file is created by uploading it to `POST api/files`, and a user by `POST api/users`,
-which sets the password. The user check runs first, so a duplicate email is a `400` there, not a
+which sets the password. The refusal comes before any check of the body, so a duplicate email is a `400` there, not a
 `409`. Reading, updating and deleting both collections still go through the generic routes.
 
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of

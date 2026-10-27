@@ -53,9 +53,10 @@ public sealed class ItemWriteContext(
 
     /// <summary>
     /// True when the write changed state. False in <see cref="IItemWriteInterceptor.AfterCommitAsync"/>
-    /// for a trash of an already-trashed row and a restore of a live row.
+    /// for a trash of an already-trashed row and a restore of a live row. Settable so a unit test of an
+    /// interceptor can build a context with <c>Changed = false</c>.
     /// </summary>
-    public bool Changed { get; internal set; } = true;
+    public bool Changed { get; set; } = true;
 
     /// <summary>The request body (the snapshot for a revert); null for trash, restore and purge.</summary>
     public JsonElement? Body { get; } = body;

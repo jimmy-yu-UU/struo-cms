@@ -241,24 +241,24 @@ public sealed class ItemService(
         return projector.Project(updated, meta, null);
     }
 
-    // Loads the stored row (null -> 404); the merge below mutates it.
+    // Loads the stored row (null -> 404); the merge mutates it.
     private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
         string collection, string id, CollectionMetadata meta, CancellationToken ct)
     {
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
-        // The row as stored, for interceptors that compare old and new; the merge mutates `existing`.
+        // A second copy of the stored row for interceptors that compare old and new.
         var preMerge = writeInterceptors.AnyApplies(meta)
             ? await repository.GetByIdAsync(collection, id, ct: ct)
             : null;
         return (existing, preMerge);
     }
 
-    // Merge update: start from the existing row and overlay ONLY the fields the client actually
-    // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
-    // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
-    // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately by persist.
-    // Overlays the client-sent fields and M2O foreign keys onto `existing`; returns the body keys.
+    // Merge update: overlays ONLY the fields the client actually sent (writable, non-readonly,
+    // non-system) and the M2O foreign keys onto `existing`, and returns the body keys. This preserves
+    // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
+    // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
+    // translations are synced separately by persist.
     private IReadOnlySet<string> MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {

@@ -47,7 +47,7 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
 `BAD_USER_INPUT`，訊息是點出集合名稱的通用句子，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。
 拒絕的依據是集合的 `Creatable = false` 旗標（見[第 5 章](05-collections.md#cmscollection-選項)）。檔案要上傳到
-`POST api/files`，使用者要走會設定密碼的 `POST api/users`。使用者的檢查排在最前面，所以重複 email
+`POST api/files`，使用者要走會設定密碼的 `POST api/users`。拒絕發生在任何 body 檢查之前，所以重複 email
 在這裡是 `400`，不是 `409`。這兩個集合的讀取、更新與刪除仍然走通用路由。
 
 版本紀錄與垃圾桶的完整規則（`DELETE` 的等冪行為、`?purge=` 的細節、版本快照的欄位形狀）留給

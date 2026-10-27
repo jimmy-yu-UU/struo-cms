@@ -550,7 +550,8 @@ already committed, so a disconnecting caller must not also skip notifying listen
 sessions) → notify. An `AfterCommitAsync` that throws skips the remaining `AfterCommitAsync` hooks,
 the notification still goes out, then the exception propagates. `AfterCommitAsync` runs for a trash or
 restore whenever the row exists, with `ItemWriteContext.Changed` false when nothing changed, and for a
-purge only when the row existed.
+purge only when the row existed. On the delete-handler path (the `file` collection) the handler
+notifies inside itself, so `AfterCommitAsync` follows its notification.
 `FileService` bypasses `ItemService` entirely for every file operation, so it raises its own
 notification per write rather than sharing `ItemService`'s call sites, immediately after each write
 commits (`RestoreAsync` in particular has no `InTransactionAsync` wrapper of its own — it is a single

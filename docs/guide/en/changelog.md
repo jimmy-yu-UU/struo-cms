@@ -15,6 +15,11 @@
   `Items cannot be created in collection '<name>' through the generic items API.` The messages that
   named `POST /api/files` and `POST /api/users` are gone, so a client that matched on them must match
   the code or the new text. `/api/schema` gains a `creatable` flag on every collection.
+- The admin UI's `NON_CREATABLE_COLLECTIONS` constant is gone, and `createRouteGuard` takes a second
+  `creatable` parameter. A fork that added a collection to the constant must set `Creatable = false` on
+  the collection instead. `ItemDeserializer.Deserialize` is gone too: `DeserializeForCreate` replaces
+  it and no longer checks scalar Required fields, which `ItemService` now checks after
+  `BeforeWriteAsync`. A fork that called `Deserialize` directly must run that check itself.
 :::
 
 ### Added
