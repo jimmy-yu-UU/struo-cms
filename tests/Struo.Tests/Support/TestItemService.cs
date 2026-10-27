@@ -2,7 +2,6 @@
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
 using Struo.Application.Configuration;
-using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
@@ -16,8 +15,8 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// Builds an <see cref="ItemService"/> the way DI does, for the unit harnesses that wire it by hand.
 /// The arguments the harnesses differ on are required; the rest default to what the harnesses used: all
-/// permissions allowed, default query options, the Ganss sanitizer, a no-op session revocation, and no
-/// search provider, notifier, language rules, credential store, file lifecycle, interceptors or handlers.
+/// permissions allowed, default query options, the Ganss sanitizer, and no search
+/// provider, notifier, interceptors or delete handlers.
 /// </summary>
 internal static class TestItemService
 {
@@ -36,13 +35,9 @@ internal static class TestItemService
         StruoQueryOptions? options = null,
         ISearchProvider? searchProvider = null,
         IItemChangeNotifier? notifier = null,
-        ILanguageCollectionRules? languageRules = null,
-        IUserCredentialStore? userCredentials = null,
-        IFileLifecycle? fileLifecycle = null,
         IEnumerable<IItemWriteInterceptor>? interceptors = null,
         IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null) =>
         new(repository, metadata, registry, permissions ?? new AllowAllPermissionService(), graph, expander,
             m2mSource, languages, options ?? new StruoQueryOptions(), new GanssHtmlSanitizer(), currentUser,
-            revisions, snapshotBuilder, new NoopUserSessionRevocationService(), searchProvider, notifier,
-            languageRules, userCredentials, fileLifecycle, interceptors, deleteHandlers);
+            revisions, snapshotBuilder, searchProvider, notifier, interceptors, deleteHandlers);
 }

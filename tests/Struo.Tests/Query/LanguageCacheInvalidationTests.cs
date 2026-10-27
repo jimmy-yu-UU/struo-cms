@@ -18,7 +18,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Pins that ItemService invalidates the language cache on trash, purge AND restore of a `language`
+/// Pins that the language write interceptor, run by ItemService, invalidates the language cache on trash, purge AND restore of a `language`
 /// row, not just create/update. The gate keys off the collection NAME ("language"), so this
 /// fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
 /// branches reachable here — the real, production `Language` row does not implement it (languages
@@ -139,6 +139,11 @@ public class LanguageCacheInvalidationTests
             Task.CompletedTask;
     }
 
+    private sealed class NoLanguageRules : ILanguageCollectionRules
+    {
+        public Task EnsureInvariantsAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
     private static EntityDescriptor Descriptor() =>
         new(typeof(FakeLanguageRow),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["id"] = "Id" },
@@ -160,7 +165,8 @@ public class LanguageCacheInvalidationTests
             new TestCurrentUserAccessor(Guid.Empty),
             new StubRevisionStore(),
             new RevisionSnapshotBuilder(repo, meta, registry, m2m),
-            permissions: new StubPermissions());
+            permissions: new StubPermissions(),
+            interceptors: [new LanguageWriteInterceptor(new NoLanguageRules(), languages)]);
     }
 
     [Fact]

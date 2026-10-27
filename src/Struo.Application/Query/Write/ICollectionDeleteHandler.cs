@@ -14,6 +14,12 @@ public interface ICollectionDeleteHandler
     /// <summary>True when this handler deletes rows of <paramref name="collection"/>, the canonical collection name.</summary>
     bool AppliesTo(string collection);
 
+    /// <summary>
+    /// False when <paramref name="id"/> cannot name a row of this collection, so the delete reports not
+    /// found without reading it (the generic read rejects a malformed id with a 400). Defaults to true.
+    /// </summary>
+    bool IsValidId(string id) => true;
+
     /// <summary>Soft-deletes the row. True when the row exists; an already-trashed row is idempotent success.</summary>
     Task<bool> TrashAsync(string id, CancellationToken ct);
 

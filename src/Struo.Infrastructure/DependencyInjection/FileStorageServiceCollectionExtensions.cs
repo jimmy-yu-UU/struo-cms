@@ -87,6 +87,7 @@ public static class FileStorageServiceCollectionExtensions
         services.AddScoped<FileServiceCollaborators>();
         services.AddScoped<FileService>();
         services.AddScoped<IFileLifecycle>(sp => sp.GetRequiredService<FileService>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ICollectionDeleteHandler, FileDeleteHandler>());
         return services;
     }
 }

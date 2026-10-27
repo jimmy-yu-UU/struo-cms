@@ -157,7 +157,7 @@ public sealed class FileReferenceCleanupTests : IDisposable
             revisions,
             new RevisionSnapshotBuilder(repo, provider, registry, graph),
             options: options,
-            fileLifecycle: _files);
+            deleteHandlers: [new FileDeleteHandler(_files)]);
     }
 
     public void Dispose() => _file.Dispose();
@@ -255,6 +255,19 @@ public sealed class FileReferenceCleanupTests : IDisposable
         (await _files.DeleteAsync(Guid.NewGuid())).Should().BeFalse();
 
         _listener.All.Should().BeEmpty();
+        _storage.Deleted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Generic_delete_of_a_non_guid_file_id_reports_not_found(bool purge)
+    {
+        var s = await SeedAsync();
+
+        (await _items.DeleteAsync("file", "not-a-guid", purge)).Should().BeFalse();
+
+        (await _db.Queryable<File>().In(s.FileId).AnyAsync()).Should().BeTrue();
         _storage.Deleted.Should().BeEmpty();
     }
 }

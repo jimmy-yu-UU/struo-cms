@@ -4,7 +4,6 @@ using System.Text.Json;
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
 using Struo.Application.Configuration;
-using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Revisions;
@@ -36,7 +35,6 @@ public sealed class ItemService(
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
     RevisionSnapshotBuilder snapshotBuilder,
-    IUserSessionRevocationService sessionRevocation,
     // U5: trailing and optional — existing test files construct ItemService directly (necessary
     // constructor args are not optional there), and DI always injects the AddStruoData-registered
     // instance; null (direct construction) means the built-in LIKE search only.
@@ -44,15 +42,6 @@ public sealed class ItemService(
     // U5b: trailing and optional, same rationale as searchProvider above; null means no listener
     // is registered (or a test harness doesn't care), so NotifyAsync below is a no-op.
     IItemChangeNotifier? notifier = null,
-    // Trailing and optional like searchProvider/notifier: tests that construct ItemService directly
-    // keep compiling; DI injects the AddStruoData registration. null means the language collection's
-    // invariants are not enforced (only direct construction in tests).
-    ILanguageCollectionRules? languageRules = null,
-    // Trailing and optional like the others: backs the User collection's email uniqueness check.
-    IUserCredentialStore? userCredentials = null,
-    // Trailing and optional like the others: owns the file collection's delete lifecycle (logo
-    // reference, blob); null (direct construction in tests) means the generic pipeline only.
-    IFileLifecycle? fileLifecycle = null,
     // Trailing and optional like the others: the write interceptors and delete handlers DI collects
     // from every registration; null (direct construction in tests) means none.
     IEnumerable<IItemWriteInterceptor>? interceptors = null,
@@ -66,7 +55,6 @@ public sealed class ItemService(
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
-    private readonly UserEmailRules userEmailRules = new(userCredentials);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
@@ -178,8 +166,8 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
-        // Rows of a non-creatable collection come from a dedicated pipeline (file uploads, user
-        // creation with password hashing), so the generic path refuses before any body inspection.
+        // Rows of a non-creatable collection come from a dedicated pipeline of their own, so the
+        // generic path refuses before any body inspection.
         if (!meta.Creatable)
             throw new QueryException($"Items cannot be created in collection '{meta.Name}' through the generic items API.");
         // A non-object top-level body (array or scalar) would reach Deserialize below, which assumes an
@@ -205,7 +193,6 @@ public sealed class ItemService(
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
-            await EnforceLanguageRulesAsync(collection, ct);
             hooks.Stored(created, createdId);
             await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
@@ -214,7 +201,6 @@ public sealed class ItemService(
                 await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct: ct);
             }
         }, ct);
-        InvalidateLanguagesIfNeeded(collection);
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, createdId, ItemChangeKind.Created));
         return projector.Project(created, meta, null);
     }
@@ -280,10 +266,6 @@ public sealed class ItemService(
             pi.SetValue(existing, pi.GetValue(incoming));
         }
 
-        if (IsFileCollection(collection) && bodyKeys.Contains("status")
-            && d.FieldToProperty.TryGetValue("status", out var statusProp))
-            EnsureFileStatus(d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) as string);
-
         // Required check runs here — against the MERGED entity, after both overlay loops above —
         // rather than while deserializing `incoming`: an omitted Required field keeps whatever
         // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
@@ -297,8 +279,6 @@ public sealed class ItemService(
             meta, existing, id, bodyKeys, body, preMerge);
         await hooks.BeforeWriteAsync(ct);
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
-        if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
-            await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
@@ -323,7 +303,6 @@ public sealed class ItemService(
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
-            await EnforceLanguageRulesAsync(collection, ct);
             hooks.Stored(updated, updatedId);
             await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
@@ -334,27 +313,8 @@ public sealed class ItemService(
             }
         }, ct);
         if (updated is null) return null;
-        InvalidateLanguagesIfNeeded(collection);
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
-    }
-
-    private const string LanguageCollection = "language";
-
-    private static bool IsLanguageCollection(string collection) =>
-        string.Equals(collection, LanguageCollection, StringComparison.OrdinalIgnoreCase);
-
-    // Runs INSIDE the write transaction: a violation throws QueryException, the transaction rolls
-    // back, and the API answers 400 with the rule's message.
-    private Task EnforceLanguageRulesAsync(string collection, CancellationToken ct) =>
-        IsLanguageCollection(collection) && languageRules is not null
-            ? languageRules.EnsureInvariantsAsync(ct)
-            : Task.CompletedTask;
-
-    private void InvalidateLanguagesIfNeeded(string collection)
-    {
-        if (IsLanguageCollection(collection))
-            languages.Invalidate();
     }
 
     /// <summary>
@@ -371,9 +331,6 @@ public sealed class ItemService(
 
         if (writeInterceptors.DeleteHandlerFor(meta) is { } handler)
             return await DeleteWithHandlerAsync(collection, meta, id, purge, handler, ct);
-
-        if (fileLifecycle is not null && IsFileCollection(collection))
-            return await DeleteFileAsync(collection, id, purge, fileLifecycle, ct);
 
         if (meta.SoftDelete && !purge)
         {
@@ -420,14 +377,11 @@ public sealed class ItemService(
                 }
                 return trashedNow;
             }, ct);
-            if (softDeletedNow) InvalidateLanguagesIfNeeded(collection);
-            // AfterCommit runs for an already-trashed row too (Changed false), like the session
-            // revocation after it.
+            // AfterCommit runs for an already-trashed row too, with Changed false.
             trashHooks.Context.Changed = softDeletedNow;
             await AfterCommitAndNotifyAsync(trashHooks, softDeletedNow
                 ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed)
                 : null);
-            await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
@@ -436,23 +390,14 @@ public sealed class ItemService(
         var existed = await repository.InTransactionAsync(async () =>
         {
             var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
-            if (purged)
-            {
-                await EnforceLanguageRulesAsync(collection, ct);
-                await purgeHooks.InTransactionAsync(ct);
-            }
+            if (purged) await purgeHooks.InTransactionAsync(ct);
             return purged;
         }, ct);
         // Gated on the top-level row having existed: with no DB-level FKs, a dangling child row (its FK
         // pointing at an id that was never a real row) could otherwise still be found by the Cascade/
         // SetNull/M2M scans above and raise its own Updated/Purged even though nothing here actually
         // existed to purge. Accepted — the only way to hit it is already-inconsistent data.
-        if (existed)
-        {
-            InvalidateLanguagesIfNeeded(collection);
-            await AfterCommitAndNotifyAsync(purgeHooks, changes);
-            await RevokeSessionsIfUserAsync(collection, id);
-        }
+        if (existed) await AfterCommitAndNotifyAsync(purgeHooks, changes);
         return existed;
     }
 
@@ -475,6 +420,7 @@ public sealed class ItemService(
         string collection, CollectionMetadata meta, string id, bool purge,
         ICollectionDeleteHandler handler, CancellationToken ct)
     {
+        if (!handler.IsValidId(id)) return false;
         var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
         var hooks = writeInterceptors.Begin(
@@ -484,59 +430,6 @@ public sealed class ItemService(
         // The handler owns the transaction and any notification, so only AfterCommit applies here.
         if (done) await AfterCommitAndNotifyAsync(hooks, changes: null);
         return done;
-    }
-
-    // A file is either published (readable by anyone with its id) or draft (file writers only).
-    private static void EnsureFileStatus(string? status)
-    {
-        if (status is not (FileStorageOptions.PublishedStatus or FileStorageOptions.DraftStatus))
-            throw new QueryException(
-                $"Field 'status' must be '{FileStorageOptions.PublishedStatus}' or '{FileStorageOptions.DraftStatus}'.");
-    }
-
-    private static bool IsFileCollection(string collection) =>
-        string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase);
-
-    // File deletes run through the file lifecycle, the single path shared with the media library: the
-    // Restrict guard, SetNull and junction cleanup, the brand-logo reference and the stored blob.
-    private async Task<bool> DeleteFileAsync(
-        string collection, string id, bool purge, IFileLifecycle lifecycle, CancellationToken ct)
-    {
-        if (!Guid.TryParse(id, out var fileId)) return false;
-        var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
-        if (existing is null) return false;
-        if (purge) return await lifecycle.PurgeAsync(fileId, ct);
-        await lifecycle.TrashAsync(fileId, ct);
-        return true; // an already-trashed file is idempotent success, like the generic trash path
-    }
-
-    /// <summary>
-    /// Deleting a `user` row (soft-delete or purge) must clear that user's <c>UserSession</c> rows
-    /// proactively: the per-request cookie-liveness check only catches a deleted user's session
-    /// reactively, on its next use, so a session that is never presented again would otherwise leave
-    /// its row (and cache entry) around until that user's next login — which, for a deleted user,
-    /// never happens. Placed here (both DELETE branches share it), not in the REST controller, so REST
-    /// and the GraphQL <c>deleteUser</c> mutation — which calls straight into this method — are both
-    /// covered. Fires only after the delete has actually taken effect; the delete stays committed
-    /// regardless of what happens next. CancellationToken.None: the delete already committed, so a
-    /// disconnecting caller must not also skip revoking the now-deleted user's sessions. A revocation
-    /// failure surfaces as a distinct, client-safe error rather than an indistinguishable success.
-    /// </summary>
-    private async Task RevokeSessionsIfUserAsync(string collection, string id)
-    {
-        if (!string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase)) return;
-        if (!Guid.TryParse(id, out var userId)) return;
-
-        try
-        {
-            await sessionRevocation.RevokeAllForUserAsync(userId, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            throw new SessionRevocationFailedException(
-                "The user was deleted, but revoking their existing sessions failed. " +
-                "Some sessions may still be active.", ex);
-        }
     }
 
     /// <summary>
@@ -576,7 +469,6 @@ public sealed class ItemService(
             }
             return r;
         }, ct);
-        if (restoredNow) InvalidateLanguagesIfNeeded(collection);
         hooks.Context.Changed = restoredNow;
         await AfterCommitAndNotifyAsync(hooks, restoredNow
             ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored)
