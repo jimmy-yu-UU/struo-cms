@@ -19,6 +19,8 @@ public class GraphQlLimitOptionsTests
     [InlineData("MaxFieldCost", "-1")]
     [InlineData("MaxTypeCost", "0")]
     [InlineData("MaxTypeCost", "-1")]
+    [InlineData("MaxFieldCost", "NaN")]
+    [InlineData("MaxTypeCost", "NaN")]
     public async Task A_limit_that_is_not_positive_fails_startup_naming_the_key(string key, string value)
     {
         var error = await ForkHost.StartupErrorAsync(mutate: s => s[$"GraphQl:{key}"] = value);

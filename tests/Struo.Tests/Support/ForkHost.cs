@@ -11,7 +11,10 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// A host composed the way a fork's <c>Program.cs</c> does it (<c>AddStruoCms(configure)</c>,
 /// <c>UseStruoCmsAsync()</c>) on a throwaway SQLite database and a TestServer, so a test can drive the
-/// <see cref="StruoCmsBuilder"/> hooks and the startup checks through a real host.
+/// <see cref="StruoCmsBuilder"/> hooks and the startup checks through a real host. It resets the static
+/// <c>Log.Logger</c>, as every <c>Program.cs</c> run does, so test classes that use it must belong to the
+/// <c>ApiIntegration</c> collection to run serially with the other hosts. Every external target the
+/// gitignored Development settings file may point at is overridden (<see cref="HostIsolation"/>).
 /// </summary>
 internal sealed class ForkHost : IAsyncDisposable
 {
@@ -43,11 +46,9 @@ internal sealed class ForkHost : IAsyncDisposable
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = db.ConnectionString,
                 ["Database:MigrateOnStartup"] = "true",
-                ["Struo:Files:Backend"] = "local",
-                ["Struo:Files:Local:RootPath"] = filesRoot,
-                ["Oidc:Providers:microsoft:Enabled"] = "false",
-                ["Oidc:Providers:google:Enabled"] = "false",
             };
+            foreach (var (key, value) in HostIsolation.ExternalTargets(filesRoot, Path.Combine(filesRoot, "image-cache")))
+                settings[key] = value;
             mutate?.Invoke(settings);
 
             // Program.cs installs a fresh bootstrap logger before each host; a second UseSerilog on the same

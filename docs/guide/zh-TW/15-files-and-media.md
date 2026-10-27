@@ -351,7 +351,7 @@ HTTP_STATUS:400
 `?purge=true`。
 
 上傳、丟進垃圾桶、復原、清除這四條檔案自己的寫入路徑，各自會發出自己的寫入通知（見
-[第 18 章：擴充點：搜尋提供者與寫入通知](18-extension-points.md)），因為 `FileService` 自己處理檔案的寫入。
+[第 18 章：擴充點](18-extension-points.md)），因為 `FileService` 自己處理檔案的寫入。
 一次清除只會回報一批通知：檔案本身是 `Purged`，參照被設為 null 的每個存活項目，以及失去連接資料列的每個
 父項，都是 `Updated`。
 

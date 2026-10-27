@@ -32,6 +32,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(HostIsolation.ExternalTargets(FilesRoot, ImageCacheRoot)));
+        builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Database:DbType"] = _db.DbType.ToString(),

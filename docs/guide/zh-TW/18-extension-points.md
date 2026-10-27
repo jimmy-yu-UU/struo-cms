@@ -1,9 +1,9 @@
-# 18. 擴充點：搜尋提供者與寫入通知
+# 18. 擴充點
 
-呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，核心把這兩件事各自留成
-一個介面，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談
-`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什
-麼事，以及怎麼註冊。
+呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，GraphQL schema 裡要有什麼，核心把這幾件事
+各自留成一個接口，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談 fork 的服務註冊在
+哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，以及
+`ConfigureGraphQl` 怎麼擴充 GraphQL schema。
 
 `search=` 本身的語法與內建的 LIKE 掃描，見
 [第 10 章：查詢：過濾、排序、分頁](10-query-basics.md)；一次寫入的版本紀錄與軟刪除語
@@ -325,12 +325,28 @@ builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
 
 之後 `{ buildInfo { version } }` 就和產生出來的欄位一起由 `/graphql` 提供。
 
+你加在 `Mutation` 上的欄位，要自己保護。CMS 的登入檢查與權限是掛在它產生出來的欄位上，不是掛在
+`Mutation` 型別上，所以 fork 自己的欄位，除非自己檢查，匿名呼叫端也能執行。你的動作也是在核心之後執行，
+所以你在 builder 上改的設定（introspection、成本與深度規則、相依性注入的範圍）會取代核心的。CSRF 防護是
+HTTP 中介層，照樣適用。要求已登入呼叫端的 mutation 長這樣：
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
 名稱不能和產生出來的 schema 衝突；衝突時啟動會失敗，訊息是 `GraphQL name collision`。查詢深度與成本的
 上限是 `GraphQl:MaxExecutionDepth`、`GraphQl:MaxFieldCost` 與 `GraphQl:MaxTypeCost`，比較重的 fork 查詢
 可能需要調高。見[第 14 章：GraphQL API](14-graphql.md)。
 
 ## 接下來
 
-搜尋提供者跟寫入通知就談到這裡；下一章，
+註冊的位置、搜尋提供者、寫入通知跟 GraphQL 的掛鉤就談到這裡；下一章，
 [第 19 章：後台客製化](19-admin-customization.md)，回到前端，談後台的哪些外觀跟行為只
 靠設定就能換掉，哪些才真的需要碰 `frontend/src`。

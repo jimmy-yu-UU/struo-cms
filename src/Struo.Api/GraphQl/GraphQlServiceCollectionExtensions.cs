@@ -27,11 +27,19 @@ public static class GraphQlServiceCollectionExtensions
 
     /// <summary>
     /// Reads the depth and cost limits from configuration at registration time, like
-    /// <see cref="ResolveExposeSchema"/>: the HotChocolate rules take plain values. A non-positive value is
-    /// rejected at startup by <see cref="GraphQlOptionsValidator"/>.
+    /// <see cref="ResolveExposeSchema"/>: the HotChocolate rules take plain values. A value that
+    /// <see cref="GraphQlOptionsValidator"/> rejects throws here, before the host touches the database or builds
+    /// the schema.
     /// </summary>
-    internal static GraphQlOptions ResolveLimits(IConfiguration config) =>
-        config.GetSection(GraphQlOptions.SectionName).Get<GraphQlOptions>() ?? new GraphQlOptions();
+    internal static GraphQlOptions ResolveLimits(IConfiguration config)
+    {
+        var limits = config.GetSection(GraphQlOptions.SectionName).Get<GraphQlOptions>() ?? new GraphQlOptions();
+        var result = new GraphQlOptionsValidator().Validate(null, limits);
+        if (result.Failed)
+            throw new OptionsValidationException(
+                Options.DefaultName, typeof(GraphQlOptions), result.Failures);
+        return limits;
+    }
 
     public static IServiceCollection AddStruoGraphQl(
         this IServiceCollection services, IHostEnvironment env, IConfiguration config)

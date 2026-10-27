@@ -4,7 +4,9 @@ using System.Text.Json;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Types;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Struo.Api.Hosting;
 using Struo.Domain.Metadata;
 using Struo.Tests.Support;
 using Xunit;
@@ -31,6 +33,37 @@ public class ConfigureGraphQlTests
     public sealed class ArticlesClashQuery
     {
         public string GetArticles() => "clash";
+    }
+
+    [ExtendObjectType("Mutation")]
+    public sealed class MutationClash
+    {
+        public string CreateArticle() => "clash";
+    }
+
+    [ExtendObjectType("Mutation")]
+    public sealed class ForkMutation
+    {
+        public string ForkOpen() => "open";
+
+        public string ForkGuarded([Service] IHttpContextAccessor accessor) =>
+            accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+                ? "guarded"
+                : throw new GraphQLException("Sign in to run this mutation.");
+    }
+
+    [ExtendObjectType("Article")]
+    public sealed class ArticleExtension
+    {
+        public string GetForkNote() => "note";
+    }
+
+    public sealed class EmptyThing;
+
+    [ExtendObjectType("Query")]
+    public sealed class EmptyTypeQuery
+    {
+        public EmptyThing GetEmpty() => new();
     }
 
     public sealed class RevisionClash
@@ -86,5 +119,75 @@ public class ConfigureGraphQlTests
         var ex = ExceptionChainSearch.FindInner<MetadataException>(error);
         ex.Should().NotBeNull(error?.ToString());
         ex!.Message.Should().Contain("GraphQL name collision").And.Contain("'Article'");
+    }
+
+    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
+    public async Task A_fork_mutation_field_is_served_and_carries_no_automatic_authentication()
+    {
+        await using var host = await ForkHost.StartAsync(cms =>
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<ForkMutation>()));
+        var client = host.CreateClient();
+
+        var open = await client.PostAsJsonAsync("/graphql", new { query = "mutation { forkOpen }" });
+        var openJson = await open.Content.ReadAsStringAsync();
+        var guarded = await client.PostAsJsonAsync("/graphql", new { query = "mutation { forkGuarded }" });
+        var guardedJson = await guarded.Content.ReadAsStringAsync();
+
+        using var openDoc = JsonDocument.Parse(openJson);
+        openDoc.RootElement.TryGetProperty("errors", out _).Should().BeFalse(openJson);
+        openDoc.RootElement.GetProperty("data").GetProperty("forkOpen").GetString().Should().Be("open");
+        using var guardedDoc = JsonDocument.Parse(guardedJson);
+        guardedDoc.RootElement.TryGetProperty("errors", out _).Should().BeTrue(
+            "the fork field checks the caller itself; " + guardedJson);
+    }
+
+    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
+    public async Task A_fork_mutation_field_named_like_a_generated_field_fails_startup()
+    {
+        var error = await ForkHost.StartupErrorAsync(cms =>
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<MutationClash>()));
+
+        var ex = ExceptionChainSearch.FindInner<MetadataException>(error);
+        ex.Should().NotBeNull(error?.ToString());
+        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("Mutation field name 'createArticle'");
+    }
+
+    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
+    public async Task A_fork_field_on_a_generated_type_is_a_legitimate_extension()
+    {
+        await using var host = await ForkHost.StartAsync(cms =>
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<ArticleExtension>()));
+
+        var response = await host.CreateClient().PostAsJsonAsync(
+            "/graphql", new { query = "{ __type(name: \"Article\") { fields { name } } }" });
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.TryGetProperty("errors", out _).Should().BeFalse(json);
+        doc.RootElement.GetProperty("data").GetProperty("__type").GetProperty("fields").EnumerateArray()
+            .Select(f => f.GetProperty("name").GetString()).Should().Contain("forkNote");
+    }
+
+    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
+    public async Task A_schema_error_that_is_not_a_name_collision_is_not_labelled_as_one()
+    {
+        var error = await ForkHost.StartupErrorAsync(cms =>
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<EmptyTypeQuery>()));
+
+        error.Should().NotBeNull();
+        ExceptionChainSearch.FindInner<HotChocolate.SchemaException>(error).Should().NotBeNull(error!.ToString());
+        error!.ToString().Should().NotContain("name collision");
+    }
+
+    [Fact]
+    public void ConfigureGraphQl_after_AddStruoCms_has_applied_the_configuration_throws()
+    {
+        StruoCmsBuilder? kept = null;
+        var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder();
+        Struo.Api.Hosting.StruoCmsHostingExtensions.AddStruoCms(builder, cms => kept = cms);
+
+        var late = () => kept!.ConfigureGraphQl(_ => { });
+
+        late.Should().Throw<InvalidOperationException>().WithMessage("*AddStruoCms*");
     }
 }

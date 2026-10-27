@@ -10,9 +10,9 @@ public sealed class GraphQlOptionsValidator : IValidateOptions<GraphQlOptions>
         List<string> failures = [];
         if (options.MaxExecutionDepth <= 0)
             failures.Add($"GraphQl:MaxExecutionDepth ({options.MaxExecutionDepth}) must be greater than 0.");
-        if (options.MaxFieldCost <= 0)
+        if (!(options.MaxFieldCost > 0))
             failures.Add($"GraphQl:MaxFieldCost ({options.MaxFieldCost}) must be greater than 0.");
-        if (options.MaxTypeCost <= 0)
+        if (!(options.MaxTypeCost > 0))
             failures.Add($"GraphQl:MaxTypeCost ({options.MaxTypeCost}) must be greater than 0.");
         return failures.Count > 0 ? ValidateOptionsResult.Fail(failures) : ValidateOptionsResult.Success;
     }

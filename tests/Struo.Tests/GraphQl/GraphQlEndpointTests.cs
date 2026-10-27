@@ -13,7 +13,7 @@ namespace Struo.Tests.GraphQl;
 /// middleware in front of MapGraphQL, exactly as StruoCmsPipeline wires it — see
 /// GraphQlServiceCollectionExtensions.MapStruoGraphQl) rather than only through the in-process
 /// IRequestExecutor used by GraphQlExecutionTests. Also proves the
-/// AddMaxExecutionDepthRule(12, ...) guard configured there actually rejects an over-deep query
+/// max-execution-depth rule configured there (GraphQl:MaxExecutionDepth, default 12) actually rejects an over-deep query
 /// end-to-end.
 /// </summary>
 [Collection("ApiIntegration")]
@@ -42,7 +42,7 @@ public class GraphQlEndpointTests(ApiFactory factory)
     /// <summary>
     /// Category is self-referential (parent: Category) in the sample schema, which lets a single
     /// selection set recurse arbitrarily deep without needing 12+ distinct collections. The rule is
-    /// registered as AddMaxExecutionDepthRule(12, ...) in GraphQlServiceCollectionExtensions and
+    /// registered with GraphQl:MaxExecutionDepth (default 12) in GraphQlServiceCollectionExtensions and
     /// runs at document-validation time — before any resolver executes — so the query is rejected
     /// purely on shape; no seeded data or authentication is required for this to fail. Confirmed via
     /// a throwaway diagnostic run that HotChocolate answers this class of validation error with

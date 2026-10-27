@@ -442,7 +442,7 @@ field. The correct form is `?purge=true`.
 
 Upload, trash, restore and purge — the four write paths specific to files — each emit their own
 change notification (see
-[Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md)),
+[Chapter 18: Extension Points](18-extension-points.md)),
 because `FileService` handles file writes itself. A purge reports one batch: `Purged` for the file,
 and `Updated` for every live item whose reference was set to null and every parent that lost a
 junction row.

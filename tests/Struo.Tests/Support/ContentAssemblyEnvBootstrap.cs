@@ -32,5 +32,13 @@ internal static class ContentAssemblyEnvBootstrap
     internal static void EnsureSampleContentAssemblyIsVisibleToEagerStartupScan()
     {
         Environment.SetEnvironmentVariable("Struo__ContentAssemblies__0", "Struo.Sample.Blog");
+
+        // Redis and the OIDC providers are also read while services are registered, before a test host
+        // can layer its own in-memory overrides, so the gitignored Development settings file would
+        // otherwise connect the suite to the maintainer's Redis. A single space is "not configured" to
+        // the Redis reader, and setting a variable to the empty string would delete it on Windows.
+        Environment.SetEnvironmentVariable("Redis__ConnectionString", " ");
+        Environment.SetEnvironmentVariable("Oidc__Providers__microsoft__Enabled", "false");
+        Environment.SetEnvironmentVariable("Oidc__Providers__google__Enabled", "false");
     }
 }

@@ -592,8 +592,8 @@ The GraphQL schema's extension point is HotChocolate's own `ITypeModule`, implem
 emits one object type + list wrapper + filter input + two root query fields (and, per-collection,
 mutation fields) for every scanned collection, plus shared value types (`TagItem` and its input type,
 `Translation`, the `DeletedFilter` enum, revision types, shared filter inputs, and shared facet
-types). Registered in `GraphQlServiceCollectionExtensions.AddStruoGraphQl`
-(`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs`):
+types). Registered in `GraphQlServiceCollectionExtensions.AddStruoGraphQlServer`, which
+`AddStruoGraphQl` and `AddStruoCms()` call (`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs`):
 ```csharp
 services.AddSingleton<StruoTypeModule>();
 // ...
@@ -605,7 +605,16 @@ The comment above the singleton registration explains why it must be explicit: H
 `AddTypeModule<T>()` resolves `T` via `GetRequiredService<T>()` against application services, not
 schema-scoped activation. Because the schema is metadata-driven, a fork does not usually reimplement
 `ITypeModule` — a new `[CmsCollection]` automatically gets a GraphQL type the next time the process
-starts and rescans metadata. See `docs/guide/en/14-graphql.md`.
+starts and rescans metadata. A fork adds its own types and root fields through
+`StruoCmsBuilder.ConfigureGraphQl` (`src/Struo.Api/Hosting/StruoCmsBuilder.cs`): the actions receive
+HotChocolate's `IRequestExecutorBuilder` and run after the core registration, so they can override core
+settings, and fields they add to `Mutation` do not get `MutationAuthentication`. When a fork used the hook,
+`RootFieldCollisionInterceptor` fails the schema build on a Query/Mutation field name contributed twice
+(HotChocolate would silently merge them), and `StruoCmsGraphQlCheck` builds the schema during the startup
+checks and rewrites HotChocolate's duplicate-type errors into the `GraphQL name collision` message. The
+depth and cost limits are `GraphQlOptions.MaxExecutionDepth/MaxFieldCost/MaxTypeCost`, read at registration
+time by `GraphQlServiceCollectionExtensions.ResolveLimits`, which throws on a non-positive value. See
+`docs/guide/en/14-graphql.md`.
 
 ### The frontend field-type registry
 

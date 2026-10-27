@@ -267,5 +267,5 @@ next request recomputes from whatever is now in the database.
 ## What's next
 
 That covers roles and permissions. The next chapter,
-[Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md),
+[Chapter 18: Extension Points](18-extension-points.md),
 covers the two places the framework deliberately leaves for a fork to implement.

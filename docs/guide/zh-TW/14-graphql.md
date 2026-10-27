@@ -377,7 +377,7 @@ HTTP_STATUS:400
 
 ## 加上自己的型別與欄位
 
-fork 從 `Program.cs` 加進 schema，用 `AddStruoCms()` 的回呼。`ConfigureGraphQl` 交給你的是
+fork 從 `Program.cs` 加進 schema。`ConfigureGraphQl` 交給你的是
 HotChocolate 自己的 `IRequestExecutorBuilder`，所以你對它寫的是 HotChocolate 的 API，不是 StruoCMS 的。
 它在核心 schema 註冊之後執行：
 
@@ -401,6 +401,22 @@ builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
 ```
 
 之後 `{ buildInfo { version } }` 就和產生出來的欄位一起由 `/graphql` 提供。
+
+你加在 `Mutation` 上的欄位，要自己保護。CMS 的登入檢查與權限是掛在它產生出來的欄位上，不是掛在
+`Mutation` 型別上，所以 fork 自己的欄位，除非自己檢查，匿名呼叫端也能執行。你的動作也是在核心之後執行，
+所以你在 builder 上改的設定（introspection、成本與深度規則、相依性注入的範圍）會取代核心的。CSRF 防護是
+HTTP 中介層，照樣適用。要求已登入呼叫端的 mutation 長這樣：
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
 
 你的型別或根欄位，不能用 schema 已經有的名稱：集合產生的型別、`Revision` 這類共用型別，或 `articles` 這類
 產生出來的根欄位。名稱衝突時啟動會失敗，訊息是 `GraphQL name collision`，並點出那個名稱；改掉自己的名稱即可。

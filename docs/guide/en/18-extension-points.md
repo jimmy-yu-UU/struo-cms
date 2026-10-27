@@ -1,9 +1,10 @@
-# 18. Extension Points: Search Providers and Change Listeners
+# 18. Extension Points
 
-How a caller's `search=` gets answered, and what happens after a write, are each left by the core to
-an interface of its own: a fork plugs in its own implementation without touching the core's query or
-write path at all. This chapter covers what each of `ISearchProvider` and `IItemChangeListener`
-promises, when each is called, what happens on failure, and how to register one.
+How a caller's `search=` gets answered, what happens after a write, and what the GraphQL schema
+contains are each left by the core to a seam of their own: a fork plugs in its own implementation
+without touching the core's query or write path at all. This chapter covers where a fork registers
+its services, what each of `ISearchProvider` and `IItemChangeListener` promises, when each is called,
+what happens on failure, and how `ConfigureGraphQl` adds to the GraphQL schema.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -381,6 +382,24 @@ builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
 
 `{ buildInfo { version } }` is then served at `/graphql` next to the generated fields.
 
+A field you add to `Mutation` is yours to protect. The CMS's sign-in check and permissions are
+attached to the fields it generates, not to the `Mutation` type, so a fork's own field runs for an
+anonymous caller unless it checks. Your actions also run after the core's, so a setting you change on
+the builder (introspection, the cost and depth rules, the dependency-injection scopes) replaces the
+core's. CSRF protection is HTTP middleware and still applies. A mutation that requires a signed-in
+caller:
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
 Names must not collide with the generated schema; startup fails with a `GraphQL name collision`
 message when one does. The query depth and cost limits, which a heavier fork query may need to
 raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxTypeCost`. See
@@ -388,7 +407,7 @@ raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxT
 
 ## What's next
 
-That covers search providers and change notifications. The next chapter,
+That covers the registration point, search providers, change notifications and the GraphQL hook. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
 covers which parts of its appearance and behavior can be changed by configuration alone, and
 which really need a change under `frontend/src`.

@@ -458,8 +458,7 @@ limits just above it.
 
 ## Adding your own types and fields
 
-A fork adds to the schema from `Program.cs`, through the callback of `AddStruoCms()`.
-`ConfigureGraphQl` hands you HotChocolate's own `IRequestExecutorBuilder`, so what you write against
+A fork adds to the schema from `Program.cs`. `ConfigureGraphQl` hands you HotChocolate's own `IRequestExecutorBuilder`, so what you write against
 it is HotChocolate's API, not a StruoCMS one. It runs after the core schema is registered:
 
 ```csharp
@@ -482,6 +481,24 @@ builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
 ```
 
 `{ buildInfo { version } }` is then served at `/graphql` next to the generated fields.
+
+A field you add to `Mutation` is yours to protect. The CMS's sign-in check and permissions are
+attached to the fields it generates, not to the `Mutation` type, so a fork's own field runs for an
+anonymous caller unless it checks. Your actions also run after the core's, so a setting you change on
+the builder (introspection, the cost and depth rules, the dependency-injection scopes) replaces the
+core's. CSRF protection is HTTP middleware and still applies. A mutation that requires a signed-in
+caller:
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
 
 A type or root field of yours must not reuse a name the schema already has: a collection's generated
 types, the shared types such as `Revision`, or the generated root fields such as `articles`. Startup
