@@ -124,8 +124,8 @@ public sealed class QuotaExceededException(string message)
 錯誤都是這樣）。三條規則：
 
 - 訊息會原樣送到客戶端，所以不要把內部細節（主機名稱、id、SQL）放進去。
-- 狀態必須是 400 到 499；其他值在建構例外時就會丟錯。伺服器錯誤不是領域錯誤：沒處理的例外會被遮蔽成
-  `INTERNAL_SERVER_ERROR`。
+- 狀態必須是 400 到 499；其他值在建構例外時就會丟錯，空白的代碼也一樣。伺服器錯誤不是領域錯誤：沒處理的例外
+  會被遮蔽成 `INTERNAL_SERVER_ERROR`。`401` 只用在登入狀態遺失：後台介面遇到任何 `401` 都會把使用者登出。
 - 代碼加上前綴（`ACME_`），才不會跟 CMS 自己的（例如 `NOT_FOUND`、`CONFLICT`）撞名。代碼不檢查是否唯一。
 
 ## 驗證錯誤的 `details`

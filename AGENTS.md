@@ -223,7 +223,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
    you verify against if you touched column mapping.
 3. **Add an endpoint** — new controller under `src/Struo.Api/Controllers/`, envelope-friendly return
    values, `[Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]` on any action that must not
-   be anonymous, new domain exceptions mapped in `DomainErrorMap`. Gate: `dotnet build && dotnet test`.
+   be anonymous, new core domain exceptions mapped in `DomainErrorMap` (a fork's own error derives from `StruoDomainException` instead, no map arm needed). Gate: `dotnet build && dotnet test`.
 4. **Add a migration** — a new FluentMigrator class in the fork's migrations directory, versioned
    `yyyyMMddHHmm` and deriving from `StruoMigration`; `make:migration <Name> --output <dir>` writes the
    skeleton. Use portable calls (`Create`/`Alter` with `AsString`, `AsGuid`, …; `AsJson(Db)`,

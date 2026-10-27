@@ -4,6 +4,7 @@ using HotChocolate.Execution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Struo.Api.Http;
+using Struo.Domain;
 
 namespace Struo.Api.GraphQl;
 
@@ -29,6 +30,11 @@ public sealed class StruoErrorFilter(
         // ClaimsPrincipal ⇒ unauthenticated, mirroring the REST handler's authenticated bit.
         var authenticated = httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
         var (code, message) = DomainErrorMap.Map(exception, authenticated);
+
+        // A fork's own error is a client error by construction; its code may equal one the branches below
+        // key on, so the type decides before the code does.
+        if (exception is StruoDomainException)
+            return error.WithMessage(message).WithCode(code);
 
         if (code == Http.ErrorCodes.Internal)
         {

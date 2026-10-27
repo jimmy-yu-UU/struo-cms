@@ -144,8 +144,9 @@ usual error envelope carrying your code and message; GraphQL stamps the same cod
 (its HTTP status stays `200`, as for every GraphQL error). Three rules:
 
 - The message goes to the client as written. Keep internal detail (hostnames, ids, SQL) out of it.
-- The status must be 400 to 499; any other value throws when the exception is constructed. A server error is
-  not a domain error: an unhandled exception is masked as `INTERNAL_SERVER_ERROR`.
+- The status must be 400 to 499; any other value throws when the exception is constructed, and so does a blank
+  code. A server error is not a domain error: an unhandled exception is masked as `INTERNAL_SERVER_ERROR`.
+  Use `401` only for a lost session: the admin UI signs the user out on any `401`.
 - Prefix your codes (`ACME_`) so they cannot collide with the CMS's own, such as `NOT_FOUND` or `CONFLICT`.
   The code is not checked for uniqueness.
 

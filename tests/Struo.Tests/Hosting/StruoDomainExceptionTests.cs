@@ -108,8 +108,46 @@ public class StruoDomainExceptionTests
         using var doc = JsonDocument.Parse(json);
         var error = doc.RootElement.GetProperty("errors")[0];
 
+        response.StatusCode.Should().Be(HttpStatusCode.OK, json);
         error.GetProperty("message").GetString().Should().Be("Daily quota used up.");
         error.GetProperty("extensions").GetProperty("code").GetString().Should().Be("ACME_QUOTA_EXCEEDED");
+    }
+
+    // A fork may pick any code, including one the CMS logs specially. The type decides, not the code.
+    public sealed class ReusedCodeException(string code, string message)
+        : StruoDomainException(code, 400, message);
+
+    [Theory]
+    [InlineData("INTERNAL_SERVER_ERROR")]
+    [InlineData("SEARCH_UNAVAILABLE")]
+    public void A_fork_error_is_never_logged_as_a_server_fault_on_REST(string code)
+    {
+        var logger = new ListLogger<StruoExceptionHandler>();
+
+        var (status, body) = StruoExceptionHandler.Map(new ReusedCodeException(code, "mine"), authenticated: false, logger);
+
+        status.Should().Be(400);
+        body.Code.Should().Be(code);
+        body.Message.Should().Be("mine");
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("INTERNAL_SERVER_ERROR")]
+    [InlineData("SEARCH_UNAVAILABLE")]
+    public void A_fork_error_is_never_logged_as_a_server_fault_on_GraphQL(string code)
+    {
+        var logger = new ListLogger<Struo.Api.GraphQl.StruoErrorFilter>();
+        var filter = new Struo.Api.GraphQl.StruoErrorFilter(
+            logger, new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var error = ErrorBuilder.New().SetMessage("original")
+            .SetException(new ReusedCodeException(code, "mine")).Build();
+
+        var mapped = filter.OnError(error);
+
+        mapped.Code.Should().Be(code);
+        mapped.Message.Should().Be("mine");
+        logger.Entries.Should().BeEmpty();
     }
 
     private sealed class TestException(string code, int status, string message)
