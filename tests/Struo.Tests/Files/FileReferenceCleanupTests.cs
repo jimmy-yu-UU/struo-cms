@@ -145,10 +145,18 @@ public sealed class FileReferenceCleanupTests : IDisposable
         _files = new FileService(
             _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, new StubLanguages(), currentUser),
             notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()), references: pipeline);
-        _items = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, new RelationExpander(repo, graph, options), graph, new StubLanguages(), options,
-            new GanssHtmlSanitizer(), currentUser, revisions,
-            new RevisionSnapshotBuilder(repo, provider, registry, graph), new NoopUserSessionRevocationService(),
+        _items = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            new RelationExpander(repo, graph, options),
+            graph,
+            new StubLanguages(),
+            currentUser,
+            revisions,
+            new RevisionSnapshotBuilder(repo, provider, registry, graph),
+            options: options,
             fileLifecycle: _files);
     }
 

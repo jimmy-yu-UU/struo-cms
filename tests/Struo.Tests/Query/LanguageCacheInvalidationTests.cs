@@ -149,14 +149,18 @@ public class LanguageCacheInvalidationTests
         var registry = new StubRegistry(Descriptor());
         var graph = new StubGraph();
         var m2m = new StubM2M();
-        return new ItemService(
-            repo, meta, registry, new StubPermissions(),
-            graph, new StubExpander(), m2m,
+        return TestItemService.Create(
+            repo,
+            meta,
+            registry,
+            graph,
+            new StubExpander(),
+            m2m,
             languages,
-            new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
-            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, m2m),
-            new NoopUserSessionRevocationService());
+            new StubRevisionStore(),
+            new RevisionSnapshotBuilder(repo, meta, registry, m2m),
+            permissions: new StubPermissions());
     }
 
     [Fact]

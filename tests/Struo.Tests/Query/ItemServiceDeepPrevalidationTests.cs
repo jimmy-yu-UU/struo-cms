@@ -63,10 +63,18 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
         var repo = new CountingItemRepository(real);
         var expander = new RelationExpander(repo, graph, options);
         var user = new TestCurrentUserAccessor(Guid.Empty);
-        var service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, new LanguageProvider(db), options, new GanssHtmlSanitizer(),
-            user, new SqlSugarRevisionStore(db, user),
-            new RevisionSnapshotBuilder(repo, provider, registry, graph), new NoopUserSessionRevocationService());
+        var service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            new LanguageProvider(db),
+            user,
+            new SqlSugarRevisionStore(db, user),
+            new RevisionSnapshotBuilder(repo, provider, registry, graph),
+            options: options);
         return (service, repo);
     }
 

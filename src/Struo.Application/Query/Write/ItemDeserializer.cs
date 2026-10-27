@@ -27,6 +27,15 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
 
     /// <summary>
+    /// Binds a request body for a CREATE like <see cref="Deserialize"/> but defers the scalar Required
+    /// check: <see cref="ItemService"/> runs the write interceptors' <c>BeforeWriteAsync</c> first, so an
+    /// interceptor can fill a Required field, then calls <see cref="EnforceRequiredFields"/> itself. The
+    /// per-interface validators still run for every field, so a Required list-type field is checked here.
+    /// </summary>
+    public object DeserializeForCreate(string collection, JsonElement body, CollectionMetadata meta) =>
+        DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null, deferRequiredCheck: true);
+
+    /// <summary>
     /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
     /// per-interface validation as <see cref="Deserialize"/>, but WITHOUT the Required check:
     /// <see cref="ItemService.UpdateCoreAsync"/> is a merge that only overlays fields the client
@@ -63,7 +72,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     private object DeserializeCore(
-        string collection, JsonElement body, CollectionMetadata meta, bool enforceRequired, IReadOnlySet<string>? onlyFields)
+        string collection, JsonElement body, CollectionMetadata meta, bool enforceRequired,
+        IReadOnlySet<string>? onlyFields, bool deferRequiredCheck = false)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
 
@@ -77,7 +87,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         // Skipped entirely for a partial bind (enforceRequired: false) — a junction payload object
         // only sets the fields it names, so a required payload field absent from this particular
         // element is not an error; absent payload fields keep their stored value.
-        if (enforceRequired) EnforceRequiredFields(meta, d, entity);
+        if (enforceRequired && !deferRequiredCheck) EnforceRequiredFields(meta, d, entity);
 
         EnforceMaxLength(meta, d, entity);
 
@@ -242,9 +252,9 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     // required validation — skip translatable fields (they live on the sidecar entity and are
-    // validated per-locale in SyncTranslationsAsync, not on the parent). Called here for CREATE
-    // (enforceRequired: true) and again by ItemService.UpdateCoreAsync, against the merged entity,
-    // after both its overlay loops have run — an update only fails Required when the client
+    // validated per-locale in SyncTranslationsAsync, not on the parent). Called by Deserialize
+    // (enforceRequired: true) and by ItemService for create and update, against the merged entity
+    // after the write interceptors' BeforeWriteAsync — an update only fails Required when the client
     // explicitly wipes the field (null/blank/Guid.Empty), never merely by omitting it.
     internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {

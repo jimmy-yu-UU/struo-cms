@@ -61,9 +61,17 @@ public sealed class MediaFolderTests : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
 
         _metadata = provider;
-        _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        _svc = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            currentUser,
+            revisionStore,
+            snapshotBuilder);
     }
 
     public void Dispose() => _file.Dispose();

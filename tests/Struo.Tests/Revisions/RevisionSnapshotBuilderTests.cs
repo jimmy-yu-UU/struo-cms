@@ -69,9 +69,17 @@ public sealed class SnapshotBuilderHarness : IDisposable
         var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
         Repository = repo;
         Builder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
-        Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, Builder, new NoopUserSessionRevocationService());
+        Service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            revisionUser,
+            revisionStore,
+            Builder);
     }
 
     public static SnapshotBuilderHarness Create() => new();

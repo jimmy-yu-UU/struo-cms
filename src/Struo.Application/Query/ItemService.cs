@@ -51,7 +51,11 @@ public sealed class ItemService(
     IUserCredentialStore? userCredentials = null,
     // Trailing and optional like the others: owns the file collection's delete lifecycle (logo
     // reference, blob); null (direct construction in tests) means the generic pipeline only.
-    IFileLifecycle? fileLifecycle = null) : IItemUseCases
+    IFileLifecycle? fileLifecycle = null,
+    // Trailing and optional like the others: the write interceptors and delete handlers DI collects
+    // from every registration; null (direct construction in tests) means none.
+    IEnumerable<IItemWriteInterceptor>? interceptors = null,
+    IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
 
@@ -62,6 +66,7 @@ public sealed class ItemService(
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly UserEmailRules userEmailRules = new(userCredentials);
+    private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
     private readonly TranslationOverlay overlay =
@@ -191,8 +196,13 @@ public sealed class ItemService(
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
-        var entity = deserializer.Deserialize(collection, body, meta);
+        // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
+        var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
+        var hooks = writeInterceptors.Begin(
+            ItemWriteOperation.Create, meta, entity, id: null, ItemDeserializer.PresentNames(body), body);
+        await hooks.BeforeWriteAsync(ct);
+        ItemDeserializer.EnforceRequiredFields(meta, d, entity);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
@@ -206,6 +216,8 @@ public sealed class ItemService(
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
             await EnforceLanguageRulesAsync(collection, ct);
+            hooks.Stored(created, createdId);
+            await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
@@ -213,7 +225,9 @@ public sealed class ItemService(
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
+        await hooks.AfterCommitAsync();
         await NotifyAsync(SingleChange(meta.Name, createdId, ItemChangeKind.Created));
+        await hooks.AfterNotifyAsync();
         return projector.Project(created, meta, null);
     }
 
@@ -288,6 +302,10 @@ public sealed class ItemService(
         // can differ from what CREATE (Required checked first) would report for the identical shape.
         // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
         // the same values a full PUT would.
+        var hooks = writeInterceptors.Begin(
+            operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
+            meta, existing, id, bodyKeys, body);
+        await hooks.BeforeWriteAsync(ct);
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
         if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
             await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
@@ -316,6 +334,8 @@ public sealed class ItemService(
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
             await EnforceLanguageRulesAsync(collection, ct);
+            hooks.Stored(updated, updatedId);
+            await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated, ct);
@@ -325,7 +345,9 @@ public sealed class ItemService(
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
+        await hooks.AfterCommitAsync();
         await NotifyAsync(SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
+        await hooks.AfterNotifyAsync();
         return projector.Project(updated, meta, null);
     }
 
@@ -359,6 +381,9 @@ public sealed class ItemService(
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
+        if (writeInterceptors.DeleteHandlerFor(meta) is { } handler)
+            return await DeleteWithHandlerAsync(collection, meta, id, purge, handler, ct);
+
         if (fileLifecycle is not null && IsFileCollection(collection))
             return await DeleteFileAsync(collection, id, purge, fileLifecycle, ct);
 
@@ -375,6 +400,8 @@ public sealed class ItemService(
             // exists, so this call still reports true; only an unknown id reports false).
             var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
             if (existing is null) return false; // unknown id -> unchanged (false)
+            var trashHooks = writeInterceptors.Begin(ItemWriteOperation.Trash, meta, existing, id);
+            await trashHooks.BeforeWriteAsync(ct);
 
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
@@ -399,23 +426,34 @@ public sealed class ItemService(
                 await this.purge.CheckRestrictAsync(collection, id, ct);
                 var trashedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
                 if (trashedNow)
+                {
+                    await trashHooks.InTransactionAsync(ct);
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
+                }
                 return trashedNow;
             }, ct);
             if (softDeletedNow)
             {
                 InvalidateLanguagesIfNeeded(collection);
+                await trashHooks.AfterCommitAsync();
                 await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
             }
+            // Runs for an already-trashed row too, like the session revocation after it.
+            await trashHooks.AfterNotifyAsync();
             await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
+        var purgeHooks = await BeginPurgeHooksAsync(collection, meta, id, ct);
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(async () =>
         {
             var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
-            if (purged) await EnforceLanguageRulesAsync(collection, ct);
+            if (purged)
+            {
+                await EnforceLanguageRulesAsync(collection, ct);
+                await purgeHooks.InTransactionAsync(ct);
+            }
             return purged;
         }, ct);
         // Gated on the top-level row having existed: with no DB-level FKs, a dangling child row (its FK
@@ -425,10 +463,38 @@ public sealed class ItemService(
         if (existed)
         {
             InvalidateLanguagesIfNeeded(collection);
+            await purgeHooks.AfterCommitAsync();
             await NotifyAsync(changes);
+            await purgeHooks.AfterNotifyAsync();
             await RevokeSessionsIfUserAsync(collection, id);
         }
         return existed;
+    }
+
+    // The interceptors' pre-read of the row a purge removes. Skipped, like the hooks, when no interceptor
+    // applies or the id is unknown (nothing to hand over).
+    private async Task<ItemWriteHooks> BeginPurgeHooksAsync(
+        string collection, CollectionMetadata meta, string id, CancellationToken ct)
+    {
+        if (!writeInterceptors.AnyApplies(meta)) return ItemWriteHooks.Empty;
+        var row = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (row is null) return ItemWriteHooks.Empty;
+        var hooks = writeInterceptors.Begin(ItemWriteOperation.Purge, meta, row, id);
+        await hooks.BeforeWriteAsync(ct);
+        return hooks;
+    }
+
+    // A registered delete handler replaces the trash/purge below; interceptors still see BeforeWrite.
+    private async Task<bool> DeleteWithHandlerAsync(
+        string collection, CollectionMetadata meta, string id, bool purge,
+        ICollectionDeleteHandler handler, CancellationToken ct)
+    {
+        var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (existing is null) return false;
+        var hooks = writeInterceptors.Begin(
+            purge ? ItemWriteOperation.Purge : ItemWriteOperation.Trash, meta, existing, id);
+        await hooks.BeforeWriteAsync(ct);
+        return purge ? await handler.PurgeAsync(id, ct) : await handler.TrashAsync(id, ct);
     }
 
     // A file is either published (readable by anyone with its id) or draft (file writers only).
@@ -501,6 +567,8 @@ public sealed class ItemService(
         // relied on to decide whether a restore actually happens (see the note below).
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
+        var hooks = writeInterceptors.Begin(ItemWriteOperation.Restore, meta, entity, id);
+        await hooks.BeforeWriteAsync(ct);
 
         // The restore clears DeletedAt, bumps Version and — for a revisioned collection — records
         // a "restore" revision, all in ONE txn (capture rolls back with it).
@@ -513,13 +581,18 @@ public sealed class ItemService(
         {
             var r = await repository.RestoreAsync(collection, id, ct);
             if (r)
+            {
+                await hooks.InTransactionAsync(ct);
                 await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+            }
             return r;
         }, ct);
         if (restoredNow)
         {
             InvalidateLanguagesIfNeeded(collection);
+            await hooks.AfterCommitAsync();
             await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
+            await hooks.AfterNotifyAsync();
         }
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
