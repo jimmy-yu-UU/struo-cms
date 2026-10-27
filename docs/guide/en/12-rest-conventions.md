@@ -127,6 +127,28 @@ means the same thing on both protocols:
 first needs an upload that genuinely exceeds the cap, and the second needs a search provider that
 actively fails; `INTERNAL_SERVER_ERROR` only shows up for a truly unhandled error.
 
+### Your own error codes
+
+A fork adds its own client-facing error by deriving from `StruoDomainException` (in `Struo.Domain`) with a code,
+an HTTP status and a message:
+
+```csharp
+using Struo.Domain;
+
+public sealed class QuotaExceededException(string message)
+    : StruoDomainException("ACME_QUOTA_EXCEEDED", 429, message);
+```
+
+Throw it from a controller, a minimal-API endpoint or a GraphQL resolver. REST answers with that status and the
+usual error envelope carrying your code and message; GraphQL stamps the same code and message on the error
+(its HTTP status stays `200`, as for every GraphQL error). Three rules:
+
+- The message goes to the client as written. Keep internal detail (hostnames, ids, SQL) out of it.
+- The status must be 400 to 499; any other value throws when the exception is constructed. A server error is
+  not a domain error: an unhandled exception is masked as `INTERNAL_SERVER_ERROR`.
+- Prefix your codes (`ACME_`) so they cannot collide with the CMS's own, such as `NOT_FOUND` or `CONFLICT`.
+  The code is not checked for uniqueness.
+
 ## Validation error `details`
 
 `details` only appears with the `VALIDATION` code — it's what model binding or data-annotation

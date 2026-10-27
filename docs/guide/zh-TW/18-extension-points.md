@@ -363,6 +363,11 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 
 內建後端的行為與 `files:sweep`，見[第 15 章](15-files-and-media.md)。
 
+## 自己的錯誤：`StruoDomainException`
+
+fork 自己、給客戶端看的錯誤，繼承 `StruoDomainException`，它帶著代碼、400 到 499 的狀態與訊息。REST 與
+GraphQL 都原樣回傳。怎麼定義，以及訊息與代碼的規則，見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
+
 ## GraphQL schema：`ConfigureGraphQl`
 
 第三個接口不是介面，而是 builder 上的一個掛鉤。`ConfigureGraphQl` 會在核心 schema 註冊之後、伺服器建立
@@ -412,6 +417,6 @@ public sealed class BuildInfoMutation
 
 ## 接下來
 
-註冊的位置、搜尋提供者、寫入通知、檔案儲存跟 GraphQL 的掛鉤就談到這裡；下一章，
+註冊的位置、搜尋提供者、寫入通知、檔案儲存、領域錯誤跟 GraphQL 的掛鉤就談到這裡；下一章，
 [第 19 章：後台客製化](19-admin-customization.md)，回到前端，談後台的哪些外觀跟行為只
 靠設定就能換掉，哪些才真的需要碰 `frontend/src`。

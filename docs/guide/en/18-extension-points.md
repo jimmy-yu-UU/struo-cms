@@ -421,6 +421,12 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 
 See [Chapter 15](15-files-and-media.md) for the behaviour of the built-in backends and `files:sweep`.
 
+## Your own errors: `StruoDomainException`
+
+A fork's own client-facing error derives from `StruoDomainException`, which carries a code, a 400 to 499 status
+and a message. REST and GraphQL both return them unchanged. How to define one, and the rules for the message and
+the code, are in [Chapter 12](12-rest-conventions.md#your-own-error-codes).
+
 ## The GraphQL schema: `ConfigureGraphQl`
 
 The third seam is not an interface but a hook on the builder. `ConfigureGraphQl` receives
@@ -474,7 +480,7 @@ raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxT
 
 ## What's next
 
-That covers the registration point, search providers, change notifications, file storage and the GraphQL hook. The next chapter,
+That covers the registration point, search providers, change notifications, file storage, domain errors and the GraphQL hook. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
 covers which parts of its appearance and behavior can be changed by configuration alone, and
 which really need a change under `frontend/src`.

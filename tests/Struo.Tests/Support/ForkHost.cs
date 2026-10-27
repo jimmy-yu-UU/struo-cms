@@ -36,7 +36,7 @@ internal sealed class ForkHost : IAsyncDisposable
     /// <summary>Starts a host; any startup failure propagates to the caller.</summary>
     public static async Task<ForkHost> StartAsync(
         Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
-        Action<IServiceCollection>? afterAddStruoCms = null)
+        Action<IServiceCollection>? afterAddStruoCms = null, Action<WebApplication>? mapEndpoints = null)
     {
         var db = TestBackend.CreateSqliteDatabase();
         var filesRoot = Path.Combine(Path.GetTempPath(), "struo-forkhost-" + Guid.NewGuid().ToString("N"));
@@ -63,6 +63,7 @@ internal sealed class ForkHost : IAsyncDisposable
             afterAddStruoCms?.Invoke(builder.Services);
             app = builder.Build();
             await app.UseStruoCmsAsync();
+            mapEndpoints?.Invoke(app);
             await app.StartAsync();
             return new ForkHost(app, db, filesRoot);
         }

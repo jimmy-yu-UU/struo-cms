@@ -476,7 +476,10 @@ hand-building an `ObjectResult`, so `EnvelopeResultFilter`'s idempotency check (
 the single source of the exception→code mapping, shared verbatim by REST's `StruoExceptionHandler`
 and GraphQL's `StruoErrorFilter` so the two protocols cannot drift apart. A new domain exception
 type that should surface a client-safe message needs a new arm in `DomainErrorMap.Map` (and, if it
-needs a REST status other than the fallback 500, in `DomainErrorMap.StatusFor`); anything left
+needs a REST status other than the fallback 500, in `DomainErrorMap.StatusFor`); a fork's own error derives
+from `StruoDomainException` (`src/Struo.Domain/StruoDomainException.cs`, status 400 to 499 enforced in the
+constructor), which `DomainErrorMap.Map` matches first and `DomainErrorMap.StatusFor(exception, code)` reads
+the status from, so it needs no arm; anything left
 unmapped collapses to `INTERNAL_SERVER_ERROR` with a masked generic message — the real exception is
 logged server-side, never leaked to the response. See `docs/guide/en/12-rest-conventions.md`.
 

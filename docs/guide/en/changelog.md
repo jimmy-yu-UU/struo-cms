@@ -58,6 +58,9 @@
 - `IFileStorage.Describe()` has a default (the type name) and is implemented by the local and S3 backends.
   `files:sweep` prints it after `storage:`: the root path for local, the bucket and endpoint host for S3,
   never a credential. See [Chapter 18](18-extension-points.md).
+- `StruoDomainException` (in `Struo.Domain`) is a base class for a fork's own client-facing errors: a code, a
+  400 to 499 status and a message. REST and GraphQL return them unchanged. A status outside 400 to 499
+  throws when the exception is constructed. See [Chapter 12](12-rest-conventions.md#your-own-error-codes).
 
 ## 0.13.1 — 2026-10-27
 

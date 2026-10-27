@@ -52,6 +52,9 @@
   `local` 或 `s3` 的儲存也可以被 fork 取代，因為核心現在用 `TryAdd` 註冊預設。
 - `IFileStorage.Describe()` 有預設值（型別名稱），local 與 S3 後端各自實作。`files:sweep` 會把它印在
   `storage:` 後面：local 是根目錄，S3 是 bucket 與 endpoint 主機，絕不含憑證。見[第 18 章](18-extension-points.md)。
+- `StruoDomainException`（在 `Struo.Domain`）是 fork 自己、給客戶端看的錯誤的基底類別：代碼、400 到 499 的
+  狀態與訊息。REST 與 GraphQL 都原樣回傳。狀態超出 400 到 499，在建構例外時就會丟錯。
+  見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
 
 ## 0.13.1 — 2026-10-27
 
