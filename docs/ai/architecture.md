@@ -39,7 +39,8 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   References `Struo.Application` and `Struo.Domain`.
 - **`src/Struo.Api`** — the ASP.NET Core host: controllers (`Controllers/`), the GraphQL schema
   (`GraphQl/`), the envelope/error-handling plumbing (`Http/`), authentication/CSRF/CORS wiring
-  (`Auth/`), and `Program.cs`. References `Struo.Application` and `Struo.Infrastructure`.
+  (`Auth/`), the host composition (`Hosting/`: `AddStruoCms()` registers services, `UseStruoCmsAsync()` builds
+  the pipeline and runs the startup checks), and `Program.cs`, the fork-owned entry point that calls them. References `Struo.Application` and `Struo.Infrastructure`.
 - **`frontend/`** — a separate pnpm workspace (Vue 3 + Pinia, Tailwind v4 + shadcn-vue), not part of
   the .NET solution dependency graph at all; it talks to `Struo.Api` only over REST/GraphQL HTTP calls.
 
@@ -148,7 +149,7 @@ Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, 
 SiteSettings, UserSession). Implementation: `EntityTypeCollector`
 (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
 container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
-(`MetadataServiceCollectionExtensions.cs`). Consumed by `Program.cs`, which hands it to
+(`MetadataServiceCollectionExtensions.cs`). Consumed by `StruoCmsStartupChecks`, which hands it to
 `StartupMigrationGate` for the Development schema check, and by `make:migration`/`migrate:check` — the
 "Migrations are the only schema source" invariant in `AGENTS.md`'s "Invariants" section has the full
 rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Migrations are the only schema source", the
@@ -469,7 +470,7 @@ implementation detail like `IItemRepository` above. Default registration:
 `services.TryAddScoped<ISearchProvider, NullSearchProvider>()` in
 `DataServiceCollectionExtensions.AddStruoData`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`) — `TryAddScoped` so
-a fork's own registration, whether added before or after `AddStruoData()` in `Program.cs`, wins over
+a fork's own registration, whether added before or after `AddStruoCms()` in `Program.cs`, wins over
 the default. `NullSearchProvider.SearchAsync` always returns `SearchOutcome.NotHandled`, so with no
 fork registration the built-in `LIKE` search (`FilterTranslator.SearchGroup`) runs unchanged.
 `SearchRequest`/`SearchOutcome` (`src/Struo.Application/Search/`) are the request/response records:
@@ -524,7 +525,7 @@ successful write into an error response. Registered in
 services.TryAddScoped<IItemChangeNotifier, ItemChangeNotifier>();
 ```
 `TryAddScoped`, for the same reason `ISearchProvider` above uses it: a fork's own
-`IItemChangeNotifier` wins whether it is registered before or after `AddStruoData()`. Whatever
+`IItemChangeNotifier` wins whether it is registered before or after `AddStruoCms()`. Whatever
 replaces it must keep the never-throw contract — a listener failure must not turn a committed write
 into an error response. Listeners themselves are always additive, never replaced — a fork adds any
 number with `services.AddScoped<IItemChangeListener, MyIndexer>()`, and with none registered

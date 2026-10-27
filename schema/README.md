@@ -51,7 +51,7 @@ would make the frontend contract test assert against a column set production nev
 ## `interfaces.json`
 
 Every member of `FieldInterface` and `RelationInterface`, in the same camelCase form the wire uses. The
-names are produced with `JsonNamingPolicy.CamelCase` — the same policy `Program.cs` hands to
+names are produced with `JsonNamingPolicy.CamelCase` — the same policy `StruoCmsServiceRegistration` hands to
 `JsonStringEnumConverter` — rather than a local re-implementation, so this file cannot drift from how
 the API actually serializes an enum. Members appear in declaration order.
 

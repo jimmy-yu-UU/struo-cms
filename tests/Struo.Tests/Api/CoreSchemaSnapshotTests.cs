@@ -89,7 +89,7 @@ public sealed class CoreSchemaSnapshotTests
 
     /// <summary>
     /// Enum member names in the same camelCase form the wire uses. The names go through
-    /// JsonNamingPolicy.CamelCase — the very policy Program.cs hands to JsonStringEnumConverter —
+    /// JsonNamingPolicy.CamelCase — the very policy StruoCmsServiceRegistration hands to JsonStringEnumConverter —
     /// rather than a local re-implementation, so this file cannot drift from how the API actually
     /// serializes an enum. Declaration order is preserved: it groups related interfaces and keeps the
     /// committed file readable, and nothing consumes it as an ordered list.

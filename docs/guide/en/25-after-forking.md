@@ -136,3 +136,14 @@ staging origin, and register `http://localhost:5173` plus the same path for deve
 `/api/` also needs a `location` block in `frontend/nginx/default.conf.template`, and an entry in
 `frontend/vite.proxy.ts` for the dev server. The setup steps per
 provider are in [Chapter 16: Authentication and SSO](16-authentication.md).
+
+## 11. `Program.cs`: it is yours now
+
+`src/Struo.Api/Program.cs` belongs to your fork. The template's own composition lives in
+`src/Struo.Api/Hosting/`, behind `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`, so upstream
+changes to the host stay out of `Program.cs`, and merging a template release does not conflict
+with your edits there.
+
+Register your own services in `Program.cs` after `AddStruoCms()`. A registration made there replaces
+the core default of any service the core registers with `TryAdd`. The seams you can plug into are in
+[Chapter 18: Extension Points](18-extension-points.md).

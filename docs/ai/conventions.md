@@ -275,7 +275,7 @@ with a dead-link error. Reference a repo path in a bare code span instead — ev
 - **Collection/field JSON names**: camelCase on the wire (`fileName`, `createdAt`) — the outbound
   `JsonSerializerOptions` are `JsonSerializerDefaults.Web` throughout (see `EnvelopeJsonOptionsHolder`,
   `src/Struo.Api/Http/EnvelopeJsonOptionsHolder.cs`, and the MVC `JsonOptions` configured in
-  `Program.cs`), and `MetadataScanner` derives each field's camelCase name from the CLR property name.
+  `StruoCmsServiceRegistration.AddStruoMvc`), and `MetadataScanner` derives each field's camelCase name from the CLR property name.
   Every REST `JsonSerializerOptions` that carries a `DateTime` includes `UtcDateTimeJsonConverter`.
 - **Migration files**: one FluentMigrator class per file, versioned `yyyyMMddHHmm`
   (`[Migration(202610080000, "Description")]`) and named `<version>_<Name>.cs`; the version is the apply
@@ -521,7 +521,7 @@ none is ever surfaced client-side.
   `SqlSugarItemRepository.RunQueryAsync` chains them as typed `OrderBy` calls, binding a translatable
   sort's locale as a SQL parameter. Every filter value `ConditionalModelTranslator` renders
   into a `ConditionalModel` (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and
-  `Program.cs` sets the host process's own default culture to invariant at startup — needed
+  `AddStruoCms` sets the host process's own default culture to invariant at startup — needed
   because SqlSugar re-parses that same rendered value back with `CultureInfo.CurrentCulture`
   (keyed off `CSharpTypeName`), so the two sides must agree or a decimal/DateTime literal silently
   comes out wrong under a non-invariant culture; a headless JSON API has no culture-formatted

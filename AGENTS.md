@@ -39,7 +39,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Domain` | Domain types only — no project or package references at all. |
 | `src/Struo.Application` | Application-layer abstractions, use-case contracts, options, query/security contracts. |
 | `src/Struo.Infrastructure` | SqlSugar wiring, identity, files, health checks, the general-purpose `AddStruoXxx` DI registration (the host-specific ones — auth, CORS, OIDC, GraphQL — live in `src/Struo.Api`). |
-| `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, `Program.cs`. |
+| `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, the host composition (`Hosting/`: `AddStruoCms`, `UseStruoCmsAsync`) and the fork-owned `Program.cs`. |
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |

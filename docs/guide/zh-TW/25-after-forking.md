@@ -118,3 +118,12 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 是 `/signin-oidc-<id>`。測試環境的來源同樣要登記，開發時再登記 `http://localhost:5173` 加上同一條路徑。
 `/api/` 之外的自訂 `CallbackPath`，還要在 `frontend/nginx/default.conf.template` 加一個 `location` 區塊，開發伺服器則要在 `frontend/vite.proxy.ts` 加一筆。
 各提供者的設定步驟見[第 16 章：認證與 SSO](16-authentication.md)。
+
+## 11. `Program.cs`：從現在起歸你
+
+`src/Struo.Api/Program.cs` 屬於你的 fork。範本自己的組裝放在 `src/Struo.Api/Hosting/`，藏在
+`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()` 後面，所以上游對主機的修改不再動到
+`Program.cs`，合併範本的新版本時也不會與你在那裡的修改衝突。
+
+自己的服務在 `Program.cs` 裡、`AddStruoCms()` 之後註冊。核心用 `TryAdd` 註冊的服務，寫在那裡的註冊會取代
+核心的預設。可以接上的擴充點見[第 18 章：擴充點](18-extension-points.md)。

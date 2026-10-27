@@ -17,6 +17,28 @@
 的 `ItemChangeNotifier`；fork 要接手，就是實作介面本身、註冊進去，不用改核心一行程式
 碼。
 
+## 你的註冊寫在哪裡
+
+fork 的 `Program.cs` 歸你所有。核心用兩個呼叫組裝自己：`builder.AddStruoCms()` 註冊所有服務，
+`app.UseStruoCmsAsync()` 建好請求管線並跑啟動檢查。你自己的服務註冊在兩者之間，也就是
+`AddStruoCms()` 之後：
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddStruoCms();
+builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
+
+var app = builder.Build();
+await app.UseStruoCmsAsync();
+await app.RunAsync();
+```
+
+在 `AddStruoCms()` 之後註冊的，贏過核心的預設。下列預設，核心用的是 `TryAdd`，所以寫在呼叫之前
+也一樣贏：`ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher`、
+`IFileAccessPolicy`。
+
 ## 搜尋提供者 `ISearchProvider`
 
 `ISearchProvider` 是搜尋這一側的擴充點：fork 接上 Meilisearch、Elasticsearch、
@@ -96,7 +118,7 @@ LIKE 掃描，兩條路都合法，這個介面不逼哪一種。
 ### 註冊與生命週期
 
 核心自己的預設註冊用的是「沒人註冊過才註冊」，所以 fork 的註冊永遠贏，不管寫在
-`AddStruoData()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
+`AddStruoCms()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
 後面註冊的才是最後被解析到的那個。
 
 `ISearchProvider` 跟下一節的 `IItemChangeListener`，註冊都寫在
@@ -133,7 +155,7 @@ public sealed class MySearchProvider(IMyIndex index) : ISearchProvider
 集合名稱與索引查詢是 fork 自己要換掉的兩處：其他集合直接回 `NotHandled`，`search=` 就
 照樣走內建的 LIKE 掃描。
 
-註冊寫在 `AddStruoData()` 之後：
+註冊寫在你自己的 `Program.cs`，`AddStruoCms()` 之後：
 
 ```csharp
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();

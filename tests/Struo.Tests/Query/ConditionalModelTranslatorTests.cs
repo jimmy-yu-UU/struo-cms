@@ -246,11 +246,11 @@ public partial class ConditionalModelTranslatorTests
         // SqlSugarCore 5.1.4.217: under de-DE (comma decimal separator), a rendered "1.5" reparses as
         // 15, because SqlSugar has no way to be told "parse this literal invariantly" — there is no
         // override. The render and reparse steps therefore only ever agree when the PROCESS's current
-        // culture is ALSO invariant, which is exactly what Program.cs now sets at startup
+        // culture is ALSO invariant, which is exactly what AddStruoCms now sets at startup
         // (CultureInfo.DefaultThreadCurrentCulture). This test proves the render+reparse PAIR is
         // self-consistent under that culture, by running the real, unparameterized SQL literal
         // (ToSqlString()) SqlSugar emits back through Convert; ProgramCultureTests (API-level) proves
-        // Program.cs actually sets it for every real request, not just this direct unit-level pairing.
+        // AddStruoCms actually sets it for every real request, not just this direct unit-level pairing.
         var original = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         try

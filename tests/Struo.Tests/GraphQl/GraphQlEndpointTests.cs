@@ -10,7 +10,7 @@ namespace Struo.Tests.GraphQl;
 
 /// <summary>
 /// Proves /graphql is reachable through the REAL host pipeline (auth/CSRF/permission
-/// middleware in front of MapGraphQL, exactly as Program.cs wires it — see
+/// middleware in front of MapGraphQL, exactly as StruoCmsPipeline wires it — see
 /// GraphQlServiceCollectionExtensions.MapStruoGraphQl) rather than only through the in-process
 /// IRequestExecutor used by GraphQlExecutionTests. Also proves the
 /// AddMaxExecutionDepthRule(12, ...) guard configured there actually rejects an over-deep query

@@ -9,11 +9,11 @@ namespace Struo.Tests.Support;
 /// <c>Struo:ContentAssemblies</c> is now empty by default. Every <c>WebApplicationFactory&lt;Program&gt;</c>
 /// in this suite (<see cref="ApiFactory"/> and <c>CorsAndCookieTests.CorsApiFactory</c>) already layers a
 /// <c>Struo:ContentAssemblies:0 = "Struo.Sample.Blog"</c> override via <c>ConfigureAppConfiguration</c> — but
-/// that override arrives too late: <c>Program.cs</c> reads <c>builder.Configuration</c> to eagerly scan
+/// that override arrives too late: <c>AddStruoCms</c> reads <c>builder.Configuration</c> to eagerly scan
 /// content assemblies BEFORE <c>builder.Build()</c>, and <c>WebApplicationFactory</c>'s
 /// <c>ConfigureAppConfiguration</c> hook is only spliced into the builder at the moment <c>Build()</c> is
 /// intercepted (via <c>HostFactoryResolver</c>'s diagnostic listener) — i.e. strictly after that line already
-/// ran. Confirmed empirically: instrumenting Program.cs to print
+/// ran. Confirmed empirically: instrumenting the host composition to print
 /// <c>builder.Configuration.GetSection("Struo:ContentAssemblies")</c> right before the
 /// <c>AddStruoMetadata</c> call showed <c>[]</c> even though the DI-resolved <c>IConfiguration</c> reads
 /// back "Struo.Sample.Blog" once the host has finished starting.

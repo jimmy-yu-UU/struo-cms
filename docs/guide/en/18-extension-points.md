@@ -21,6 +21,28 @@ The core provides only a `NullSearchProvider` that never handles a search, and a
 fork that wants to take over either seam just implements the interface and registers it — none of
 the core's own code needs to change.
 
+## Where your registrations go
+
+Your fork's `Program.cs` is yours. The core composes itself in two calls: `builder.AddStruoCms()`
+registers every service, and `app.UseStruoCmsAsync()` builds the request pipeline and runs the
+startup checks. Register your own services between them, after `AddStruoCms()`:
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddStruoCms();
+builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
+
+var app = builder.Build();
+await app.UseStruoCmsAsync();
+await app.RunAsync();
+```
+
+A registration made after `AddStruoCms()` wins over the core's default. The core registers these
+defaults with `TryAdd`, so a registration made before the call wins too: `ISearchProvider`,
+`IItemChangeNotifier`, `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy`.
+
 ## The search provider: `ISearchProvider`
 
 `ISearchProvider` is the search-side extension point: a fork wires in Meilisearch,
@@ -116,7 +138,7 @@ either one.
 ### Registration and lifetime
 
 The core registers its own default with `TryAdd` — only if nothing is registered yet — so a
-fork's registration always wins, whether it runs before or after `AddStruoData()`: before wins
+fork's registration always wins, whether it runs before or after `AddStruoCms()`: before wins
 because the core's default then never takes effect; after wins because whatever registers last is
 what actually gets resolved.
 
@@ -156,7 +178,7 @@ public sealed class MySearchProvider(IMyIndex index) : ISearchProvider
 The collection name and the index lookup are the two things a fork swaps out: every other
 collection just returns `NotHandled`, and `search=` keeps running the built-in `LIKE` scan for it.
 
-Register it after `AddStruoData()`:
+Register it in your `Program.cs`, after `AddStruoCms()`:
 
 ```csharp
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();

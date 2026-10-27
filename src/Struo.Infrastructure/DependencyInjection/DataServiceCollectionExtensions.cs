@@ -47,7 +47,7 @@ public static class DataServiceCollectionExtensions
         // Scoped: the language cache lives for one request.
         services.AddScoped<ILanguageProvider, LanguageProvider>();
         services.AddScoped<ILanguageCollectionRules, SqlSugarLanguageCollectionRules>();
-        services.AddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
+        services.TryAddSingleton<IHtmlSanitizer, GanssHtmlSanitizer>();
         services.AddScoped<Struo.Application.Revisions.IRevisionStore, Struo.Infrastructure.Revisions.SqlSugarRevisionStore>();
         services.AddScoped<Struo.Application.Settings.ISiteSettingsStore, Struo.Infrastructure.Settings.SqlSugarSiteSettingsStore>();
         services.AddScoped<Struo.Application.Query.RevisionSnapshotBuilder>();

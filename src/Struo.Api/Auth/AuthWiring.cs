@@ -92,7 +92,7 @@ public static class AuthWiring
 
         // FilesController's file-collection RBAC decisions, extracted off its constructor.
         // Scoped so it shares the per-request ICurrentPermissions/IPermissionService instances.
-        services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
+        services.TryAddScoped<IFileAccessPolicy, FileAccessPolicy>();
 
         return services;
     }

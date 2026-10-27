@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.14.0
+
+::: danger Breaking
+- `Program.cs` no longer holds the host composition. Service registration, the rate limiters, the
+  request pipeline and the startup checks moved into `Struo.Api` behind two calls,
+  `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`. `Program.cs` is now a short file that your
+  fork owns, so upstream changes to the host no longer conflict with your edits.
+
+  If your fork edited the old `Program.cs`, take the new one from this release and move your own
+  registrations after `AddStruoCms()`. A registration made there replaces the core default of any
+  service the core registers with `TryAdd` (`ISearchProvider`, `IItemChangeNotifier`,
+  `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy`).
+  Before:
+
+  ```csharp
+  builder.Services.AddStruoInfrastructure();
+  builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
+  builder.Services.AddStruoData();
+  // ... the rest of the registrations, the rate limiters, then:
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+  var app = builder.Build();
+  app.UseStruoForwardedHeaders();
+  // ... the rest of the pipeline, the migration gate
+  await app.RunAsync();
+  ```
+
+  After:
+
+  ```csharp
+  builder.AddStruoCms();
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+
+  var app = builder.Build();
+  await app.UseStruoCmsAsync();
+  await app.RunAsync();
+  ```
+- `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy` are registered with `TryAdd`. A fork
+  that registered its own implementation before `AddStruoCms()` now keeps it; before, the core
+  default won over a registration made that early.
+:::
+
 ## 0.13.1 — 2026-10-27
 
 ### Changed

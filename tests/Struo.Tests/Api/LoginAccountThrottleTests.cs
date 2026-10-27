@@ -96,7 +96,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
         blocked.Headers.RetryAfter.Should().NotBeNull();
         var (code, message) = await ErrorOf(blocked);
         code.Should().Be("TOO_MANY_REQUESTS");
-        // Same wording the per-client-IP limiter's OnRejected callback writes (Program.cs) — the two
+        // Same wording the per-client-IP limiter's OnRejected callback writes (StruoCmsRateLimiting) — the two
         // layers are deliberately indistinguishable to a client.
         message.Should().Be("Too many login attempts. Please try again later.");
     }
