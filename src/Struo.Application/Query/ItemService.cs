@@ -216,7 +216,7 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
         // Same non-object-body guard as CreateAsync — placed identically, right after the
-        // permission checks and before Deserialize.
+        // permission checks and before deserializing.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         var d = registry.Get(collection)!;
@@ -234,17 +234,14 @@ public sealed class ItemService(
         await ValidateMergedAsync(collection, meta, d, body, existing, ct);
 
         var persisted = await PersistUpdateAsync(
-            collection, id, meta, d, body, existing, hooks, operation, sourceRevisionNumber, ct);
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber), meta, d, body, existing, hooks, ct);
         if (persisted is null) return null;
         var (updated, updatedId) = persisted.Value;
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
     }
 
-    // Merge update: start from the existing row and overlay ONLY the fields the client actually
-    // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
-    // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
-    // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately by persist.
+    // Loads the stored row (null -> 404); the merge below mutates it.
     private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
         string collection, string id, CollectionMetadata meta, CancellationToken ct)
     {
@@ -257,6 +254,10 @@ public sealed class ItemService(
         return (existing, preMerge);
     }
 
+    // Merge update: start from the existing row and overlay ONLY the fields the client actually
+    // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
+    // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
+    // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately by persist.
     // Overlays the client-sent fields and M2O foreign keys onto `existing`; returns the body keys.
     private IReadOnlySet<string> MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
@@ -326,12 +327,14 @@ public sealed class ItemService(
             ex.Version = JsonBodyUtil.TryReadVersion(body) ?? ex.Version;
     }
 
+    private readonly record struct UpdateTarget(string Collection, string Id, string Operation, long? SourceRevisionNumber);
+
     // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
     private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
-        string collection, string id, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
-        object existing, ItemWriteHooks hooks, string operation, long? sourceRevisionNumber,
-        CancellationToken ct)
+        UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
+        object existing, ItemWriteHooks hooks, CancellationToken ct)
     {
+        var (collection, id, operation, sourceRevisionNumber) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
