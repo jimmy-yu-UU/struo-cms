@@ -51,6 +51,13 @@
 - `ConfigureGraphQl` on the `AddStruoCms()` callback gives a fork HotChocolate's builder to add its
   own types and root fields. A name that clashes with the generated schema fails startup with a
   `GraphQL name collision` message. See [Chapter 18](18-extension-points.md).
+- `Struo:Files:Backend=custom` lets a fork supply its own `IFileStorage`, registered after `AddStruoCms()`. The
+  core builds no storage in that mode and skips the Local and S3 validation; startup fails with a message
+  naming the key when no `IFileStorage` is registered. A fork may also replace the `local` or `s3` storage,
+  since the core now registers its default with `TryAdd`.
+- `IFileStorage.Describe()` has a default (the type name) and is implemented by the local and S3 backends.
+  `files:sweep` prints it after `storage:`: the root path for local, the bucket and endpoint host for S3,
+  never a credential. See [Chapter 18](18-extension-points.md).
 
 ## 0.13.1 — 2026-10-27
 

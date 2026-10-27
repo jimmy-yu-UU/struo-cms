@@ -4,7 +4,7 @@ How a caller's `search=` gets answered, what happens after a write, and what the
 contains are each left by the core to a seam of their own: a fork plugs in its own implementation
 without touching the core's query or write path at all. This chapter covers where a fork registers
 its services, what each of `ISearchProvider` and `IItemChangeListener` promises, when each is called,
-what happens on failure, and how `ConfigureGraphQl` adds to the GraphQL schema.
+what happens on failure, how to bring your own file storage, and how `ConfigureGraphQl` adds to the GraphQL schema.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -354,6 +354,72 @@ An application can register any number of listeners:
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## File storage: `IFileStorage`
+
+The byte store behind the `file` collection is `IFileStorage`. The core ships a local and an S3 backend, chosen
+by `Struo:Files:Backend`. To store files somewhere else, set the backend to `custom` and register your
+implementation after `AddStruoCms()`. The core builds no storage in that mode, and startup fails with a message
+naming the key when none is registered. Keep the contract in mind: a missing key throws
+`FileBlobNotFoundException`, never the backend's own exception; `ListAsync` streams every blob;
+`Describe()` is the line `files:sweep` prints, and must not contain a credential. An Azure Blob storage
+(the `Azure.Storage.Blobs` package belongs to your fork, not to the core):
+
+```csharp
+using System.Runtime.CompilerServices;
+using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Struo.Application.Files;
+using Struo.Domain.Query;
+
+public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileStorage
+{
+    public bool SupportsPresignedUrls => false;
+
+    public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
+
+    public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).UploadAsync(
+            content, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = contentType } }, ct);
+
+    public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            return await container.GetBlobClient(key).OpenReadAsync(cancellationToken: ct);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            throw new FileBlobNotFoundException(key);   // the contract: a missing key is never a backend exception
+        }
+    }
+
+    public async Task DeleteAsync(string key, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: ct);
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: ct))
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified?.UtcDateTime ?? DateTime.MaxValue);
+    }
+
+    // Shown by files:sweep: the container and account, never a key or a connection string.
+    public string Describe() => $"azure blob, container {container.Name}, account {container.AccountName}";
+}
+```
+
+In `Program.cs`, set `Struo:Files:Backend` to `custom` (for example `Struo__Files__Backend=custom`) and register
+the storage after `AddStruoCms()`:
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddSingleton(new BlobContainerClient(builder.Configuration["Azure:Storage:ConnectionString"], "media"));
+builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+```
+
+See [Chapter 15](15-files-and-media.md) for the behaviour of the built-in backends and `files:sweep`.
+
 ## The GraphQL schema: `ConfigureGraphQl`
 
 The third seam is not an interface but a hook on the builder. `ConfigureGraphQl` receives
@@ -407,7 +473,7 @@ raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxT
 
 ## What's next
 
-That covers the registration point, search providers, change notifications and the GraphQL hook. The next chapter,
+That covers the registration point, search providers, change notifications, file storage and the GraphQL hook. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
 covers which parts of its appearance and behavior can be changed by configuration alone, and
 which really need a change under `frontend/src`.

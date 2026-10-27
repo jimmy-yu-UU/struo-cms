@@ -149,7 +149,9 @@ reported.
 
 `Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
 startup: an unrecognized value fails startup immediately, and the required fields of whichever
-backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`,
+backend you picked (see Local/S3 below) are validated along with it. `Backend` is `local`, `s3` or
+`custom`; `custom` builds no storage in the core and needs a fork-registered `IFileStorage` (see
+[Chapter 15](15-files-and-media.md)), and startup fails when there is none. `MaxUploadBytes`,
 `AllowedContentTypes`, `PresignedRedirect`, and the `ImageTransform` keys other than the ones
 listed under [ImageTransform](#imagetransform) as validated have no validation rule — a
 correctly typed value is never checked further.
@@ -174,7 +176,8 @@ correctly typed value is never checked further.
 |---|---|---|
 | `Struo:Files:Local:RootPath` | string | `"App_Data/uploads"` |
 
-When `Backend="local"`, `RootPath` is the only field validated at startup.
+When `Backend="local"`, `RootPath` is the only field validated at startup. With `Backend="custom"` neither
+the Local nor the S3 keys are validated.
 
 ### S3
 

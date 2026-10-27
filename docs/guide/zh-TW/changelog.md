@@ -47,6 +47,11 @@
 - `AddStruoCms()` 回呼上的 `ConfigureGraphQl`，讓 fork 取得 HotChocolate 的 builder，加上自己的型別與
   根欄位。名稱和產生出來的 schema 衝突時，啟動會失敗，訊息是 `GraphQL name collision`。
   見[第 18 章](18-extension-points.md)。
+- `Struo:Files:Backend=custom` 讓 fork 提供自己的 `IFileStorage`，在 `AddStruoCms()` 之後註冊。這個模式下
+  核心不建任何儲存，也不驗證 Local 與 S3 的鍵；沒有註冊 `IFileStorage` 時，啟動會失敗，訊息會點出那個鍵。
+  `local` 或 `s3` 的儲存也可以被 fork 取代，因為核心現在用 `TryAdd` 註冊預設。
+- `IFileStorage.Describe()` 有預設值（型別名稱），local 與 S3 後端各自實作。`files:sweep` 會把它印在
+  `storage:` 後面：local 是根目錄，S3 是 bucket 與 endpoint 主機，絕不含憑證。見[第 18 章](18-extension-points.md)。
 
 ## 0.13.1 — 2026-10-27
 

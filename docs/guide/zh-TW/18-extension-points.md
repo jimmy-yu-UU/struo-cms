@@ -2,7 +2,7 @@
 
 呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，GraphQL schema 裡要有什麼，核心把這幾件事
 各自留成一個接口，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談 fork 的服務註冊在
-哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，以及
+哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼帶來自己的檔案儲存，以及
 `ConfigureGraphQl` 怎麼擴充 GraphQL schema。
 
 `search=` 本身的語法與內建的 LIKE 掃描，見
@@ -298,6 +298,70 @@ public sealed class MyChangeListener(IMyIndex index) : IItemChangeListener
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## 檔案儲存：`IFileStorage`
+
+`file` 集合背後的位元組儲存是 `IFileStorage`。核心附帶 local 與 S3 兩個後端，由 `Struo:Files:Backend`
+選擇。要把檔案存到別處，就把後端設成 `custom`，並在 `AddStruoCms()` 之後註冊你的實作。這個模式下核心不會
+自己建任何儲存，沒註冊時啟動會失敗，訊息會點出那個鍵。記住契約：找不到 key 要丟 `FileBlobNotFoundException`，
+不能丟後端自己的例外；`ListAsync` 要串流每一個 blob；`Describe()` 是 `files:sweep` 印出的那一行，不能含
+任何憑證。下面是 Azure Blob 的儲存（`Azure.Storage.Blobs` 套件屬於你的 fork，不屬於核心）：
+
+```csharp
+using System.Runtime.CompilerServices;
+using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Struo.Application.Files;
+using Struo.Domain.Query;
+
+public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileStorage
+{
+    public bool SupportsPresignedUrls => false;
+
+    public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
+
+    public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).UploadAsync(
+            content, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = contentType } }, ct);
+
+    public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            return await container.GetBlobClient(key).OpenReadAsync(cancellationToken: ct);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            throw new FileBlobNotFoundException(key);   // 契約：找不到 key 時，不能丟出後端自己的例外
+        }
+    }
+
+    public async Task DeleteAsync(string key, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: ct);
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: ct))
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified?.UtcDateTime ?? DateTime.MaxValue);
+    }
+
+    // files:sweep 會印出這一行：只寫容器與帳號，絕不放金鑰或連線字串。
+    public string Describe() => $"azure blob, container {container.Name}, account {container.AccountName}";
+}
+```
+
+在 `Program.cs` 把 `Struo:Files:Backend` 設成 `custom`（例如 `Struo__Files__Backend=custom`），並在
+`AddStruoCms()` 之後註冊這個儲存：
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddSingleton(new BlobContainerClient(builder.Configuration["Azure:Storage:ConnectionString"], "media"));
+builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+```
+
+內建後端的行為與 `files:sweep`，見[第 15 章](15-files-and-media.md)。
+
 ## GraphQL schema：`ConfigureGraphQl`
 
 第三個接口不是介面，而是 builder 上的一個掛鉤。`ConfigureGraphQl` 會在核心 schema 註冊之後、伺服器建立
@@ -347,6 +411,6 @@ public sealed class BuildInfoMutation
 
 ## 接下來
 
-註冊的位置、搜尋提供者、寫入通知跟 GraphQL 的掛鉤就談到這裡；下一章，
+註冊的位置、搜尋提供者、寫入通知、檔案儲存跟 GraphQL 的掛鉤就談到這裡；下一章，
 [第 19 章：後台客製化](19-admin-customization.md)，回到前端，談後台的哪些外觀跟行為只
 靠設定就能換掉，哪些才真的需要碰 `frontend/src`。

@@ -574,14 +574,19 @@ in it, ends up in the batch once, as `Purged`.
 The extension point for file storage backends is `IFileStorage`
 (`src/Struo.Application/Files/IFileStorage.cs`): `SaveAsync`, `OpenReadAsync`, `DeleteAsync`,
 `SupportsPresignedUrls`, `GetPresignedUrlAsync`, `ListAsync` (every stored blob as a `StoredBlob`, streamed;
-`files:sweep` reads it). Its doc comment states "Exactly one
+`files:sweep` reads it) and `Describe()` (a default interface method returning the type name; `LocalFileStorage`
+and `S3FileStorage` return their target without credentials, and `files:sweep` prints it after `storage:`). Its doc comment states "Exactly one
 implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
 (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) by a
-factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, anything else —
-including the default — selects `LocalFileStorage`), registered singleton. Adding a third backend means
-implementing `IFileStorage` and extending that lambda's branch (or switch) to select it. See
+factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, `"custom"` throws, anything
+else — including the default — selects `LocalFileStorage`), registered with `TryAddSingleton` so a fork's own
+`IFileStorage` wins whether it is registered before or after `AddStruoCms()`. `Backend=custom` skips the
+local/s3 validation in `FileStorageOptions.Validate`; the fork registers its `IFileStorage` after
+`AddStruoCms()`, and `StruoCmsStartupChecks.VerifyCustomFileStorage` resolves it at startup so a missing
+registration fails with the factory's message naming `Struo:Files:Backend`. A third backend therefore needs
+no change in the core. See
 `docs/guide/en/15-files-and-media.md`.
 
 ### The GraphQL type module

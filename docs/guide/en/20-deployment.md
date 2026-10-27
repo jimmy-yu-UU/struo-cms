@@ -463,7 +463,7 @@ The command acts on whatever storage and database the configuration points at, i
 `appsettings.Development.json` or environment variables you forgot were set. Read the first two
 lines, `storage:` and `database:`, and confirm they are the pair you mean to clean. A relative
 `Local:RootPath` resolves against the directory you run the command from, and the `storage:` line
-shows the full path it resolved to.
+shows the full path it resolved to. With a custom storage, the line is that storage's own description.
 :::
 
 The command always starts by printing those two lines: the storage backend with its target (the local

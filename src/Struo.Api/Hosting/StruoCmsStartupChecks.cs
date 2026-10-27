@@ -41,5 +41,15 @@ internal static class StruoCmsStartupChecks
             startupLogger);
 
         await StruoCmsGraphQlCheck.RunAsync(sp);
+        VerifyCustomFileStorage(sp);
+    }
+
+    // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
+    // startup with the message naming the key, not the first file request.
+    private static void VerifyCustomFileStorage(IServiceProvider sp)
+    {
+        var files = sp.GetRequiredService<Struo.Application.Files.FileStorageOptions>();
+        if (string.Equals(files.Backend, "custom", StringComparison.OrdinalIgnoreCase))
+            _ = sp.GetRequiredService<Struo.Application.Files.IFileStorage>();
     }
 }

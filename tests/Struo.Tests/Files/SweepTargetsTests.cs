@@ -8,7 +8,7 @@ namespace Struo.Tests.Files;
 public class SweepTargetsTests
 {
     private static string Describe(StruoDbType type, string connection) =>
-        SweepTargets.Describe(new Struo.Application.Files.FileStorageOptions(),
+        SweepTargets.Describe("local, root /data",
             new DatabaseOptions { DbType = type, ConnectionString = connection });
 
     [Theory]

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Files;
+using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Migrations.Commands;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
@@ -27,6 +28,9 @@ public sealed class FilesSweepCommandTests : IDisposable
     {
         public readonly Dictionary<string, DateTime> Blobs = [];
         public readonly HashSet<string> FailDelete = [];
+        public string? Description { get; set; }
+
+        public string Describe() => Description ?? nameof(MemoryStorage);
 
         public Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
             throw new NotSupportedException();
@@ -292,6 +296,7 @@ public sealed class FilesSweepCommandTests : IDisposable
         var db = new DatabaseOptions
             { DbType = StruoDbType.PostgreSQL, ConnectionString = "Host=h;Database=prod_cms;Username=u;Password=pw" };
         using var sp = Services(files, db);
+        _storage.Description = new LocalFileStorage(files).Describe();
         _storage.Blobs[Key(1)] = Old;
         _storage.Blobs[Key(2)] = Old;
         Row(Key(2));
@@ -324,6 +329,8 @@ public sealed class FilesSweepCommandTests : IDisposable
             ConnectionString = "Host=db.internal;Port=5432;Database=cms_db;Username=cms_user;Password=PG-PASSWORD-5",
         };
         using var sp = Services(files, db);
+        using var s3 = new S3FileStorage(files);
+        _storage.Description = s3.Describe();
         _storage.Blobs[Key(1)] = Old;
 
         var (o, e) = (new StringWriter(), new StringWriter());
@@ -333,6 +340,17 @@ public sealed class FilesSweepCommandTests : IDisposable
         all.Should().Contain("media-bucket").And.Contain("minio.example.test").And.Contain("cms_db");
         all.Should().NotContain("S3-SECRET-7").And.NotContain("AKIA-ACCESS-9")
             .And.NotContain("PG-PASSWORD-5").And.NotContain("cms_user").And.NotContain("db.internal");
+    }
+
+    [Fact]
+    public async Task A_custom_storage_is_named_by_its_own_description()
+    {
+        _storage.Description = "Azure Blob container media";
+
+        var (o, e) = (new StringWriter(), new StringWriter());
+        await MigrationCli.RunAsync(MigrationCli.Parse(["files:sweep"]), _sp, o, e, default);
+
+        o.ToString().Split('\n')[0].Should().Contain("storage:").And.Contain("Azure Blob container media");
     }
 
     [Fact]

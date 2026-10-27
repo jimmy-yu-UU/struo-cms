@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Struo.Api.Hosting;
 
@@ -34,7 +35,8 @@ internal sealed class ForkHost : IAsyncDisposable
 
     /// <summary>Starts a host; any startup failure propagates to the caller.</summary>
     public static async Task<ForkHost> StartAsync(
-        Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null)
+        Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
+        Action<IServiceCollection>? afterAddStruoCms = null)
     {
         var db = TestBackend.CreateSqliteDatabase();
         var filesRoot = Path.Combine(Path.GetTempPath(), "struo-forkhost-" + Guid.NewGuid().ToString("N"));
@@ -58,6 +60,7 @@ internal sealed class ForkHost : IAsyncDisposable
             builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(settings);
             builder.AddStruoCms(configure);
+            afterAddStruoCms?.Invoke(builder.Services);
             app = builder.Build();
             await app.UseStruoCmsAsync();
             await app.StartAsync();
@@ -73,11 +76,12 @@ internal sealed class ForkHost : IAsyncDisposable
 
     /// <summary>Starts a host and returns the failure it threw, or null when it started.</summary>
     public static async Task<Exception?> StartupErrorAsync(
-        Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null)
+        Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
+        Action<IServiceCollection>? afterAddStruoCms = null)
     {
         try
         {
-            await using var host = await StartAsync(configure, mutate);
+            await using var host = await StartAsync(configure, mutate, afterAddStruoCms);
             return null;
         }
         catch (Exception ex)

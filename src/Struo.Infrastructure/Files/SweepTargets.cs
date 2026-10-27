@@ -1,29 +1,13 @@
 using System.Data.Common;
 using Struo.Application.Configuration;
-using Struo.Application.Files;
 
 namespace Struo.Infrastructure.Files;
 
 /// <summary>Describes what <c>files:sweep</c> is about to compare, without credentials or connection strings.</summary>
 internal static class SweepTargets
 {
-    public static string Describe(FileStorageOptions files, DatabaseOptions database) =>
-        $"storage:  {DescribeStorage(files)}{Environment.NewLine}database: {DescribeDatabase(database)}";
-
-    private static string DescribeStorage(FileStorageOptions files)
-    {
-        if (!string.Equals(files.Backend, "s3", StringComparison.OrdinalIgnoreCase))
-            return $"local, root {Path.GetFullPath(files.Local.RootPath)}";
-
-        return $"s3, bucket {files.S3.Bucket}, service {DescribeS3Service(files.S3)}";
-    }
-
-    private static string DescribeS3Service(FileStorageOptions.S3Options s3)
-    {
-        if (!Uri.TryCreate(s3.Endpoint, UriKind.Absolute, out var uri))
-            return $"AWS region {s3.Region}";
-        return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
-    }
+    public static string Describe(string storage, DatabaseOptions database) =>
+        $"storage:  {storage}{Environment.NewLine}database: {DescribeDatabase(database)}";
 
     private static string DescribeDatabase(DatabaseOptions database) =>
         $"{database.DbType}, database {DatabaseName(database)}";

@@ -50,7 +50,7 @@ internal static class FilesSweepCommand
         try
         {
             await stdout.WriteLineAsync(SweepTargets.Describe(
-                services.GetRequiredService<FileStorageOptions>(),
+                services.GetRequiredService<IFileStorage>().Describe(),
                 services.GetRequiredService<IOptions<DatabaseOptions>>().Value));
 
             var scan = new Scan(

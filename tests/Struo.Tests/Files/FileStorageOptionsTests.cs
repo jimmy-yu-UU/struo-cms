@@ -28,6 +28,17 @@ public class FileStorageOptionsTests
     }
 
     [Fact]
+    public void Custom_backend_needs_no_local_or_s3_settings() =>
+        new FileStorageOptions { Backend = "custom", Local = new() { RootPath = "" } }
+            .Invoking(x => x.Validate()).Should().NotThrow();
+
+    [Fact]
+    public void The_unknown_backend_message_lists_custom() =>
+        new FileStorageOptions { Backend = "azure" }
+            .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>()
+            .WithMessage("*'azure'*'custom'*");
+
+    [Fact]
     public void Valid_local_passes() =>
         new FileStorageOptions { Backend = "local", Local = new() { RootPath = "App_Data/uploads" } }
             .Invoking(x => x.Validate()).Should().NotThrow();

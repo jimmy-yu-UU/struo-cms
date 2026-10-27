@@ -148,10 +148,10 @@ recorded or a truncated object to be stored.
 The file row and its auto-filled translation row are written together inside the same transaction,
 so there's never an intermediate state with a file but no title.
 
-## Storage backends: local and s3
+## Storage backends: local, s3 and custom
 
 `Struo:Files:Backend` selects exactly one of the registered `IFileStorage` implementations:
-`"local"` (the default) or `"s3"`; any other value fails startup outright. Both backends' keys
+`"local"` (the default), `"s3"` or `"custom"`; any other value fails startup outright. Both backends' keys
 and validation rules are in [Chapter 4](04-configuration.md); this section covers only the
 behavioral differences.
 
@@ -183,6 +183,18 @@ Both backends throw the same kind of exception when a row exists but its bytes d
 missing file or missing year/month directory, and `s3` recognizes only the `NoSuchKey` error
 code — a missing bucket entirely is a configuration error and stays a `500`. Either way, a blob
 that can't be found is a clean `404` to the caller, never a `500`.
+
+### Your own storage: `custom`
+
+With `Struo:Files:Backend` set to `custom`, the core builds no storage of its own. Your fork implements
+`IFileStorage` and registers it in `Program.cs` after `AddStruoCms()`; a host with `custom` and no
+registered `IFileStorage` fails at startup with a message naming the key. The Local and S3 keys are not
+validated in this mode. A fork that keeps `local` or `s3` can still register its own `IFileStorage`: the core's
+default is registered with `TryAdd`, so yours wins either way.
+
+`IFileStorage.Describe()` returns the one line `files:sweep` prints after `storage:`. It has a default
+(the type name); override it to name the container or root path, and never put a key or connection string in
+it. A complete Azure Blob example is in [Chapter 18: Extension Points](18-extension-points.md).
 
 ## Serving files: who can see what
 

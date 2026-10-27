@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.Auth;
 using Struo.Api.Hosting;
+using Struo.Application.Files;
 using Struo.Application.Search;
 using Struo.Application.Security;
 using Struo.Tests.Support;
@@ -60,6 +61,7 @@ public class AddStruoCmsTests
     [InlineData(typeof(IHtmlSanitizer))]
     [InlineData(typeof(IPasswordHasher))]
     [InlineData(typeof(IFileAccessPolicy))]
+    [InlineData(typeof(IFileStorage))]
     public void A_replaceable_core_default_registered_before_AddStruoCms_is_kept(Type serviceType)
     {
         var builder = WebApplication.CreateBuilder();

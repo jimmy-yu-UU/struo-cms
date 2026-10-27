@@ -122,7 +122,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
-| `Struo:Files:Backend` | 字串 | `"local"` |
+| `Struo:Files:Backend` | 字串（`local`、`s3` 或 `custom`） | `"local"` |
 | `Struo:Files:MaxUploadBytes` | 長整數（bytes） | `26214400` |
 | `Struo:Files:AllowedContentTypes` | 字串陣列 | `[]` |
 | `Struo:Files:DefaultStatus` | 字串 | `"published"` |
@@ -147,7 +147,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 |---|---|---|
 | `Struo:Files:Local:RootPath` | 字串 | `"App_Data/uploads"` |
 
-`Backend="local"` 時，`RootPath` 是唯一在啟動時被驗證的欄位。
+`Backend="local"` 時，`RootPath` 是唯一在啟動時被驗證的欄位。`Backend="custom"` 時，Local 與 S3 的鍵都不驗證。
 
 ### S3
 
