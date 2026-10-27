@@ -23,11 +23,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     private readonly FieldValidatorRegistry validatorRegistry = new();
 
-    public object Deserialize(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
-
     /// <summary>
-    /// Binds a request body for a CREATE like <see cref="Deserialize"/> but defers the scalar Required
+    /// Binds a request body for a CREATE, deferring the scalar Required
     /// check: <see cref="ItemService"/> runs the write interceptors' <c>BeforeWriteAsync</c> first, so an
     /// interceptor can fill a Required field, then calls <see cref="EnforceRequiredFields"/> itself. The
     /// per-interface validators still run for every field, so a Required list-type field is checked here.
@@ -37,7 +34,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     /// <summary>
     /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
-    /// per-interface validation as <see cref="Deserialize"/>, but WITHOUT the Required check:
+    /// per-interface validation as <see cref="DeserializeForCreate"/>, but WITHOUT the Required check:
     /// <see cref="ItemService.UpdateCoreAsync"/> is a merge that only overlays fields the client
     /// actually sent, so a Required field this body omits must not fail here — it fails, if at
     /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
@@ -47,7 +44,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
-    /// RichText, MaxLength and per-interface validation as <see cref="Deserialize"/>, but only for the
+    /// RichText, MaxLength and per-interface validation as <see cref="DeserializeForCreate"/>, but only for the
     /// camelCase fields in <paramref name="onlyFields"/> that are present in <paramref name="body"/>, and
     /// without Required checks (absent payload fields keep their stored value). Returns CLR property name → value.
     /// </summary>

@@ -42,7 +42,7 @@ public sealed class ItemDeserializerUtcInstantTests
     {
         var (deserializer, meta) = Build();
 
-        var article = (Article)deserializer.Deserialize("article", Body("\"2026-10-14T10:00:00+08:00\""), meta);
+        var article = (Article)deserializer.DeserializeForCreate("article", Body("\"2026-10-14T10:00:00+08:00\""), meta);
 
         article.PublishedAt.Should().Be(new DateTime(2026, 10, 14, 2, 0, 0, DateTimeKind.Utc));
         article.PublishedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
@@ -57,7 +57,7 @@ public sealed class ItemDeserializerUtcInstantTests
     {
         var (deserializer, meta) = Build();
 
-        var act = () => deserializer.Deserialize("article", Body(json), meta);
+        var act = () => deserializer.DeserializeForCreate("article", Body(json), meta);
 
         act.Should().Throw<QueryException>().WithMessage("Field 'publishedAt' has an invalid value.");
     }
