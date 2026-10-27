@@ -39,5 +39,7 @@ internal static class StruoCmsStartupChecks
         await Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
             startupLogger);
+
+        await StruoCmsGraphQlCheck.RunAsync(sp);
     }
 }

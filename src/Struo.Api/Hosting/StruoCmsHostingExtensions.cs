@@ -35,11 +35,18 @@ public static class StruoCmsHostingExtensions
             configuration.ReadFrom.Configuration(context.Configuration).ReadFrom.Services(services));
 
         builder.Services.AddStruoMvc();
-        builder.Services.AddStruoCoreServices(builder.Configuration, builder.Environment);
+        var graphQl = builder.Services.AddStruoCoreServices(builder.Configuration, builder.Environment);
         builder.Services.AddStruoOptions();
         builder.Services.AddStruoRateLimiting();
 
-        configure?.Invoke(new StruoCmsBuilder());
+        var cms = new StruoCmsBuilder();
+        configure?.Invoke(cms);
+        cms.ApplyGraphQl(graphQl);
+        if (cms.HasGraphQlConfiguration)
+        {
+            graphQl.TryAddTypeInterceptor<RootFieldCollisionInterceptor>();
+            builder.Services.AddSingleton<StruoCmsGraphQlMarker>();
+        }
         return builder;
     }
 

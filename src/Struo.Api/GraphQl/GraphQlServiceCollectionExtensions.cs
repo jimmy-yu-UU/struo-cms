@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 
 namespace Struo.Api.GraphQl;
@@ -24,11 +25,30 @@ public static class GraphQlServiceCollectionExtensions
             .GetValue<bool?>(nameof(GraphQlOptions.ExposeSchema))
         ?? env.IsDevelopment();
 
+    /// <summary>
+    /// Reads the depth and cost limits from configuration at registration time, like
+    /// <see cref="ResolveExposeSchema"/>: the HotChocolate rules take plain values. A non-positive value is
+    /// rejected at startup by <see cref="GraphQlOptionsValidator"/>.
+    /// </summary>
+    internal static GraphQlOptions ResolveLimits(IConfiguration config) =>
+        config.GetSection(GraphQlOptions.SectionName).Get<GraphQlOptions>() ?? new GraphQlOptions();
+
     public static IServiceCollection AddStruoGraphQl(
         this IServiceCollection services, IHostEnvironment env, IConfiguration config)
     {
-        services.AddOptions<GraphQlOptions>().BindConfiguration(GraphQlOptions.SectionName);
+        services.AddStruoGraphQlServer(env, config);
+        return services;
+    }
+
+    internal static IRequestExecutorBuilder AddStruoGraphQlServer(
+        this IServiceCollection services, IHostEnvironment env, IConfiguration config)
+    {
+        services.AddOptions<GraphQlOptions>()
+            .BindConfiguration(GraphQlOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<GraphQlOptions>, GraphQlOptionsValidator>();
         var exposeSchema = ResolveExposeSchema(config, env);
+        var limits = ResolveLimits(config);
         // Registered on the application IServiceCollection (not chained via
         // IRequestExecutorBuilder.AddErrorFilter<T>()): the schema-services container HotChocolate
         // builds for the operation-execution pipeline is a filtered subset of app services that
@@ -42,7 +62,7 @@ public static class GraphQlServiceCollectionExtensions
         // (not schema-scoped activation) — StruoTypeModule must be registered explicitly.
         services.AddSingleton<StruoTypeModule>();
 
-        services
+        return services
             .AddGraphQLServer()
             .AddQueryType(d => d
                 .Name("Query")
@@ -63,7 +83,7 @@ public static class GraphQlServiceCollectionExtensions
             .AddType<AnyType>()            // JSON scalar (SDL name "Any")
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
-            .AddMaxExecutionDepthRule(12, skipIntrospectionFields: true)
+            .AddMaxExecutionDepthRule(limits.MaxExecutionDepth, skipIntrospectionFields: true)
             // Static cost analysis is the alias-amplification defense. HotChocolate 16.6.0's
             // validation rule set has no dedicated alias/operation-count rule (checked directly
             // against the HotChocolate.Validation 16.6.0 assembly), so every aliased selection
@@ -75,17 +95,21 @@ public static class GraphQlServiceCollectionExtensions
             .ModifyCostOptions(o =>
             {
                 o.EnforceCostLimits = true;
-                // Calibrated empirically against the full GraphQL suite (see GraphQlCostAnalysisTests):
+                // Defaults (GraphQlOptions) are calibrated empirically against the core-only schema (see
+                // GraphQlCostAnalysisTests):
                 //   - heaviest LEGITIMATE query (3-root articles/categories/tags, the concurrency
                 //     smoke test) measures fieldCost = 33;
                 //   - a 50-alias `articles { items { id } }` amplification measures fieldCost = 550.
                 // 150 sits between them (~4.5x headroom over legitimate traffic, rejects the bomb at
                 // ~0.27x). The default 1000-tier would NOT catch a cheap-field alias bomb (550 < 1000),
                 // so it is deliberately lowered. HotChocolate 16.6.0's default MaxFieldCost is still
-                // 1000 (checked directly against the HotChocolate.CostAnalysis 16.6.0 assembly); this
-                // is the smallest round value that separates our observed legit/abuse costs.
-                o.MaxFieldCost = 150.0;
-                o.MaxTypeCost = 150.0;
+                // 1000 (checked directly against the HotChocolate.CostAnalysis 16.6.0 assembly); 150 is the
+                // smallest round value that separates the observed legit/abuse costs. A fork that adds
+                // heavier queries re-measures its own heaviest legitimate query, using
+                // GraphQlCostAnalysisTests as the template, and sets GraphQl:MaxFieldCost and
+                // GraphQl:MaxTypeCost to match.
+                o.MaxFieldCost = limits.MaxFieldCost;
+                o.MaxTypeCost = limits.MaxTypeCost;
             })
             .DisableIntrospection(!exposeSchema)
             // Pin both root scopes to Request explicitly (Mutation would otherwise fall back to
@@ -99,8 +123,6 @@ public static class GraphQlServiceCollectionExtensions
                 o.DefaultQueryDependencyInjectionScope = DependencyInjectionScope.Request;
                 o.DefaultMutationDependencyInjectionScope = DependencyInjectionScope.Request;
             });
-
-        return services;
     }
 
     public static void MapStruoGraphQl(this WebApplication app)

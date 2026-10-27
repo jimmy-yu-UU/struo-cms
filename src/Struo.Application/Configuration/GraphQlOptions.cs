@@ -28,4 +28,13 @@ public sealed class GraphQlOptions
     /// </para>
     /// </summary>
     public bool? ExposeSchema { get; set; }
+
+    /// <summary>Deepest selection nesting an operation may have; introspection fields are exempt. Must be greater than 0.</summary>
+    public int MaxExecutionDepth { get; set; } = 12;
+
+    /// <summary>Highest static field cost one operation may accrue. Must be greater than 0.</summary>
+    public double MaxFieldCost { get; set; } = 150;
+
+    /// <summary>Highest static type cost one operation may accrue. Must be greater than 0.</summary>
+    public double MaxTypeCost { get; set; } = 150;
 }

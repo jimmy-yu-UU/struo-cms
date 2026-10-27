@@ -40,6 +40,14 @@
   `AddStruoCms()` 之前就註冊了自己的實作，現在會被保留；以前核心的預設會贏過這麼早的註冊。
 :::
 
+### 新增
+
+- `GraphQl:MaxExecutionDepth`（12）、`GraphQl:MaxFieldCost`（150）與 `GraphQl:MaxTypeCost`（150）
+  設定 GraphQL 的深度與成本上限，各自必須大於 0，否則啟動失敗，訊息會點出是哪一個鍵。預設值不變。
+- `AddStruoCms()` 回呼上的 `ConfigureGraphQl`，讓 fork 取得 HotChocolate 的 builder，加上自己的型別與
+  根欄位。名稱和產生出來的 schema 衝突時，啟動會失敗，訊息是 `GraphQL name collision`。
+  見[第 18 章](18-extension-points.md)。
+
 ## 0.13.1 — 2026-10-27
 
 ### 變更

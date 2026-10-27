@@ -298,6 +298,37 @@ public sealed class MyChangeListener(IMyIndex index) : IItemChangeListener
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## GraphQL schema：`ConfigureGraphQl`
+
+第三個接口不是介面，而是 builder 上的一個掛鉤。`ConfigureGraphQl` 會在核心 schema 註冊之後、伺服器建立
+之前，收到 HotChocolate 自己的 `IRequestExecutorBuilder`，fork 因此可以加查詢與變更欄位，以及自己的
+物件型別。它直接露出 HotChocolate 的 API；能做什麼，就看 HotChocolate 允許什麼。
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+在 `Program.cs` 透過 `AddStruoCms()` 的回呼註冊：
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+之後 `{ buildInfo { version } }` 就和產生出來的欄位一起由 `/graphql` 提供。
+
+名稱不能和產生出來的 schema 衝突；衝突時啟動會失敗，訊息是 `GraphQL name collision`。查詢深度與成本的
+上限是 `GraphQl:MaxExecutionDepth`、`GraphQl:MaxFieldCost` 與 `GraphQl:MaxTypeCost`，比較重的 fork 查詢
+可能需要調高。見[第 14 章：GraphQL API](14-graphql.md)。
+
 ## 接下來
 
 搜尋提供者跟寫入通知就談到這裡；下一章，

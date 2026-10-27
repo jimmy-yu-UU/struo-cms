@@ -49,7 +49,7 @@ internal static class StruoCmsServiceRegistration
         services.AddOpenApi();
     }
 
-    internal static void AddStruoCoreServices(
+    internal static HotChocolate.Execution.Configuration.IRequestExecutorBuilder AddStruoCoreServices(
         this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
         services.AddStruoInfrastructure();
@@ -58,12 +58,13 @@ internal static class StruoCmsServiceRegistration
         // builder.Configuration before AddStruoCms() to be seen by the metadata scan.
         services.AddStruoMetadata(configuration, typeof(StruoCmsHostingExtensions).Assembly);
         services.AddStruoData();
-        services.AddStruoGraphQl(environment, configuration);
+        var graphQl = services.AddStruoGraphQlServer(environment, configuration);
         services.AddStruoFiles();
         services.AddStruoAuth(configuration, environment);
         services.AddStruoCors(configuration);
         services.AddStruoForwardedHeaders(configuration);
         services.AddStruoOidc(configuration);
+        return graphQl;
     }
 
     internal static void AddStruoOptions(this IServiceCollection services)

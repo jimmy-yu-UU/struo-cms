@@ -43,6 +43,15 @@
   default won over a registration made that early.
 :::
 
+### Added
+
+- `GraphQl:MaxExecutionDepth` (12), `GraphQl:MaxFieldCost` (150) and `GraphQl:MaxTypeCost` (150) set
+  the GraphQL depth and cost limits. Each must be greater than 0, or startup fails with a message
+  naming the key. The defaults are unchanged.
+- `ConfigureGraphQl` on the `AddStruoCms()` callback gives a fork HotChocolate's builder to add its
+  own types and root fields. A name that clashes with the generated schema fails startup with a
+  `GraphQL name collision` message. See [Chapter 18](18-extension-points.md).
+
 ## 0.13.1 — 2026-10-27
 
 ### Changed

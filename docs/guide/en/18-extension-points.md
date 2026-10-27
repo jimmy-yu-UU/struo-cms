@@ -353,6 +353,39 @@ An application can register any number of listeners:
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## The GraphQL schema: `ConfigureGraphQl`
+
+The third seam is not an interface but a hook on the builder. `ConfigureGraphQl` receives
+HotChocolate's own `IRequestExecutorBuilder`, after the core schema is registered and before the
+server is built, so a fork can add query and mutation fields and its own object types. It exposes
+HotChocolate's API directly; what you can do with it is whatever HotChocolate allows.
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+Register it in `Program.cs` through the callback of `AddStruoCms()`:
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+`{ buildInfo { version } }` is then served at `/graphql` next to the generated fields.
+
+Names must not collide with the generated schema; startup fails with a `GraphQL name collision`
+message when one does. The query depth and cost limits, which a heavier fork query may need to
+raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxTypeCost`. See
+[Chapter 14: GraphQL API](14-graphql.md).
+
 ## What's next
 
 That covers search providers and change notifications. The next chapter,
