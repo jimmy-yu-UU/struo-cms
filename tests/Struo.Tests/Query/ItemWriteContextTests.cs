@@ -41,4 +41,12 @@ public class ItemWriteContextTests
         context.Changed.Should().BeTrue();
         changed.Entity.Should().BeSameAs(context.Entity);
     }
+
+    [Fact]
+    public void Public_surface_has_only_the_documented_members()
+    {
+        typeof(ItemWriteContext).GetProperties().Select(p => p.Name).Where(n => n != "EqualityContract")
+            .Should().BeEquivalentTo("Operation", "Meta", "Entity", "Id", "Existing", "BodyKeys", "Changed", "Body");
+        typeof(ItemWriteContext).GetMethod("Deconstruct").Should().BeNull();
+    }
 }

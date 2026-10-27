@@ -22,34 +22,45 @@ public enum ItemWriteOperation
 }
 
 /// <summary>What an <see cref="IItemWriteInterceptor"/> hook sees of one write.</summary>
-public sealed record ItemWriteContext(
-    ItemWriteOperation operation, CollectionMetadata meta, object entity, string? id,
-    IReadOnlySet<string> bodyKeys, JsonElement? body, object? existing = null)
+public sealed record ItemWriteContext
 {
-    public ItemWriteOperation Operation { get; } = operation;
+    public ItemWriteContext(
+        ItemWriteOperation operation, CollectionMetadata meta, object entity, string? id,
+        IReadOnlySet<string> bodyKeys, JsonElement? body, object? existing = null)
+    {
+        Operation = operation;
+        Meta = meta;
+        Entity = entity;
+        Id = id;
+        BodyKeys = bodyKeys;
+        Body = body;
+        Existing = existing;
+    }
 
-    public CollectionMetadata Meta { get; } = meta;
+    public ItemWriteOperation Operation { get; }
+
+    public CollectionMetadata Meta { get; }
 
     /// <summary>
     /// The entity being written, mutable until the transaction runs: for create, update and revert the
     /// request body merged into it; for trash, restore and purge the existing row. After the row is
     /// written it is the stored entity.
     /// </summary>
-    public object Entity { get; init; } = entity;
+    public object Entity { get; init; }
 
     /// <summary>The item id; null for a create until the row is inserted.</summary>
-    public string? Id { get; init; } = id;
+    public string? Id { get; init; }
 
     /// <summary>
     /// For update and revert, the row as stored before the body was merged (a separate read, loaded only
     /// when an interceptor applies), so a hook can compare old and new. Null for create, trash, restore
     /// and purge, where <see cref="Entity"/> is the row.
     /// </summary>
-    public object? Existing { get; } = existing;
+    public object? Existing { get; }
 
     /// <summary>The top-level property names of the request body, as sent (a case-insensitive set); empty
     /// for trash, restore and purge.</summary>
-    public IReadOnlySet<string> BodyKeys { get; } = bodyKeys;
+    public IReadOnlySet<string> BodyKeys { get; }
 
     /// <summary>
     /// True when the write changed state. False in <see cref="IItemWriteInterceptor.AfterCommitAsync"/>
@@ -59,5 +70,5 @@ public sealed record ItemWriteContext(
     public bool Changed { get; init; } = true;
 
     /// <summary>The request body (the snapshot for a revert); null for trash, restore and purge.</summary>
-    public JsonElement? Body { get; } = body;
+    public JsonElement? Body { get; }
 }
