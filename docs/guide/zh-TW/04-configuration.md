@@ -129,7 +129,8 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
 `Backend` 與 `DefaultStatus` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
-要欄位（見下面 Local／S3）也一併驗證。`MaxUploadBytes`、`AllowedContentTypes`、
+要欄位（見下面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要 fork
+註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。`MaxUploadBytes`、`AllowedContentTypes`、
 `PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
@@ -147,7 +148,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 |---|---|---|
 | `Struo:Files:Local:RootPath` | 字串 | `"App_Data/uploads"` |
 
-`Backend="local"` 時，`RootPath` 是唯一在啟動時被驗證的欄位。
+`Backend="local"` 時，`RootPath` 是唯一在啟動時被驗證的欄位。`Backend="custom"` 時，Local 與 S3 的鍵都不驗證。
 
 ### S3
 
@@ -163,7 +164,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
-會擋下啟動。
+會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
 
 ### ImageTransform
 
@@ -275,6 +276,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 | `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
+| `Auth:Cookie:Name` | 字串 | `"struo.session"` |
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
@@ -292,6 +294,12 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 一律是 `Always`，Development 則跟隨請求本身；`true` 在所有環境強制 `Secure`；`false` 讓 cookie 可以走純
 HTTP，前面沒有 TLS 的類 Staging 主機需要這樣設。只要設定了任何 `Struo:Cors` 來源，不論這個鍵怎麼設，
 都會強制 `Secure`。
+
+`Auth:Cookie:Name` 是 session cookie 的名稱，留空就用預設值。CSRF 防護與 session 輪替都跟著它走。名稱不是
+有效的 cookie 名稱（字母、數字與 ``! # $ % & ' * + - . ^ _ ` | ~``），或 `__Secure-`、`__Host-` 名稱碰上不是
+一律 `Secure` 的 cookie，或 `__Host-` 名稱碰上帶 `Domain` 或 `Path` 不是 `/` 的 cookie，啟動都會失敗，
+訊息會點出這個鍵。StruoCMS 不送 `Domain`，也不送 `/` 以外的 `Path`。見
+[第 25 章](25-after-forking.md)的 `__Host-` 前綴那一節。
 
 ## OpenApi
 
@@ -317,10 +325,18 @@ Development 之外打開之前，前面要自己加一層驗證。
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
 | `GraphQl:ExposeSchema` | 布林（可留空） | 無（依環境判斷） |
+| `GraphQl:MaxExecutionDepth` | 整數，至少 1 | `12` |
+| `GraphQl:MaxFieldCost` | 數字，大於 0 | `150` |
+| `GraphQl:MaxTypeCost` | 數字，大於 0 | `150` |
 
 留空時只有 Development 預設開放，其他環境（含 Production）一律預設關閉；管的只是 schema 能不能被
 查詢（introspection 與 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器
 IDE 另外只認開發環境，不受這個鍵控制。
+
+另外三個鍵是單一操作的上限：選擇集最多能巢狀幾層，以及最多能累積多少欄位成本與型別成本。設成 0
+或更小，啟動會失敗，訊息會點出是哪一個鍵。預設值是只針對核心 schema 量出來的。fork 加了比較重的
+查詢，就把成本上限調高到合適的值，見[第 14 章：GraphQL API](14-graphql.md)的〈深度上限〉。這幾個鍵只從設定讀取：在程式碼裡設定
+`GraphQlOptions` 對它們沒有作用。
 
 ## ForwardedHeaders
 

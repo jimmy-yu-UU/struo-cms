@@ -85,9 +85,9 @@ configuration keys are in the `RateLimiting` section of
 ## Login and the session cookie
 
 A request that carries no `Authorization: Bearer …` header always goes through the cookie: named
-`struo.session`, `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
-`Auth:Cookie:RequireSecure`; left unset, it is `Always` in every environment except Development, which
-follows the request itself.
+`struo.session` unless `Auth:Cookie:Name` says otherwise, `HttpOnly`, `SameSite` defaulting to `Lax`.
+The `Secure` policy follows `Auth:Cookie:RequireSecure`; left unset, it is `Always` in every
+environment except Development, which follows the request itself.
 
 As soon as any CORS origin is configured at all, both the `Secure` policy and `SameSite` switch to
 `Always`/`None`, because a browser only accepts `SameSite=None` under `Secure` — meaning a

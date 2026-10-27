@@ -31,9 +31,17 @@ public static class FileStorageServiceCollectionExtensions
         services.AddSingleton<IValidateOptions<FileStorageOptions>, FileStorageOptionsValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<FileStorageOptions>>().Value);
 
-        services.AddSingleton<IFileStorage>(sp =>
+        // TryAdd so a fork's own IFileStorage wins whether it is registered before or after this call.
+        // Backend=custom builds nothing: the fork must register one, and the factory below fails with a
+        // message naming the key when none is registered (a later registration is the one resolved, so
+        // this factory never runs then).
+        services.TryAddSingleton<IFileStorage>(sp =>
         {
             var options = sp.GetRequiredService<FileStorageOptions>();
+            if (string.Equals(options.Backend, "custom", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Struo:Files:Backend is 'custom' but no IFileStorage is registered. " +
+                    "Register your implementation after AddStruoCms(), or set Struo:Files:Backend to 'local' or 's3'.");
             return string.Equals(options.Backend, "s3", StringComparison.OrdinalIgnoreCase)
                 ? new S3FileStorage(options)
                 : new LocalFileStorage(options);

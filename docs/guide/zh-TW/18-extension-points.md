@@ -1,9 +1,9 @@
-# 18. 擴充點：搜尋提供者與寫入通知
+# 18. 擴充點
 
-呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，核心把這兩件事各自留成
-一個介面，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談
-`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什
-麼事，以及怎麼註冊。
+呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，GraphQL schema 裡要有什麼，核心把這幾件事
+各自留成一個接口，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談 fork 的服務註冊在
+哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼帶來自己的檔案儲存，怎麼用 `StruoDomainException` 定義自己的、給客戶端看的錯誤，以及
+`ConfigureGraphQl` 怎麼擴充 GraphQL schema。
 
 `search=` 本身的語法與內建的 LIKE 掃描，見
 [第 10 章：查詢：過濾、排序、分頁](10-query-basics.md)；一次寫入的版本紀錄與軟刪除語
@@ -16,6 +16,40 @@
 內建一個永遠不處理搜尋的 `NullSearchProvider`，以及一個負責派送、但預設沒有任何監聽者
 的 `ItemChangeNotifier`；fork 要接手，就是實作介面本身、註冊進去，不用改核心一行程式
 碼。
+
+## 你的註冊寫在哪裡
+
+fork 的 `Program.cs` 歸你所有。核心用兩個呼叫組裝自己：`builder.AddStruoCms()` 註冊所有服務，
+`app.UseStruoCmsAsync()` 建好請求管線並跑啟動檢查。你自己的服務註冊在兩者之間，也就是
+`AddStruoCms()` 之後。下面是隨附的 `src/Struo.Api/Program.cs` 的節錄，只留下這裡要談的幾行；
+完整的檔案還有啟動用的 bootstrap logger 與啟動錯誤的處理：
+
+```csharp
+var cli = MigrationCli.Parse(args);
+var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
+builder.AddStruoCms();
+builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
+
+var app = builder.Build();
+if (await app.TryRunStruoCommandAsync(cli)) return;
+await app.UseStruoCmsAsync();
+await app.RunAsync();
+```
+
+`AddStruoCms()` 執行時就會讀設定，用來掃描 `Struo:ContentAssemblies`。自己的設定來源（例如
+Key Vault）要在呼叫之前加進 `builder.Configuration`，否則掃描看不到。
+
+在 `AddStruoCms()` 之後註冊的，一律贏過核心的預設。下列預設，核心用的是 `TryAdd`，所以寫在
+呼叫之前的註冊也會被保留：`ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、
+`IPasswordHasher`、`IFileAccessPolicy`、`IFileStorage`。
+
+其中三個有契約，替換的實作要遵守：
+
+- `IPasswordHasher` 要能驗證已存的 Argon2id 雜湊，而且比對要是常數時間。
+- `IHtmlSanitizer` 是防止富文字欄位被注入指令碼的唯一防線。
+- `IFileAccessPolicy` 是檔案下載的權限檢查。
 
 ## 搜尋提供者 `ISearchProvider`
 
@@ -96,7 +130,7 @@ LIKE 掃描，兩條路都合法，這個介面不逼哪一種。
 ### 註冊與生命週期
 
 核心自己的預設註冊用的是「沒人註冊過才註冊」，所以 fork 的註冊永遠贏，不管寫在
-`AddStruoData()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
+`AddStruoCms()` 之前還是之後：之前贏，是因為核心的預設接著就不會生效；之後贏，是因為
 後面註冊的才是最後被解析到的那個。
 
 `ISearchProvider` 跟下一節的 `IItemChangeListener`，註冊都寫在
@@ -133,7 +167,7 @@ public sealed class MySearchProvider(IMyIndex index) : ISearchProvider
 集合名稱與索引查詢是 fork 自己要換掉的兩處：其他集合直接回 `NotHandled`，`search=` 就
 照樣走內建的 LIKE 掃描。
 
-註冊寫在 `AddStruoData()` 之後：
+註冊寫在你自己的 `Program.cs`，`AddStruoCms()` 之後：
 
 ```csharp
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
@@ -264,8 +298,125 @@ public sealed class MyChangeListener(IMyIndex index) : IItemChangeListener
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## 檔案儲存：`IFileStorage`
+
+`file` 集合背後的位元組儲存是 `IFileStorage`。核心附帶 local 與 S3 兩個後端，由 `Struo:Files:Backend`
+選擇。要把檔案存到別處，就把後端設成 `custom`，並在 `AddStruoCms()` 之後註冊你的實作。這個模式下核心不會
+自己建任何儲存，沒註冊時啟動會失敗，訊息會點出那個鍵。記住契約：找不到 key 要丟 `FileBlobNotFoundException`，
+不能丟後端自己的例外；`ListAsync` 要串流每一個 blob；`Describe()` 是 `files:sweep` 印出的那一行，不能含
+任何憑證。下面是 Azure Blob 儲存的最小示意（`Azure.Storage.Blobs` 套件屬於你的 fork，不屬於核心）。它沒有測試過：
+容器必須事先存在，也沒有做預簽章網址（SAS）：
+
+```csharp
+using System.Runtime.CompilerServices;
+using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Struo.Application.Files;
+using Struo.Domain.Query;
+
+public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileStorage
+{
+    public bool SupportsPresignedUrls => false;
+
+    public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
+
+    public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).UploadAsync(
+            content, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = contentType } }, ct);
+
+    public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            return await container.GetBlobClient(key).OpenReadAsync(cancellationToken: ct);
+        }
+        catch (RequestFailedException ex) when (ex.ErrorCode == BlobErrorCode.BlobNotFound)
+        {
+            throw new FileBlobNotFoundException(key);   // 契約：找不到 key 時，不能丟出後端自己的例外
+        }
+    }
+
+    public async Task DeleteAsync(string key, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: ct);
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: ct))
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified?.UtcDateTime ?? DateTime.MaxValue);
+    }
+
+    // files:sweep 會印出這一行：只寫容器與帳號，絕不放金鑰或連線字串。
+    public string Describe() => $"azure blob, container {container.Name}, account {container.AccountName}";
+}
+```
+
+在設定裡把 `Struo:Files:Backend` 設成 `custom`（例如 `Struo__Files__Backend=custom`），並在 `Program.cs` 於
+`AddStruoCms()` 之後註冊這個儲存：
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddSingleton(new BlobContainerClient(builder.Configuration["Azure:Storage:ConnectionString"], "media"));
+builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+```
+
+內建後端的行為與 `files:sweep`，見[第 15 章](15-files-and-media.md)。
+
+## 自己的錯誤：`StruoDomainException`
+
+fork 自己、給客戶端看的錯誤，繼承 `StruoDomainException`，它帶著代碼、400 到 499 的狀態與訊息。REST 與
+GraphQL 都原樣回傳。怎麼定義，以及訊息與代碼的規則，見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
+
+## GraphQL schema：`ConfigureGraphQl`
+
+第三個接口不是介面，而是 builder 上的一個掛鉤。`ConfigureGraphQl` 會在核心 schema 註冊之後、伺服器建立
+之前，收到 HotChocolate 自己的 `IRequestExecutorBuilder`，fork 因此可以加查詢與變更欄位，以及自己的
+物件型別。它直接露出 HotChocolate 的 API；能做什麼，就看 HotChocolate 允許什麼。
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+在 `Program.cs` 透過 `AddStruoCms()` 的回呼註冊：
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+之後 `{ buildInfo { version } }` 就和產生出來的欄位一起由 `/graphql` 提供。
+
+你加在 `Mutation` 上的欄位，要自己保護。CMS 的登入檢查與權限是掛在它產生出來的欄位上，不是掛在
+`Mutation` 型別上，所以 fork 自己的欄位，除非自己檢查，匿名呼叫端也能執行。你的動作也是在核心之後執行，
+所以你在 builder 上改的設定（introspection、成本與深度規則、相依性注入的範圍）會取代核心的。CSRF 防護是
+HTTP 中介層，照樣適用。要求已登入呼叫端的 mutation 長這樣：
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
+名稱不能和產生出來的 schema 衝突；衝突時啟動會失敗，訊息是 `GraphQL name collision`。查詢深度與成本的
+上限是 `GraphQl:MaxExecutionDepth`、`GraphQl:MaxFieldCost` 與 `GraphQl:MaxTypeCost`，比較重的 fork 查詢
+可能需要調高。見[第 14 章：GraphQL API](14-graphql.md)。
+
 ## 接下來
 
-搜尋提供者跟寫入通知就談到這裡；下一章，
+註冊的位置、搜尋提供者、寫入通知、檔案儲存、領域錯誤跟 GraphQL 的掛鉤就談到這裡；下一章，
 [第 19 章：後台客製化](19-admin-customization.md)，回到前端，談後台的哪些外觀跟行為只
 靠設定就能換掉，哪些才真的需要碰 `frontend/src`。

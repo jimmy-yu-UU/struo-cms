@@ -3,7 +3,7 @@ namespace Struo.Application.Files;
 /// <summary>A blob in the byte store: its key and last-modified time (UTC).</summary>
 public sealed record StoredBlob(string Key, DateTime LastModifiedUtc);
 
-/// <summary>Pluggable byte storage for file assets. Exactly one implementation is registered.</summary>
+/// <summary>Pluggable byte storage for file assets. Exactly one implementation is resolved; a later registration replaces the core default.</summary>
 public interface IFileStorage
 {
     /// <summary>
@@ -35,4 +35,12 @@ public interface IFileStorage
 
     /// <summary>Returns a presigned URL, or null when the backend streams through the API (local).</summary>
     Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default);
+
+    /// <summary>
+    /// A one-line description of the storage target for <c>files:sweep</c> to print, so the operator can
+    /// check which storage the sweep will compare against the database. It must not contain a credential,
+    /// connection string or key: name the bucket, container, endpoint host or root path only. The default
+    /// is the implementation's type name.
+    /// </summary>
+    string Describe() => GetType().Name;
 }

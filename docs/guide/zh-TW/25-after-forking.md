@@ -57,7 +57,7 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 
 ## 7. 正式網域在共用的上層網域下：考慮 `__Host-` cookie 前綴
 
-登入 cookie 叫 `struo.session`。如果你的正式網站是某個共用上層網域底下的子網域（例如
+登入 cookie 預設叫 `struo.session`。如果你的正式網站是某個共用上層網域底下的子網域（例如
 `app.example.com`，而同一個上層網域下還有別人控制的子網域），那些兄弟子網域可以替整個上層網域
 寫入同名的 cookie，蓋掉或塞入你的 session cookie。
 
@@ -65,20 +65,20 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 帶 `Domain`，所以兄弟子網域寫不進來。這個專案的 cookie 已經是 `Path=/`、沒有 `Domain`，缺的只
 有名稱。
 
-名稱是 `src/Struo.Api/Auth/AuthSchemes.cs` 裡的常數 `SessionCookieName`，沒有設定鍵。把它改成
-`__Host-struo.session` 即可；CSRF 與 session 輪替的 middleware 讀的是同一個常數。
+把 `Auth:Cookie:Name` 設成 `__Host-struo.session`（例如 `Auth__Cookie__Name=__Host-struo.session`）即可；
+CSRF 與 session 輪替的 middleware 跟著它走。啟動時會檢查這個名稱，cookie 不是一律 `Secure`、或帶了
+`Domain` 或別的 `Path` 時，啟動失敗，訊息會點出這個鍵。
 [第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)裡寫的字面 `struo.session`
 也會跟著變。先知道三件事：
 
 - 前綴要求 `Secure`，但只有面對瀏覽器的來源必須是 HTTPS。Development 之外，不論 API 自己看到的是
   什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。
-  `RequireSecure=false` 等於 `SameAsRequest`：只有 API 自己看到的是純 http（例如前面沒有 TLS 的
-  主機），cookie 才不帶 `Secure`，瀏覽器也才會拒收帶前綴的 cookie。
-- 這個常數在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
-  `SameAsRequest`：在 `http://localhost` 上 cookie 沒有 `Secure`，瀏覽器拒收，本機登入與 e2e 測試
-  都會失敗。本機執行與 e2e 的主機要設 `Auth__Cookie__RequireSecure=true`，cookie 就會帶
-  `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的瀏覽器（Safari）
-  本機就得走 HTTPS。
+  `RequireSecure=false` 等於 `SameAsRequest`，名稱帶前綴時，啟動會失敗，訊息會點出
+  `Auth:Cookie:Name`。
+- 這個名稱在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
+  `SameAsRequest`，所以在本機執行與 e2e 的主機設 `Auth__Cookie__RequireSecure=true` 之前，啟動都會失敗。
+  設了之後 cookie 就帶 `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的
+  瀏覽器（Safari）本機就得走 HTTPS。
 - cookie 改名之後，所有已登入的人都會被登出一次。
 
 ## 8. 圖片或 API 在另一個來源：`CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
@@ -118,3 +118,13 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 是 `/signin-oidc-<id>`。測試環境的來源同樣要登記，開發時再登記 `http://localhost:5173` 加上同一條路徑。
 `/api/` 之外的自訂 `CallbackPath`，還要在 `frontend/nginx/default.conf.template` 加一個 `location` 區塊，開發伺服器則要在 `frontend/vite.proxy.ts` 加一筆。
 各提供者的設定步驟見[第 16 章：認證與 SSO](16-authentication.md)。
+
+## 11. `Program.cs`：從現在起歸你
+
+`src/Struo.Api/Program.cs` 屬於你的 fork。範本自己的組裝放在 `src/Struo.Api/Hosting/`，藏在
+`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()` 後面，所以上游不會再在 `Program.cs` 裡改動
+組裝的內容。這個檔案本身由你自己改。
+
+自己的服務在 `Program.cs` 裡、`AddStruoCms()` 之後註冊，那裡的註冊贏過核心的預設。核心用 `TryAdd`
+註冊的服務，寫在 `AddStruoCms()` 之前的註冊也會被保留。設定來源要在呼叫之前加。可以接上的擴充點見
+[第 18 章：擴充點](18-extension-points.md)。

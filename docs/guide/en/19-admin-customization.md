@@ -118,10 +118,10 @@ breaking the sidebar. The keys are grouped by purpose:
 - **Semantic names the `Icon` property itself hands out:** `article`, `tag`, `megaphone`
 
 Adding a sidebar icon: import the icon component in `frontend/src/lib/icons.ts`, add a key to
-`ICON_MAP`, and put that key into the collection's `[CmsCollection(Icon = ...)]`. This table isn't
-freely extensible — a coverage test checks, key by key, whether it is actually used by some token in
-the source, by a semantic name an `Icon` property hands out, or by a class assembled at runtime.
-Adding a key nobody uses turns the admin SPA's test suite red.
+`ICON_MAP`, and put that key into the collection's `[CmsCollection(Icon = ...)]`. A coverage test
+guards the other direction: every `pi-` icon token still present in the source must have a key in
+`ICON_MAP`, so a template that names an unmapped icon turns the admin SPA's test suite red. A key
+nobody uses does not fail it.
 
 ## Restyling a vendored `ui/` component
 

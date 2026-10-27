@@ -26,9 +26,12 @@ public class CorsAndCookieTests
     internal sealed class CorsApiFactory : WebApplicationFactory<Program>
     {
         private readonly ITestDatabase _db = TestBackend.CreateDatabase("cors");
+        private readonly string _filesRoot = Path.Combine(Path.GetTempPath(), "struo-files-cors-" + Guid.NewGuid().ToString("N"));
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(HostIsolation.ExternalTargets(_filesRoot, Path.Combine(_filesRoot, "image-cache"))));
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -39,7 +42,13 @@ public class CorsAndCookieTests
                     ["Struo:Cors:AllowedOrigins:0"] = "https://admin.example.test"
                 }));
         }
-        protected override void Dispose(bool disposing) { base.Dispose(disposing); if (disposing) _db.Dispose(); }
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (!disposing) return;
+            _db.Dispose();
+            if (Directory.Exists(_filesRoot)) Directory.Delete(_filesRoot, recursive: true);
+        }
     }
 
     [Fact]

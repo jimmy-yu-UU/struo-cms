@@ -140,7 +140,8 @@ public static class MigrationCli
         var status = host.GetStatus();
         foreach (var m in status)
             await stdout.WriteLineAsync(
-                $"{m.Version,-14} {m.State,-9} {(m.AppliedOn?.ToString("u") ?? "-"),-21} {m.Description}");
+                $"{m.Version,-14} {m.State,-9} {(m.AppliedOn?.ToString("u") ?? "-"),-21} {m.Description}" +
+                (m.OutOfOrder ? "  (out of order)" : ""));
         await stdout.WriteLineAsync(
             $"{status.Count(m => m.State == MigrationState.Applied)} applied, " +
             $"{status.Count(m => m.State == MigrationState.Pending)} pending, " +

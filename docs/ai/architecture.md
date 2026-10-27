@@ -39,7 +39,8 @@ frontend/            Vue 3 admin SPA (separate pnpm workspace), talks to Struo.A
   References `Struo.Application` and `Struo.Domain`.
 - **`src/Struo.Api`** — the ASP.NET Core host: controllers (`Controllers/`), the GraphQL schema
   (`GraphQl/`), the envelope/error-handling plumbing (`Http/`), authentication/CSRF/CORS wiring
-  (`Auth/`), and `Program.cs`. References `Struo.Application` and `Struo.Infrastructure`.
+  (`Auth/`), the host composition (`Hosting/`: `AddStruoCms()` registers services, `UseStruoCmsAsync()` builds
+  the pipeline and runs the startup checks), and `Program.cs`, the fork-owned entry point that calls them. References `Struo.Application` and `Struo.Infrastructure`.
 - **`frontend/`** — a separate pnpm workspace (Vue 3 + Pinia, Tailwind v4 + shadcn-vue), not part of
   the .NET solution dependency graph at all; it talks to `Struo.Api` only over REST/GraphQL HTTP calls.
 
@@ -148,7 +149,7 @@ Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, 
 SiteSettings, UserSession). Implementation: `EntityTypeCollector`
 (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
 container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
-(`MetadataServiceCollectionExtensions.cs`). Consumed by `Program.cs`, which hands it to
+(`MetadataServiceCollectionExtensions.cs`). Consumed by `StruoCmsStartupChecks`, which hands it to
 `StartupMigrationGate` for the Development schema check, and by `make:migration`/`migrate:check` — the
 "Migrations are the only schema source" invariant in `AGENTS.md`'s "Invariants" section has the full
 rule, and `docs/guide/en/21-schema-and-upgrades.md`, "Migrations are the only schema source", the
@@ -469,7 +470,7 @@ implementation detail like `IItemRepository` above. Default registration:
 `services.TryAddScoped<ISearchProvider, NullSearchProvider>()` in
 `DataServiceCollectionExtensions.AddStruoData`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`) — `TryAddScoped` so
-a fork's own registration, whether added before or after `AddStruoData()` in `Program.cs`, wins over
+a fork's own registration, whether added before or after `AddStruoCms()` in `Program.cs`, wins over
 the default. `NullSearchProvider.SearchAsync` always returns `SearchOutcome.NotHandled`, so with no
 fork registration the built-in `LIKE` search (`FilterTranslator.SearchGroup`) runs unchanged.
 `SearchRequest`/`SearchOutcome` (`src/Struo.Application/Search/`) are the request/response records:
@@ -524,7 +525,7 @@ successful write into an error response. Registered in
 services.TryAddScoped<IItemChangeNotifier, ItemChangeNotifier>();
 ```
 `TryAddScoped`, for the same reason `ISearchProvider` above uses it: a fork's own
-`IItemChangeNotifier` wins whether it is registered before or after `AddStruoData()`. Whatever
+`IItemChangeNotifier` wins whether it is registered before or after `AddStruoCms()`. Whatever
 replaces it must keep the never-throw contract — a listener failure must not turn a committed write
 into an error response. Listeners themselves are always additive, never replaced — a fork adds any
 number with `services.AddScoped<IItemChangeListener, MyIndexer>()`, and with none registered
@@ -573,14 +574,19 @@ in it, ends up in the batch once, as `Purged`.
 The extension point for file storage backends is `IFileStorage`
 (`src/Struo.Application/Files/IFileStorage.cs`): `SaveAsync`, `OpenReadAsync`, `DeleteAsync`,
 `SupportsPresignedUrls`, `GetPresignedUrlAsync`, `ListAsync` (every stored blob as a `StoredBlob`, streamed;
-`files:sweep` reads it). Its doc comment states "Exactly one
-implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
+`files:sweep` reads it) and `Describe()` (a default interface method returning the type name; `LocalFileStorage`
+and `S3FileStorage` return their target without credentials, and `files:sweep` prints it after `storage:`). Its doc comment states "Exactly one
+implementation is resolved; a later registration replaces the core default." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
 (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) by a
-factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, anything else —
-including the default — selects `LocalFileStorage`), registered singleton. Adding a third backend means
-implementing `IFileStorage` and extending that lambda's branch (or switch) to select it. See
+factory lambda keyed on `FileStorageOptions.Backend` (`"s3"` selects `S3FileStorage`, `"custom"` throws, anything
+else — including the default — selects `LocalFileStorage`), registered with `TryAddSingleton` so a fork's own
+`IFileStorage` wins whether it is registered before or after `AddStruoCms()`. `Backend=custom` skips the
+local/s3 validation in `FileStorageOptions.Validate`; the fork registers its `IFileStorage` after
+`AddStruoCms()`, and `StruoCmsStartupChecks.VerifyCustomFileStorage` resolves it at startup so a missing
+registration fails with the factory's message naming `Struo:Files:Backend`. A third backend therefore needs
+no change in the core. See
 `docs/guide/en/15-files-and-media.md`.
 
 ### The GraphQL type module
@@ -591,8 +597,8 @@ The GraphQL schema's extension point is HotChocolate's own `ITypeModule`, implem
 emits one object type + list wrapper + filter input + two root query fields (and, per-collection,
 mutation fields) for every scanned collection, plus shared value types (`TagItem` and its input type,
 `Translation`, the `DeletedFilter` enum, revision types, shared filter inputs, and shared facet
-types). Registered in `GraphQlServiceCollectionExtensions.AddStruoGraphQl`
-(`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs`):
+types). Registered in `GraphQlServiceCollectionExtensions.AddStruoGraphQlServer`, which
+`AddStruoGraphQl` and `AddStruoCms()` call (`src/Struo.Api/GraphQl/GraphQlServiceCollectionExtensions.cs`):
 ```csharp
 services.AddSingleton<StruoTypeModule>();
 // ...
@@ -604,7 +610,16 @@ The comment above the singleton registration explains why it must be explicit: H
 `AddTypeModule<T>()` resolves `T` via `GetRequiredService<T>()` against application services, not
 schema-scoped activation. Because the schema is metadata-driven, a fork does not usually reimplement
 `ITypeModule` — a new `[CmsCollection]` automatically gets a GraphQL type the next time the process
-starts and rescans metadata. See `docs/guide/en/14-graphql.md`.
+starts and rescans metadata. A fork adds its own types and root fields through
+`StruoCmsBuilder.ConfigureGraphQl` (`src/Struo.Api/Hosting/StruoCmsBuilder.cs`): the actions receive
+HotChocolate's `IRequestExecutorBuilder` and run after the core registration, so they can override core
+settings, and fields they add to `Mutation` do not get `MutationAuthentication`. When a fork used the hook,
+`RootFieldCollisionInterceptor` fails the schema build on a Query/Mutation field name contributed twice
+(HotChocolate would silently merge them), and `StruoCmsGraphQlCheck` builds the schema during the startup
+checks and rewrites HotChocolate's duplicate-type errors into the `GraphQL name collision` message. The
+depth and cost limits are `GraphQlOptions.MaxExecutionDepth/MaxFieldCost/MaxTypeCost`, read at registration
+time by `GraphQlServiceCollectionExtensions.ResolveLimits`, which throws on a non-positive value. See
+`docs/guide/en/14-graphql.md`.
 
 ### The frontend field-type registry
 

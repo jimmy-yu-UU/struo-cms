@@ -190,6 +190,28 @@ fork；[版本紀錄](changelog.md)會點名每一支新的核心 migration。�
 
 有些版本還要手動修正既有資料，版本紀錄裡該版的「升級說明」列出何時要做、要跑的 SQL。
 
+### 比已套用的更舊的 migration
+
+兩個分支可以各自加一支 migration，版本較低的那支最後才合併。在已經跑過較高版本的資料庫上，較低的那支是
+待套用，卻比最新已套用的 migration 還舊；全新的資料庫會依版本順序跑完兩支，兩份歷史因此不同。StruoCMS
+照樣套用它，並且講出來：`migrate` 與會套用 migration 的啟動會記一則警告，列出這些版本與已套用的最高
+版本；`migrate:status` 在那一列標上 `(out of order)`；`MigrateOnStartup` 關閉時，啟動在因為待套用的
+migration 而拒絕之前，會記下同一則警告。不會因為順序錯亂而拒絕任何東西。
+
+```
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
+202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
+202611010000   Pending   -                     AddInvoiceTable  (out of order)
+202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+3 applied, 1 pending, 0 orphaned
+```
+
+該怎麼做：用 `migrate:preview` 看那支 migration 的 SQL，確認它不依賴後來那支改過的東西，例如被改名或
+刪掉的欄位。如果依賴，而且還沒有任何資料庫套用過它，就把它的版本改到比已套用的最高版本更高；只要它在任何地方跑過，
+就不要動它的版本，改加一支後續的 migration。兩種順序都要測：全新的
+資料庫，以及已經跑過較晚那支的資料庫。
+
 ## 各後端的差異
 
 - **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值。建資料庫時明確指定

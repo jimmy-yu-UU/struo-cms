@@ -1,9 +1,11 @@
-# 18. Extension Points: Search Providers and Change Listeners
+# 18. Extension Points
 
-How a caller's `search=` gets answered, and what happens after a write, are each left by the core to
-an interface of its own: a fork plugs in its own implementation without touching the core's query or
-write path at all. This chapter covers what each of `ISearchProvider` and `IItemChangeListener`
-promises, when each is called, what happens on failure, and how to register one.
+How a caller's `search=` gets answered, what happens after a write, and what the GraphQL schema
+contains are each left by the core to a seam of their own: a fork plugs in its own implementation
+without touching the core's query or write path at all. This chapter covers where a fork registers
+its services, what each of `ISearchProvider` and `IItemChangeListener` promises, when each is called,
+what happens on failure, how to bring your own file storage, how to define your own client-facing errors
+with `StruoDomainException`, and how `ConfigureGraphQl` adds to the GraphQL schema.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -20,6 +22,42 @@ The core provides only a `NullSearchProvider` that never handles a search, and a
 `ItemChangeNotifier` that dispatches notifications but has no listener registered by default. A
 fork that wants to take over either seam just implements the interface and registers it — none of
 the core's own code needs to change.
+
+## Where your registrations go
+
+Your fork's `Program.cs` is yours. The core composes itself in two calls: `builder.AddStruoCms()`
+registers every service, and `app.UseStruoCmsAsync()` builds the request pipeline and runs the
+startup checks. Register your own services between them, after `AddStruoCms()`. This is an excerpt
+of the shipped `src/Struo.Api/Program.cs`, shortened to the lines that matter here; the full file
+also sets up the bootstrap logger and the startup error handling:
+
+```csharp
+var cli = MigrationCli.Parse(args);
+var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
+builder.AddStruoCms();
+builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
+
+var app = builder.Build();
+if (await app.TryRunStruoCommandAsync(cli)) return;
+await app.UseStruoCmsAsync();
+await app.RunAsync();
+```
+
+`AddStruoCms()` reads configuration while it runs, to scan `Struo:ContentAssemblies`. Add any
+configuration source of your own (Key Vault, for example) to `builder.Configuration` before the
+call, or the scan won't see it.
+
+A registration made after `AddStruoCms()` always wins over the core's default. The core registers
+these defaults with `TryAdd`, so a registration made before the call is kept too: `ISearchProvider`,
+`IItemChangeNotifier`, `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage`.
+
+Three of those carry a contract a replacement has to keep:
+
+- `IPasswordHasher` must verify the Argon2id hashes already stored, and compare in constant time.
+- `IHtmlSanitizer` is the only defence against script injection in rich-text fields.
+- `IFileAccessPolicy` is the permission check on file downloads.
 
 ## The search provider: `ISearchProvider`
 
@@ -116,7 +154,7 @@ either one.
 ### Registration and lifetime
 
 The core registers its own default with `TryAdd` — only if nothing is registered yet — so a
-fork's registration always wins, whether it runs before or after `AddStruoData()`: before wins
+fork's registration always wins, whether it runs before or after `AddStruoCms()`: before wins
 because the core's default then never takes effect; after wins because whatever registers last is
 what actually gets resolved.
 
@@ -156,7 +194,7 @@ public sealed class MySearchProvider(IMyIndex index) : ISearchProvider
 The collection name and the index lookup are the two things a fork swaps out: every other
 collection just returns `NotHandled`, and `search=` keeps running the built-in `LIKE` scan for it.
 
-Register it after `AddStruoData()`:
+Register it in your `Program.cs`, after `AddStruoCms()`:
 
 ```csharp
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
@@ -317,9 +355,133 @@ An application can register any number of listeners:
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## File storage: `IFileStorage`
+
+The byte store behind the `file` collection is `IFileStorage`. The core ships a local and an S3 backend, chosen
+by `Struo:Files:Backend`. To store files somewhere else, set the backend to `custom` and register your
+implementation after `AddStruoCms()`. The core builds no storage in that mode, and startup fails with a message
+naming the key when none is registered. Keep the contract in mind: a missing key throws
+`FileBlobNotFoundException`, never the backend's own exception; `ListAsync` streams every blob;
+`Describe()` is the line `files:sweep` prints, and must not contain a credential. A minimal sketch of an
+Azure Blob storage (the `Azure.Storage.Blobs` package belongs to your fork, not to the core). It is untested: the
+container must already exist, and presigned URLs (SAS) are left out:
+
+```csharp
+using System.Runtime.CompilerServices;
+using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Struo.Application.Files;
+using Struo.Domain.Query;
+
+public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileStorage
+{
+    public bool SupportsPresignedUrls => false;
+
+    public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
+
+    public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).UploadAsync(
+            content, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = contentType } }, ct);
+
+    public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            return await container.GetBlobClient(key).OpenReadAsync(cancellationToken: ct);
+        }
+        catch (RequestFailedException ex) when (ex.ErrorCode == BlobErrorCode.BlobNotFound)
+        {
+            throw new FileBlobNotFoundException(key);   // the contract: a missing key is never a backend exception
+        }
+    }
+
+    public async Task DeleteAsync(string key, CancellationToken ct = default) =>
+        await container.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: ct);
+
+    public async IAsyncEnumerable<StoredBlob> ListAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var blob in container.GetBlobsAsync(cancellationToken: ct))
+            yield return new StoredBlob(blob.Name, blob.Properties.LastModified?.UtcDateTime ?? DateTime.MaxValue);
+    }
+
+    // Shown by files:sweep: the container and account, never a key or a connection string.
+    public string Describe() => $"azure blob, container {container.Name}, account {container.AccountName}";
+}
+```
+
+Set `Struo:Files:Backend` to `custom` in configuration (for example `Struo__Files__Backend=custom`), and in
+`Program.cs` register the storage after `AddStruoCms()`:
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddSingleton(new BlobContainerClient(builder.Configuration["Azure:Storage:ConnectionString"], "media"));
+builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+```
+
+See [Chapter 15](15-files-and-media.md) for the behaviour of the built-in backends and `files:sweep`.
+
+## Your own errors: `StruoDomainException`
+
+A fork's own client-facing error derives from `StruoDomainException`, which carries a code, a 400 to 499 status
+and a message. REST and GraphQL both return them unchanged. How to define one, and the rules for the message and
+the code, are in [Chapter 12](12-rest-conventions.md#your-own-error-codes).
+
+## The GraphQL schema: `ConfigureGraphQl`
+
+The third seam is not an interface but a hook on the builder. `ConfigureGraphQl` receives
+HotChocolate's own `IRequestExecutorBuilder`, after the core schema is registered and before the
+server is built, so a fork can add query and mutation fields and its own object types. It exposes
+HotChocolate's API directly; what you can do with it is whatever HotChocolate allows.
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+Register it in `Program.cs` through the callback of `AddStruoCms()`:
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+`{ buildInfo { version } }` is then served at `/graphql` next to the generated fields.
+
+A field you add to `Mutation` is yours to protect. The CMS's sign-in check and permissions are
+attached to the fields it generates, not to the `Mutation` type, so a fork's own field runs for an
+anonymous caller unless it checks. Your actions also run after the core's, so a setting you change on
+the builder (introspection, the cost and depth rules, the dependency-injection scopes) replaces the
+core's. CSRF protection is HTTP middleware and still applies. A mutation that requires a signed-in
+caller:
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
+Names must not collide with the generated schema; startup fails with a `GraphQL name collision`
+message when one does. The query depth and cost limits, which a heavier fork query may need to
+raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxTypeCost`. See
+[Chapter 14: GraphQL API](14-graphql.md).
+
 ## What's next
 
-That covers search providers and change notifications. The next chapter,
+That covers the registration point, search providers, change notifications, file storage, domain errors and the GraphQL hook. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
 covers which parts of its appearance and behavior can be changed by configuration alone, and
 which really need a change under `frontend/src`.

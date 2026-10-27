@@ -80,6 +80,11 @@ public static class AuthWiring
         services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie)
             .Configure<IConfiguration>((options, resolvedConfig) =>
             {
+                options.Cookie.Name = SessionCookieName.FromConfiguration(resolvedConfig);
+                // A __Host- cookie needs Path=/. Left null, the cookie handler writes the request's PathBase,
+                // which a fork that mounts the app under a path base would see the browser reject.
+                if (options.Cookie.Name.StartsWith("__Host-", StringComparison.OrdinalIgnoreCase))
+                    options.Cookie.Path = "/";
                 options.Cookie.SecurePolicy = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
                     ? CookieSecurePolicy.Always
                     : CookieSecurePolicy.SameAsRequest;
@@ -88,11 +93,22 @@ public static class AuthWiring
                 options.Cookie.SameSite = SameSiteMode.None;
             });
 
+        // The cookie's name and prefix rules are checked against these effective options (including a
+        // fork's own later changes), at startup and by UseStruoCmsAsync before it touches the database.
+        services.AddSingleton<IValidateOptions<CookieAuthenticationOptions>, SessionCookieOptionsValidator>();
+        services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie).ValidateOnStart();
+        // Read by the CSRF and session-rotation middleware: the one place that knows the cookie's name.
+        services.AddSingleton(sp =>
+        {
+            var monitor = sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
+            return new SessionCookieName(() => monitor.Get(AuthSchemes.Cookie).Cookie.Name ?? SessionCookieName.Default);
+        });
+
         services.AddAuthorization();
 
         // FilesController's file-collection RBAC decisions, extracted off its constructor.
         // Scoped so it shares the per-request ICurrentPermissions/IPermissionService instances.
-        services.AddScoped<IFileAccessPolicy, FileAccessPolicy>();
+        services.TryAddScoped<IFileAccessPolicy, FileAccessPolicy>();
 
         return services;
     }
@@ -112,7 +128,6 @@ public static class AuthWiring
 
     private static void ConfigureCookieOptions(CookieAuthenticationOptions options)
     {
-        options.Cookie.Name = AuthSchemes.SessionCookieName;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;

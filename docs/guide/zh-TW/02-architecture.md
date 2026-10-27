@@ -9,7 +9,7 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 - `Struo.Domain`：純粹的 domain 型別。
 - `Struo.Application`：應用層的介面與設定選項，以及查詢和安全性的合約。
 - `Struo.Infrastructure`：SqlSugar 的介接設定、身分驗證、檔案儲存、健康檢查與各種 DI 擴充。
-- `Struo.Api`：ASP.NET Core host 本身——controller、GraphQL、Scalar、Serilog、`Program.cs`。
+- `Struo.Api`：ASP.NET Core host 本身——controller、GraphQL、Scalar、Serilog、`AddStruoCms()` 背後的主機組裝，以及歸 fork 所有的 `Program.cs`。
 
 依賴方向只能往一個方向走：`Struo.Domain` 不依賴任何專案；`Struo.Application` 依賴
 `Struo.Domain`；`Struo.Infrastructure` 依賴 `Struo.Application` 與 `Struo.Domain`；
@@ -90,7 +90,7 @@ entity 類別自己建表。fork 為自己的集合寫的 migration 屬於那個
   `IUserAccountStore`、`IPermissionGrantStore`、`IRolePermissionStore`、
   `IExternalUserStore`、`IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個
   介面各自有對應的 `SqlSugar*` 實作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。
-  fork 要換掉識別儲存的實作，得在呼叫 `AddStruoInfrastructure` 之後再註冊自己的版本——後註
+  fork 要換掉識別儲存的實作，得在呼叫 `AddStruoCms()` 之後再註冊自己的版本——後註
   冊的贏，這幾個不是 `TryAdd`。
 
 不能換的是 SqlSugar 本身，以及它牽動的框架資料表：每個內容 entity 都直接背著 SqlSugar 的屬

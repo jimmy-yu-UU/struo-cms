@@ -1,5 +1,101 @@
 # Changelog
 
+## 0.14.0
+
+::: danger Breaking
+- `Program.cs` no longer holds the host composition. Service registration, the rate limiters, the
+  request pipeline and the startup checks moved into `Struo.Api` behind two calls,
+  `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`. `Program.cs` is now a short file that your
+  fork owns: upstream does not change the composition inside it, and the file itself is yours to edit.
+
+  If your fork edited the old `Program.cs`, take the new one from this release and move your own
+  registrations after `AddStruoCms()`; a registration made there wins over the core default. Add
+  configuration sources before the call. The core registers `ISearchProvider`, `IItemChangeNotifier`,
+  `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage` with `TryAdd`, so a registration made
+  before `AddStruoCms()` is kept for those too.
+  Before:
+
+  ```csharp
+  builder.Services.AddStruoInfrastructure();
+  builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
+  builder.Services.AddStruoData();
+  // ... the rest of the registrations, the rate limiters, then:
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+  var app = builder.Build();
+  app.UseStruoForwardedHeaders();
+  // ... the rest of the pipeline, the migration gate, the migration-CLI branch
+  await app.RunAsync();
+  ```
+
+  After:
+
+  ```csharp
+  var cli = MigrationCli.Parse(args);
+  var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
+  builder.AddStruoCms();
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+
+  var app = builder.Build();
+  if (await app.TryRunStruoCommandAsync(cli)) return;
+  await app.UseStruoCmsAsync();
+  await app.RunAsync();
+  ```
+- `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage` are registered with `TryAdd`. A fork
+  that registered its own implementation before `AddStruoCms()` now keeps it; before, the core
+  default won over a registration made that early.
+- The `AuthSchemes.SessionCookieName` constant is gone. A fork that edited it (as Chapter 25 used to say, for
+  `__Host-struo.session`) must set `Auth:Cookie:Name` instead, for example
+  `Auth__Cookie__Name=__Host-struo.session`; if the merge takes the upstream file without that, the cookie
+  silently goes back to `struo.session`. Code that read the constant resolves `SessionCookieName` and reads its
+  `Value`, or uses `SessionCookieName.Default`. A `__Host-` or `__Secure-` name now needs a cookie that is
+  always `Secure`: set `Auth:Cookie:RequireSecure` to `true` wherever it is not already `Always`, Development
+  included, or startup fails.
+- Setting `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` or `CmsRelationAttribute.MaxDepth`
+  fails the build: they are now `[Obsolete]`, and the template's `TreatWarningsAsErrors` turns the warning into
+  an error. Delete the property from your collections; it never had an effect.
+:::
+
+### Added
+
+- `GraphQl:MaxExecutionDepth` (12), `GraphQl:MaxFieldCost` (150) and `GraphQl:MaxTypeCost` (150) set
+  the GraphQL depth and cost limits. Each must be greater than 0, or startup fails with a message
+  naming the key. The defaults are unchanged.
+- `ConfigureGraphQl` on the `AddStruoCms()` callback gives a fork HotChocolate's builder to add its
+  own types and root fields. A name that clashes with the generated schema fails startup with a
+  `GraphQL name collision` message. See [Chapter 18](18-extension-points.md).
+- `Struo:Files:Backend=custom` lets a fork supply its own `IFileStorage`, registered after `AddStruoCms()`. The
+  core builds no storage in that mode and skips the Local and S3 validation; startup fails with a message
+  naming the key when no `IFileStorage` is registered. A fork may also replace the `local` or `s3` storage,
+  since the core now registers its default with `TryAdd`.
+- `IFileStorage.Describe()` has a default (the type name) and is implemented by the local and S3 backends.
+  `files:sweep` prints it after `storage:`: the root path for local, the bucket and endpoint host for S3,
+  never a credential. See [Chapter 18](18-extension-points.md).
+- `StruoDomainException` (in `Struo.Domain`) is a base class for a fork's own client-facing errors: a code, a
+  400 to 499 status and a message. REST and GraphQL return them unchanged. A status outside 400 to 499
+  throws when the exception is constructed. See [Chapter 12](12-rest-conventions.md#your-own-error-codes).
+- A pending migration older than the highest applied one (a branch merged late) is flagged: `migrate` and a
+  startup that applies migrations log a warning, `migrate:status` marks the row `(out of order)`, and a
+  startup with `MigrateOnStartup` off logs the warning before it refuses on the pending migration. The
+  migration is still applied; exit codes are unchanged. See [Chapter 21](21-schema-and-upgrades.md).
+- `Auth:Cookie:Name` sets the session cookie's name (default `struo.session`); the CSRF guard and session
+  rotation follow it. Startup fails, naming the key, for a name that is not a valid cookie name, a `__Secure-`
+  or `__Host-` name on a cookie that is not always `Secure`, or a `__Host-` name on a cookie with a `Domain` or
+  a `Path` other than `/`. See [Chapter 4](04-configuration.md) and [Chapter 25](25-after-forking.md).
+
+### Security
+
+- Session rotation hid the session cookie on sign-in by an exact-case match, while the cookie handler reads
+  cookies case-insensitively, so a planted `STRUO.SESSION=` cookie was renewed as a session instead of being
+  discarded (session fixation). The match is now case-insensitive.
+
+### Deprecated
+
+- `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` and `CmsRelationAttribute.MaxDepth` are
+  marked `[Obsolete]`. Nothing reads them; setting one produces a compiler warning, which the template's
+  `TreatWarningsAsErrors` makes a build error, and they are removed in the next minor version. Delete them from
+  your collections.
+
 ## 0.13.1 — 2026-10-27
 
 ### Changed

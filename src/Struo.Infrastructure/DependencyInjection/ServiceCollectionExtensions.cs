@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Abstractions;
@@ -22,7 +23,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<DatabaseOptions>, DataAnnotationsValidateOptions<DatabaseOptions>>();
         services.AddSingleton<ICurrentUserAccessor, StubCurrentUserAccessor>();
-        services.AddSingleton<Struo.Application.Security.IPasswordHasher, Identity.Argon2idPasswordHasher>();
+        services.TryAddSingleton<Struo.Application.Security.IPasswordHasher, Identity.Argon2idPasswordHasher>();
         services.AddScoped<Struo.Application.Security.IUserCredentialStore, Identity.SqlSugarUserCredentialStore>();
         services.AddScoped<Struo.Application.Security.IRolePermissionStore, Identity.SqlSugarRolePermissionStore>();
         // Identity administration seams: UsersController/RolesController/AuthController depend on

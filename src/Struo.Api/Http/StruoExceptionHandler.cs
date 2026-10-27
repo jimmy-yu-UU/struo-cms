@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Struo.Domain;
 
 namespace Struo.Api.Http;
 
@@ -29,12 +30,16 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
     public static (int Status, ErrorBody Body) Map(Exception exception, bool authenticated, ILogger? logger = null)
     {
         var (code, message) = DomainErrorMap.Map(exception, authenticated);
+        // A fork's own error is a client error by construction; its code may equal one the branches below
+        // key on, so the type decides before the code does.
+        if (exception is StruoDomainException)
+            return (DomainErrorMap.StatusFor(exception, code), new ErrorBody(code, message));
         if (code == ErrorCodes.Internal)
             logger?.LogError(exception, "Unhandled API exception");
         else if (code == ErrorCodes.SearchUnavailable)
             logger?.LogWarning(exception, "Search provider unavailable");
         else if (DomainErrorMap.IsUniqueViolation(exception))
             logger?.LogWarning(exception, "Unique constraint violation");
-        return (DomainErrorMap.StatusFor(code), new ErrorBody(code, message));
+        return (DomainErrorMap.StatusFor(exception, code), new ErrorBody(code, message));
     }
 }

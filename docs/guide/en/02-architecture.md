@@ -12,7 +12,7 @@ The backend solution under `src/` has four projects, each responsible for one la
   contracts.
 - `Struo.Infrastructure`: SqlSugar wiring, authentication, file storage, health checks, and various
   DI extensions.
-- `Struo.Api`: the ASP.NET Core host itself — controllers, GraphQL, Scalar, Serilog, `Program.cs`.
+- `Struo.Api`: the ASP.NET Core host itself — controllers, GraphQL, Scalar, Serilog, the host composition behind `AddStruoCms()`, and the fork-owned `Program.cs`.
 
 Dependencies flow one way only. `Struo.Domain` depends on nothing; `Struo.Application` depends on
 `Struo.Domain`; `Struo.Infrastructure` depends on `Struo.Application` and `Struo.Domain`;
@@ -99,7 +99,7 @@ Swappable parts:
   `IExternalUserStore`, `IUserSessionStore` — all under `Struo.Application/Security/`. Each has a
   corresponding `SqlSugar*` implementation class, registered with `AddScoped` inside
   `AddStruoInfrastructure`. To replace an identity store, a fork registers its own implementation
-  after calling `AddStruoInfrastructure` — the later registration wins, since these are not
+  after calling `AddStruoCms()` — the later registration wins, since these are not
   `TryAdd`.
 
 Not swappable: SqlSugar itself, and the framework tables it drives. Every content entity carries

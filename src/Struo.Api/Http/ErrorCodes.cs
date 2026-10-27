@@ -15,7 +15,7 @@ public static class ErrorCodes
     public const string Internal = "INTERNAL_SERVER_ERROR";
     // Three independent producers write this code, none of them through DomainErrorMap (no
     // exception is thrown for any of them): the per-client-IP login and change-password rate
-    // limiters (Program.cs, Microsoft.AspNetCore.RateLimiting) write it directly from their shared
+    // limiters (StruoCmsRateLimiting, Microsoft.AspNetCore.RateLimiting) write it directly from their shared
     // OnRejected callback, and AuthController.Login's per-account ILoginAttemptThrottle writes it
     // directly when a throttled login is rejected before authentication even runs.
     public const string TooManyRequests = "TOO_MANY_REQUESTS";

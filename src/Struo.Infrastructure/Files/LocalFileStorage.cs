@@ -7,6 +7,8 @@ public sealed class LocalFileStorage(FileStorageOptions options) : IFileStorage
 {
     private string Root => options.Local.RootPath;
 
+    public string Describe() => $"local, root {Path.GetFullPath(Root)}";
+
     private string FullPath(string key)
     {
         // Reject traversal: the resolved path must stay under Root. Compare against Root plus a

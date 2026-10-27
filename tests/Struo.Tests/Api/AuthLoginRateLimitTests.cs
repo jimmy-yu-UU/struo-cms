@@ -13,7 +13,7 @@ namespace Struo.Tests.Api;
 
 // POST /api/auth/login is brute-forceable and every anonymous attempt burns full
 // Argon2id CPU. Verifies the app-layer, login-only, fixed-window-per-client-IP limiter added in
-// Program.cs (Microsoft.AspNetCore.RateLimiting). Each test spins up its OWN derived host via
+// StruoCmsRateLimiting (Microsoft.AspNetCore.RateLimiting). Each test spins up its OWN derived host via
 // WithWebHostBuilder (isolated TestServer + in-memory limiter state) with a small configured
 // PermitLimit, so this cannot interfere with the base ApiFactory's login-heavy fixture used by
 // the other ~55 integration test classes in the shared "ApiIntegration" collection.

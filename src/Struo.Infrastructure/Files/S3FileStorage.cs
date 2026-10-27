@@ -14,9 +14,12 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
 {
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
+    private const string UnknownService = "unknown";
+    private readonly string _service;
 
     public S3FileStorage(FileStorageOptions options)
-        : this(CreateClient(options.S3), options.S3.Bucket!) { }
+        : this(CreateClient(options.S3), options.S3.Bucket!) =>
+        _service = DescribeService(options.S3);
 
     // Test seam: inject a fake IAmazonS3 to assert request assembly (ContentType / download
     // disposition) without a live S3/MinIO endpoint. Production always goes through the public ctor.
@@ -24,6 +27,17 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         _client = client;
         _bucket = bucket;
+        _service = UnknownService;
+    }
+
+    public string Describe() => $"s3, bucket {_bucket}, service {_service}";
+
+    // The endpoint host (and port) only: never the path, the access key or the secret key.
+    private static string DescribeService(FileStorageOptions.S3Options s3)
+    {
+        if (!Uri.TryCreate(s3.Endpoint, UriKind.Absolute, out var uri))
+            return $"AWS region {s3.Region}";
+        return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
     }
 
     internal static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3)

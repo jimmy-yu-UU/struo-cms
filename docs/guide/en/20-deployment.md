@@ -434,7 +434,8 @@ that's genuinely missing turns into an error, rather than an endless reload.
   Migrations have no rollback command, so back up before every `migrate`.
 - **Uploaded files** — stored outside the database; where to back them up depends on
   `Struo:Files:Backend`: `local` mode means backing up the `Local:RootPath` directory, `s3` mode
-  relies on the S3-compatible bucket's own versioning or replication; backing up only the database
+  relies on the S3-compatible bucket's own versioning or replication, and `custom` means backing up wherever your
+  storage writes; backing up only the database
   silently misses every uploaded file.
 - **Redis needs none** — Redis (or its in-process substitute) holds only short-lived state: the
   ticket behind a cookie session, account login-attempt counters, and session revocation records.
@@ -463,7 +464,7 @@ The command acts on whatever storage and database the configuration points at, i
 `appsettings.Development.json` or environment variables you forgot were set. Read the first two
 lines, `storage:` and `database:`, and confirm they are the pair you mean to clean. A relative
 `Local:RootPath` resolves against the directory you run the command from, and the `storage:` line
-shows the full path it resolved to.
+shows the full path it resolved to. With a custom storage, the line is that storage's own description.
 :::
 
 The command always starts by printing those two lines: the storage backend with its target (the local

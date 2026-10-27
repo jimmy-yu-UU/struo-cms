@@ -66,7 +66,7 @@ public class SettingsControllerTests(ApiFactory factory)
     /// <summary>Anonymous callers get 401, not 403 CSRF. Deliberately sent
     /// WITHOUT the X-Struo-CSRF header, matching a real anonymous SPA caller. CSRF is not in play for
     /// two independent reasons: (1) UseAuthorization runs BEFORE CsrfProtectionMiddleware in the
-    /// pipeline (Program.cs), so an unauthorized request 401s before the CSRF gate is even reached;
+    /// pipeline (StruoCmsPipeline), so an unauthorized request 401s before the CSRF gate is even reached;
     /// and (2) even were the order reversed, CsrfProtectionMiddleware only demands the header when the
     /// request carries the session cookie (<see cref="Struo.Api.Auth.CsrfProtectionMiddleware"/>), which
     /// an anonymous request lacks. Either way the request falls through to the [Authorize] challenge.

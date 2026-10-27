@@ -1,6 +1,12 @@
 // src/Struo.Application/Configuration/GraphQlOptions.cs
 namespace Struo.Application.Configuration;
 
+/// <summary>
+/// GraphQL settings under <c>GraphQl:*</c>. The depth and cost limits are read from configuration once, while
+/// services are registered (the HotChocolate rules take plain values), and a value that is not greater than 0
+/// fails startup. Code that configures this options type, for example
+/// <c>services.Configure&lt;GraphQlOptions&gt;(...)</c>, has no effect on them: set them in configuration.
+/// </summary>
 public sealed class GraphQlOptions
 {
     public const string SectionName = "GraphQl";
@@ -28,4 +34,13 @@ public sealed class GraphQlOptions
     /// </para>
     /// </summary>
     public bool? ExposeSchema { get; set; }
+
+    /// <summary>Deepest selection nesting an operation may have; introspection fields are exempt. Must be greater than 0.</summary>
+    public int MaxExecutionDepth { get; set; } = 12;
+
+    /// <summary>Highest static field cost one operation may accrue. Must be greater than 0.</summary>
+    public double MaxFieldCost { get; set; } = 150;
+
+    /// <summary>Highest static type cost one operation may accrue. Must be greater than 0.</summary>
+    public double MaxTypeCost { get; set; } = 150;
 }

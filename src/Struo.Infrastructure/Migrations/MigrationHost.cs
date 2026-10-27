@@ -27,6 +27,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         RefuseUnrecordedSchema();
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
+        if (MigrationInfo.OutOfOrderWarning(before) is { } outOfOrder) logger.LogWarning("{Warning}", outOfOrder);
         try
         {
             using var sp = BuildRunner(preview: false, new SqlSuppressingLoggerFactory(loggerFactory));
@@ -233,12 +234,16 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             throw new MigrationFailedException($"Could not read applied migrations: {Innermost(ex).Message}", ex);
         }
 
+        // A pending migration below the highest applied one was merged after a newer one ran. Only a record
+        // whose migration is still in the code counts: an orphan says nothing about the code's history.
+        var highestApplied = applied.Keys.Where(known.ContainsKey).DefaultIfEmpty(long.MinValue).Max();
         return known.Keys.Union(applied.Keys).Order()
             .Select(v => new MigrationInfo(
                 v,
                 known.TryGetValue(v, out var d) ? d : applied[v].Description ?? "",
                 StateOf(known.ContainsKey(v), applied.ContainsKey(v)),
-                applied.TryGetValue(v, out var row) ? row.AppliedOn : null))
+                applied.TryGetValue(v, out var row) ? row.AppliedOn : null,
+                OutOfOrder: !applied.ContainsKey(v) && v < highestApplied))
             .ToList();
     }
 

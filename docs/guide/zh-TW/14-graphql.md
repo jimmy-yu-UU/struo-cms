@@ -361,8 +361,8 @@ HTTP_STATUS:400
 
 | 限制 | 數值 | 防的是什麼 |
 |---|---|---|
-| 執行深度 | 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
-| Cost（`MaxFieldCost`／`MaxTypeCost`） | 150 | alias 放大：同一昂貴欄位配多別名重複算 |
+| 執行深度（`GraphQl:MaxExecutionDepth`） | 預設 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
+| Cost（`GraphQl:MaxFieldCost`／`GraphQl:MaxTypeCost`） | 預設 150 | alias 放大：同一昂貴欄位配多別名重複算 |
 | 關聯路徑深度（`Query:MaxRelationDepth`） | 預設 6 | 跨關聯篩選與巢狀展開，跟 REST 共用設定 |
 | 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
 | 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
@@ -370,6 +370,57 @@ HTTP_STATUS:400
 
 你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
 `MaxDeepRelations`。
+
+前兩個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)），而且只能在設定裡設：在程式碼裡設定
+`GraphQlOptions` 沒有作用。預設值是只針對核心 schema 量出來的：
+最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的查詢，就像
+`GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的上面一點。
+
+## 加上自己的型別與欄位
+
+fork 從 `Program.cs` 加進 schema。`ConfigureGraphQl` 交給你的是
+HotChocolate 自己的 `IRequestExecutorBuilder`，所以你對它寫的是 HotChocolate 的 API，不是 StruoCMS 的。
+它在核心 schema 註冊之後執行：
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+在 `Program.cs` 透過 `AddStruoCms()` 的回呼註冊：
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+之後 `{ buildInfo { version } }` 就和產生出來的欄位一起由 `/graphql` 提供。
+
+你加在 `Mutation` 上的欄位，要自己保護。CMS 的登入檢查與權限是掛在它產生出來的欄位上，不是掛在
+`Mutation` 型別上，所以 fork 自己的欄位，除非自己檢查，匿名呼叫端也能執行。你的動作也是在核心之後執行，
+所以你在 builder 上改的設定（introspection、成本與深度規則、相依性注入的範圍）會取代核心的。CSRF 防護是
+HTTP 中介層，照樣適用。要求已登入呼叫端的 mutation 長這樣：
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
+你的型別或根欄位，不能用 schema 已經有的名稱：集合產生的型別、`Revision` 這類共用型別，或 `articles` 這類
+產生出來的根欄位。名稱衝突時啟動會失敗，訊息是 `GraphQL name collision`，並點出那個名稱；改掉自己的名稱即可。
 
 ## 接下來
 

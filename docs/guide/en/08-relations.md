@@ -120,7 +120,9 @@ The last four decide write and delete behavior:
 Neither `DisplayColumns` nor `MaxDepth` is read into `RelationMetadata`, so neither reaches
 `/api/schema`. There's no field for a per-relation depth override at all — the one cap that's
 actually enforced is the global `Query:MaxRelationDepth`; see "Reading related data with `deep`"
-below.
+below. Both properties are marked `[Obsolete]`: setting one gives a compiler warning, and with the template's
+`TreatWarningsAsErrors` the build fails with the obsolete message, so delete it. They are removed in the next
+minor version.
 
 ## Junction entities and payloads
 

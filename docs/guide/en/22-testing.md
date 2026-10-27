@@ -119,7 +119,7 @@ fork to implement: `ScriptedSearchProvider` wires a scripted `SearchOutcome` int
 records every `OnChangedAsync` call and can optionally attach a scripted callback.
 
 How the two interfaces themselves work is covered in
-[Chapter 18: Extension Points: Search Providers and Change Listeners](18-extension-points.md).
+[Chapter 18: Extension Points](18-extension-points.md).
 
 ## Admin SPA tests
 

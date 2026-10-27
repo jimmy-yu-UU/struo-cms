@@ -64,7 +64,7 @@ the details of this variable, are in "UI language" in
 
 ## 7. A production domain under a shared parent domain: consider the `__Host-` cookie prefix
 
-The login cookie is named `struo.session`. If your production site is a subdomain of a shared parent
+By default, the login cookie is named `struo.session`. If your production site is a subdomain of a shared parent
 domain (say `app.example.com`, with other subdomains under the same parent controlled by someone
 else), those sibling subdomains can set a cookie of the same name for the whole parent domain,
 overwriting or planting your session cookie.
@@ -73,21 +73,19 @@ The `__Host-` prefix makes the browser refuse such cookies: a cookie with this p
 `Secure`, have `Path=/` and carry no `Domain`, so a sibling subdomain can't write it. This project's
 cookie is already `Path=/` with no `Domain`; only the name is missing.
 
-The name is the constant `SessionCookieName` in `src/Struo.Api/Auth/AuthSchemes.cs`, with no
-configuration key. Change it to `__Host-struo.session`; the CSRF and session-rotation middleware read
-the same constant. The literal `struo.session` shown in
-[Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
+Set `Auth:Cookie:Name` to `__Host-struo.session` (for example `Auth__Cookie__Name=__Host-struo.session`);
+the CSRF and session-rotation middleware follow it. Startup checks the name and fails, naming the key,
+when the cookie is not always `Secure` or carries a `Domain` or another `Path`. The literal `struo.session`
+shown in [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
 things to know first:
 
 - The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
   Development the cookie is `Secure` whatever scheme the API itself sees, so nginx can still talk to
-  the API over plain http. `RequireSecure=false` means `SameAsRequest`: the cookie loses `Secure`
-  only when the API itself sees plain http, as on a host with no TLS in front, and the browser then
-  rejects the prefixed cookie.
-- The constant applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
-  `SameAsRequest`: over `http://localhost` the cookie carries no `Secure`, the browser rejects it, and
-  local login and the e2e suite fail. Set `Auth__Cookie__RequireSecure=true` for local runs and the
-  e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
+  the API over plain http. `RequireSecure=false` means `SameAsRequest`, and with a prefixed name startup
+  fails with a message naming `Auth:Cookie:Name`.
+- The name applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
+  `SameAsRequest`, so startup fails there until you set `Auth__Cookie__RequireSecure=true` for local runs
+  and the e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
   `http://localhost`. A browser that doesn't (Safari) needs HTTPS locally.
 - Renaming the cookie signs everyone out once.
 
@@ -136,3 +134,14 @@ staging origin, and register `http://localhost:5173` plus the same path for deve
 `/api/` also needs a `location` block in `frontend/nginx/default.conf.template`, and an entry in
 `frontend/vite.proxy.ts` for the dev server. The setup steps per
 provider are in [Chapter 16: Authentication and SSO](16-authentication.md).
+
+## 11. `Program.cs`: it is yours now
+
+`src/Struo.Api/Program.cs` belongs to your fork. The template's own composition lives in
+`src/Struo.Api/Hosting/`, behind `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`, so upstream
+does not change the composition inside `Program.cs`. The file itself is yours to edit.
+
+Register your own services in `Program.cs` after `AddStruoCms()`; a registration made there wins
+over the core default. For the services the core registers with `TryAdd`, a registration made before
+`AddStruoCms()` is kept too. Add configuration sources before the call. The seams you can plug into
+are in [Chapter 18: Extension Points](18-extension-points.md).

@@ -229,7 +229,9 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
 4. **Error mapping**: if the endpoint throws a new domain exception type that should surface a specific
    client-safe message/status, add it to `DomainErrorMap.Map` (and `StatusFor` if it needs a REST status
    other than the 500 fallback) in `src/Struo.Api/Http/DomainErrorMap.cs` — this is shared verbatim with
-   GraphQL's error filter, so both protocols pick up the new mapping together.
+   GraphQL's error filter, so both protocols pick up the new mapping together. A fork's own error needs no
+   arm: derive it from `StruoDomainException` (`src/Struo.Domain/StruoDomainException.cs`), whose code, 400 to
+   499 status and message are returned as they are.
 5. **Tests to add**: an integration test under `tests/Struo.Tests/Api/` using the `WebApplicationFactory`
    -based fixture in `tests/Struo.Tests/Support/ApiFactory.cs` (see `EndpointSmokeTests.cs` for the
    minimal shape of standing up the factory and asserting a 200 + envelope shape, or

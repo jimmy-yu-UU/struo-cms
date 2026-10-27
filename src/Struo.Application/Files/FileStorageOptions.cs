@@ -4,7 +4,7 @@ public sealed class FileStorageOptions
 {
     public const string SectionName = "Struo:Files";
 
-    public string Backend { get; set; } = "local";          // "local" | "s3"
+    public string Backend { get; set; } = "local";          // "local" | "s3" | "custom"
     public long MaxUploadBytes { get; set; } = 26_214_400;   // 25 MB
     public string[] AllowedContentTypes { get; set; } = [];  // empty = allow all
 
@@ -147,8 +147,11 @@ public sealed class FileStorageOptions
                     throw new InvalidOperationException(
                         "Struo:Files:S3 Endpoint, Bucket, AccessKey and SecretKey are required when Backend=s3.");
                 break;
+            case "custom":
+                // The fork registers its own IFileStorage; nothing here to check.
+                break;
             default:
-                throw new InvalidOperationException($"Unknown Struo:Files:Backend '{Backend}' (expected 'local' or 's3').");
+                throw new InvalidOperationException($"Unknown Struo:Files:Backend '{Backend}' (expected 'local', 's3' or 'custom').");
         }
     }
 }

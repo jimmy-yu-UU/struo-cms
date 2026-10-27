@@ -17,7 +17,7 @@ namespace Struo.Api.Auth;
 /// This relies on CORS not being widened to untrusted origins. StruoCMS CORS is allowlist-only and
 /// default-off (see <see cref="CorsWiring"/>), so the assumption holds.
 /// </summary>
-public sealed class CsrfProtectionMiddleware(RequestDelegate next)
+public sealed class CsrfProtectionMiddleware(RequestDelegate next, SessionCookieName sessionCookie)
 {
     public const string HeaderName = "X-Struo-CSRF";
 
@@ -43,7 +43,7 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
         await next(context);
     }
 
-    private static bool RequiresCsrfHeader(HttpContext context)
+    private bool RequiresCsrfHeader(HttpContext context)
     {
         var request = context.Request;
         if (SafeMethods.Contains(request.Method)) return false;
@@ -53,7 +53,7 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next)
 
         // Only requests riding on the session cookie need the guard (SessionRotationMiddleware hides the
         // cookie on sign-in requests, so its recorded copy counts too).
-        if (!request.Cookies.ContainsKey(AuthSchemes.SessionCookieName)
+        if (!request.Cookies.ContainsKey(sessionCookie.Value)
             && SessionRotation.PresentedCookie(context) is null) return false;
 
         return !request.Headers.ContainsKey(HeaderName);

@@ -440,8 +440,8 @@ Six independent caps each guard their own concern:
 
 | Limit | Value | Guards against |
 |---|---|---|
-| Execution depth | 12 levels | Selection sets nested too deep; introspection fields exempt |
-| Cost (`MaxFieldCost`/`MaxTypeCost`) | 150 | Alias amplification: one costly field under many aliases |
+| Execution depth (`GraphQl:MaxExecutionDepth`) | 12 by default | Selection sets nested too deep; introspection fields exempt |
+| Cost (`GraphQl:MaxFieldCost`/`GraphQl:MaxTypeCost`) | 150 by default | Alias amplification: one costly field under many aliases |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
@@ -449,6 +449,61 @@ Six independent caps each guard their own concern:
 
 Each relation field you select counts as one node of the deep tree, so a query that selects many
 relations can hit `MaxDeepRelations` without sending any `deep` argument.
+
+The first two limits are set under `GraphQl:` (see [Chapter 4](04-configuration.md)), in configuration only:
+configuring `GraphQlOptions` in code has no effect. The defaults
+are measured against the core schema alone: the heaviest ordinary query costs 33 and a 50-alias
+amplification costs 550, so 150 sits between them. A fork that adds heavier queries measures its own
+heaviest legitimate query, the way `GraphQlCostAnalysisTests` does for the core, and sets the cost
+limits just above it.
+
+## Adding your own types and fields
+
+A fork adds to the schema from `Program.cs`. `ConfigureGraphQl` hands you HotChocolate's own `IRequestExecutorBuilder`, so what you write against
+it is HotChocolate's API, not a StruoCMS one. It runs after the core schema is registered:
+
+```csharp
+using HotChocolate.Types;
+
+public sealed record BuildInfo(string Version);
+
+[ExtendObjectType("Query")]
+public sealed class BuildInfoQuery
+{
+    public BuildInfo GetBuildInfo() => new("1.4.2");
+}
+```
+
+Register it in `Program.cs` through the callback of `AddStruoCms()`:
+
+```csharp
+builder.AddStruoCms(cms => cms.ConfigureGraphQl(graphQl => graphQl
+    .AddTypeExtension<BuildInfoQuery>()));
+```
+
+`{ buildInfo { version } }` is then served at `/graphql` next to the generated fields.
+
+A field you add to `Mutation` is yours to protect. The CMS's sign-in check and permissions are
+attached to the fields it generates, not to the `Mutation` type, so a fork's own field runs for an
+anonymous caller unless it checks. Your actions also run after the core's, so a setting you change on
+the builder (introspection, the cost and depth rules, the dependency-injection scopes) replaces the
+core's. CSRF protection is HTTP middleware and still applies. A mutation that requires a signed-in
+caller:
+
+```csharp
+[ExtendObjectType("Mutation")]
+public sealed class BuildInfoMutation
+{
+    public string RefreshBuildInfo([Service] IHttpContextAccessor accessor) =>
+        accessor.HttpContext?.User.Identity?.IsAuthenticated == true
+            ? "refreshed"
+            : throw new GraphQLException("Sign in to run this mutation.");
+}
+```
+
+A type or root field of yours must not reuse a name the schema already has: a collection's generated
+types, the shared types such as `Revision`, or the generated root fields such as `articles`. Startup
+fails with a `GraphQL name collision` message naming the name; rename yours.
 
 ## What's next
 

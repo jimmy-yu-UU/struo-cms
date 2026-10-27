@@ -1,5 +1,92 @@
 # 版本紀錄
 
+## 0.14.0
+
+::: danger 破壞性變更
+- `Program.cs` 不再放主機的組裝。服務註冊、速率限制器、請求管線與啟動檢查，全部搬進 `Struo.Api`，
+  收成兩個呼叫：`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()`。`Program.cs` 變成一個很短、
+  歸 fork 所有的檔案：上游不會再在裡面改動組裝的內容，檔案本身由你自己改。
+
+  如果你的 fork 改過舊的 `Program.cs`，請改用這個版本的 `Program.cs`，並把你自己的註冊搬到
+  `AddStruoCms()` 之後，那裡的註冊贏過核心的預設。設定來源要在呼叫之前加。核心用 `TryAdd` 註冊
+  `ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher`、`IFileAccessPolicy` 與
+  `IFileStorage`，所以這幾個服務寫在 `AddStruoCms()` 之前的註冊也會被保留。
+  之前：
+
+  ```csharp
+  builder.Services.AddStruoInfrastructure();
+  builder.Services.AddStruoMetadata(builder.Configuration, typeof(Program).Assembly);
+  builder.Services.AddStruoData();
+  // ……其餘的註冊與速率限制器，接著：
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+  var app = builder.Build();
+  app.UseStruoForwardedHeaders();
+  // ……其餘的管線、遷移閘門與遷移 CLI 的分支
+  await app.RunAsync();
+  ```
+
+  之後：
+
+  ```csharp
+  var cli = MigrationCli.Parse(args);
+  var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
+  builder.AddStruoCms();
+  builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
+
+  var app = builder.Build();
+  if (await app.TryRunStruoCommandAsync(cli)) return;
+  await app.UseStruoCmsAsync();
+  await app.RunAsync();
+  ```
+- `IHtmlSanitizer`、`IPasswordHasher`、`IFileAccessPolicy` 與 `IFileStorage` 改用 `TryAdd` 註冊。fork 若在
+  `AddStruoCms()` 之前就註冊了自己的實作，現在會被保留；以前核心的預設會贏過這麼早的註冊。
+- `AuthSchemes.SessionCookieName` 常數移除了。改過它的 fork（第 25 章以前這樣教，改成
+  `__Host-struo.session`）必須改設 `Auth:Cookie:Name`，例如 `Auth__Cookie__Name=__Host-struo.session`；
+  合併時如果直接採用上游的檔案而沒有這個設定，cookie 會悄悄變回 `struo.session`。讀過那個常數的程式碼改為
+  解析 `SessionCookieName`，讀它的 `Value`，或使用 `SessionCookieName.Default`。`__Host-` 或 `__Secure-` 名稱現在
+  需要一律 `Secure` 的 cookie：在政策還不是 `Always` 的地方（包含 Development）把 `Auth:Cookie:RequireSecure`
+  設成 `true`，否則啟動失敗。
+- 設定 `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 或 `CmsRelationAttribute.MaxDepth`
+  會讓建置失敗：它們現在是 `[Obsolete]`，而範本的 `TreatWarningsAsErrors` 把警告變成錯誤。請從你的集合刪掉
+  這個屬性；它從來沒有作用。
+:::
+
+### 新增
+
+- `GraphQl:MaxExecutionDepth`（12）、`GraphQl:MaxFieldCost`（150）與 `GraphQl:MaxTypeCost`（150）
+  設定 GraphQL 的深度與成本上限，各自必須大於 0，否則啟動失敗，訊息會點出是哪一個鍵。預設值不變。
+- `AddStruoCms()` 回呼上的 `ConfigureGraphQl`，讓 fork 取得 HotChocolate 的 builder，加上自己的型別與
+  根欄位。名稱和產生出來的 schema 衝突時，啟動會失敗，訊息是 `GraphQL name collision`。
+  見[第 18 章](18-extension-points.md)。
+- `Struo:Files:Backend=custom` 讓 fork 提供自己的 `IFileStorage`，在 `AddStruoCms()` 之後註冊。這個模式下
+  核心不建任何儲存，也不驗證 Local 與 S3 的鍵；沒有註冊 `IFileStorage` 時，啟動會失敗，訊息會點出那個鍵。
+  `local` 或 `s3` 的儲存也可以被 fork 取代，因為核心現在用 `TryAdd` 註冊預設。
+- `IFileStorage.Describe()` 有預設值（型別名稱），local 與 S3 後端各自實作。`files:sweep` 會把它印在
+  `storage:` 後面：local 是根目錄，S3 是 bucket 與 endpoint 主機，絕不含憑證。見[第 18 章](18-extension-points.md)。
+- `StruoDomainException`（在 `Struo.Domain`）是 fork 自己、給客戶端看的錯誤的基底類別：代碼、400 到 499 的
+  狀態與訊息。REST 與 GraphQL 都原樣回傳。狀態超出 400 到 499，在建構例外時就會丟錯。
+  見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
+- 比已套用的最高版本還舊的待套用 migration（較晚才合併的分支）會被標出來：`migrate` 與會套用 migration 的
+  啟動會記一則警告，`migrate:status` 在那一列標上 `(out of order)`，`MigrateOnStartup` 關閉時啟動在因待套用
+  的 migration 而拒絕之前也會記下警告。migration 仍會套用，結束碼不變。見[第 21 章](21-schema-and-upgrades.md)。
+- `Auth:Cookie:Name` 設定 session cookie 的名稱（預設 `struo.session`），CSRF 防護與 session 輪替都跟著它走。
+  名稱不是有效的 cookie 名稱、`__Secure-` 或 `__Host-` 名稱碰上不是一律 `Secure` 的 cookie、或 `__Host-` 名稱
+  碰上帶 `Domain` 或 `Path` 不是 `/` 的 cookie，啟動都會失敗，訊息會點出這個鍵。見
+  [第 4 章](04-configuration.md)與[第 25 章](25-after-forking.md)。
+
+### 安全性
+
+- session 輪替在登入時用大小寫完全一致的比對來隱藏 session cookie，但 cookie handler 讀 cookie 不分大小寫，
+  所以被塞進來的 `STRUO.SESSION=` cookie 會被當成 session 續期，而不是被丟棄（session fixation）。
+  現在比對不分大小寫。
+
+### 棄用
+
+- `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 與 `CmsRelationAttribute.MaxDepth` 標成
+  `[Obsolete]`。沒有任何東西讀它們；設定它們會產生編譯器警告，範本的 `TreatWarningsAsErrors` 會把它變成建置錯誤，
+  下一個次要版本會移除。請從你的集合中刪掉。
+
 ## 0.13.1 — 2026-10-27
 
 ### 變更

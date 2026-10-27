@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Struo.Application.Security;
+using Struo.Domain;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Persistence;
 
@@ -19,7 +20,8 @@ public static class DomainErrorMap
     /// Maps <paramref name="exception"/> to an <c>(code, message)</c> pair using
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
-    /// yields <see cref="ErrorCodes.Forbidden"/>. Mapped domain exceptions surface their
+    /// yields <see cref="ErrorCodes.Forbidden"/>. A <see cref="StruoDomainException"/> (a fork's own error) is matched first and surfaces
+    /// its own code and message. Mapped domain exceptions surface their
     /// client-safe <see cref="System.Exception.Message"/> verbatim. Two cases carry a fixed message
     /// instead, because the exception's own text names internals:
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
@@ -31,6 +33,7 @@ public static class DomainErrorMap
     public static (string Code, string Message) Map(Exception exception, bool authenticated) =>
         exception switch
         {
+            StruoDomainException domain => (domain.Code, domain.Message),
             PermissionDeniedException when !authenticated => (ErrorCodes.Unauthorized, exception.Message),
             PermissionDeniedException => (ErrorCodes.Forbidden, exception.Message),
             CollectionNotFoundException => (ErrorCodes.NotFound, exception.Message),
@@ -61,6 +64,13 @@ public static class DomainErrorMap
     /// message, which names the constraint, index or column.
     /// </summary>
     public const string UniqueViolationMessage = "A record with the same unique value already exists.";
+
+    /// <summary>
+    /// REST-only: the HTTP status for <paramref name="exception"/>. A <see cref="StruoDomainException"/>
+    /// carries its own status; any other exception takes the status of its mapped <paramref name="code"/>.
+    /// </summary>
+    public static int StatusFor(Exception exception, string code) =>
+        exception is StruoDomainException domain ? domain.Status : StatusFor(code);
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the

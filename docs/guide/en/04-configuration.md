@@ -149,7 +149,9 @@ reported.
 
 `Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
 startup: an unrecognized value fails startup immediately, and the required fields of whichever
-backend you picked (see Local/S3 below) are validated along with it. `MaxUploadBytes`,
+backend you picked (see Local/S3 below) are validated along with it. `Backend` is `local`, `s3` or
+`custom`; `custom` builds no storage in the core and needs a fork-registered `IFileStorage` (see
+[Chapter 15](15-files-and-media.md)), and startup fails when there is none. `MaxUploadBytes`,
 `AllowedContentTypes`, `PresignedRedirect`, and the `ImageTransform` keys other than the ones
 listed under [ImageTransform](#imagetransform) as validated have no validation rule — a
 correctly typed value is never checked further.
@@ -174,7 +176,8 @@ correctly typed value is never checked further.
 |---|---|---|
 | `Struo:Files:Local:RootPath` | string | `"App_Data/uploads"` |
 
-When `Backend="local"`, `RootPath` is the only field validated at startup.
+When `Backend="local"`, `RootPath` is the only field validated at startup. With `Backend="custom"` neither
+the Local nor the S3 keys are validated.
 
 ### S3
 
@@ -190,7 +193,7 @@ When `Backend="local"`, `RootPath` is the only field validated at startup.
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
 startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
-`Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup.
+`Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup. `PresignTtlSeconds` also sets the lifetime of presigned URLs from a `custom` storage.
 
 ### ImageTransform
 
@@ -320,6 +323,7 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 | `Auth:Cookie:RequireSecure` | bool (may be empty) | none (environment-dependent) |
+| `Auth:Cookie:Name` | string | `"struo.session"` |
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
@@ -341,6 +345,13 @@ Setting them backwards fails startup. Only `MinLength` is returned to the admin 
 in every environment except Development, which follows the request itself. `true` forces `Secure`
 everywhere; `false` lets the cookie travel over plain HTTP, which a Staging-like host without TLS in
 front of it needs. Configuring any `Struo:Cors` origin forces `Secure` whatever this key says.
+
+`Auth:Cookie:Name` is the session cookie's name; blank means the default. The CSRF guard and the session
+rotation follow it. Startup fails, with a message naming the key, when the name is not a valid cookie name
+(letters, digits and ``! # $ % & ' * + - . ^ _ ` | ~``), when a `__Secure-` or `__Host-` name meets a cookie that
+is not always `Secure`, or when a `__Host-` name meets a cookie with a `Domain` or a `Path` other than `/`.
+StruoCMS sends neither a `Domain` nor another `Path`. See
+[Chapter 25](25-after-forking.md), section 7.
 
 ## OpenApi
 
@@ -368,12 +379,21 @@ retroactively grant public read access on an existing database. Either set it be
 | Key | Type | Default |
 |---|---|---|
 | `GraphQl:ExposeSchema` | bool (may be empty) | none (environment-dependent) |
+| `GraphQl:MaxExecutionDepth` | integer, at least 1 | `12` |
+| `GraphQl:MaxFieldCost` | number, greater than 0 | `150` |
+| `GraphQl:MaxTypeCost` | number, greater than 0 | `150` |
 
 When unset, it defaults to open only in Development; every other environment, Production included,
 defaults to closed. It governs only whether the
 schema can be queried (introspection and `GET /graphql?sdl`); `POST /graphql` itself is unaffected.
 The built-in Nitro browser IDE separately only recognizes Development, and isn't controlled by this
 key.
+
+The other three keys are the limits on one operation: how deep its selections may nest, and the most
+field cost and type cost it may accrue. A value of 0 or below fails startup with a message naming
+the key. The defaults are measured against the core schema alone. A fork that adds heavier queries
+raises the cost limits to fit; see "Depth caps" in [Chapter 14: GraphQL API](14-graphql.md). These keys
+are read from configuration only: configuring `GraphQlOptions` in code has no effect on them.
 
 ## ForwardedHeaders
 

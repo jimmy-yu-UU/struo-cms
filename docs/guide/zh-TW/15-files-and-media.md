@@ -123,9 +123,9 @@ allowed.`。
 
 檔案列與它自動填好的翻譯列在同一筆交易裡一起寫入，不會出現有檔案卻沒有標題的中間狀態。
 
-## 存到哪裡：local 與 s3
+## 存到哪裡：local、s3 與 custom
 
-`Struo:Files:Backend` 只能選一種已註冊的 `IFileStorage`：`"local"`（預設）或 `"s3"`，其他值
+`Struo:Files:Backend` 只能選一種已註冊的 `IFileStorage`：`"local"`（預設）、`"s3"` 或 `"custom"`，其他值
 會讓啟動直接失敗。兩種後端的鍵與驗證規則都在[第 4 章](04-configuration.md)；這裡只講行為上
 的差異。
 
@@ -148,6 +148,19 @@ allowed.`。
 兩種後端遇到「這一列還在、位元組卻不見了」都丟同一種例外：`local` 是缺檔案或缺年月目錄，
 `s3` 只認 `NoSuchKey` 這個錯誤碼，缺一整個 bucket 是設定錯誤，仍然是 `500`。不管哪一種，對不
 上的 blob 對呼叫端來說都是乾淨的 `404`，不是 `500`。
+
+### 自己的儲存：`custom`
+
+`Struo:Files:Backend` 設成 `custom` 時，核心不會自己建任何儲存。你的 fork 實作 `IFileStorage`，在
+`Program.cs` 的 `AddStruoCms()` 之後註冊；設了 `custom` 卻沒有註冊 `IFileStorage` 的主機，啟動會失敗，
+訊息會點出那個鍵。這個模式下，Local 與 S3 的鍵都不驗證。沿用 `local` 或 `s3` 的 fork 也可以註冊自己的
+`IFileStorage`：核心的預設用 `TryAdd` 註冊，所以不管寫在前面或後面，你的都贏。
+
+`IFileStorage.Describe()` 回傳 `files:sweep` 印在 `storage:` 後面的那一行。它有預設值（型別名稱）；
+覆寫它來指出容器或根目錄，而且絕不要放金鑰或連線字串。最小的 Azure Blob 示意見
+[第 18 章：擴充點](18-extension-points.md)。
+
+自訂儲存若回傳預簽章網址，網址的有效時間由 `Struo:Files:S3:PresignTtlSeconds` 決定，跟 S3 後端用的是同一個鍵。
 
 ## 提供檔案：誰看得到
 
@@ -351,7 +364,7 @@ HTTP_STATUS:400
 `?purge=true`。
 
 上傳、丟進垃圾桶、復原、清除這四條檔案自己的寫入路徑，各自會發出自己的寫入通知（見
-[第 18 章：擴充點：搜尋提供者與寫入通知](18-extension-points.md)），因為 `FileService` 自己處理檔案的寫入。
+[第 18 章：擴充點](18-extension-points.md)），因為 `FileService` 自己處理檔案的寫入。
 一次清除只會回報一批通知：檔案本身是 `Purged`，參照被設為 null 的每個存活項目，以及失去連接資料列的每個
 父項，都是 `Updated`。
 

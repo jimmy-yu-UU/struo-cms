@@ -18,12 +18,12 @@ public sealed class AuthController(
     public sealed record LoginRequest(string Email, string Password);
 
     // Three independent login defenses guard this action:
-    // 1. The per-client-IP fixed-window limiter ([EnableRateLimiting("login")], see Program.cs) —
+    // 1. The per-client-IP fixed-window limiter ([EnableRateLimiting("login")], see StruoCmsRateLimiting) —
     //    ships DISABLED by default (LoginRateLimitOptions).
     // 2. loginThrottle — a per-ACCOUNT throttle that ships ENABLED by default, since it cannot suffer
     //    the per-IP layer's shared-egress collapse. It counts the attempt before the password is
     //    verified, so parallel guesses cannot all slip past the limit.
-    // 3. A process-wide cap on concurrent logins (LoginConcurrencyOptions, Program.cs).
+    // 3. A process-wide cap on concurrent logins (LoginConcurrencyOptions, StruoCmsRateLimiting).
     // Each attempt burns full Argon2id CPU, making unbounded brute-forcing a DoS amplifier. Applied to
     // this action only — logout/me/oidc below are intentionally NOT limited by any layer.
     [AllowAnonymous]
@@ -38,7 +38,7 @@ public sealed class AuthController(
         {
             Response.Headers.RetryAfter = throttleState.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
             // Same status, code and message the per-client-IP limiter's OnRejected callback writes
-            // (Program.cs) — the two layers are deliberately indistinguishable to a client.
+            // (StruoCmsRateLimiting) — the two layers are deliberately indistinguishable to a client.
             return Struo.Api.Http.ApiResults.Fail(StatusCodes.Status429TooManyRequests,
                 Struo.Api.Http.ErrorCodes.TooManyRequests, "Too many login attempts. Please try again later.");
         }

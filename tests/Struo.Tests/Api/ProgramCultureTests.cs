@@ -7,13 +7,13 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// Proves the process-wide invariant-culture fix in Program.cs actually runs as part of real host
+/// Proves the process-wide invariant-culture fix in AddStruoCms actually runs as part of real host
 /// startup, not just something the direct translator+SqlSugar pairing in
 /// ConditionalModelTranslatorTests exercises on its own. WebApplicationFactory&lt;Program&gt; invokes
 /// the real top-level statements in Program.cs (everything up to, but not including, await app.RunAsync()) the
 /// first time the host is built, so forcing that via CreateClient() is enough to trigger it.
 /// Asserting CultureInfo.DefaultThreadCurrentCulture/UICulture (rather than CultureInfo.CurrentCulture
-/// inside a request) is the provable, non-overkill check here: it is the exact static Program.cs sets,
+/// inside a request) is the provable, non-overkill check here: it is the exact static AddStruoCms sets,
 /// its effect (every new thread defaults to it) is what actually protects SqlSugar's re-parse of
 /// ConditionalModel.FieldValue, and — unlike issuing a REST filter query — it needs no decimal-typed
 /// field on a real seeded collection (none of the shipped core/sample collections has one).

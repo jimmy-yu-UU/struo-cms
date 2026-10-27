@@ -97,7 +97,7 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 框架留給 fork 接手的兩個介面，測試套件各有一個替身：`ScriptedSearchProvider` 把一個腳本化
 的 `SearchOutcome` 接到 `ISearchProvider`，同時記下收到的每一次 `SearchRequest`；
 `RecordingItemChangeListener` 記下每一次 `OnChangedAsync` 呼叫，可以選擇性地掛一個腳本化的
-回呼。兩個介面本身怎麼運作，見[第 18 章：擴充點：搜尋提供者與寫入通知](18-extension-points.md)。
+回呼。兩個介面本身怎麼運作，見[第 18 章：擴充點](18-extension-points.md)。
 
 ## 前端測試
 

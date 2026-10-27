@@ -108,6 +108,26 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 `PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的傳超過上限的位元
 組，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERVER_ERROR` 只出現在真正未處理的錯誤上。
 
+### 自己的錯誤代碼
+
+fork 要加自己的、給客戶端看的錯誤，就繼承 `StruoDomainException`（在 `Struo.Domain`），給它代碼、HTTP 狀態與訊息：
+
+```csharp
+using Struo.Domain;
+
+public sealed class QuotaExceededException(string message)
+    : StruoDomainException("ACME_QUOTA_EXCEEDED", 429, message);
+```
+
+在 controller、minimal API 端點或 GraphQL resolver 裡丟出它。REST 會用那個狀態與一般的錯誤信封回應，
+信封裡帶著你的代碼與訊息；GraphQL 在錯誤上蓋上同樣的代碼與訊息（HTTP 狀態照舊是 `200`，所有 GraphQL
+錯誤都是這樣）。三條規則：
+
+- 訊息會原樣送到客戶端，所以不要把內部細節（主機名稱、id、SQL）放進去。
+- 狀態必須是 400 到 499；其他值在建構例外時就會丟錯，空白的代碼也一樣。伺服器錯誤不是領域錯誤：沒處理的例外
+  會被遮蔽成 `INTERNAL_SERVER_ERROR`。`401` 只用在登入狀態遺失：後台介面遇到任何 `401` 都會把使用者登出。
+- 代碼加上前綴（`ACME_`），才不會跟 CMS 自己的（例如 `NOT_FOUND`、`CONFLICT`）撞名。代碼不檢查是否唯一。
+
 ## 驗證錯誤的 `details`
 
 `details` 只在 `VALIDATION` 代碼上出現，是模型繫結或資料註記驗證失敗時才有的東西，發生在動作本身
