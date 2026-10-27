@@ -18,6 +18,12 @@
   每個已存在的翻譯列，沒有的語系才新增，不再先刪除再重新寫入，MariaDB 的情況就此消除；SQL Server
   則在開啟 `READ_COMMITTED_SNAPSHOT` 之後更新都能成功。
 
+### 安全性
+
+- 後台映像在 runtime 階段執行 `apk upgrade`，每次建置都會套用 `nginx-unprivileged` 基底映像建置之後
+  才發布的 Alpine 套件修補（本版發布時為 brotli-libs CVE-2026-111497 與 curl/libcurl
+  CVE-2026-92392）。容器仍以 uid 101 執行。
+
 ## 0.13.0 — 2026-10-22
 
 ::: danger 破壞性變更
