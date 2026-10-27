@@ -19,7 +19,7 @@ public static class StartupMigrationGate
         if (options.MigrateOnStartup)
             await ApplyAsync(host, logger, ct);
         else
-            RequireMigrated(db, host, options.TablePrefix);
+            RequireMigrated(db, host, options.TablePrefix, logger);
 
         if (isDevelopment)
             CheckSchema(db, options.DbType, entityTypes);
@@ -33,17 +33,22 @@ public static class StartupMigrationGate
             logger.LogInformation("Applied migration {Version} {Description}.", applied.Version, applied.Description);
     }
 
-    private static void RequireMigrated(ISqlSugarClient db, MigrationHost host, string tablePrefix)
+    private static void RequireMigrated(ISqlSugarClient db, MigrationHost host, string tablePrefix, ILogger logger)
     {
         var versionTable = StruoVersionTableMetaData.TableNameFor(tablePrefix);
         if (!db.DbMaintenance.IsAnyTable(versionTable, false) && CoreTables.Exist(db, tablePrefix))
             throw new InvalidOperationException(
                 "The database has the framework tables but no migration history; run the 'migrate:baseline' command once, then start the application.");
 
-        var pending = host.GetStatus().Where(m => m.State == MigrationState.Pending).ToList();
-        if (pending.Count > 0)
-            throw new InvalidOperationException(
-                $"{pending.Count} migration(s) pending, the lowest is {pending[0].Version}; run the 'migrate' command, or set Database:MigrateOnStartup to true.");
+        var status = host.GetStatus();
+        var pending = status.Where(m => m.State == MigrationState.Pending).ToList();
+        if (pending.Count == 0) return;
+
+        var outOfOrder = MigrationInfo.OutOfOrderWarning(status);
+        if (outOfOrder is not null) logger.LogWarning("{Warning}", outOfOrder);
+        throw new InvalidOperationException(
+            $"{pending.Count} migration(s) pending, the lowest is {pending[0].Version}; run the 'migrate' command, or set Database:MigrateOnStartup to true." +
+            (outOfOrder is null ? "" : " Some of them are out of order: older than the highest applied migration."));
     }
 
     private static void CheckSchema(ISqlSugarClient db, StruoDbType dbType, IReadOnlyList<Type> entityTypes)

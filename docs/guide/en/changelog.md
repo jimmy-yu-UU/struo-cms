@@ -61,6 +61,10 @@
 - `StruoDomainException` (in `Struo.Domain`) is a base class for a fork's own client-facing errors: a code, a
   400 to 499 status and a message. REST and GraphQL return them unchanged. A status outside 400 to 499
   throws when the exception is constructed. See [Chapter 12](12-rest-conventions.md#your-own-error-codes).
+- A pending migration older than the highest applied one (a branch merged late) is flagged: `migrate` and a
+  startup that applies migrations log a warning, `migrate:status` marks the row `(out of order)`, and a
+  startup with `MigrateOnStartup` off logs the warning before it refuses on the pending migration. The
+  migration is still applied; exit codes are unchanged. See [Chapter 21](21-schema-and-upgrades.md).
 
 ## 0.13.1 — 2026-10-27
 

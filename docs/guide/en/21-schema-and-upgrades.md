@@ -213,6 +213,27 @@ on a backed-up database, then run `migrate:check`.
 Some releases also need existing data corrected by hand. That release's "Upgrade notes" in the
 changelog say when it applies and give the SQL to run.
 
+### A migration older than the applied ones
+
+Two branches can each add a migration, and the one with the lower version merges last. On a database that
+already ran the higher version, the lower one is pending but older than the newest applied migration; a
+new database runs both in version order, so the two histories differ. StruoCMS applies it anyway and says
+so: `migrate` and a startup that applies migrations log a warning naming the versions and the highest applied
+one, `migrate:status` marks the row `(out of order)`, and a startup with `MigrateOnStartup` off logs the same
+warning before it refuses to start on the pending migration. Nothing is refused for being out of order.
+
+```
+202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
+202610140000   Pending   -                     AddInvoiceTable  (out of order)
+202610200000   Applied   2026-10-20 08:12:03Z  AddOrderTable
+2 applied, 1 pending, 0 orphaned
+```
+
+What to do: read the migration's SQL with `migrate:preview` and check that it does not depend on anything
+the later migration changed, such as a column it renamed or dropped. If it does, give the migration a
+version above the highest applied one and merge again. Test both orders: a new database, and one that
+already ran the later migration.
+
 ## Backend differences
 
 - **MySQL/MariaDB**: migrations set no character set, so tables take the database default. Create the

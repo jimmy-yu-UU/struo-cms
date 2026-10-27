@@ -55,6 +55,9 @@
 - `StruoDomainException`（在 `Struo.Domain`）是 fork 自己、給客戶端看的錯誤的基底類別：代碼、400 到 499 的
   狀態與訊息。REST 與 GraphQL 都原樣回傳。狀態超出 400 到 499，在建構例外時就會丟錯。
   見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
+- 比已套用的最高版本還舊的待套用 migration（較晚才合併的分支）會被標出來：`migrate` 與會套用 migration 的
+  啟動會記一則警告，`migrate:status` 在那一列標上 `(out of order)`，`MigrateOnStartup` 關閉時啟動在因待套用
+  的 migration 而拒絕之前也會記下警告。migration 仍會套用，結束碼不變。見[第 21 章](21-schema-and-upgrades.md)。
 
 ## 0.13.1 — 2026-10-27
 
