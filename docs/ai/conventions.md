@@ -397,6 +397,12 @@ DI-built client, `SchemaChecker.Check`
 migration that left the `(fk, locale)` index out: it fails startup with the findings. A hand-built
 client without the policy expects no such index, so it hides the gap.
 
+`TranslationStore.SyncTranslationsAsync` updates an existing locale's row in place and inserts a
+missing locale's row; it never deletes. A translatable parent therefore relies on its own version
+check (the `AuditableEntity` optimistic lock in the repository's update, which runs first in the same
+transaction) to keep two concurrent updates of the same item apart: without it, both could read the
+locale as missing and both insert, and the `(fk, locale)` unique index would reject one.
+
 ## Many-to-many junction payload
 
 A relation's payload field list — which of a junction collection's `[CmsField]`s (beyond its two

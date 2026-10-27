@@ -260,6 +260,16 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         translations.LoadTranslationsAsync(translationType, fkProperty, localeProperty, parentIds, locale, ct);
 
+    public Task InsertTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default) =>
+        translations.InsertTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+
     public Task SyncTranslationsAsync(
         Type translationType,
         string fkProperty,

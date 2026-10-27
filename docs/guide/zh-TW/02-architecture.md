@@ -109,9 +109,9 @@ sidecar的唯一索引由 `TranslationSidecarIndexPolicy` 算出、由同一個 
 的過濾條件，也是同一個 factory 註冊的查詢過濾器（`db.QueryFilter.AddTableFilter<ISoftDeletable>`），
 fork 不需要自己重算或重新註冊。
 
-所有資料庫存取都得經過 SqlSugar，結構變更與初始資料則是 FluentMigrator migration。只有三個刻
-意留下的例外會組字串 SQL：關聯篩選的子查詢包裝、migration 鎖 `MigrationLockSql`，以及 `IndexCatalog` 讀索引用的唯讀系統目錄查詢。細節見
-[第 21 章](21-schema-and-upgrades.md#核心的三個-raw-sql-例外)。
+所有資料庫存取都得經過 SqlSugar，結構變更與初始資料則是 FluentMigrator migration。只有四個刻
+意留下的例外會用字串 SQL：關聯篩選的子查詢包裝、migration 鎖 `MigrationLockSql`、`IndexCatalog` 讀索引用的唯讀系統目錄查詢，以及 SQL Server 啟動時讀一個系統目錄旗標的檢查。細節見
+[第 21 章](21-schema-and-upgrades.md#核心的四個-raw-sql-例外)。
 
 ## 技術堆疊
 

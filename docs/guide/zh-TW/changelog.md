@@ -1,5 +1,23 @@
 # 版本紀錄
 
+## 0.13.1
+
+### 變更
+
+- SQL Server 資料庫需要開啟 `READ_COMMITTED_SNAPSHOT`。在沒有其他連線連著資料庫時，執行一次
+  `ALTER DATABASE [your_database] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE`；Azure SQL
+  Database 預設就是開啟的。沒開的時候，啟動會記一筆警告，內容點出資料庫名稱與要執行的語句，啟動
+  仍會成功。見[第 20 章](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
+
+### 修正
+
+- 並行建立有翻譯的項目時，MySQL、MariaDB 與 SQL Server 會發生死結，API 回 500。建立項目時不再先
+  刪除翻譯列再寫入，這是 MySQL 與 MariaDB 的成因；SQL Server 的成因是預設的鎖定隔離等級，由上面
+  的設定解決。
+- 並行更新有翻譯之集合的不同項目時，SQL Server 會發生死結，MariaDB 偶爾也會。更新時改成就地取代
+  每個已存在的翻譯列，沒有的語系才新增，不再先刪除再重新寫入，MariaDB 的情況就此消除；SQL Server
+  則在開啟 `READ_COMMITTED_SNAPSHOT` 之後更新都能成功。
+
 ## 0.13.0 — 2026-10-22
 
 ::: danger 破壞性變更

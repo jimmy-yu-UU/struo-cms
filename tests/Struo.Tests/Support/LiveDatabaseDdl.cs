@@ -7,8 +7,10 @@ using SqlSugar;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Create, drop and list databases on a live test server. The DROP statements below are the only raw
-/// SQL in the test-database lifecycle; every interpolated name passes <see cref="ValidateName"/> first.
+/// Create, drop and list databases on a live test server. The raw SQL in the test-database lifecycle is
+/// the DROP statements and, on SQL Server, the READ_COMMITTED_SNAPSHOT check and ALTER statements. A
+/// name interpolated into a DROP passes <see cref="ValidateName"/> first; the SQL Server ALTERs
+/// bracket-quote the name (doubling any <c>]</c>) and refuse a database whose name lacks "test".
 /// </summary>
 internal static partial class LiveDatabaseDdl
 {
@@ -44,8 +46,58 @@ internal static partial class LiveDatabaseDdl
             database.Dispose();
             throw new InvalidOperationException($"{kind}: database '{name}' is missing after creation.");
         }
+        try
+        {
+            if (kind == TestBackendKind.SqlServer) EnableReadCommittedSnapshot(connection);
+        }
+        catch
+        {
+            database.Dispose();
+            throw;
+        }
         return database;
     }
+
+    /// <summary>
+    /// Turns READ_COMMITTED_SNAPSHOT on for the database the connection string names, as the
+    /// deployment requirement for SQL Server (test-only SQL). Does nothing when it is already on, so a
+    /// shared database is not disturbed by the ROLLBACK IMMEDIATE that the change needs.
+    /// </summary>
+    public static void EnableReadCommittedSnapshot(string sqlServerConnection)
+    {
+        LiveDatabases.GuardDisposable(sqlServerConnection);
+        var builder = new SqlConnectionStringBuilder(sqlServerConnection);
+        var name = builder.InitialCatalog;
+        builder.InitialCatalog = "master";
+        using var connection = new SqlConnection(builder.ConnectionString);
+        connection.Open();
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = @name";
+            check.Parameters.AddWithValue("@name", name);
+            if (check.ExecuteScalar() is true) return;
+        }
+
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER DATABASE {QuoteSqlServer(name)} SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE";
+        alter.ExecuteNonQuery();
+    }
+
+    /// <summary>Turns READ_COMMITTED_SNAPSHOT off again, for tests that need a database without it.</summary>
+    public static void DisableReadCommittedSnapshot(string sqlServerConnection)
+    {
+        LiveDatabases.GuardDisposable(sqlServerConnection);
+        var builder = new SqlConnectionStringBuilder(sqlServerConnection);
+        var name = builder.InitialCatalog;
+        builder.InitialCatalog = "master";
+        using var connection = new SqlConnection(builder.ConnectionString);
+        connection.Open();
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER DATABASE {QuoteSqlServer(name)} SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE";
+        alter.ExecuteNonQuery();
+    }
+
+    private static string QuoteSqlServer(string name) => "[" + name.Replace("]", "]]") + "]";
 
     /// <summary>Creates a database with a caller-chosen name; disposing drops it.</summary>
     public static IDisposable CreateNamed(TestBackendKind kind, string name) =>

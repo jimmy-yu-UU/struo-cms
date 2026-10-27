@@ -15,6 +15,11 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
              typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<TranslationStore, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> InsertDispatcher =
+        new(typeof(TranslationStore), nameof(InsertTranslationsGenericAsync),
+            [typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
+
     public async Task<IReadOnlyList<object>> LoadTranslationsAsync(
         Type translationType,
         string fkProperty,
@@ -58,6 +63,16 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         return rows.Cast<object>().ToList();
     }
 
+    public async Task InsertTranslationsAsync(
+        Type translationType,
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct = default) =>
+        await InsertDispatcher.For(translationType)(this, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+
     public async Task SyncTranslationsAsync(
         Type translationType,
         string fkProperty,
@@ -69,6 +84,21 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
         await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+    }
+
+    // A create inserts under a parent id that is new in this transaction, so there is nothing to look up.
+    private async Task InsertTranslationsGenericAsync<T>(
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        CancellationToken ct) where T : class, new()
+    {
+        if (perLocale.Count == 0) return;
+
+        var rows = BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, perLocale);
+        await transactions.InTransactionAsync(async () => await db.Insertable(rows).ExecuteCommandAsync(ct), ct);
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
@@ -83,6 +113,44 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         if (perLocale.Count == 0) return;
 
         var type = typeof(T);
+        var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var rows = BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, perLocale);
+
+        await transactions.InTransactionAsync(async () =>
+        {
+            // An update replaces the stored row of each supplied locale in place (by primary key) and
+            // inserts a row for a locale that has none. It issues no DELETE: a delete that matches
+            // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
+            // updates of different items on InnoDB. The existing rows come from a plain consistent read.
+            // Two concurrent updates of the same item are kept apart by the parent's version check
+            // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
+            var existing = await LoadExistingAsync<T>(fkColumn, parentId, ct);
+            var pk = PrimaryKeyOf(type);
+            var updates = new List<T>();
+            var inserts = new List<T>();
+            foreach (var row in rows)
+            {
+                var stored = existing.Find(e => string.Equals(
+                    (string?)localeProp.GetValue(e), (string?)localeProp.GetValue(row), StringComparison.OrdinalIgnoreCase));
+                if (stored is null) { inserts.Add(row); continue; }
+                pk.SetValue(row, pk.GetValue(stored));
+                updates.Add(row);
+            }
+
+            if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
+            if (inserts.Count > 0) await db.Insertable(inserts).ExecuteCommandAsync(ct);
+        }, ct);
+    }
+
+    // One row per supplied locale, built by reflection outside the transaction.
+    private static List<T> BuildRows<T>(
+        string fkProperty,
+        string localeProperty,
+        IReadOnlyList<string> fieldProperties,
+        object parentId,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale) where T : class, new()
+    {
+        var type = typeof(T);
         var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var fieldProps = fieldProperties.ToDictionary(
@@ -92,9 +160,7 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
                      $"Translation entity '{type.Name}' has no field property '{f}'."),
             StringComparer.OrdinalIgnoreCase);
 
-        // Build the rows + per-locale delete models outside the transaction (reflection only).
-        var inserts = new List<T>(perLocale.Count);
-        var deletes = new List<List<IConditionalModel>>(perLocale.Count);
+        var rows = new List<T>(perLocale.Count);
         foreach (var (locale, values) in perLocale)
         {
             var row = new T();
@@ -105,33 +171,28 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
                 if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
                     prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
             }
-            inserts.Add(row);
-
-            // ConditionalType.In on the FK (Postgres-safe), Equal on the string locale.
-            deletes.Add(
-            [
-                new ConditionalModel
-                {
-                    FieldName = fkColumn,
-                    ConditionalType = ConditionalType.In,
-                    FieldValue = parentId.ToString(),
-                    CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
-                },
-                new ConditionalModel
-                {
-                    FieldName = db.EntityMaintenance.GetDbColumnName(localeProperty, type),
-                    ConditionalType = ConditionalType.Equal,
-                    FieldValue = locale
-                }
-            ]);
+            rows.Add(row);
         }
+        return rows;
+    }
 
-        await transactions.InTransactionAsync(async () =>
-        {
-            foreach (var del in deletes)
-                await db.Deleteable<T>().Where(del).ExecuteCommandAsync(ct);
-            await db.Insertable(inserts).ExecuteCommandAsync(ct);
-        }, ct);
+    private async Task<List<T>> LoadExistingAsync<T>(string fkColumn, object parentId, CancellationToken ct)
+        where T : class, new() =>
+        await db.Queryable<T>().Where(
+        [
+            new ConditionalModel
+            {
+                FieldName = fkColumn,
+                ConditionalType = ConditionalType.In,
+                FieldValue = parentId.ToString(),
+                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
+            }
+        ]).ToListAsync(ct);
+
+    private PropertyInfo PrimaryKeyOf(Type type)
+    {
+        var column = db.EntityMaintenance.GetEntityInfo(type).Columns.Single(c => c.IsPrimarykey);
+        return type.GetProperty(column.PropertyName, BindingFlags.Public | BindingFlags.Instance)!;
     }
 
     private static bool TryGetValueCaseInsensitive(
