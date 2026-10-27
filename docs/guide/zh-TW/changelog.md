@@ -17,7 +17,7 @@
 - 後台的 `NON_CREATABLE_COLLECTIONS` 常數移除了，`createRouteGuard` 多了第二個參數 `creatable`。曾把集
   合加進該常數的 fork，要改在集合上設 `Creatable = false`。`ItemDeserializer.Deserialize` 也移除了：由
   `DeserializeForCreate` 取代，它不再檢查純量必填欄位，這項檢查改由 `ItemService` 在 `BeforeWriteAsync`
-  之後執行。直接呼叫過 `Deserialize` 的 fork，要自己補上這項檢查。
+  之後執行。直接呼叫過 `Deserialize` 的 fork，要自己檢查純量必填欄位，因為 `EnforceRequiredFields` 是 internal。
 :::
 
 ### 新增

@@ -409,8 +409,8 @@ builder.Services.AddScoped<IItemWriteInterceptor, ArticleSlugInterceptor>();
 它有 `AppliesTo(string collection)`、`TrashAsync(string id, CancellationToken ct)` 與
 `PurgeAsync(string id, CancellationToken ct)`，後兩者在那一列存在時回傳 true。選用的
 `IsValidId(string id)` 對不可能是列 id 的字串回 false，刪除就直接回找不到，不去讀取。註冊的處理器
-裡，第一個適用的勝出；核心的 `file` 處理器是在 `AddStruoCms()` 裡註冊的，所以你替 `file` 另外註冊
-的處理器永遠不會被執行。
+裡，第一個適用的勝出；核心的 `file` 處理器是在 `AddStruoCms()` 裡註冊的，所以在 `AddStruoCms()` 之後替 `file` 另外
+註冊的處理器永遠不會被執行（在它之前註冊的才會排在前面）。
 
 `ItemService` 先檢查權限與那一列是否存在，執行攔截器的 `BeforeWriteAsync`，再呼叫處理器。從這裡開
 始交易與變更通知都歸處理器管，所以不會跑 `InTransactionAsync`。處理器回傳 true 時，
@@ -421,7 +421,8 @@ builder.Services.AddScoped<IItemWriteInterceptor, ArticleSlugInterceptor>();
 
 ```csharp
 public sealed class AttachmentDeleteHandler(
-    IItemRepository repository, IItemChangeNotifier notifier, IMyBlobs blobs) : ICollectionDeleteHandler
+    IItemRepository repository, ItemPurgePipeline purge, IItemChangeNotifier notifier,
+    IMyBlobs blobs, ILogger<AttachmentDeleteHandler> log) : ICollectionDeleteHandler
 {
     public bool AppliesTo(string collection) => collection == "attachment";
 
@@ -431,19 +432,30 @@ public sealed class AttachmentDeleteHandler(
 
     public async Task<bool> PurgeAsync(string id, CancellationToken ct)
     {
+        var changes = new ItemChangeSet();
         var removed = await repository.InTransactionAsync(
-            () => repository.DeleteAsync("attachment", id, ct), ct);
+            () => purge.PurgeCoreAsync("attachment", id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
         if (!removed) return false;
 
-        await notifier.NotifyAsync([new ItemChange("attachment", id, ItemChangeKind.Purged)], CancellationToken.None);
-        await blobs.RemoveAsync(id, ct);
+        await notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+        try
+        {
+            await blobs.RemoveAsync(id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Deleting the blob {Id} failed; the bytes are orphaned.", id);
+        }
         return true;
     }
 }
 ```
 
-`IItemRepository` 與 `IItemChangeNotifier`（命名空間 `Struo.Application.Changes`，連同 `ItemChange`、
-`ItemChangeKind`）是核心自己的服務。`IMyBlobs` 代表你自己的儲存客戶端。處理器用同樣的方式註冊：
+`IItemRepository` 與 `ItemPurgePipeline`（命名空間 `Struo.Application.Query`），以及
+`IItemChangeNotifier` 與 `ItemChangeSet`（命名空間 `Struo.Application.Changes`），是核心自己的服務。
+`ItemPurgePipeline` 套用跟通用清除相同的規則：Restrict 防護、SetNull、級聯子列、關聯表資料列、翻譯與版本
+紀錄，並收集要通知的變更。blob 在 commit 之後才移除，失敗只記錄，已經 commit 的刪除不會被回報成錯
+誤。`IMyBlobs` 代表你自己的儲存客戶端。處理器用同樣的方式註冊：
 
 ```csharp
 builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();

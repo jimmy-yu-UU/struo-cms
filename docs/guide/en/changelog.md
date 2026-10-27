@@ -19,7 +19,7 @@
   `creatable` parameter. A fork that added a collection to the constant must set `Creatable = false` on
   the collection instead. `ItemDeserializer.Deserialize` is gone too: `DeserializeForCreate` replaces
   it and no longer checks scalar Required fields, which `ItemService` now checks after
-  `BeforeWriteAsync`. A fork that called `Deserialize` directly must run that check itself.
+  `BeforeWriteAsync`. A fork that called `Deserialize` directly must check its scalar Required fields itself, because `EnforceRequiredFields` is internal.
 :::
 
 ### Added

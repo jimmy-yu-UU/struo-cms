@@ -479,7 +479,8 @@ It has `AppliesTo(string collection)`, `TrashAsync(string id, CancellationToken 
 `PurgeAsync(string id, CancellationToken ct)`, each returning true when the row existed. An optional
 `IsValidId(string id)` returns false for an id that cannot name a row, so the delete answers not found
 without reading it. The first registered handler that applies wins, and the core's `file` handler is
-registered inside `AddStruoCms()`, so a handler of yours for `file` never runs.
+registered inside `AddStruoCms()`, so a handler of yours for `file` registered after `AddStruoCms()` never runs (one registered before it
+would come first).
 
 `ItemService` checks permissions and that the row exists, runs the interceptors' `BeforeWriteAsync`,
 then calls the handler. From there the handler owns the transaction and the change notification, so no
@@ -491,7 +492,8 @@ transaction, and notify the change listeners; `ItemService` does neither afterwa
 
 ```csharp
 public sealed class AttachmentDeleteHandler(
-    IItemRepository repository, IItemChangeNotifier notifier, IMyBlobs blobs) : ICollectionDeleteHandler
+    IItemRepository repository, ItemPurgePipeline purge, IItemChangeNotifier notifier,
+    IMyBlobs blobs, ILogger<AttachmentDeleteHandler> log) : ICollectionDeleteHandler
 {
     public bool AppliesTo(string collection) => collection == "attachment";
 
@@ -501,19 +503,31 @@ public sealed class AttachmentDeleteHandler(
 
     public async Task<bool> PurgeAsync(string id, CancellationToken ct)
     {
+        var changes = new ItemChangeSet();
         var removed = await repository.InTransactionAsync(
-            () => repository.DeleteAsync("attachment", id, ct), ct);
+            () => purge.PurgeCoreAsync("attachment", id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
         if (!removed) return false;
 
-        await notifier.NotifyAsync([new ItemChange("attachment", id, ItemChangeKind.Purged)], CancellationToken.None);
-        await blobs.RemoveAsync(id, ct);
+        await notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+        try
+        {
+            await blobs.RemoveAsync(id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Deleting the blob {Id} failed; the bytes are orphaned.", id);
+        }
         return true;
     }
 }
 ```
 
-`IItemRepository` and `IItemChangeNotifier` (namespace `Struo.Application.Changes`, with `ItemChange`
-and `ItemChangeKind`) are the core's own services. `IMyBlobs` stands for your own storage client. Register the handler the same way:
+`IItemRepository` and `ItemPurgePipeline` (namespace `Struo.Application.Query`) and
+`IItemChangeNotifier` and `ItemChangeSet` (namespace `Struo.Application.Changes`) are the core's own
+services. `ItemPurgePipeline` applies the same rules as the generic purge: the Restrict guard, SetNull,
+cascade children, junction rows, translations and revisions, and it collects the changes to announce.
+The blob is removed after the commit and a failure is only logged, so a committed delete is never
+reported as an error. `IMyBlobs` stands for your own storage client. Register the handler the same way:
 
 ```csharp
 builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();

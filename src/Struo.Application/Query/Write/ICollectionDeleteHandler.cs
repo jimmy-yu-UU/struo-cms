@@ -5,7 +5,9 @@ namespace Struo.Application.Query;
 /// Replaces the generic trash and purge of the collections it applies to, for a collection whose delete
 /// has side effects the generic pipeline cannot express (a blob to remove, a reference to clear).
 /// Register with <c>services.AddScoped&lt;ICollectionDeleteHandler, MyHandler&gt;()</c>; the first handler
-/// that applies wins. <see cref="ItemService"/> checks permissions and the id's existence first, runs the
+/// that applies wins, and the core's <c>file</c> handler is registered inside <c>AddStruoCms()</c>, so
+/// one registered after it never runs for <c>file</c>.
+/// <see cref="ItemService"/> checks permissions and the id's existence first, runs the
 /// interceptors' <see cref="IItemWriteInterceptor.BeforeWriteAsync"/>, then calls the handler, which owns
 /// the transaction and the change notification from there.
 /// </summary>
