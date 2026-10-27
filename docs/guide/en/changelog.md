@@ -21,6 +21,12 @@
   place, or inserts a row for a new locale, instead of deleting and re-inserting it, which removes the
   MariaDB case; on SQL Server the updates succeed with `READ_COMMITTED_SNAPSHOT` on.
 
+### Security
+
+- The admin image runs `apk upgrade` in its runtime stage, so each build picks up Alpine package
+  fixes published after the `nginx-unprivileged` base image was built (brotli-libs CVE-2026-111497,
+  curl/libcurl CVE-2026-92392 at the time of this release). The container still runs as uid 101.
+
 ## 0.13.0 — 2026-10-22
 
 ::: danger Breaking
