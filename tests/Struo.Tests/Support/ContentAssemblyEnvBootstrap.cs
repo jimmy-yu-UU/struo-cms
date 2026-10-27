@@ -4,7 +4,8 @@ using System.Runtime.CompilerServices;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Shipping the host without the Blog sample wired in removed the literal
+/// Pins the configuration a test host must see while services are registered: the sample content
+/// assembly, no Redis and no OIDC providers (below). Shipping the host without the Blog sample wired in removed the literal
 /// <c>"Struo.Sample.Blog"</c> entry from <c>src/Struo.Api/appsettings.json</c>, so
 /// <c>Struo:ContentAssemblies</c> is now empty by default. Every <c>WebApplicationFactory&lt;Program&gt;</c>
 /// in this suite (<see cref="ApiFactory"/> and <c>CorsAndCookieTests.CorsApiFactory</c>) already layers a
@@ -29,7 +30,7 @@ namespace Struo.Tests.Support;
 internal static class ContentAssemblyEnvBootstrap
 {
     [ModuleInitializer]
-    internal static void EnsureSampleContentAssemblyIsVisibleToEagerStartupScan()
+    internal static void PinRegistrationTimeConfigurationForTestHosts()
     {
         Environment.SetEnvironmentVariable("Struo__ContentAssemblies__0", "Struo.Sample.Blog");
 

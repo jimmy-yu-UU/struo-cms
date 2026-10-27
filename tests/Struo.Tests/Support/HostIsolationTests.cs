@@ -1,8 +1,10 @@
 // tests/Struo.Tests/Support/HostIsolationTests.cs
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Struo.Api.Auth;
 using Struo.Application.Security;
 using Struo.Infrastructure.Files;
 using Xunit;
@@ -31,6 +33,25 @@ public class HostIsolationTests(ApiFactory factory)
         var storage = services.GetRequiredService<Struo.Application.Files.IFileStorage>();
         (storage is LocalFileStorage).Should().BeTrue("the file backend must be the local one");
         (storage is S3FileStorage).Should().BeFalse("no test host may talk to a remote bucket");
+    }
+
+    // The pins below are read while services are registered, so they come from process environment
+    // variables (see ContentAssemblyEnvBootstrap). These assertions fail on any machine, with or without a
+    // Development settings file.
+    [Fact]
+    public async Task The_registration_time_pins_are_in_place_and_no_OIDC_scheme_is_registered()
+    {
+        string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("Redis__ConnectionString"))
+            .Should().BeTrue("the Redis pin is a blank-looking value");
+        Environment.GetEnvironmentVariable("Redis__ConnectionString").Should().NotBeNull(
+            "the variable must exist so it overrides the settings file");
+        Environment.GetEnvironmentVariable("Oidc__Providers__microsoft__Enabled").Should().Be("false");
+        Environment.GetEnvironmentVariable("Oidc__Providers__google__Enabled").Should().Be("false");
+
+        var schemes = (await factory.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetAllSchemesAsync())
+            .Select(x => x.Name).ToList();
+        schemes.Should().NotContain(AuthSchemes.OidcFor("microsoft"));
+        schemes.Should().NotContain(AuthSchemes.OidcFor("google"));
     }
 
     [Fact]

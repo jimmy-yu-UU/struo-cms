@@ -53,7 +53,7 @@ public class RedisMissingWarningTests(ApiFactory factory)
     [Fact]
     public void Production_with_Redis_does_not_warn()
     {
-        var entries = StartHost("Production", "localhost:6379,abortConnect=false");
+        var entries = StartHost("Production", "127.0.0.1:1,abortConnect=false");
 
         entries.Should().NotContain(e => e.Message.Contains(WarningFragment));
     }
