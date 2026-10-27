@@ -298,17 +298,17 @@ describe('CollectionListView', () => {
     expect(pushMock).toHaveBeenCalledWith({ name: 'collection-create', params: { name: 'article' } })
   })
 
-  function seedCollection(collection: string) {
+  function seedCollection(collection: string, creatable = true) {
     const schema = useSchemaStore()
-    schema.collections = [{ name: collection, label: collection, defaultDisplayField: 'status', fields: [], relations: [] }]
+    schema.collections = [{ name: collection, label: collection, defaultDisplayField: 'status', creatable, fields: [], relations: [] }]
     schema.loaded = true
     seedLanguage()
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
     mockRoute.params.name = collection
   }
 
-  it('hides the New button for the file collection (created by upload)', async () => {
-    seedCollection('file')
+  it('hides the New button when the schema says creatable is false', async () => {
+    seedCollection('file', false)
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const w = mountView()
     await flushPromises()
@@ -318,7 +318,7 @@ describe('CollectionListView', () => {
   })
 
   it('hides the New button on user for a non-super-admin with a write grant', async () => {
-    seedCollection('user')
+    seedCollection('user', false)
     useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true } } } as any
     const w = mountView()
     await flushPromises()
@@ -328,7 +328,7 @@ describe('CollectionListView', () => {
   })
 
   it('shows New on user for a super-admin and opens the create-user dialog instead of the item form', async () => {
-    seedCollection('user')
+    seedCollection('user', false)
     pushMock.mockClear()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const w = mountView()
@@ -342,7 +342,7 @@ describe('CollectionListView', () => {
   })
 
   it('mounts the create-user dialog and opens it from the New button', async () => {
-    seedCollection('user')
+    seedCollection('user', false)
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const w = mountView()
     await flushPromises()
@@ -364,7 +364,7 @@ describe('CollectionListView', () => {
   })
 
   it('navigates to the new user edit page after the dialog creates one', async () => {
-    seedCollection('user')
+    seedCollection('user', false)
     pushMock.mockClear()
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     const w = mountView()

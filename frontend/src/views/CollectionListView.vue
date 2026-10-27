@@ -24,7 +24,7 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
-import { LANGUAGE_COLLECTION, NON_CREATABLE_COLLECTIONS, USER_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { CreatedUser } from '@/api/usersApi'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
@@ -50,7 +50,7 @@ const isUserCollection = computed(() => name.value === USER_COLLECTION)
 const canCreate = computed(() => canWrite.value && (
   isUserCollection.value
     ? auth.user?.isSuperAdmin === true
-    : !NON_CREATABLE_COLLECTIONS.has(name.value)
+    : meta.value?.creatable !== false
 ))
 const createUserOpen = ref(false)
 const mode = ref<'active' | 'trash'>('active')

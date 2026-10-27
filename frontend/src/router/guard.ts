@@ -1,5 +1,4 @@
 import { loginRedirectQuery } from '../lib/safeRedirect'
-import { NON_CREATABLE_COLLECTIONS } from '../lib/frameworkCollections'
 
 export type GuardTarget = { name: string | null | undefined; meta: { public?: boolean }; fullPath?: string }
 export type GuardResult = true | { name: string; query?: { redirect: string } }
@@ -17,11 +16,12 @@ export function authGuard(to: GuardTarget, isAuthenticated: boolean): GuardResul
 export type CreateRouteTarget = { name: string | null | undefined; params: { name?: unknown } }
 export type CreateRouteResult = true | { name: 'collection-list'; params: { name: string } }
 
-// Rows of these collections are not created through the generic form, so a direct visit to the
-// create URL goes back to the list.
-export function createRouteGuard(to: CreateRouteTarget): CreateRouteResult {
+// `creatable` is the schema's flag for the target collection. Rows of a collection whose flag is
+// false are not created through the generic form, so a direct visit to the create URL goes back to
+// the list. An unknown flag (unknown collection, schema not loaded) lets the form open.
+export function createRouteGuard(to: CreateRouteTarget, creatable: boolean | undefined): CreateRouteResult {
   const collection = to.params.name
-  if (to.name === 'collection-create' && typeof collection === 'string' && NON_CREATABLE_COLLECTIONS.has(collection)) {
+  if (to.name === 'collection-create' && typeof collection === 'string' && creatable === false) {
     return { name: 'collection-list', params: { name: collection } }
   }
   return true

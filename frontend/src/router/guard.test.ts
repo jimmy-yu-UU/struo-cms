@@ -35,16 +35,20 @@ describe('authGuard redirect', () => {
 })
 
 describe('createRouteGuard', () => {
-  it.each(['user', 'file'])('sends a new %s back to its list', (name) => {
-    expect(createRouteGuard({ name: 'collection-create', params: { name } }))
+  it.each(['user', 'file'])('sends a new %s back to its list when the schema says creatable is false', (name) => {
+    expect(createRouteGuard({ name: 'collection-create', params: { name } }, false))
       .toEqual({ name: 'collection-list', params: { name } })
   })
 
-  it('lets other collections open the create form', () => {
-    expect(createRouteGuard({ name: 'collection-create', params: { name: 'article' } })).toBe(true)
+  it('lets a creatable collection open the create form', () => {
+    expect(createRouteGuard({ name: 'collection-create', params: { name: 'article' } }, true)).toBe(true)
+  })
+
+  it('lets the form open when the flag is unknown', () => {
+    expect(createRouteGuard({ name: 'collection-create', params: { name: 'article' } }, undefined)).toBe(true)
   })
 
   it('ignores routes other than the create form', () => {
-    expect(createRouteGuard({ name: 'collection-item', params: { name: 'user' } })).toBe(true)
+    expect(createRouteGuard({ name: 'collection-item', params: { name: 'user' } }, false)).toBe(true)
   })
 })
