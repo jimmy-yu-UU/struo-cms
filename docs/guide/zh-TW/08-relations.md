@@ -104,7 +104,7 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 
 `DisplayColumns` 與 `MaxDepth` 都不會被讀進 `RelationMetadata`，也到不了 `/api/schema`。沒有逐關聯覆
 寫深度上限的欄位，唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」
-一節。
+一節。這兩個屬性都標成 `[Obsolete]`：設定它們會有編譯器警告，下一個次要版本會移除。
 
 ## junction entity 與 payload
 

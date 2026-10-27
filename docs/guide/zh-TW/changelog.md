@@ -75,6 +75,11 @@
   所以被塞進來的 `STRUO.SESSION=` cookie 會被當成 session 續期，而不是被丟棄（session fixation）。
   現在比對不分大小寫。
 
+### 棄用
+
+- `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 與 `CmsRelationAttribute.MaxDepth` 標成
+  `[Obsolete]`。沒有任何東西讀它們；設定它們現在會產生編譯器警告，下一個次要版本會移除。請從你的集合中刪掉。
+
 ## 0.13.1 — 2026-10-27
 
 ### 變更

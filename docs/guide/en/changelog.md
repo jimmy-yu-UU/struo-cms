@@ -83,6 +83,12 @@
   cookies case-insensitively, so a planted `STRUO.SESSION=` cookie was renewed as a session instead of being
   discarded (session fixation). The match is now case-insensitive.
 
+### Deprecated
+
+- `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` and `CmsRelationAttribute.MaxDepth` are
+  marked `[Obsolete]`. Nothing reads them; setting one now produces a compiler warning, and they are removed in
+  the next minor version. Delete them from your collections.
+
 ## 0.13.1 — 2026-10-27
 
 ### Changed

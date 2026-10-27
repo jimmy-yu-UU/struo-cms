@@ -58,6 +58,12 @@ jobs:
   # table the content column cannot show without scrolling. `pnpm test` runs
   # the unit tests of check-table-width.mjs and its table-measuring library. A
   # few seconds of work in total.
+  #
+  # A fork that deleted docs/ has nothing to build. GitHub's hashFiles() cannot be
+  # used in the job-level `if` (it is only available inside steps, and the workspace
+  # does not exist yet at that point), so the first step after checkout looks for
+  # docs/package.json and the later steps run only when it is there. The job then
+  # passes without doing anything.
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -66,19 +72,33 @@ jobs:
         working-directory: docs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - id: docs
+        working-directory: .
+        run: |
+          if [ -f docs/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "docs/package.json is absent; skipping the docs gates."
+          fi
+      - if: steps.docs.outputs.present == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - if: steps.docs.outputs.present == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: docs/pnpm-lock.yaml
       # Same reasoning as the frontend job: --ignore-scripts keeps a dependency's
       # postinstall from executing on the runner.
-      - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm test
-      - run: pnpm build
+      - if: steps.docs.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - if: steps.docs.outputs.present == 'true'
+        run: pnpm test
+      - if: steps.docs.outputs.present == 'true'
+        run: pnpm build
 
   # Builds the two container images (root Dockerfile for the API, frontend/Dockerfile
   # for the admin SPA) and smoke-tests each one, then smoke-tests the Compose stack

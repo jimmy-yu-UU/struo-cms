@@ -7,6 +7,7 @@ public sealed class CmsFieldAttribute : Attribute
 {
     public string? Label { get; set; }
     public FieldInterface Interface { get; set; } = FieldInterface.Text;
+    [Obsolete("Has no effect; removed in the next minor version.")]
     public string? Display { get; set; }
     public bool Required { get; set; }
     public bool Searchable { get; set; }

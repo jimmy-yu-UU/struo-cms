@@ -134,7 +134,7 @@ Every `[CmsField]` setting is written as a named argument:
 |---|---|---|---|
 | `Label` | `string?` | `null` | field label; falls back to PascalCase property name |
 | `Interface` | `FieldInterface` | `Text` | decides field type, GraphQL type, admin editor |
-| `Display` | `string?` | `null` | no effect |
+| `Display` | `string?` | `null` | no effect; obsolete |
 | `Required` | `bool` | `false` | required check (see below) |
 | `Searchable` | `bool` | `false` | added to full-text search whitelist |
 | `Sortable` | `bool` | `false` | admin list header becomes clickable to sort |
