@@ -221,19 +221,50 @@ public sealed class ItemService(
             throw new QueryException("Request body must be a JSON object.");
         var d = registry.Get(collection)!;
 
-        // Merge update: start from the existing row and overlay ONLY the fields the client actually
-        // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
-        // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
-        // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
+        var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
+        if (loaded is null) return null;
+        var (existing, preMerge) = loaded.Value;
+
+        var bodyKeys = MergeBody(collection, meta, d, body, existing);
+
+        var hooks = writeInterceptors.Begin(
+            operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
+            meta, existing, id, bodyKeys, body, preMerge);
+        await hooks.BeforeWriteAsync(ct);
+        await ValidateMergedAsync(collection, meta, d, body, existing, ct);
+
+        var persisted = await PersistUpdateAsync(
+            collection, id, meta, d, body, existing, hooks, operation, sourceRevisionNumber, ct);
+        if (persisted is null) return null;
+        var (updated, updatedId) = persisted.Value;
+        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
+        return projector.Project(updated, meta, null);
+    }
+
+    // Merge update: start from the existing row and overlay ONLY the fields the client actually
+    // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
+    // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
+    // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately by persist.
+    private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
+        string collection, string id, CollectionMetadata meta, CancellationToken ct)
+    {
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
-        // The row as stored, for interceptors that compare old and new; the merge below mutates `existing`.
+        // The row as stored, for interceptors that compare old and new; the merge mutates `existing`.
         var preMerge = writeInterceptors.AnyApplies(meta)
             ? await repository.GetByIdAsync(collection, id, ct: ct)
             : null;
+        return (existing, preMerge);
+    }
+
+    // Overlays the client-sent fields and M2O foreign keys onto `existing`; returns the body keys.
+    private IReadOnlySet<string> MergeBody(
+        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
+    {
         // No Required check here — an update only overlays fields the client actually sent (see
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
-        // `incoming` alone; the Required check re-runs against the merged `existing` entity below.
+        // `incoming` alone; the Required check re-runs against the merged `existing` entity in
+        // ValidateMergedAsync.
         var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
@@ -265,19 +296,22 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+        return bodyKeys;
+    }
 
-        // Required check runs here — against the MERGED entity, after both overlay loops above —
-        // rather than while deserializing `incoming`: an omitted Required field keeps whatever
-        // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
-        // field still 400s with the same message CREATE uses. The write interceptors' BeforeWrite runs
-        // immediately before it, and MaxLength and the per-interface validator phases already ran on
-        // `incoming` inside DeserializeForUpdate above, so a body that violates one of those rules AND
-        // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert passes a full snapshot as its body, so every field is re-sent and this check sees
-        // the same values a full PUT would.
-        var hooks = writeInterceptors.Begin(
-            operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
-            meta, existing, id, bodyKeys, body, preMerge);
-        await hooks.BeforeWriteAsync(ct);
+    // Required check runs here — against the MERGED entity, after both overlay loops in MergeBody —
+    // rather than while deserializing `incoming`: an omitted Required field keeps whatever
+    // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
+    // field still 400s with the same message CREATE uses. The write interceptors' BeforeWrite runs
+    // immediately before it, and MaxLength and the per-interface validator phases already ran on
+    // `incoming` inside DeserializeForUpdate, so a body that violates one of those rules AND
+    // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert
+    // passes a full snapshot as its body, so every field is re-sent and this check sees the same
+    // values a full PUT would.
+    private async Task ValidateMergedAsync(
+        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing,
+        CancellationToken ct)
+    {
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
@@ -290,8 +324,14 @@ public sealed class ItemService(
         // value (no protection, but backward compatible for callers that don't track versions).
         if (existing is Struo.Domain.Auditing.AuditableEntity ex)
             ex.Version = JsonBodyUtil.TryReadVersion(body) ?? ex.Version;
+    }
 
-        // Parent row + M2M + translations commit atomically (see CreateAsync).
+    // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
+    private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
+        string collection, string id, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
+        object existing, ItemWriteHooks hooks, string operation, long? sourceRevisionNumber,
+        CancellationToken ct)
+    {
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
@@ -312,9 +352,7 @@ public sealed class ItemService(
                     sourceRevisionNumber, ct: ct);
             }
         }, ct);
-        if (updated is null) return null;
-        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
-        return projector.Project(updated, meta, null);
+        return updated is null ? null : (updated, updatedId);
     }
 
     /// <summary>
