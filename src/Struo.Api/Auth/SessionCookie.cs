@@ -36,7 +36,7 @@ internal sealed partial class SessionCookieOptionsValidator : IValidateOptions<C
     private const string SecurePrefix = "__Secure-";
 
     // RFC 6265 cookie-name is an RFC 2616 token.
-    [GeneratedRegex("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$")]
+    [GeneratedRegex("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+\\z")]
     private static partial Regex TokenPattern();
 
     public ValidateOptionsResult Validate(string? name, CookieAuthenticationOptions options)

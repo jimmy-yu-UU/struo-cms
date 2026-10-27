@@ -17,7 +17,7 @@ public sealed record MigrationInfo(
         var outOfOrder = status.Where(m => m.OutOfOrder).Select(m => m.Version).ToList();
         if (outOfOrder.Count == 0) return null;
 
-        var highest = status.Where(m => m.State != MigrationState.Pending).Max(m => m.Version);
+        var highest = status.Where(m => m.State == MigrationState.Applied).Max(m => m.Version);
         return $"Migration(s) {string.Join(", ", outOfOrder)} are out of order: older than the highest applied " +
                $"migration {highest}. They run after it here, while a new database runs them in version order, " +
                "so check that they do not depend on later migrations.";

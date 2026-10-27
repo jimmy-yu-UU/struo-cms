@@ -62,6 +62,40 @@ public class SessionCookieNameTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Session_rotation_follows_the_configured_name()
+    {
+        var (emailA, passwordA, _) = await factory.SeedEditorAsync(["article"], []);
+        var (emailB, passwordB, idB) = await factory.SeedEditorAsync(["article"], []);
+        using var client = CustomNameClient(handleCookies: false);
+        client.DefaultRequestHeaders.Add(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName, "1");
+
+        var loginA = await client.PostAsJsonAsync("/api/auth/login", new { email = emailA, password = passwordA });
+        var cookieA = CookieValue(loginA);
+
+        // B signs in while A's cookie is presented under the custom name: A's session must die, never become B's.
+        using var second = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new { email = emailB, password = passwordB }),
+        };
+        second.Headers.Add("Cookie", $"{CustomName}={cookieA}");
+        var loginB = await client.SendAsync(second);
+        loginB.EnsureSuccessStatusCode();
+        CookieValue(loginB).Should().NotBe(cookieA);
+
+        using var me = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        me.Headers.Add("Cookie", $"{CustomName}={cookieA}");
+        (await client.SendAsync(me)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        _ = idB;
+    }
+
+    private static string CookieValue(HttpResponseMessage response)
+    {
+        var line = response.Headers.GetValues("Set-Cookie")
+            .Last(c => c.StartsWith(CustomName + "=", StringComparison.Ordinal));
+        return line[(CustomName.Length + 1)..].Split(';')[0];
+    }
+
+    [Fact]
     public async Task A_cookie_under_the_old_name_is_not_a_session_cookie_any_more()
     {
         using var client = CustomNameClient(handleCookies: false);

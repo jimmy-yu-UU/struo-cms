@@ -81,6 +81,10 @@ public static class AuthWiring
             .Configure<IConfiguration>((options, resolvedConfig) =>
             {
                 options.Cookie.Name = SessionCookieName.FromConfiguration(resolvedConfig);
+                // A __Host- cookie needs Path=/. Left null, the cookie handler writes the request's PathBase,
+                // which a fork that mounts the app under a path base would see the browser reject.
+                if (options.Cookie.Name.StartsWith("__Host-", StringComparison.OrdinalIgnoreCase))
+                    options.Cookie.Path = "/";
                 options.Cookie.SecurePolicy = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
                     ? CookieSecurePolicy.Always
                     : CookieSecurePolicy.SameAsRequest;
@@ -94,9 +98,11 @@ public static class AuthWiring
         services.AddSingleton<IValidateOptions<CookieAuthenticationOptions>, SessionCookieOptionsValidator>();
         services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie).ValidateOnStart();
         // Read by the CSRF and session-rotation middleware: the one place that knows the cookie's name.
-        services.AddSingleton(sp => new SessionCookieName(() =>
-            sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthSchemes.Cookie).Cookie.Name
-            ?? SessionCookieName.Default));
+        services.AddSingleton(sp =>
+        {
+            var monitor = sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
+            return new SessionCookieName(() => monitor.Get(AuthSchemes.Cookie).Cookie.Name ?? SessionCookieName.Default);
+        });
 
         services.AddAuthorization();
 

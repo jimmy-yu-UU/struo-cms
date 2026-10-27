@@ -81,13 +81,11 @@ things to know first:
 
 - The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
   Development the cookie is `Secure` whatever scheme the API itself sees, so nginx can still talk to
-  the API over plain http. `RequireSecure=false` means `SameAsRequest`: the cookie loses `Secure`
-  only when the API itself sees plain http, as on a host with no TLS in front, and the browser then
-  rejects the prefixed cookie.
+  the API over plain http. `RequireSecure=false` means `SameAsRequest`, and with a prefixed name startup
+  fails with a message naming `Auth:Cookie:Name`.
 - The name applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
-  `SameAsRequest`: over `http://localhost` the cookie carries no `Secure`, the browser rejects it, and
-  local login and the e2e suite fail. Set `Auth__Cookie__RequireSecure=true` for local runs and the
-  e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
+  `SameAsRequest`, so startup fails there until you set `Auth__Cookie__RequireSecure=true` for local runs
+  and the e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
   `http://localhost`. A browser that doesn't (Safari) needs HTTPS locally.
 - Renaming the cookie signs everyone out once.
 

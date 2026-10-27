@@ -38,6 +38,12 @@
   ```
 - `IHtmlSanitizer`、`IPasswordHasher` 與 `IFileAccessPolicy` 改用 `TryAdd` 註冊。fork 若在
   `AddStruoCms()` 之前就註冊了自己的實作，現在會被保留；以前核心的預設會贏過這麼早的註冊。
+- `AuthSchemes.SessionCookieName` 常數移除了。改過它的 fork（第 25 章以前這樣教，改成
+  `__Host-struo.session`）必須改設 `Auth:Cookie:Name`，例如 `Auth__Cookie__Name=__Host-struo.session`；
+  合併時如果直接採用上游的檔案而沒有這個設定，cookie 會悄悄變回 `struo.session`。讀過那個常數的程式碼改為
+  解析 `SessionCookieName`，讀它的 `Value`，或使用 `SessionCookieName.Default`。`__Host-` 或 `__Secure-` 名稱現在
+  需要一律 `Secure` 的 cookie：在政策還不是 `Always` 的地方（包含 Development）把 `Auth:Cookie:RequireSecure`
+  設成 `true`，否則啟動失敗。
 :::
 
 ### 新增
@@ -63,10 +69,11 @@
   碰上帶 `Domain` 或 `Path` 不是 `/` 的 cookie，啟動都會失敗，訊息會點出這個鍵。見
   [第 4 章](04-configuration.md)與[第 25 章](25-after-forking.md)。
 
-### 變更
+### 安全性
 
-- `AuthSchemes.SessionCookieName` 常數由 `SessionCookieName.Default` 與 `SessionCookieName` 服務取代。改過那個
-  常數的 fork 改設 `Auth:Cookie:Name`；讀過那個常數的程式碼改為解析 `SessionCookieName`，讀它的 `Value`。
+- session 輪替在登入時用大小寫完全一致的比對來隱藏 session cookie，但 cookie handler 讀 cookie 不分大小寫，
+  所以被塞進來的 `STRUO.SESSION=` cookie 會被當成 session 續期，而不是被丟棄（session fixation）。
+  現在比對不分大小寫。
 
 ## 0.13.1 — 2026-10-27
 

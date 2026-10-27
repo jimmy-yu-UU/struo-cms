@@ -101,6 +101,22 @@ public sealed class OutOfOrderMigrationTests : IDisposable
     }
 
     [Fact]
+    public void The_warning_names_the_highest_applied_migration_in_code_never_an_orphan()
+    {
+        var status = new List<MigrationInfo>
+        {
+            new(1, "one", MigrationState.Applied, DateTime.UtcNow),
+            new(2, "two", MigrationState.Pending, null, OutOfOrder: true),
+            new(3, "three", MigrationState.Applied, DateTime.UtcNow),
+            new(99, "gone", MigrationState.Orphaned, DateTime.UtcNow),
+        };
+
+        var warning = MigrationInfo.OutOfOrderWarning(status);
+
+        warning.Should().Contain("migration 3.").And.NotContain("99");
+    }
+
+    [Fact]
     public async Task A_fresh_database_applies_in_order_without_a_warning()
     {
         await Host("Upgrade").ApplyAsync(default);

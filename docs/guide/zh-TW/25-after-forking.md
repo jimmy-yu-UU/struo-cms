@@ -73,13 +73,12 @@ CSRF 與 session 輪替的 middleware 跟著它走。啟動時會檢查這個名
 
 - 前綴要求 `Secure`，但只有面對瀏覽器的來源必須是 HTTPS。Development 之外，不論 API 自己看到的是
   什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。
-  `RequireSecure=false` 等於 `SameAsRequest`：只有 API 自己看到的是純 http（例如前面沒有 TLS 的
-  主機），cookie 才不帶 `Secure`，瀏覽器也才會拒收帶前綴的 cookie。
+  `RequireSecure=false` 等於 `SameAsRequest`，名稱帶前綴時，啟動會失敗，訊息會點出
+  `Auth:Cookie:Name`。
 - 這個名稱在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
-  `SameAsRequest`：在 `http://localhost` 上 cookie 沒有 `Secure`，瀏覽器拒收，本機登入與 e2e 測試
-  都會失敗。本機執行與 e2e 的主機要設 `Auth__Cookie__RequireSecure=true`，cookie 就會帶
-  `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的瀏覽器（Safari）
-  本機就得走 HTTPS。
+  `SameAsRequest`，所以在本機執行與 e2e 的主機設 `Auth__Cookie__RequireSecure=true` 之前，啟動都會失敗。
+  設了之後 cookie 就帶 `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的
+  瀏覽器（Safari）本機就得走 HTTPS。
 - cookie 改名之後，所有已登入的人都會被登出一次。
 
 ## 8. 圖片或 API 在另一個來源：`CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`

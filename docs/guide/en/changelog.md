@@ -41,6 +41,13 @@
 - `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy` are registered with `TryAdd`. A fork
   that registered its own implementation before `AddStruoCms()` now keeps it; before, the core
   default won over a registration made that early.
+- The `AuthSchemes.SessionCookieName` constant is gone. A fork that edited it (as Chapter 25 used to say, for
+  `__Host-struo.session`) must set `Auth:Cookie:Name` instead, for example
+  `Auth__Cookie__Name=__Host-struo.session`; if the merge takes the upstream file without that, the cookie
+  silently goes back to `struo.session`. Code that read the constant resolves `SessionCookieName` and reads its
+  `Value`, or uses `SessionCookieName.Default`. A `__Host-` or `__Secure-` name now needs a cookie that is
+  always `Secure`: set `Auth:Cookie:RequireSecure` to `true` wherever it is not already `Always`, Development
+  included, or startup fails.
 :::
 
 ### Added
@@ -70,11 +77,11 @@
   or `__Host-` name on a cookie that is not always `Secure`, or a `__Host-` name on a cookie with a `Domain` or
   a `Path` other than `/`. See [Chapter 4](04-configuration.md) and [Chapter 25](25-after-forking.md).
 
-### Changed
+### Security
 
-- The `AuthSchemes.SessionCookieName` constant is replaced by `SessionCookieName.Default` and the
-  `SessionCookieName` service. A fork that edited the constant sets `Auth:Cookie:Name` instead; code that read
-  the constant resolves `SessionCookieName` and reads its `Value`.
+- Session rotation hid the session cookie on sign-in by an exact-case match, while the cookie handler reads
+  cookies case-insensitively, so a planted `STRUO.SESSION=` cookie was renewed as a session instead of being
+  discarded (session fixation). The match is now case-insensitive.
 
 ## 0.13.1 — 2026-10-27
 

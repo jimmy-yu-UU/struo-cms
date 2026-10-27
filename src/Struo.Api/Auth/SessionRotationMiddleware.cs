@@ -42,7 +42,8 @@ public sealed class SessionRotationMiddleware(
             var pairs = (header ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var pair in pairs)
             {
-                if (pair.StartsWith(prefix, StringComparison.Ordinal))
+                // Case-insensitive, like the cookie handler's own lookup: a planted variant must be hidden too.
+                if (pair.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     SessionRotation.RecordPresentedCookie(context, pair[prefix.Length..]);
                 else
                     kept.Add(pair);

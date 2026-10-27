@@ -188,6 +188,21 @@ public class SessionFixationTests(ApiFactory factory)
         }
     }
 
+    [Theory]
+    [InlineData("STRUO.SESSION")]
+    [InlineData("Struo.Session")]
+    public async Task Middleware_hides_the_session_cookie_whatever_the_case_of_its_name(string plantedName)
+    {
+        // The cookie handler reads cookies case-insensitively, so a planted variant would be renewed as a session.
+        var invoke = Middleware(TwoProviders());
+        var ctx = Request("POST", "/api/auth/login", $"other=1; {plantedName}=planted; more=2");
+
+        await invoke(ctx);
+
+        ctx.Request.Headers.Cookie.ToString().Should().Be("other=1; more=2");
+        SessionRotation.PresentedCookie(ctx).Should().Be("planted");
+    }
+
     [Fact]
     public async Task Middleware_ignores_the_oidc_callback_path_when_oidc_is_disabled()
     {

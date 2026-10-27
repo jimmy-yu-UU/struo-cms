@@ -1,5 +1,7 @@
 // tests/Struo.Tests/Hosting/SessionCookieValidationTests.cs
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Tests.Support;
 using Xunit;
@@ -33,6 +35,7 @@ public class SessionCookieValidationTests
     [InlineData("bad;name")]
     [InlineData("bad=name")]
     [InlineData("naïve")]
+    [InlineData("acme\n")]
     public async Task A_name_that_is_not_a_cookie_token_fails_startup(string name)
     {
         var failure = await FailureAsync(name, "true");
@@ -60,5 +63,41 @@ public class SessionCookieValidationTests
         var failure = await FailureAsync(name, "true");
 
         failure.Should().BeNull();
+    }
+
+    [SqliteOnlyTheory("starts a full host on a SQLite temp database")]
+    [InlineData("Domain")]
+    [InlineData("Path")]
+    public async Task A_host_prefixed_name_on_a_cookie_with_a_domain_or_another_path_fails_startup(string changed)
+    {
+        var error = await ForkHost.StartupErrorAsync(
+            mutate: s =>
+            {
+                s["Auth:Cookie:Name"] = "__Host-acme";
+                s["Auth:Cookie:RequireSecure"] = "true";
+            },
+            afterAddStruoCms: services => services.PostConfigure<CookieAuthenticationOptions>(
+                Struo.Api.Auth.AuthSchemes.Cookie, o =>
+                {
+                    if (changed == "Domain") o.Cookie.Domain = "example.test";
+                    else o.Cookie.Path = "/admin";
+                }));
+
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull(error?.ToString());
+        string.Join(" ", ove!.Failures).Should().Contain("Auth:Cookie:Name").And.Contain("Path=/");
+    }
+
+    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
+    public async Task A_host_prefixed_name_pins_the_cookie_path_to_the_root()
+    {
+        await using var host = await ForkHost.StartAsync(mutate: s =>
+        {
+            s["Auth:Cookie:Name"] = "__Host-acme";
+            s["Auth:Cookie:RequireSecure"] = "true";
+        });
+
+        host.App.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(Struo.Api.Auth.AuthSchemes.Cookie).Cookie.Path.Should().Be("/");
     }
 }
