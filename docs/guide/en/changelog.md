@@ -65,6 +65,16 @@
   startup that applies migrations log a warning, `migrate:status` marks the row `(out of order)`, and a
   startup with `MigrateOnStartup` off logs the warning before it refuses on the pending migration. The
   migration is still applied; exit codes are unchanged. See [Chapter 21](21-schema-and-upgrades.md).
+- `Auth:Cookie:Name` sets the session cookie's name (default `struo.session`); the CSRF guard and session
+  rotation follow it. Startup fails, naming the key, for a name that is not a valid cookie name, a `__Secure-`
+  or `__Host-` name on a cookie that is not always `Secure`, or a `__Host-` name on a cookie with a `Domain` or
+  a `Path` other than `/`. See [Chapter 4](04-configuration.md) and [Chapter 25](25-after-forking.md).
+
+### Changed
+
+- The `AuthSchemes.SessionCookieName` constant is replaced by `SessionCookieName.Default` and the
+  `SessionCookieName` service. A fork that edited the constant sets `Auth:Cookie:Name` instead; code that read
+  the constant resolves `SessionCookieName` and reads its `Value`.
 
 ## 0.13.1 — 2026-10-27
 

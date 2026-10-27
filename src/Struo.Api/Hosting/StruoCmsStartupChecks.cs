@@ -15,7 +15,10 @@ internal static class StruoCmsStartupChecks
     {
         using var scope = app.Services.CreateScope();
         var sp = scope.ServiceProvider;
-        // Needs only configuration and DI, so it runs before anything touches the database.
+        // Need only configuration and DI, so they run before anything touches the database. Reading the
+        // cookie options runs their validators: a bad session cookie name fails here.
+        sp.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
+            .Get(Struo.Api.Auth.AuthSchemes.Cookie);
         VerifyCustomFileStorage(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;

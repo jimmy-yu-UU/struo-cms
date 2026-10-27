@@ -85,7 +85,7 @@ configuration keys are in the `RateLimiting` section of
 ## Login and the session cookie
 
 A request that carries no `Authorization: Bearer …` header always goes through the cookie: named
-`struo.session`, `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
+`struo.session` unless `Auth:Cookie:Name` says otherwise, `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
 `Auth:Cookie:RequireSecure`; left unset, it is `Always` in every environment except Development, which
 follows the request itself.
 

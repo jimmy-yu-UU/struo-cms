@@ -65,8 +65,9 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 帶 `Domain`，所以兄弟子網域寫不進來。這個專案的 cookie 已經是 `Path=/`、沒有 `Domain`，缺的只
 有名稱。
 
-名稱是 `src/Struo.Api/Auth/AuthSchemes.cs` 裡的常數 `SessionCookieName`，沒有設定鍵。把它改成
-`__Host-struo.session` 即可；CSRF 與 session 輪替的 middleware 讀的是同一個常數。
+把 `Auth:Cookie:Name` 設成 `__Host-struo.session`（例如 `Auth__Cookie__Name=__Host-struo.session`）即可；
+CSRF 與 session 輪替的 middleware 跟著它走。啟動時會檢查這個名稱，cookie 不是一律 `Secure`、或帶了
+`Domain` 或別的 `Path` 時，啟動失敗，訊息會點出這個鍵。
 [第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)裡寫的字面 `struo.session`
 也會跟著變。先知道三件事：
 
@@ -74,7 +75,7 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
   什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。
   `RequireSecure=false` 等於 `SameAsRequest`：只有 API 自己看到的是純 http（例如前面沒有 TLS 的
   主機），cookie 才不帶 `Secure`，瀏覽器也才會拒收帶前綴的 cookie。
-- 這個常數在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
+- 這個名稱在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
   `SameAsRequest`：在 `http://localhost` 上 cookie 沒有 `Secure`，瀏覽器拒收，本機登入與 e2e 測試
   都會失敗。本機執行與 e2e 的主機要設 `Auth__Cookie__RequireSecure=true`，cookie 就會帶
   `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的瀏覽器（Safari）

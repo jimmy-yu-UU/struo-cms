@@ -80,6 +80,7 @@ public static class AuthWiring
         services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie)
             .Configure<IConfiguration>((options, resolvedConfig) =>
             {
+                options.Cookie.Name = SessionCookieName.FromConfiguration(resolvedConfig);
                 options.Cookie.SecurePolicy = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
                     ? CookieSecurePolicy.Always
                     : CookieSecurePolicy.SameAsRequest;
@@ -87,6 +88,15 @@ public static class AuthWiring
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.None;
             });
+
+        // The cookie's name and prefix rules are checked against these effective options (including a
+        // fork's own later changes), at startup and by UseStruoCmsAsync before it touches the database.
+        services.AddSingleton<IValidateOptions<CookieAuthenticationOptions>, SessionCookieOptionsValidator>();
+        services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie).ValidateOnStart();
+        // Read by the CSRF and session-rotation middleware: the one place that knows the cookie's name.
+        services.AddSingleton(sp => new SessionCookieName(() =>
+            sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthSchemes.Cookie).Cookie.Name
+            ?? SessionCookieName.Default));
 
         services.AddAuthorization();
 
@@ -112,7 +122,6 @@ public static class AuthWiring
 
     private static void ConfigureCookieOptions(CookieAuthenticationOptions options)
     {
-        options.Cookie.Name = AuthSchemes.SessionCookieName;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;

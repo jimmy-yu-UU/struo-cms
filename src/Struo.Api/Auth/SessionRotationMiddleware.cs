@@ -9,7 +9,8 @@ namespace Struo.Api.Auth;
 /// The presented cookie is remembered for <see cref="SessionRotation.RevokePresentedAsync"/>. Must sit
 /// ahead of <c>UseAuthentication</c>.
 /// </summary>
-public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<OidcOptions> oidc)
+public sealed class SessionRotationMiddleware(
+    RequestDelegate next, IOptions<OidcOptions> oidc, SessionCookieName sessionCookie)
 {
     // OIDC options are startup-bound, so the callback paths are computed once.
     private readonly HashSet<string> _callbackPaths = new(
@@ -32,9 +33,9 @@ public sealed class SessionRotationMiddleware(RequestDelegate next, IOptions<Oid
         return _callbackPaths.Contains(path);
     }
 
-    private static void HidePresentedCookie(HttpRequest request, HttpContext context)
+    private void HidePresentedCookie(HttpRequest request, HttpContext context)
     {
-        var prefix = AuthSchemes.SessionCookieName + "=";
+        var prefix = sessionCookie.Value + "=";
         var kept = new List<string>();
         foreach (var header in request.Headers.Cookie)
         {

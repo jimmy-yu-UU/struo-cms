@@ -73,10 +73,10 @@ The `__Host-` prefix makes the browser refuse such cookies: a cookie with this p
 `Secure`, have `Path=/` and carry no `Domain`, so a sibling subdomain can't write it. This project's
 cookie is already `Path=/` with no `Domain`; only the name is missing.
 
-The name is the constant `SessionCookieName` in `src/Struo.Api/Auth/AuthSchemes.cs`, with no
-configuration key. Change it to `__Host-struo.session`; the CSRF and session-rotation middleware read
-the same constant. The literal `struo.session` shown in
-[Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
+Set `Auth:Cookie:Name` to `__Host-struo.session` (for example `Auth__Cookie__Name=__Host-struo.session`);
+the CSRF and session-rotation middleware follow it. Startup checks the name and fails, naming the key,
+when the cookie is not always `Secure` or carries a `Domain` or another `Path`. The literal `struo.session`
+shown in [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
 things to know first:
 
 - The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
@@ -84,7 +84,7 @@ things to know first:
   the API over plain http. `RequireSecure=false` means `SameAsRequest`: the cookie loses `Secure`
   only when the API itself sees plain http, as on a host with no TLS in front, and the browser then
   rejects the prefixed cookie.
-- The constant applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
+- The name applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
   `SameAsRequest`: over `http://localhost` the cookie carries no `Secure`, the browser rejects it, and
   local login and the e2e suite fail. Set `Auth__Cookie__RequireSecure=true` for local runs and the
   e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from

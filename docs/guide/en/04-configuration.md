@@ -323,6 +323,7 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 | `Auth:Cookie:RequireSecure` | bool (may be empty) | none (environment-dependent) |
+| `Auth:Cookie:Name` | string | `"struo.session"` |
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
@@ -344,6 +345,13 @@ Setting them backwards fails startup. Only `MinLength` is returned to the admin 
 in every environment except Development, which follows the request itself. `true` forces `Secure`
 everywhere; `false` lets the cookie travel over plain HTTP, which a Staging-like host without TLS in
 front of it needs. Configuring any `Struo:Cors` origin forces `Secure` whatever this key says.
+
+`Auth:Cookie:Name` is the session cookie's name; blank means the default. The CSRF guard and the session
+rotation follow it. Startup fails, with a message naming the key, when the name is not a valid cookie name
+(letters, digits and ``! # $ % & ' * + - . ^ _ ` | ~``), when a `__Secure-` or `__Host-` name meets a cookie that
+is not always `Secure`, or when a `__Host-` name meets a cookie with a `Domain` or a `Path` other than `/`.
+StruoCMS sends neither a `Domain` nor another `Path`. See
+[Chapter 25](25-after-forking.md), section 7.
 
 ## OpenApi
 

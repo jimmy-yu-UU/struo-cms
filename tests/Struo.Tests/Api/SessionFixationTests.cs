@@ -51,7 +51,7 @@ public class SessionFixationTests(ApiFactory factory)
     private static string? SessionCookieFrom(HttpResponseMessage resp)
     {
         if (!resp.Headers.TryGetValues("Set-Cookie", out var values)) return null;
-        var prefix = AuthSchemes.SessionCookieName + "=";
+        var prefix = SessionCookieName.Default + "=";
         var line = values.LastOrDefault(v => v.StartsWith(prefix, StringComparison.Ordinal));
         if (line is null) return null;
         var value = line[prefix.Length..].Split(';')[0];
@@ -61,7 +61,7 @@ public class SessionFixationTests(ApiFactory factory)
     private static HttpRequestMessage WithCookie(HttpMethod method, string url, string? cookie)
     {
         var req = new HttpRequestMessage(method, url);
-        if (cookie is not null) req.Headers.Add("Cookie", $"{AuthSchemes.SessionCookieName}={cookie}");
+        if (cookie is not null) req.Headers.Add("Cookie", $"{SessionCookieName.Default}={cookie}");
         return req;
     }
 
@@ -148,7 +148,7 @@ public class SessionFixationTests(ApiFactory factory)
     };
 
     private static Func<HttpContext, Task> Middleware(OidcOptions oidc) =>
-        new SessionRotationMiddleware(_ => Task.CompletedTask, Options.Create(oidc)).InvokeAsync;
+        new SessionRotationMiddleware(_ => Task.CompletedTask, Options.Create(oidc), SessionCookieName.Fixed()).InvokeAsync;
 
     private static DefaultHttpContext Request(string method, string path, string cookieHeader)
     {
@@ -172,7 +172,7 @@ public class SessionFixationTests(ApiFactory factory)
     public async Task Middleware_hides_the_session_cookie_only_on_sign_in_requests(string method, string path, bool hidden)
     {
         var invoke = Middleware(TwoProviders());
-        var ctx = Request(method, path, $"other=1; {AuthSchemes.SessionCookieName}=abc; more=2");
+        var ctx = Request(method, path, $"other=1; {SessionCookieName.Default}=abc; more=2");
 
         await invoke(ctx);
 
@@ -183,7 +183,7 @@ public class SessionFixationTests(ApiFactory factory)
         }
         else
         {
-            ctx.Request.Headers.Cookie.ToString().Should().Contain(AuthSchemes.SessionCookieName);
+            ctx.Request.Headers.Cookie.ToString().Should().Contain(SessionCookieName.Default);
             SessionRotation.PresentedCookie(ctx).Should().BeNull();
         }
     }
@@ -192,7 +192,7 @@ public class SessionFixationTests(ApiFactory factory)
     public async Task Middleware_ignores_the_oidc_callback_path_when_oidc_is_disabled()
     {
         var invoke = Middleware(TwoProviders());
-        var ctx = Request("GET", "/signin-oidc-off", $"{AuthSchemes.SessionCookieName}=abc");
+        var ctx = Request("GET", "/signin-oidc-off", $"{SessionCookieName.Default}=abc");
 
         await invoke(ctx);
 
@@ -215,7 +215,7 @@ public class SessionFixationTests(ApiFactory factory)
             .AddSingleton(Options.Create(oidc))
             .AddSingleton(factory.Services.GetRequiredService<SessionRotation>())
             .BuildServiceProvider();
-        var ctx = Request("GET", "/signin-oidc-acme", $"{AuthSchemes.SessionCookieName}={presentedCookie}");
+        var ctx = Request("GET", "/signin-oidc-acme", $"{SessionCookieName.Default}={presentedCookie}");
         ctx.RequestServices = services;
         await Middleware(oidc)(ctx);
         return (await OidcWiring.ResolveLocalPrincipalAsync(ctx, new ClaimsPrincipal(new ClaimsIdentity()), "acme")).Principal;

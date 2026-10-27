@@ -276,6 +276,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 | `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
+| `Auth:Cookie:Name` | 字串 | `"struo.session"` |
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
@@ -293,6 +294,12 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 一律是 `Always`，Development 則跟隨請求本身；`true` 在所有環境強制 `Secure`；`false` 讓 cookie 可以走純
 HTTP，前面沒有 TLS 的類 Staging 主機需要這樣設。只要設定了任何 `Struo:Cors` 來源，不論這個鍵怎麼設，
 都會強制 `Secure`。
+
+`Auth:Cookie:Name` 是 session cookie 的名稱，留空就用預設值。CSRF 防護與 session 輪替都跟著它走。名稱不是
+有效的 cookie 名稱（字母、數字與 ``! # $ % & ' * + - . ^ _ ` | ~``），或 `__Secure-`、`__Host-` 名稱碰上不是
+一律 `Secure` 的 cookie，或 `__Host-` 名稱碰上帶 `Domain` 或 `Path` 不是 `/` 的 cookie，啟動都會失敗，
+訊息會點出這個鍵。StruoCMS 不送 `Domain`，也不送 `/` 以外的 `Path`。見
+[第 25 章](25-after-forking.md)的 `__Host-` 前綴那一節。
 
 ## OpenApi
 

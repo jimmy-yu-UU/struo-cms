@@ -58,6 +58,15 @@
 - 比已套用的最高版本還舊的待套用 migration（較晚才合併的分支）會被標出來：`migrate` 與會套用 migration 的
   啟動會記一則警告，`migrate:status` 在那一列標上 `(out of order)`，`MigrateOnStartup` 關閉時啟動在因待套用
   的 migration 而拒絕之前也會記下警告。migration 仍會套用，結束碼不變。見[第 21 章](21-schema-and-upgrades.md)。
+- `Auth:Cookie:Name` 設定 session cookie 的名稱（預設 `struo.session`），CSRF 防護與 session 輪替都跟著它走。
+  名稱不是有效的 cookie 名稱、`__Secure-` 或 `__Host-` 名稱碰上不是一律 `Secure` 的 cookie、或 `__Host-` 名稱
+  碰上帶 `Domain` 或 `Path` 不是 `/` 的 cookie，啟動都會失敗，訊息會點出這個鍵。見
+  [第 4 章](04-configuration.md)與[第 25 章](25-after-forking.md)。
+
+### 變更
+
+- `AuthSchemes.SessionCookieName` 常數由 `SessionCookieName.Default` 與 `SessionCookieName` 服務取代。改過那個
+  常數的 fork 改設 `Auth:Cookie:Name`；讀過那個常數的程式碼改為解析 `SessionCookieName`，讀它的 `Value`。
 
 ## 0.13.1 — 2026-10-27
 

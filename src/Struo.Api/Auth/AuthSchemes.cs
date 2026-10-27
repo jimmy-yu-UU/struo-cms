@@ -20,10 +20,6 @@ public static class AuthSchemes
     /// endpoints with no <c>[Authorize]</c> (item reads, <c>/graphql</c>) never inspected a token.</summary>
     public const string Adaptive = "Adaptive";
 
-    /// <summary>Name of the cookie holding the auth session. Shared by the cookie handler
-    /// (AuthWiring) and the CSRF middleware (which keys its guard off this cookie's presence).</summary>
-    public const string SessionCookieName = "struo.session";
-
     /// <summary>
     /// Single source of truth for how long a cookie session lives: both
     /// <c>CookieAuthenticationOptions.ExpireTimeSpan</c> (<c>AuthWiring</c>, the sliding window the
