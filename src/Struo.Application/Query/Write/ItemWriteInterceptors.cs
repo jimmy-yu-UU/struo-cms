@@ -29,8 +29,10 @@ internal sealed class ItemWriteInterceptors(
 }
 
 /// <summary>The hooks of one write, run over the interceptors that apply in registration order.</summary>
-internal sealed class ItemWriteHooks(ItemWriteContext? context, IReadOnlyList<IItemWriteInterceptor> interceptors)
+internal sealed class ItemWriteHooks(ItemWriteContext? initialContext, IReadOnlyList<IItemWriteInterceptor> interceptors)
 {
+    private ItemWriteContext? context = initialContext;
+
     /// <summary>The hooks of a write no interceptor sees: every method is a no-op.</summary>
     public static readonly ItemWriteHooks Empty = new(null, []);
 
@@ -40,9 +42,11 @@ internal sealed class ItemWriteHooks(ItemWriteContext? context, IReadOnlyList<II
     /// <summary>Records the stored entity and id once the row is written.</summary>
     public void Stored(object entity, object id)
     {
-        Context.Entity = entity;
-        Context.Id = id.ToString();
+        context = Context with { Entity = entity, Id = id.ToString() };
     }
+
+    /// <summary>Records whether the write changed state; the hooks that run next see the new value.</summary>
+    public void SetChanged(bool changed) => context = Context with { Changed = changed };
 
     public Task BeforeWriteAsync(CancellationToken ct) => RunAsync(i => i.BeforeWriteAsync(Context, ct));
 

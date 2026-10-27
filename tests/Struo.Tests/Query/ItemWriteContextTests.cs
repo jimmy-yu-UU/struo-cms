@@ -29,4 +29,16 @@ public class ItemWriteContextTests
 
         context.Changed.Should().BeFalse();
     }
+
+    [Fact]
+    public void With_copies_the_context_keeping_the_same_entity_reference()
+    {
+        var context = NewContext();
+
+        var changed = context with { Changed = false };
+
+        changed.Changed.Should().BeFalse();
+        context.Changed.Should().BeTrue();
+        changed.Entity.Should().BeSameAs(context.Entity);
+    }
 }

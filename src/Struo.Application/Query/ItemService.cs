@@ -259,7 +259,7 @@ public sealed class ItemService(
     // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
     // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
     // translations are synced separately by persist.
-    private IReadOnlySet<string> MergeBody(
+    private HashSet<string> MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         // No Required check here — an update only overlays fields the client actually sent (see
@@ -270,6 +270,14 @@ public sealed class ItemService(
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
         var bodyKeys = ItemDeserializer.PresentNames(body);
+        OverlayFields(meta, d, bodyKeys, existing, incoming);
+        OverlayManyToOneKeys(meta, d, bodyKeys, existing, incoming);
+        return bodyKeys;
+    }
+
+    private static void OverlayFields(
+        CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
+    {
         foreach (var field in meta.Fields)
         {
             if (field.IsSystem || field.ReadOnly) continue;
@@ -279,14 +287,18 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+    }
 
-        // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
-        // [CmsField], so the field overlay above skips them. Overlay each local FK the client
-        // actually sent, keeping the same allowlist discipline (only declared relations, only keys
-        // present in the body). Restricted to ManyToOne: O2M relations also carry a non-null
-        // ForeignKey (it names the FK column on the *related* entity, not this one), so without
-        // this guard the loop would try to overlay a property that doesn't exist/isn't writable
-        // here; M2M has no local FK at all.
+    // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
+    // [CmsField], so the field overlay skips them. Overlay each local FK the client
+    // actually sent, keeping the same allowlist discipline (only declared relations, only keys
+    // present in the body). Restricted to ManyToOne: O2M relations also carry a non-null
+    // ForeignKey (it names the FK column on the *related* entity, not this one), so without
+    // this guard the loop would try to overlay a property that doesn't exist/isn't writable
+    // here; M2M has no local FK at all.
+    private static void OverlayManyToOneKeys(
+        CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
+    {
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
@@ -297,7 +309,6 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
-        return bodyKeys;
     }
 
     // Required check runs here — against the MERGED entity, after both overlay loops in MergeBody —
@@ -419,7 +430,7 @@ public sealed class ItemService(
                 return trashedNow;
             }, ct);
             // AfterCommit runs for an already-trashed row too, with Changed false.
-            trashHooks.Context.SetChanged(softDeletedNow);
+            trashHooks.SetChanged(softDeletedNow);
             await AfterCommitAndNotifyAsync(trashHooks, softDeletedNow
                 ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed)
                 : null);
@@ -510,7 +521,7 @@ public sealed class ItemService(
             }
             return r;
         }, ct);
-        hooks.Context.SetChanged(restoredNow);
+        hooks.SetChanged(restoredNow);
         await AfterCommitAndNotifyAsync(hooks, restoredNow
             ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored)
             : null);
