@@ -26,13 +26,15 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     private sealed class RuleViolationException(string message)
         : StruoDomainException("ACME_RULE_VIOLATION", 429, message);
 
-    private sealed record HookCall(string Interceptor, string Hook, ItemWriteOperation Operation, string? Id, string[] BodyKeys, bool Changed);
+    private sealed record HookCall(string Interceptor, string Hook, ItemWriteOperation Operation, string? Id, string[] BodyKeys, bool Changed, bool HasExisting);
 
     private sealed class Script
     {
         public readonly List<HookCall> Calls = [];
         public string? ThrowIn;
         public bool MutateStatus;
+        public bool ThrowQueryException;
+        public (string? Old, string? Current)? Statuses;
     }
 
     private sealed class ScriptedInterceptor(string name, string collection, Script script) : IItemWriteInterceptor
@@ -42,6 +44,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
         {
             if (script.MutateStatus && context.Entity is Article article) article.Status = "published";
+            if (context.Operation == ItemWriteOperation.Update && context.Existing is Article old && context.Entity is Article current)
+                script.Statuses = (old.Status, current.Status);
             return Step(context, "BeforeWrite");
         }
 
@@ -51,7 +55,9 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         private Task Step(ItemWriteContext context, string hook)
         {
             lock (script.Calls)
-                script.Calls.Add(new HookCall(name, hook, context.Operation, context.Id, context.BodyKeys.Order().ToArray(), context.Changed));
+                script.Calls.Add(new HookCall(name, hook, context.Operation, context.Id, context.BodyKeys.Order().ToArray(), context.Changed, context.Existing is not null));
+            if (script.ThrowIn == hook && script.ThrowQueryException)
+                throw new Struo.Domain.Query.QueryException($"{hook} refused.");
             if (script.ThrowIn == hook)
                 throw new RuleViolationException($"{hook} refused.");
             return Task.CompletedTask;
@@ -150,6 +156,70 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
         Sequence(script).Should().Equal("A:BeforeWrite:Trash", "A:AfterCommit:Trash");
         script.Calls[1].Changed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_restore_of_a_live_row_runs_AfterCommit_with_Changed_false()
+    {
+        var (_, client, script) = await HostAsync();
+        var id = await CreateArticleAsync(client);
+        script.Calls.Clear();
+
+        (await client.PostAsync($"/api/items/article/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        Sequence(script).Should().Equal("A:BeforeWrite:Restore", "A:AfterCommit:Restore");
+        script.Calls[1].Changed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Update_and_revert_see_the_stored_row_in_Existing_and_the_merged_row_in_Entity()
+    {
+        var (_, client, script) = await HostAsync();
+        var id = await CreateArticleAsync(client);
+        script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeFalse();
+        script.Calls.Clear();
+
+        (await client.PutAsJsonAsync($"/api/items/article/{id}", new { status = "published" }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        script.Statuses.Should().Be(("draft", "published"));
+        script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeTrue();
+
+        script.Calls.Clear();
+        (await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeTrue();
+
+        script.Calls.Clear();
+        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        script.Calls.Should().OnlyContain(c => !c.HasExisting);
+    }
+
+    [Fact]
+    public async Task A_QueryException_from_BeforeWrite_surfaces_as_400()
+    {
+        var (_, client, script) = await HostAsync();
+        script.ThrowIn = "BeforeWrite";
+        script.ThrowQueryException = true;
+
+        var response = await client.PostAsJsonAsync("/api/items/article",
+            new { status = "draft", translations = new { en = new { title = "refused" } } });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_InTransaction_throw_rolls_back_a_trash()
+    {
+        var (host, client, script) = await HostAsync();
+        var id = await CreateArticleAsync(client);
+        var before = await CountsAsync(host);
+        script.ThrowIn = "InTransaction";
+
+        var response = await client.DeleteAsync($"/api/items/article/{id}");
+
+        response.StatusCode.Should().Be((HttpStatusCode)429);
+        (await CountsAsync(host)).Should().Be(before);
+        (await client.GetAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -395,7 +465,9 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         (await client.DeleteAsync($"/api/items/category/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         calls.Should().Equal($"trash:{id}", $"purge:{id}");
-        Sequence(script).Should().Equal("A:BeforeWrite:Trash", "A:BeforeWrite:Purge");
+        Sequence(script).Should().Equal(
+            "A:BeforeWrite:Trash", "A:AfterCommit:Trash", "A:BeforeWrite:Purge", "A:AfterCommit:Purge");
+        script.Calls.Where(c => c.Hook == "AfterCommit").Should().OnlyContain(c => c.Changed);
         var get = await client.GetAsync($"/api/items/category/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK, "the handler never touched the row");
     }

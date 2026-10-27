@@ -24,7 +24,7 @@ public enum ItemWriteOperation
 /// <summary>What an <see cref="IItemWriteInterceptor"/> hook sees of one write.</summary>
 public sealed class ItemWriteContext(
     ItemWriteOperation operation, CollectionMetadata meta, object entity, string? id,
-    IReadOnlySet<string> bodyKeys, JsonElement? body)
+    IReadOnlySet<string> bodyKeys, JsonElement? body, object? existing = null)
 {
     public ItemWriteOperation Operation { get; } = operation;
 
@@ -40,7 +40,15 @@ public sealed class ItemWriteContext(
     /// <summary>The item id; null for a create until the row is inserted.</summary>
     public string? Id { get; internal set; } = id;
 
-    /// <summary>The camelCase names of the keys the request body carries; empty for trash, restore and purge.</summary>
+    /// <summary>
+    /// For update and revert, the row as stored before the body was merged (a separate read, loaded only
+    /// when an interceptor applies), so a hook can compare old and new. Null for create, trash, restore
+    /// and purge, where <see cref="Entity"/> is the row.
+    /// </summary>
+    public object? Existing { get; } = existing;
+
+    /// <summary>The top-level property names of the request body, as sent (a case-insensitive set); empty
+    /// for trash, restore and purge.</summary>
     public IReadOnlySet<string> BodyKeys { get; } = bodyKeys;
 
     /// <summary>

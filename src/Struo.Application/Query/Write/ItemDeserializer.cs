@@ -101,7 +101,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         // reject that exactly as if the client had explicitly wiped it. A field the body DOES send
         // — including an explicit "[]"/"{}" — still runs its full validator and can still fail
         // Required; only "never mentioned" is exempt. enforceRequired: true (create) keeps
-        // validating every field regardless of presence, same as before.
+        // validating every field regardless of presence — also when the scalar Required check itself
+        // is deferred (DeserializeForCreate), so a Required list-type field is still checked here.
         RunPerInterfaceValidators(meta, d, entity, enforceRequired ? null : PresentNames(body));
 
         return entity;

@@ -252,6 +252,10 @@ public sealed class ItemService(
         // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
+        // The row as stored, for interceptors that compare old and new; the merge below mutates `existing`.
+        var preMerge = writeInterceptors.AnyApplies(meta)
+            ? await repository.GetByIdAsync(collection, id, ct: ct)
+            : null;
         // No Required check here — an update only overlays fields the client actually sent (see
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
         // `incoming` alone; the Required check re-runs against the merged `existing` entity below.
@@ -294,16 +298,14 @@ public sealed class ItemService(
         // Required check runs here — against the MERGED entity, after both overlay loops above —
         // rather than while deserializing `incoming`: an omitted Required field keeps whatever
         // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
-        // field still 400s with the same message CREATE uses. Required is also evaluated LAST here:
-        // MaxLength and the per-interface validator phases already ran on `incoming` inside
-        // DeserializeForUpdate above, before this line is ever reached, so a body that violates both
-        // one of those rules AND Required (on the merged entity) reports the earlier failure — which
-        // can differ from what CREATE (Required checked first) would report for the identical shape.
-        // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
+        // field still 400s with the same message CREATE uses. The write interceptors' BeforeWrite runs
+        // immediately before it, and MaxLength and the per-interface validator phases already ran on
+        // `incoming` inside DeserializeForUpdate above, so a body that violates one of those rules AND
+        // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert passes a full snapshot as its body, so every field is re-sent and this check sees
         // the same values a full PUT would.
         var hooks = writeInterceptors.Begin(
             operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
-            meta, existing, id, bodyKeys, body);
+            meta, existing, id, bodyKeys, body, preMerge);
         await hooks.BeforeWriteAsync(ct);
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
         if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
@@ -478,7 +480,8 @@ public sealed class ItemService(
         return hooks;
     }
 
-    // A registered delete handler replaces the trash/purge below; interceptors still see BeforeWrite.
+    // A registered delete handler replaces the trash/purge below; interceptors see BeforeWrite and, once
+    // the handler reports the delete done, AfterCommit.
     private async Task<bool> DeleteWithHandlerAsync(
         string collection, CollectionMetadata meta, string id, bool purge,
         ICollectionDeleteHandler handler, CancellationToken ct)
@@ -488,7 +491,10 @@ public sealed class ItemService(
         var hooks = writeInterceptors.Begin(
             purge ? ItemWriteOperation.Purge : ItemWriteOperation.Trash, meta, existing, id);
         await hooks.BeforeWriteAsync(ct);
-        return purge ? await handler.PurgeAsync(id, ct) : await handler.TrashAsync(id, ct);
+        var done = purge ? await handler.PurgeAsync(id, ct) : await handler.TrashAsync(id, ct);
+        // The handler owns the transaction and any notification, so only AfterCommit applies here.
+        if (done) await AfterCommitAndNotifyAsync(hooks, changes: null);
+        return done;
     }
 
     // A file is either published (readable by anyone with its id) or draft (file writers only).

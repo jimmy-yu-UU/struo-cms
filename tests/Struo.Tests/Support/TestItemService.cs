@@ -15,8 +15,9 @@ namespace Struo.Tests.Support;
 
 /// <summary>
 /// Builds an <see cref="ItemService"/> the way DI does, for the unit harnesses that wire it by hand.
-/// The arguments the harnesses differ on are required; the rest default to what the host registers
-/// (all permissions allowed, default query options, the Ganss sanitizer, no session revocation).
+/// The arguments the harnesses differ on are required; the rest default to what the harnesses used: all
+/// permissions allowed, default query options, the Ganss sanitizer, a no-op session revocation, and no
+/// search provider, notifier, language rules, credential store, file lifecycle, interceptors or handlers.
 /// </summary>
 internal static class TestItemService
 {

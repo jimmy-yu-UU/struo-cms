@@ -30,7 +30,8 @@ public interface IItemWriteInterceptor
     /// <summary>
     /// Runs inside the write transaction, after the row, many-to-many links and translations are written
     /// and before the revision is captured. A throw rolls the whole write back. For trash, restore and
-    /// purge it runs only when the row was actually trashed, restored or purged.
+    /// purge it runs only when the row was actually trashed, restored or purged. It does not run when an
+    /// <see cref="ICollectionDeleteHandler"/> replaces the delete: the handler owns the transaction.
     /// </summary>
     Task InTransactionAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
 
@@ -39,8 +40,11 @@ public interface IItemWriteInterceptor
     /// listeners (cache invalidation, session revocation). A throw skips the remaining interceptors'
     /// hooks, the notification still goes out, then the exception propagates although the write stays
     /// committed. It runs only when the write happened, except for trash and restore, which run it
-    /// whenever the row exists: check <see cref="ItemWriteContext.Changed"/> to act on real changes
-    /// only. <paramref name="ct"/> is not tied to the request.
+    /// whenever the row exists (a restore on a collection without soft delete included): check
+    /// <see cref="ItemWriteContext.Changed"/> to act on real changes only. For a collection whose delete
+    /// an <see cref="ICollectionDeleteHandler"/> replaces, it runs after the handler reports the delete
+    /// done, with <see cref="ItemWriteContext.Changed"/> true; the handler cannot report a no-op trash.
+    /// <paramref name="ct"/> is not tied to the request.
     /// </summary>
     Task AfterCommitAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
 }

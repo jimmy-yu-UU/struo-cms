@@ -14,11 +14,11 @@ internal sealed class ItemWriteInterceptors(
     /// <summary>Starts one write: the hooks of the interceptors that apply to <paramref name="meta"/>.</summary>
     public ItemWriteHooks Begin(
         ItemWriteOperation operation, CollectionMetadata meta, object entity, string? id,
-        IReadOnlySet<string>? bodyKeys = null, JsonElement? body = null)
+        IReadOnlySet<string>? bodyKeys = null, JsonElement? body = null, object? existing = null)
     {
         var applicable = all.Where(i => i.AppliesTo(meta.Name)).ToArray();
         return new ItemWriteHooks(
-            new ItemWriteContext(operation, meta, entity, id, bodyKeys ?? new HashSet<string>(), body), applicable);
+            new ItemWriteContext(operation, meta, entity, id, bodyKeys ?? new HashSet<string>(), body, existing), applicable);
     }
 
     /// <summary>True when an interceptor applies, so a caller can skip the reads only hooks need.</summary>
@@ -29,12 +29,13 @@ internal sealed class ItemWriteInterceptors(
 }
 
 /// <summary>The hooks of one write, run over the interceptors that apply in registration order.</summary>
-internal sealed class ItemWriteHooks(ItemWriteContext context, IReadOnlyList<IItemWriteInterceptor> interceptors)
+internal sealed class ItemWriteHooks(ItemWriteContext? context, IReadOnlyList<IItemWriteInterceptor> interceptors)
 {
     /// <summary>The hooks of a write no interceptor sees: every method is a no-op.</summary>
     public static readonly ItemWriteHooks Empty = new(null!, []);
 
-    public ItemWriteContext Context { get; } = context;
+    public ItemWriteContext Context =>
+        context ?? throw new InvalidOperationException("No interceptor applies to this write.");
 
     /// <summary>Records the stored entity and id once the row is written.</summary>
     public void Stored(object entity, object id)
