@@ -73,4 +73,18 @@ public class SchemaEndpointTests(ApiFactory factory)
         collections.First(c => c.GetProperty("name").GetString() == "role")
             .GetProperty("hidden").GetBoolean().Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Schema_serializes_the_creatable_collection_flag()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var json = await (await client.GetAsync("/api/schema")).Content.ReadFromJsonAsync<JsonElement>();
+        var collections = json.GetProperty("data").EnumerateArray().ToList();
+
+        foreach (var name in new[] { "file", "user" })
+            collections.First(c => c.GetProperty("name").GetString() == name)
+                .GetProperty("creatable").GetBoolean().Should().BeFalse(name);
+        collections.First(c => c.GetProperty("name").GetString() == "role")
+            .GetProperty("creatable").GetBoolean().Should().BeTrue();
+    }
 }

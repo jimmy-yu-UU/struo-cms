@@ -34,6 +34,14 @@ public sealed class CmsCollectionAttribute(string label) : Attribute
     public bool Hidden { get; set; }
 
     /// <summary>
+    /// When false, the generic items API (REST and GraphQL) refuses to create rows in this collection,
+    /// and the admin UI offers no generic "New" form for it. Reads, updates and deletes are unaffected.
+    /// For collections whose rows come from a dedicated pipeline (uploads, account creation). Defaults
+    /// to true.
+    /// </summary>
+    public bool Creatable { get; set; } = true;
+
+    /// <summary>
     /// When true, the collection keeps a revision history: every successful create/update appends a
     /// complete snapshot of the item's post-write state to the framework `Revision` table, and any past
     /// revision can be re-applied via revert. Opt-in; snapshots live in a shared table, so —

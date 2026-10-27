@@ -15,7 +15,7 @@ namespace Struo.Infrastructure.Identity;
 [SugarTable("users")]
 [SugarIndex("ux_{table}_email", nameof(Email), OrderByType.Asc, true)]
 [SugarIndex("ix_{table}_accesstoken", nameof(AccessToken), OrderByType.Asc, false)]
-[CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email), AdminOnly = true)]
+[CmsCollection("User", Group = "System", DefaultDisplayField = nameof(Email), AdminOnly = true, Creatable = false)]
 public sealed class User : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

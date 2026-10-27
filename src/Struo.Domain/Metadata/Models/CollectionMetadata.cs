@@ -19,6 +19,11 @@ public sealed record CollectionMetadata
     public bool Hidden { get; init; }
 
     /// <summary>
+    /// False when the generic items API refuses to create rows. See <c>CmsCollectionAttribute.Creatable</c>.
+    /// </summary>
+    public bool Creatable { get; init; } = true;
+
+    /// <summary>
     /// When true, the collection's entity implements <see cref="Struo.Domain.Auditing.ISoftDeletable"/>:
     /// DELETE marks the row (DeletedAt set) instead of removing it, reads exclude it by default, and a
     /// restore/purge surface applies. Derived by the scanner from the interface — no attribute.

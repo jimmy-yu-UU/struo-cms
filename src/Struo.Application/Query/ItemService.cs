@@ -178,21 +178,10 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
-        // File rows are owned by the upload pipeline: StorageKey/Size/ContentType/dimensions are all
-        // derived from the blob, and FileName is ReadOnly so the generic write path cannot even set
-        // it (setting it null there would violate the NOT NULL column and throw an unhandled 500).
-        // Reject explicitly here rather than at the controller, so REST and the GraphQL createFile
-        // mutation are both covered. Reads, updates (the admin media UI edits per-locale Title/Alt
-        // this way) and deletes are unaffected.
-        if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
-            throw new QueryException(
-                "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
-        // Creating a user needs the password hashing and password policy that only POST /api/users
-        // applies. Checked before any email rule, so a duplicate address is a 400 as well. Reads,
-        // updates and deletes are unaffected.
-        if (string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase))
-            throw new QueryException(
-                "Users cannot be created through the generic items API. Create one with POST /api/users instead.");
+        // Rows of a non-creatable collection come from a dedicated pipeline (file uploads, user
+        // creation with password hashing), so the generic path refuses before any body inspection.
+        if (!meta.Creatable)
+            throw new QueryException($"Items cannot be created in collection '{meta.Name}' through the generic items API.");
         // A non-object top-level body (array or scalar) would reach Deserialize below, which assumes an
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
