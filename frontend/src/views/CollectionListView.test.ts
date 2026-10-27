@@ -317,6 +317,15 @@ describe('CollectionListView', () => {
     expect((w.vm as any).canCreate).toBe(false)
   })
 
+  it('shows the New button on file when the schema says creatable is true', async () => {
+    seedCollection('file', true)
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('New')
+    expect((w.vm as any).canCreate).toBe(true)
+  })
+
   it('hides the New button on user for a non-super-admin with a write grant', async () => {
     seedCollection('user', false)
     useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true } } } as any
