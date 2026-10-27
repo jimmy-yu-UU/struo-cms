@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Types;
@@ -25,6 +26,7 @@ public class StruoDomainExceptionTests
         : StruoDomainException("ACME_QUOTA_EXCEEDED", 429, message);
 
     [ExtendObjectType("Query")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class QuotaQuery
     {
         public string GetQuota() => throw new QuotaExceededException("Daily quota used up.");

@@ -19,7 +19,7 @@ namespace Struo.Tests.Migrations;
 /// <c>migrate:status</c>. The probe set <c>Upgrade.V1</c> holds versions 1 and 3; <c>Upgrade</c> adds 2.
 /// </summary>
 [Collection("MigrationCli")] // OptionsOverride is static; keep these tests serial
-public sealed class OutOfOrderMigrationTests : IDisposable
+public sealed partial class OutOfOrderMigrationTests : IDisposable
 {
     private const string Probes = "Struo.Tests.Migrations.Probes";
     private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
@@ -151,7 +151,10 @@ public sealed class OutOfOrderMigrationTests : IDisposable
         Warnings().Should().ContainSingle(m => m.Contains("out of order"));
     }
 
-    private static bool IsRowTwo(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"^2\s+(Pending|Applied)");
+    [System.Text.RegularExpressions.GeneratedRegex(@"^2\s+(Pending|Applied)")]
+    private static partial System.Text.RegularExpressions.Regex RowTwoPattern();
+
+    private static bool IsRowTwo(string line) => RowTwoPattern().IsMatch(line);
 
     [Fact]
     public async Task Migrate_status_marks_the_row_and_keeps_the_other_lines()

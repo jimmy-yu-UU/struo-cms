@@ -25,8 +25,8 @@ internal sealed class RootFieldCollisionInterceptor : TypeInterceptor
             fields = new Dictionary<string, int>(StringComparer.Ordinal);
             _counts[root.Name] = fields;
         }
-        foreach (var field in root.Fields)
-            fields[field.Name] = fields.GetValueOrDefault(field.Name) + 1;
+        foreach (var name in root.Fields.Select(field => field.Name))
+            fields[name] = fields.GetValueOrDefault(name) + 1;
     }
 
     public override void OnTypesInitialized()

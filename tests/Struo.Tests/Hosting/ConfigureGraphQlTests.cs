@@ -1,6 +1,7 @@
 // tests/Struo.Tests/Hosting/ConfigureGraphQlTests.cs
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Diagnostics.CodeAnalysis;
 using AwesomeAssertions;
 using HotChocolate;
 using HotChocolate.Types;
@@ -24,24 +25,28 @@ public class ConfigureGraphQlTests
     public sealed record ForkInfo(string Name);
 
     [ExtendObjectType("Query")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class ForkQuery
     {
         public ForkInfo GetForkInfo() => new("from-the-fork");
     }
 
     [ExtendObjectType("Query")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class ArticlesClashQuery
     {
         public string GetArticles() => "clash";
     }
 
     [ExtendObjectType("Mutation")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class MutationClash
     {
         public string CreateArticle() => "clash";
     }
 
     [ExtendObjectType("Mutation")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class ForkMutation
     {
         public string ForkOpen() => "open";
@@ -53,6 +58,7 @@ public class ConfigureGraphQlTests
     }
 
     [ExtendObjectType("Article")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class ArticleExtension
     {
         public string GetForkNote() => "note";
@@ -61,6 +67,7 @@ public class ConfigureGraphQlTests
     public sealed class EmptyThing;
 
     [ExtendObjectType("Query")]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class EmptyTypeQuery
     {
         public EmptyThing GetEmpty() => new();
@@ -68,7 +75,7 @@ public class ConfigureGraphQlTests
 
     public sealed class RevisionClash
     {
-        public string Name => "clash";
+        public static string Name => "clash";
     }
 
     [SqliteOnlyFact("starts a full host on a SQLite temp database")]
