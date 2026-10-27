@@ -122,8 +122,9 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 ## 11. `Program.cs`：從現在起歸你
 
 `src/Struo.Api/Program.cs` 屬於你的 fork。範本自己的組裝放在 `src/Struo.Api/Hosting/`，藏在
-`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()` 後面，所以上游對主機的修改不再動到
-`Program.cs`，合併範本的新版本時也不會與你在那裡的修改衝突。
+`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()` 後面，所以上游不會再在 `Program.cs` 裡改動
+組裝的內容。這個檔案本身由你自己改。
 
-自己的服務在 `Program.cs` 裡、`AddStruoCms()` 之後註冊。核心用 `TryAdd` 註冊的服務，寫在那裡的註冊會取代
-核心的預設。可以接上的擴充點見[第 18 章：擴充點](18-extension-points.md)。
+自己的服務在 `Program.cs` 裡、`AddStruoCms()` 之後註冊，那裡的註冊贏過核心的預設。核心用 `TryAdd`
+註冊的服務，寫在 `AddStruoCms()` 之前的註冊也會被保留。設定來源要在呼叫之前加。可以接上的擴充點見
+[第 18 章：擴充點](18-extension-points.md)。

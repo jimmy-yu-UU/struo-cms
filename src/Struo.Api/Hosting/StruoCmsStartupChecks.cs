@@ -15,13 +15,14 @@ internal static class StruoCmsStartupChecks
     {
         using var scope = app.Services.CreateScope();
         var sp = scope.ServiceProvider;
+        var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
         RemovedDatabaseKeyWarnings.Log(
-            app.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
+            app.Configuration, startupLogger);
         Struo.Api.Auth.OidcLegacyKeyWarnings.Log(
-            app.Configuration, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
+            app.Configuration, startupLogger);
         Struo.Api.Auth.AuthWiring.WarnIfSessionsAreInMemory(
-            app.Configuration, app.Environment, sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
+            app.Configuration, app.Environment, startupLogger);
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());
@@ -37,6 +38,6 @@ internal static class StruoCmsStartupChecks
 
         await Struo.Infrastructure.Persistence.SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory));
+            startupLogger);
     }
 }

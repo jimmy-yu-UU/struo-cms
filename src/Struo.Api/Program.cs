@@ -10,18 +10,15 @@ try
     var cli = MigrationCli.Parse(args);
     var builder = WebApplication.CreateBuilder(cli.HostArgs);
 
+    // Add configuration sources (Key Vault, ...) before AddStruoCms(): the content-assembly scan reads
+    // the configuration during that call.
     builder.AddStruoCms();
-    // Register your own services here, after AddStruoCms(): a registration made after it replaces the
-    // core default for any service the core registers with TryAdd.
+    // Register your own services here, after AddStruoCms(): a registration made after it wins over the
+    // core default. For the services the core registers with TryAdd, one made before it wins too.
 
     var app = builder.Build();
 
-    if (cli.Command is not null)
-    {
-        Environment.ExitCode = await MigrationCli.RunAsync(
-            cli, app.Services, Console.Out, Console.Error, CancellationToken.None);
-        return;
-    }
+    if (await app.TryRunStruoCommandAsync(cli)) return;
 
     await app.UseStruoCmsAsync();
     await app.RunAsync();

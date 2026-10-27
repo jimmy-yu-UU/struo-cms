@@ -141,9 +141,9 @@ provider are in [Chapter 16: Authentication and SSO](16-authentication.md).
 
 `src/Struo.Api/Program.cs` belongs to your fork. The template's own composition lives in
 `src/Struo.Api/Hosting/`, behind `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`, so upstream
-changes to the host stay out of `Program.cs`, and merging a template release does not conflict
-with your edits there.
+does not change the composition inside `Program.cs`. The file itself is yours to edit.
 
-Register your own services in `Program.cs` after `AddStruoCms()`. A registration made there replaces
-the core default of any service the core registers with `TryAdd`. The seams you can plug into are in
-[Chapter 18: Extension Points](18-extension-points.md).
+Register your own services in `Program.cs` after `AddStruoCms()`; a registration made there wins
+over the core default. For the services the core registers with `TryAdd`, a registration made before
+`AddStruoCms()` is kept too. Add configuration sources before the call. The seams you can plug into
+are in [Chapter 18: Extension Points](18-extension-points.md).

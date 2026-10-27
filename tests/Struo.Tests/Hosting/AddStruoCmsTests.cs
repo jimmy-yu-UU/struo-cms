@@ -2,8 +2,10 @@
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Struo.Api.Auth;
 using Struo.Api.Hosting;
 using Struo.Application.Search;
+using Struo.Application.Security;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -52,5 +54,22 @@ public class AddStruoCmsTests
         builder.AddStruoCms(cms => seen = cms);
 
         seen.Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData(typeof(IHtmlSanitizer))]
+    [InlineData(typeof(IPasswordHasher))]
+    [InlineData(typeof(IFileAccessPolicy))]
+    public void A_replaceable_core_default_registered_before_AddStruoCms_is_kept(Type serviceType)
+    {
+        var builder = WebApplication.CreateBuilder();
+        Func<IServiceProvider, object> forkFactory = _ => throw new InvalidOperationException("not resolved by this test");
+        builder.Services.AddSingleton(serviceType, forkFactory);
+
+        builder.AddStruoCms();
+
+        // The last descriptor is the one the container resolves: it must still be the fork's.
+        builder.Services.Last(d => d.ServiceType == serviceType)
+            .ImplementationFactory.Should().BeSameAs(forkFactory);
     }
 }

@@ -21,23 +21,35 @@
 
 fork 的 `Program.cs` 歸你所有。核心用兩個呼叫組裝自己：`builder.AddStruoCms()` 註冊所有服務，
 `app.UseStruoCmsAsync()` 建好請求管線並跑啟動檢查。你自己的服務註冊在兩者之間，也就是
-`AddStruoCms()` 之後：
+`AddStruoCms()` 之後。下面是隨附的 `src/Struo.Api/Program.cs` 的節錄，只留下這裡要談的幾行；
+完整的檔案還有啟動用的 bootstrap logger 與啟動錯誤的處理：
 
 ```csharp
-var builder = WebApplication.CreateBuilder(args);
+var cli = MigrationCli.Parse(args);
+var builder = WebApplication.CreateBuilder(cli.HostArgs);
 
 builder.AddStruoCms();
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
 
 var app = builder.Build();
+if (await app.TryRunStruoCommandAsync(cli)) return;
 await app.UseStruoCmsAsync();
 await app.RunAsync();
 ```
 
-在 `AddStruoCms()` 之後註冊的，贏過核心的預設。下列預設，核心用的是 `TryAdd`，所以寫在呼叫之前
-也一樣贏：`ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher`、
-`IFileAccessPolicy`。
+`AddStruoCms()` 執行時就會讀設定，用來掃描 `Struo:ContentAssemblies`。自己的設定來源（例如
+Key Vault）要在呼叫之前加進 `builder.Configuration`，否則掃描看不到。
+
+在 `AddStruoCms()` 之後註冊的，一律贏過核心的預設。下列預設，核心用的是 `TryAdd`，所以寫在
+呼叫之前的註冊也會被保留：`ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、
+`IPasswordHasher`、`IFileAccessPolicy`。
+
+其中三個有契約，替換的實作要遵守：
+
+- `IPasswordHasher` 要能驗證已存的 Argon2id 雜湊，而且比對要是常數時間。
+- `IHtmlSanitizer` 是防止富文字欄位被注入指令碼的唯一防線。
+- `IFileAccessPolicy` 是檔案下載的權限檢查。
 
 ## 搜尋提供者 `ISearchProvider`
 

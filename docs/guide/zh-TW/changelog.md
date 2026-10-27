@@ -5,11 +5,12 @@
 ::: danger 破壞性變更
 - `Program.cs` 不再放主機的組裝。服務註冊、速率限制器、請求管線與啟動檢查，全部搬進 `Struo.Api`，
   收成兩個呼叫：`builder.AddStruoCms()` 與 `app.UseStruoCmsAsync()`。`Program.cs` 變成一個很短、
-  歸 fork 所有的檔案，上游對主機的修改不會再與你的修改衝突。
+  歸 fork 所有的檔案：上游不會再在裡面改動組裝的內容，檔案本身由你自己改。
 
   如果你的 fork 改過舊的 `Program.cs`，請改用這個版本的 `Program.cs`，並把你自己的註冊搬到
-  `AddStruoCms()` 之後。核心用 `TryAdd` 註冊的服務（`ISearchProvider`、`IItemChangeNotifier`、
-  `IHtmlSanitizer`、`IPasswordHasher`、`IFileAccessPolicy`），寫在那裡的註冊會取代核心的預設。
+  `AddStruoCms()` 之後，那裡的註冊贏過核心的預設。設定來源要在呼叫之前加。核心用 `TryAdd` 註冊
+  `ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher` 與
+  `IFileAccessPolicy`，所以這幾個服務寫在 `AddStruoCms()` 之前的註冊也會被保留。
   之前：
 
   ```csharp
@@ -20,7 +21,7 @@
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
   var app = builder.Build();
   app.UseStruoForwardedHeaders();
-  // ……其餘的管線與遷移閘門
+  // ……其餘的管線、遷移閘門與遷移 CLI 的分支
   await app.RunAsync();
   ```
 
@@ -31,6 +32,7 @@
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 
   var app = builder.Build();
+  if (await app.TryRunStruoCommandAsync(cli)) return;
   await app.UseStruoCmsAsync();
   await app.RunAsync();
   ```

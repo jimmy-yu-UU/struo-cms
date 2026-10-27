@@ -6,12 +6,13 @@
 - `Program.cs` no longer holds the host composition. Service registration, the rate limiters, the
   request pipeline and the startup checks moved into `Struo.Api` behind two calls,
   `builder.AddStruoCms()` and `app.UseStruoCmsAsync()`. `Program.cs` is now a short file that your
-  fork owns, so upstream changes to the host no longer conflict with your edits.
+  fork owns: upstream does not change the composition inside it, and the file itself is yours to edit.
 
   If your fork edited the old `Program.cs`, take the new one from this release and move your own
-  registrations after `AddStruoCms()`. A registration made there replaces the core default of any
-  service the core registers with `TryAdd` (`ISearchProvider`, `IItemChangeNotifier`,
-  `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy`).
+  registrations after `AddStruoCms()`; a registration made there wins over the core default. Add
+  configuration sources before the call. The core registers `ISearchProvider`, `IItemChangeNotifier`,
+  `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy` with `TryAdd`, so a registration made
+  before `AddStruoCms()` is kept for those too.
   Before:
 
   ```csharp
@@ -22,7 +23,7 @@
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
   var app = builder.Build();
   app.UseStruoForwardedHeaders();
-  // ... the rest of the pipeline, the migration gate
+  // ... the rest of the pipeline, the migration gate, the migration-CLI branch
   await app.RunAsync();
   ```
 
@@ -33,6 +34,7 @@
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 
   var app = builder.Build();
+  if (await app.TryRunStruoCommandAsync(cli)) return;
   await app.UseStruoCmsAsync();
   await app.RunAsync();
   ```

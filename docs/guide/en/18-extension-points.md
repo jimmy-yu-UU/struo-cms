@@ -25,23 +25,37 @@ the core's own code needs to change.
 
 Your fork's `Program.cs` is yours. The core composes itself in two calls: `builder.AddStruoCms()`
 registers every service, and `app.UseStruoCmsAsync()` builds the request pipeline and runs the
-startup checks. Register your own services between them, after `AddStruoCms()`:
+startup checks. Register your own services between them, after `AddStruoCms()`. This is an excerpt
+of the shipped `src/Struo.Api/Program.cs`, shortened to the lines that matter here; the full file
+also sets up the bootstrap logger and the startup error handling:
 
 ```csharp
-var builder = WebApplication.CreateBuilder(args);
+var cli = MigrationCli.Parse(args);
+var builder = WebApplication.CreateBuilder(cli.HostArgs);
 
 builder.AddStruoCms();
 builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 builder.Services.AddScoped<IItemChangeListener, MyIndexer>();
 
 var app = builder.Build();
+if (await app.TryRunStruoCommandAsync(cli)) return;
 await app.UseStruoCmsAsync();
 await app.RunAsync();
 ```
 
-A registration made after `AddStruoCms()` wins over the core's default. The core registers these
-defaults with `TryAdd`, so a registration made before the call wins too: `ISearchProvider`,
+`AddStruoCms()` reads configuration while it runs, to scan `Struo:ContentAssemblies`. Add any
+configuration source of your own (Key Vault, for example) to `builder.Configuration` before the
+call, or the scan won't see it.
+
+A registration made after `AddStruoCms()` always wins over the core's default. The core registers
+these defaults with `TryAdd`, so a registration made before the call is kept too: `ISearchProvider`,
 `IItemChangeNotifier`, `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy`.
+
+Three of those carry a contract a replacement has to keep:
+
+- `IPasswordHasher` must verify the Argon2id hashes already stored, and compare in constant time.
+- `IHtmlSanitizer` is the only defence against script injection in rich-text fields.
+- `IFileAccessPolicy` is the permission check on file downloads.
 
 ## The search provider: `ISearchProvider`
 
