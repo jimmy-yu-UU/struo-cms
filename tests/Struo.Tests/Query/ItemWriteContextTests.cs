@@ -22,8 +22,10 @@ public class ItemWriteContextTests
     [Fact]
     public void A_fork_test_can_build_a_context_whose_write_changed_nothing()
     {
-        var context = NewContext();
-        context.Changed = false;
+        var context = new ItemWriteContext(
+            ItemWriteOperation.Trash,
+            new CollectionMetadata { Name = "x", Label = "X", FieldGroups = [], Fields = [] },
+            new object(), "1", new HashSet<string>(), null) { Changed = false };
 
         context.Changed.Should().BeFalse();
     }

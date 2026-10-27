@@ -419,7 +419,7 @@ public sealed class ItemService(
                 return trashedNow;
             }, ct);
             // AfterCommit runs for an already-trashed row too, with Changed false.
-            trashHooks.Context.Changed = softDeletedNow;
+            trashHooks.Context.SetChanged(softDeletedNow);
             await AfterCommitAndNotifyAsync(trashHooks, softDeletedNow
                 ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed)
                 : null);
@@ -510,7 +510,7 @@ public sealed class ItemService(
             }
             return r;
         }, ct);
-        hooks.Context.Changed = restoredNow;
+        hooks.Context.SetChanged(restoredNow);
         await AfterCommitAndNotifyAsync(hooks, restoredNow
             ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored)
             : null);
