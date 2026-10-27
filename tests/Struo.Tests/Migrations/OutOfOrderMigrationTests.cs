@@ -88,6 +88,19 @@ public sealed class OutOfOrderMigrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_newer_orphaned_record_does_not_make_an_older_pending_migration_out_of_order()
+    {
+        await Host("Upgrade.V1").ApplyAsync(default);
+
+        // Upgrade.V2 knows only version 2: versions 1 and 3 are now recorded but absent from the code.
+        var status = Host("Upgrade.V2").GetStatus();
+        status.Single(m => m.Version == 2).OutOfOrder.Should().BeFalse();
+        await Host("Upgrade.V2").ApplyAsync(default);
+
+        Warnings().Should().NotContain(m => m.Contains("out of order"));
+    }
+
+    [Fact]
     public async Task A_fresh_database_applies_in_order_without_a_warning()
     {
         await Host("Upgrade").ApplyAsync(default);
@@ -103,7 +116,8 @@ public sealed class OutOfOrderMigrationTests : IDisposable
         var applied = await Host("Upgrade").ApplyAsync(default);
 
         applied.Select(m => m.Version).Should().Equal(2);
-        Warnings().Should().ContainSingle(m => m.Contains("out of order") && m.Contains("2") && m.Contains("3"));
+        Warnings().Should().ContainSingle().Which.Should()
+            .StartWith("Migration(s) 2 are out of order: older than the highest applied migration 3.");
     }
 
     [Fact]
@@ -153,7 +167,7 @@ public sealed class OutOfOrderMigrationTests : IDisposable
         Warnings().Should().ContainSingle(m => m.Contains("out of order"));
 
         // Roll the set back to "2 pending, 3 applied" by recording a lower pending version again.
-        db.Deleteable<SchemaVersionRow>().AS("struo_schema_versions").Where(r => r.Version == 2).ExecuteCommand();
+        db.Deleteable<SchemaVersionRow>().AS(StruoVersionTableMetaData.TableNameFor("struo_")).Where(r => r.Version == 2).ExecuteCommand();
         _logs.Logger.Entries.Clear();
 
         var refuse = () => StartupMigrationGate.RunAsync(

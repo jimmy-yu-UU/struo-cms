@@ -223,15 +223,18 @@ one, `migrate:status` marks the row `(out of order)`, and a startup with `Migrat
 warning before it refuses to start on the pending migration. Nothing is refused for being out of order.
 
 ```
-202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
-202610140000   Pending   -                     AddInvoiceTable  (out of order)
-202610200000   Applied   2026-10-20 08:12:03Z  AddOrderTable
-2 applied, 1 pending, 0 orphaned
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
+202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
+202611010000   Pending   -                     AddInvoiceTable  (out of order)
+202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+3 applied, 1 pending, 0 orphaned
 ```
 
 What to do: read the migration's SQL with `migrate:preview` and check that it does not depend on anything
 the later migration changed, such as a column it renamed or dropped. If it does, give the migration a
-version above the highest applied one and merge again. Test both orders: a new database, and one that
+version above the highest applied one, but only if no database has applied it yet; once it has run anywhere,
+leave its version alone and add a follow-up migration instead. Test both orders: a new database, and one that
 already ran the later migration.
 
 ## Backend differences

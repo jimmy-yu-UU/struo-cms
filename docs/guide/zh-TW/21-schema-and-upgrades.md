@@ -199,14 +199,17 @@ fork；[版本紀錄](changelog.md)會點名每一支新的核心 migration。�
 migration 而拒絕之前，會記下同一則警告。不會因為順序錯亂而拒絕任何東西。
 
 ```
-202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
-202610140000   Pending   -                     AddInvoiceTable  (out of order)
-202610200000   Applied   2026-10-20 08:12:03Z  AddOrderTable
-2 applied, 1 pending, 0 orphaned
+$ dotnet run --project src/Struo.Api -- migrate:status
+202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
+202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
+202611010000   Pending   -                     AddInvoiceTable  (out of order)
+202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+3 applied, 1 pending, 0 orphaned
 ```
 
 該怎麼做：用 `migrate:preview` 看那支 migration 的 SQL，確認它不依賴後來那支改過的東西，例如被改名或
-刪掉的欄位。如果依賴，就把它的版本改到比已套用的最高版本更高，再合併一次。兩種順序都要測：全新的
+刪掉的欄位。如果依賴，而且還沒有任何資料庫套用過它，就把它的版本改到比已套用的最高版本更高；只要它在任何地方跑過，
+就不要動它的版本，改加一支後續的 migration。兩種順序都要測：全新的
 資料庫，以及已經跑過較晚那支的資料庫。
 
 ## 各後端的差異

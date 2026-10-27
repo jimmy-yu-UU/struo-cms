@@ -5,7 +5,7 @@ public enum MigrationState { Applied, Pending, Orphaned }
 
 /// <summary>
 /// One migration. <see cref="OutOfOrder"/> is true for a Pending migration whose version is lower than the
-/// highest recorded one: it is applied anyway, but a database built from scratch ran it in version order
+/// highest applied one: it is applied anyway, but a database built from scratch ran it in version order
 /// and this one runs it last.
 /// </summary>
 public sealed record MigrationInfo(
