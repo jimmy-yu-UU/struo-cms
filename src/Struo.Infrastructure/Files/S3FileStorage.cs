@@ -26,7 +26,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         _client = client;
         _bucket = bucket;
-        _service = "unknown service";
+        _service = "unknown";
     }
 
     public string Describe() => $"s3, bucket {_bucket}, service {_service}";
