@@ -361,8 +361,9 @@ by `Struo:Files:Backend`. To store files somewhere else, set the backend to `cus
 implementation after `AddStruoCms()`. The core builds no storage in that mode, and startup fails with a message
 naming the key when none is registered. Keep the contract in mind: a missing key throws
 `FileBlobNotFoundException`, never the backend's own exception; `ListAsync` streams every blob;
-`Describe()` is the line `files:sweep` prints, and must not contain a credential. An Azure Blob storage
-(the `Azure.Storage.Blobs` package belongs to your fork, not to the core):
+`Describe()` is the line `files:sweep` prints, and must not contain a credential. A minimal sketch of an
+Azure Blob storage (the `Azure.Storage.Blobs` package belongs to your fork, not to the core). It is untested: the
+container must already exist, and presigned URLs (SAS) are left out:
 
 ```csharp
 using System.Runtime.CompilerServices;
@@ -389,7 +390,7 @@ public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileS
         {
             return await container.GetBlobClient(key).OpenReadAsync(cancellationToken: ct);
         }
-        catch (RequestFailedException ex) when (ex.Status == 404)
+        catch (RequestFailedException ex) when (ex.ErrorCode == BlobErrorCode.BlobNotFound)
         {
             throw new FileBlobNotFoundException(key);   // the contract: a missing key is never a backend exception
         }

@@ -157,8 +157,10 @@ allowed.`。
 `IFileStorage`：核心的預設用 `TryAdd` 註冊，所以不管寫在前面或後面，你的都贏。
 
 `IFileStorage.Describe()` 回傳 `files:sweep` 印在 `storage:` 後面的那一行。它有預設值（型別名稱）；
-覆寫它來指出容器或根目錄，而且絕不要放金鑰或連線字串。完整的 Azure Blob 範例見
+覆寫它來指出容器或根目錄，而且絕不要放金鑰或連線字串。最小的 Azure Blob 示意見
 [第 18 章：擴充點](18-extension-points.md)。
+
+自訂儲存若回傳預簽章網址，網址的有效時間由 `Struo:Files:S3:PresignTtlSeconds` 決定，跟 S3 後端用的是同一個鍵。
 
 ## 提供檔案：誰看得到
 

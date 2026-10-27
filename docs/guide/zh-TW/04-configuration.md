@@ -122,14 +122,15 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
-| `Struo:Files:Backend` | 字串（`local`、`s3` 或 `custom`） | `"local"` |
+| `Struo:Files:Backend` | 字串 | `"local"` |
 | `Struo:Files:MaxUploadBytes` | 長整數（bytes） | `26214400` |
 | `Struo:Files:AllowedContentTypes` | 字串陣列 | `[]` |
 | `Struo:Files:DefaultStatus` | 字串 | `"published"` |
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
 `Backend` 與 `DefaultStatus` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
-要欄位（見下面 Local／S3）也一併驗證。`MaxUploadBytes`、`AllowedContentTypes`、
+要欄位（見下面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要 fork
+註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。`MaxUploadBytes`、`AllowedContentTypes`、
 `PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
@@ -163,7 +164,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
-會擋下啟動。
+會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
 
 ### ImageTransform
 

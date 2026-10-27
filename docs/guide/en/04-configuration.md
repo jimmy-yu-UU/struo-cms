@@ -193,7 +193,7 @@ the Local nor the S3 keys are validated.
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
 startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
-`Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup.
+`Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup. `PresignTtlSeconds` also sets the lifetime of presigned URLs from a `custom` storage.
 
 ### ImageTransform
 

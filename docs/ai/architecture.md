@@ -576,7 +576,7 @@ The extension point for file storage backends is `IFileStorage`
 `SupportsPresignedUrls`, `GetPresignedUrlAsync`, `ListAsync` (every stored blob as a `StoredBlob`, streamed;
 `files:sweep` reads it) and `Describe()` (a default interface method returning the type name; `LocalFileStorage`
 and `S3FileStorage` return their target without credentials, and `files:sweep` prints it after `storage:`). Its doc comment states "Exactly one
-implementation is registered." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
+implementation is resolved; a later registration replaces the core default." Two implementations ship: `LocalFileStorage` and `S3FileStorage`
 (both `src/Struo.Infrastructure/Files/`). The active one is chosen at registration time in
 `FileStorageServiceCollectionExtensions.AddStruoFiles`
 (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) by a

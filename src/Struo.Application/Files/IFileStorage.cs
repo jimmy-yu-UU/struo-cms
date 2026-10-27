@@ -3,7 +3,7 @@ namespace Struo.Application.Files;
 /// <summary>A blob in the byte store: its key and last-modified time (UTC).</summary>
 public sealed record StoredBlob(string Key, DateTime LastModifiedUtc);
 
-/// <summary>Pluggable byte storage for file assets. Exactly one implementation is registered.</summary>
+/// <summary>Pluggable byte storage for file assets. Exactly one implementation is resolved; a later registration replaces the core default.</summary>
 public interface IFileStorage
 {
     /// <summary>

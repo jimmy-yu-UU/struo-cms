@@ -15,6 +15,8 @@ internal static class StruoCmsStartupChecks
     {
         using var scope = app.Services.CreateScope();
         var sp = scope.ServiceProvider;
+        // Needs only configuration and DI, so it runs before anything touches the database.
+        VerifyCustomFileStorage(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
         RemovedDatabaseKeyWarnings.Log(
@@ -41,7 +43,6 @@ internal static class StruoCmsStartupChecks
             startupLogger);
 
         await StruoCmsGraphQlCheck.RunAsync(sp);
-        VerifyCustomFileStorage(sp);
     }
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail

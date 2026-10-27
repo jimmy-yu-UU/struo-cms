@@ -52,4 +52,18 @@ public class FileStorageDescribeTests
         text.Should().StartWith("s3").And.Contain("media-bucket").And.Contain("minio.example.test:9443");
         text.Should().NotContain("AKIA-ACCESS-9").And.NotContain("S3-SECRET-7").And.NotContain("/base");
     }
+
+    [Fact]
+    public void S3_never_prints_userinfo_from_the_endpoint()
+    {
+        var options = new FileStorageOptions
+        {
+            Backend = "s3",
+            S3 = { Endpoint = "https://svc-user:svc-pass@minio.example.test:9000", Bucket = "b", AccessKey = "a", SecretKey = "s" },
+        };
+        using var storage = new S3FileStorage(options);
+
+        storage.Describe().Should().Contain("minio.example.test:9000")
+            .And.NotContain("svc-user").And.NotContain("svc-pass");
+    }
 }

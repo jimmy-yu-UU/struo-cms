@@ -434,7 +434,8 @@ that's genuinely missing turns into an error, rather than an endless reload.
   Migrations have no rollback command, so back up before every `migrate`.
 - **Uploaded files** — stored outside the database; where to back them up depends on
   `Struo:Files:Backend`: `local` mode means backing up the `Local:RootPath` directory, `s3` mode
-  relies on the S3-compatible bucket's own versioning or replication; backing up only the database
+  relies on the S3-compatible bucket's own versioning or replication, and `custom` means backing up wherever your
+  storage writes; backing up only the database
   silently misses every uploaded file.
 - **Redis needs none** — Redis (or its in-process substitute) holds only short-lived state: the
   ticket behind a cookie session, account login-attempt counters, and session revocation records.

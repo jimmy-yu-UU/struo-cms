@@ -360,7 +360,7 @@ Healthy
   備份，例如 PostgreSQL 的 `pg_dump`，或託管服務的快照與 PITR；StruoCMS 沒有另外提供備份機制。
   Migration 沒有回滾命令，每次 `migrate` 之前都先備份。
 - **上傳檔案**——存在資料庫之外，備份哪裡看 `Struo:Files:Backend` 設成什麼：`local` 模式備
-  份 `Local:RootPath` 那個目錄，`s3` 模式靠 S3 相容儲存桶自己的版本控制或複寫；只備份資料
+  份 `Local:RootPath` 那個目錄，`s3` 模式靠 S3 相容儲存桶自己的版本控制或複寫，`custom` 則備份你的儲存實際寫入的地方；只備份資料
   庫，會悄悄漏掉每一個上傳過的檔案。
 - **Redis 不需要**——Redis（或行程內的替代品）裡只有短命狀態：cookie 工作階段的 ticket、帳
   號登入嘗試計數、工作階段撤銷紀錄。丟了它只會逼每個已登入的使用者重新登入，並把登入計數歸

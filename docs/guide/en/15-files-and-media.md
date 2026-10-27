@@ -194,7 +194,10 @@ default is registered with `TryAdd`, so yours wins either way.
 
 `IFileStorage.Describe()` returns the one line `files:sweep` prints after `storage:`. It has a default
 (the type name); override it to name the container or root path, and never put a key or connection string in
-it. A complete Azure Blob example is in [Chapter 18: Extension Points](18-extension-points.md).
+it. A minimal Azure Blob sketch is in [Chapter 18: Extension Points](18-extension-points.md).
+
+A custom storage that returns presigned URLs gets their lifetime from `Struo:Files:S3:PresignTtlSeconds`, the
+same key the S3 backend uses.
 
 ## Serving files: who can see what
 
