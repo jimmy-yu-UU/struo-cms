@@ -15,9 +15,10 @@
 瀏覽、篩選與排序媒體庫，是一次普通的查詢。每個端點的授權與狀態碼見
 [第 13 章：REST API 端點參考](13-rest-endpoints.md)。
 
-透過通用的項目 API 建立 `file` 一律被拒，這道檢查寫在 `ItemService.CreateAsync`，因此 GraphQL
-的 `createFile` mutation 也被同一句訊息擋下：`Files cannot be created through the generic items
-API. Upload one with POST /api/files instead.`，狀態碼 `400`／`BAD_USER_INPUT`。
+透過通用的項目 API 建立 `file` 一律被拒，因為 `File` 宣告了 `Creatable = false`。這道檢查寫在
+`ItemService.CreateAsync`，因此 GraphQL 的 `createFile` mutation 也被同一句訊息擋下：`Items cannot
+be created in collection 'file' through the generic items API.`，狀態碼 `400`／`BAD_USER_INPUT`。
+檔案要靠上傳到 `POST /api/files` 來建立。
 
 `File` 的集合名稱是 `file`，分組在 `System`，並且宣告了 `Hidden = true`。它管的是這個集合在
 後台怎麼呈現，跟[第 6 章：欄位型別與編輯介面](06-field-types.md)講的欄位層級 `Hidden` 是兩

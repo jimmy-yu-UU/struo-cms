@@ -85,6 +85,7 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 | `DefaultDisplayField` | `string?` | `null` | 項目顯示標題 |
 | `AdminOnly` | `bool` | `false` | 一般 CRUD 寫入一律要求 super-admin |
 | `Hidden` | `bool` | `false` | 只從後台側欄移除；REST、GraphQL、權限與 schema 不受影響 |
+| `Creatable` | `bool` | `true` | `false` 讓通用項目 API 拒絕建立 |
 | `Revisions` | `bool` | `false` | 啟用版本紀錄 |
 
 `Name` 是集合的身分：REST 路由片段、GraphQL 名稱，以及存在權限授予、版本紀錄與其他資料列裡的值。
@@ -99,6 +100,11 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 
 `AdminOnly = true` 只管一般 CRUD 的寫入，不論該集合的 RBAC 授予了什麼都要求 super-admin；讀取
 仍照一般 RBAC 走。
+
+`Creatable = false` 給列是由自己專屬流程產生的集合，就像 `file` 的列來自上傳。`POST
+api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之前就回 `400`
+`BAD_USER_INPUT`，`/api/schema` 回報 `creatable: false`，後台據此隱藏「新增」按鈕。讀取、更新與刪除
+不受影響。核心的 `file` 與 `user` 集合就設了它。
 
 軟刪除和版本紀錄是兩個各自獨立的開關：軟刪除讓集合實作 `ISoftDeletable`，版本紀錄在
 `[CmsCollection]` 上設 `Revisions = true`。

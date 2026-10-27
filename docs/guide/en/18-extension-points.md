@@ -4,7 +4,7 @@ How a caller's `search=` gets answered, what happens after a write, and what the
 contains are each left by the core to a seam of their own: a fork plugs in its own implementation
 without touching the core's query or write path at all. This chapter covers where a fork registers
 its services, what each of `ISearchProvider` and `IItemChangeListener` promises, when each is called,
-what happens on failure, how to bring your own file storage, how to define your own client-facing errors
+what happens on failure, how write interceptors and delete handlers add business rules to item writes, how to bring your own file storage, how to define your own client-facing errors
 with `StruoDomainException`, and how `ConfigureGraphQl` adds to the GraphQL schema.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
@@ -355,6 +355,160 @@ An application can register any number of listeners:
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## Write interceptors: `IItemWriteInterceptor`
+
+`IItemWriteInterceptor` is the extension point for business rules on an item write: generate a slug,
+check one field against another, write an audit row, refuse writes to an append-only collection. It
+runs inside the generic write path, so REST and GraphQL both get it, and you do not edit
+`ItemService`. The core's own rules for `file`, `user` and `language` are registered the same way.
+
+### The contract
+
+An interceptor has `bool AppliesTo(string collection)` and three hooks. `AppliesTo` receives the
+canonical collection name, the same spelling `ISearchProvider` sees. Every hook defaults to a no-op,
+so you override only the ones you need.
+
+| Hook | Runs | A throw |
+|---|---|---|
+| `BeforeWriteAsync` | Outside the transaction, after the merge | Refuses the write |
+| `InTransactionAsync` | Inside the transaction, after the row is written | Rolls everything back |
+| `AfterCommitAsync` | After the commit, before listeners are notified | Surfaces after the commit |
+
+The merge is the request body applied to the entity. `InTransactionAsync` runs after the row, the many-to-many links and the translations are written, and before the revision is captured. All three hooks take an `ItemWriteContext`.
+Its members:
+
+- `Operation`: `Create`, `Update`, `Revert`, `Trash`, `Restore` or `Purge`. A revert is an update that
+  re-applies a past snapshot, flagged `Revert`.
+- `Meta`: the collection's metadata.
+- `Entity`: the entity being written. For create, update and revert it is the request body merged into
+  the entity, and you may change it in `BeforeWriteAsync`. For trash, restore and purge it is the
+  existing row.
+- `Id`: the item id as a string. It is `null` in a create's `BeforeWriteAsync`, because the row does not
+  exist yet.
+- `Existing`: for update and revert, the row as stored before the merge, so a hook can compare old and
+  new. It is loaded only when an interceptor applies to the collection, and it is `null` for the other
+  operations.
+- `BodyKeys` and `Body`: the top-level property names of the request body, and the body itself.
+  `BodyKeys` is empty and `Body` is `null` for trash, restore and purge.
+- `Changed`: false in `AfterCommitAsync` when a trash hit an already-trashed row or a restore hit a
+  live one.
+
+Trash, restore and purge run `BeforeWriteAsync` with the existing row and no body, and an unknown id
+never reaches an interceptor. Their `InTransactionAsync` runs only when the row was actually trashed,
+restored or purged. Their `AfterCommitAsync` runs whenever the row exists, so check `Changed` if you
+only care about real changes.
+
+### Order and failure
+
+Interceptors that apply to the collection run in registration order, the core's first. Within one
+write the hooks run in this order: every interceptor's `BeforeWriteAsync`, the write transaction with
+every `InTransactionAsync` inside it, every `AfterCommitAsync`, then the `IItemChangeListener`
+notification.
+
+A `StruoDomainException` or a `QueryException` thrown from `BeforeWriteAsync` or
+`InTransactionAsync` answers with the 4xx it carries, the same as a thrown validation error. Any other
+exception is a `500`. A throw in `InTransactionAsync` rolls the write back.
+
+`AfterCommitAsync` is different, because the write is committed by then. If one interceptor throws,
+the remaining `AfterCommitAsync` hooks are skipped, the listeners are still notified, and then the
+exception propagates to the caller. The caller sees an error although the data was saved. Its
+`CancellationToken` is not tied to the request, so a disconnecting client does not cut it short. Use
+it for cache invalidation and similar work, and keep it from throwing.
+
+### Where it sits in the validation order
+
+On create, the body is checked in this order: permission, the `Creatable` check, body shape,
+`MaxLength` and per-field validators, then your `BeforeWriteAsync`, then the Required check. A scalar
+Required field is checked after your hook, so a hook can fill it; that is how the slug example below
+works. A list-type Required field is checked before it, and an interceptor cannot fill one.
+
+### What does not run interceptors
+
+- The dedicated endpoints, such as `POST /api/files` and `POST /api/users`, do not go through
+  `ItemService` and run no interceptors. The core's `file` and `user` rules apply only where the
+  generic path is used.
+- The children of a cascaded purge are removed without running interceptors. They still reach
+  `IItemChangeListener`, which is the place to react to them.
+
+### A slug example
+
+This interceptor fills the slug of a new `article` from its title. `Article` is your own collection
+class, with a `Title` and a settable `Slug`.
+
+```csharp
+using System.Text.RegularExpressions;
+using Struo.Application.Query;
+
+public sealed class ArticleSlugInterceptor : IItemWriteInterceptor
+{
+    public bool AppliesTo(string collection) => collection == "article";
+
+    public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    {
+        if (context.Operation != ItemWriteOperation.Create) return Task.CompletedTask;
+
+        var article = (Article)context.Entity;
+        if (string.IsNullOrWhiteSpace(article.Slug))
+            article.Slug = Regex.Replace(article.Title.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return Task.CompletedTask;
+    }
+}
+```
+
+Register it in your own `Program.cs`, after `AddStruoCms()`. Registrations are additive: any number of
+interceptors can apply to the same collection.
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddScoped<IItemWriteInterceptor, ArticleSlugInterceptor>();
+```
+
+## Delete handlers: `ICollectionDeleteHandler`
+
+An interceptor adds to a delete; it cannot replace one. A collection whose delete has side effects the
+generic pipeline cannot express, such as a blob to remove, gets an `ICollectionDeleteHandler` instead.
+The core's `file` collection uses one.
+
+It has `AppliesTo(string collection)`, `TrashAsync(string id, CancellationToken ct)` and
+`PurgeAsync(string id, CancellationToken ct)`, each returning true when the row existed. An optional
+`IsValidId(string id)` returns false for an id that cannot name a row, so the delete answers not found
+without reading it. The first registered handler that applies wins.
+
+`ItemService` checks permissions and that the row exists, runs the interceptors' `BeforeWriteAsync`,
+then calls the handler. From there the handler owns the transaction and the change notification, so no
+`InTransactionAsync` runs. When the handler returns true, `AfterCommitAsync` runs with `Changed` true.
+A handler cannot report that a trash did nothing.
+
+```csharp
+public sealed class AttachmentDeleteHandler(IMyBlobs blobs) : ICollectionDeleteHandler
+{
+    public bool AppliesTo(string collection) => collection == "attachment";
+
+    public bool IsValidId(string id) => Guid.TryParse(id, out _);
+
+    public async Task<bool> TrashAsync(string id, CancellationToken ct) => await PurgeAsync(id, ct);
+
+    public async Task<bool> PurgeAsync(string id, CancellationToken ct)
+    {
+        await blobs.RemoveAsync(id, ct);
+        return true;
+    }
+}
+```
+
+`IMyBlobs` stands for your own storage client. Register the handler the same way:
+
+```csharp
+builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();
+```
+
+## Collections that cannot be created
+
+`[CmsCollection(Creatable = false)]` makes the generic items API refuse a create for that collection
+with a `400` before it looks at the body. The core sets it on `file` and `user`, whose rows come from
+`POST /api/files` and `POST /api/users`. See [Chapter 5: Collections](05-collections.md) for the flag,
+and [Chapter 13](13-rest-endpoints.md) for how `/api/schema` exposes it as `creatable`.
+
 ## File storage: `IFileStorage`
 
 The byte store behind the `file` collection is `IFileStorage`. The core ships a local and an S3 backend, chosen
@@ -481,7 +635,7 @@ raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxT
 
 ## What's next
 
-That covers the registration point, search providers, change notifications, file storage, domain errors and the GraphQL hook. The next chapter,
+That covers the registration point, search providers, change notifications, write interceptors and delete handlers, file storage, domain errors and the GraphQL hook. The next chapter,
 [Chapter 19: Admin Customization](19-admin-customization.md), comes back to the admin SPA, and
 covers which parts of its appearance and behavior can be changed by configuration alone, and
 which really need a change under `frontend/src`.

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.15.0
+
+::: danger Breaking
+- The `ItemService` constructor changed. The `IUserSessionRevocationService`, `ILanguageCollectionRules`,
+  `IUserCredentialStore` and `IFileLifecycle` parameters are gone, and it takes
+  `IEnumerable<IItemWriteInterceptor>? interceptors = null` and
+  `IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null` at the end. The core's rules for the
+  `file`, `user` and `language` collections moved into registered interceptors and a delete handler.
+  DI builds `ItemService` for you, so a fork only notices if it constructs `ItemService` itself, for
+  example in tests: pass the interceptors and handlers it needs (or none) instead of the removed
+  services. See [Chapter 18](18-extension-points.md).
+- Creating an item in a collection that is not creatable now answers `400` `BAD_USER_INPUT` with
+  `Items cannot be created in collection '<name>' through the generic items API.` The messages that
+  named `POST /api/files` and `POST /api/users` are gone, so a client that matched on them must match
+  the code or the new text. `/api/schema` gains a `creatable` flag on every collection.
+:::
+
+### Added
+
+- `IItemWriteInterceptor` lets a fork add business rules to item writes without editing `ItemService`:
+  `BeforeWriteAsync` (outside the transaction, after the body is merged), `InTransactionAsync` (inside
+  it, a throw rolls back) and `AfterCommitAsync` (after the commit, before listeners are notified). It
+  sees create, update, revert, trash, restore and purge through an `ItemWriteContext`. Interceptors run
+  in registration order, core ones first. The dedicated endpoints and the children of a cascaded purge do
+  not run them. See [Chapter 18](18-extension-points.md).
+- `ICollectionDeleteHandler` replaces the generic trash and purge of a collection, for deletes with side
+  effects of their own. The core's `file` collection uses one.
+- `[CmsCollection(Creatable = false)]` makes the generic items API refuse to create rows of a collection.
+  The core sets it on `file` and `user`. The admin UI reads `creatable` from `/api/schema` to hide the
+  New button. See [Chapter 5](05-collections.md).
+
+### Changed
+
+- On create, a body that breaks both a validator or `MaxLength` rule and a scalar Required field now
+  reports the validator error first, the same as an update does. The Required check runs after
+  `BeforeWriteAsync`, so an interceptor can fill a scalar Required field such as a slug.
+- On update and revert of a `user`, the email normalization and uniqueness check runs before the
+  Required check, not after it.
+- The user session revocation after a `user` delete now runs before the change listeners are notified,
+  not after.
+
 ## 0.14.0 — 2026-10-27
 
 ::: danger Breaking
