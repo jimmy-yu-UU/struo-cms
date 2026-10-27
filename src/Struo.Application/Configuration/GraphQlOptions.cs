@@ -1,6 +1,12 @@
 // src/Struo.Application/Configuration/GraphQlOptions.cs
 namespace Struo.Application.Configuration;
 
+/// <summary>
+/// GraphQL settings under <c>GraphQl:*</c>. The depth and cost limits are read from configuration once, while
+/// services are registered (the HotChocolate rules take plain values), and a value that is not greater than 0
+/// fails startup. Code that configures this options type, for example
+/// <c>services.Configure&lt;GraphQlOptions&gt;(...)</c>, has no effect on them: set them in configuration.
+/// </summary>
 public sealed class GraphQlOptions
 {
     public const string SectionName = "GraphQl";

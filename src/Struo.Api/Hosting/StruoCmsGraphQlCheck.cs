@@ -6,7 +6,7 @@ using Struo.Domain.Metadata;
 namespace Struo.Api.Hosting;
 
 /// <summary>Registered when a fork added to the GraphQL schema through <c>ConfigureGraphQl</c>, so startup builds and checks the schema.</summary>
-internal sealed class StruoCmsGraphQlMarker;
+internal sealed record StruoCmsGraphQlCheckState(bool ForkExtended);
 
 /// <summary>
 /// Builds the GraphQL schema at startup when a fork extended it, so a name that clashes with the schema
@@ -19,7 +19,7 @@ internal static class StruoCmsGraphQlCheck
 
     internal static async Task RunAsync(IServiceProvider services)
     {
-        if (services.GetService<StruoCmsGraphQlMarker>() is null) return;
+        if (services.GetService<StruoCmsGraphQlCheckState>() is not { ForkExtended: true }) return;
 
         try
         {

@@ -9,6 +9,8 @@ namespace Struo.Api.Hosting;
 /// <summary>The rate limiters behind <c>AddStruoCms</c>: the "login" and "password" policies and the global login-concurrency cap.</summary>
 internal static class StruoCmsRateLimiting
 {
+    private const string UnknownClient = "unknown";
+
     // App-layer login rate limiter — fixed-window, partitioned by client IP, applied ONLY to
     // POST /api/auth/login via [EnableRateLimiting("login")] on the action. Deliberately NOT a
     // global limiter: every anonymous login attempt burns full Argon2id CPU (timing-equalized by
@@ -87,7 +89,7 @@ internal static class StruoCmsRateLimiting
         // Partition key = client IP. Behind a reverse proxy, RemoteIpAddress is the proxy's own
         // address unless ForwardedHeaders:Enabled trusts that proxy (see UseStruoForwardedHeaders);
         // otherwise every login attempt through it shares a single partition/bucket.
-        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? UnknownClient;
 
         // RateLimiting:Login:Enabled toggle (config-driven, see LoginRateLimitOptions): when
         // disabled, return a no-op limiter for this partition. The "login" policy still EXISTS
@@ -128,7 +130,7 @@ internal static class StruoCmsRateLimiting
             .GetRequiredService<Struo.Application.Abstractions.ICurrentUserAccessor>();
         var partitionKey = currentUser.GetCurrentUserId()?.ToString()
             ?? httpContext.Connection.RemoteIpAddress?.ToString()
-            ?? "unknown";
+            ?? UnknownClient;
 
         if (!passwordOptions.Enabled)
         {

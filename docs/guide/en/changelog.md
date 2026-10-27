@@ -11,7 +11,7 @@
   If your fork edited the old `Program.cs`, take the new one from this release and move your own
   registrations after `AddStruoCms()`; a registration made there wins over the core default. Add
   configuration sources before the call. The core registers `ISearchProvider`, `IItemChangeNotifier`,
-  `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy` with `TryAdd`, so a registration made
+  `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage` with `TryAdd`, so a registration made
   before `AddStruoCms()` is kept for those too.
   Before:
 
@@ -30,6 +30,9 @@
   After:
 
   ```csharp
+  var cli = MigrationCli.Parse(args);
+  var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
   builder.AddStruoCms();
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 
@@ -38,7 +41,7 @@
   await app.UseStruoCmsAsync();
   await app.RunAsync();
   ```
-- `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy` are registered with `TryAdd`. A fork
+- `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage` are registered with `TryAdd`. A fork
   that registered its own implementation before `AddStruoCms()` now keeps it; before, the core
   default won over a registration made that early.
 - The `AuthSchemes.SessionCookieName` constant is gone. A fork that edited it (as Chapter 25 used to say, for
@@ -48,6 +51,9 @@
   `Value`, or uses `SessionCookieName.Default`. A `__Host-` or `__Secure-` name now needs a cookie that is
   always `Secure`: set `Auth:Cookie:RequireSecure` to `true` wherever it is not already `Always`, Development
   included, or startup fails.
+- Setting `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` or `CmsRelationAttribute.MaxDepth`
+  fails the build: they are now `[Obsolete]`, and the template's `TreatWarningsAsErrors` turns the warning into
+  an error. Delete the property from your collections; it never had an effect.
 :::
 
 ### Added
@@ -86,8 +92,9 @@
 ### Deprecated
 
 - `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` and `CmsRelationAttribute.MaxDepth` are
-  marked `[Obsolete]`. Nothing reads them; setting one now produces a compiler warning, and they are removed in
-  the next minor version. Delete them from your collections.
+  marked `[Obsolete]`. Nothing reads them; setting one produces a compiler warning, which the template's
+  `TreatWarningsAsErrors` makes a build error, and they are removed in the next minor version. Delete them from
+  your collections.
 
 ## 0.13.1 — 2026-10-27
 

@@ -21,7 +21,10 @@ internal sealed class RootFieldCollisionInterceptor : TypeInterceptor
         if (configuration is not ObjectTypeConfiguration { Name: "Query" or "Mutation" } root) return;
 
         if (!_counts.TryGetValue(root.Name, out var fields))
-            _counts[root.Name] = fields = new Dictionary<string, int>(StringComparer.Ordinal);
+        {
+            fields = new Dictionary<string, int>(StringComparer.Ordinal);
+            _counts[root.Name] = fields;
+        }
         foreach (var field in root.Fields)
             fields[field.Name] = fields.GetValueOrDefault(field.Name) + 1;
     }

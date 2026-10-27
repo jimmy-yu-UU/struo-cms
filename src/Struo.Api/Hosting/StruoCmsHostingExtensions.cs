@@ -45,15 +45,16 @@ public static class StruoCmsHostingExtensions
         if (cms.HasGraphQlConfiguration)
         {
             graphQl.TryAddTypeInterceptor<RootFieldCollisionInterceptor>();
-            builder.Services.AddSingleton<StruoCmsGraphQlMarker>();
+            builder.Services.AddSingleton(new StruoCmsGraphQlCheckState(ForkExtended: true));
         }
         return builder;
     }
 
     /// <summary>
-    /// Builds the request pipeline, maps the endpoints, and runs the startup gate (migration gate,
-    /// configuration warnings, SQL Server isolation check). Call it on the built application, before
-    /// <c>RunAsync()</c>.
+    /// Builds the request pipeline, maps the endpoints, and runs the startup checks: the checks that need
+    /// only configuration and DI first (session cookie name, custom file storage, the GraphQL schema when a
+    /// fork extended it), then the configuration warnings, the migration gate and the SQL Server isolation
+    /// check. Call it on the built application, before <c>RunAsync()</c>.
     /// </summary>
     public static async Task<WebApplication> UseStruoCmsAsync(this WebApplication app)
     {

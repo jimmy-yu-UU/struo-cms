@@ -64,7 +64,7 @@ the details of this variable, are in "UI language" in
 
 ## 7. A production domain under a shared parent domain: consider the `__Host-` cookie prefix
 
-The login cookie is named `struo.session`. If your production site is a subdomain of a shared parent
+By default, the login cookie is named `struo.session`. If your production site is a subdomain of a shared parent
 domain (say `app.example.com`, with other subdomains under the same parent controlled by someone
 else), those sibling subdomains can set a cookie of the same name for the whole parent domain,
 overwriting or planting your session cookie.

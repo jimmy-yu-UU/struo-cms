@@ -14,6 +14,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
 {
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
+    private const string UnknownService = "unknown";
     private readonly string _service;
 
     public S3FileStorage(FileStorageOptions options)
@@ -26,7 +27,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         _client = client;
         _bucket = bucket;
-        _service = "unknown";
+        _service = UnknownService;
     }
 
     public string Describe() => $"s3, bucket {_bucket}, service {_service}";

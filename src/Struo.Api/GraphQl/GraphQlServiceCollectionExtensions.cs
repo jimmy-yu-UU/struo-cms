@@ -51,10 +51,7 @@ public static class GraphQlServiceCollectionExtensions
     internal static IRequestExecutorBuilder AddStruoGraphQlServer(
         this IServiceCollection services, IHostEnvironment env, IConfiguration config)
     {
-        services.AddOptions<GraphQlOptions>()
-            .BindConfiguration(GraphQlOptions.SectionName)
-            .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<GraphQlOptions>, GraphQlOptionsValidator>();
+        services.AddOptions<GraphQlOptions>().BindConfiguration(GraphQlOptions.SectionName);
         var exposeSchema = ResolveExposeSchema(config, env);
         var limits = ResolveLimits(config);
         // Registered on the application IServiceCollection (not chained via

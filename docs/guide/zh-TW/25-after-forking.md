@@ -57,7 +57,7 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 
 ## 7. 正式網域在共用的上層網域下：考慮 `__Host-` cookie 前綴
 
-登入 cookie 叫 `struo.session`。如果你的正式網站是某個共用上層網域底下的子網域（例如
+登入 cookie 預設叫 `struo.session`。如果你的正式網站是某個共用上層網域底下的子網域（例如
 `app.example.com`，而同一個上層網域下還有別人控制的子網域），那些兄弟子網域可以替整個上層網域
 寫入同名的 cookie，蓋掉或塞入你的 session cookie。
 

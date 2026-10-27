@@ -9,8 +9,8 @@
 
   如果你的 fork 改過舊的 `Program.cs`，請改用這個版本的 `Program.cs`，並把你自己的註冊搬到
   `AddStruoCms()` 之後，那裡的註冊贏過核心的預設。設定來源要在呼叫之前加。核心用 `TryAdd` 註冊
-  `ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher` 與
-  `IFileAccessPolicy`，所以這幾個服務寫在 `AddStruoCms()` 之前的註冊也會被保留。
+  `ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、`IPasswordHasher`、`IFileAccessPolicy` 與
+  `IFileStorage`，所以這幾個服務寫在 `AddStruoCms()` 之前的註冊也會被保留。
   之前：
 
   ```csharp
@@ -28,6 +28,9 @@
   之後：
 
   ```csharp
+  var cli = MigrationCli.Parse(args);
+  var builder = WebApplication.CreateBuilder(cli.HostArgs);
+
   builder.AddStruoCms();
   builder.Services.AddScoped<ISearchProvider, MySearchProvider>();
 
@@ -36,7 +39,7 @@
   await app.UseStruoCmsAsync();
   await app.RunAsync();
   ```
-- `IHtmlSanitizer`、`IPasswordHasher` 與 `IFileAccessPolicy` 改用 `TryAdd` 註冊。fork 若在
+- `IHtmlSanitizer`、`IPasswordHasher`、`IFileAccessPolicy` 與 `IFileStorage` 改用 `TryAdd` 註冊。fork 若在
   `AddStruoCms()` 之前就註冊了自己的實作，現在會被保留；以前核心的預設會贏過這麼早的註冊。
 - `AuthSchemes.SessionCookieName` 常數移除了。改過它的 fork（第 25 章以前這樣教，改成
   `__Host-struo.session`）必須改設 `Auth:Cookie:Name`，例如 `Auth__Cookie__Name=__Host-struo.session`；
@@ -44,6 +47,9 @@
   解析 `SessionCookieName`，讀它的 `Value`，或使用 `SessionCookieName.Default`。`__Host-` 或 `__Secure-` 名稱現在
   需要一律 `Secure` 的 cookie：在政策還不是 `Always` 的地方（包含 Development）把 `Auth:Cookie:RequireSecure`
   設成 `true`，否則啟動失敗。
+- 設定 `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 或 `CmsRelationAttribute.MaxDepth`
+  會讓建置失敗：它們現在是 `[Obsolete]`，而範本的 `TreatWarningsAsErrors` 把警告變成錯誤。請從你的集合刪掉
+  這個屬性；它從來沒有作用。
 :::
 
 ### 新增
@@ -78,7 +84,8 @@
 ### 棄用
 
 - `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 與 `CmsRelationAttribute.MaxDepth` 標成
-  `[Obsolete]`。沒有任何東西讀它們；設定它們現在會產生編譯器警告，下一個次要版本會移除。請從你的集合中刪掉。
+  `[Obsolete]`。沒有任何東西讀它們；設定它們會產生編譯器警告，範本的 `TreatWarningsAsErrors` 會把它變成建置錯誤，
+  下一個次要版本會移除。請從你的集合中刪掉。
 
 ## 0.13.1 — 2026-10-27
 

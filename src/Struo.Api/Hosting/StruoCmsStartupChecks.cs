@@ -20,6 +20,7 @@ internal static class StruoCmsStartupChecks
         sp.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
             .Get(Struo.Api.Auth.AuthSchemes.Cookie);
         VerifyCustomFileStorage(sp);
+        await StruoCmsGraphQlCheck.RunAsync(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
         RemovedDatabaseKeyWarnings.Log(
@@ -45,7 +46,6 @@ internal static class StruoCmsStartupChecks
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
             startupLogger);
 
-        await StruoCmsGraphQlCheck.RunAsync(sp);
     }
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail

@@ -66,4 +66,30 @@ public class FileStorageDescribeTests
         storage.Describe().Should().Contain("minio.example.test:9000")
             .And.NotContain("svc-user").And.NotContain("svc-pass");
     }
+
+    [Fact]
+    public void S3_without_an_endpoint_names_the_aws_region()
+    {
+        var options = new FileStorageOptions
+        {
+            Backend = "s3",
+            S3 = { Endpoint = null, Bucket = "media-bucket", AccessKey = "a", SecretKey = "s", Region = "eu-west-1" },
+        };
+        using var storage = new S3FileStorage(options);
+
+        storage.Describe().Should().Contain("media-bucket").And.Contain("AWS region eu-west-1");
+    }
+
+    [Fact]
+    public void S3_on_the_default_port_names_the_host_only()
+    {
+        var options = new FileStorageOptions
+        {
+            Backend = "s3",
+            S3 = { Endpoint = "https://minio.example.test", Bucket = "b", AccessKey = "a", SecretKey = "s" },
+        };
+        using var storage = new S3FileStorage(options);
+
+        storage.Describe().Should().EndWith("service minio.example.test");
+    }
 }

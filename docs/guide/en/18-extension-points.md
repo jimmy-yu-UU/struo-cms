@@ -4,7 +4,8 @@ How a caller's `search=` gets answered, what happens after a write, and what the
 contains are each left by the core to a seam of their own: a fork plugs in its own implementation
 without touching the core's query or write path at all. This chapter covers where a fork registers
 its services, what each of `ISearchProvider` and `IItemChangeListener` promises, when each is called,
-what happens on failure, how to bring your own file storage, and how `ConfigureGraphQl` adds to the GraphQL schema.
+what happens on failure, how to bring your own file storage, how to define your own client-facing errors
+with `StruoDomainException`, and how `ConfigureGraphQl` adds to the GraphQL schema.
 
 `search=`'s own syntax and the built-in `LIKE` scan are in
 [Chapter 10: Querying: Filters, Sorting and Pagination](10-query-basics.md); a write's revision
@@ -50,7 +51,7 @@ call, or the scan won't see it.
 
 A registration made after `AddStruoCms()` always wins over the core's default. The core registers
 these defaults with `TryAdd`, so a registration made before the call is kept too: `ISearchProvider`,
-`IItemChangeNotifier`, `IHtmlSanitizer`, `IPasswordHasher` and `IFileAccessPolicy`.
+`IItemChangeNotifier`, `IHtmlSanitizer`, `IPasswordHasher`, `IFileAccessPolicy` and `IFileStorage`.
 
 Three of those carry a contract a replacement has to keep:
 
@@ -410,8 +411,8 @@ public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileS
 }
 ```
 
-In `Program.cs`, set `Struo:Files:Backend` to `custom` (for example `Struo__Files__Backend=custom`) and register
-the storage after `AddStruoCms()`:
+Set `Struo:Files:Backend` to `custom` in configuration (for example `Struo__Files__Backend=custom`), and in
+`Program.cs` register the storage after `AddStruoCms()`:
 
 ```csharp
 builder.AddStruoCms();

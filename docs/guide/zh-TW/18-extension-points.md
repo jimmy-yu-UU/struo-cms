@@ -2,7 +2,7 @@
 
 呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，GraphQL schema 裡要有什麼，核心把這幾件事
 各自留成一個接口，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談 fork 的服務註冊在
-哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼帶來自己的檔案儲存，以及
+哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼帶來自己的檔案儲存，怎麼用 `StruoDomainException` 定義自己的、給客戶端看的錯誤，以及
 `ConfigureGraphQl` 怎麼擴充 GraphQL schema。
 
 `search=` 本身的語法與內建的 LIKE 掃描，見
@@ -43,7 +43,7 @@ Key Vault）要在呼叫之前加進 `builder.Configuration`，否則掃描看�
 
 在 `AddStruoCms()` 之後註冊的，一律贏過核心的預設。下列預設，核心用的是 `TryAdd`，所以寫在
 呼叫之前的註冊也會被保留：`ISearchProvider`、`IItemChangeNotifier`、`IHtmlSanitizer`、
-`IPasswordHasher`、`IFileAccessPolicy`。
+`IPasswordHasher`、`IFileAccessPolicy`、`IFileStorage`。
 
 其中三個有契約，替換的實作要遵守：
 
@@ -352,7 +352,7 @@ public sealed class AzureBlobFileStorage(BlobContainerClient container) : IFileS
 }
 ```
 
-在 `Program.cs` 把 `Struo:Files:Backend` 設成 `custom`（例如 `Struo__Files__Backend=custom`），並在
+在設定裡把 `Struo:Files:Backend` 設成 `custom`（例如 `Struo__Files__Backend=custom`），並在 `Program.cs` 於
 `AddStruoCms()` 之後註冊這個儲存：
 
 ```csharp

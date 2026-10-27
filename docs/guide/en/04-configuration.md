@@ -392,7 +392,8 @@ key.
 The other three keys are the limits on one operation: how deep its selections may nest, and the most
 field cost and type cost it may accrue. A value of 0 or below fails startup with a message naming
 the key. The defaults are measured against the core schema alone. A fork that adds heavier queries
-raises the cost limits to fit; see "Depth caps" in [Chapter 14: GraphQL API](14-graphql.md).
+raises the cost limits to fit; see "Depth caps" in [Chapter 14: GraphQL API](14-graphql.md). These keys
+are read from configuration only: configuring `GraphQlOptions` in code has no effect on them.
 
 ## ForwardedHeaders
 

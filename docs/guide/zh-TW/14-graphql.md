@@ -371,7 +371,8 @@ HTTP_STATUS:400
 你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
 `MaxDeepRelations`。
 
-前兩個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)）。預設值是只針對核心 schema 量出來的：
+前兩個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)），而且只能在設定裡設：在程式碼裡設定
+`GraphQlOptions` 沒有作用。預設值是只針對核心 schema 量出來的：
 最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的查詢，就像
 `GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的上面一點。
 
