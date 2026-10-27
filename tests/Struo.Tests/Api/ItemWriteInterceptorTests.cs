@@ -26,7 +26,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     private sealed class RuleViolationException(string message)
         : StruoDomainException("ACME_RULE_VIOLATION", 429, message);
 
-    private sealed record HookCall(string Interceptor, string Hook, ItemWriteOperation Operation, string? Id, string[] BodyKeys);
+    private sealed record HookCall(string Interceptor, string Hook, ItemWriteOperation Operation, string? Id, string[] BodyKeys, bool Changed);
 
     private sealed class Script
     {
@@ -47,12 +47,11 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
         public Task InTransactionAsync(ItemWriteContext context, CancellationToken ct) => Step(context, "InTransaction");
         public Task AfterCommitAsync(ItemWriteContext context, CancellationToken ct) => Step(context, "AfterCommit");
-        public Task AfterNotifyAsync(ItemWriteContext context, CancellationToken ct) => Step(context, "AfterNotify");
 
         private Task Step(ItemWriteContext context, string hook)
         {
             lock (script.Calls)
-                script.Calls.Add(new HookCall(name, hook, context.Operation, context.Id, context.BodyKeys.Order().ToArray()));
+                script.Calls.Add(new HookCall(name, hook, context.Operation, context.Id, context.BodyKeys.Order().ToArray(), context.Changed));
             if (script.ThrowIn == hook)
                 throw new RuleViolationException($"{hook} refused.");
             return Task.CompletedTask;
@@ -96,7 +95,6 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         $"A:BeforeWrite:{operation}", $"B:BeforeWrite:{operation}",
         $"A:InTransaction:{operation}", $"B:InTransaction:{operation}",
         $"A:AfterCommit:{operation}", $"B:AfterCommit:{operation}",
-        $"A:AfterNotify:{operation}", $"B:AfterNotify:{operation}",
     ];
 
     [Fact]
@@ -139,16 +137,19 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_second_trash_of_a_trashed_row_runs_only_BeforeWrite_and_AfterNotify()
+    public async Task A_second_trash_of_a_trashed_row_runs_AfterCommit_with_Changed_false()
     {
         var (_, client, script) = await HostAsync();
         var id = await CreateArticleAsync(client);
+        script.Calls.Clear();
         (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        script.Calls.Single(c => c.Hook == "AfterCommit").Changed.Should().BeTrue();
 
         script.Calls.Clear();
         (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        Sequence(script).Should().Equal("A:BeforeWrite:Trash", "A:AfterNotify:Trash");
+        Sequence(script).Should().Equal("A:BeforeWrite:Trash", "A:AfterCommit:Trash");
+        script.Calls[1].Changed.Should().BeFalse();
     }
 
     [Fact]
@@ -278,6 +279,30 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var after = await CountsAsync(host);
         after.Articles.Should().Be(before.Articles + 1);
         after.Revisions.Should().Be(before.Revisions + 1);
+    }
+
+    [Fact]
+    public async Task An_AfterCommit_throw_skips_later_interceptors_but_the_change_is_still_notified()
+    {
+        var script = new Script { ThrowIn = "AfterCommit" };
+        var listener = new RecordingItemChangeListener();
+        var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+        {
+            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "article", script));
+            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("B", "article", script));
+            s.AddSingleton<Struo.Application.Changes.IItemChangeListener>(listener);
+        })).CreateClient();
+        await factory.EnsureAdminSeededAsync();
+        client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
+        (await client.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+
+        var response = await client.PostAsJsonAsync("/api/items/article",
+            new { status = "draft", translations = new { en = new { title = "notified" } } });
+
+        response.StatusCode.Should().Be((HttpStatusCode)429, await response.Content.ReadAsStringAsync());
+        script.Calls.Where(c => c.Hook == "AfterCommit").Select(c => c.Interceptor).Should().Equal("A");
+        listener.All.Should().ContainSingle().Which.Kind.Should().Be(Struo.Application.Changes.ItemChangeKind.Created);
     }
 
     [Fact]

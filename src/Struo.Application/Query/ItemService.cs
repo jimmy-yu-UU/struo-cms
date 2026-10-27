@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/ItemService.cs
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
@@ -225,9 +226,7 @@ public sealed class ItemService(
             }
         }, ct);
         InvalidateLanguagesIfNeeded(collection);
-        await hooks.AfterCommitAsync();
-        await NotifyAsync(SingleChange(meta.Name, createdId, ItemChangeKind.Created));
-        await hooks.AfterNotifyAsync();
+        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, createdId, ItemChangeKind.Created));
         return projector.Project(created, meta, null);
     }
 
@@ -345,9 +344,7 @@ public sealed class ItemService(
         }, ct);
         if (updated is null) return null;
         InvalidateLanguagesIfNeeded(collection);
-        await hooks.AfterCommitAsync();
-        await NotifyAsync(SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
-        await hooks.AfterNotifyAsync();
+        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
     }
 
@@ -432,14 +429,13 @@ public sealed class ItemService(
                 }
                 return trashedNow;
             }, ct);
-            if (softDeletedNow)
-            {
-                InvalidateLanguagesIfNeeded(collection);
-                await trashHooks.AfterCommitAsync();
-                await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
-            }
-            // Runs for an already-trashed row too, like the session revocation after it.
-            await trashHooks.AfterNotifyAsync();
+            if (softDeletedNow) InvalidateLanguagesIfNeeded(collection);
+            // AfterCommit runs for an already-trashed row too (Changed false), like the session
+            // revocation after it.
+            trashHooks.Context.Changed = softDeletedNow;
+            await AfterCommitAndNotifyAsync(trashHooks, softDeletedNow
+                ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed)
+                : null);
             await RevokeSessionsIfUserAsync(collection, id);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
@@ -463,9 +459,7 @@ public sealed class ItemService(
         if (existed)
         {
             InvalidateLanguagesIfNeeded(collection);
-            await purgeHooks.AfterCommitAsync();
-            await NotifyAsync(changes);
-            await purgeHooks.AfterNotifyAsync();
+            await AfterCommitAndNotifyAsync(purgeHooks, changes);
             await RevokeSessionsIfUserAsync(collection, id);
         }
         return existed;
@@ -587,13 +581,11 @@ public sealed class ItemService(
             }
             return r;
         }, ct);
-        if (restoredNow)
-        {
-            InvalidateLanguagesIfNeeded(collection);
-            await hooks.AfterCommitAsync();
-            await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
-            await hooks.AfterNotifyAsync();
-        }
+        if (restoredNow) InvalidateLanguagesIfNeeded(collection);
+        hooks.Context.Changed = restoredNow;
+        await AfterCommitAndNotifyAsync(hooks, restoredNow
+            ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored)
+            : null);
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : projector.Project(restored, meta, null);
@@ -702,6 +694,23 @@ public sealed class ItemService(
     // error response.
     private Task NotifyAsync(ItemChangeSet changes) =>
         notifier is null || changes.Count == 0 ? Task.CompletedTask : notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+
+    // Interceptor AfterCommit hooks run first; a throw skips the rest, the change notification still
+    // goes out (the write is committed), then the original exception surfaces.
+    private async Task AfterCommitAndNotifyAsync(ItemWriteHooks hooks, ItemChangeSet? changes)
+    {
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await hooks.AfterCommitAsync();
+        }
+        catch (Exception ex)
+        {
+            failure = ExceptionDispatchInfo.Capture(ex);
+        }
+        if (changes is not null) await NotifyAsync(changes);
+        failure?.Throw();
+    }
 
     private static ItemChangeSet SingleChange(string collection, object id, ItemChangeKind kind)
     {

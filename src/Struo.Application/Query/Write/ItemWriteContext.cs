@@ -43,6 +43,12 @@ public sealed class ItemWriteContext(
     /// <summary>The camelCase names of the keys the request body carries; empty for trash, restore and purge.</summary>
     public IReadOnlySet<string> BodyKeys { get; } = bodyKeys;
 
+    /// <summary>
+    /// True when the write changed state. False in <see cref="IItemWriteInterceptor.AfterCommitAsync"/>
+    /// for a trash of an already-trashed row and a restore of a live row.
+    /// </summary>
+    public bool Changed { get; internal set; } = true;
+
     /// <summary>The request body (the snapshot for a revert); null for trash, restore and purge.</summary>
     public JsonElement? Body { get; } = body;
 }

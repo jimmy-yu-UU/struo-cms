@@ -36,15 +36,11 @@ public interface IItemWriteInterceptor
 
     /// <summary>
     /// Runs once the write is committed, before <see cref="Changes.IItemChangeNotifier"/> notifies its
-    /// listeners (cache invalidation). A throw propagates to the caller although the write stays
-    /// committed. <paramref name="ct"/> is not tied to the request.
+    /// listeners (cache invalidation, session revocation). A throw skips the remaining interceptors'
+    /// hooks, the notification still goes out, then the exception propagates although the write stays
+    /// committed. It runs only when the write happened, except for trash and restore, which run it
+    /// whenever the row exists: check <see cref="ItemWriteContext.Changed"/> to act on real changes
+    /// only. <paramref name="ct"/> is not tied to the request.
     /// </summary>
     Task AfterCommitAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
-
-    /// <summary>
-    /// Runs after the change notification. A throw propagates to the caller although the write stays
-    /// committed. For trash it also runs when the row was already trashed. <paramref name="ct"/> is not
-    /// tied to the request.
-    /// </summary>
-    Task AfterNotifyAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
 }

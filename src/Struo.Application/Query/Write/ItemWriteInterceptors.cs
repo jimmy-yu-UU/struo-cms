@@ -50,8 +50,6 @@ internal sealed class ItemWriteHooks(ItemWriteContext context, IReadOnlyList<IIt
     // The write is committed by now: a disconnecting caller must not skip these.
     public Task AfterCommitAsync() => RunAsync(i => i.AfterCommitAsync(Context, CancellationToken.None));
 
-    public Task AfterNotifyAsync() => RunAsync(i => i.AfterNotifyAsync(Context, CancellationToken.None));
-
     private async Task RunAsync(Func<IItemWriteInterceptor, Task> hook)
     {
         foreach (var interceptor in interceptors)
