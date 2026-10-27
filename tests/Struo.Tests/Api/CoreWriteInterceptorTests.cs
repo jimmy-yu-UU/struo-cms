@@ -76,7 +76,7 @@ public class CoreWriteInterceptorTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_failing_session_revocation_after_a_user_trash_is_a_distinct_error_and_the_trash_stays()
+    public async Task A_failing_session_revocation_after_a_user_delete_is_a_distinct_error_and_the_delete_stays()
     {
         var userId = await SeedUserAsync();
         var admin = await AdminOnAsync(factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
@@ -91,23 +91,23 @@ public class CoreWriteInterceptorTests(ApiFactory factory)
         body.Should().NotContain("session index unreachable");
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        (await db.Queryable<User>().In(userId).AnyAsync()).Should().BeFalse("the trash is committed");
+        (await db.Queryable<User>().In(userId).AnyAsync()).Should().BeFalse("the delete is committed");
     }
 
     [Fact]
-    public async Task Sessions_are_revoked_after_a_user_trash_and_after_a_user_purge_but_not_for_an_unknown_id()
+    public async Task Sessions_are_revoked_after_a_user_delete_with_and_without_the_purge_flag_but_not_for_an_unknown_id()
     {
-        var trashed = await SeedUserAsync();
-        var purged = await SeedUserAsync();
+        var plain = await SeedUserAsync();
+        var flagged = await SeedUserAsync();
         var counting = new CountingRevocationService();
         var admin = await AdminOnAsync(factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
             s.AddSingleton<IUserSessionRevocationService>(counting))));
 
-        (await admin.DeleteAsync($"/api/items/user/{trashed}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        counting.Revoked.Should().Equal(trashed);
+        (await admin.DeleteAsync($"/api/items/user/{plain}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        counting.Revoked.Should().Equal(plain);
 
-        (await admin.DeleteAsync($"/api/items/user/{purged}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        counting.Revoked.Should().Equal(trashed, purged);
+        (await admin.DeleteAsync($"/api/items/user/{flagged}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        counting.Revoked.Should().Equal(plain, flagged);
 
         (await admin.DeleteAsync($"/api/items/user/{Guid.NewGuid()}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         counting.Revoked.Should().HaveCount(2, "an unknown user revokes nothing");

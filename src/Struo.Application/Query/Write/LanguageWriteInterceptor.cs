@@ -11,8 +11,10 @@ namespace Struo.Application.Query;
 public sealed class LanguageWriteInterceptor(ILanguageCollectionRules rules, ILanguageProvider languages)
     : IItemWriteInterceptor
 {
+    private const string CollectionName = "language";
+
     public bool AppliesTo(string collection) =>
-        string.Equals(collection, "language", StringComparison.OrdinalIgnoreCase);
+        string.Equals(collection, CollectionName, StringComparison.OrdinalIgnoreCase);
 
     // Trash and restore do not change the invariants' inputs, so only the other operations check them.
     public Task InTransactionAsync(ItemWriteContext context, CancellationToken ct) =>

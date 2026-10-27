@@ -18,13 +18,13 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Pins that the language write interceptor, run by ItemService, invalidates the language cache on trash, purge AND restore of a `language`
-/// row, not just create/update. The gate keys off the collection NAME ("language"), so this
-/// fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
+/// Pins that ItemService, through the language write interceptor, invalidates the language cache on
+/// trash, purge AND restore of a `language` row, not just create/update. The interceptor keys off the
+/// collection NAME ("language"), so this fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
 /// branches reachable here — the real, production `Language` row does not implement it (languages
 /// are never soft-deleted in this template; every delete purges), which is also covered below.
 /// Minimal hand-rolled stubs throughout (no DB, no SqlSugar) — same style as
-/// <c>DeleteRestrictWithGuidPkTests</c> — so the only real code under test is ItemService itself.
+/// <c>DeleteRestrictWithGuidPkTests</c> — so the only real code under test is ItemService and the language interceptor.
 /// </summary>
 public class LanguageCacheInvalidationTests
 {

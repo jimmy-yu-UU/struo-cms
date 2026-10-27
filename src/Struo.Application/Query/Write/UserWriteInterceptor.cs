@@ -41,7 +41,7 @@ public sealed class UserWriteInterceptor(
             throw new ConflictException("Email already in use.");
     }
 
-    // Runs once the delete took effect, and for a trash of an already-trashed user too; the delete stays
+    // Runs once a delete took effect (a user row is never soft-deleted, so every delete is a purge); it stays
     // committed whatever happens here. A revocation failure surfaces as a distinct, client-safe error
     // rather than an indistinguishable success.
     public async Task AfterCommitAsync(ItemWriteContext context, CancellationToken ct)
