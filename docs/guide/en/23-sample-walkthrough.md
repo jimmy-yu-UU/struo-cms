@@ -234,17 +234,19 @@ the core tests run on `tests/Struo.Tests.Fixtures`, not on the sample.
 
 1. If you opted the sample in, revert both edits: remove the `ProjectReference` to
    `Struo.Sample.Blog.csproj` from `Struo.Api.csproj`, and re-comment (or delete) the
-   `"ContentAssemblies"` line in your `appsettings.Development.json`. Then delete that line and the
-   two comment lines above `"Struo"` from the tracked `appsettings.Development.json.example` too;
-   otherwise the tracked example keeps pointing at a sample that doesn't exist.
+   `"ContentAssemblies"` line in your `appsettings.Development.json`. Whether or not you did,
+   delete the sample's `"ContentAssemblies"` line and the two comment lines above `"Struo"` from the
+   tracked `src/Struo.Api/appsettings.Development.json.example`; otherwise it keeps pointing at a
+   sample that doesn't exist.
 
 2. Delete the whole `samples/` directory, which holds the sample and its test project
    `Struo.Sample.Blog.Tests`, and remove the `<Folder Name="/samples/">` block from `StruoCMS.slnx`.
 
 3. Delete `frontend/e2e/sample/`. `frontend/playwright.config.ts` adds the `sample` project only
    while that directory exists, so the config needs no edit. Remove the `"e2e:sample"` and
-   `"e2e:all"` scripts from `frontend/package.json`, which would otherwise name a project that is
-   gone, and trim the sample's section out of `frontend/e2e/README.md`.
+   `"e2e:all"` scripts from `frontend/package.json`: `e2e:sample` would name a project that is gone,
+   and `e2e:all` would only repeat `e2e`. Trim the sample's section out of `frontend/e2e/README.md`,
+   and the "Manually verifying sample-only flows" section out of `frontend/README.md`.
 
 4. Clean up the five tables in any database the sample has run against, and the sample migration's
    row in the version table. The tables the sample migration created don't go away with the code;

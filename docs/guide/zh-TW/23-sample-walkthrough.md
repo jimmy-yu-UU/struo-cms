@@ -217,15 +217,18 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
 
 1. 如果你開啟過範例，先還原兩處編輯：從 `Struo.Api.csproj` 移除指到 `Struo.Sample.Blog.csproj` 的
    `ProjectReference`；把 `appsettings.Development.json` 裡的 `"ContentAssemblies"` 那一行改回註解
-   或刪掉。接著把追蹤中的 `appsettings.Development.json.example` 裡那一行、連同 `"Struo"` 上面兩行
-   指向它的註解一起移除，否則這份範例設定檔會一直指向不存在的範例。
+   或刪掉。不論有沒有開啟過，都要把追蹤中的 `src/Struo.Api/appsettings.Development.json.example`
+   裡範例的 `"ContentAssemblies"` 那一行、連同 `"Struo"` 上面兩行指向它的註解一起移除，否則這份
+   範例設定檔會一直指向不存在的範例。
 
 2. 刪掉整個 `samples/` 目錄（裡面是範例與它的測試專案 `Struo.Sample.Blog.Tests`），並從
    `StruoCMS.slnx` 移除 `<Folder Name="/samples/">` 那個區塊。
 
 3. 刪掉 `frontend/e2e/sample/`。`frontend/playwright.config.ts` 只在這個目錄存在時才加入
-   `sample` 專案，設定檔不用改。從 `frontend/package.json` 移除 `"e2e:sample"` 與 `"e2e:all"`，
-   否則它們會指向已經不存在的專案；再修剪 `frontend/e2e/README.md` 談範例的段落。
+   `sample` 專案，設定檔不用改。從 `frontend/package.json` 移除 `"e2e:sample"` 與 `"e2e:all"`：
+   `e2e:sample` 會指向已經不存在的專案，`e2e:all` 則只是重複 `e2e`。再修剪
+   `frontend/e2e/README.md` 談範例的段落，以及 `frontend/README.md` 的「Manually verifying
+   sample-only flows」一節。
 
 4. 清掉任何跑過範例的資料庫裡的五張表，以及版本表裡範例 migration 的紀錄。範例 migration 建的
    表不會跟著程式碼一起消失；紀錄不刪的話，`migrate:status` 會把它列成 `Orphaned`，不擋啟動，

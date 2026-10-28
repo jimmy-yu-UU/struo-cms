@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The backend tests are split into three projects. `tests/Struo.Tests.Support` is a class library with
+- The backend tests are split into separate projects. `tests/Struo.Tests.Support` is a class library with
   the shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`) in
   the namespace `Struo.Tests.Support`. `tests/Struo.Tests.Template` holds the template's own
   repository guards, the documentation conventions, the template invariants and the CI, Docker and
@@ -21,8 +21,12 @@
   sample. Removing the sample no longer touches `tests/`: delete `samples/`, its `StruoCMS.slnx` block
   and `frontend/e2e/sample/`. The Playwright config adds the `sample` project only while
   `frontend/e2e/sample/` exists. A fork that already deleted or edited the sample's tests under
-  `tests/Struo.Tests` gets a one-time merge conflict on those files: keep your deletion, or apply the
-  edit to the retargeted file. See [Chapter 22](22-testing.md) and
+  `tests/Struo.Tests` gets a one-time merge conflict. On every conflict under `tests/Struo.Tests`, take
+  upstream's version: those files now run on the fixtures, and the pin in
+  `Support/ContentAssemblyEnvBootstrap.cs` and the `Struo.Tests.Fixtures` `ProjectReference` in
+  `Struo.Tests.csproj` must stay, or the suite fails and its tests reach your development Redis and
+  OIDC providers. Only the sample's own tests, which moved to `samples/Struo.Sample.Blog.Tests`, may
+  stay deleted. See [Chapter 22](22-testing.md) and
   [Chapter 23](23-sample-walkthrough.md).
 
 ## 0.15.0 — 2026-10-28

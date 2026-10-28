@@ -19,9 +19,9 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 `Struo.Domain` 本身沒有任何 `PackageReference` 或 `ProjectReference`——連 SqlSugar 的持久化
 屬性都不會出現在 domain 型別上。
 
-測試專案 `tests/Struo.Tests` 是唯一參照全部四個專案、外加範例專案的地方；`Struo.Application`
-與 `Struo.Infrastructure` 也都對它開放 `InternalsVisibleTo`，fork 如果重新命名測試專案，這
-兩個 `InternalsVisibleTo` 要一起改。
+測試專案 `tests/Struo.Tests` 參照全部四個專案，另外還有 `tests/Struo.Tests.Support` 與只給測試用的
+`tests/Struo.Tests.Fixtures`；`Struo.Api`、`Struo.Application` 與 `Struo.Infrastructure` 都對它開放
+`InternalsVisibleTo`，fork 如果重新命名測試專案，這三個 `InternalsVisibleTo` 要一起改。
 
 ## 核心與範例的界線
 

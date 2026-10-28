@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
 
-// The sample's specs live next to the sample; deleting `e2e/sample/` removes the project with them.
+// Present only while `e2e/sample/` exists; deleting it removes the project.
 const sampleSpecsDir = fileURLToPath(new URL('./e2e/sample', import.meta.url))
 const hasSampleSpecs = existsSync(sampleSpecsDir)
 

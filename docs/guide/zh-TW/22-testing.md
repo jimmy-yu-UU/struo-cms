@@ -102,7 +102,7 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 
 `tests/Struo.Tests.Fixtures` 是只為測試存在的小型內容專案，核心要處理的每種形狀各宣告一個集合：
 帶翻譯 sidecar、版本紀錄與軟刪除的文章，經由帶 payload 的 junction 連起來的標籤，自我參照的
-分類樹，以及 `Repeater` 的子型別。它有自己的 migration，`tests/Struo.Tests` 透過
+分類樹，外加一個當 `Repeater` 子型別用的純類別。它有自己的 migration，`tests/Struo.Tests` 透過
 `ContentAssemblyEnvBootstrap` 把它釘成內容組件。
 
 任何會出貨的主機都不會註冊它。它的集合帶 `fx` 前綴（`fxArticle`、`fxTag`），資料表叫 `fx_*`，所以

@@ -4,7 +4,7 @@
 
 ### 變更
 
-- 後端測試拆成三個專案。`tests/Struo.Tests.Support` 是類別庫，裝著共用的輔助程式
+- 後端測試拆成多個獨立專案。`tests/Struo.Tests.Support` 是類別庫，裝著共用的輔助程式
   （`StruoApiFactory`、`TestBackend`、`TestHostEnvironment`、`StruoTestFramework`），命名空間是
   `Struo.Tests.Support`。`tests/Struo.Tests.Template` 放模板自己的儲存庫守衛，包括文件慣例、
   模板不變式，以及 CI、Docker 與健康檢查的慣例，fork 可以整個刪掉。`tests/Struo.Tests` 留著核心測試。
@@ -17,7 +17,10 @@
   的測試搬到範例旁邊的 `samples/Struo.Sample.Blog.Tests`。移除範例不再需要動 `tests/`：刪掉
   `samples/`、它在 `StruoCMS.slnx` 的區塊與 `frontend/e2e/sample/` 就好。Playwright 設定只在
   `frontend/e2e/sample/` 存在時才加入 `sample` 專案。已經刪掉或改過 `tests/Struo.Tests` 底下範例測試
-  的 fork，合併時那些檔案會衝突一次：保留你的刪除，或把修改套用到改指向後的檔案。見
+  的 fork，合併時會衝突一次。`tests/Struo.Tests` 底下的衝突一律採用上游的版本：那些檔案現在跑在
+fixture 上，`Support/ContentAssemblyEnvBootstrap.cs` 的釘住設定與 `Struo.Tests.csproj` 裡指向
+`Struo.Tests.Fixtures` 的 `ProjectReference` 必須留著，否則測試套件會失敗，而且測試會連到你的開發
+Redis 與 OIDC 提供者。只有搬到 `samples/Struo.Sample.Blog.Tests` 的範例自己的測試可以維持刪除。見
   [第 22 章](22-testing.md)與[第 23 章](23-sample-walkthrough.md)。
 
 ## 0.15.0 — 2026-10-28
