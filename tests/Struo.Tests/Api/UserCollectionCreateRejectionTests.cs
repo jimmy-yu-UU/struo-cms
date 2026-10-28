@@ -16,7 +16,7 @@ public class UserCollectionCreateRejectionTests(ApiFactory factory)
     private static JsonElement Root(string body) => JsonDocument.Parse(body).RootElement;
 
     [Fact]
-    public async Task Generic_create_on_the_user_collection_is_a_400_pointing_at_the_users_endpoint()
+    public async Task Generic_create_on_the_user_collection_is_a_400_naming_the_collection()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
 
@@ -26,7 +26,8 @@ public class UserCollectionCreateRejectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
         var error = Root(body).GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
-        error.GetProperty("message").GetString().Should().Contain("POST /api/users");
+        error.GetProperty("message").GetString()
+            .Should().Be("Items cannot be created in collection 'user' through the generic items API.");
     }
 
     [Fact]
@@ -54,6 +55,6 @@ public class UserCollectionCreateRejectionTests(ApiFactory factory)
 
         var body = await resp.Content.ReadAsStringAsync();
         Root(body).GetProperty("errors").EnumerateArray().Should().NotBeEmpty(body);
-        body.Should().Contain("BAD_USER_INPUT").And.Contain("POST /api/users");
+        body.Should().Contain("BAD_USER_INPUT").And.Contain("cannot be created in collection 'user'");
     }
 }

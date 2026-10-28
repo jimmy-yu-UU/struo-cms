@@ -101,7 +101,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // Wires an ItemDeserializer against the SAME repo/graph BuildRepoWithGraph() just built, so the
-    // create-binding allowlist tests below drive ItemDeserializer.Deserialize ->
+    // create-binding allowlist tests below drive ItemDeserializer.DeserializeForCreate ->
     // SqlSugarItemRepository.CreateAsync, the pair ItemService.CreateAsync calls in production,
     // without the full ItemService.
     private (IItemRepository Repo, ItemDeserializer Deserializer, IMetadataProvider Provider)
@@ -592,7 +592,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         rows.Should().ContainSingle().Which.Id.Should().Be(hit.Id);
     }
 
-    // The create-binding allowlist (bf04229, ItemDeserializer.Deserialize) on real Postgres. Once a
+    // The create-binding allowlist (bf04229, ItemDeserializer.DeserializeForCreate) on real Postgres. Once a
     // client-supplied "id" is stripped from the body, the entity reaches
     // SqlSugarItemRepository.CreateAsync with Id == Guid.Empty — exactly the condition that makes it
     // mint a Guid.CreateVersion7() id (SqlSugarItemRepository.CreateAsync). Doing this TWICE with the SAME
@@ -611,8 +611,8 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         var clientId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var body = JsonDocument.Parse($$"""{"id":"{{clientId}}","name":"PgAllowlistId"}""").RootElement;
 
-        var first = (Category)await repo.CreateAsync("category", deserializer.Deserialize("category", body, meta));
-        var second = (Category)await repo.CreateAsync("category", deserializer.Deserialize("category", body, meta));
+        var first = (Category)await repo.CreateAsync("category", deserializer.DeserializeForCreate("category", body, meta));
+        var second = (Category)await repo.CreateAsync("category", deserializer.DeserializeForCreate("category", body, meta));
 
         first.Id.Should().NotBe(clientId);
         second.Id.Should().NotBe(clientId);
@@ -638,12 +638,12 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
 
         var parentBody = JsonDocument.Parse("""{"name":"PgAllowlistFkParent"}""").RootElement;
         var parent = (Category)await repo.CreateAsync(
-            "category", deserializer.Deserialize("category", parentBody, meta));
+            "category", deserializer.DeserializeForCreate("category", parentBody, meta));
 
         var childBody = JsonDocument.Parse(
             "{\"name\":\"PgAllowlistFkChild\",\"parentId\":\"" + parent.Id + "\"}").RootElement;
         var child = (Category)await repo.CreateAsync(
-            "category", deserializer.Deserialize("category", childBody, meta));
+            "category", deserializer.DeserializeForCreate("category", childBody, meta));
 
         var reloaded = (Category)(await repo.GetByIdAsync("category", child.Id.ToString()))!;
         reloaded.ParentId.Should().Be(parent.Id);

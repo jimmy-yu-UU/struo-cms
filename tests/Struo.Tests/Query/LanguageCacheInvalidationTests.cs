@@ -18,13 +18,13 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Pins that ItemService invalidates the language cache on trash, purge AND restore of a `language`
-/// row, not just create/update. The gate keys off the collection NAME ("language"), so this
-/// fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
+/// Pins that ItemService, through the language write interceptor, invalidates the language cache on
+/// trash, purge AND restore of a `language` row, not just create/update. The interceptor keys off the
+/// collection NAME ("language"), so this fixture entity implements <see cref="ISoftDeletable"/> itself purely to make the trash/restore
 /// branches reachable here — the real, production `Language` row does not implement it (languages
 /// are never soft-deleted in this template; every delete purges), which is also covered below.
 /// Minimal hand-rolled stubs throughout (no DB, no SqlSugar) — same style as
-/// <c>DeleteRestrictWithGuidPkTests</c> — so the only real code under test is ItemService itself.
+/// <c>DeleteRestrictWithGuidPkTests</c> — so the only real code under test is ItemService and the language interceptor.
 /// </summary>
 public class LanguageCacheInvalidationTests
 {
@@ -139,6 +139,11 @@ public class LanguageCacheInvalidationTests
             Task.CompletedTask;
     }
 
+    private sealed class NoLanguageRules : ILanguageCollectionRules
+    {
+        public Task EnsureInvariantsAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
     private static EntityDescriptor Descriptor() =>
         new(typeof(FakeLanguageRow),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["id"] = "Id" },
@@ -149,14 +154,19 @@ public class LanguageCacheInvalidationTests
         var registry = new StubRegistry(Descriptor());
         var graph = new StubGraph();
         var m2m = new StubM2M();
-        return new ItemService(
-            repo, meta, registry, new StubPermissions(),
-            graph, new StubExpander(), m2m,
+        return TestItemService.Create(
+            repo,
+            meta,
+            registry,
+            graph,
+            new StubExpander(),
+            m2m,
             languages,
-            new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
-            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, m2m),
-            new NoopUserSessionRevocationService());
+            new StubRevisionStore(),
+            new RevisionSnapshotBuilder(repo, meta, registry, m2m),
+            permissions: new StubPermissions(),
+            interceptors: [new LanguageWriteInterceptor(new NoLanguageRules(), languages)]);
     }
 
     [Fact]

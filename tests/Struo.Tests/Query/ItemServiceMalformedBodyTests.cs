@@ -67,9 +67,17 @@ internal sealed class MalformedBodyHarness : IDisposable
         var revisionUser = new TestCurrentUserAccessor(Guid.Empty);
         var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
-        Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        Service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            revisionUser,
+            revisionStore,
+            snapshotBuilder);
     }
 
     public static MalformedBodyHarness Create() => new();

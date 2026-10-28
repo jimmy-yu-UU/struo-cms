@@ -371,9 +371,17 @@ internal sealed class SoftDeleteRepositoryHarness : IDisposable
         var languages = new LanguageProvider(db);
         var revisionStore = new SqlSugarRevisionStore(db, currentUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
-        var service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        var service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            currentUser,
+            revisionStore,
+            snapshotBuilder);
 
         return new SoftDeleteRepositoryHarness(database, db, repo, service);
     }

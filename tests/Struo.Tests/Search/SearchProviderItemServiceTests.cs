@@ -62,9 +62,19 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
         _provider = new ScriptedSearchProvider(r => _script(r));
-        _svc = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, _languages, _options, new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService(), _provider);
+        _svc = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            _languages,
+            revisionUser,
+            revisionStore,
+            snapshotBuilder,
+            options: _options,
+            searchProvider: _provider);
 
         _alpha = Create("Alpha"); _beta = Create("Beta"); _gamma = Create("Gamma");
         db.Aop.OnLogExecuting = (sql, _) => _sql.Add(sql);

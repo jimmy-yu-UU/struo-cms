@@ -23,22 +23,28 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     private readonly FieldValidatorRegistry validatorRegistry = new();
 
-    public object Deserialize(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, enforceRequired: true, onlyFields: null);
+    /// <summary>
+    /// Binds a request body for a CREATE, deferring the scalar Required
+    /// check: <see cref="ItemService"/> runs the write interceptors' <c>BeforeWriteAsync</c> first, so an
+    /// interceptor can fill a Required field, then calls <see cref="EnforceRequiredFields"/> itself. The
+    /// per-interface validators still run for every field, so a Required list-type field is checked here.
+    /// </summary>
+    public object DeserializeForCreate(string collection, JsonElement body, CollectionMetadata meta) =>
+        DeserializeCore(collection, body, meta, validateAllFields: true, onlyFields: null);
 
     /// <summary>
     /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
-    /// per-interface validation as <see cref="Deserialize"/>, but WITHOUT the Required check:
+    /// per-interface validation as <see cref="DeserializeForCreate"/>, but WITHOUT the Required check:
     /// <see cref="ItemService.UpdateCoreAsync"/> is a merge that only overlays fields the client
     /// actually sent, so a Required field this body omits must not fail here — it fails, if at
     /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
     /// </summary>
     public object DeserializeForUpdate(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, enforceRequired: false, onlyFields: null);
+        DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields: null);
 
     /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
-    /// RichText, MaxLength and per-interface validation as <see cref="Deserialize"/>, but only for the
+    /// RichText, MaxLength and per-interface validation as <see cref="DeserializeForCreate"/>, but only for the
     /// camelCase fields in <paramref name="onlyFields"/> that are present in <paramref name="body"/>, and
     /// without Required checks (absent payload fields keep their stored value). Returns CLR property name → value.
     /// </summary>
@@ -46,7 +52,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         string collection, JsonElement body, CollectionMetadata meta, IReadOnlySet<string> onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-        var entity = DeserializeCore(collection, body, meta, enforceRequired: false, onlyFields);
+        var entity = DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields);
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
@@ -63,7 +69,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     private object DeserializeCore(
-        string collection, JsonElement body, CollectionMetadata meta, bool enforceRequired, IReadOnlySet<string>? onlyFields)
+        string collection, JsonElement body, CollectionMetadata meta, bool validateAllFields,
+        IReadOnlySet<string>? onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
 
@@ -74,14 +81,12 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         ClearSystemReadOnlyFields(meta, d, entity);
         SanitizeRichTextFields(meta, d, entity);
 
-        // Skipped entirely for a partial bind (enforceRequired: false) — a junction payload object
-        // only sets the fields it names, so a required payload field absent from this particular
-        // element is not an error; absent payload fields keep their stored value.
-        if (enforceRequired) EnforceRequiredFields(meta, d, entity);
-
+        // The scalar Required check is not run here: ItemService runs it (create after BeforeWrite,
+        // update against the merged entity), and a partial bind never runs it — a junction payload
+        // object only sets the fields it names, so absent payload fields keep their stored value.
         EnforceMaxLength(meta, d, entity);
 
-        // When Required isn't enforced above (update / partial bind), gate the per-interface
+        // For an update or partial bind (validateAllFields: false), gate the per-interface
         // validators on body presence too: an omitted field is never overlaid by the caller
         // (ItemService.UpdateCoreAsync's bodyKeys merge, or DeserializePartial's own
         // onlyFields∩presence extraction), so validating/normalizing it here is pointless — and
@@ -90,9 +95,9 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         // the body never mentioned, and each validator's own unconditional Required check would
         // reject that exactly as if the client had explicitly wiped it. A field the body DOES send
         // — including an explicit "[]"/"{}" — still runs its full validator and can still fail
-        // Required; only "never mentioned" is exempt. enforceRequired: true (create) keeps
-        // validating every field regardless of presence, same as before.
-        RunPerInterfaceValidators(meta, d, entity, enforceRequired ? null : PresentNames(body));
+        // Required; only "never mentioned" is exempt. validateAllFields: true (create) validates every
+        // field regardless of presence, so a Required list-type field is checked here.
+        RunPerInterfaceValidators(meta, d, entity, validateAllFields ? null : PresentNames(body));
 
         return entity;
     }
@@ -242,10 +247,10 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     // required validation — skip translatable fields (they live on the sidecar entity and are
-    // validated per-locale in SyncTranslationsAsync, not on the parent). Called here for CREATE
-    // (enforceRequired: true) and again by ItemService.UpdateCoreAsync, against the merged entity,
-    // after both its overlay loops have run — an update only fails Required when the client
-    // explicitly wipes the field (null/blank/Guid.Empty), never merely by omitting it.
+    // validated per-locale in SyncTranslationsAsync, not on the parent). Called only by ItemService,
+    // for create and update, against the merged entity after the write interceptors' BeforeWriteAsync —
+    // an update only fails Required when the client explicitly wipes the field (null/blank/Guid.Empty),
+    // never merely by omitting it.
     internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
         foreach (var fieldName in meta.Fields.Where(f => f.Required && !f.Translatable).Select(f => f.Name))

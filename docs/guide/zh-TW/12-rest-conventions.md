@@ -296,7 +296,7 @@ HTTP_STATUS:400
 `file` 集合要走專屬的上傳端點，對它送 `POST /api/items/file` 一律被拒絕，不管 body 寫什麼：
 
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Files cannot be created through the generic items API. Upload one with POST /api/files instead."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
 ```
 

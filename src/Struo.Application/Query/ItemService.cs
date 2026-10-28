@@ -1,9 +1,9 @@
 // src/Struo.Application/Query/ItemService.cs
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
 using Struo.Application.Configuration;
-using Struo.Application.Files;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Revisions;
@@ -35,7 +35,6 @@ public sealed class ItemService(
     ICurrentUserAccessor currentUser,
     IRevisionStore revisions,
     RevisionSnapshotBuilder snapshotBuilder,
-    IUserSessionRevocationService sessionRevocation,
     // U5: trailing and optional — existing test files construct ItemService directly (necessary
     // constructor args are not optional there), and DI always injects the AddStruoData-registered
     // instance; null (direct construction) means the built-in LIKE search only.
@@ -43,15 +42,10 @@ public sealed class ItemService(
     // U5b: trailing and optional, same rationale as searchProvider above; null means no listener
     // is registered (or a test harness doesn't care), so NotifyAsync below is a no-op.
     IItemChangeNotifier? notifier = null,
-    // Trailing and optional like searchProvider/notifier: tests that construct ItemService directly
-    // keep compiling; DI injects the AddStruoData registration. null means the language collection's
-    // invariants are not enforced (only direct construction in tests).
-    ILanguageCollectionRules? languageRules = null,
-    // Trailing and optional like the others: backs the User collection's email uniqueness check.
-    IUserCredentialStore? userCredentials = null,
-    // Trailing and optional like the others: owns the file collection's delete lifecycle (logo
-    // reference, blob); null (direct construction in tests) means the generic pipeline only.
-    IFileLifecycle? fileLifecycle = null) : IItemUseCases
+    // Trailing and optional like the others: the write interceptors and delete handlers DI collects
+    // from every registration; null (direct construction in tests) means none.
+    IEnumerable<IItemWriteInterceptor>? interceptors = null,
+    IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
 
@@ -61,7 +55,7 @@ public sealed class ItemService(
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
-    private readonly UserEmailRules userEmailRules = new(userCredentials);
+    private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
     private readonly TranslationOverlay overlay =
@@ -172,27 +166,21 @@ public sealed class ItemService(
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
-        // File rows are owned by the upload pipeline: StorageKey/Size/ContentType/dimensions are all
-        // derived from the blob, and FileName is ReadOnly so the generic write path cannot even set
-        // it (setting it null there would violate the NOT NULL column and throw an unhandled 500).
-        // Reject explicitly here rather than at the controller, so REST and the GraphQL createFile
-        // mutation are both covered. Reads, updates (the admin media UI edits per-locale Title/Alt
-        // this way) and deletes are unaffected.
-        if (string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase))
-            throw new QueryException(
-                "Files cannot be created through the generic items API. Upload one with POST /api/files instead.");
-        // Creating a user needs the password hashing and password policy that only POST /api/users
-        // applies. Checked before any email rule, so a duplicate address is a 400 as well. Reads,
-        // updates and deletes are unaffected.
-        if (string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase))
-            throw new QueryException(
-                "Users cannot be created through the generic items API. Create one with POST /api/users instead.");
+        // Rows of a non-creatable collection come from a dedicated pipeline of their own, so the
+        // generic path refuses before any body inspection.
+        if (!meta.Creatable)
+            throw new QueryException($"Items cannot be created in collection '{meta.Name}' through the generic items API.");
         // A non-object top-level body (array or scalar) would reach Deserialize below, which assumes an
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
-        var entity = deserializer.Deserialize(collection, body, meta);
+        // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
+        var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
+        var hooks = writeInterceptors.Begin(
+            ItemWriteOperation.Create, meta, entity, id: null, ItemDeserializer.PresentNames(body), body);
+        await hooks.BeforeWriteAsync(ct);
+        ItemDeserializer.EnforceRequiredFields(meta, d, entity);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
@@ -205,15 +193,15 @@ public sealed class ItemService(
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
-            await EnforceLanguageRulesAsync(collection, ct);
+            hooks.Stored(created, createdId);
+            await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
                 await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct: ct);
             }
         }, ct);
-        InvalidateLanguagesIfNeeded(collection);
-        await NotifyAsync(SingleChange(meta.Name, createdId, ItemChangeKind.Created));
+        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, createdId, ItemChangeKind.Created));
         return projector.Project(created, meta, null);
     }
 
@@ -228,24 +216,68 @@ public sealed class ItemService(
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
         RequireSuperAdminForAdminOnly(meta);
         // Same non-object-body guard as CreateAsync — placed identically, right after the
-        // permission checks and before Deserialize.
+        // permission checks and before deserializing.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         var d = registry.Get(collection)!;
 
-        // Merge update: start from the existing row and overlay ONLY the fields the client actually
-        // sent (writable, non-readonly, non-system). This preserves server-managed columns the client
-        // never sends — e.g. a File's StorageKey/FileName/Size — so a partial PUT (status + translations
-        // only) cannot wipe NOT NULL metadata. Relations/translations are synced separately below.
+        var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
+        if (loaded is null) return null;
+        var (existing, preMerge) = loaded.Value;
+
+        var bodyKeys = MergeBody(collection, meta, d, body, existing);
+
+        var hooks = writeInterceptors.Begin(
+            operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
+            meta, existing, id, bodyKeys, body, preMerge);
+        await hooks.BeforeWriteAsync(ct);
+        await ValidateMergedAsync(collection, meta, d, body, existing, ct);
+
+        var persisted = await PersistUpdateAsync(
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber), meta, d, body, existing, hooks, ct);
+        if (persisted is null) return null;
+        var (updated, updatedId) = persisted.Value;
+        await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
+        return projector.Project(updated, meta, null);
+    }
+
+    // Loads the stored row (null -> 404); the merge mutates it.
+    private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
+        string collection, string id, CollectionMetadata meta, CancellationToken ct)
+    {
         var existing = await repository.GetByIdAsync(collection, id, ct: ct);
         if (existing is null) return null;
+        // A second copy of the stored row for interceptors that compare old and new.
+        var preMerge = writeInterceptors.AnyApplies(meta)
+            ? await repository.GetByIdAsync(collection, id, ct: ct)
+            : null;
+        return (existing, preMerge);
+    }
+
+    // Merge update: overlays ONLY the fields the client actually sent (writable, non-readonly,
+    // non-system) and the M2O foreign keys onto `existing`, and returns the body keys. This preserves
+    // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
+    // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
+    // translations are synced separately by persist.
+    private HashSet<string> MergeBody(
+        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
+    {
         // No Required check here — an update only overlays fields the client actually sent (see
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
-        // `incoming` alone; the Required check re-runs against the merged `existing` entity below.
+        // `incoming` alone; the Required check re-runs against the merged `existing` entity in
+        // ValidateMergedAsync.
         var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
         var bodyKeys = ItemDeserializer.PresentNames(body);
+        OverlayFields(meta, d, bodyKeys, existing, incoming);
+        OverlayManyToOneKeys(meta, d, bodyKeys, existing, incoming);
+        return bodyKeys;
+    }
+
+    private static void OverlayFields(
+        CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
+    {
         foreach (var field in meta.Fields)
         {
             if (field.IsSystem || field.ReadOnly) continue;
@@ -255,14 +287,18 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+    }
 
-        // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
-        // [CmsField], so the field overlay above skips them. Overlay each local FK the client
-        // actually sent, keeping the same allowlist discipline (only declared relations, only keys
-        // present in the body). Restricted to ManyToOne: O2M relations also carry a non-null
-        // ForeignKey (it names the FK column on the *related* entity, not this one), so without
-        // this guard the loop would try to overlay a property that doesn't exist/isn't writable
-        // here; M2M has no local FK at all.
+    // Relation foreign keys (M2O / self-referencing tree) are declared via [CmsRelation], not
+    // [CmsField], so the field overlay skips them. Overlay each local FK the client
+    // actually sent, keeping the same allowlist discipline (only declared relations, only keys
+    // present in the body). Restricted to ManyToOne: O2M relations also carry a non-null
+    // ForeignKey (it names the FK column on the *related* entity, not this one), so without
+    // this guard the loop would try to overlay a property that doesn't exist/isn't writable
+    // here; M2M has no local FK at all.
+    private static void OverlayManyToOneKeys(
+        CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
+    {
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
@@ -273,24 +309,22 @@ public sealed class ItemService(
             if (pi is not { CanWrite: true }) continue;        // FK must be a writable property on THIS entity
             pi.SetValue(existing, pi.GetValue(incoming));
         }
+    }
 
-        if (IsFileCollection(collection) && bodyKeys.Contains("status")
-            && d.FieldToProperty.TryGetValue("status", out var statusProp))
-            EnsureFileStatus(d.Properties.GetValueOrDefault(statusProp)?.GetValue(existing) as string);
-
-        // Required check runs here — against the MERGED entity, after both overlay loops above —
-        // rather than while deserializing `incoming`: an omitted Required field keeps whatever
-        // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
-        // field still 400s with the same message CREATE uses. Required is also evaluated LAST here:
-        // MaxLength and the per-interface validator phases already ran on `incoming` inside
-        // DeserializeForUpdate above, before this line is ever reached, so a body that violates both
-        // one of those rules AND Required (on the merged entity) reports the earlier failure — which
-        // can differ from what CREATE (Required checked first) would report for the identical shape.
-        // A revert passes a full snapshot as its body, so every field is re-sent and this check sees
-        // the same values a full PUT would.
+    // Required check runs here — against the MERGED entity, after both overlay loops in MergeBody —
+    // rather than while deserializing `incoming`: an omitted Required field keeps whatever
+    // `existing` already held (no failure), while an explicit null/blank/Guid.Empty for that
+    // field still 400s with the same message CREATE uses. The write interceptors' BeforeWrite runs
+    // immediately before it, and MaxLength and the per-interface validator phases already ran on
+    // `incoming` inside DeserializeForUpdate, so a body that violates one of those rules AND
+    // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert
+    // passes a full snapshot as its body, so every field is re-sent and this check sees the same
+    // values a full PUT would.
+    private async Task ValidateMergedAsync(
+        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing,
+        CancellationToken ct)
+    {
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
-        if (UserEmailRules.AppliesTo(collection) && bodyKeys.Contains(UserEmailRules.EmailField))
-            await userEmailRules.NormalizeAndCheckAsync(d, existing, ct);
 
         // Self-referencing tree collections: reject a parentId that points at the item itself or
         // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
@@ -302,8 +336,16 @@ public sealed class ItemService(
         // value (no protection, but backward compatible for callers that don't track versions).
         if (existing is Struo.Domain.Auditing.AuditableEntity ex)
             ex.Version = JsonBodyUtil.TryReadVersion(body) ?? ex.Version;
+    }
 
-        // Parent row + M2M + translations commit atomically (see CreateAsync).
+    private readonly record struct UpdateTarget(string Collection, string Id, string Operation, long? SourceRevisionNumber);
+
+    // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
+    private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
+        UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
+        object existing, ItemWriteHooks hooks, CancellationToken ct)
+    {
+        var (collection, id, operation, sourceRevisionNumber) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
@@ -315,7 +357,8 @@ public sealed class ItemService(
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
-            await EnforceLanguageRulesAsync(collection, ct);
+            hooks.Stored(updated, updatedId);
+            await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, updated, ct);
@@ -323,28 +366,7 @@ public sealed class ItemService(
                     sourceRevisionNumber, ct: ct);
             }
         }, ct);
-        if (updated is null) return null;
-        InvalidateLanguagesIfNeeded(collection);
-        await NotifyAsync(SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
-        return projector.Project(updated, meta, null);
-    }
-
-    private const string LanguageCollection = "language";
-
-    private static bool IsLanguageCollection(string collection) =>
-        string.Equals(collection, LanguageCollection, StringComparison.OrdinalIgnoreCase);
-
-    // Runs INSIDE the write transaction: a violation throws QueryException, the transaction rolls
-    // back, and the API answers 400 with the rule's message.
-    private Task EnforceLanguageRulesAsync(string collection, CancellationToken ct) =>
-        IsLanguageCollection(collection) && languageRules is not null
-            ? languageRules.EnsureInvariantsAsync(ct)
-            : Task.CompletedTask;
-
-    private void InvalidateLanguagesIfNeeded(string collection)
-    {
-        if (IsLanguageCollection(collection))
-            languages.Invalidate();
+        return updated is null ? null : (updated, updatedId);
     }
 
     /// <summary>
@@ -359,8 +381,8 @@ public sealed class ItemService(
         if (!permissions.CanDelete(collection)) throw new PermissionDeniedException("Delete not permitted.");
         RequireSuperAdminForAdminOnly(meta);
 
-        if (fileLifecycle is not null && IsFileCollection(collection))
-            return await DeleteFileAsync(collection, id, purge, fileLifecycle, ct);
+        if (writeInterceptors.DeleteHandlerFor(meta) is { } handler)
+            return await DeleteWithHandlerAsync(collection, meta, id, purge, handler, ct);
 
         if (meta.SoftDelete && !purge)
         {
@@ -375,6 +397,8 @@ public sealed class ItemService(
             // exists, so this call still reports true; only an unknown id reports false).
             var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
             if (existing is null) return false; // unknown id -> unchanged (false)
+            var trashHooks = writeInterceptors.Begin(ItemWriteOperation.Trash, meta, existing, id);
+            await trashHooks.BeforeWriteAsync(ct);
 
             // Restrict still guards the soft-delete (trash) branch — unchanged contract. The purge
             // branch below re-runs the identical check as the first step of PurgeCoreAsync, so every
@@ -399,89 +423,65 @@ public sealed class ItemService(
                 await this.purge.CheckRestrictAsync(collection, id, ct);
                 var trashedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
                 if (trashedNow)
+                {
+                    await trashHooks.InTransactionAsync(ct);
                     await CaptureRevisionAsync(collection, id, meta, "delete", ct);
+                }
                 return trashedNow;
             }, ct);
-            if (softDeletedNow)
-            {
-                InvalidateLanguagesIfNeeded(collection);
-                await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed));
-            }
-            await RevokeSessionsIfUserAsync(collection, id);
+            // AfterCommit runs for an already-trashed row too, with Changed false.
+            trashHooks.SetChanged(softDeletedNow);
+            await AfterCommitAndNotifyAsync(trashHooks, softDeletedNow
+                ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Trashed)
+                : null);
             return true; // idempotent success: the row exists, whether newly trashed here or already trashed
         }
 
+        var purgeHooks = await BeginPurgeHooksAsync(collection, meta, id, ct);
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(async () =>
         {
             var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
-            if (purged) await EnforceLanguageRulesAsync(collection, ct);
+            if (purged) await purgeHooks.InTransactionAsync(ct);
             return purged;
         }, ct);
         // Gated on the top-level row having existed: with no DB-level FKs, a dangling child row (its FK
         // pointing at an id that was never a real row) could otherwise still be found by the Cascade/
         // SetNull/M2M scans above and raise its own Updated/Purged even though nothing here actually
         // existed to purge. Accepted — the only way to hit it is already-inconsistent data.
-        if (existed)
-        {
-            InvalidateLanguagesIfNeeded(collection);
-            await NotifyAsync(changes);
-            await RevokeSessionsIfUserAsync(collection, id);
-        }
+        if (existed) await AfterCommitAndNotifyAsync(purgeHooks, changes);
         return existed;
     }
 
-    // A file is either published (readable by anyone with its id) or draft (file writers only).
-    private static void EnsureFileStatus(string? status)
+    // The interceptors' pre-read of the row a purge removes. Skipped, like the hooks, when no interceptor
+    // applies or the id is unknown (nothing to hand over).
+    private async Task<ItemWriteHooks> BeginPurgeHooksAsync(
+        string collection, CollectionMetadata meta, string id, CancellationToken ct)
     {
-        if (status is not (FileStorageOptions.PublishedStatus or FileStorageOptions.DraftStatus))
-            throw new QueryException(
-                $"Field 'status' must be '{FileStorageOptions.PublishedStatus}' or '{FileStorageOptions.DraftStatus}'.");
+        if (!writeInterceptors.AnyApplies(meta)) return ItemWriteHooks.Empty;
+        var row = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
+        if (row is null) return ItemWriteHooks.Empty;
+        var hooks = writeInterceptors.Begin(ItemWriteOperation.Purge, meta, row, id);
+        await hooks.BeforeWriteAsync(ct);
+        return hooks;
     }
 
-    private static bool IsFileCollection(string collection) =>
-        string.Equals(collection, FileCollection.Name, StringComparison.OrdinalIgnoreCase);
-
-    // File deletes run through the file lifecycle, the single path shared with the media library: the
-    // Restrict guard, SetNull and junction cleanup, the brand-logo reference and the stored blob.
-    private async Task<bool> DeleteFileAsync(
-        string collection, string id, bool purge, IFileLifecycle lifecycle, CancellationToken ct)
+    // A registered delete handler replaces the trash/purge below; interceptors see BeforeWrite and, once
+    // the handler reports the delete done, AfterCommit.
+    private async Task<bool> DeleteWithHandlerAsync(
+        string collection, CollectionMetadata meta, string id, bool purge,
+        ICollectionDeleteHandler handler, CancellationToken ct)
     {
-        if (!Guid.TryParse(id, out var fileId)) return false;
+        if (!handler.IsValidId(id)) return false;
         var existing = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (existing is null) return false;
-        if (purge) return await lifecycle.PurgeAsync(fileId, ct);
-        await lifecycle.TrashAsync(fileId, ct);
-        return true; // an already-trashed file is idempotent success, like the generic trash path
-    }
-
-    /// <summary>
-    /// Deleting a `user` row (soft-delete or purge) must clear that user's <c>UserSession</c> rows
-    /// proactively: the per-request cookie-liveness check only catches a deleted user's session
-    /// reactively, on its next use, so a session that is never presented again would otherwise leave
-    /// its row (and cache entry) around until that user's next login — which, for a deleted user,
-    /// never happens. Placed here (both DELETE branches share it), not in the REST controller, so REST
-    /// and the GraphQL <c>deleteUser</c> mutation — which calls straight into this method — are both
-    /// covered. Fires only after the delete has actually taken effect; the delete stays committed
-    /// regardless of what happens next. CancellationToken.None: the delete already committed, so a
-    /// disconnecting caller must not also skip revoking the now-deleted user's sessions. A revocation
-    /// failure surfaces as a distinct, client-safe error rather than an indistinguishable success.
-    /// </summary>
-    private async Task RevokeSessionsIfUserAsync(string collection, string id)
-    {
-        if (!string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase)) return;
-        if (!Guid.TryParse(id, out var userId)) return;
-
-        try
-        {
-            await sessionRevocation.RevokeAllForUserAsync(userId, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            throw new SessionRevocationFailedException(
-                "The user was deleted, but revoking their existing sessions failed. " +
-                "Some sessions may still be active.", ex);
-        }
+        var hooks = writeInterceptors.Begin(
+            purge ? ItemWriteOperation.Purge : ItemWriteOperation.Trash, meta, existing, id);
+        await hooks.BeforeWriteAsync(ct);
+        var done = purge ? await handler.PurgeAsync(id, ct) : await handler.TrashAsync(id, ct);
+        // The handler owns the transaction and any notification, so only AfterCommit applies here.
+        if (done) await AfterCommitAndNotifyAsync(hooks, changes: null);
+        return done;
     }
 
     /// <summary>
@@ -501,6 +501,8 @@ public sealed class ItemService(
         // relied on to decide whether a restore actually happens (see the note below).
         var entity = await repository.GetByIdAsync(collection, id, DeletedFilter.With, ct);
         if (entity is null) return null;                       // unknown id -> 404
+        var hooks = writeInterceptors.Begin(ItemWriteOperation.Restore, meta, entity, id);
+        await hooks.BeforeWriteAsync(ct);
 
         // The restore clears DeletedAt, bumps Version and — for a revisioned collection — records
         // a "restore" revision, all in ONE txn (capture rolls back with it).
@@ -513,14 +515,16 @@ public sealed class ItemService(
         {
             var r = await repository.RestoreAsync(collection, id, ct);
             if (r)
+            {
+                await hooks.InTransactionAsync(ct);
                 await CaptureRevisionAsync(collection, id, meta, "restore", ct);
+            }
             return r;
         }, ct);
-        if (restoredNow)
-        {
-            InvalidateLanguagesIfNeeded(collection);
-            await NotifyAsync(SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored));
-        }
+        hooks.SetChanged(restoredNow);
+        await AfterCommitAndNotifyAsync(hooks, restoredNow
+            ? SingleChange(meta.Name, this.purge.TypedId(collection, id), ItemChangeKind.Restored)
+            : null);
 
         var restored = await repository.GetByIdAsync(collection, id, DeletedFilter.Exclude, ct);
         return restored is null ? null : projector.Project(restored, meta, null);
@@ -629,6 +633,23 @@ public sealed class ItemService(
     // error response.
     private Task NotifyAsync(ItemChangeSet changes) =>
         notifier is null || changes.Count == 0 ? Task.CompletedTask : notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+
+    // Interceptor AfterCommit hooks run first; a throw skips the rest, the change notification still
+    // goes out (the write is committed), then the original exception surfaces.
+    private async Task AfterCommitAndNotifyAsync(ItemWriteHooks hooks, ItemChangeSet? changes)
+    {
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await hooks.AfterCommitAsync();
+        }
+        catch (Exception ex)
+        {
+            failure = ExceptionDispatchInfo.Capture(ex);
+        }
+        if (changes is not null) await NotifyAsync(changes);
+        failure?.Throw();
+    }
 
     private static ItemChangeSet SingleChange(string collection, object id, ItemChangeKind kind)
     {

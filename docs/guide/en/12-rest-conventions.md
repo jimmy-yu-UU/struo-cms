@@ -351,7 +351,7 @@ The `file` collection has to go through its own dedicated upload endpoint — se
 `POST /api/items/file` against it is always refused, whatever the body says:
 
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Files cannot be created through the generic items API. Upload one with POST /api/files instead."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
 ```
 

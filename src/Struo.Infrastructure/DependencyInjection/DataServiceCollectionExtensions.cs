@@ -63,6 +63,12 @@ public static class DataServiceCollectionExtensions
         // never-throw contract IItemChangeNotifier documents.
         services.TryAddScoped<IItemChangeNotifier, ItemChangeNotifier>();
         services.TryAddScoped<ItemPurgePipeline>();
+        // The core collections' write rules are ordinary interceptors, registered first so a fork's
+        // own interceptors (registered after AddStruoData) run after them. TryAddEnumerable keeps a
+        // repeated AddStruoData call from stacking duplicates.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, LanguageWriteInterceptor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, UserWriteInterceptor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, FileWriteInterceptor>());
         services.AddScoped<ItemService>();
         // Expose the use-case seam controllers depend on, forwarding to the SAME scoped
         // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.

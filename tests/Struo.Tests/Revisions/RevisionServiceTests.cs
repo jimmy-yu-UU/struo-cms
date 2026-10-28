@@ -86,9 +86,18 @@ public sealed class RevisionServiceHarness : IDisposable
 
         Repository = repo;
         Store = realStore;
-        Service = new ItemService(repo, provider, registry, perms,
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        Service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            revisionUser,
+            serviceStore,
+            snapshotBuilder,
+            permissions: perms);
     }
 
     public static RevisionServiceHarness Create(bool failCapture = false, bool canRead = true) =>

@@ -174,9 +174,19 @@ public sealed class JunctionPayloadHarness : IDisposable
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, Metadata, Registry, Graph);
         Repository = repo;
         RevisionStore = revisionStore;
-        Service = new ItemService(repo, Metadata, Registry, permissions ?? new AllowAllPermissionService(),
-            Graph, expander, Graph, languages, options, new GanssHtmlSanitizer(),
-            currentUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        Service = TestItemService.Create(
+            repo,
+            Metadata,
+            Registry,
+            Graph,
+            expander,
+            Graph,
+            languages,
+            currentUser,
+            revisionStore,
+            snapshotBuilder,
+            permissions: permissions ?? new AllowAllPermissionService(),
+            options: options);
     }
 
     public static JsonElement Body(object obj)

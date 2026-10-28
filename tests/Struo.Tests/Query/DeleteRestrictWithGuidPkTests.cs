@@ -161,13 +161,18 @@ public class DeleteRestrictWithGuidPkTests
         var registry = new StubRegistry(targetColl, descriptor);
         var repo     = new StubRepo();
         var meta     = new StubMeta(targetColl);
-        var svc      = new ItemService(
-            repo, meta, registry, new StubPermissions(),
-            graph, new StubExpander(), new StubM2M(),
+        var svc      = TestItemService.Create(
+            repo,
+            meta,
+            registry,
+            graph,
+            new StubExpander(),
+            new StubM2M(),
             new StubLanguages(),
-            new StruoQueryOptions(), new GanssHtmlSanitizer(),
             new TestCurrentUserAccessor(Guid.Empty),
-            new StubRevisionStore(), new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()), new NoopUserSessionRevocationService());
+            new StubRevisionStore(),
+            new RevisionSnapshotBuilder(repo, meta, registry, new StubM2M()),
+            permissions: new StubPermissions());
 
         // Act: delete a Guid-keyed row that is still referenced — must throw RelationConflictException
         // (conflict / 409), NOT a QueryException from a failed Convert.ChangeType (spurious 400).

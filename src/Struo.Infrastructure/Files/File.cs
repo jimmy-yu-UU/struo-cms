@@ -13,7 +13,7 @@ namespace Struo.Infrastructure.Files;
 /// </summary>
 [SugarTable("files")]
 [SugarIndex("ix_{table}_folderid", nameof(FolderId), OrderByType.Asc)]
-[CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true)]
+[CmsCollection("File", Group = "System", DefaultDisplayField = nameof(FileName), Hidden = true, Creatable = false)]
 public sealed class File : AuditableEntity, ISoftDeletable
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

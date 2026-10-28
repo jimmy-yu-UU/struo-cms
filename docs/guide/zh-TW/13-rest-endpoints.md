@@ -45,8 +45,9 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
-`BAD_USER_INPUT`，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。檔案要上傳到
-`POST api/files`，使用者要走會設定密碼的 `POST api/users`。使用者的檢查排在最前面，所以重複 email
+`BAD_USER_INPUT`，訊息是點出集合名稱的通用句子，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。
+拒絕的依據是集合的 `Creatable = false` 旗標（見[第 5 章](05-collections.md#cmscollection-選項)）。檔案要上傳到
+`POST api/files`，使用者要走會設定密碼的 `POST api/users`。拒絕發生在任何 body 檢查之前，所以重複 email
 在這裡是 `400`，不是 `409`。這兩個集合的讀取、更新與刪除仍然走通用路由。
 
 版本紀錄與垃圾桶的完整規則（`DELETE` 的等冪行為、`?purge=` 的細節、版本快照的欄位形狀）留給
@@ -115,8 +116,7 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 不會悄悄少算。
 
 使用者的列表、更新與刪除都走通用項目 API 的 `user` 集合——建立回應的 `Location` 就是指向那裡。在
-那裡建立使用者會被 `400` 擋下，訊息是 `Users cannot be created through the generic items API.
-Create one with POST /api/users instead.`。
+那裡建立使用者會被 `400` 擋下，訊息是 `Items cannot be created in collection 'user' through the generic items API.`。
 
 ## Roles `api/roles`
 
@@ -156,7 +156,8 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 | `GET api/schema` | 登入 | 列出所有集合的完整結構 |
 | `GET api/schema/{collection}` | 登入 | 讀單一集合的結構，未知集合回 404 |
 
-`Hidden` 欄位在兩個回應裡都不會出現。
+`Hidden` 欄位在兩個回應裡都不會出現。每個集合帶一個 `creatable` 旗標：集合的 `[CmsCollection]` 設了
+`Creatable = false` 就是 `false`，後台也依它決定要不要顯示「新增」按鈕。
 
 ## Auth `api/auth`
 

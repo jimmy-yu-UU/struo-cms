@@ -62,6 +62,12 @@ public class CollectionNameTests
         [CmsField(Interface = FieldInterface.Text)] public string Title { get; set; } = "";
     }
 
+    [CmsCollection("Fixed", Creatable = false)]
+    private sealed class CnNotCreatable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
     [CmsCollection("Bad", Name = "Bad-Name")]
     private sealed class CnBadDash { }
 
@@ -88,6 +94,13 @@ public class CollectionNameTests
 
     [CmsCollection("Clash2", Name = "cnClash")]
     private sealed class CnClashExplicit { }
+
+    [Fact]
+    public void Creatable_defaults_to_true_and_the_attribute_turns_it_off()
+    {
+        MetadataScanner.ScanTypes([typeof(CnDerived)]).Single().Creatable.Should().BeTrue();
+        MetadataScanner.ScanTypes([typeof(CnNotCreatable)]).Single().Creatable.Should().BeFalse();
+    }
 
     [Fact]
     public void Explicit_name_replaces_the_derived_name()

@@ -27,7 +27,8 @@ public class FileCollectionCreateRejectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
         var error = Root(body).GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
-        error.GetProperty("message").GetString().Should().Contain("/api/files");
+        error.GetProperty("message").GetString()
+            .Should().Be("Items cannot be created in collection 'file' through the generic items API.");
     }
 
     [Fact]
@@ -43,7 +44,7 @@ public class FileCollectionCreateRejectionTests(ApiFactory factory)
         var body = await resp.Content.ReadAsStringAsync();
         var errors = Root(body).GetProperty("errors");
         errors.EnumerateArray().Should().NotBeEmpty(body);
-        body.Should().Contain("BAD_USER_INPUT");
+        body.Should().Contain("BAD_USER_INPUT").And.Contain("cannot be created in collection 'file'");
     }
 
     [Fact]

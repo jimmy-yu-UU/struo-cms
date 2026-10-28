@@ -259,9 +259,17 @@ internal sealed class TrashRevisionHarness : IDisposable
 
         Repository = repo;
         RevisionStore = realStore;
-        Service = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            currentUser, serviceStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        Service = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            currentUser,
+            serviceStore,
+            snapshotBuilder);
     }
 
     public static TrashRevisionHarness Create(bool failCaptureRevision = false) => new(failCaptureRevision);

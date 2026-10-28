@@ -1,5 +1,44 @@
 # 版本紀錄
 
+## 0.15.0
+
+::: danger 破壞性變更
+- `ItemService` 的建構子變了。`IUserSessionRevocationService`、`ILanguageCollectionRules`、
+  `IUserCredentialStore` 與 `IFileLifecycle` 這幾個參數不見了，建構子最後多了
+  `IEnumerable<IItemWriteInterceptor>? interceptors = null` 與
+  `IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null`。核心對 `file`、`user`、`language`
+  集合的規則，搬進了註冊的攔截器與刪除處理器。`ItemService` 是 DI 替你建的，所以只有自己動手建構
+  `ItemService` 的 fork（例如測試裡）才會碰到：改成傳入需要的攔截器與處理器（或都不傳），不再傳那幾個被
+  移除的服務。見[第 18 章](18-extension-points.md)。
+- 在不可建立的集合裡建立項目，現在回 `400` `BAD_USER_INPUT`，訊息是
+  `Items cannot be created in collection '<name>' through the generic items API.`。原本點名
+  `POST /api/files` 與 `POST /api/users` 的訊息不見了，拿它們做比對的客戶端要改成比對代碼或新的文
+  字。`/api/schema` 在每個集合上多了一個 `creatable` 旗標。
+- 後台的 `NON_CREATABLE_COLLECTIONS` 常數移除了，`createRouteGuard` 多了第二個參數 `creatable`。曾把集
+  合加進該常數的 fork，要改在集合上設 `Creatable = false`。`ItemDeserializer.Deserialize` 也移除了：由
+  `DeserializeForCreate` 取代，它不再檢查純量必填欄位，這項檢查改由 `ItemService` 在 `BeforeWriteAsync`
+  之後執行。直接呼叫過 `Deserialize` 的 fork，要自己檢查純量必填欄位，因為 `EnforceRequiredFields` 是 internal。
+:::
+
+### 新增
+
+- `IItemWriteInterceptor` 讓 fork 不必改 `ItemService` 就能替項目寫入加上商業規則：
+  `BeforeWriteAsync`（交易之外、body 合併之後）、`InTransactionAsync`（交易之內，丟例外會回滾）與
+  `AfterCommitAsync`（commit 之後、通知監聽者之前）。它透過 `ItemWriteContext` 看得到建立、更新、還
+  原、丟進垃圾桶、復原與清除。攔截器按註冊順序執行，核心的排在前面。專屬端點與級聯清除所帶走的子列不
+  會執行它們。見[第 18 章](18-extension-points.md)。
+- `ICollectionDeleteHandler` 取代集合通用的丟進垃圾桶與清除，用於帶著自己副作用的刪除。核心的 `file`
+  集合用的就是它。
+- `[CmsCollection(Creatable = false)]` 讓通用的項目 API 拒絕建立該集合的列。核心把它設在 `file` 與
+  `user`。後台從 `/api/schema` 讀 `creatable` 來隱藏「新增」按鈕。見[第 5 章](05-collections.md)。
+
+### 變更
+
+- 建立時，body 若同時違反驗證器或 `MaxLength` 規則與純量必填欄位，現在先回報驗證器的錯誤，跟更新一
+  樣。必填檢查在 `BeforeWriteAsync` 之後，所以攔截器可以填起 slug 這類純量必填欄位。
+- 更新與還原 `user` 時，email 的正規化與唯一性檢查，現在在必填檢查之前執行，不再在它之後。
+- 刪除 `user` 之後的工作階段撤銷，現在在通知變更監聽者之前執行，不再在之後。
+
 ## 0.14.0 — 2026-10-27
 
 ::: danger 破壞性變更

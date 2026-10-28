@@ -209,6 +209,14 @@ GraphQL does **not** consume `IItemUseCases` — it keeps its own `IGraphQlDataS
 GraphQL section below) so the REST and GraphQL read/write paths can differ in shape while sharing the
 same underlying repository/expander/resolver primitives.
 
+`ItemService` names no collection. Per-collection write rules are `IItemWriteInterceptor`
+registrations (`src/Struo.Application/Query/Write/`) — `LanguageWriteInterceptor`,
+`UserWriteInterceptor` and `FileWriteInterceptor` — added with `TryAddEnumerable` in
+`AddStruoData`, so a fork's own interceptors run after them. `FileDeleteHandler` is the one
+`ICollectionDeleteHandler`. `ItemService` takes both as trailing optional
+`IEnumerable<…>` constructor parameters and creating in a collection with `Creatable = false` is
+refused from metadata. Hooks, order and failure semantics: `docs/guide/en/18-extension-points.md`.
+
 ### `IItemRepository`
 
 `src/Struo.Application/Query/IItemRepository.cs`: the SqlSugar-facing data-access seam — query/get/
@@ -439,8 +447,8 @@ table (`UserSession.cs`, one row per live cookie ticket, indexed by `UserId`) �
 cache itself has no way to scan, needed to find "every live session for user X".
 `IUserSessionRevocationService.RevokeAllForUserAsync` clears a user's cache entries and
 `UserSession` rows together, and is invoked on two triggers: password change and
-`ItemService.RevokeSessionsIfUserAsync` on **both** DELETE branches (soft-delete and purge) of a
-`user` row — placed in `ItemService` rather than a controller so the GraphQL `deleteUser` mutation
+`UserWriteInterceptor.AfterCommitAsync` on **both** DELETE operations (trash and purge) of a
+`user` row — an item write interceptor rather than a controller so the GraphQL `deleteUser` mutation
 is covered too. Logout is a narrower, single-ticket operation: `AuthController.Logout` calls
 `HttpContext.SignOutAsync`, whose cookie middleware invokes
 `DistributedCacheTicketStore.RemoveAsync` to remove just the signed-out cookie's cache entry and
@@ -537,10 +545,13 @@ null)` and `FileService(..., IItemChangeNotifier? notifier = null)`, so existing
 test files keep compiling and `null` behaves identically to "no listener registered." Both call the
 notifier only **after their write has committed**, always with `CancellationToken.None` (the write
 already committed, so a disconnecting caller must not also skip notifying listeners). Every
-`ItemService` path is commit → `InvalidateLanguagesIfNeeded` (a no-op outside the `language`
-collection) → notify. The trash and purge paths add `RevokeSessionsIfUserAsync` (a no-op outside the
-`user` collection) after the notification; on the trash path that call runs whether or not the row was
-newly trashed, on the purge path only when the row existed. The restore path stops at notify.
+`ItemService` path is commit → the applicable interceptors' `AfterCommitAsync` in registration order
+(`LanguageWriteInterceptor` drops the language cache, `UserWriteInterceptor` revokes a deleted user's
+sessions) → notify. An `AfterCommitAsync` that throws skips the remaining `AfterCommitAsync` hooks,
+the notification still goes out, then the exception propagates. `AfterCommitAsync` runs for a trash or
+restore whenever the row exists, with `ItemWriteContext.Changed` false when nothing changed, and for a
+purge only when the row existed. On the delete-handler path (the `file` collection) the handler
+notifies inside itself, so `AfterCommitAsync` follows its notification.
 `FileService` bypasses `ItemService` entirely for every file operation, so it raises its own
 notification per write rather than sharing `ItemService`'s call sites, immediately after each write
 commits (`RestoreAsync` in particular has no `InTransactionAsync` wrapper of its own — it is a single
@@ -548,9 +559,9 @@ atomic `UPDATE`, and the notification follows straight after it):
 `UploadAsync` → `Created`, `TrashAsync` → `Trashed` (only when the atomic trash `UPDATE` affected a
 row), `RestoreAsync` → `Restored` (same gate), `DeleteAsync` (purge) → the pipeline's whole change set
 (see below): `Purged` for the file plus `Updated` for the `SetNull` children and junction parents.
-`ItemService.DeleteAsync` delegates the `file` collection to `IFileLifecycle` (implemented by
-`FileService`), so the items API, GraphQL and the media library share one delete path, Restrict guard
-included.
+`ItemService.DeleteAsync` hands the `file` collection to `FileDeleteHandler`, an
+`ICollectionDeleteHandler` that calls `IFileLifecycle` (implemented by `FileService`), so the items
+API, GraphQL and the media library share one delete path, Restrict guard included.
 
 A purge's cascade is the one path that raises more than a single-item change, collected by
 `ItemPurgePipeline.PurgeCoreAsync`'s `changes` parameter — one `ItemChangeSet`

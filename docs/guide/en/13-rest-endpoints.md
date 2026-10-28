@@ -54,9 +54,10 @@ any junction a fork has marked `AdminOnly`, additionally requires the caller to 
 delegated collection grant doesn't count.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
-Both return `400` `BAD_USER_INPUT`, and GraphQL's `createFile` and `createUser` mutations get the
-same error. A file is created by uploading it to `POST api/files`, and a user by `POST api/users`,
-which sets the password. The user check runs first, so a duplicate email is a `400` there, not a
+Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
+`createFile` and `createUser` mutations get the same error. The refusal comes from the collection's
+`Creatable = false` flag ([Chapter 5](05-collections.md#cmscollection-options)). A file is created by uploading it to `POST api/files`, and a user by `POST api/users`,
+which sets the password. The refusal comes before any check of the body, so a duplicate email is a `400` there, not a
 `409`. Reading, updating and deleting both collections still go through the generic routes.
 
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
@@ -137,8 +138,7 @@ role id is always rejected, never silently dropped from the count.
 
 Listing, updating and deleting users all go through the generic item API's `user` collection — the
 create response's `Location` points exactly there. Creating a user there is refused with `400`:
-the error message is `Users cannot be created through the generic items API. Create one with
-POST /api/users instead.`
+the error message is `Items cannot be created in collection 'user' through the generic items API.`
 
 ## Roles `api/roles`
 
@@ -182,7 +182,9 @@ it back, see `GET api/config` in the Config section below.
 | `GET api/schema` | Signed in | List every collection's full schema |
 | `GET api/schema/{collection}` | Signed in | Read one collection's schema, 404 if unknown |
 
-A `Hidden` field never appears in either response.
+A `Hidden` field never appears in either response. Each collection carries a `creatable` flag: `false`
+when the collection's `[CmsCollection]` sets `Creatable = false`, which is what makes the admin UI hide
+the New button.
 
 ## Auth `api/auth`
 

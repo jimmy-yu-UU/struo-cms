@@ -139,9 +139,18 @@ public sealed class ItemServicePermissionTests : IDisposable
         var revisionUser = new TestCurrentUserAccessor(Guid.Empty);
         var revisionStore = new SqlSugarRevisionStore(db, revisionUser);
         var snapshotBuilder = new RevisionSnapshotBuilder(repo, provider, registry, graph);
-        return new ItemService(repo, provider, registry, permissions,
-            graph, expander, graph, languages, new StruoQueryOptions(), new GanssHtmlSanitizer(),
-            revisionUser, revisionStore, snapshotBuilder, new NoopUserSessionRevocationService());
+        return TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            expander,
+            graph,
+            languages,
+            revisionUser,
+            revisionStore,
+            snapshotBuilder,
+            permissions: permissions);
     }
 
     public void Dispose() => _file.Dispose();

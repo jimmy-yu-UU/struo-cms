@@ -19,10 +19,10 @@ Reading, updating and deleting `file` metadata still goes through the ordinary `
 ordinary query. The grants and status codes for each endpoint are in
 [Chapter 13: REST API Endpoint Reference](13-rest-endpoints.md).
 
-Creating a `file` through the generic item API is always refused; the check lives in
-`ItemService.CreateAsync`, so GraphQL's `createFile` mutation is blocked by the same message:
-`Files cannot be created through the generic items API. Upload one with POST /api/files instead.`,
-status `400`/`BAD_USER_INPUT`.
+Creating a `file` through the generic item API is always refused, because `File` declares
+`Creatable = false`. The check lives in `ItemService.CreateAsync`, so GraphQL's `createFile` mutation
+is blocked by the same message: `Items cannot be created in collection 'file' through the generic items
+API.`, status `400`/`BAD_USER_INPUT`. A file is created by uploading it to `POST /api/files`.
 
 `File`'s collection name is `file`, grouped under `System`, and it declares `Hidden = true`. That
 governs how the collection itself appears in the admin UI, a different thing from the field-level

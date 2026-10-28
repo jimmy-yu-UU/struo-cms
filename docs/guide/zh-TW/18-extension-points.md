@@ -2,7 +2,7 @@
 
 呼叫端的 `search=` 該怎麼回答，資料寫入之後要不要順便做點什麼，GraphQL schema 裡要有什麼，核心把這幾件事
 各自留成一個接口，fork 接上自己的實作就好，不必碰核心的查詢或寫入路徑本身。這一章談 fork 的服務註冊在
-哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼帶來自己的檔案儲存，怎麼用 `StruoDomainException` 定義自己的、給客戶端看的錯誤，以及
+哪裡、`ISearchProvider` 與 `IItemChangeListener` 各自的契約、什麼時候被呼叫、失敗時會發生什麼事，怎麼用寫入攔截器與刪除處理器替項目寫入加上商業規則，怎麼帶來自己的檔案儲存，怎麼用 `StruoDomainException` 定義自己的、給客戶端看的錯誤，以及
 `ConfigureGraphQl` 怎麼擴充 GraphQL schema。
 
 `search=` 本身的語法與內建的 LIKE 掃描，見
@@ -298,6 +298,176 @@ public sealed class MyChangeListener(IMyIndex index) : IItemChangeListener
 builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 ```
 
+## 寫入攔截器 `IItemWriteInterceptor`
+
+`IItemWriteInterceptor` 是項目寫入上放商業規則的擴充點：產生 slug、檢查一個欄位與另一個欄位的關
+係、寫一筆稽核紀錄、讓某個集合只能新增不能改。它掛在通用的寫入路徑裡，所以 REST 與 GraphQL 都適
+用，而你不必改 `ItemService`。核心自己對 `file`、`user`、`language` 的規則，也是用同樣的方式註冊
+的。
+
+### 契約
+
+攔截器有一個 `bool AppliesTo(string collection)` 和三個掛鉤。`AppliesTo` 收到的是集合的正式名稱，
+和 `ISearchProvider` 看到的拼法相同。每個掛鉤預設都是空操作，只覆寫你要的那幾個。
+
+| 掛鉤 | 何時執行 | 丟例外 |
+|---|---|---|
+| `BeforeWriteAsync` | 交易之外，body 合併進實體之後 | 拒絕這次寫入 |
+| `InTransactionAsync` | 交易之內，列、關聯與翻譯都寫完之後 | 整個寫入回滾 |
+| `AfterCommitAsync` | commit 之後、通知監聽者之前 | 在 commit 之後才浮出 |
+
+`InTransactionAsync` 在擷取版本紀錄之前執行。三個掛鉤都收到一個 `ItemWriteContext`，成員如下：
+
+- `Operation`：`Create`、`Update`、`Revert`、`Trash`、`Restore` 或 `Purge`。還原版本是用過去的快照
+  重做一次更新，標成 `Revert`。
+- `Meta`：集合的中繼資料。
+- `Entity`：正在寫的實體。建立、更新、還原時，它是 body 合併進實體之後的樣子，可以在
+  `BeforeWriteAsync` 裡改。丟進垃圾桶、復原、清除時，它是既有的那一列。
+- `Id`：字串形式的項目 id。建立時的 `BeforeWriteAsync` 裡是 `null`，因為列還不存在。
+- `Existing`：更新與還原時，合併之前存著的那一列，掛鉤可以拿來比較新舊。只有在有攔截器適用於該集合
+  時才會去讀，其他操作則是 `null`。
+- `BodyKeys` 與 `Body`：請求 body 的頂層屬性名稱，以及 body 本身。丟進垃圾桶、復原、清除時，
+  `BodyKeys` 是空的、`Body` 是 `null`。
+- `Changed`：在 `AfterCommitAsync` 裡，丟進垃圾桶碰到已經在垃圾桶的列、復原碰到已經上線的列時為
+  `false`。
+
+丟進垃圾桶、復原、清除會帶著既有的列、沒有 body 去跑 `BeforeWriteAsync`，不存在的 id 根本不會到達
+攔截器。它們的 `InTransactionAsync` 只在那一列真的被丟進垃圾桶、復原或清除時才跑；`AfterCommitAsync`
+則只要那一列存在就跑，只在乎真實變更的話，要自己看 `Changed`。
+
+### 順序與失敗
+
+適用於該集合的攔截器按註冊順序執行，核心的排在最前。同一次寫入裡，掛鉤的順序是：每個攔截器的
+`BeforeWriteAsync`、寫入交易（每個 `InTransactionAsync` 在裡面）、每個 `AfterCommitAsync`，最後是
+`IItemChangeListener` 的通知。下面的刪除處理器路徑上，是處理器自己通知監聽者，所以 `AfterCommitAsync`
+排在那次通知之後。
+
+`BeforeWriteAsync` 或 `InTransactionAsync` 丟出 `StruoDomainException` 或 `QueryException`，回應
+的是它自己帶的 4xx，跟丟出驗證錯誤一樣。核心自己的例外對應方式跟其他地方相同：`ConflictException`
+是 `409`，`PermissionDeniedException` 是 `401` 或 `403`，`QueryException` 是 `400`；API 沒有對應的例外
+才是 `500`。`InTransactionAsync` 裡丟例外會讓寫入回滾。
+
+`AfterCommitAsync` 不一樣，因為這時寫入已經 commit 了。某個攔截器丟例外，後面的 `AfterCommitAsync`
+掛鉤就不跑，監聽者仍然會被通知，然後例外才傳回給呼叫端。呼叫端看到錯誤，但資料其實已經存下來了。它
+的 `CancellationToken` 與請求無關，客戶端中途斷線不會讓它提早結束。拿它做清快取之類的事，並且避免讓
+它丟例外。
+
+### 在驗證順序裡的位置
+
+建立時，body 的檢查順序是：權限、`Creatable` 檢查、body 形狀、`MaxLength` 與各欄位的驗證器，然後是你
+的 `BeforeWriteAsync`，最後才是必填檢查。純量的必填欄位在你的掛鉤之後才檢查，所以掛鉤可以把它填起
+來，下面的 slug 範例靠的就是這點。列表型別的必填欄位在掛鉤之前就檢查了，攔截器填不了它。
+
+掛鉤設進去的值不會再被 `MaxLength` 或欄位驗證器檢查，所以掛鉤得自己產出合法的值；只有純量必填檢查
+看得到它。
+
+### 哪些不會跑攔截器
+
+- 專屬端點，例如 `POST /api/files` 與 `POST /api/users`，不經過 `ItemService`，不跑攔截器。核心對
+  `file`、`user` 的規則只在走通用路徑時才會生效。
+- 級聯清除所帶走的子列，刪除時不跑攔截器。它們仍然會到達 `IItemChangeListener`，要對它們做反應就
+  在那裡。
+
+### Slug 範例
+
+這個攔截器用標題替新的 `article` 填 slug。`Article` 是你自己的集合類別，有 `Title` 與可設定的
+`Slug`。
+
+```csharp
+using System.Text.RegularExpressions;
+using Struo.Application.Query;
+
+public sealed class ArticleSlugInterceptor : IItemWriteInterceptor
+{
+    public bool AppliesTo(string collection) => collection == "article";
+
+    public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    {
+        if (context.Operation != ItemWriteOperation.Create) return Task.CompletedTask;
+
+        var article = (Article)context.Entity;
+        if (string.IsNullOrWhiteSpace(article.Slug))
+            article.Slug = Regex.Replace(article.Title.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return Task.CompletedTask;
+    }
+}
+```
+
+註冊寫在你自己的 `Program.cs`，`AddStruoCms()` 之後。註冊是累加的：同一個集合可以有任意數量的攔截
+器。
+
+```csharp
+builder.AddStruoCms();
+builder.Services.AddScoped<IItemWriteInterceptor, ArticleSlugInterceptor>();
+```
+
+## 刪除處理器 `ICollectionDeleteHandler`
+
+攔截器是替刪除加料，不能取代它。集合的刪除若帶著通用流程表達不了的副作用，例如要移除一個 blob，就
+改用 `ICollectionDeleteHandler`。核心的 `file` 集合用的就是這個。
+
+它有 `AppliesTo(string collection)`、`TrashAsync(string id, CancellationToken ct)` 與
+`PurgeAsync(string id, CancellationToken ct)`，後兩者在那一列存在時回傳 true。選用的
+`IsValidId(string id)` 對不可能是列 id 的字串回 false，刪除就直接回找不到，不去讀取。註冊的處理器
+裡，第一個適用的勝出；核心的 `file` 處理器是在 `AddStruoCms()` 裡註冊的，所以在 `AddStruoCms()` 之後替 `file` 另外
+註冊的處理器永遠不會被執行（在它之前註冊的才會排在前面）。
+
+`ItemService` 先檢查權限與那一列是否存在，執行攔截器的 `BeforeWriteAsync`，再呼叫處理器。從這裡開
+始交易與變更通知都歸處理器管，所以不會跑 `InTransactionAsync`。處理器回傳 true 時，
+`AfterCommitAsync` 會以 `Changed` 為 true 執行。處理器沒辦法回報「這次丟進垃圾桶什麼都沒做」。
+
+處理器取代了整個丟進垃圾桶或清除的動作，所以它必須自己在自己的交易裡移除那一列，並通知變更監聽者；
+`ItemService` 之後不會再做這兩件事。
+
+```csharp
+public sealed class AttachmentDeleteHandler(
+    IItemRepository repository, ItemPurgePipeline purge, IItemChangeNotifier notifier,
+    IMyBlobs blobs, ILogger<AttachmentDeleteHandler> log) : ICollectionDeleteHandler
+{
+    public bool AppliesTo(string collection) => collection == "attachment";
+
+    public bool IsValidId(string id) => Guid.TryParse(id, out _);
+
+    public async Task<bool> TrashAsync(string id, CancellationToken ct) => await PurgeAsync(id, ct);
+
+    public async Task<bool> PurgeAsync(string id, CancellationToken ct)
+    {
+        var changes = new ItemChangeSet();
+        var removed = await repository.InTransactionAsync(
+            () => purge.PurgeCoreAsync("attachment", id, new HashSet<(string Collection, string Id)>(), changes, ct), ct);
+        if (!removed) return false;
+
+        await notifier.NotifyAsync(changes.ToList(), CancellationToken.None);
+        try
+        {
+            await blobs.RemoveAsync(id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Deleting the blob {Id} failed; the bytes are orphaned.", id);
+        }
+        return true;
+    }
+}
+```
+
+`IItemRepository` 與 `ItemPurgePipeline`（命名空間 `Struo.Application.Query`），以及
+`IItemChangeNotifier` 與 `ItemChangeSet`（命名空間 `Struo.Application.Changes`），是核心自己的服務。
+`ItemPurgePipeline` 套用跟通用清除相同的規則：Restrict 防護、SetNull、級聯子列、關聯表資料列、翻譯與版本
+紀錄，並收集要通知的變更。blob 在 commit 之後才移除，失敗只記錄，已經 commit 的刪除不會被回報成錯
+誤。`IMyBlobs` 代表你自己的儲存客戶端。處理器用同樣的方式註冊：
+
+```csharp
+builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();
+```
+
+## 不能建立的集合
+
+`[CmsCollection(Creatable = false)]` 讓通用的項目 API 在檢視 body 之前，就對該集合的建立回 `400`。
+核心把它設在 `file` 與 `user`，它們的列來自 `POST /api/files` 與 `POST /api/users`。旗標本身見
+[第 5 章：集合](05-collections.md)，`/api/schema` 怎麼以 `creatable` 露出它，見
+[第 13 章](13-rest-endpoints.md)。
+
 ## 檔案儲存：`IFileStorage`
 
 `file` 集合背後的位元組儲存是 `IFileStorage`。核心附帶 local 與 S3 兩個後端，由 `Struo:Files:Backend`
@@ -417,6 +587,6 @@ public sealed class BuildInfoMutation
 
 ## 接下來
 
-註冊的位置、搜尋提供者、寫入通知、檔案儲存、領域錯誤跟 GraphQL 的掛鉤就談到這裡；下一章，
+註冊的位置、搜尋提供者、寫入通知、寫入攔截器與刪除處理器、檔案儲存、領域錯誤跟 GraphQL 的掛鉤就談到這裡；下一章，
 [第 19 章：後台客製化](19-admin-customization.md)，回到前端，談後台的哪些外觀跟行為只
 靠設定就能換掉，哪些才真的需要碰 `frontend/src`。

@@ -376,6 +376,7 @@ public static class MetadataScanner
             DefaultDisplayField = defaultDisplay,
             AdminOnly = attr.AdminOnly,
             Hidden = attr.Hidden,
+            Creatable = attr.Creatable,
             Revisions = attr.Revisions,
             SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
             FieldGroups = groups,

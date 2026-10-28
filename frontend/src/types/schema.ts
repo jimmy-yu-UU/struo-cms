@@ -49,6 +49,7 @@ export type CollectionMeta = {
   softDelete?: boolean // true when the collection's entity implements ISoftDeletable
   revisions?: boolean // true when the collection is revisioned ([CmsCollection(Revisions=true)])
   adminOnly?: boolean // writes always require super-admin (matrix disables write/delete for these)
+  creatable?: boolean // false: the generic items API refuses create ([CmsCollection(Creatable=false)])
   hidden?: boolean // omit from the sidebar; still reachable via API/direct URL
   fields: FieldMeta[]
   relations: RelationMeta[]

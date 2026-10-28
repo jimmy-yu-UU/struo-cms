@@ -145,11 +145,19 @@ public sealed class FileReferenceCleanupTests : IDisposable
         _files = new FileService(
             _db, new FileStorageServices(_storage, new NoopImages(), new FileStorageOptions()), new FileServiceCollaborators(repo, new StubLanguages(), currentUser),
             notifier: new ItemChangeNotifier([_listener], new ListLogger<ItemChangeNotifier>()), references: pipeline);
-        _items = new ItemService(repo, provider, registry, new AllowAllPermissionService(),
-            graph, new RelationExpander(repo, graph, options), graph, new StubLanguages(), options,
-            new GanssHtmlSanitizer(), currentUser, revisions,
-            new RevisionSnapshotBuilder(repo, provider, registry, graph), new NoopUserSessionRevocationService(),
-            fileLifecycle: _files);
+        _items = TestItemService.Create(
+            repo,
+            provider,
+            registry,
+            graph,
+            new RelationExpander(repo, graph, options),
+            graph,
+            new StubLanguages(),
+            currentUser,
+            revisions,
+            new RevisionSnapshotBuilder(repo, provider, registry, graph),
+            options: options,
+            deleteHandlers: [new FileDeleteHandler(_files)]);
     }
 
     public void Dispose() => _file.Dispose();
@@ -247,6 +255,19 @@ public sealed class FileReferenceCleanupTests : IDisposable
         (await _files.DeleteAsync(Guid.NewGuid())).Should().BeFalse();
 
         _listener.All.Should().BeEmpty();
+        _storage.Deleted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Generic_delete_of_a_non_guid_file_id_reports_not_found(bool purge)
+    {
+        var s = await SeedAsync();
+
+        (await _items.DeleteAsync("file", "not-a-guid", purge)).Should().BeFalse();
+
+        (await _db.Queryable<File>().In(s.FileId).AnyAsync()).Should().BeTrue();
         _storage.Deleted.Should().BeEmpty();
     }
 }
