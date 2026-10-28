@@ -1,9 +1,9 @@
-// tests/Struo.Tests.Template/Template/DockerIgnoreConventionTests.cs
+// tests/Struo.Tests.Template/DockerIgnoreConventionTests.cs
 using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Template.Template;
+namespace Struo.Tests.Template;
 
 /// <summary>
 /// Guards the two <c>.dockerignore</c> files. A bare pattern such as <c>bin/</c> matches only at the

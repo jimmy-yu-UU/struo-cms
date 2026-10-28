@@ -1,8 +1,8 @@
-// tests/Struo.Tests.Template/Template/TemplateInvariantsTests.cs
+// tests/Struo.Tests.Template/TemplateInvariantsTests.cs
 using AwesomeAssertions;
 using Xunit;
 
-namespace Struo.Tests.Template.Template;
+namespace Struo.Tests.Template;
 
 /// <summary>
 /// Guards two template-level invariants: the dependency rule ("framework code never references

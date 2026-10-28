@@ -1,9 +1,9 @@
-// tests/Struo.Tests.Template/Template/HealthcheckConventionTests.cs
+// tests/Struo.Tests.Template/HealthcheckConventionTests.cs
 using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Template.Template;
+namespace Struo.Tests.Template;
 
 /// <summary>
 /// Guards the API health probes. The image's <c>HEALTHCHECK</c> and the Compose <c>api</c>
