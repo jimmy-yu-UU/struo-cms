@@ -10,7 +10,7 @@ namespace Struo.Tests.Support;
 /// from any other probe table in this suite.
 /// </summary>
 [SugarTable("junction_sync_probe")]
-public sealed class JunctionSyncProbe
+internal sealed class JunctionSyncProbe
 {
     [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
     public Guid ParentId { get; set; }

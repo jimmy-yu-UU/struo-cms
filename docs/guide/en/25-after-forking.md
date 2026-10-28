@@ -145,3 +145,69 @@ Register your own services in `Program.cs` after `AddStruoCms()`; a registration
 over the core default. For the services the core registers with `TryAdd`, a registration made before
 `AddStruoCms()` is kept too. Add configuration sources before the call. The seams you can plug into
 are in [Chapter 18: Extension Points](18-extension-points.md).
+
+## 12. Tests: drop the template's guards, add your own project
+
+`tests/Struo.Tests.Template` holds the template's own repository guards: the documentation
+conventions, the template invariants, and the CI, Docker and health conventions. They check this
+repository's files, not your product. Delete the project folder and its line in `StruoCMS.slnx`, or
+keep the guards you want. Nothing else references it.
+
+Write your own tests in a project of your own that references `Struo.Tests.Support` and your content
+project. The versions of the test packages are central in `Directory.Packages.props`, so the
+`PackageReference` lines carry none. This is for a project at `tests/MyFork.Tests` whose content
+project is `src/MyFork.Content`:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Struo.Tests.Support\Struo.Tests.Support.csproj" />
+    <ProjectReference Include="..\..\src\MyFork.Content\MyFork.Content.csproj" />
+  </ItemGroup>
+</Project>
+```
+
+Two pieces of setup belong to your project, as in `tests/Struo.Tests`. The `TestFramework` attribute
+names `StruoTestFramework`, and a `[ModuleInitializer]` pins your content assembly through
+`TestHostEnvironment.Pin`, which must run before any host is built. A host class derived from
+`StruoApiFactory` lists the collections that are publicly readable:
+
+```csharp
+using System.Runtime.CompilerServices;
+using Struo.Tests.Support;
+using Xunit;
+
+[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]
+
+namespace MyFork.Tests;
+
+internal static class ContentAssemblyBootstrap
+{
+    [ModuleInitializer]
+    internal static void Pin() => TestHostEnvironment.Pin("MyFork.Content");
+}
+
+public sealed class MyApiFactory : StruoApiFactory
+{
+    protected override IReadOnlyList<string> PublicReadCollections => ["post"];
+}
+
+[CollectionDefinition("MyApi")]
+public sealed class MyApiCollection : ICollectionFixture<MyApiFactory>;
+```
+
+Every host runs `Program.cs`, which resets the static Serilog `Log.Logger`, so test classes that use
+a host must not run in parallel. Put each of them in the serial collection with
+`[Collection("MyApi")]` and take the factory through its constructor.
+
+[Chapter 22](22-testing.md) describes the library. Changes to its public API are announced in the
+[changelog](changelog.md).

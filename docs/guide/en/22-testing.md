@@ -5,11 +5,42 @@ each layer tests, which jobs CI runs, and what it deliberately doesn't run.
 
 ## Backend tests
 
-Backend tests live in `tests/Struo.Tests`, use xUnit, and run with `dotnet test`. The default
-backend is SQLite: unit tests get their database from `TestBackend.CreateUnitDatabase()`, which,
-with no backend switch set, is a temp SQLite file deleted when the test ends, so no test shares
-state with another. A test outside `tests/Struo.Tests/Support/` that uses `SqliteTestDatabase`
-directly fails `SqliteTestDatabaseUsageTests`, so every test follows the backend switch.
+Backend tests live in three projects under `tests/`, use xUnit, and run with `dotnet test` from
+the repository root:
+
+- `tests/Struo.Tests` holds the core's unit and integration tests.
+- `tests/Struo.Tests.Template` holds the template's own repository guards: the documentation
+  conventions, the template invariants, and the CI, Docker and health conventions. A fork can delete
+  it (see [Chapter 25](25-after-forking.md)).
+- `tests/Struo.Tests.Support` is a class library, not a test project. It holds the helpers the other
+  two share.
+
+The default backend is SQLite: unit tests get their database from `TestBackend.CreateUnitDatabase()`,
+which, with no backend switch set, is a temp SQLite file deleted when the test ends, so no test shares
+state with another. A test that uses `SqliteTestDatabase` directly fails
+`SqliteTestDatabaseUsageTests`, so every test follows the backend switch. Only the Support library
+and a project's own top-level `Support/` folder may use it.
+
+### The Support library
+
+`Struo.Tests.Support` (namespace `Struo.Tests.Support`) carries `StruoApiFactory`, the base for a
+test host; `TestBackend` and the live-database helpers behind the backend switch below;
+`TestHostEnvironment`; and `StruoTestFramework`, which drops the live database pools after the last
+test.
+
+Each test project that hosts the API or leases pooled live databases sets up two things of its own.
+An assembly attribute names the test framework, because without it the pools are dropped on process
+exit and leave databases behind:
+`[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`.
+A module initializer calls `TestHostEnvironment.Pin` with the content assemblies the project's hosts
+load. `Pin` also turns off the Redis connection and the two shipped OIDC providers, `microsoft` and
+`google`, so a developer's gitignored Development settings cannot reach the suite. A provider your
+fork adds is not touched. It sets environment variables, because they are the only override that
+reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is `ContentAssemblyEnvBootstrap`.
+
+`ApiFactory` in `tests/Struo.Tests` derives from `StruoApiFactory` and names the collections the host
+makes publicly readable. A fork's test project does the same; [Chapter 25](25-after-forking.md) shows
+the setup.
 
 These unit tests build their tables from entities with CodeFirst. When your fork's own test
 entities declare unique group indexes, keep the names within 63 characters; see
@@ -100,10 +131,11 @@ fixture. The full steps for removing the sample are in
 A handful of tests don't verify a feature — they pin down a rule; break the rule itself and the
 test goes red.
 
-- `CodeCitationConventionTests` — every citation in the manual and in code must point to a
+- `CodeCitationConventionTests` (in `tests/Struo.Tests.Template`) — every citation in the manual and in code must point to a
   construct, never a line number.
-- `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples` — the API project
-  (`Struo.Api`) has no direct reference to any sample assembly.
+- `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples` (in
+  `tests/Struo.Tests.Template`) — the API project (`Struo.Api`) has no direct reference to any
+  sample assembly.
 - `OptionsValidationTests` — drives the real startup pipeline to confirm a configuration error
   fails at startup itself rather than waiting for the first request: a missing database
   connection string, `Query:MaxLimit` set to 0, and OIDC enabled without a client ID must each
@@ -226,8 +258,8 @@ on a push to `main`, on every pull request, and on manual dispatch; `sonar-backe
 run at the repository root; `frontend` and `docs` each run inside their own subdirectory.
 
 `backend`: `dotnet restore`, `dotnet build --no-restore --configuration Release`,
-`dotnet test --no-build --configuration Release --verbosity normal`, running the whole backend
-test suite. CI sets no `STRUO_TEST_*` connection and no `STRUO_TEST_BACKEND`, so it runs on SQLite
+`dotnet test --no-build --configuration Release --verbosity normal`, running every backend test
+project. CI sets no `STRUO_TEST_*` connection and no `STRUO_TEST_BACKEND`, so it runs on SQLite
 only and every live suite takes its pass-outright path here.
 
 `frontend`: inside the `frontend` directory, `pnpm install --frozen-lockfile --ignore-scripts`,

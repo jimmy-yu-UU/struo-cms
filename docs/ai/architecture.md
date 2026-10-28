@@ -49,7 +49,7 @@ lists (checked directly: `Struo.Domain.csproj` has none at all; `Struo.Applicati
 only `Struo.Domain`; `Struo.Infrastructure.csproj` references `Struo.Application` and `Struo.Domain`;
 `Struo.Api.csproj` references `Struo.Application` and `Struo.Infrastructure`) — nothing scans or asserts
 it automatically. The one edge that **is** guarded by an automated test is framework code never
-referencing `samples/*`: `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+referencing `samples/*`: `tests/Struo.Tests.Template/TemplateInvariantsTests.cs`'s
 `Host_project_has_no_project_reference_into_samples` reads `Struo.Api.csproj` directly and fails if any
 `<ProjectReference>` line mentions `samples`; its sibling
 `Shipped_appsettings_declares_no_content_assemblies` asserts the shipped `appsettings.json`'s
@@ -459,7 +459,7 @@ success. Between triggers, a still-live cookie is caught reactively: `AuthWiring
 (mirroring what `BearerTokenAuthenticationHandler` already does for bearer requests) and signs the
 session out the moment a deactivated account's cookie is next presented.
 
-`tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
+`tests/Struo.Tests/Architecture/ControllerPersistenceBoundaryTests.cs` guards the boundary the identity
 seams above exist to create: no file under `src/Struo.Api/Controllers/` may mention
 `ISqlSugarClient`. The seams keep identity writes off a raw `ISqlSugarClient` call in a controller —
 an identity store owns whatever audit/version stamping its own writes need, not a controller (see

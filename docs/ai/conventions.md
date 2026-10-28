@@ -190,10 +190,10 @@ The deliberate exception is a citation into **pinned upstream SqlSugar source**,
 shift underneath us, so a line range there stays valid.
 
 Enforced by `CodeCitationConventionTests`
-(`tests/Struo.Tests/Documentation/CodeCitationConventionTests.cs`), mechanically, for two of the
+(`tests/Struo.Tests.Template/Documentation/CodeCitationConventionTests.cs`), mechanically, for two of the
 four shapes citations take. A citation that names a file extension (e.g. `SomeFile.cs:123`,
 citation-guard:allow) is a violation only if the cited file resolves to a real path under `src/`,
-`tests/`, `frontend/src/`, `schema/`, `db/`, `docs/` or `samples/` (or is `AGENTS.md`/`CLAUDE.md`
+`tests/`, `frontend/src/`, `schema/`, `docs/` or `samples/` (or is `AGENTS.md`/`CLAUDE.md`
 itself) — a bare filename matches by basename anywhere under those roots, a directory-prefixed one
 (as most upstream citations here are written) must match a real path suffix, and there is
 deliberately no upstream-filename allowlist, which would go stale. A citation with no file extension
@@ -637,7 +637,7 @@ destructive actions, the user is left with a blocked action and no working way t
 ## Tests per layer
 
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests take a fresh database
-  per test from `TestBackend.CreateUnitDatabase()` (`tests/Struo.Tests/Support/TestBackend.cs`): a
+  per test from `TestBackend.CreateUnitDatabase()` (`tests/Struo.Tests.Support/TestBackend.cs`): a
   SQLite temp file deleted on dispose by default, or a pooled empty database on the backend
   `STRUO_TEST_BACKEND` selects. An opt-in
   live repository suite (`LiveRepositoryTests`) exists specifically to catch "SQLite-green ≠
@@ -646,10 +646,17 @@ destructive actions, the user is left with a blocked action and no working way t
   against any database whose name doesn't contain `test` — see `AGENTS.md`, "Verification", for the
   connection-resolution order and the `STRUO_TEST_BACKEND` switch that moves the API test hosts and
   the unit harnesses to a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
-  using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`).
-  `tests/Struo.Tests/Template/TemplateInvariantsTests.cs` is the one suite that guards
+  using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`, a `StruoApiFactory`).
+  The shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`)
+  live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project
+  that hosts the API pins its own content assemblies from a `[ModuleInitializer]` that calls
+  `TestHostEnvironment.Pin` (`tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`).
+  `tests/Struo.Tests.Template` holds the template's own repository guards (`Documentation/`,
+  `TemplateInvariantsTests`, `CiWorkflowConventionTests`, `DockerIgnoreConventionTests`,
+  `HealthcheckConventionTests`); `tests/Struo.Tests.Template/TemplateInvariantsTests.cs` guards
   template-shape invariants (no `samples/*` reference from `Struo.Api`, empty shipped
-  `ContentAssemblies`) rather than exercising `AddStruoMetadata` at runtime.
+  `ContentAssemblies`) rather than exercising `AddStruoMetadata` at runtime. A fork may delete that
+  project.
 - **Frontend unit** (`pnpm test`, Vitest, `jsdom` environment): `*.test.ts` files sit next to the
   source file they cover (e.g. `frontend/src/lib/buildItemPayload.ts` /
   `frontend/src/lib/buildItemPayload.test.ts`).

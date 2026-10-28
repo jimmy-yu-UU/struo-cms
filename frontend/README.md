@@ -62,7 +62,7 @@ configuration is needed.
 
 **This is a temporary, uncommitted opt-in — revert it as soon as you're done**, before committing
 anything else. `dotnet test`'s `Host_project_has_no_project_reference_into_samples`
-(`tests/Struo.Tests/Template/TemplateInvariantsTests.cs`) fails while the reference is in place — that is
+(`tests/Struo.Tests.Template/TemplateInvariantsTests.cs`) fails while the reference is in place — that is
 expected, not a regression to chase — and passes again once it's reverted; confirm `git status` shows no
 tracked diff at all before moving on (not just to `Struo.Api.csproj`) — chapter 23's
 `Struo:ContentAssemblies` edit belongs in the gitignored Development file precisely so it never shows up

@@ -44,7 +44,9 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
-| `tests/Struo.Tests` | The backend xUnit suite (unit, integration, and the template-invariant guard). |
+| `tests/Struo.Tests` | The backend xUnit suite (unit and integration). |
+| `tests/Struo.Tests.Support` | Class library of shared test helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`). Fork test projects reference it. |
+| `tests/Struo.Tests.Template` | The template's own repository guards (documentation conventions, template invariants, CI/Docker/health conventions). A fork may delete it. |
 
 ## Hard constraints
 
@@ -55,7 +57,7 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
   build outright, while a skip-layer reference (e.g. `Struo.Api` referencing `Struo.Domain` directly)
   compiles cleanly, so nothing but this rule and code review catches it. Framework code never
   references `samples/*` — this one edge **is** test-enforced:
-  `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+  `tests/Struo.Tests.Template/TemplateInvariantsTests.cs`'s
   `Host_project_has_no_project_reference_into_samples` fails if `Struo.Api.csproj` ever gains a
   `ProjectReference` into `samples/`.
 - `Struo.Domain` stays free of external packages — `Struo.Domain.csproj` declares zero
@@ -353,8 +355,9 @@ hides length and charset bugs.
 A test that only means something on SQLite carries `[SqliteOnlyFact("reason")]` or
 `[SqliteOnlyTheory("reason")]` and is skipped on a live backend with a reason starting
 "SQLite-only:"; a live run skips 17 of them. `SqliteTestDatabaseUsageTests` fails when a test
-outside `tests/Struo.Tests/Support/` uses `SqliteTestDatabase` or `SqliteTempTestDatabase`
-directly, so every other test follows the switch.
+outside the Support library (`tests/Struo.Tests.Support/`) or a test project's own top-level
+`Support/` folder uses `SqliteTestDatabase` or `SqliteTempTestDatabase` directly, so every other
+test follows the switch.
 
 Pool databases are dropped when the test run finishes. On MySQL and MariaDB a discarded database
 whose holder connection stays open survives until that connection closes, and a crashed or killed
