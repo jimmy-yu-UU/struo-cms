@@ -191,7 +191,7 @@ public class FacetSqlShapeTests : IDisposable
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
-    // Category is [SugarTable("categories")] with no per-column [SugarColumn(Name=...)] override, so
+    // FxCategory is [SugarTable("fx_categories")] with no per-column [SugarColumn(Name=...)] override, so
     // SqlSugar's default SELECT lists every mapped property by its own name — including the literal
     // column "DeletedAt" — regardless of DeletedFilter. That means "does the rendered SQL contain the
     // substring DeletedAt" can never distinguish the three scopes; the actual scope-defining signal is

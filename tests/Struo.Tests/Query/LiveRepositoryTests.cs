@@ -551,7 +551,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // Task 6, live PG: the translation-sidecar subquery's own shape — fx_article_translations has a
-    // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
+    // `long` identity PK (Id) and projects a `uuid` FK (FxArticleId) that the outer article query
     // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination
     // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips above): a
     // long-keyed sidecar table projecting a uuid column into an outer IN (SELECT …) must still bind

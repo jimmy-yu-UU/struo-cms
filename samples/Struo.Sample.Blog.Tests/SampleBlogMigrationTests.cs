@@ -4,15 +4,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Application.Security;
 using Struo.Infrastructure.DependencyInjection;
+using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Schema;
-using Struo.Tests.Migrations.Core;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Migrations;
+namespace Struo.Sample.Blog.Tests;
 
 public sealed class SampleBlogMigrationTests : IDisposable
 {
@@ -44,7 +46,7 @@ public sealed class SampleBlogMigrationTests : IDisposable
         var assemblies = sp.GetRequiredService<Struo.Infrastructure.Metadata.ScannedAssemblies>().All;
         var host = new MigrationHost(
             new MigrationHostOptions(_database.DbType, _database.ConnectionString, _prefix, assemblies, LockTimeoutSeconds: 5)
-            { Seed = CoreMigrationHarness.Seed() },
+            { Seed = CoreSeedData.From(new LocalizationOptions(), new Argon2idPasswordHasher(), "admin@example.com", "s3cret-pw", []) },
             NullLoggerFactory.Instance);
 
         var applied = await host.ApplyAsync(default);
