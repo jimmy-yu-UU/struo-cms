@@ -17,11 +17,11 @@ namespace Struo.Tests.Query;
 public sealed partial class LiveRepositoryTests
 {
     // Same wiring as BuildRepoWithGraph(), but the entity set is the article/category/tag/tags
-    // relation graph these facet/aggregate tests need, plus ArticleTag registered directly so
+    // relation graph these facet/aggregate tests need, plus FxArticleTag registered directly so
     // "fxArticleTag" can be queried as its own collection (registry.Get("fxArticleTag")) rather than
     // only reachable as a relation's junction type. `types`/`collections`/`provider` stay the same
     // shape BuildRepoWithGraph() uses; only the registry's ScanDescriptors input and collectionTypes
-    // gain ArticleTag — RelationshipGraph itself never looks at collectionTypes entries for
+    // gain FxArticleTag — RelationshipGraph itself never looks at collectionTypes entries for
     // collections absent from `collections`, so that extra entry is inert there.
     private (IItemRepository Repo, RelationshipGraph Graph, IMetadataProvider Md) BuildFacetRepo()
     {

@@ -191,7 +191,7 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
 /// <summary>
 /// Broad happy-path check that the create allowlist did not narrow the legitimate write surface —
 /// declared fields, translations and an M2M relation still bind exactly as before. Reuses the
-/// Article/Category/Tag fixture-domain wiring from <c>ItemServiceTests</c>.
+/// FxArticle/FxCategory/FxTag fixture-domain wiring from <c>ItemServiceTests</c>.
 /// </summary>
 public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
 {

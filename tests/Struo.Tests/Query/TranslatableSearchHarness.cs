@@ -14,7 +14,7 @@ namespace Struo.Tests.Query;
 
 // A minimal fixture with TWO translatable, searchable fields on its translation sidecar — grepped
 // tests/ and samples/ for "Translatable = true": every real fixture (Struo.Tests.Fixtures'
-// Article/ArticleTranslation included) has at most one translatable field that is ALSO Searchable, so
+// FxArticle/FxArticleTranslation included) has at most one translatable field that is ALSO Searchable, so
 // none of them can exercise FilterTranslator.SearchGroup's translatable-search OR-merge path (two
 // adjacent TranslatableLeaf conditionals landing in one implicit search OR group). This fixture exists
 // solely for that.

@@ -24,8 +24,8 @@ public class RelationSchemaTests(ApiFactory factory)
         body.Should().NotContain("\"name\":\"seoOgImage\"");
         body.Should().Contain("\"targetCollection\":\"fxCategory\"");
 
-        // Removed Author/ArticleFile entities.
-        // Tag/ArticleTag M2M reintroduced for TagSelect live-verification.
+        // The fixture domain has no author or article-file collection; its tags relation is a
+        // many-to-many through the FxArticleTag junction.
         body.Should().NotContain("\"name\":\"author\"");
         body.Should().Contain("\"name\":\"tags\"");
         body.Should().Contain("\"kind\":\"manyToMany\"");

@@ -86,4 +86,23 @@ public sealed class BarePathCitationsTests
     [InlineData("docs/ai/changelog.md", false)] // citation-guard:allow: literal fixture, not a real citation
     public void The_locale_changelogs_are_the_files_the_guard_exempts(string path, bool exempt) =>
         NarrativeScanScope.IsLocaleChangelog(path).Should().Be(exempt);
+
+    [Fact]
+    public void A_path_counts_as_existing_when_its_example_twin_exists()
+    {
+        var root = Directory.CreateTempSubdirectory("bare-path-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "local.json.example"), "{}");
+            File.WriteAllText(Path.Combine(root, "tracked.json"), "{}");
+
+            BarePathCitations.Exists(root, "local.json").Should().BeTrue();
+            BarePathCitations.Exists(root, "tracked.json").Should().BeTrue();
+            BarePathCitations.Exists(root, "missing.json").Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

@@ -81,7 +81,7 @@ public sealed class ItemServiceTests : IDisposable
         dict.Should().ContainKey("id");
         dict["status"].Should().Be("draft");
         dict.Should().ContainKey("createdAt");
-        // seoTitle is now a translatable field on ArticleTranslation
+        // seoTitle is now a translatable field on FxArticleTranslation
         dict.Should().NotContainKey("seoTitle");
     }
 

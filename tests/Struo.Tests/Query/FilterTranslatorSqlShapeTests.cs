@@ -41,8 +41,8 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    // A FilterTranslator wired over the FxArticle/FxCategory graph (Article.title lives on its
-    // ArticleTranslation sidecar and is translatable; Article.status is a plain own field) — same
+    // A FilterTranslator wired over the FxArticle/FxCategory graph (FxArticle.title lives on its
+    // FxArticleTranslation sidecar and is translatable; FxArticle.status is a plain own field) — same
     // wiring shape as SubqueryPushdownHarness/TranslatableSearchHarness, but over the real
     // fixtures so the assertions below can check for the actual "fx_article_translations" table name.
     private FilterTranslator BuildFixtureTranslator()

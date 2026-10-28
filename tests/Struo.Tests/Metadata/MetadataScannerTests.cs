@@ -398,8 +398,8 @@ public class MetadataScannerTests
         d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
     }
 
-    // The fixture's article<->tag junction (ArticleTag) is a hidden [CmsCollection] carrying a Note
-    // payload and a Sort column (see ArticleTag.cs) — this pins the two things that make it a real
+    // The fixture's article<->tag junction (FxArticleTag) is a hidden [CmsCollection] carrying a Note
+    // payload and a Sort column (see FxArticleTag.cs) — this pins the two things that make it a real
     // demo of the junction-payload feature: the relation names its junction collection, and the M2M
     // descriptor's payload is exactly the one non-FK, non-sort field.
     [Fact]

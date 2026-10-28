@@ -393,8 +393,9 @@ against a real PostgreSQL. Two things worth knowing before you touch it:
 `PgTestConnectionString`'s class doc points to `docs/ai/decisions/pg-test-connection-pooling.md` for the
 full write-up.
 
-**E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in; the `sample` project exists only while `frontend/e2e/sample/` does) is a
-further check for changes to user-facing flows — it needs a live API and a migrated database (run
+**E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in;
+the `sample` project exists only while `frontend/e2e/sample/` does) is a further check for changes
+to user-facing flows — it needs a live API and a migrated database (run
 `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local
 configuration; a local database built by v0.8.x CodeFirst needs `migrate:baseline` once instead), is
 not one of the five standing gates, and is not run by CI.

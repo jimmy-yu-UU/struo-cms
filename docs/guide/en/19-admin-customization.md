@@ -248,9 +248,8 @@ see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-lega
 message catalogs are registered in one place, the `catalogs` object in
 `frontend/src/locales/index.ts`, and two ship: `zh-TW.ts` and `en.ts`, each a nested object with
 top-level namespaces by screen (`nav`, `login`, `itemForm`, `settings`, and so on) and a `richtext`
-sub-namespace under `fields`. The
-`UiLocale` type, the i18n message table, the switcher's options and the key-symmetry test are all
-derived from that registry.
+sub-namespace under `fields`. The `UiLocale` type, the i18n message table, the switcher's options and
+the key-symmetry test are all derived from that registry.
 
 Every catalog in the registry is offered. The default is `en`; a build overrides it with
 `VITE_DEFAULT_UI_LOCALE` (a registered code; a dev server reads `frontend/.env`, an image build

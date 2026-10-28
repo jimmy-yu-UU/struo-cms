@@ -485,7 +485,7 @@ public class GraphQlExecutionTests
 
     /// <summary>
     /// Live-gate regression (HC0053): <c>ItemService.Project</c> emits a Repeater field's value as
-    /// the entity's raw <c>List&lt;TChild&gt;</c> of POCOs (e.g. <c>List&lt;FaqItem&gt;</c>) — NOT a
+    /// the entity's raw <c>List&lt;TChild&gt;</c> of POCOs (e.g. <c>List&lt;FxFaqItem&gt;</c>) — NOT a
     /// list of dictionaries. Before the fix, <c>BuildRepeaterItemType</c>'s sub-field resolvers cast
     /// the parent straight to <c>IReadOnlyDictionary&lt;string,object?&gt;</c>, which throws
     /// HC0053 ("unable to cast the parent type") when the parent is actually a POCO. The fix must

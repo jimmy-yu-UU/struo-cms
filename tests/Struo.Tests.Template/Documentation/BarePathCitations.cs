@@ -46,6 +46,17 @@ internal static class BarePathCitations
         return unresolved;
     }
 
+    /// <summary>
+    /// True when <paramref name="relativePath"/> names a file or directory under <paramref name="repoRoot"/>,
+    /// or when <c>&lt;path&gt;.example</c> does: a gitignored local file (such as
+    /// <c>appsettings.Development.json</c>) is tracked as its <c>.example</c> and is absent on a clean checkout.
+    /// </summary>
+    public static bool Exists(string repoRoot, string relativePath)
+    {
+        var full = Path.Combine(repoRoot, relativePath);
+        return File.Exists(full) || Directory.Exists(full) || File.Exists(full + ".example");
+    }
+
     private static bool IsCheckable(string path, bool samplesPresent)
     {
         if (path.IndexOfAny(['*', '<', '>', '{', '}', '~']) >= 0)

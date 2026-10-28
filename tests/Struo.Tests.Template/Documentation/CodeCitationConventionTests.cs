@@ -17,8 +17,9 @@ namespace Struo.Tests.Template.Documentation;
 public sealed partial class CodeCitationConventionTests
 {
     /// <summary>
-    /// A line carrying this literal marker is skipped by both citation regexes below; no real citation
-    /// in this repository carries it, so it cannot be used to launder an actual violation.
+    /// A line carrying this literal marker is skipped by both citation regexes below. It has two
+    /// sanctioned uses: a regex false positive in a guard fixture, and a path a walkthrough tells the
+    /// reader to create, which cannot exist yet. It is not a general-purpose suppression.
     /// </summary>
     private const string AllowMarker = "citation-guard:allow";
 
@@ -160,7 +161,7 @@ public sealed partial class CodeCitationConventionTests
                     continue;
 
                 violations.AddRange(BarePathCitations
-                    .FindUnresolved(lines[i], path => PathExists(repoRoot, path))
+                    .FindUnresolved(lines[i], path => BarePathCitations.Exists(repoRoot, path))
                     .Select(path => $"{relativePath}:{i + 1} → {path}"));
             }
         }
@@ -169,12 +170,6 @@ public sealed partial class CodeCitationConventionTests
             "a repo-relative path cited without a line number must name a file or directory that exists " +
             "(docs/ai/conventions.md, \"Citing code from docs and comments\") — violations:\n" +
             string.Join("\n", violations));
-    }
-
-    private static bool PathExists(string repoRoot, string relativePath)
-    {
-        var full = Path.Combine(repoRoot, relativePath);
-        return File.Exists(full) || Directory.Exists(full);
     }
 
     private static void CollectExtensionAnchoredViolations(

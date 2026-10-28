@@ -223,7 +223,7 @@ public class FacetQueriesTests : IDisposable
 }
 
 // A second facet fixture — over the real FxArticle/FxCategory graph — pins down the translatable-leaf
-// path: Article.title lives on the ArticleTranslation sidecar, so `articles.title` (a one-to-many hop
+// path: FxArticle.title lives on the FxArticleTranslation sidecar, so `articles.title` (a one-to-many hop
 // from Category) must resolve per-locale sidecar values rather than the target row's own scalar field.
 public class TranslatableLeafFacetTests : IDisposable
 {

@@ -239,12 +239,12 @@ public class SoftDeleteRepositoryTests
     // The M2M existence check excluding a trashed target is exercised end-to-end via
     // Service.UpdateAsync's SyncM2MAsync, which validates target ids through
     // IItemRepository.QueryWhereInAsync(targetCollection, "id", ids). The fixture domain's only M2M
-    // relation is Article.Tags -> Tag, and Tag does NOT implement ISoftDeletable (see Tag.cs) — so a
-    // real "link a trashed tag" scenario can't surface the soft-delete floor at all (Tag rows are
+    // relation is FxArticle.Tags -> FxTag, and FxTag does NOT implement ISoftDeletable (see FxTag.cs) — so a
+    // real "link a trashed tag" scenario can't surface the soft-delete floor at all (FxTag rows are
     // never filtered regardless of DeletedAt, because it has no DeletedAt). No other M2M relation onto
-    // a soft-deletable collection (Article/Category) exists in this fixture domain. This test instead
+    // a soft-deletable collection (FxArticle/FxCategory) exists in this fixture domain. This test instead
     // proves the underlying primitive the existence check depends on: QueryWhereInAsync excludes a
-    // trashed row of a collection that IS soft-deletable (Category), which is exactly the mechanism
+    // trashed row of a collection that IS soft-deletable (FxCategory), which is exactly the mechanism
     // that would reject a trashed M2M target if/when a soft-deletable M2M target collection exists.
     [Fact]
     public async Task QueryWhereIn_excludes_a_trashed_row_of_a_soft_deletable_collection()
@@ -258,8 +258,8 @@ public class SoftDeleteRepositoryTests
     }
 
     // The claim that inbound-Restrict counts live references only is NOT exercisable with the
-    // current fixture entities: Article.CategoryId is OnDelete.SetNull and Category.ParentId
-    // (self-reference) is also OnDelete.SetNull (see Article.cs/Category.cs) — no relation in the
+    // current fixture entities: FxArticle.CategoryId is OnDelete.SetNull and FxCategory.ParentId
+    // (self-reference) is also OnDelete.SetNull (see FxArticle.cs/FxCategory.cs) — no relation in the
     // fixture domain uses OnDelete.Restrict, so graph.InboundRestrict() is empty for every
     // soft-deletable collection and ItemService.DeleteAsync's Restrict-guard branch never runs for
     // them. Deferred to the live gate / a future fixture entity with a Restrict relation; no test added

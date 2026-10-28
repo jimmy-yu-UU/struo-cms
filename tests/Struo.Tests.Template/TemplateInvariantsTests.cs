@@ -1,5 +1,6 @@
 // tests/Struo.Tests.Template/TemplateInvariantsTests.cs
 using AwesomeAssertions;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Template;
@@ -56,23 +57,24 @@ public sealed class TemplateInvariantsTests
     }
 
     [Fact]
-    public void Core_test_project_has_no_project_reference_into_samples()
+    public void No_test_project_has_a_project_reference_into_samples()
     {
-        // Struo.Tests exercises core through tests/Struo.Tests.Fixtures; the sample has its own test
-        // project. A reference from the core suite into samples/ would make deleting the sample break it.
-        var offenders = ProjectReferences(Path.Combine(RepoRoot(), "tests", "Struo.Tests"))
+        // The core suite exercises core through tests/Struo.Tests.Fixtures; the sample has its own test
+        // project next to it. A reference from any project under tests/ into samples/ would make
+        // deleting the sample break it.
+        var offenders = ProjectReferences(Path.Combine(RepoRoot.Find(), "tests"))
             .Where(x => ReferencesFolder(x.reference, "samples"))
             .Select(x => $"{x.project}: {x.reference}")
             .ToList();
 
-        offenders.Should().BeEmpty("the core test project must not reference samples/*");
+        offenders.Should().BeEmpty("no project under tests/ may reference samples/*");
     }
 
     [Fact]
     public void Shipped_src_projects_have_no_project_reference_into_tests()
     {
         // Test fixtures and test support never ship; framework code must not depend on them.
-        var offenders = ProjectReferences(Path.Combine(RepoRoot(), "src"))
+        var offenders = ProjectReferences(Path.Combine(RepoRoot.Find(), "src"))
             .Where(x => ReferencesFolder(x.reference, "tests"))
             .Select(x => $"{x.project}: {x.reference}")
             .ToList();
@@ -107,13 +109,6 @@ public sealed class TemplateInvariantsTests
                 .Select(e => e.Attribute("Include")?.Value)
                 .OfType<string>()
                 .Select(include => (Path.GetFileName(path), include)));
-
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (Directory.Exists(Path.Combine(dir.FullName, "src", "Struo.Api"))) return dir.FullName;
-        throw new DirectoryNotFoundException("the repository root is not an ancestor of the test output directory");
-    }
 
     // Same walk-up-from-BaseDirectory approach as LiveDatabases.FindApiDir - see
     // tests/Struo.Tests.Support/LiveDatabases.cs.

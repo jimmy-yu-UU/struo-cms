@@ -17,7 +17,7 @@ namespace Struo.Tests.Revisions;
 
 /// <summary>
 /// Wires an <see cref="ItemService"/> + <see cref="RevisionSnapshotBuilder"/> over the fixture types
-/// (Article/Category/Tag/File), mirroring <c>ItemServiceTests</c>' harness construction, so a live item
+/// (FxArticle/FxCategory/FxTag/File), mirroring <c>ItemServiceTests</c>' harness construction, so a live item
 /// with an M2O relation, an M2M relation, a multi-value own-field, and i18n translations can be seeded
 /// through the normal write path and then snapshotted.
 /// </summary>

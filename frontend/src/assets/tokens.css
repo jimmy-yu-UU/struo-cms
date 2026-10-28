@@ -161,8 +161,8 @@
      light, #fafafa in dark) instead of a subtle border. This is Tailwind's own documented v4
      upgrade shim: restore a sane default so every OTHER bare border utility across
      frontend/src/components/ui/ (read-only, can't be edited directly) gets one too. Utility
-     classes that DO specify a colour (`border-destructive`, `border-input`, ...) still win — they live in
-     Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
+     classes that DO specify a colour (`border-destructive`, `border-input`, ...) still win — they
+     live in Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
   *,
   ::before,
   ::after,

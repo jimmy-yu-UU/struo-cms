@@ -20,7 +20,7 @@ namespace Struo.Tests.Query;
 // A handful of malformed write-path request bodies fell through to an
 // unhandled InvalidOperationException/FormatException (-> 500) instead of the established
 // QueryException (-> 400) client-error path. This harness mirrors ItemServiceTests' fixture-domain
-// wiring (Article/Category/Tag, M2M via "tags") and additionally scans Language so the "language"
+// wiring (FxArticle/FxCategory/FxTag, M2M via "tags") and additionally scans Language so the "language"
 // collection's code-format guard (Site 3) can be exercised directly.
 internal sealed class MalformedBodyHarness : IDisposable
 {

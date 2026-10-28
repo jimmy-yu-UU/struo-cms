@@ -14,11 +14,11 @@
   衝突一次：把修改套用到檔案的新位置。Support 類別庫的公開 API 是 fork 測試所依賴的，之後它的變動都會列在這裡。
 - 核心測試改跑在測試專用的 fixture 集合上，不再用範例。`tests/Struo.Tests.Fixtures` 以 `fx` 前綴宣告
   這些集合（`fxArticle`，資料表 `fx_*`）並帶自己的 migration，任何會出貨的主機都不會註冊它。範例自己
-  的測試搬到範例旁邊的 `samples/Struo.Sample.Blog.Tests`。移除範例不再需要動 `tests/`：刪掉
-  `samples/`、它在 `StruoCMS.slnx` 的區塊與 `frontend/e2e/sample/` 就好。Playwright 設定只在
+  的測試搬到範例旁邊的 `samples/Struo.Sample.Blog.Tests`。移除範例不再需要動 `tests/`：照
+  [第 23 章](23-sample-walkthrough.md)做就好。Playwright 設定只在
   `frontend/e2e/sample/` 存在時才加入 `sample` 專案。已經刪掉或改過 `tests/Struo.Tests` 底下範例測試
-  的 fork，合併時會衝突一次。`tests/Struo.Tests` 底下的衝突一律採用上游的版本：那些檔案現在跑在
-  fixture 上，`Support/ContentAssemblyEnvBootstrap.cs` 的釘住設定與 `Struo.Tests.csproj` 裡指向
+  的 fork，合併時會衝突一次。由這次變更造成的衝突（`tests/Struo.Tests` 底下、你的 fork 因範例而刪掉或
+  修改的檔案），採用上游的版本：那些檔案現在跑在 fixture 上，`Support/ContentAssemblyEnvBootstrap.cs` 的釘住設定與 `Struo.Tests.csproj` 裡指向
   `Struo.Tests.Fixtures` 的 `ProjectReference` 必須留著，否則測試套件會失敗，而且測試會連到你的開發
   Redis 與 OIDC 提供者。只有搬到 `samples/Struo.Sample.Blog.Tests` 的範例自己的測試可以維持刪除。見
   [第 22 章](22-testing.md)與[第 23 章](23-sample-walkthrough.md)。
