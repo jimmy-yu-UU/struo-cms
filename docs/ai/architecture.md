@@ -55,6 +55,7 @@ referencing `samples/*`: `tests/Struo.Tests.Template/TemplateInvariantsTests.cs`
 `Shipped_appsettings_declares_no_content_assemblies` asserts the shipped `appsettings.json`'s
 `Struo:ContentAssemblies` is empty. Only `tests/Struo.Tests` references the sample project — that is
 what makes `samples/Struo.Sample.Blog` truly optional and deletable.
+`tests/Struo.Tests.Fixtures` is a test-only content project (collections prefixed `fx`) with its own migration; no host registers it.
 
 See `docs/guide/en/02-architecture.md` for the conceptual introduction to this layering.
 
