@@ -60,8 +60,8 @@ public sealed class TemplateInvariantsTests
     {
         // Struo.Tests exercises core through tests/Struo.Tests.Fixtures; the sample has its own test
         // project. A reference from the core suite into samples/ would make deleting the sample break it.
-        var offenders = ProjectReferenceLines(Path.Combine(RepoRoot(), "tests", "Struo.Tests"))
-            .Where(x => x.reference.Contains("samples", StringComparison.OrdinalIgnoreCase))
+        var offenders = ProjectReferences(Path.Combine(RepoRoot(), "tests", "Struo.Tests"))
+            .Where(x => ReferencesFolder(x.reference, "samples"))
             .Select(x => $"{x.project}: {x.reference}")
             .ToList();
 
@@ -72,20 +72,41 @@ public sealed class TemplateInvariantsTests
     public void Shipped_src_projects_have_no_project_reference_into_tests()
     {
         // Test fixtures and test support never ship; framework code must not depend on them.
-        var offenders = ProjectReferenceLines(Path.Combine(RepoRoot(), "src"))
-            .Where(x => x.reference.Replace(Path.DirectorySeparatorChar, (char)47).Contains("tests/", StringComparison.OrdinalIgnoreCase))
+        var offenders = ProjectReferences(Path.Combine(RepoRoot(), "src"))
+            .Where(x => ReferencesFolder(x.reference, "tests"))
             .Select(x => $"{x.project}: {x.reference}")
             .ToList();
 
         offenders.Should().BeEmpty("src/ must not reference tests/* (fixtures and support are non-shipping)");
     }
 
-    private static IEnumerable<(string project, string reference)> ProjectReferenceLines(string directory) =>
+    [Theory]
+    [InlineData(@"..\..\tests\Struo.Tests.Fixtures\Struo.Tests.Fixtures.csproj", "tests", true)]
+    [InlineData("../../tests/Struo.Tests.Fixtures/Struo.Tests.Fixtures.csproj", "tests", true)]
+    [InlineData(@"..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj", "samples", true)]
+    [InlineData("../../samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj", "samples", true)]
+    [InlineData(@"..\Struo.Domain\Struo.Domain.csproj", "tests", false)]
+    [InlineData("../Struo.Application/Struo.Application.csproj", "samples", false)]
+    [InlineData(@"..\Struo.Tests.Support\Struo.Tests.Support.csproj", "tests", false)]
+    public void ReferencesFolder_matches_either_separator_on_any_os(string reference, string folder, bool expected) =>
+        ReferencesFolder(reference, folder).Should().Be(expected);
+
+    // Both csproj separators, so the checks do not depend on the OS running the test.
+    private static readonly char[] Separators = [(char)92, (char)47];
+
+    // True when a path segment of the reference is exactly the folder name, whichever separator the
+    // csproj uses and whichever OS runs the test.
+    private static bool ReferencesFolder(string reference, string folder) =>
+        reference.Split(Separators).Any(segment => segment.Equals(folder, StringComparison.OrdinalIgnoreCase));
+
+    private static IEnumerable<(string project, string reference)> ProjectReferences(string directory) =>
         Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .SelectMany(path => File.ReadLines(path)
-                .Where(line => line.Contains("ProjectReference", StringComparison.Ordinal))
-                .Select(line => (Path.GetFileName(path), line.Trim())));
+            .Where(path => !path.Split(Separators).Contains("obj"))
+            .SelectMany(path => System.Xml.Linq.XDocument.Load(path)
+                .Descendants("ProjectReference")
+                .Select(e => e.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => (Path.GetFileName(path), include)));
 
     private static string RepoRoot()
     {
