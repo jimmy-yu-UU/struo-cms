@@ -108,21 +108,15 @@ display and target picking:
 | `PickerQuery` | `string?` | `null` | saved to metadata; not read by the admin SPA |
 | `SortField` | `string?` | `null` | many-to-many only; the junction's sort column |
 
-The last four decide write and delete behavior:
+The last two decide write and delete behavior:
 
 | Member | CLR type | Default | Effect |
 |---|---|---|---|
 | `OnDelete` | `OnDelete` | `Restrict` | many-to-one only |
 | `Editable` | `bool` | `true` | whether the admin picker accepts input |
-| `DisplayColumns` | `string?` | `null` | no effect |
-| `MaxDepth` | `int` | `1` | no effect |
 
-Neither `DisplayColumns` nor `MaxDepth` is read into `RelationMetadata`, so neither reaches
-`/api/schema`. There's no field for a per-relation depth override at all — the one cap that's
-actually enforced is the global `Query:MaxRelationDepth`; see "Reading related data with `deep`"
-below. Both properties are marked `[Obsolete]`: setting one gives a compiler warning, and with the template's
-`TreatWarningsAsErrors` the build fails with the obsolete message, so delete it. They are removed in the next
-minor version.
+There is no per-relation depth setting. The one cap that is enforced is the global
+`Query:MaxRelationDepth`; see "Reading related data with `deep`" below.
 
 ## Junction entities and payloads
 

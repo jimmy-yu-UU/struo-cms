@@ -20,6 +20,9 @@
   the collection instead. `ItemDeserializer.Deserialize` is gone too: `DeserializeForCreate` replaces
   it and no longer checks scalar Required fields, which `ItemService` now checks after
   `BeforeWriteAsync`. A fork that called `Deserialize` directly must check its scalar Required fields itself, because `EnforceRequiredFields` is internal.
+- `CmsFieldAttribute.Display`, `CmsRelationAttribute.DisplayColumns` and `CmsRelationAttribute.MaxDepth`
+  are removed. They were `[Obsolete]` since 0.14.0 and nothing read them. A collection that still sets
+  one fails to build: delete the argument.
 :::
 
 ### Added

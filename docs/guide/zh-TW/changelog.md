@@ -18,6 +18,8 @@
   合加進該常數的 fork，要改在集合上設 `Creatable = false`。`ItemDeserializer.Deserialize` 也移除了：由
   `DeserializeForCreate` 取代，它不再檢查純量必填欄位，這項檢查改由 `ItemService` 在 `BeforeWriteAsync`
   之後執行。直接呼叫過 `Deserialize` 的 fork，要自己檢查純量必填欄位，因為 `EnforceRequiredFields` 是 internal。
+- `CmsFieldAttribute.Display`、`CmsRelationAttribute.DisplayColumns` 與 `CmsRelationAttribute.MaxDepth`
+  已移除。它們自 0.14.0 起標為 `[Obsolete]`，沒有任何地方讀取。仍設定其中之一的集合會建置失敗：請刪掉該引數。
 :::
 
 ### 新增

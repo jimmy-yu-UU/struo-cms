@@ -93,19 +93,14 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 | `PickerQuery` | `string?` | `null` | 存進 metadata，後台目前沒有讀取 |
 | `SortField` | `string?` | `null` | 僅多對多；junction 的排序欄 |
 
-後四個決定寫入與刪除時的行為：
+後兩個決定寫入與刪除時的行為：
 
 | 成員 | CLR 型別 | 預設值 | 效果 |
 |---|---|---|---|
 | `OnDelete` | `OnDelete` | `Restrict` | 僅多對一 |
 | `Editable` | `bool` | `true` | 後台 picker 是否接受輸入 |
-| `DisplayColumns` | `string?` | `null` | 沒有效果 |
-| `MaxDepth` | `int` | `1` | 沒有效果 |
 
-`DisplayColumns` 與 `MaxDepth` 都不會被讀進 `RelationMetadata`，也到不了 `/api/schema`。沒有逐關聯覆
-寫深度上限的欄位，唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」
-一節。這兩個屬性都標成 `[Obsolete]`：設定它們會有編譯器警告，在範本的 `TreatWarningsAsErrors` 下建置會帶著棄用訊息失敗，
-所以請刪掉。下一個次要版本會移除。
+沒有逐關聯設定深度的欄位。唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節。
 
 ## junction entity 與 payload
 

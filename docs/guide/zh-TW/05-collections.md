@@ -126,7 +126,6 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 |---|---|---|---|
 | `Label` | `string?` | `null` | 欄位標籤，未設定時用 PascalCase 屬性名 |
 | `Interface` | `FieldInterface` | `Text` | 決定欄位型別、GraphQL 型別、後台編輯器 |
-| `Display` | `string?` | `null` | 沒有效果；已棄用 |
 | `Required` | `bool` | `false` | 必填檢查（見下文） |
 | `Searchable` | `bool` | `false` | 加入全文搜尋白名單 |
 | `Sortable` | `bool` | `false` | 後台清單表頭可點排序 |
