@@ -47,7 +47,7 @@ public sealed class LiveDatabasePool
     public ITestDatabase Lease() => new PooledTestDatabase(this);
 
     /// <summary>Drops the databases of every shared pool that exists; creates none. Never throws.</summary>
-    public static void DropAllShared()
+    internal static void DropAllShared()
     {
         foreach (var lazy in Shared.Values)
         {
@@ -80,7 +80,7 @@ public sealed class LiveDatabasePool
     }
 
     /// <summary>Empties <paramref name="db"/> and makes it idle, or drops it. Never throws.</summary>
-    public void Return(ITestDatabase db)
+    internal void Return(ITestDatabase db)
     {
         // Already dropped by DropAll.
         if (!_owned.ContainsKey(db.Name)) return;

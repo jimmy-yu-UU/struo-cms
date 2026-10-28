@@ -69,7 +69,7 @@ public sealed partial class SqliteTestDatabaseUsageTests
             var root = Path.GetDirectoryName(projectDir)!;
             return Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
-                .Where(relative => !IsSupport(relative) && !IsBuildOutput(relative))
+                .Where(relative => !IsProjectSupport(relative) && !IsBuildOutput(relative))
                 .SelectMany(relative => File.ReadLines(Path.Combine(root, relative))
                     .Select((line, index) => (relative, line, number: index + 1)));
         });
@@ -84,7 +84,9 @@ public sealed partial class SqliteTestDatabaseUsageTests
                && name.Contains("Tests", StringComparison.Ordinal);
     }
 
-    private static bool IsSupport(string relative) => relative.Contains("/Support/", StringComparison.Ordinal);
+    // relative is "<project>/<path>"; only the project's own top-level Support folder is excluded.
+    private static bool IsProjectSupport(string relative) =>
+        relative.Split('/') is [_, "Support", ..];
 
     private static bool IsBuildOutput(string relative) =>
         relative.Contains("/bin/", StringComparison.Ordinal) || relative.Contains("/obj/", StringComparison.Ordinal);

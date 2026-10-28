@@ -23,7 +23,7 @@ public sealed class SqliteTempTestDatabase : ITestDatabase
 }
 
 /// <summary>A database created on a live server; disposing drops it and never throws.</summary>
-public sealed class LiveTestDatabase : ITestDatabase
+internal sealed class LiveTestDatabase : ITestDatabase
 {
     private readonly TestBackendKind _kind;
     private int _disposed;
@@ -49,7 +49,7 @@ public sealed class LiveTestDatabase : ITestDatabase
 /// A database leased from a <see cref="LiveDatabasePool"/> on first use of <see cref="ConnectionString"/>
 /// or <see cref="Name"/>; disposing returns it to the pool and never throws.
 /// </summary>
-public sealed class PooledTestDatabase : ITestDatabase
+internal sealed class PooledTestDatabase : ITestDatabase
 {
     private readonly LiveDatabasePool _pool;
     private readonly Lock _gate = new();

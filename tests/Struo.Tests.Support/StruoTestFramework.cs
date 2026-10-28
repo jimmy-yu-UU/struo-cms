@@ -15,7 +15,7 @@ public sealed class StruoTestFramework(IMessageSink diagnosticMessageSink) : Xun
         new StruoTestFrameworkExecutor(assemblyName, SourceInformationProvider, DiagnosticMessageSink);
 }
 
-public sealed class StruoTestFrameworkExecutor(
+internal sealed class StruoTestFrameworkExecutor(
     AssemblyName assemblyName,
     ISourceInformationProvider sourceInformationProvider,
     IMessageSink diagnosticMessageSink)
@@ -32,7 +32,7 @@ public sealed class StruoTestFrameworkExecutor(
     }
 }
 
-public sealed class StruoTestAssemblyRunner(
+internal sealed class StruoTestAssemblyRunner(
     ITestAssembly testAssembly,
     IEnumerable<IXunitTestCase> testCases,
     IMessageSink diagnosticMessageSink,

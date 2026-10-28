@@ -27,7 +27,7 @@ public static partial class LiveDatabaseDdl
     };
 
     /// <summary>Creates <paramref name="name"/> next to the configured test database.</summary>
-    public static LiveTestDatabase Create(TestBackendKind kind, string name, string configuredConnection)
+    internal static LiveTestDatabase Create(TestBackendKind kind, string name, string configuredConnection)
     {
         ValidateName(name);
         if (Exists(kind, name, configuredConnection))
@@ -63,7 +63,7 @@ public static partial class LiveDatabaseDdl
     /// deployment requirement for SQL Server (test-only SQL). Does nothing when it is already on, so a
     /// shared database is not disturbed by the ROLLBACK IMMEDIATE that the change needs.
     /// </summary>
-    public static void EnableReadCommittedSnapshot(string sqlServerConnection)
+    internal static void EnableReadCommittedSnapshot(string sqlServerConnection)
     {
         LiveDatabases.GuardDisposable(sqlServerConnection);
         var builder = new SqlConnectionStringBuilder(sqlServerConnection);
@@ -145,7 +145,7 @@ public static partial class LiveDatabaseDdl
             MoreSettings = new ConnMoreSettings { SqlServerCodeFirstNvarchar = kind == TestBackendKind.SqlServer },
         });
 
-    public static void ValidateName(string name)
+    internal static void ValidateName(string name)
     {
         if (!ValidNamePattern().IsMatch(name))
             throw new ArgumentException($"Test database name '{name}' must match ^[a-z0-9_]+$.", nameof(name));
@@ -169,7 +169,7 @@ public static partial class LiveDatabaseDdl
     };
 
     // Clears the client pool of exactly this connection string. Never throws.
-    public static void ClearPool(TestBackendKind kind, string connectionString)
+    internal static void ClearPool(TestBackendKind kind, string connectionString)
     {
         try
         {

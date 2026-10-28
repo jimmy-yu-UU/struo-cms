@@ -8,7 +8,7 @@ namespace Struo.Tests.Support.Seeding;
 /// collection.</summary>
 public static class RbacSeeder
 {
-    public const string PublicRoleName = SqlSugarRolePermissionStore.PublicRoleName;
+    internal const string PublicRoleName = SqlSugarRolePermissionStore.PublicRoleName;
 
     public static async Task SeedAsync(
         ISqlSugarClient db, string? bootstrapAdminEmail,

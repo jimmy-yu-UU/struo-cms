@@ -49,59 +49,28 @@ public class StruoApiFactory : WebApplicationFactory<Program>
                 // The host builds its schema and seed data from the migrations; the startup gate then
                 // checks the result against the entity model (Development).
                 ["Database:MigrateOnStartup"] = "true",
-                // Struo:ContentAssemblies cannot be set here - it is read before Build(). See TestHostEnvironment.Pin.
+                // Struo:ContentAssemblies is read before Build(); see TestHostEnvironment.Pin.
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,
                 ["Struo:Files:ImageTransform:CachePath"] = ImageCacheRoot,
-                // Pin OIDC off by default so the IT suite is deterministic regardless of a developer's
-                // local, gitignored appsettings.Development.json (which may carry real tenant config for
-                // manual OIDC testing). Tests that need it on layer an override via WithWebHostBuilder.
-                // The same content-root file is also a live input to Struo:ContentAssemblies (now empty
-                // in the shipped appsettings.json): a developer who uncomments a sample entry there gets
-                // a suite that behaves differently from CI, since that key can't be overridden here (see
-                // TestHostEnvironment.Pin).
+                // OIDC is pinned off so a developer's gitignored appsettings.Development.json cannot change
+                // the suite. A test that needs a provider layers an override via WithWebHostBuilder.
                 ["Oidc:Providers:microsoft:Enabled"] = "false",
                 ["Oidc:Providers:google:Enabled"] = "false",
-                // The whole suite shares this ApiFactory instance (and its client-IP partition,
-                // since TestServer has a fixed connection IP) across ~55 test classes that each log in
-                // one or more test users via CreateAuthenticatedClientAsync/CreateEditorClientAsync/
-                // CreateRolelessClientAsync. A production-sized PermitLimit (5/60s) would make the
-                // suite itself trip the 429 the limiter exists to produce. Kept generously high here;
-                // AuthLoginRateLimitTests exercises the real limiter behavior on its own isolated
-                // derived host via WithWebHostBuilder with a small, dedicated PermitLimit. Enabled is
-                // pinned true here even though the shipped default is now false — this suite's own
-                // integration tests target the mechanism, not the default. AuthLoginRateLimitTests
-                // covers the explicitly-disabled case (RateLimiting:Login:Enabled = "false") on its own
-                // isolated host, not the shipped default itself — ShippedConfigurationBindingTests
-                // covers RateLimiting:Login by key shape only, so no test asserts the shipped value.
+                // Hosts are shared across many test classes behind one client IP, so the login limiters are
+                // raised far above the production defaults. A test of the limiter itself runs on its own
+                // derived host with a small PermitLimit.
                 ["RateLimiting:Login:Enabled"] = "true",
                 ["RateLimiting:Login:PermitLimit"] = "100000",
                 ["RateLimiting:Login:WindowSeconds"] = "60",
-                // Same rationale as RateLimiting:Login above, for the per-account throttle: the
-                // shared admin/editor logins across this suite must never trip it. It is keyed by
-                // account (not client IP), so unlike the per-IP override this one protects the SAME
-                // seeded accounts (e.g. AdminEmail) being re-used, failed-then-retried, across many
-                // unrelated test classes within this one process-lifetime cache.
+                // The per-account throttle is raised for the same reason: shared admin and editor
+                // accounts log in repeatedly across unrelated classes.
                 ["RateLimiting:LoginAccount:PermitLimit"] = "100000",
                 ["RateLimiting:LoginAccount:WindowSeconds"] = "60"
-                // RateLimiting:Password is deliberately left at its production default (5/60s) here,
-                // unlike RateLimiting:Login above: it partitions by authenticated user id, and every
-                // call site except the shared admin logs in a freshly-seeded user via
-                // CreateEditorClientAsync/CreateRolelessClientAsync, so each gets its own untouched
-                // bucket — raising the default would mask exactly the per-user-partition bug
-                // PasswordChangeRateLimitTests exists to catch. The ONE exception is the shared admin
-                // from CreateAuthenticatedClientAsync: every admin-authenticated password change in
-                // this collection spends down that single bucket. As of this writing
-                // UserCredentialWriteAuditTests and PasswordChangeSemanticsTests together use 3 of the
-                // 5 permits (well inside the 60s test run), so there is headroom, but it is not
-                // unlimited. A future author adding more
-                // admin-authenticated password changes to this collection should either (a) use a
-                // fresh CreateEditorClientAsync user instead of the shared admin when the test doesn't
-                // specifically need admin privileges, or (b) raise RateLimiting:Password:PermitLimit
-                // on an isolated derived host via WithWebHostBuilder the way
-                // PasswordChangeRateLimitTests/AuthLoginRateLimitTests already do — not here, since
-                // that would blunt the very partition-key test this limiter needs.
-            }.AsEnumerable()).ToDictionary()));
+                // RateLimiting:Password keeps its production default (5/60s). It partitions by user id and
+                // each editor or roleless client is a fresh user. The shared admin has one bucket, so use
+                // another user, or an isolated derived host, for many admin password changes.
+            }).ToDictionary()));
     }
 
     private IEnumerable<KeyValuePair<string, string?>> PublicReadSettings() =>
@@ -160,11 +129,7 @@ public class StruoApiFactory : WebApplicationFactory<Program>
         await EnsureAdminSeededAsync();
 
         var client = CreateClient();
-        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
-        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = AdminEmail, password = AdminPassword });
-        resp.EnsureSuccessStatusCode();
+        await LoginAsync(client, new { email = AdminEmail, password = AdminPassword });
         return client;
     }
 
@@ -217,11 +182,7 @@ public class StruoApiFactory : WebApplicationFactory<Program>
     {
         var (email, password, userId) = await SeedEditorAsync(readCollections, writeCollections);
         var client = CreateClient();
-        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
-        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
-        resp.EnsureSuccessStatusCode();
+        await LoginAsync(client, new { email, password });
         return (client, userId);
     }
 
@@ -247,12 +208,17 @@ public class StruoApiFactory : WebApplicationFactory<Program>
             }).ExecuteCommandAsync();
         }
         var client = CreateClient();
-        // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that here so
-        // these cookie-based clients aren't rejected by CsrfProtectionMiddleware.
-        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-        var resp = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
-        resp.EnsureSuccessStatusCode();
+        await LoginAsync(client, new { email, password });
         return (client, userId);
+    }
+
+    // The SPA sends the CSRF header on every cookie-authenticated mutation; mirror that so these
+    // clients are not rejected by CsrfProtectionMiddleware.
+    private static async Task LoginAsync(HttpClient client, object credentials)
+    {
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        var resp = await client.PostAsJsonAsync("/api/auth/login", credentials);
+        resp.EnsureSuccessStatusCode();
     }
 
     protected override void Dispose(bool disposing)

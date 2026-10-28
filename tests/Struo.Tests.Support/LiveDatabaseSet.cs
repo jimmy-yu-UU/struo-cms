@@ -20,7 +20,7 @@ public abstract class LiveDatabaseSet : IDisposable
     {
     }
 
-    public LiveDatabaseSet(string purpose, Func<TestBackendKind, string, ITestDatabase> create)
+    protected LiveDatabaseSet(string purpose, Func<TestBackendKind, string, ITestDatabase> create)
     {
         _purpose = purpose;
         _create = create;

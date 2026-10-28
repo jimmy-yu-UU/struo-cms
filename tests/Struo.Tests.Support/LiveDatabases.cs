@@ -9,14 +9,14 @@ namespace Struo.Tests.Support;
 /// </summary>
 public static class LiveDatabases
 {
-    public const string PostgresEnvVar = "STRUO_TEST_PG_CONNECTION";
-    public const string PostgresConfigKey = "Testing:PostgresConnection";
-    public const string SqlServerEnvVar = "STRUO_TEST_SQLSERVER_CONNECTION";
-    public const string SqlServerConfigKey = "Testing:SqlServerConnection";
-    public const string MySqlEnvVar = "STRUO_TEST_MYSQL_CONNECTION";
-    public const string MySqlConfigKey = "Testing:MySqlConnection";
-    public const string MariaDbEnvVar = "STRUO_TEST_MARIADB_CONNECTION";
-    public const string MariaDbConfigKey = "Testing:MariaDbConnection";
+    internal const string PostgresEnvVar = "STRUO_TEST_PG_CONNECTION";
+    internal const string PostgresConfigKey = "Testing:PostgresConnection";
+    internal const string SqlServerEnvVar = "STRUO_TEST_SQLSERVER_CONNECTION";
+    internal const string SqlServerConfigKey = "Testing:SqlServerConnection";
+    internal const string MySqlEnvVar = "STRUO_TEST_MYSQL_CONNECTION";
+    internal const string MySqlConfigKey = "Testing:MySqlConnection";
+    internal const string MariaDbEnvVar = "STRUO_TEST_MARIADB_CONNECTION";
+    internal const string MariaDbConfigKey = "Testing:MariaDbConnection";
 
     public static string? Postgres { get; } =
         Resolve(PostgresEnvVar, PostgresConfigKey) is { } raw
