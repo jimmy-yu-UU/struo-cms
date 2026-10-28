@@ -7,7 +7,8 @@ Two suites, configured as separate Playwright projects (`playwright.config.ts`):
   checkout.
 - **`sample`** (`pnpm e2e:sample`) — specs under `e2e/sample/`: collections, items CRUD, relations,
   revisions and related flows. Requires the Blog sample opted into `Struo:ContentAssemblies` first —
-  see [chapter 23](../../docs/guide/en/23-sample-walkthrough.md).
+  see [chapter 23](../../docs/guide/en/23-sample-walkthrough.md). The config adds this project only
+  while `e2e/sample/` exists.
 - **`pnpm e2e:all`** runs both projects.
 
 ## Prerequisites

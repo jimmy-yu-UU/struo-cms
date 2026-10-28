@@ -679,7 +679,7 @@ destructive actions, the user is left with a blocked action and no working way t
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped
   template with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and
-  needs the Blog sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification",
+  needs the Blog sample opted in first and is added to the config only while `e2e/sample/` exists. Neither is run by CI — see `AGENTS.md`, "Verification",
   for the five standing gates CI does run — and both need a live API and database, not just a
   build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two container images and
   the Compose stack — `docs/guide/en/20-deployment.md`'s "The two container images" and "The

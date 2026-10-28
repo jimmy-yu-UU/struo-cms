@@ -15,6 +15,15 @@
   `tests/Struo.Tests/Support`, `Documentation` or `Template` gets a one-time merge conflict on the
   moved files: apply the edit to the file's new location. The Support library's public API is what a
   fork's tests depend on, and later changes to it are listed here.
+- The core tests run on test-only fixture collections instead of the sample. `tests/Struo.Tests.Fixtures`
+  declares them with an `fx` prefix (`fxArticle`, tables `fx_*`) and its own migration, and no shipped
+  host registers it. The sample's own tests moved to `samples/Struo.Sample.Blog.Tests`, next to the
+  sample. Removing the sample no longer touches `tests/`: delete `samples/`, its `StruoCMS.slnx` block
+  and `frontend/e2e/sample/`. The Playwright config adds the `sample` project only while
+  `frontend/e2e/sample/` exists. A fork that already deleted or edited the sample's tests under
+  `tests/Struo.Tests` gets a one-time merge conflict on those files: keep your deletion, or apply the
+  edit to the retargeted file. See [Chapter 22](22-testing.md) and
+  [Chapter 23](23-sample-walkthrough.md).
 
 ## 0.15.0 — 2026-10-28
 

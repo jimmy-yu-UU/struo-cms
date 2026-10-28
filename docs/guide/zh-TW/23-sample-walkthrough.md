@@ -22,8 +22,9 @@
 entity 時的最低限度就是前者。範例自己的 migration 繼承 `Struo.Infrastructure` 的
 `StruoMigration`，所以後者也少不了。
 
-參照它的只有測試專案 `tests/Struo.Tests`，而且用得很深，〈完全移除範例〉列出全部要動的
-檔案。`src/Struo.Api/Struo.Api.csproj` 沒有指到它的 `ProjectReference`，
+參照它的只有它自己的測試專案 `samples/Struo.Sample.Blog.Tests`。`tests/` 裡的核心測試不碰它：
+核心測試跑在 `tests/Struo.Tests.Fixtures` 這組測試專用的 fixture 上（見[第 22 章](22-testing.md)）。
+`src/Struo.Api/Struo.Api.csproj` 沒有指到它的 `ProjectReference`，
 `Struo:ContentAssemblies` 預設是空陣列。
 
 ## 開啟範例
@@ -211,73 +212,35 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
 
 ## 完全移除範例
 
-清乾淨的範圍比 `samples/Struo.Sample.Blog/` 這個目錄大：後端測試套件拿範例的集合當
-fixture，照下面的清單逐步走完。
+範例和它的測試放在一起，所以移除只要四步。`tests/` 不用動：核心測試跑在
+`tests/Struo.Tests.Fixtures` 上，不依賴範例。
 
-1. 還原兩處開啟編輯：從 `Struo.Api.csproj` 移除指到 `Struo.Sample.Blog.csproj` 的
+1. 如果你開啟過範例，先還原兩處編輯：從 `Struo.Api.csproj` 移除指到 `Struo.Sample.Blog.csproj` 的
    `ProjectReference`；把 `appsettings.Development.json` 裡的 `"ContentAssemblies"` 那一行改回註解
    或刪掉。接著把追蹤中的 `appsettings.Development.json.example` 裡那一行、連同 `"Struo"` 上面兩行
    指向它的註解一起移除，否則這份範例設定檔會一直指向不存在的範例。
 
-2. 刪掉整個 `samples/Struo.Sample.Blog/` 目錄；從 `StruoCMS.slnx` 移除
-   `<Folder Name="/samples/">` 那個區塊；從 `tests/Struo.Tests/Struo.Tests.csproj` 移除指
-   到它的 `ProjectReference`。
+2. 刪掉整個 `samples/` 目錄（裡面是範例與它的測試專案 `Struo.Sample.Blog.Tests`），並從
+   `StruoCMS.slnx` 移除 `<Folder Name="/samples/">` 那個區塊。
 
-3. 刪掉 `tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`——這是在任何測試跑之
-   前，就把 `Struo__ContentAssemblies__0=Struo.Sample.Blog` 設進行程環境變數的
-   `[ModuleInitializer]`；少了它，`ApiFactory` 起的測試主機看不到範例的集合。
+3. 刪掉 `frontend/e2e/sample/`。`frontend/playwright.config.ts` 只在這個目錄存在時才加入
+   `sample` 專案，設定檔不用改。從 `frontend/package.json` 移除 `"e2e:sample"` 與 `"e2e:all"`，
+   否則它們會指向已經不存在的專案；再修剪 `frontend/e2e/README.md` 談範例的段落。
 
-4. 用下面這道指令找出還提到範例的測試檔：
+4. 清掉任何跑過範例的資料庫裡的五張表，以及版本表裡範例 migration 的紀錄。範例 migration 建的
+   表不會跟著程式碼一起消失；紀錄不刪的話，`migrate:status` 會把它列成 `Orphaned`，不擋啟動，
+   但會一直留著：
 
    ```
-   grep -rl "Struo.Sample.Blog" tests/Struo.Tests --include=*.cs
+   DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
+   DELETE FROM struo_schema_versions WHERE version = 202610080100;
    ```
 
-   第 3 步做完之後，它列出 45 個檔案，依情況處理：
+   `struo_` 換成你的 `Database:TablePrefix`。範例的表之間沒有外鍵，不需要 `CASCADE`。這兩道語句
+   在 PostgreSQL、SQL Server、MySQL 與 MariaDB 上實際跑過；SQLite 的 `DROP TABLE` 一次只接受一
+   張表，要拆成五道。
 
-   - 有 `using Struo.Sample.Blog;` 的 36 個檔案（分布見[第 22 章](22-testing.md)），加上用完整名稱
-     引用範例型別的 `Migrations/SampleBlogMigrationTests.cs` 與
-     `Query/NestedListArgsExpansionTests.cs`：整個刪掉。
-   - `Persistence/SqlSugarClientFactoryTests.cs` 與 `Persistence/TableNamingTests.cs`：只刪掉寫著
-     `Struo.Sample.Blog.` 型別的那一行斷言與那兩筆 `InlineData`，其餘測試留著。
-   - `Metadata/ConventionMetadataDiscoveryTests.cs`：第 6 步處理。
-   - `GraphQl/FakeMetadataFixtures.cs`、`GraphQl/GraphQlExecutionTests.cs`、
-     `Query/TranslatableSearchHarness.cs` 只在註解裡提到範例，第 8 步處理。
-
-5. 跑一次 `dotnet build` 確認編譯已經乾淨——`src/Struo.*` 底下沒有程式碼參照範例。
-   `dotnet test` 這時還是紅的，接下來兩步處理它。
-
-6. 修 `tests/Struo.Tests/Metadata/ConventionMetadataDiscoveryTests.cs`：四個測試裡有兩個用字串
-   把 `"Struo.Sample.Blog"` 設成要掃描的組件，刪掉 `Configured_content_assembly_is_scanned`
-   與 `Registers_entity_type_collector`，或改指向自己 fork 的組件；另外兩個不涉及範例，留著。
-
-7. 刪掉沒有 `using` 範例命名空間、卻經 REST／GraphQL 操作 `article`／`category`／`tag` 的測試檔：
-   全靠第 3 步的 module initializer，編譯期抓不到，跑一次 `dotnet test` 看哪些回 `404`／
-   `KeyNotFoundException`，分布在 `Api/`、`Query/`、`GraphQl/`、`Localization/`、`Identity/`。
-
-8. 順手清掉七處提到範例的註解：`CorsAndCookieTests.cs`、`CoreSchemaSnapshotTests.cs`、
-   `OidcEndpointTests.cs` 與 `HostIsolationTests.cs` 引用第 3 步刪掉的 `ContentAssemblyEnvBootstrap`，
-   `FakeMetadataFixtures.cs`、`GraphQlExecutionTests.cs` 與 `TranslatableSearchHarness.cs` 的註解
-   指著範例的路徑與型別。
-
-9. 前端這邊：刪掉 `frontend/e2e/sample/`（8 個 spec 檔）；`frontend/playwright.config.ts` 移
-   除 `"sample"` 專案與 `core` 用不到的 `testIgnore: '**/e2e/sample/**'`；`frontend/package.json`
-   移除 `"e2e:sample"`、`"e2e:all"`，只留 `"e2e"`；修剪 `frontend/e2e/README.md` 談範例的段落。
-
-10. 清掉任何跑過範例的資料庫裡的五張表，以及版本表裡範例 migration 的紀錄。範例 migration 建的
-    表不會跟著程式碼一起消失；紀錄不刪的話，`migrate:status` 會把它列成 `Orphaned`，不擋啟動，
-    但會一直留著：
-
-    ```
-    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
-    DELETE FROM struo_schema_versions WHERE version = 202610080100;
-    ```
-
-    `struo_` 換成你的 `Database:TablePrefix`。範例的表之間沒有外鍵，不需要 `CASCADE`。這兩道語句
-    在 PostgreSQL、SQL Server、MySQL 與 MariaDB 上實際跑過；SQLite 的 `DROP TABLE` 一次只接受一
-    張表，要拆成五道。
-
-第 10 步做完，`migrate:status` 只剩核心的兩支：
+第 4 步做完，`migrate:status` 只剩核心的兩支：
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status

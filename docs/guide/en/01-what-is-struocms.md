@@ -54,8 +54,8 @@ The core handles the framework layer only.
 Category to show how to define your own content model with the tools the core provides. The API
 host never references it, and you can delete it once you've learned from it.
 
-Deleting it is not just deleting the folder: it is also wired into the solution file and a test
-project, so removing the folder alone breaks the solution-level build. The full removal steps are
+Deleting it is not just deleting the folder: it is also wired into the solution file, so removing
+the folder alone breaks the solution-level build. The full removal steps are
 covered in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 
 ## What a fresh install looks like

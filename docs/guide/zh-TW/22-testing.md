@@ -5,12 +5,14 @@
 
 ## 後端測試
 
-後端測試分在 `tests/` 底下三個專案，用 xUnit，在儲存庫根目錄執行 `dotnet test`：
+後端測試分在 `tests/` 與 `samples/` 底下的幾個專案，用 xUnit，在儲存庫根目錄執行 `dotnet test`：
 
 - `tests/Struo.Tests` 放核心的單元與整合測試。
+- `samples/Struo.Sample.Blog.Tests` 放範例自己的測試，和範例一起刪除。
 - `tests/Struo.Tests.Template` 放模板自己的儲存庫守衛：文件慣例、模板不變式，以及 CI、Docker 與
   健康檢查的慣例。fork 可以整個刪掉（見[第 25 章](25-after-forking.md)）。
-- `tests/Struo.Tests.Support` 是類別庫，不是測試專案，放另外兩個專案共用的輔助程式。
+- `tests/Struo.Tests.Fixtures` 是只給測試用的內容專案，下面會談。
+- `tests/Struo.Tests.Support` 是類別庫，不是測試專案，放各測試專案共用的輔助程式。
 
 預設後端是 SQLite：單元測試從 `TestBackend.CreateUnitDatabase()` 拿資料庫，沒有切換後端時那是
 一個暫存的 SQLite 檔，測試結束就刪除，彼此不共用狀態。測試直接用 `SqliteTestDatabase` 的話，
@@ -96,13 +98,17 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 
 它會強制刪除其他執行的資料庫，同一台伺服器上還有別的測試在跑時不要用。
 
-### 測試套件用範例當 fixture
+### 核心測試跑在測試專用的 fixture 上
 
-整個後端測試套件裡有 36 個檔案 `using Struo.Sample.Blog;`，大半在 `Query` 底下，其餘散在
-`Metadata`、`Persistence`、`Revisions`、`Search`、`Changes` 與 `Health`；載入靠
-`ContentAssemblyEnvBootstrap` 這個 `[ModuleInitializer]`。範例專案不只是拿來示範，它是這些
-測試實際拿來查詢、驗證的 fixture：拆掉範例，這些測試要嘛跟著改寫，要嘛改用別的 fixture。移
-除範例的完整步驟，見[第 23 章：範例專案導覽](23-sample-walkthrough.md)。
+`tests/Struo.Tests.Fixtures` 是只為測試存在的小型內容專案，核心要處理的每種形狀各宣告一個集合：
+帶翻譯 sidecar、版本紀錄與軟刪除的文章，經由帶 payload 的 junction 連起來的標籤，自我參照的
+分類樹，以及 `Repeater` 的子型別。它有自己的 migration，`tests/Struo.Tests` 透過
+`ContentAssemblyEnvBootstrap` 把它釘成內容組件。
+
+任何會出貨的主機都不會註冊它。它的集合帶 `fx` 前綴（`fxArticle`、`fxTag`），資料表叫 `fx_*`，所以
+不管你自己的集合取什麼名字，都不會跟它撞名。範例不在其中：核心測試不參照 `samples/`，哪天有人
+加了參照，`tests/Struo.Tests.Template` 裡有一個測試會失敗。移除範例不用動 `tests/`；步驟見
+[第 23 章：範例專案導覽](23-sample-walkthrough.md)。
 
 ### 幾個當契約用的測試
 
@@ -146,8 +152,8 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 
 端到端測試用 Playwright，設定在 `frontend/playwright.config.ts`，分兩個專案：
 `core`（`pnpm e2e`）跑 `e2e/` 底下、排除 `e2e/sample/**` 的規格，在沒有任何內容集合的情況
-下跑；`sample`（`pnpm e2e:sample`）跑 `e2e/sample/**`，需要先把範例集合啟用。`pnpm e2e:all`
-兩個都跑。
+下跑；`sample`（`pnpm e2e:sample`）跑 `e2e/sample/**`，需要先把範例集合啟用。設定檔只在
+`e2e/sample/` 存在時才加入 `sample` 專案。`pnpm e2e:all` 兩個都跑。
 
 `webServer` 這個區塊只會啟動前端的 dev server（`pnpm dev`，`reuseExistingServer: true`），
 不會替你啟動 API 或資料庫：兩個專案都假設有一份正在跑的 API 跟它背後的資料庫，接在設定好的
@@ -155,7 +161,8 @@ proxy 目標上。
 
 設定裡 `workers: 1`，`use.baseURL` 是 `http://localhost:5173`；`core` 的 `testDir` 是
 `./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠 `testIgnore: '**/e2e/sample/**'` 把範例規
-格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。資料庫要先跑過
+格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後
+只剩 `core`。資料庫要先跑過
 `migrate`（或設 `Database:MigrateOnStartup=true`），登入用的 bootstrap 管理員才會種好；其餘前置
 條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 
