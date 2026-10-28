@@ -208,6 +208,15 @@ from this scan either — a citation written inside a fence is a real citation a
 bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
 distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
 
+A repo-relative path cited **without** a line number is checked for existence by the same test
+(`BarePathCitations`): a token that starts at one of the resolution roots above and names a
+known-extension file, or ends in a slash, must resolve to a real file or directory. A path in the
+frontend's own shorthand, which drops the leading `frontend/`, starts at the wrong root and fails;
+write the full path. Globs, `<placeholder>` and `{placeholder}` segments, `MyFork`, `MyApp` and
+`MyProject` example paths, anything under `docs/_archive-local/`, and a path with a `:line` suffix
+(owned by the check above) are skipped. A path that a walkthrough tells the reader to create takes
+the same `citation-guard:allow` marker on its line.
+
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
 records — is excluded from the walk entirely (`CodeCitationConventionTests`'s
 `ExcludedRelativePrefix`), which cuts two ways: a line citation written in a spec is never scanned, and

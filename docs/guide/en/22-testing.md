@@ -123,8 +123,9 @@ server.
 `tests/Struo.Tests.Fixtures` is a small content project that exists only for the tests. It declares
 one collection of each shape the core has to handle: an article with a translation sidecar,
 revisions and soft delete, tags joined through a junction that carries its own payload, and a
-self-referencing category tree, plus a plain class used as a `Repeater` child type. It has its own migration, and
-`tests/Struo.Tests` pins it as its content assembly through `ContentAssemblyEnvBootstrap`.
+self-referencing category tree, plus a plain class used as a `Repeater` child type. It has its own
+migration, and `tests/Struo.Tests` pins it as its content assembly through
+`ContentAssemblyEnvBootstrap`.
 
 No shipped host registers it. Its collections carry an `fx` prefix (`fxArticle`, `fxTag`) and its
 tables are named `fx_*`, so they can never collide with a collection of your own, whatever you call
@@ -166,16 +167,16 @@ environment is `jsdom`, `globals`/`restoreMocks`/`clearMocks` are all on, and `s
 at `vitest.setup.ts`. Every command in this section runs from `frontend/`.
 
 Component- and `lib/`-level `*.test.ts` files sit next to the code they test rather than being
-collected into a separate directory; the cross-file guard tests mostly live under `tests/`,
-except the locale one, which sits with `src/locales/`.
+collected into a separate directory; the cross-file guard tests mostly live under `frontend/tests/`,
+except the locale one, which sits with `frontend/src/locales/`.
 
 Three guard tests each pin one thing down:
 
-- `tests/iconCoverage.test.ts` — scans `src/` and confirms every `pi-` icon token that appears in
-  source has a matching key in `ICON_MAP`.
-- `src/locales/locales.test.ts` — the `zh-TW` and `en` UI-language directories have exactly
+- `frontend/tests/iconCoverage.test.ts` — scans `frontend/src/` and confirms every `pi-` icon token
+  that appears in source has a matching key in `ICON_MAP`.
+- `frontend/src/locales/locales.test.ts` — the `zh-TW` and `en` UI-language directories have exactly
   symmetric key sets.
-- `tests/schemaContract.test.ts` — feeds the two JSON files under `schema/` into the real
+- `frontend/tests/schemaContract.test.ts` — feeds the two JSON files under `schema/` into the real
   field-interface registry, verifying the field types the admin SPA recognizes match what the
   backend declares; covered below under "The schema contract".
 

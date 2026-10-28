@@ -135,14 +135,14 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 前端測試用 Vitest，設定在 `frontend/vite.config.ts` 的 `test` 區塊：環境是 `jsdom`，
 `globals`／`restoreMocks`／`clearMocks` 都開著，`setupFiles` 指到 `vitest.setup.ts`。這一節
 的指令都在 `frontend/` 底下跑。元件與 `lib/` 層級的 `*.test.ts` 就放在被測程式碼旁邊，不集
-中到另一個目錄；跨檔案的守衛測試多半放在 `tests/`，語系包那一個則跟著 `src/locales/` 走。
+中到另一個目錄；跨檔案的守衛測試多半放在 `frontend/tests/`，語系包那一個則跟著 `frontend/src/locales/` 走。
 
 三個守衛測試各釘住一件事：
 
-- `tests/iconCoverage.test.ts`：掃過 `src/`，確認原始碼裡出現的每一個 `pi-` 圖示 token 在
+- `frontend/tests/iconCoverage.test.ts`：掃過 `frontend/src/`，確認原始碼裡出現的每一個 `pi-` 圖示 token 在
   `ICON_MAP` 裡都有對應的鍵。
-- `src/locales/locales.test.ts`：`zh-TW`、`en` 兩份介面語言目錄的鍵集合完全對稱。
-- `tests/schemaContract.test.ts`：把 `schema/` 底下兩份 JSON 檔餵進真正的欄位介面
+- `frontend/src/locales/locales.test.ts`：`zh-TW`、`en` 兩份介面語言目錄的鍵集合完全對稱。
+- `frontend/tests/schemaContract.test.ts`：把 `schema/` 底下兩份 JSON 檔餵進真正的欄位介面
   registry，驗證前端認得的欄位型別跟後端宣告的一致，下面〈Schema 契約〉細談。
 
 `pnpm test` 只跑 Vitest，型別檢查要靠 `pnpm build`（`vue-tsc -b && vite build`）：光是單元

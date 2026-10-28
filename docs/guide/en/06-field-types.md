@@ -352,7 +352,7 @@ defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 ```
 
-**1. Write the component** — `frontend/src/components/fields/ColorSwatchField.vue`:
+**1. Write the component** — `frontend/src/components/fields/ColorSwatchField.vue`: <!-- citation-guard:allow: the file the reader creates in this walkthrough -->
 
 ```vue
 <script setup lang="ts">

@@ -245,7 +245,7 @@ Every file except `tokens.css` is under `frontend/src/components/fields/`.
 The admin UI's own language is independent of content locales; the chosen locale is never sent to
 the API, and the set on offer is the registered catalogs, not server configuration —
 see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode; the
-message catalogs are registered in one place, the `catalogs` object in `src/locales/index.ts`, and two
+message catalogs are registered in one place, the `catalogs` object in `frontend/src/locales/index.ts`, and two
 ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by screen (`nav`,
 `login`, `itemForm`, `settings`, and so on) and a `richtext` sub-namespace under `fields`. The
 `UiLocale` type, the i18n message table, the switcher's options and the key-symmetry test are all
@@ -265,7 +265,7 @@ registered catalog the component is not rendered.
 Adding an interface language:
 
 1. Add a catalog file with the same key structure as the existing ones.
-2. Register it in `catalogs` in `src/locales/index.ts`.
+2. Register it in `catalogs` in `frontend/src/locales/index.ts`.
 3. Add a `lang.<code>` key (the switcher's option text) to every catalog.
 4. Optionally set `VITE_DEFAULT_UI_LOCALE` to the code if it should be the default.
 5. Rebuild the SPA: both the registry and the variable are read at build time.

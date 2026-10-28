@@ -8,9 +8,9 @@ public sealed class NarrativeScanScopeTests
     [InlineData("docs/guide/en/changelog.md", false)]
     [InlineData("docs/guide/zh-TW/changelog.md", false)]
     [InlineData("docs/guide/index.md", true)]
-    [InlineData("docs/guide/changelog.en.md", true)]
+    [InlineData("docs/guide/changelog.en.md", true)] // citation-guard:allow: literal fixture, not a real citation
     [InlineData("docs/guide/en/01-what-is-struocms.md", true)]
-    [InlineData("docs/guide/en/sub/changelog.md", true)]
+    [InlineData("docs/guide/en/sub/changelog.md", true)] // citation-guard:allow: literal fixture, not a real citation
     [InlineData("docs/guide/zh-TW/21-schema-and-upgrades.md", true)]
     [InlineData("docs/ai/conventions.md", true)]
     [InlineData("docs/ai/decisions/pg-test-connection-pooling.md", true)]

@@ -66,6 +66,8 @@ public sealed partial class CodeCitationConventionTests
     private static readonly string[] ExcludedDirNames = ["obj", "bin", "node_modules", ".git"];
     private const string ExcludedRelativePrefix = "docs/_archive-local";
 
+    internal static bool IsKnownFileExtension(string extension) => KnownFileExtensions.Contains(extension);
+
     private sealed record Violation(string RelativePath, int LineNumber, string Citation, string Reason)
     {
         public override string ToString() => $"{RelativePath}:{LineNumber} → {Citation} ({Reason})";
@@ -137,6 +139,39 @@ public sealed partial class CodeCitationConventionTests
         CollectConstructWithRangeViolations("doc.md", 1, line, violations);
 
         violations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void No_bare_path_citations_into_files_or_directories_that_do_not_exist()
+    {
+        var repoRoot = RepoRoot.Find();
+        var (scanFiles, _) = WalkRepositoryOnce(repoRoot);
+
+        var violations = new List<string>();
+        foreach (var relativePath in scanFiles)
+        {
+            var lines = File.ReadAllLines(Path.Combine(repoRoot, relativePath));
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains(AllowMarker, StringComparison.Ordinal))
+                    continue;
+
+                violations.AddRange(BarePathCitations
+                    .FindUnresolved(lines[i], path => PathExists(repoRoot, path))
+                    .Select(path => $"{relativePath}:{i + 1} → {path}"));
+            }
+        }
+
+        violations.Should().BeEmpty(
+            "a repo-relative path cited without a line number must name a file or directory that exists " +
+            "(docs/ai/conventions.md, \"Citing code from docs and comments\") — violations:\n" +
+            string.Join("\n", violations));
+    }
+
+    private static bool PathExists(string repoRoot, string relativePath)
+    {
+        var full = Path.Combine(repoRoot, relativePath);
+        return File.Exists(full) || Directory.Exists(full);
     }
 
     private static void CollectExtensionAnchoredViolations(
