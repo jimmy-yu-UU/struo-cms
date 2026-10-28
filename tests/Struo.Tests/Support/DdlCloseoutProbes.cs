@@ -9,7 +9,7 @@ namespace Struo.Tests.Support;
 /// See LiveRepositoryTests.Bare_IsJson_column_holds_a_list_and_round_trips.
 /// </summary>
 [SugarTable("ddl_closeout_isjson_probe")]
-public sealed class DdlCloseoutIsJsonProbe
+internal sealed class DdlCloseoutIsJsonProbe
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
     [SugarColumn(IsJson = true)] public List<string> Tags { get; set; } = [];

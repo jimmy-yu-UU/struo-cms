@@ -13,8 +13,8 @@ namespace Struo.Tests.Support;
 /// A host composed the way a fork's <c>Program.cs</c> does it (<c>AddStruoCms(configure)</c>,
 /// <c>UseStruoCmsAsync()</c>) on a throwaway SQLite database and a TestServer, so a test can drive the
 /// <see cref="StruoCmsBuilder"/> hooks and the startup checks through a real host. It resets the static
-/// <c>Log.Logger</c>, as every <c>Program.cs</c> run does, so test classes that use it must belong to the
-/// <c>ApiIntegration</c> collection to run serially with the other hosts. Every external target the
+/// <c>Log.Logger</c>, as every <c>Program.cs</c> run does, so test classes that use it must belong to a
+/// serial test collection so they do not run in parallel with other hosts. Every external target the
 /// gitignored Development settings file may point at is overridden (<see cref="HostIsolation"/>).
 /// </summary>
 public sealed class ForkHost : IAsyncDisposable

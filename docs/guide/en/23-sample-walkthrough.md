@@ -262,8 +262,7 @@ uses the sample's collections as a fixture. Work through the list below in order
      rest of their tests stay.
    - `Metadata/ConventionMetadataDiscoveryTests.cs`: step 6 handles it.
    - `GraphQl/FakeMetadataFixtures.cs`, `GraphQl/GraphQlExecutionTests.cs` and
-     `Query/TranslatableSearchHarness.cs` mention the sample only in comments, which step 8 handles;
-     `tests/Struo.Tests.Template/Documentation/NarrativeScanScopeTests.cs` also names the sample, uses its path as test data, and stays.
+     `Query/TranslatableSearchHarness.cs` mention the sample only in comments, which step 8 handles.
 
 5. Run `dotnet build` to confirm the build is clean — nothing under `src/Struo.*` references the
    sample. `dotnet test` is still red at this point; the next two steps handle it.
@@ -279,8 +278,9 @@ uses the sample's collections as a fixture. Work through the list below in order
    `404`/`KeyNotFoundException` failures under `Api/`, `Query/`, `GraphQl/`, `Localization/`,
    and `Identity/`.
 
-8. Clean up the six comments that mention the sample: `ApiFactory.cs`, `CorsAndCookieTests.cs` and
-   `CoreSchemaSnapshotTests.cs` reference `ContentAssemblyEnvBootstrap.cs`, which step 3 deleted;
+8. Clean up the seven comments that mention the sample: `CorsAndCookieTests.cs`,
+   `CoreSchemaSnapshotTests.cs`, `OidcEndpointTests.cs` and `HostIsolationTests.cs` reference
+   `ContentAssemblyEnvBootstrap`, which step 3 deleted;
    the comments in `FakeMetadataFixtures.cs`, `GraphQlExecutionTests.cs` and
    `TranslatableSearchHarness.cs` point at the sample's paths and types.
 

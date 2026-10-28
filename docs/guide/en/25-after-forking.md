@@ -200,7 +200,14 @@ public sealed class MyApiFactory : StruoApiFactory
 {
     protected override IReadOnlyList<string> PublicReadCollections => ["post"];
 }
+
+[CollectionDefinition("MyApi")]
+public sealed class MyApiCollection : ICollectionFixture<MyApiFactory>;
 ```
+
+Every host runs `Program.cs`, which resets the static Serilog `Log.Logger`, so test classes that use
+a host must not run in parallel. Put each of them in the serial collection with
+`[Collection("MyApi")]` and take the factory through its constructor.
 
 [Chapter 22](22-testing.md) describes the library. Changes to its public API are announced in the
 [changelog](changelog.md).

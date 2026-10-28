@@ -106,7 +106,7 @@ public static partial class LiveDatabaseDdl
     public static bool Exists(TestBackendKind kind, string name) =>
         Exists(kind, name, TestBackend.ConfiguredConnection(kind));
 
-    public static IReadOnlyList<string> List(TestBackendKind kind) =>
+    internal static IReadOnlyList<string> List(TestBackendKind kind) =>
         List(kind, TestBackend.ConfiguredConnection(kind));
 
     private static bool Exists(TestBackendKind kind, string name, string configuredConnection) =>
@@ -119,7 +119,7 @@ public static partial class LiveDatabaseDdl
     }
 
     /// <summary>Drops the database, severing open connections where the server allows it. Never throws.</summary>
-    public static void Drop(TestBackendKind kind, string name)
+    internal static void Drop(TestBackendKind kind, string name)
     {
         try
         {

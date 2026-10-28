@@ -58,9 +58,3 @@ public abstract class LiveDatabaseSet : IDisposable
         GC.SuppressFinalize(this);
     }
 }
-
-/// <summary>Databases for <c>LiveRepositoryTests</c>.</summary>
-public sealed class RepositoryDatabases() : LiveDatabaseSet("repo");
-
-/// <summary>Databases for <c>PostgresOnlyTests</c>.</summary>
-public sealed class PostgresOnlyDatabases() : LiveDatabaseSet("pgonly");

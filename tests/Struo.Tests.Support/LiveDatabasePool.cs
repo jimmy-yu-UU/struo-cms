@@ -25,7 +25,7 @@ public sealed class LiveDatabasePool
         Kind = kind;
     }
 
-    public TestBackendKind Kind { get; }
+    internal TestBackendKind Kind { get; }
 
     /// <summary>Databases this pool has created.</summary>
     public int CreatedCount => Volatile.Read(ref _createdCount);
@@ -35,7 +35,7 @@ public sealed class LiveDatabasePool
     /// <summary>
     /// The process-wide pool for <paramref name="kind"/>; its databases are dropped when the test run
     /// finishes; a ProcessExit handler drops any still left.</summary>
-    public static LiveDatabasePool For(TestBackendKind kind) =>
+    internal static LiveDatabasePool For(TestBackendKind kind) =>
         Shared.GetOrAdd(kind, k => new Lazy<LiveDatabasePool>(() =>
         {
             var pool = new LiveDatabasePool(k);
@@ -70,7 +70,7 @@ public sealed class LiveDatabasePool
         });
     }
 
-    public ITestDatabase Take()
+    internal ITestDatabase Take()
     {
         if (_idle.TryTake(out var idle)) return idle;
         var created = TestBackend.CreateLiveDatabase(Kind, Purpose);

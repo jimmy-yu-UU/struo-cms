@@ -9,7 +9,7 @@ namespace Struo.Tests.Support;
 /// 也不會被 EntityTypeCollector 掃到，因此永遠不會進入任何生產建表路徑。
 /// </summary>
 [SugarTable("destructive_init_probe")]
-public sealed class DestructiveInitProbeWide
+internal sealed class DestructiveInitProbeWide
 {
     [SugarColumn(IsPrimaryKey = true)]
     public Guid Id { get; set; }
@@ -22,7 +22,7 @@ public sealed class DestructiveInitProbeWide
 
 /// <summary>與 <see cref="DestructiveInitProbeWide"/> 同表，少一個 Doomed 屬性。</summary>
 [SugarTable("destructive_init_probe")]
-public sealed class DestructiveInitProbeNarrow
+internal sealed class DestructiveInitProbeNarrow
 {
     [SugarColumn(IsPrimaryKey = true)]
     public Guid Id { get; set; }

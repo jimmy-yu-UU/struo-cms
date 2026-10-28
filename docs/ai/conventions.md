@@ -193,7 +193,7 @@ Enforced by `CodeCitationConventionTests`
 (`tests/Struo.Tests.Template/Documentation/CodeCitationConventionTests.cs`), mechanically, for two of the
 four shapes citations take. A citation that names a file extension (e.g. `SomeFile.cs:123`,
 citation-guard:allow) is a violation only if the cited file resolves to a real path under `src/`,
-`tests/`, `frontend/src/`, `schema/`, `db/`, `docs/` or `samples/` (or is `AGENTS.md`/`CLAUDE.md`
+`tests/`, `frontend/src/`, `schema/`, `docs/` or `samples/` (or is `AGENTS.md`/`CLAUDE.md`
 itself) — a bare filename matches by basename anywhere under those roots, a directory-prefixed one
 (as most upstream citations here are written) must match a real path suffix, and there is
 deliberately no upstream-filename allowlist, which would go stale. A citation with no file extension
@@ -648,9 +648,9 @@ destructive actions, the user is left with a blocked action and no working way t
   the unit harnesses to a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
   using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`, a `StruoApiFactory`).
   The shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`)
-  live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project that
-  hosts the API pins its own content assemblies from a `[ModuleInitializer]` that calls `TestHostEnvironment.Pin`
-  (`tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`).
+  live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project
+  that hosts the API pins its own content assemblies from a `[ModuleInitializer]` that calls
+  `TestHostEnvironment.Pin` (`tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`).
   `tests/Struo.Tests.Template` holds the template's own repository guards (`Documentation/`,
   `TemplateInvariantsTests`, `CiWorkflowConventionTests`, `DockerIgnoreConventionTests`,
   `HealthcheckConventionTests`); `tests/Struo.Tests.Template/TemplateInvariantsTests.cs` guards

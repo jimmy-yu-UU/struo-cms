@@ -5,7 +5,8 @@ using Xunit;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Tests in every test project (<c>tests/*</c> except the Support library, and <c>samples/*Tests</c>) get
+/// Tests in this repository's own test projects (the <c>Struo*Tests*</c> projects under <c>tests/</c> and
+/// <c>samples/</c>, except the Support library) get
 /// their database from <see cref="TestBackend"/>, so they run on the
 /// backend <c>STRUO_TEST_BACKEND</c> selects. Using <see cref="SqliteTestDatabase"/> or
 /// <see cref="SqliteTempTestDatabase"/> directly pins a test to SQLite; a SQLite-only test says so with

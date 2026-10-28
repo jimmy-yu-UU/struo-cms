@@ -242,8 +242,7 @@ fixture，照下面的清單逐步走完。
      `Struo.Sample.Blog.` 型別的那一行斷言與那兩筆 `InlineData`，其餘測試留著。
    - `Metadata/ConventionMetadataDiscoveryTests.cs`：第 6 步處理。
    - `GraphQl/FakeMetadataFixtures.cs`、`GraphQl/GraphQlExecutionTests.cs`、
-     `Query/TranslatableSearchHarness.cs` 只在註解裡提到範例，第 8 步處理；
-     `tests/Struo.Tests.Template/Documentation/NarrativeScanScopeTests.cs` 也提到範例，把範例的路徑當成測試資料，留著。
+     `Query/TranslatableSearchHarness.cs` 只在註解裡提到範例，第 8 步處理。
 
 5. 跑一次 `dotnet build` 確認編譯已經乾淨——`src/Struo.*` 底下沒有程式碼參照範例。
    `dotnet test` 這時還是紅的，接下來兩步處理它。
@@ -256,8 +255,8 @@ fixture，照下面的清單逐步走完。
    全靠第 3 步的 module initializer，編譯期抓不到，跑一次 `dotnet test` 看哪些回 `404`／
    `KeyNotFoundException`，分布在 `Api/`、`Query/`、`GraphQl/`、`Localization/`、`Identity/`。
 
-8. 順手清掉六處提到範例的註解：`ApiFactory.cs`、`CorsAndCookieTests.cs` 與
-   `CoreSchemaSnapshotTests.cs` 引用第 3 步刪掉的 `ContentAssemblyEnvBootstrap.cs`，
+8. 順手清掉七處提到範例的註解：`CorsAndCookieTests.cs`、`CoreSchemaSnapshotTests.cs`、
+   `OidcEndpointTests.cs` 與 `HostIsolationTests.cs` 引用第 3 步刪掉的 `ContentAssemblyEnvBootstrap`，
    `FakeMetadataFixtures.cs`、`GraphQlExecutionTests.cs` 與 `TranslatableSearchHarness.cs` 的註解
    指著範例的路徑與型別。
 

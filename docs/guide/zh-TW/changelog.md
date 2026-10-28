@@ -6,8 +6,8 @@
 
 - 後端測試拆成三個專案。`tests/Struo.Tests.Support` 是類別庫，裝著共用的輔助程式
   （`StruoApiFactory`、`TestBackend`、`TestHostEnvironment`、`StruoTestFramework`），命名空間是
-  `Struo.Tests.Support`。`tests/Struo.Tests.Template` 放模板自己的儲存庫守衛，包括文件慣例，
-  以及模板、CI、Docker 與健康檢查的慣例，fork 可以整個刪掉。`tests/Struo.Tests` 留著核心測試。
+  `Struo.Tests.Support`。`tests/Struo.Tests.Template` 放模板自己的儲存庫守衛，包括文件慣例、
+  模板不變式，以及 CI、Docker 與健康檢查的慣例，fork 可以整個刪掉。`tests/Struo.Tests` 留著核心測試。
   每個會起 API 主機的測試專案各自用 `[ModuleInitializer]` 呼叫 `TestHostEnvironment.Pin` 釘住內容組件；見
   [第 22 章](22-testing.md)與[第 25 章](25-after-forking.md)。曾改過
   `tests/Struo.Tests/Support`、`Documentation` 或 `Template` 底下檔案的 fork，合併時搬走的那些檔案會

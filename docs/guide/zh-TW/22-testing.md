@@ -23,13 +23,14 @@
 `TestBackend` 與下面後端切換背後的實機資料庫輔助程式；`TestHostEnvironment`；以及
 `StruoTestFramework`，它在最後一個測試跑完後放掉實機資料庫池。
 
-每個會起 API 主機的測試專案，要自己設兩樣東西。一個組件屬性指定測試框架：
+每個會起 API 主機、或會租用實機資料庫池的測試專案，要自己設兩樣東西。一個組件屬性指定測試框架，
+沒有它的話，資料庫池會在程序結束時才被放掉，留下沒清的資料庫：
 `[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`。
 一個 module initializer 呼叫 `TestHostEnvironment.Pin`，帶入該專案的主機要載入的內容組件。
-`Pin` 同時把 Redis 清空、關掉內建的兩個 OIDC 提供者 `microsoft` 與 `google`，開發者那份不進版本控制的
-Development 設定就碰不到測試；fork 自己加的提供者不在此列。
-它設的是環境變數，因為環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個
-initializer 是 `ContentAssemblyEnvBootstrap`。
+`Pin` 同時讓測試不連 Redis、關掉內建的兩個 OIDC 提供者 `microsoft` 與 `google`，開發者那份不進
+版本控制的 Development 設定就碰不到測試；fork 自己加的提供者不在此列。它設的是環境變數，因為
+環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個 initializer 是
+`ContentAssemblyEnvBootstrap`。
 
 `tests/Struo.Tests` 的 `ApiFactory` 繼承 `StruoApiFactory`，並指定主機公開可讀的集合。fork 的測試
 專案照樣做；設定方式見[第 25 章](25-after-forking.md)。

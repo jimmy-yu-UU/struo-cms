@@ -28,14 +28,15 @@ test host; `TestBackend` and the live-database helpers behind the backend switch
 `TestHostEnvironment`; and `StruoTestFramework`, which drops the live database pools after the last
 test.
 
-Each test project that hosts the API sets up two things of its own. An assembly attribute names the
-test framework: `[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`.
+Each test project that hosts the API or leases pooled live databases sets up two things of its own.
+An assembly attribute names the test framework, because without it the pools are dropped on process
+exit and leave databases behind:
+`[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`.
 A module initializer calls `TestHostEnvironment.Pin` with the content assemblies the project's hosts
-load. `Pin` also blanks Redis and turns off the two shipped OIDC providers, `microsoft` and `google`, so a
-developer's gitignored Development settings cannot reach the suite. A provider your fork adds is not
-touched. It sets environment variables, because they are the only
-override that reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is
-`ContentAssemblyEnvBootstrap`.
+load. `Pin` also turns off the Redis connection and the two shipped OIDC providers, `microsoft` and
+`google`, so a developer's gitignored Development settings cannot reach the suite. A provider your
+fork adds is not touched. It sets environment variables, because they are the only override that
+reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is `ContentAssemblyEnvBootstrap`.
 
 `ApiFactory` in `tests/Struo.Tests` derives from `StruoApiFactory` and names the collections the host
 makes publicly readable. A fork's test project does the same; [Chapter 25](25-after-forking.md) shows

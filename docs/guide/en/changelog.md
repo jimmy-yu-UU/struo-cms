@@ -7,9 +7,10 @@
 - The backend tests are split into three projects. `tests/Struo.Tests.Support` is a class library with
   the shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`) in
   the namespace `Struo.Tests.Support`. `tests/Struo.Tests.Template` holds the template's own
-  repository guards, the documentation conventions and the template, CI, Docker and health
-  conventions, and a fork can delete it. `tests/Struo.Tests` keeps the core tests. Each test project that
-  hosts the API pins its content assemblies from a `[ModuleInitializer]` that calls `TestHostEnvironment.Pin`; see
+  repository guards, the documentation conventions, the template invariants and the CI, Docker and
+  health conventions, and a fork can delete it. `tests/Struo.Tests` keeps the core tests. Each test
+  project that hosts the API pins its content assemblies from a `[ModuleInitializer]` that calls
+  `TestHostEnvironment.Pin`; see
   [Chapter 22](22-testing.md) and [Chapter 25](25-after-forking.md). A fork that edited files under
   `tests/Struo.Tests/Support`, `Documentation` or `Template` gets a one-time merge conflict on the
   moved files: apply the edit to the file's new location. The Support library's public API is what a

@@ -6,10 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <PackageReference Include="Microsoft.Data.Sqlite" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="xunit" />
   </ItemGroup>
 

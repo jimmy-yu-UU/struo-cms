@@ -180,6 +180,12 @@ public sealed class MyApiFactory : StruoApiFactory
 {
     protected override IReadOnlyList<string> PublicReadCollections => ["post"];
 }
+
+[CollectionDefinition("MyApi")]
+public sealed class MyApiCollection : ICollectionFixture<MyApiFactory>;
 ```
+
+每個主機都會跑 `Program.cs`，它會重設靜態的 Serilog `Log.Logger`，所以用到主機的測試類別不能
+平行執行。把它們都放進這個序列集合：標上 `[Collection("MyApi")]`，並從建構函式取得 factory。
 
 類別庫的說明見[第 22 章](22-testing.md)。它的公開 API 有變動，會寫在[版本紀錄](changelog.md)。
