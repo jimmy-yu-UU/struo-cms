@@ -20,7 +20,7 @@ public sealed class FxArticle : AuditableEntity, ISoftDeletable
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
 
-    // Title/Body moved to the FxArticleTranslation sidecar for per-locale content.
+    // Title/Body live on the FxArticleTranslation sidecar for per-locale content.
     [CmsTranslations(typeof(FxArticleTranslation))]
     [SugarColumn(IsIgnore = true)]
     public List<FxArticleTranslation> Translations { get; set; } = [];

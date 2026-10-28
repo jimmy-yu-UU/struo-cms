@@ -8,7 +8,7 @@ namespace Struo.Tests.Fixtures;
 public sealed class FxArticleTranslation : Struo.Domain.Seo.SeoTranslation
 {
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-    // ArticleId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
+    // FxArticleId/Locale carry no unique attribute here: SqlSugarClientFactory's EntityService hook reads
     // this table's [CmsTranslations] metadata through TranslationSidecarIndexPolicy and adds the
     // composite unique (fxarticleid, locale) to the entity schema that SchemaChecker compares against the
     // database; the fixture migration Migrations/202610080200_CreateFixtureSchema.cs creates it.

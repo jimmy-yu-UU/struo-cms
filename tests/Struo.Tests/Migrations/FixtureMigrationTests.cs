@@ -30,7 +30,7 @@ public sealed class FixtureMigrationTests : IDisposable
     public void Dispose() => _database.Dispose();
 
     [Fact]
-    public async Task Core_and_fixture_migrations_apply_to_a_fresh_database_without_warnings()
+    public async Task Fixture_migration_applies_cleanly_alongside_core_on_a_fresh_database()
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -55,7 +55,7 @@ public sealed class FixtureMigrationTests : IDisposable
 
         applied.Should().Contain(m => m.Description == "CreateFixtureSchema");
         logs.Logger.Entries.Where(e => e.Level >= LogLevel.Warning).Select(e => e.Message)
-            .Should().BeEmpty("a fresh database applies core then fixtures in version order");
+            .Should().BeEmpty("the fixture migration applies with core without warning-level logs");
         var db = sp.GetRequiredService<ISqlSugarClient>();
         db.DbMaintenance.IsAnyTable("fx_articles", false).Should().BeTrue();
         db.DbMaintenance.GetColumnInfosByTableName("fx_article_tags", false)
