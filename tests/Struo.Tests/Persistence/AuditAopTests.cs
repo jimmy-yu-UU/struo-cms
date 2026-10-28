@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -17,12 +17,12 @@ public class AuditAopTests
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Alice));
-        client.CodeFirst.InitTables<Article>();
+        client.CodeFirst.InitTables<FxArticle>();
 
-        var article = new Article { Id = Guid.CreateVersion7(), Status = "draft" };
+        var article = new FxArticle { Id = Guid.CreateVersion7(), Status = "draft" };
         client.Insertable(article).ExecuteCommand();
 
-        var saved = client.Queryable<Article>().InSingle(article.Id);
+        var saved = client.Queryable<FxArticle>().InSingle(article.Id);
         saved.CreatedBy.Should().Be(Alice);
         saved.UpdatedBy.Should().Be(Alice);
         saved.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
@@ -34,17 +34,17 @@ public class AuditAopTests
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Alice));
-        client.CodeFirst.InitTables<Article>();
-        var article = new Article { Id = Guid.CreateVersion7(), Status = "draft" };
+        client.CodeFirst.InitTables<FxArticle>();
+        var article = new FxArticle { Id = Guid.CreateVersion7(), Status = "draft" };
         client.Insertable(article).ExecuteCommand();
-        var original = client.Queryable<Article>().InSingle(article.Id);
+        var original = client.Queryable<FxArticle>().InSingle(article.Id);
 
         var updateClient = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Bob));
-        var toUpdate = updateClient.Queryable<Article>().InSingle(article.Id);
+        var toUpdate = updateClient.Queryable<FxArticle>().InSingle(article.Id);
         toUpdate.Status = "published";
         updateClient.Updateable(toUpdate).ExecuteCommand();
 
-        var after = updateClient.Queryable<Article>().InSingle(article.Id);
+        var after = updateClient.Queryable<FxArticle>().InSingle(article.Id);
         after.CreatedBy.Should().Be(Alice);   // unchanged
         after.UpdatedBy.Should().Be(Bob);     // restamped
         after.CreatedAt.Should().BeCloseTo(original.CreatedAt, TimeSpan.FromSeconds(1));

@@ -36,7 +36,7 @@ public class SqlSugarClientFactoryTests
         var client = NewClient(db, "struo_");
 
         Assert.Equal("struo_users", client.EntityMaintenance.GetTableName<Struo.Infrastructure.Identity.User>());
-        Assert.Equal("articles", client.EntityMaintenance.GetTableName<Struo.Sample.Blog.Article>());
+        Assert.Equal("fx_articles", client.EntityMaintenance.GetTableName<Struo.Tests.Fixtures.FxArticle>());
     }
 
     [Fact]

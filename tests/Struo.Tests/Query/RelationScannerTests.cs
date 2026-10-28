@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -14,9 +14,9 @@ public class RelationScannerTests
     [Fact]
     public void Scans_m2o_category_with_foreign_key()
     {
-        var category = Rel(typeof(Article)).Single(r => r.Name == "category");
+        var category = Rel(typeof(FxArticle)).Single(r => r.Name == "category");
         category.Kind.Should().Be(RelationKind.ManyToOne);
-        category.TargetCollection.Should().Be("category");
+        category.TargetCollection.Should().Be("fxCategory");
         category.ForeignKey.Should().Be("categoryId");
         category.Interface.Should().Be(RelationInterface.Dropdown);
         category.OnDelete.Should().Be(OnDelete.SetNull);
@@ -26,7 +26,7 @@ public class RelationScannerTests
     [Fact]
     public void Scans_self_referential_category_tree()
     {
-        var rels = Rel(typeof(Category));
+        var rels = Rel(typeof(FxCategory));
         var parent = rels.Single(r => r.Name == "parent");
         parent.Kind.Should().Be(RelationKind.ManyToOne);
         parent.SelfReferencing.Should().BeTrue();
@@ -37,7 +37,7 @@ public class RelationScannerTests
     [Fact]
     public void O2m_relations_expose_reverse_foreign_key()
     {
-        var rels = Rel(typeof(Category));
+        var rels = Rel(typeof(FxCategory));
         rels.Single(r => r.Name == "articles").ForeignKey.Should().Be("categoryId");
         rels.Single(r => r.Name == "children").ForeignKey.Should().Be("parentId");
     }
@@ -45,9 +45,9 @@ public class RelationScannerTests
     [Fact]
     public void Scans_m2m_tags_with_junction()
     {
-        var tags = Rel(typeof(Article)).Single(r => r.Name == "tags");
+        var tags = Rel(typeof(FxArticle)).Single(r => r.Name == "tags");
         tags.Kind.Should().Be(RelationKind.ManyToMany);
-        tags.TargetCollection.Should().Be("tag");
+        tags.TargetCollection.Should().Be("fxTag");
         tags.Interface.Should().Be(RelationInterface.TagSelect);
     }
 }

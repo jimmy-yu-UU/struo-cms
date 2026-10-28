@@ -8,7 +8,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 // NOTE: Tests that exercised Author (Restrict delete), Tag M2M, and ArticleFile gallery
-// were deleted when those entities were removed from the sample domain.
+// were deleted when those entities were removed from the fixture domain.
 // Remaining: category SetNull relation (still present on Article.CategoryId).
 
 [Collection("ApiIntegration")]
@@ -24,15 +24,15 @@ public class RelationWriteTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         // Article.categoryId is OnDelete.SetNull (not Restrict), so deleting a referenced category is permitted.
-        var categoryId = await Id(await c.PostAsJsonAsync("/api/items/category", new { name = "Doomed" }));
-        await c.PostAsJsonAsync("/api/items/article", new
+        var categoryId = await Id(await c.PostAsJsonAsync("/api/items/fxCategory", new { name = "Doomed" }));
+        await c.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             categoryId,
             translations = new { en = new { title = "InCat" } }
         });
 
-        (await c.DeleteAsync($"/api/items/category/{categoryId}")).StatusCode
+        (await c.DeleteAsync($"/api/items/fxCategory/{categoryId}")).StatusCode
             .Should().Be(System.Net.HttpStatusCode.NoContent);
     }
 }

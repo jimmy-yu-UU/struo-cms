@@ -26,7 +26,7 @@ public sealed class ConventionMetadataDiscoveryTests
             .BuildServiceProvider();
         var provider = sp.GetRequiredService<IMetadataProvider>();
 
-        provider.GetCollection("article").Should().BeNull();     // sample not scanned
+        provider.GetCollection("fxArticle").Should().BeNull();     // fixtures not scanned
         provider.GetCollection("user").Should().NotBeNull();     // framework built-in collection
     }
 
@@ -34,11 +34,11 @@ public sealed class ConventionMetadataDiscoveryTests
     public void Configured_content_assembly_is_scanned()
     {
         using var sp = new ServiceCollection()
-            .AddStruoMetadata(Config("Struo.Sample.Blog"))
+            .AddStruoMetadata(Config("Struo.Tests.Fixtures"))
             .BuildServiceProvider();
         var provider = sp.GetRequiredService<IMetadataProvider>();
 
-        provider.GetCollection("article").Should().NotBeNull();
+        provider.GetCollection("fxArticle").Should().NotBeNull();
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class ConventionMetadataDiscoveryTests
     public void Registers_entity_type_collector()
     {
         using var sp = new ServiceCollection()
-            .AddStruoMetadata(Config("Struo.Sample.Blog"))
+            .AddStruoMetadata(Config("Struo.Tests.Fixtures"))
             .BuildServiceProvider();
 
         sp.GetService<IEntityTypeCollector>().Should().NotBeNull();

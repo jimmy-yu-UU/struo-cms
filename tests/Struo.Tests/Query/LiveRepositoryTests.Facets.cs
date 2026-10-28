@@ -8,7 +8,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -18,7 +18,7 @@ public sealed partial class LiveRepositoryTests
 {
     // Same wiring as BuildRepoWithGraph(), but the entity set is the article/category/tag/tags
     // relation graph these facet/aggregate tests need, plus ArticleTag registered directly so
-    // "articleTag" can be queried as its own collection (registry.Get("articleTag")) rather than
+    // "fxArticleTag" can be queried as its own collection (registry.Get("fxArticleTag")) rather than
     // only reachable as a relation's junction type. `types`/`collections`/`provider` stay the same
     // shape BuildRepoWithGraph() uses; only the registry's ScanDescriptors input and collectionTypes
     // gain ArticleTag — RelationshipGraph itself never looks at collectionTypes entries for
@@ -26,31 +26,31 @@ public sealed partial class LiveRepositoryTests
     private (IItemRepository Repo, RelationshipGraph Graph, IMetadataProvider Md) BuildFacetRepo()
     {
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
-        _db.CodeFirst.InitTables<Category>();
-        _db.CodeFirst.InitTables<Article>();
-        _db.CodeFirst.InitTables<Tag>();
-        _db.CodeFirst.InitTables<ArticleTag>();
-        _db.CodeFirst.InitTables<ArticleTranslation>();
-        // Deterministic start: clear the four sample tables this suite writes plus Category.
-        _db.Deleteable<ArticleTag>().Where(x => true).ExecuteCommand();
-        _db.Deleteable<ArticleTranslation>().Where(x => true).ExecuteCommand();
-        _db.Deleteable<Article>().Where(x => true).ExecuteCommand();
-        _db.Deleteable<Tag>().Where(x => true).ExecuteCommand();
-        _db.Deleteable<Category>().Where(x => true).ExecuteCommand();
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.CodeFirst.InitTables<FxArticle>();
+        _db.CodeFirst.InitTables<FxTag>();
+        _db.CodeFirst.InitTables<FxArticleTag>();
+        _db.CodeFirst.InitTables<FxArticleTranslation>();
+        // Deterministic start: clear the four fixture tables this suite writes plus Category.
+        _db.Deleteable<FxArticleTag>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<FxArticleTranslation>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<FxArticle>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<FxTag>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<FxCategory>().Where(x => true).ExecuteCommand();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(ArticleTag)]));
+            [typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(FxArticleTag)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag), ["articleTag"] = typeof(ArticleTag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag), ["fxArticleTag"] = typeof(FxArticleTag),
             ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -65,14 +65,14 @@ public sealed partial class LiveRepositoryTests
     {
         if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
-        var cat = new Category { Id = Guid.NewGuid(), Name = "Tech" };
-        await repo.CreateAsync("category", cat);
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id });
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id });
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "draft" });
+        var cat = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
+        await repo.CreateAsync("fxCategory", cat);
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id });
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id });
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "draft" });
 
-        var facet = FacetPathResolver.Resolve(md.GetCollection("article")!, "categoryId", graph, md);
-        var b = await repo.FacetAsync(new FacetRequest("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
+        var facet = FacetPathResolver.Resolve(md.GetCollection("fxArticle")!, "categoryId", graph, md);
+        var b = await repo.FacetAsync(new FacetRequest("fxArticle", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
         b.Should().HaveCount(2);
         b[0].Should().Be(new FacetBucket(cat.Id.ToString(), 2));
         b[1].Should().Be(new FacetBucket(null, 1));
@@ -83,20 +83,20 @@ public sealed partial class LiveRepositoryTests
     {
         if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
-        var a1 = new Article { Id = Guid.NewGuid(), Status = "published" };
-        var a2 = new Article { Id = Guid.NewGuid(), Status = "published" };
-        await repo.CreateAsync("article", a1); await repo.CreateAsync("article", a2);
-        var guide = new Tag { Id = Guid.NewGuid(), Name = "Guide" }; var misc = new Tag { Id = Guid.NewGuid(), Name = "Misc" };
-        await repo.CreateAsync("tag", guide); await repo.CreateAsync("tag", misc);
+        var a1 = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
+        var a2 = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
+        await repo.CreateAsync("fxArticle", a1); await repo.CreateAsync("fxArticle", a2);
+        var guide = new FxTag { Id = Guid.NewGuid(), Name = "Guide" }; var misc = new FxTag { Id = Guid.NewGuid(), Name = "Misc" };
+        await repo.CreateAsync("fxTag", guide); await repo.CreateAsync("fxTag", misc);
         _db!.Insertable(new[]
         {
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a1.Id, TagId = guide.Id },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a2.Id, TagId = guide.Id },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a2.Id, TagId = misc.Id },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a1.Id, TagId = guide.Id },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a2.Id, TagId = guide.Id },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a2.Id, TagId = misc.Id },
         }).ExecuteCommand();
 
-        var facet = FacetPathResolver.Resolve(md.GetCollection("article")!, "tags.name", graph, md);
-        var b = await repo.FacetAsync(new FacetRequest("article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
+        var facet = FacetPathResolver.Resolve(md.GetCollection("fxArticle")!, "tags.name", graph, md);
+        var b = await repo.FacetAsync(new FacetRequest("fxArticle", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
         b.Select(x => (x.Value, x.Count)).Should().Equal(("Guide", 2), ("Misc", 1));
     }
 
@@ -105,16 +105,16 @@ public sealed partial class LiveRepositoryTests
     {
         if (!Use(backend)) return;
         var (repo, graph, md) = BuildFacetRepo();
-        var cat = new Category { Id = Guid.NewGuid(), Name = "C" };
-        await repo.CreateAsync("category", cat);
-        var a1 = new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
-        await repo.CreateAsync("article", a1);
-        _db!.Insertable(new ArticleTranslation { ArticleId = a1.Id, Locale = "zh-TW", Title = "甲" }).ExecuteCommand();
+        var cat = new FxCategory { Id = Guid.NewGuid(), Name = "C" };
+        await repo.CreateAsync("fxCategory", cat);
+        var a1 = new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
+        await repo.CreateAsync("fxArticle", a1);
+        _db!.Insertable(new FxArticleTranslation { FxArticleId = a1.Id, Locale = "zh-TW", Title = "甲" }).ExecuteCommand();
 
-        var facet = FacetPathResolver.Resolve(md.GetCollection("category")!, "articles.title", graph, md);
-        var zh = await repo.FacetAsync(new FacetRequest("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "zh-TW", DeletedFilter.Exclude, 50));
+        var facet = FacetPathResolver.Resolve(md.GetCollection("fxCategory")!, "articles.title", graph, md);
+        var zh = await repo.FacetAsync(new FacetRequest("fxCategory", new QueryModel(null, null, [], 100, 0, null), facet, [], "zh-TW", DeletedFilter.Exclude, 50));
         zh.Should().Equal(new FacetBucket("甲", 1));
-        var en = await repo.FacetAsync(new FacetRequest("category", new QueryModel(null, null, [], 100, 0, null), facet, [], "en", DeletedFilter.Exclude, 50));
+        var en = await repo.FacetAsync(new FacetRequest("fxCategory", new QueryModel(null, null, [], 100, 0, null), facet, [], "en", DeletedFilter.Exclude, 50));
         en.Should().Equal(new FacetBucket(null, 1));
     }
 
@@ -123,28 +123,28 @@ public sealed partial class LiveRepositoryTests
     {
         if (!Use(backend)) return;
         var (repo, _, _) = BuildFacetRepo();
-        var a = new Article { Id = Guid.NewGuid(), Status = "published" };
-        await repo.CreateAsync("article", a);
-        var t = new Tag { Id = Guid.NewGuid(), Name = "T" };
-        await repo.CreateAsync("tag", t);
+        var a = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
+        await repo.CreateAsync("fxArticle", a);
+        var t = new FxTag { Id = Guid.NewGuid(), Name = "T" };
+        await repo.CreateAsync("fxTag", t);
         _db!.Insertable(new[]
         {
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a.Id, TagId = t.Id, Sort = 1 },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a.Id, TagId = t.Id, Sort = 4 },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a.Id, TagId = t.Id, Sort = 1 },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a.Id, TagId = t.Id, Sort = 4 },
         }).ExecuteCommand();
 
         var spec = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>>
         {
             [AggregateOp.Sum] = ["sort"], [AggregateOp.Avg] = ["sort"], [AggregateOp.Min] = ["sort"], [AggregateOp.Count] = ["note"],
         });
-        var r = await repo.AggregateAsync("articleTag", new QueryModel(null, null, [], 100, 0, null), spec, [], null, DeletedFilter.Exclude);
+        var r = await repo.AggregateAsync("fxArticleTag", new QueryModel(null, null, [], 100, 0, null), spec, [], null, DeletedFilter.Exclude);
         r.Values[AggregateOp.Sum]["sort"].Should().BeOfType<long>().And.Be(5L);
         r.Values[AggregateOp.Avg]["sort"].Should().BeOfType<double>().And.Be(2.5);
         r.Values[AggregateOp.Min]["sort"].Should().BeOfType<int>().And.Be(1);
         r.Values[AggregateOp.Count]["note"].Should().Be(0L);
 
         var articleSpec = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>> { [AggregateOp.Max] = ["createdAt"] });
-        var ar = await repo.AggregateAsync("article", new QueryModel(null, null, [], 100, 0, null), articleSpec, [], null, DeletedFilter.Exclude);
+        var ar = await repo.AggregateAsync("fxArticle", new QueryModel(null, null, [], 100, 0, null), articleSpec, [], null, DeletedFilter.Exclude);
         ar.Values[AggregateOp.Max]["createdAt"].Should().BeOfType<DateTime>();
     }
 

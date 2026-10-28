@@ -11,7 +11,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -22,7 +22,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     // A permission service that denies reads on a specific collection.
     private sealed class DenyReadPermissions : IPermissionService
     {
-        public bool CanRead(string collection) => collection != "article";
+        public bool CanRead(string collection) => collection != "fxArticle";
         public bool CanWrite(string collection) => true;
         public bool CanDelete(string collection) => true;
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
@@ -32,7 +32,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     private sealed class DenyWritePermissions : IPermissionService
     {
         public bool CanRead(string collection) => true;
-        public bool CanWrite(string collection) => collection != "article";
+        public bool CanWrite(string collection) => collection != "fxArticle";
         public bool CanDelete(string collection) => true;
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
     }
@@ -42,7 +42,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         public bool CanRead(string collection) => true;
         public bool CanWrite(string collection) => true;
-        public bool CanDelete(string collection) => collection != "article";
+        public bool CanDelete(string collection) => collection != "fxArticle";
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
     }
 
@@ -57,13 +57,13 @@ public sealed class ItemServicePermissionTests : IDisposable
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
     }
 
-    // Holds read on 'article' and nothing else. A relation hop must not become a way to reach
+    // Holds read on 'fxArticle' and nothing else. A relation hop must not become a way to reach
     // rows in a collection the caller has no read grant on: 'deep' drops the relation, a relation
     // filter/sort path is refused outright.
     private sealed class ReadArticleOnlyPermissions : IPermissionService
     {
         public bool CanRead(string collection) =>
-            string.Equals(collection, "article", StringComparison.OrdinalIgnoreCase);
+            string.Equals(collection, "fxArticle", StringComparison.OrdinalIgnoreCase);
         public bool CanWrite(string collection) => true;
         public bool CanDelete(string collection) => true;
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
@@ -96,12 +96,12 @@ public sealed class ItemServicePermissionTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
@@ -113,7 +113,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         // alongside User or RelationshipGraph construction throws "targets unknown collection".
         var scanTypes = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Identity.User),
             typeof(Struo.Infrastructure.Identity.Role), typeof(Struo.Infrastructure.Identity.UserRole),
             typeof(Struo.Infrastructure.Files.MediaFolder),
@@ -123,9 +123,9 @@ public sealed class ItemServicePermissionTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(scanTypes));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]  = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"]      = typeof(Tag),
+            ["fxArticle"]  = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"]      = typeof(FxTag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["user"]     = typeof(Struo.Infrastructure.Identity.User),
             ["role"]     = typeof(Struo.Infrastructure.Identity.Role),
@@ -159,7 +159,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     public async Task Denied_read_QueryAsync_throws_PermissionDeniedException()
     {
         var svc = BuildService(new DenyReadPermissions());
-        var act = async () => await svc.QueryAsync("article", new QueryModel(null, null, [], 20, 0, null));
+        var act = async () => await svc.QueryAsync("fxArticle", new QueryModel(null, null, [], 20, 0, null));
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -167,7 +167,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     public async Task Denied_read_GetAsync_throws_PermissionDeniedException()
     {
         var svc = BuildService(new DenyReadPermissions());
-        var act = async () => await svc.GetAsync("article", "some-id");
+        var act = async () => await svc.GetAsync("fxArticle", "some-id");
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -176,7 +176,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new DenyWritePermissions());
         using var body = System.Text.Json.JsonDocument.Parse("""{"status":"draft","translations":{"en":{"title":"Hello"}}}""");
-        var act = async () => await svc.CreateAsync("article", body.RootElement);
+        var act = async () => await svc.CreateAsync("fxArticle", body.RootElement);
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -185,7 +185,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new DenyWritePermissions());
         using var body = System.Text.Json.JsonDocument.Parse("""{"status":"published"}""");
-        var act = async () => await svc.UpdateAsync("article", "some-id", body.RootElement);
+        var act = async () => await svc.UpdateAsync("fxArticle", "some-id", body.RootElement);
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -193,7 +193,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     public async Task Denied_delete_DeleteAsync_throws_PermissionDeniedException()
     {
         var svc = BuildService(new DenyDeletePermissions());
-        var act = async () => await svc.DeleteAsync("article", "some-id");
+        var act = async () => await svc.DeleteAsync("fxArticle", "some-id");
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -242,11 +242,11 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var admin = BuildService(new SuperAdminPermissions());
         using var cat = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
-        var catId = (await admin.CreateAsync("category", cat.RootElement))["id"]!.ToString()!;
+        var catId = (await admin.CreateAsync("fxCategory", cat.RootElement))["id"]!.ToString()!;
         using var art = System.Text.Json.JsonDocument.Parse(
             """{"status":"draft","categoryId":"__CAT__","translations":{"en":{"title":"Hello"}}}"""
                 .Replace("__CAT__", catId));
-        return (await admin.CreateAsync("article", art.RootElement))["id"]!.ToString()!;
+        return (await admin.CreateAsync("fxArticle", art.RootElement))["id"]!.ToString()!;
     }
 
     // Inserts a 'file' row directly: ItemService refuses generic creates on the file collection,
@@ -276,7 +276,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         using var art = System.Text.Json.JsonDocument.Parse(
             """{"status":"draft","translations":{"en":{"title":"Hello","seoOgImageId":"__F__"}}}"""
                 .Replace("__F__", fileId.ToString()));
-        return (await admin.CreateAsync("article", art.RootElement))["id"]!.ToString()!;
+        return (await admin.CreateAsync("fxArticle", art.RootElement))["id"]!.ToString()!;
     }
 
     private static IReadOnlyDictionary<string, object?> EnTranslation(
@@ -286,7 +286,7 @@ public sealed class ItemServicePermissionTests : IDisposable
 
     // A translatable Image field resolves into a projected 'file' row. That is a read of the file
     // collection and needs its own grant: without it the nested object must not materialise, or a
-    // role granted only 'article' reads file names, sizes and content types it has no grant for.
+    // role granted only 'fxArticle' reads file names, sizes and content types it has no grant for.
     [Fact]
     public async Task Translatable_image_field_is_not_resolved_without_read_on_the_file_collection()
     {
@@ -294,7 +294,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithOgImageAsync(fileId);
         var narrow = BuildService(new DenyReadOfPermissions("file"));
 
-        var row = await narrow.GetAsync("article", id, locale: "en");
+        var row = await narrow.GetAsync("fxArticle", id, locale: "en");
 
         var en = EnTranslation(row!);
         en["seoOgImage"].Should().BeNull();
@@ -308,7 +308,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithOgImageAsync(fileId);
         var svc = BuildService(new SuperAdminPermissions());
 
-        var row = await svc.GetAsync("article", id, locale: "en");
+        var row = await svc.GetAsync("fxArticle", id, locale: "en");
 
         var en = EnTranslation(row!);
         en["seoOgImage"].Should().NotBeNull();
@@ -320,7 +320,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         new(relations.ToDictionary(
             r => r, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase));
 
-    // A caller who cannot read 'category' gets the article without the expanded relation, rather
+    // A caller who cannot read 'fxCategory' gets the article without the expanded relation, rather
     // than a 403 — expanding is a convenience, and failing the whole read would take the admin SPA
     // down for any narrowly-granted role (its item form requests deep=category,tags).
     [Fact]
@@ -329,7 +329,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithCategoryAsync();
         var narrow = BuildService(new ReadArticleOnlyPermissions());
 
-        var row = await narrow.GetAsync("article", id, Deep("category"));
+        var row = await narrow.GetAsync("fxArticle", id, Deep("category"));
 
         row.Should().NotBeNull();
         row!.Should().NotContainKey("category");
@@ -342,7 +342,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithCategoryAsync();
         var svc = BuildService(new SuperAdminPermissions());
 
-        var row = await svc.GetAsync("article", id, Deep("category"));
+        var row = await svc.GetAsync("fxArticle", id, Deep("category"));
 
         row!.Should().ContainKey("category");
     }
@@ -357,7 +357,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var q = new QueryModel(
             null, new ComparisonFilter("category.name", QueryOperator.Eq, "News"), [], 20, 0, null);
 
-        var act = async () => await narrow.QueryAsync("article", q);
+        var act = async () => await narrow.QueryAsync("fxArticle", q);
 
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
@@ -368,24 +368,24 @@ public sealed class ItemServicePermissionTests : IDisposable
         var narrow = BuildService(new ReadArticleOnlyPermissions());
         var q = new QueryModel(null, null, [new SortField("category.name", false)], 20, 0, null);
 
-        var act = async () => await narrow.QueryAsync("article", q);
+        var act = async () => await narrow.QueryAsync("fxArticle", q);
 
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
-    // The many-to-many hop is the same rule: 'tags' targets 'tag', which this caller cannot read.
+    // The many-to-many hop is the same rule: 'tags' targets 'fxTag', which this caller cannot read.
     [Fact]
     public async Task Deep_expansion_omits_a_many_to_many_relation_whose_target_is_unreadable()
     {
         var id = await SeedArticleWithCategoryAsync();
         var narrow = BuildService(new ReadArticleOnlyPermissions());
 
-        var row = await narrow.GetAsync("article", id, Deep("tags"));
+        var row = await narrow.GetAsync("fxArticle", id, Deep("tags"));
 
         row!.Should().NotContainKey("tags");
     }
 
-    // Pruning is recursive. Root 'category' and the first hop ('children' -> category) are both
+    // Pruning is recursive. Root 'fxCategory' and the first hop ('children' -> category) are both
     // readable; the second hop ('articles' -> article) is not, and must be dropped from the nested
     // rows rather than riding in on the readable hop above it.
     [Fact]
@@ -393,18 +393,18 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var admin = BuildService(new SuperAdminPermissions());
         using var parent = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
-        var parentId = (await admin.CreateAsync("category", parent.RootElement))["id"]!.ToString()!;
+        var parentId = (await admin.CreateAsync("fxCategory", parent.RootElement))["id"]!.ToString()!;
         using var child = System.Text.Json.JsonDocument.Parse(
             """{"name":"Sub","parentId":"__P__"}""".Replace("__P__", parentId));
-        await admin.CreateAsync("category", child.RootElement);
+        await admin.CreateAsync("fxCategory", child.RootElement);
 
-        var svc = BuildService(new DenyReadOfPermissions("article"));
+        var svc = BuildService(new DenyReadOfPermissions("fxArticle"));
         var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
         {
             ["children"] = new DeepRelationSpec(null, null, Deep("articles")),
         });
 
-        var row = await svc.GetAsync("category", parentId, deep);
+        var row = await svc.GetAsync("fxCategory", parentId, deep);
 
         row!.Should().ContainKey("children");
         var children = ((System.Collections.IEnumerable)row["children"]!)
@@ -421,7 +421,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithCategoryAsync();
         var narrow = BuildService(new ReadArticleOnlyPermissions());
 
-        var row = await narrow.GetAsync("article", id, Deep("category", "tags"));
+        var row = await narrow.GetAsync("fxArticle", id, Deep("category", "tags"));
 
         row.Should().NotBeNull();
         row!.Should().ContainKey("id");
@@ -437,7 +437,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         var id = await SeedArticleWithCategoryAsync();
         var narrow = BuildService(new ReadArticleOnlyPermissions());
 
-        var act = async () => await narrow.GetAsync("article", id, Deep("category", "ghostRelation"));
+        var act = async () => await narrow.GetAsync("fxArticle", id, Deep("category", "ghostRelation"));
 
         await act.Should().ThrowAsync<QueryException>();
     }
@@ -450,10 +450,10 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var admin = BuildService(new SuperAdminPermissions());
         using var cat = System.Text.Json.JsonDocument.Parse("""{"name":"News"}""");
-        var catId = (await admin.CreateAsync("category", cat.RootElement))["id"]!.ToString()!;
+        var catId = (await admin.CreateAsync("fxCategory", cat.RootElement))["id"]!.ToString()!;
 
-        // 'category' (root) and 'children' -> category are readable; the filter's own hop is not.
-        var svc = BuildService(new DenyReadOfPermissions("article"));
+        // 'fxCategory' (root) and 'children' -> category are readable; the filter's own hop is not.
+        var svc = BuildService(new DenyReadOfPermissions("fxArticle"));
         var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase)
         {
             ["children"] = new DeepRelationSpec(null, null)
@@ -462,7 +462,7 @@ public sealed class ItemServicePermissionTests : IDisposable
             },
         });
 
-        var act = async () => await svc.GetAsync("category", catId, deep);
+        var act = async () => await svc.GetAsync("fxCategory", catId, deep);
 
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
@@ -473,12 +473,12 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new SuperAdminPermissions());
         using var create = System.Text.Json.JsonDocument.Parse("""{"name":"A"}""");
-        var created = await svc.CreateAsync("category", create.RootElement);
+        var created = await svc.CreateAsync("fxCategory", create.RootElement);
         var id = created["id"]!.ToString()!;
         created["version"].Should().Be(0L);
 
         using var upd = System.Text.Json.JsonDocument.Parse("""{"name":"B","version":0}""");
-        var updated = await svc.UpdateAsync("category", id, upd.RootElement);
+        var updated = await svc.UpdateAsync("fxCategory", id, upd.RootElement);
         updated!["version"].Should().Be(1L);
     }
 
@@ -488,15 +488,15 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new SuperAdminPermissions());
         using var create = System.Text.Json.JsonDocument.Parse("""{"name":"A"}""");
-        var id = (await svc.CreateAsync("category", create.RootElement))["id"]!.ToString()!;
+        var id = (await svc.CreateAsync("fxCategory", create.RootElement))["id"]!.ToString()!;
 
         // First writer moves version 0 → 1.
         using var first = System.Text.Json.JsonDocument.Parse("""{"name":"B","version":0}""");
-        await svc.UpdateAsync("category", id, first.RootElement);
+        await svc.UpdateAsync("fxCategory", id, first.RootElement);
 
         // Second writer still holds the stale version 0 → conflict.
         using var stale = System.Text.Json.JsonDocument.Parse("""{"name":"C","version":0}""");
-        var act = async () => await svc.UpdateAsync("category", id, stale.RootElement);
+        var act = async () => await svc.UpdateAsync("fxCategory", id, stale.RootElement);
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 
@@ -506,10 +506,10 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new SuperAdminPermissions());
         using var create = System.Text.Json.JsonDocument.Parse("""{"name":"A"}""");
-        var id = (await svc.CreateAsync("category", create.RootElement))["id"]!.ToString()!;
+        var id = (await svc.CreateAsync("fxCategory", create.RootElement))["id"]!.ToString()!;
 
         using var upd = System.Text.Json.JsonDocument.Parse("""{"name":"B"}""");
-        var updated = await svc.UpdateAsync("category", id, upd.RootElement);
+        var updated = await svc.UpdateAsync("fxCategory", id, upd.RootElement);
         updated!["version"].Should().Be(1L);
     }
 }

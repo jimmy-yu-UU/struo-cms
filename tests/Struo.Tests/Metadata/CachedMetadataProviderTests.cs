@@ -2,7 +2,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Metadata;
@@ -12,7 +12,7 @@ public class CachedMetadataProviderTests
     private static ServiceProvider Build()
     {
         var services = new ServiceCollection();
-        services.AddStruoMetadata(typeof(Article).Assembly);
+        services.AddStruoMetadata(typeof(FxArticle).Assembly);
         return services.BuildServiceProvider();
     }
 
@@ -22,7 +22,7 @@ public class CachedMetadataProviderTests
         using var sp = Build();
         var provider = sp.GetRequiredService<IMetadataProvider>();
         provider.GetCollections().Select(c => c.Name)
-            .Should().Contain(["article", "category"]);
+            .Should().Contain(["fxArticle", "fxCategory"]);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public class CachedMetadataProviderTests
     {
         using var sp = Build();
         var provider = sp.GetRequiredService<IMetadataProvider>();
-        provider.GetCollection("ARTICLE").Should().NotBeNull();
+        provider.GetCollection("FXARTICLE").Should().NotBeNull();
         provider.GetCollection("nope").Should().BeNull();
     }
 
@@ -41,6 +41,6 @@ public class CachedMetadataProviderTests
         var a = sp.GetRequiredService<IMetadataProvider>();
         var b = sp.GetRequiredService<IMetadataProvider>();
         a.Should().BeSameAs(b);                                   // singleton, scanned once
-        a.GetCollection("article").Should().BeSameAs(b.GetCollection("article")); // cached instance
+        a.GetCollection("fxArticle").Should().BeSameAs(b.GetCollection("fxArticle")); // cached instance
     }
 }

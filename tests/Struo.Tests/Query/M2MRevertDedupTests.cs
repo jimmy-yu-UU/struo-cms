@@ -16,7 +16,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -24,9 +24,9 @@ namespace Struo.Tests.Query;
 
 // ── Test-local entities ─────────────────────────────────────────────
 //
-// The sample Blog M2M target (Tag) is NOT ISoftDeletable, so it cannot be trashed — and the
+// The fixture M2M target (Tag) is NOT ISoftDeletable, so it cannot be trashed — and the
 // "revert tolerates a trashed M2M target" case requires exactly that. Following the precedent set by
-// PurgeIntegrityTests (which declares its own [CmsCollection] fixtures for scenarios the sample domain
+// PurgeIntegrityTests (which declares its own [CmsCollection] fixtures for scenarios the fixture domain
 // can't express), this file declares a revisioned parent (Doc) with an M2M relation to a
 // soft-deletable target (Label) plus the junction (DocLabel).
 
@@ -69,7 +69,7 @@ internal sealed class DocLabel
     public Guid LabelId { get; set; }
 }
 
-/// <summary>Wires a real <see cref="ItemService"/> over the Doc/Label/DocLabel fixtures (plus the sample
+/// <summary>Wires a real <see cref="ItemService"/> over the Doc/Label/DocLabel fixtures (plus the fixture
 /// types the metadata/registry expects), mirroring <c>PurgeIntegrityHarness</c>.</summary>
 internal sealed class M2MRevertHarness : IDisposable
 {

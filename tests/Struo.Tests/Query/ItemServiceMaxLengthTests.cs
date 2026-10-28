@@ -11,7 +11,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -32,18 +32,18 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -51,8 +51,8 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag), ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag), ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -87,7 +87,7 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
     public async Task Create_rejects_overlong_non_translatable_string_with_MaxLength_error()
     {
         var body = JsonBody(new { name = new string('x', 256) }); // category.name, effective 255
-        var act = () => _svc.CreateAsync("category", body);
+        var act = () => _svc.CreateAsync("fxCategory", body);
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'name' exceeds maximum length 255.");
     }
@@ -96,7 +96,7 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
     public async Task Create_accepts_non_translatable_string_exactly_at_MaxLength()
     {
         var body = JsonBody(new { name = new string('x', 255) });
-        var created = await _svc.CreateAsync("category", body); // must not throw
+        var created = await _svc.CreateAsync("fxCategory", body); // must not throw
         created.Should().NotBeNull();
     }
 
@@ -110,7 +110,7 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
                 ["en"] = new { title = new string('x', 256), body = "<p>ok</p>" }
             }
         });
-        var act = () => _svc.CreateAsync("article", body);
+        var act = () => _svc.CreateAsync("fxArticle", body);
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'title' exceeds maximum length 255 for locale 'en'.");
     }
@@ -125,7 +125,7 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
                 ["en"] = new { title = new string('x', 255), body = "<p>ok</p>" }
             }
         });
-        var created = await _svc.CreateAsync("article", body);
+        var created = await _svc.CreateAsync("fxArticle", body);
         created.Should().NotBeNull();
     }
 
@@ -133,11 +133,11 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
     public async Task Update_rejects_overlong_non_translatable_string_with_MaxLength_error()
     {
         var createBody = JsonBody(new { name = "Original" });
-        var created = await _svc.CreateAsync("category", createBody);
+        var created = await _svc.CreateAsync("fxCategory", createBody);
         var id = created["id"]!.ToString()!;
 
         var updateBody = JsonBody(new { name = new string('x', 256) });
-        var act = () => _svc.UpdateAsync("category", id, updateBody);
+        var act = () => _svc.UpdateAsync("fxCategory", id, updateBody);
         await act.Should().ThrowAsync<QueryException>()
             .WithMessage("Field 'name' exceeds maximum length 255.");
     }

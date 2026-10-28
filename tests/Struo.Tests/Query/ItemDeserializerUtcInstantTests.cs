@@ -8,7 +8,7 @@ using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -22,15 +22,15 @@ public sealed class ItemDeserializerUtcInstantTests
 {
     private static (ItemDeserializer Deserializer, CollectionMetadata Meta) Build()
     {
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
-        var meta = new CachedMetadataProvider(collections).GetCollection("article")!;
+        var meta = new CachedMetadataProvider(collections).GetCollection("fxArticle")!;
         return (new ItemDeserializer(registry, graph, new RichTextCleaner(new GanssHtmlSanitizer())), meta);
     }
 
@@ -42,7 +42,7 @@ public sealed class ItemDeserializerUtcInstantTests
     {
         var (deserializer, meta) = Build();
 
-        var article = (Article)deserializer.DeserializeForCreate("article", Body("\"2026-10-14T10:00:00+08:00\""), meta);
+        var article = (FxArticle)deserializer.DeserializeForCreate("fxArticle", Body("\"2026-10-14T10:00:00+08:00\""), meta);
 
         article.PublishedAt.Should().Be(new DateTime(2026, 10, 14, 2, 0, 0, DateTimeKind.Utc));
         article.PublishedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
@@ -57,7 +57,7 @@ public sealed class ItemDeserializerUtcInstantTests
     {
         var (deserializer, meta) = Build();
 
-        var act = () => deserializer.DeserializeForCreate("article", Body(json), meta);
+        var act = () => deserializer.DeserializeForCreate("fxArticle", Body(json), meta);
 
         act.Should().Throw<QueryException>().WithMessage("Field 'publishedAt' has an invalid value.");
     }

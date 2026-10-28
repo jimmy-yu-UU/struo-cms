@@ -7,7 +7,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -222,7 +222,7 @@ public class FacetQueriesTests : IDisposable
     }
 }
 
-// A second facet fixture — over the real sample Article/Category graph — pins down the translatable-leaf
+// A second facet fixture — over the real FxArticle/FxCategory graph — pins down the translatable-leaf
 // path: Article.title lives on the ArticleTranslation sidecar, so `articles.title` (a one-to-many hop
 // from Category) must resolve per-locale sidecar values rather than the target row's own scalar field.
 public class TranslatableLeafFacetTests : IDisposable
@@ -238,13 +238,13 @@ public class TranslatableLeafFacetTests : IDisposable
         _db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        _db.CodeFirst.InitTables<Category>(); _db.CodeFirst.InitTables<Article>(); _db.CodeFirst.InitTables<ArticleTranslation>();
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        _db.CodeFirst.InitTables<FxCategory>(); _db.CodeFirst.InitTables<FxArticle>(); _db.CodeFirst.InitTables<FxArticleTranslation>();
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         _md = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         _graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
-        { ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag) });
+        { ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag) });
         _repo = new SqlSugarItemRepository(_db, registry, _graph, _md, new StruoQueryOptions());
     }
 
@@ -253,43 +253,43 @@ public class TranslatableLeafFacetTests : IDisposable
     [Fact]
     public async Task Translatable_leaf_uses_the_query_locale_and_puts_untranslated_targets_in_the_null_bucket()
     {
-        var cat = new Category { Id = Guid.NewGuid(), Name = "C" };
+        var cat = new FxCategory { Id = Guid.NewGuid(), Name = "C" };
         _db.Insertable(cat).ExecuteCommand();
-        var a1 = new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
-        var a2 = new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
+        var a1 = new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
+        var a2 = new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
         _db.Insertable(new[] { a1, a2 }).ExecuteCommand();
         _db.Insertable(new[]
         {
-            new ArticleTranslation { ArticleId = a1.Id, Locale = "en", Title = "Alpha" },
-            new ArticleTranslation { ArticleId = a1.Id, Locale = "zh-TW", Title = "甲" },
-            new ArticleTranslation { ArticleId = a2.Id, Locale = "en", Title = "Beta" },
+            new FxArticleTranslation { FxArticleId = a1.Id, Locale = "en", Title = "Alpha" },
+            new FxArticleTranslation { FxArticleId = a1.Id, Locale = "zh-TW", Title = "甲" },
+            new FxArticleTranslation { FxArticleId = a2.Id, Locale = "en", Title = "Beta" },
         }).ExecuteCommand();
 
-        var meta = _md.GetCollection("category")!;
+        var meta = _md.GetCollection("fxCategory")!;
         var facet = FacetPathResolver.Resolve(meta, "articles.title", _graph, _md);
         var q = new QueryModel(null, null, [], 100, 0, null);
 
-        var en = await _repo.FacetAsync(new FacetRequest("category", q, facet, [], "en", DeletedFilter.Exclude, 50));
+        var en = await _repo.FacetAsync(new FacetRequest("fxCategory", q, facet, [], "en", DeletedFilter.Exclude, 50));
         en.Select(b => (b.Value, b.Count)).Should().Equal(("Alpha", 1), ("Beta", 1));
 
-        var zh = await _repo.FacetAsync(new FacetRequest("category", q, facet, [], "zh-TW", DeletedFilter.Exclude, 50));
+        var zh = await _repo.FacetAsync(new FacetRequest("fxCategory", q, facet, [], "zh-TW", DeletedFilter.Exclude, 50));
         zh.Should().BeEquivalentTo([new FacetBucket("甲", 1), new FacetBucket(null, 1)]);
     }
 
     [Fact]
     public async Task Translatable_leaf_without_a_query_locale_throws()
     {
-        var cat = new Category { Id = Guid.NewGuid(), Name = "C" };
+        var cat = new FxCategory { Id = Guid.NewGuid(), Name = "C" };
         _db.Insertable(cat).ExecuteCommand();
-        var a1 = new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
+        var a1 = new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = cat.Id };
         _db.Insertable(a1).ExecuteCommand();
-        _db.Insertable(new ArticleTranslation { ArticleId = a1.Id, Locale = "en", Title = "Alpha" }).ExecuteCommand();
+        _db.Insertable(new FxArticleTranslation { FxArticleId = a1.Id, Locale = "en", Title = "Alpha" }).ExecuteCommand();
 
-        var meta = _md.GetCollection("category")!;
+        var meta = _md.GetCollection("fxCategory")!;
         var facet = FacetPathResolver.Resolve(meta, "articles.title", _graph, _md);
         var q = new QueryModel(null, null, [], 100, 0, null);
 
-        Func<Task> act = async () => await _repo.FacetAsync(new FacetRequest("category", q, facet, [], null, DeletedFilter.Exclude, 50));
+        Func<Task> act = async () => await _repo.FacetAsync(new FacetRequest("fxCategory", q, facet, [], null, DeletedFilter.Exclude, 50));
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*query locale is required*");
     }
 }

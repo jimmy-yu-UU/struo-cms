@@ -26,16 +26,16 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_to_one_category_name()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var news = await Post(c, "category", new { name = "FilterNews" });
-        var other = await Post(c, "category", new { name = "FilterOther" });
-        var hit = await Post(c, "article", new { status = "draft", categoryId = news, translations = new { en = new { title = "HIT" } } });
-        var miss = await Post(c, "article", new { status = "draft", categoryId = other, translations = new { en = new { title = "MISS" } } });
+        var news = await Post(c, "fxCategory", new { name = "FilterNews" });
+        var other = await Post(c, "fxCategory", new { name = "FilterOther" });
+        var hit = await Post(c, "fxArticle", new { status = "draft", categoryId = news, translations = new { en = new { title = "HIT" } } });
+        var miss = await Post(c, "fxArticle", new { status = "draft", categoryId = other, translations = new { en = new { title = "MISS" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new Dictionary<string, object> { ["category.name"] = Eq("FilterNews") }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
@@ -51,7 +51,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         {
             filter = new Dictionary<string, object> { ["category.name"] = Eq("NoSuchCategoryXYZ") }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
     }
@@ -60,15 +60,15 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_multi_level_category_parent_name()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var parent = await Post(c, "category", new { name = "ParentCat" });
-        var child = await Post(c, "category", new { name = "ChildCat", parentId = parent });
-        var hit = await Post(c, "article", new { status = "draft", categoryId = child, translations = new { en = new { title = "DEEPHIT" } } });
+        var parent = await Post(c, "fxCategory", new { name = "ParentCat" });
+        var child = await Post(c, "fxCategory", new { name = "ChildCat", parentId = parent });
+        var hit = await Post(c, "fxArticle", new { status = "draft", categoryId = child, translations = new { en = new { title = "DEEPHIT" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new Dictionary<string, object> { ["category.parent.name"] = Eq("ParentCat") }
         });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit);
     }
 
@@ -81,16 +81,16 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var stamp = "WideHop" + Guid.NewGuid().ToString("N")[..8];
-        var parent = await Post(c, "category", new { name = stamp });
+        var parent = await Post(c, "fxCategory", new { name = stamp });
         const int childCount = 3;
         for (var i = 0; i < childCount; i++)
-            await Post(c, "category", new { name = $"{stamp}-child-{i}", parentId = parent });
+            await Post(c, "fxCategory", new { name = $"{stamp}-child-{i}", parentId = parent });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new Dictionary<string, object> { ["category.parent.name"] = Eq(stamp) }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
         // No article references any of these categories, so the pushed-down query legitimately
         // returns zero rows — the point is the 200, not the row count.
@@ -101,9 +101,9 @@ public class CrossRelationFilterTests(ApiFactory factory)
     public async Task Filter_relation_path_or_scalar_composes()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "OrCat" });
-        var byCat = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "ZZZ" } } });
-        var byId = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "OrIdUnique" } } });
+        var cat = await Post(c, "fxCategory", new { name = "OrCat" });
+        var byCat = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = "ZZZ" } } });
+        var byId = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "OrIdUnique" } } });
 
         // _or over a relation-path condition and a scalar condition
         var envelope = JsonSerializer.SerializeToElement(new
@@ -117,7 +117,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 }
             }
         });
-        var ids = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync())
+        var ids = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope)).Content.ReadAsStringAsync())
             .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         ids.Should().Contain(byCat).And.Contain(byId);
     }
@@ -129,14 +129,14 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // relation querying. Here we filter the o2m relation by the child's
         // non-translatable own-collection field (id) to exercise the same two-phase resolution.
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "O2MFilterCat" });
-        var childArticle = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "UniqueChildTitle" } } });
+        var cat = await Post(c, "fxCategory", new { name = "O2MFilterCat" });
+        var childArticle = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = "UniqueChildTitle" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new Dictionary<string, object> { ["articles.id"] = Eq(childArticle) }
         });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/category/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope)).Content.ReadAsStringAsync()).GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(cat);
     }
 
@@ -146,7 +146,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // _or: relation branch matches nothing, scalar branch matches one article.
         // The empty relation branch must contribute zero ids — not swallow the whole OR.
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var hit = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "OrEmptyUnique" } } });
+        var hit = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "OrEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -159,7 +159,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 }
             }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
         var ids = Root(await resp.Content.ReadAsStringAsync())
             .GetProperty("data").EnumerateArray()
@@ -173,7 +173,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // _and: relation branch matches nothing, so the whole AND must return 0 rows
         // even though the scalar branch would match.
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var art = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "AndEmptyUnique" } } });
+        var art = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "AndEmptyUnique" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -186,7 +186,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 }
             }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
     }
@@ -198,14 +198,14 @@ public class CrossRelationFilterTests(ApiFactory factory)
         // Proves FilterTranslator's M2M subquery pushdown (junction targetFk -> parentFk) end-to-end:
         // "articles that have AT LEAST ONE tag named X" (ANY/EXISTS).
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var tag = await Post(c, "tag", new { name = "M2MFilterTag" });
-        var tagged = await Post(c, "article", new
+        var tag = await Post(c, "fxTag", new { name = "M2MFilterTag" });
+        var tagged = await Post(c, "fxArticle", new
         {
             status = "draft",
             tags = new[] { tag },
             translations = new { en = new { title = "TAGGED" } }
         });
-        var untagged = await Post(c, "article", new
+        var untagged = await Post(c, "fxArticle", new
         {
             status = "draft",
             translations = new { en = new { title = "UNTAGGED" } }
@@ -215,7 +215,7 @@ public class CrossRelationFilterTests(ApiFactory factory)
         {
             filter = new Dictionary<string, object> { ["tags.name"] = Eq("M2MFilterTag") }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var ids = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")
             .EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
@@ -232,15 +232,15 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var stamp = "Some" + Guid.NewGuid().ToString("N")[..6];
-        var guide = await Post(c, "tag", new { name = stamp + "-guide" });
-        var misc = await Post(c, "tag", new { name = stamp + "-misc" });
+        var guide = await Post(c, "fxTag", new { name = stamp + "-guide" });
+        var misc = await Post(c, "fxTag", new { name = stamp + "-misc" });
         // hit: ONE link carrying name=guide AND note=hero; miss: guide/plain + misc/hero (cross-row only)
-        var hit = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "SomeHit" } },
+        var hit = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "SomeHit" } },
             tags = new object[] { new { id = guide, note = "hero" } } });
-        var miss = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "SomeMiss" } },
+        var miss = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "SomeMiss" } },
             tags = new object[] { new { id = guide, note = "plain" }, new { id = misc, note = "hero" } } });
 
-        var viaQs = await IdsAsync(c, $"/api/items/article?filter%5Btags._some.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero");
+        var viaQs = await IdsAsync(c, $"/api/items/fxArticle?filter%5Btags._some.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._some._junction.note%5D%5B_eq%5D=hero");
         viaQs.Should().Contain(hit).And.NotContain(miss);
 
         var envelope = JsonSerializer.SerializeToElement(new
@@ -253,11 +253,11 @@ public class CrossRelationFilterTests(ApiFactory factory)
                 }
             }
         });
-        var viaEnv = Root(await (await c.PostAsJsonAsync("/api/items/article/query", envelope)).Content.ReadAsStringAsync())
+        var viaEnv = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope)).Content.ReadAsStringAsync())
             .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         viaEnv.Should().Contain(hit).And.NotContain(miss);
 
-        var each = await IdsAsync(c, $"/api/items/article?filter%5Btags.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._junction.note%5D%5B_eq%5D=hero");
+        var each = await IdsAsync(c, $"/api/items/fxArticle?filter%5Btags.name%5D%5B_eq%5D={stamp}-guide&filter%5Btags._junction.note%5D%5B_eq%5D=hero");
         each.Should().Contain(hit).And.Contain(miss);
     }
 
@@ -266,10 +266,10 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var stamp = "None" + Guid.NewGuid().ToString("N")[..6];
-        var tag = await Post(c, "tag", new { name = stamp });
-        var tagged = await Post(c, "article", new { status = "draft", translations = new { en = new { title = "T" } }, tags = new[] { tag } });
-        var bare = await Post(c, "article", new { status = "draft", translations = new { en = new { title = stamp } } });
-        var ids = await IdsAsync(c, $"/api/items/article?filter%5Btags._none.name%5D%5B_eq%5D={stamp}");
+        var tag = await Post(c, "fxTag", new { name = stamp });
+        var tagged = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = "T" } }, tags = new[] { tag } });
+        var bare = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = stamp } } });
+        var ids = await IdsAsync(c, $"/api/items/fxArticle?filter%5Btags._none.name%5D%5B_eq%5D={stamp}");
         ids.Should().Contain(bare).And.NotContain(tagged);
     }
 
@@ -282,11 +282,11 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var stamp = "FS" + Guid.NewGuid().ToString("N")[..8];
-        var cat = await Post(c, "category", new { name = stamp });
-        var artX = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "X" } } });
-        var artY = await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "Y" } } });
+        var cat = await Post(c, "fxCategory", new { name = stamp });
+        var artX = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "X" } } });
+        var artY = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "Y" } } });
 
-        var ids = await IdsAsync(c, $"/api/items/article?filter%5Bcategory.name%5D%5B_eq%5D={stamp}&search={stamp}X");
+        var ids = await IdsAsync(c, $"/api/items/fxArticle?filter%5Bcategory.name%5D%5B_eq%5D={stamp}&search={stamp}X");
         ids.Should().Contain(artX).And.NotContain(artY);
     }
 
@@ -298,10 +298,10 @@ public class CrossRelationFilterTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var stamp = "FS2" + Guid.NewGuid().ToString("N")[..8];
-        var draftArt = await Post(c, "article", new { status = "draft", translations = new { en = new { title = stamp } } });
-        var publishedArt = await Post(c, "article", new { status = "published", translations = new { en = new { title = stamp } } });
+        var draftArt = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = stamp } } });
+        var publishedArt = await Post(c, "fxArticle", new { status = "published", translations = new { en = new { title = stamp } } });
 
-        var ids = await IdsAsync(c, $"/api/items/article?filter%5Bstatus%5D%5B_eq%5D=published&search={stamp}");
+        var ids = await IdsAsync(c, $"/api/items/fxArticle?filter%5Bstatus%5D%5B_eq%5D=published&search={stamp}");
         ids.Should().Contain(publishedArt).And.NotContain(draftArt);
     }
 }

@@ -9,7 +9,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Struo.Tests.Support.Seeding;
 using Xunit;
@@ -24,12 +24,12 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
     private (ItemService Service, CountingItemRepository Repo) Build(StruoQueryOptions options)
     {
         var db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
@@ -39,7 +39,7 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
 
         var scanTypes = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Identity.User),
             typeof(Struo.Infrastructure.Identity.Role), typeof(Struo.Infrastructure.Identity.UserRole),
             typeof(Struo.Infrastructure.Files.MediaFolder),
@@ -49,9 +49,9 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(scanTypes));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag),
             ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["user"] = typeof(Struo.Infrastructure.Identity.User),
             ["role"] = typeof(Struo.Infrastructure.Identity.Role),
@@ -87,7 +87,7 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
         var (svc, repo) = Build(new StruoQueryOptions { MaxDeepRelations = 1 });
         var query = new QueryModel(null, null, [], 20, 0, null) { Deep = Relations("category", "tags") };
 
-        var act = async () => await svc.QueryAsync("article", query);
+        var act = async () => await svc.QueryAsync("fxArticle", query);
 
         await act.Should().ThrowAsync<QueryException>();
         repo.RootReads.Should().Be(0);
@@ -98,7 +98,7 @@ public sealed class ItemServiceDeepPrevalidationTests : IDisposable
     {
         var (svc, repo) = Build(new StruoQueryOptions { MaxDeepRelations = 1 });
 
-        var act = async () => await svc.GetAsync("article", Guid.NewGuid().ToString(),
+        var act = async () => await svc.GetAsync("fxArticle", Guid.NewGuid().ToString(),
             Relations("category", "tags"));
 
         await act.Should().ThrowAsync<QueryException>();

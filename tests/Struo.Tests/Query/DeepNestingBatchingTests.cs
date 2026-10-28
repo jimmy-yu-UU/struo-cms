@@ -33,9 +33,9 @@ public class DeepNestingBatchingTests(ApiFactory factory)
     private async Task<int> ExpandCountForCategoryWith(int articleCount, string label)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var catId = await Post(c, "category", new { name = $"Batch-{label}" });
+        var catId = await Post(c, "fxCategory", new { name = $"Batch-{label}" });
         for (var i = 0; i < articleCount; i++)
-            await Post(c, "article", new
+            await Post(c, "fxArticle", new
             {
                 status = "draft", categoryId = catId,
                 translations = new { en = new { title = $"Batch-{label}-{i}" } }
@@ -48,7 +48,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         var opts = scope.ServiceProvider.GetRequiredService<StruoQueryOptions>();
         var expander = new RelationExpander(counter, graph, opts);
 
-        var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
+        var parents = await real.QueryWhereInAsync("fxCategory", "id", new object[] { System.Guid.Parse(catId) });
 
         var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
         {
@@ -61,7 +61,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
 
         counter.ResetCount();
         await expander.ExpandAsync(
-            "category", parents, deep,
+            "fxCategory", parents, deep,
             new EntityAccessors(
                 (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
                 entity => ReadProp(entity, "id")!,
@@ -85,9 +85,9 @@ public class DeepNestingBatchingTests(ApiFactory factory)
     private async Task<int> ExpandCountWithArgs(int articleCount, string label)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var catId = await Post(c, "category", new { name = $"ArgBatch-{label}" });
+        var catId = await Post(c, "fxCategory", new { name = $"ArgBatch-{label}" });
         for (var i = 0; i < articleCount; i++)
-            await Post(c, "article", new
+            await Post(c, "fxArticle", new
             {
                 status = $"s{i}", categoryId = catId,
                 translations = new { en = new { title = $"ArgBatch-{label}-{i}" } }
@@ -100,7 +100,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         var counter = new CountingItemRepository(real);
         var expander = new RelationExpander(counter, graph, opts);
 
-        var parents = await real.QueryWhereInAsync("category", "id", new object[] { System.Guid.Parse(catId) });
+        var parents = await real.QueryWhereInAsync("fxCategory", "id", new object[] { System.Guid.Parse(catId) });
 
         // articles(O2M) with filter+sort+limit, nested category(M2O). Args must NOT add queries.
         var deep = new DeepSpec(new Dictionary<string, DeepRelationSpec>
@@ -115,7 +115,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
 
         counter.ResetCount();
         await expander.ExpandAsync(
-            "category", parents, deep,
+            "fxCategory", parents, deep,
             new EntityAccessors(
                 (_, entity, _) => new Dictionary<string, object?> { ["id"] = ReadProp(entity, "id") },
                 entity => ReadProp(entity, "id")!,
@@ -156,14 +156,14 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         ExpandSixLevelParentChain(int leafCount, string label)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var rootId = await Post(c, "category", new { name = $"Root-{label}" });
+        var rootId = await Post(c, "fxCategory", new { name = $"Root-{label}" });
         var prev = rootId;
         for (var lvl = 1; lvl <= 5; lvl++)
-            prev = await Post(c, "category", new { name = $"A{lvl}-{label}", parentId = prev });
+            prev = await Post(c, "fxCategory", new { name = $"A{lvl}-{label}", parentId = prev });
 
         var leafIds = new List<string>();
         for (var i = 0; i < leafCount; i++)
-            leafIds.Add(await Post(c, "category", new { name = $"Leaf-{label}-{i}", parentId = prev }));
+            leafIds.Add(await Post(c, "fxCategory", new { name = $"Leaf-{label}-{i}", parentId = prev }));
 
         using var scope = _factory.Services.CreateScope();
         var real = scope.ServiceProvider.GetRequiredService<IItemRepository>();
@@ -173,13 +173,13 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         var expander = new RelationExpander(counter, graph, opts);
 
         var parents = await real.QueryWhereInAsync(
-            "category", "id", leafIds.Select(System.Guid.Parse).Cast<object>().ToList());
+            "fxCategory", "id", leafIds.Select(System.Guid.Parse).Cast<object>().ToList());
 
         var deep = BuildParentChain(6);
 
         counter.ResetCount();
         var result = await expander.ExpandAsync(
-            "category", parents, deep,
+            "fxCategory", parents, deep,
             new EntityAccessors(
                 (_, entity, _) => new Dictionary<string, object?>
                 {

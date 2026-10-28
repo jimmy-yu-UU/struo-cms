@@ -12,7 +12,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -20,7 +20,7 @@ namespace Struo.Tests.Revisions;
 
 /// <summary>
 /// Wires a real <see cref="ItemService"/> + <see cref="SqlSugarRevisionStore"/> +
-/// <see cref="RevisionSnapshotBuilder"/> over the sample Blog types, mirroring
+/// <see cref="RevisionSnapshotBuilder"/> over the fixture types, mirroring
 /// <c>SnapshotBuilderHarness</c>'s construction. Article is revisioned
 /// (<c>Revisions = true</c>); Category is not, so it exercises the <c>meta.Revisions</c> gate.
 /// <para>
@@ -47,19 +47,19 @@ public sealed class RevisionServiceHarness : IDisposable
         var db = SqlSugarClientFactory.Create(
             _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.MediaFolder>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -67,9 +67,9 @@ public sealed class RevisionServiceHarness : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]  = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"]      = typeof(Tag),
+            ["fxArticle"]  = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"]      = typeof(FxTag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -141,7 +141,7 @@ public sealed class RevisionServiceHarness : IDisposable
     /// <summary>The create-article call as an un-awaited Task, so a failing capture's exception can
     /// be observed via <c>Assert.ThrowsAnyAsync</c> around the whole write.</summary>
     public Task<IReadOnlyDictionary<string, object?>> CreateArticleTask(string status) =>
-        Service.CreateAsync("article", BodyOf(new
+        Service.CreateAsync("fxArticle", BodyOf(new
         {
             status,
             translations = new Dictionary<string, object> { ["en"] = new { title = "T" } }
@@ -155,13 +155,13 @@ public sealed class RevisionServiceHarness : IDisposable
 
     public async Task<string> CreateCategoryAsync(string name)
     {
-        var created = await Service.CreateAsync("category", BodyOf(new { name }));
+        var created = await Service.CreateAsync("fxCategory", BodyOf(new { name }));
         return created["id"]!.ToString()!;
     }
 
     public async Task<string> CreateTagAsync(string name)
     {
-        var created = await Service.CreateAsync("tag", BodyOf(new { name }));
+        var created = await Service.CreateAsync("fxTag", BodyOf(new { name }));
         return created["id"]!.ToString()!;
     }
 
@@ -174,7 +174,7 @@ public sealed class RevisionServiceHarness : IDisposable
         var catB = Guid.Parse(await CreateCategoryAsync("B"));
         var tag = Guid.Parse(await CreateTagAsync("T"));
 
-        var created = await Service.CreateAsync("article", BodyOf(new
+        var created = await Service.CreateAsync("fxArticle", BodyOf(new
         {
             status = "draft",
             categoryId = catA,
@@ -223,9 +223,9 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");        // create -> rev 1
-        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // update -> rev 2
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default); // update -> rev 2
 
-        var list = await h.Store.ListAsync("article", id, default);
+        var list = await h.Store.ListAsync("fxArticle", id, default);
         Assert.Equal(2, list.Count);
         Assert.Equal("update", list[0].Operation);                   // newest-first
         Assert.Equal("create", list[1].Operation);
@@ -236,7 +236,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateCategoryAsync(name: "Cat");           // Category is NOT revisioned
-        var list = await h.Store.ListAsync("category", id, default);
+        var list = await h.Store.ListAsync("fxCategory", id, default);
         Assert.Empty(list);
     }
 
@@ -246,7 +246,7 @@ public sealed class RevisionServiceTests
         using var h = RevisionServiceHarness.Create(failCapture: true); // store stub throws in CaptureAsync
         await Assert.ThrowsAnyAsync<Exception>(() => h.CreateArticleTask(status: "draft"));
         // the parent write rolled back with the failed capture (same transaction) -> no article persisted
-        var page = await h.Service.QueryAsync("article", new QueryModel(null, null, [], 100, 0, null), null, default);
+        var page = await h.Service.QueryAsync("fxArticle", new QueryModel(null, null, [], 100, 0, null), null, default);
         Assert.Empty(page.Data);
     }
 
@@ -255,13 +255,13 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1 (create), status=draft
-        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2, status=published
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2, status=published
 
-        var reverted = await h.Service.RevertAsync("article", id, 1, default);      // revert to rev 1 (draft)
+        var reverted = await h.Service.RevertAsync("fxArticle", id, 1, default);      // revert to rev 1 (draft)
         Assert.NotNull(reverted);
         Assert.Equal("draft", reverted!["status"]);                                 // current state matches rev 1
 
-        var list = (await h.Service.ListRevisionsAsync("article", id, default))!;
+        var list = (await h.Service.ListRevisionsAsync("fxArticle", id, default))!;
         Assert.Equal(3, list.Count);                                                // append-only: 1,2 preserved + revert
         Assert.Equal("revert", list[0].Operation);
     }
@@ -271,10 +271,10 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
-        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(category: catB, tags: []), default); // rev2: catB, no tags
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(category: catB, tags: []), default); // rev2: catB, no tags
 
-        await h.Service.RevertAsync("article", id, 1, default);
-        var now = await h.Service.GetAsync("article", id, DeepFor("category", "tags"), null, default);
+        await h.Service.RevertAsync("fxArticle", id, 1, default);
+        var now = await h.Service.GetAsync("fxArticle", id, DeepFor("category", "tags"), null, default);
         Assert.Equal(catA.ToString(), CategoryIdOf(now!));                          // M2O FK restored
         Assert.Single(TagsOf(now!));                                                // M2M restored
         Assert.Equal(tag.ToString(), TagIdOf(now!, 0));
@@ -286,11 +286,11 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1
-        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2
 
-        await h.Service.RevertAsync("article", id, 1, default);                     // rev 3, reverting to 1
+        await h.Service.RevertAsync("fxArticle", id, 1, default);                     // rev 3, reverting to 1
 
-        var list = await h.Store.ListAsync("article", id, default);
+        var list = await h.Store.ListAsync("fxArticle", id, default);
         var newest = list[0];                                                       // newest-first
 
         Assert.Equal("revert", newest.Operation);
@@ -302,9 +302,9 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");
-        await h.Service.UpdateAsync("article", id, RevisionServiceHarness.Body(status: "published"), default);
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default);
 
-        var list = await h.Store.ListAsync("article", id, default);
+        var list = await h.Store.ListAsync("fxArticle", id, default);
         Assert.Null(list[0].SourceRevisionNumber);
     }
 
@@ -313,7 +313,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");
-        Assert.Null(await h.Service.RevertAsync("article", id, 99, default));       // -> 404
+        Assert.Null(await h.Service.RevertAsync("fxArticle", id, 99, default));       // -> 404
     }
 
     [Fact]
@@ -321,26 +321,26 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");
-        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        var rec = await h.Service.GetRevisionAsync("fxArticle", id, 1, default);
         Assert.NotNull(rec);
         Assert.Contains("\"status\"", rec!.Snapshot, StringComparison.Ordinal);
 
         using var noRead = RevisionServiceHarness.Create(canRead: false);
         await Assert.ThrowsAsync<PermissionDeniedException>(
-            () => noRead.Service.ListRevisionsAsync("article", id, default));
+            () => noRead.Service.ListRevisionsAsync("fxArticle", id, default));
     }
 
     /// <summary><c>GetRevisionAsync</c> is the externally-facing read (backs REST/GraphQL) — its
-    /// snapshot must have <c>internalNote</c> (a <c>[CmsField(Hidden = true)]</c> own-field on the sample
+    /// snapshot must have <c>internalNote</c> (a <c>[CmsField(Hidden = true)]</c> own-field on the fixture
     /// Article) redacted, even though <see cref="RevisionSnapshotBuilder"/> captured it in full.</summary>
     [Fact]
     public async Task GetRevision_redacts_hidden_own_field()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token"));
+        var created = await h.Service.CreateAsync("fxArticle", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token"));
         var id = created["id"]!.ToString()!;
 
-        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        var rec = await h.Service.GetRevisionAsync("fxArticle", id, 1, default);
         Assert.NotNull(rec);
         Assert.DoesNotContain("secret-token", rec!.Snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("internalNote", rec.Snapshot, StringComparison.Ordinal);
@@ -353,10 +353,10 @@ public sealed class RevisionServiceTests
     public async Task GetRevision_redacts_hidden_translatable_field_in_every_locale()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalSlug());
+        var created = await h.Service.CreateAsync("fxArticle", RevisionServiceHarness.ArticleBodyWithInternalSlug());
         var id = created["id"]!.ToString()!;
 
-        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        var rec = await h.Service.GetRevisionAsync("fxArticle", id, 1, default);
         Assert.NotNull(rec);
         using var doc = JsonDocument.Parse(rec!.Snapshot);
         var translations = doc.RootElement.GetProperty("translations");
@@ -376,14 +376,14 @@ public sealed class RevisionServiceTests
     public async Task Revert_restores_hidden_field_value_despite_external_redaction()
     {
         using var h = RevisionServiceHarness.Create();
-        var created = await h.Service.CreateAsync("article", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
+        var created = await h.Service.CreateAsync("fxArticle", RevisionServiceHarness.ArticleBodyWithInternalNote("draft", "secret-token")); // rev 1
         var id = created["id"]!.ToString()!;
         // rev 2: overwrite the hidden field so rev 1's value survives ONLY via the revert body itself.
-        await h.Service.UpdateAsync("article", id,
+        await h.Service.UpdateAsync("fxArticle", id,
             RevisionServiceHarness.ArticleBodyWithInternalNote("published", "changed-token"), default);
 
         // Confirm the externally-visible view (GetRevisionAsync) is redacted, as above.
-        var rec = await h.Service.GetRevisionAsync("article", id, 1, default);
+        var rec = await h.Service.GetRevisionAsync("fxArticle", id, 1, default);
         Assert.DoesNotContain("secret-token", rec!.Snapshot, StringComparison.Ordinal);
 
         // Now revert to rev 1 and prove the hidden field's ORIGINAL value came back on the live row.
@@ -391,9 +391,9 @@ public sealed class RevisionServiceTests
         // Hidden fields on every read). Because rev 2 set InternalNote to "changed-token", this assert
         // can only pass if RevertAsync applied the unredacted snapshot from the revision store — a
         // redacted snapshot has no internalNote key, so partial-merge would keep "changed-token".
-        var reverted = await h.Service.RevertAsync("article", id, 1, default);
+        var reverted = await h.Service.RevertAsync("fxArticle", id, 1, default);
         Assert.NotNull(reverted);
-        var rawEntity = (Struo.Sample.Blog.Article)(await h.Repository.GetByIdAsync("article", id, DeletedFilter.Exclude, default))!;
+        var rawEntity = (Struo.Tests.Fixtures.FxArticle)(await h.Repository.GetByIdAsync("fxArticle", id, DeletedFilter.Exclude, default))!;
         Assert.Equal("secret-token", rawEntity.InternalNote);
     }
 

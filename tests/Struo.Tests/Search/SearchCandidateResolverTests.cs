@@ -5,7 +5,7 @@ using Struo.Application.Search;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Metadata;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -13,9 +13,9 @@ namespace Struo.Tests.Search;
 
 public class SearchCandidateResolverTests
 {
-    // category: Guid PK (sample); language: long identity PK (framework) — the two PK shapes the template ships.
+    // category: Guid PK (fixture); language: long identity PK (framework) — the two PK shapes the template ships.
     private static readonly EntityRegistry Registry =
-        new(MetadataScanner.ScanDescriptors([typeof(Category), typeof(Language)]));
+        new(MetadataScanner.ScanDescriptors([typeof(FxCategory), typeof(Language)]));
 
     private static QueryModel Query(string? search) => new(null, null, [], 25, 0, search);
 
@@ -30,7 +30,7 @@ public class SearchCandidateResolverTests
     {
         var provider = new ScriptedSearchProvider(_ => throw new InvalidOperationException("must not be called"));
         var q = Query(search);
-        var result = await Resolver(provider).ResolveAsync("category", q, ["name"], "en", default);
+        var result = await Resolver(provider).ResolveAsync("fxCategory", q, ["name"], "en", default);
         result.Should().BeSameAs(q);
         provider.Requests.Should().BeEmpty();
     }
@@ -39,9 +39,9 @@ public class SearchCandidateResolverTests
     public async Task Provider_receives_collection_verbatim_term_locale_and_searchable_hint()
     {
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.NotHandled);
-        await Resolver(provider).ResolveAsync("category", Query("  Hello "), ["name"], "zh-TW", default);
+        await Resolver(provider).ResolveAsync("fxCategory", Query("  Hello "), ["name"], "zh-TW", default);
         provider.Requests.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new SearchRequest("category", "  Hello ", "zh-TW", ["name"]),
+            .Which.Should().BeEquivalentTo(new SearchRequest("fxCategory", "  Hello ", "zh-TW", ["name"]),
                 o => o.WithStrictOrdering());
     }
 
@@ -49,7 +49,7 @@ public class SearchCandidateResolverTests
     public async Task Provider_is_asked_even_when_the_collection_has_no_searchable_fields()
     {
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.NotHandled);
-        await Resolver(provider).ResolveAsync("category", Query("x"), [], "en", default);
+        await Resolver(provider).ResolveAsync("fxCategory", Query("x"), [], "en", default);
         provider.Requests.Should().ContainSingle().Which.SearchableFields.Should().BeEmpty();
     }
 
@@ -58,7 +58,7 @@ public class SearchCandidateResolverTests
     {
         var q = Query("x");
         var result = await Resolver(new ScriptedSearchProvider(_ => SearchOutcome.NotHandled))
-            .ResolveAsync("category", q, ["name"], "en", default);
+            .ResolveAsync("fxCategory", q, ["name"], "en", default);
         result.Should().BeSameAs(q);
         result.SearchCandidates.Should().BeNull();
     }
@@ -68,7 +68,7 @@ public class SearchCandidateResolverTests
     {
         var a = Guid.NewGuid(); var b = Guid.NewGuid();
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.Candidates([a.ToString(), b.ToString(), a.ToString()]));
-        var result = await Resolver(provider).ResolveAsync("category", Query("x"), ["name"], "en", default);
+        var result = await Resolver(provider).ResolveAsync("fxCategory", Query("x"), ["name"], "en", default);
         result.SearchCandidates.Should().Equal(a, b);
         result.SearchCandidates![0].Should().BeOfType<Guid>();
         result.Search.Should().Be("x", "the term stays on the model for logging/diagnostics; the translator ignores it once candidates are set");
@@ -78,7 +78,7 @@ public class SearchCandidateResolverTests
     public async Task Empty_candidates_are_kept_as_an_empty_set_not_null()
     {
         var result = await Resolver(new ScriptedSearchProvider(_ => SearchOutcome.Candidates([])))
-            .ResolveAsync("category", Query("x"), ["name"], "en", default);
+            .ResolveAsync("fxCategory", Query("x"), ["name"], "en", default);
         result.SearchCandidates.Should().NotBeNull().And.BeEmpty();
     }
 
@@ -136,18 +136,18 @@ public class SearchCandidateResolverTests
     {
         var ids = Enumerable.Range(0, 3).Select(_ => Guid.NewGuid().ToString()).ToList();
         var act = () => Resolver(new ScriptedSearchProvider(_ => SearchOutcome.Candidates(ids)), max: 2)
-            .ResolveAsync("category", Query("x"), ["name"], "en", default);
+            .ResolveAsync("fxCategory", Query("x"), ["name"], "en", default);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*3 candidate ids*'category'*Query:MaxSearchCandidates (2)*");
+            .WithMessage("*3 candidate ids*'fxCategory'*Query:MaxSearchCandidates (2)*");
     }
 
     [Fact]
     public async Task An_unparsable_id_is_a_provider_contract_violation_not_a_400()
     {
         var act = () => Resolver(new ScriptedSearchProvider(_ => SearchOutcome.Candidates(["not-a-guid"])))
-            .ResolveAsync("category", Query("x"), ["name"], "en", default);
+            .ResolveAsync("fxCategory", Query("x"), ["name"], "en", default);
         var ex = await act.Should().ThrowAsync<InvalidOperationException>();
-        ex.WithMessage("*'not-a-guid'*Guid*'category'*");
+        ex.WithMessage("*'not-a-guid'*Guid*'fxCategory'*");
         ex.Which.Should().NotBeAssignableTo<QueryException>();
     }
 

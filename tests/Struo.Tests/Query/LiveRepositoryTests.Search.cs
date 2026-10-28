@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Struo.Domain.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -15,8 +15,8 @@ public sealed partial class LiveRepositoryTests
         var a = Guid.NewGuid(); var b = Guid.NewGuid(); var c = Guid.NewGuid();
         _db!.Insertable(new[]
         {
-            new Category { Id = a, Name = "u5-a" }, new Category { Id = b, Name = "u5-b" },
-            new Category { Id = c, Name = "u5-c" }, new Category { Id = Guid.NewGuid(), Name = "u5-d" },
+            new FxCategory { Id = a, Name = "u5-a" }, new FxCategory { Id = b, Name = "u5-b" },
+            new FxCategory { Id = c, Name = "u5-c" }, new FxCategory { Id = Guid.NewGuid(), Name = "u5-d" },
         }).ExecuteCommand();
         return (a, b, c);
     }
@@ -30,9 +30,9 @@ public sealed partial class LiveRepositoryTests
         if (!Use(backend)) return;
         var repo = BuildRepo();
         var (a, b, _) = SeedThreeCategories();
-        var r = await repo.QueryAsync("category", WithCandidates([a, b]), ["name"], null);
+        var r = await repo.QueryAsync("fxCategory", WithCandidates([a, b]), ["name"], null);
         r.Total.Should().Be(2);
-        r.Rows.Cast<Category>().Select(x => x.Id).Should().BeEquivalentTo([a, b]);
+        r.Rows.Cast<FxCategory>().Select(x => x.Id).Should().BeEquivalentTo([a, b]);
     }
 
     [Theory, MemberData(nameof(Backends))]
@@ -45,7 +45,7 @@ public sealed partial class LiveRepositoryTests
         // an empty candidate list like "no candidates" (falling back to the LIKE search on this term),
         // this would come back with 4 rows instead of 0 — proving the assertion below actually
         // exercises the empty-candidates `id IS NULL` branch, not an accidentally-unmatched search term.
-        var r = await repo.QueryAsync("category", WithCandidates([], search: "u5-"), ["name"], null);
+        var r = await repo.QueryAsync("fxCategory", WithCandidates([], search: "u5-"), ["name"], null);
         r.Total.Should().Be(0);
         r.Rows.Should().BeEmpty();
     }
@@ -57,8 +57,8 @@ public sealed partial class LiveRepositoryTests
         var repo = BuildRepo();
         var (a, b, c) = SeedThreeCategories();
         var ids = Enumerable.Range(0, 997).Select(_ => (object)Guid.NewGuid()).Append(a).Append(b).Append(c).ToList();
-        var r = await repo.QueryAsync("category", WithCandidates(ids), ["name"], null);
+        var r = await repo.QueryAsync("fxCategory", WithCandidates(ids), ["name"], null);
         r.Total.Should().Be(3);
-        r.Rows.Cast<Category>().Select(x => x.Id).Should().BeEquivalentTo([a, b, c]);
+        r.Rows.Cast<FxCategory>().Select(x => x.Id).Should().BeEquivalentTo([a, b, c]);
     }
 }

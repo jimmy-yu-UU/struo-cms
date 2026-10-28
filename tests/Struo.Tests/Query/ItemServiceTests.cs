@@ -9,7 +9,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -25,27 +25,27 @@ public sealed class ItemServiceTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var collections = MetadataScanner.ScanTypes(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            [typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
              typeof(Struo.Infrastructure.Files.MediaFolder)]);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(
-            [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            [typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
              typeof(Struo.Infrastructure.Files.MediaFolder)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]  = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"]      = typeof(Tag),
+            ["fxArticle"]  = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"]      = typeof(FxTag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -76,7 +76,7 @@ public sealed class ItemServiceTests : IDisposable
     {
         using var body = System.Text.Json.JsonDocument.Parse(
             """{"status":"draft","translations":{"en":{"title":"Hello"}}}""");
-        var dict = await _svc.CreateAsync("article", body.RootElement);
+        var dict = await _svc.CreateAsync("fxArticle", body.RootElement);
 
         dict.Should().ContainKey("id");
         dict["status"].Should().Be("draft");
@@ -89,21 +89,21 @@ public sealed class ItemServiceTests : IDisposable
     public async Task Update_persists_m2o_foreign_key()
     {
         using var catABody = System.Text.Json.JsonDocument.Parse("""{"name":"Category A"}""");
-        var catA = await _svc.CreateAsync("category", catABody.RootElement);
+        var catA = await _svc.CreateAsync("fxCategory", catABody.RootElement);
         var catAId = (Guid)catA["id"]!;
 
         using var catBBody = System.Text.Json.JsonDocument.Parse("""{"name":"Category B"}""");
-        var catB = await _svc.CreateAsync("category", catBBody.RootElement);
+        var catB = await _svc.CreateAsync("fxCategory", catBBody.RootElement);
         var catBId = (Guid)catB["id"]!;
 
         using var createBody = System.Text.Json.JsonDocument.Parse(
             "{\"status\":\"draft\",\"categoryId\":\"" + catAId + "\",\"translations\":{\"en\":{\"title\":\"Hello\"}}}");
-        var created = await _svc.CreateAsync("article", createBody.RootElement);
+        var created = await _svc.CreateAsync("fxArticle", createBody.RootElement);
         var articleId = created["id"]!.ToString()!;
 
         using var updateBody = System.Text.Json.JsonDocument.Parse(
             "{\"categoryId\":\"" + catBId + "\"}");
-        var updated = await _svc.UpdateAsync("article", articleId, updateBody.RootElement);
+        var updated = await _svc.UpdateAsync("fxArticle", articleId, updateBody.RootElement);
         updated.Should().NotBeNull();
 
         var deep = new Struo.Domain.Query.DeepSpec(
@@ -111,7 +111,7 @@ public sealed class ItemServiceTests : IDisposable
             {
                 ["category"] = new Struo.Domain.Query.DeepRelationSpec(null, null)
             });
-        var reloaded = await _svc.GetAsync("article", articleId, deep);
+        var reloaded = await _svc.GetAsync("fxArticle", articleId, deep);
         reloaded.Should().NotBeNull();
         reloaded!.Should().ContainKey("category");
         var category = (IReadOnlyDictionary<string, object?>)reloaded["category"]!;
@@ -122,25 +122,25 @@ public sealed class ItemServiceTests : IDisposable
     public async Task Query_filters_by_m2o_relation_foreign_key()
     {
         using var catABody = System.Text.Json.JsonDocument.Parse("""{"name":"Category A"}""");
-        var catA = await _svc.CreateAsync("category", catABody.RootElement);
+        var catA = await _svc.CreateAsync("fxCategory", catABody.RootElement);
         var catAId = (Guid)catA["id"]!;
 
         using var catBBody = System.Text.Json.JsonDocument.Parse("""{"name":"Category B"}""");
-        var catB = await _svc.CreateAsync("category", catBBody.RootElement);
+        var catB = await _svc.CreateAsync("fxCategory", catBBody.RootElement);
         var catBId = (Guid)catB["id"]!;
 
         using var articleABody = System.Text.Json.JsonDocument.Parse(
             "{\"status\":\"draft\",\"categoryId\":\"" + catAId + "\",\"translations\":{\"en\":{\"title\":\"A\"}}}");
-        await _svc.CreateAsync("article", articleABody.RootElement);
+        await _svc.CreateAsync("fxArticle", articleABody.RootElement);
 
         using var articleBBody = System.Text.Json.JsonDocument.Parse(
             "{\"status\":\"draft\",\"categoryId\":\"" + catBId + "\",\"translations\":{\"en\":{\"title\":\"B\"}}}");
-        await _svc.CreateAsync("article", articleBBody.RootElement);
+        await _svc.CreateAsync("fxArticle", articleBBody.RootElement);
 
         var filter = new Struo.Domain.Query.ComparisonFilter(
             "categoryId", Struo.Domain.Query.QueryOperator.Eq, catAId.ToString());
         var query = new Struo.Domain.Query.QueryModel(null, filter, [], 0, 0, null);
-        var result = await _svc.QueryAsync("article", query);
+        var result = await _svc.QueryAsync("fxArticle", query);
 
         result.Data.Should().HaveCount(1);
         result.Data[0].Should().NotContainKey("categoryId"); // FK is not projected (meta.Fields unchanged)
@@ -149,7 +149,7 @@ public sealed class ItemServiceTests : IDisposable
             {
                 ["category"] = new Struo.Domain.Query.DeepRelationSpec(null, null)
             });
-        var reloaded = await _svc.GetAsync("article", result.Data[0]["id"]!.ToString()!, deep);
+        var reloaded = await _svc.GetAsync("fxArticle", result.Data[0]["id"]!.ToString()!, deep);
         var category = (IReadOnlyDictionary<string, object?>)reloaded!["category"]!;
         category["id"].Should().Be(catAId);
     }

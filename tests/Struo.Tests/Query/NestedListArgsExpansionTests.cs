@@ -23,16 +23,16 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task QueryWhereInFiltered_narrows_by_extra_filter()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "RepoFilterCat" });
-        await Post(c, "article", new { status = "published", categoryId = cat, translations = new { en = new { title = "Pub" } } });
-        await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "Drf" } } });
+        var cat = await Post(c, "fxCategory", new { name = "RepoFilterCat" });
+        await Post(c, "fxArticle", new { status = "published", categoryId = cat, translations = new { en = new { title = "Pub" } } });
+        await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = "Drf" } } });
 
         using var scope = _factory.Services.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IItemRepository>();
 
         var filter = new ComparisonFilter("status", QueryOperator.Eq, "published");
         var rows = await repo.QueryWhereInFilteredAsync(
-            "article", "categoryId", new object[] { System.Guid.Parse(cat) }, filter, null);
+            "fxArticle", "categoryId", new object[] { System.Guid.Parse(cat) }, filter, null);
 
         rows.Should().HaveCount(1);
     }
@@ -43,15 +43,15 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         // A `_some` RelationPredicateFilter (not a dotted path) passed directly as the extraFilter —
         // spec §7's acceptance case for a `_some` predicate reaching the nested-list path.
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "SomePredicateCat" });
-        var wanted = await Post(c, "tag", new { name = "Wanted-Predicate" });
-        var other = await Post(c, "tag", new { name = "Other-Predicate" });
-        var articleWithWanted = await Post(c, "article", new
+        var cat = await Post(c, "fxCategory", new { name = "SomePredicateCat" });
+        var wanted = await Post(c, "fxTag", new { name = "Wanted-Predicate" });
+        var other = await Post(c, "fxTag", new { name = "Other-Predicate" });
+        var articleWithWanted = await Post(c, "fxArticle", new
         {
             status = "draft", categoryId = cat, tags = new[] { wanted },
             translations = new { en = new { title = "HasWanted" } }
         });
-        await Post(c, "article", new
+        await Post(c, "fxArticle", new
         {
             status = "draft", categoryId = cat, tags = new[] { other },
             translations = new { en = new { title = "HasOther" } }
@@ -63,26 +63,26 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var predicate = new RelationPredicateFilter(
             "tags", RelationQuantifier.Some, new ComparisonFilter("name", QueryOperator.Eq, "Wanted-Predicate"));
         var rows = await repo.QueryWhereInFilteredAsync(
-            "article", "categoryId", new object[] { System.Guid.Parse(cat) }, predicate, queryLocale: null);
+            "fxArticle", "categoryId", new object[] { System.Guid.Parse(cat) }, predicate, queryLocale: null);
 
         rows.Should().HaveCount(1);
-        rows.Cast<Struo.Sample.Blog.Article>().Single().Id.Should().Be(System.Guid.Parse(articleWithWanted));
+        rows.Cast<Struo.Tests.Fixtures.FxArticle>().Single().Id.Should().Be(System.Guid.Parse(articleWithWanted));
     }
 
     [Fact]
     public async Task Nested_o2m_filter_narrows_list()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "O2MFilterCat" });
-        await Post(c, "article", new { status = "published", categoryId = cat, translations = new { en = new { title = "Pub1" } } });
-        await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = "Drf1" } } });
+        var cat = await Post(c, "fxCategory", new { name = "O2MFilterCat" });
+        await Post(c, "fxArticle", new { status = "published", categoryId = cat, translations = new { en = new { title = "Pub1" } } });
+        await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = "Drf1" } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { filter = new { status = new Dictionary<string, object> { ["_eq"] = "published" } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         row.GetProperty("articles").GetArrayLength().Should().Be(1); // draft filtered out
     }
@@ -91,9 +91,9 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Nested_m2m_filter_narrows_list()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var tagAi = await Post(c, "tag", new { name = "AI" });
-        var tagUx = await Post(c, "tag", new { name = "UX" });
-        var art = await Post(c, "article", new
+        var tagAi = await Post(c, "fxTag", new { name = "AI" });
+        var tagUx = await Post(c, "fxTag", new { name = "UX" });
+        var art = await Post(c, "fxArticle", new
         {
             status = "draft", tags = new[] { tagAi, tagUx },
             translations = new { en = new { title = "M2MFilterArt" } }
@@ -104,7 +104,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = art } },
             deep = new { tags = new { filter = new { name = new Dictionary<string, object> { ["_eq"] = "AI" } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var tags = row.GetProperty("tags");
         tags.GetArrayLength().Should().Be(1);
@@ -117,16 +117,16 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Nested_o2m_sort_and_limit_apply_per_parent()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "SortCat" });
+        var cat = await Post(c, "fxCategory", new { name = "SortCat" });
         foreach (var s in new[] { "c", "a", "b" })
-            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "S-" + s } } });
+            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "S-" + s } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { sort = SortByStatus, limit = 2 } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var statuses = row.GetProperty("articles").EnumerateArray()
             .Select(a => a.GetProperty("status").GetString()).ToList();
@@ -137,16 +137,16 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Nested_o2m_offset_skips_per_parent()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "OffsetCat" });
+        var cat = await Post(c, "fxCategory", new { name = "OffsetCat" });
         foreach (var s in new[] { "a", "b", "c" })
-            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "O-" + s } } });
+            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "O-" + s } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { sort = SortByStatus, offset = 1, limit = 1 } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var statuses = row.GetProperty("articles").EnumerateArray()
             .Select(a => a.GetProperty("status").GetString()).ToList();
@@ -159,11 +159,11 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Nested_limit_is_independent_per_parent()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat1 = await Post(c, "category", new { name = "PP-1" });
-        var cat2 = await Post(c, "category", new { name = "PP-2" });
+        var cat1 = await Post(c, "fxCategory", new { name = "PP-1" });
+        var cat2 = await Post(c, "fxCategory", new { name = "PP-2" });
         for (var i = 0; i < 3; i++)
-            await Post(c, "article", new { status = "s" + i, categoryId = cat1, translations = new { en = new { title = $"PP1-{i}" } } });
-        await Post(c, "article", new { status = "s0", categoryId = cat2, translations = new { en = new { title = "PP2-0" } } });
+            await Post(c, "fxArticle", new { status = "s" + i, categoryId = cat1, translations = new { en = new { title = $"PP1-{i}" } } });
+        await Post(c, "fxArticle", new { status = "s0", categoryId = cat2, translations = new { en = new { title = "PP2-0" } } });
 
         // Query BOTH parents in one page; each must be trimmed independently to limit 2.
         var envelope = JsonSerializer.SerializeToElement(new
@@ -172,7 +172,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
             sort = SortByName,
             deep = new { articles = new { sort = SortByStatus, limit = 2 } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data[0].GetProperty("articles").GetArrayLength().Should().Be(2); // PP-1: 3 -> capped at 2
         data[1].GetProperty("articles").GetArrayLength().Should().Be(1); // PP-2: 1 -> unchanged
@@ -182,12 +182,12 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Nested_cross_relation_filter_on_o2m_list_resolves()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "CrossRelCat-8c3b" });
-        var wantedTag = await Post(c, "tag", new { name = "Wanted-8c3b" });
-        var otherTag = await Post(c, "tag", new { name = "Other-8c3b" });
+        var cat = await Post(c, "fxCategory", new { name = "CrossRelCat-8c3b" });
+        var wantedTag = await Post(c, "fxTag", new { name = "Wanted-8c3b" });
+        var otherTag = await Post(c, "fxTag", new { name = "Other-8c3b" });
         // Two articles in the SAME category; article A carries the wanted tag, article B the other.
-        var articleA = await Post(c, "article", new { status = "draft", categoryId = cat, tags = new[] { wantedTag }, translations = new { en = new { title = "A-8c3b" } } });
-        await Post(c, "article", new { status = "draft", categoryId = cat, tags = new[] { otherTag }, translations = new { en = new { title = "B-8c3b" } } });
+        var articleA = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, tags = new[] { wantedTag }, translations = new { en = new { title = "A-8c3b" } } });
+        await Post(c, "fxArticle", new { status = "draft", categoryId = cat, tags = new[] { otherTag }, translations = new { en = new { title = "B-8c3b" } } });
 
         // Expand the category's O2M `articles`, filtered by a CROSS-RELATION dotted path on the
         // article's own M2M (article.tags.name) — flat dotted key, REST envelope syntax.
@@ -196,7 +196,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { filter = new Dictionary<string, object> { ["tags.name"] = new Dictionary<string, object> { ["_eq"] = "Wanted-8c3b" } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var articles = row.GetProperty("articles");
         articles.GetArrayLength().Should().Be(1); // only article A (tagged "Wanted-8c3b")
@@ -207,9 +207,9 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     public async Task Limit_trims_before_recursing_into_nested_deep()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "TrimCat" });
+        var cat = await Post(c, "fxCategory", new { name = "TrimCat" });
         foreach (var s in new[] { "a", "b", "c" })
-            await Post(c, "article", new { status = s, categoryId = cat, translations = new { en = new { title = "T-" + s } } });
+            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "T-" + s } } });
 
         // limit=1 on articles; each surviving article expands its category (nested M2O).
         var envelope = JsonSerializer.SerializeToElement(new
@@ -217,7 +217,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { sort = SortByStatus, limit = 1, deep = new { category = new { } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var articles = row.GetProperty("articles");
         articles.GetArrayLength().Should().Be(1);

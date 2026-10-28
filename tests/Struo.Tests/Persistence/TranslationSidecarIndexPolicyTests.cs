@@ -5,7 +5,7 @@ using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 using File = Struo.Infrastructure.Files.File;
@@ -212,27 +212,27 @@ public sealed class TranslationSidecarIndexPolicyTests
     }
 
     [Fact]
-    public void Sample_ArticleTranslation_gets_its_unique_from_metadata_not_from_attributes()
+    public void Fixture_ArticleTranslation_gets_its_unique_from_metadata_not_from_attributes()
     {
-        typeof(ArticleTranslation).GetProperty(nameof(ArticleTranslation.ArticleId))!
+        typeof(FxArticleTranslation).GetProperty(nameof(FxArticleTranslation.FxArticleId))!
             .GetCustomAttributes(typeof(SugarColumn), inherit: false)
             .Cast<SugarColumn>().Select(a => a.UniqueGroupNameList)
-            .Should().AllSatisfy(g => g.Should().BeNullOrEmpty(), "the sample must not hand-write what core derives");
-        typeof(ArticleTranslation).GetCustomAttributes(typeof(SugarIndexAttribute), inherit: false)
+            .Should().AllSatisfy(g => g.Should().BeNullOrEmpty(), "the fixture must not hand-write what core derives");
+        typeof(FxArticleTranslation).GetCustomAttributes(typeof(SugarIndexAttribute), inherit: false)
             .Should().BeEmpty("the (fk, locale) unique index already serves the lookup; the plain btree was redundant");
 
         using var db = TestBackend.CreateUnitDatabase();
         var policy = TranslationSidecarIndexPolicy.FromMetadata(
-            MetadataScanner.ScanTypes([typeof(Article), typeof(Category), typeof(Tag)]));
+            MetadataScanner.ScanTypes([typeof(FxArticle), typeof(FxCategory), typeof(FxTag)]));
         var client = NewClient(db, policy);
-        client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(ArticleTranslation));
+        client.CodeFirst.InitTables(typeof(Struo.Infrastructure.Revisions.Revision), typeof(FxArticleTranslation));
 
         HasUniqueIndexOn(
             client,
             db.DbType,
-            client.EntityMaintenance.GetTableName<ArticleTranslation>(),
-            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.ArticleId)),
-            client.EntityMaintenance.GetDbColumnName<ArticleTranslation>(nameof(ArticleTranslation.Locale)))
+            client.EntityMaintenance.GetTableName<FxArticleTranslation>(),
+            client.EntityMaintenance.GetDbColumnName<FxArticleTranslation>(nameof(FxArticleTranslation.FxArticleId)),
+            client.EntityMaintenance.GetDbColumnName<FxArticleTranslation>(nameof(FxArticleTranslation.Locale)))
             .Should().BeTrue();
     }
 }

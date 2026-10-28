@@ -46,7 +46,7 @@ public class StaleQueryOptionKeyTests(ApiFactory factory)
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword });
         login.EnsureSuccessStatusCode();
 
-        var response = await client.GetAsync("/api/items/article");
+        var response = await client.GetAsync("/api/items/fxArticle");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "the host must start and answer requests even with a stale, no-longer-bound " +

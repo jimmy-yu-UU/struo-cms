@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Metadata;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Metadata;
@@ -12,7 +12,7 @@ public sealed class EntityTypeCollectorTests
 {
     private static ServiceProvider BuildProvider() =>
         new ServiceCollection()
-            .AddStruoMetadata(typeof(Article).Assembly)
+            .AddStruoMetadata(typeof(FxArticle).Assembly)
             .BuildServiceProvider();
 
     private static EntityTypeCollector Collector(IServiceProvider sp, IM2MDescriptorSource? m2m = null) =>
@@ -30,7 +30,7 @@ public sealed class EntityTypeCollectorTests
 
         types.Should().Contain(new[]
         {
-            typeof(Article), typeof(ArticleTranslation), typeof(Category),
+            typeof(FxArticle), typeof(FxArticleTranslation), typeof(FxCategory),
             typeof(Struo.Infrastructure.Localization.Language),
             typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.FileTranslation),
@@ -67,8 +67,8 @@ public sealed class EntityTypeCollectorTests
     private sealed class FakeM2MSource : IM2MDescriptorSource
     {
         public IReadOnlyList<M2MDescriptor> M2MDescriptors(string collection) =>
-            collection == "article"
-                ? new[] { new M2MDescriptor("tags", "tag", typeof(FakeJunction), "articleId", "tagId", null) }
+            collection == "fxArticle"
+                ? new[] { new M2MDescriptor("tags", "fxTag", typeof(FakeJunction), "articleId", "tagId", null) }
                 : Array.Empty<M2MDescriptor>();
     }
 }

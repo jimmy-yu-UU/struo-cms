@@ -9,7 +9,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -30,9 +30,9 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         _db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        _db.CodeFirst.InitTables<Category>();
-        _db.CodeFirst.InitTables<Article>();
-        _db.CodeFirst.InitTables<ArticleTranslation>();
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.CodeFirst.InitTables<FxArticle>();
+        _db.CodeFirst.InitTables<FxArticleTranslation>();
     }
 
     public void Dispose()
@@ -41,19 +41,19 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    // A FilterTranslator wired over the sample Article/Category graph (Article.title lives on its
+    // A FilterTranslator wired over the FxArticle/FxCategory graph (Article.title lives on its
     // ArticleTranslation sidecar and is translatable; Article.status is a plain own field) — same
-    // wiring shape as SubqueryPushdownHarness/TranslatableSearchHarness, but over the real sample
-    // fixture so the assertions below can check for the actual "article_translations" table name.
-    private FilterTranslator BuildSampleTranslator()
+    // wiring shape as SubqueryPushdownHarness/TranslatableSearchHarness, but over the real
+    // fixtures so the assertions below can check for the actual "fx_article_translations" table name.
+    private FilterTranslator BuildFixtureTranslator()
     {
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         IMetadataProvider metadata = new CachedMetadataProvider(collections);
         IEntityRegistry registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         });
         return new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
     }
@@ -64,8 +64,8 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     // name (e.g. "@ConditName0") — the exact case SubQueryConditional's renaming exists to handle.
     private KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name)
     {
-        var sel = (Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
-        return _db.Queryable<Category>()
+        var sel = (Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id");
+        return _db.Queryable<FxCategory>()
             .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
             .Select(sel).ToSql();
     }
@@ -77,9 +77,9 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
         originalNames.Should().NotBeEmpty("Equal parameterizes its FieldValue, unlike In's literal inlining");
 
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, sub);
-        var wrapped = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToSql();
+        var wrapped = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { cond }).ToSql();
 
         wrapped.Key.Should().NotContain("SqlSugar.");
         wrapped.Value.Should().NotBeEmpty();
@@ -95,18 +95,18 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Wrapped_subquery_works_at_the_top_level_of_a_where_list()
     {
-        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
-        var news = new Category { Id = Guid.NewGuid(), Name = "News" };
+        var tech = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
+        var news = new FxCategory { Id = Guid.NewGuid(), Name = "News" };
         _db.Insertable(new[] { tech, news }).ExecuteCommand();
         _db.Insertable(new[]
         {
-            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
-            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
         }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("Tech"));
-        var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond });
+        var q = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { cond });
 
         q.ToSql().Key.Should().Contain($"{col} IN (SELECT");
         q.ToList().Should().ContainSingle().Which.CategoryId.Should().Be(tech.Id);
@@ -115,7 +115,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Wrapped_subquery_inside_an_or_group_keeps_its_parentheses()
     {
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var group = new ConditionalCollections
         {
             ConditionalList =
@@ -124,29 +124,29 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
                 new(WhereType.Or, SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("Tech"))),
             ]
         };
-        var sql = _db.Queryable<Article>().Where(new List<IConditionalModel> { group }).ToSql().Key;
+        var sql = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { group }).ToSql().Key;
         sql.Should().MatchRegex(@"\(\s*.*Status.*OR\s+.*IN \(SELECT.*\)\s*\)");
     }
 
     [Fact]
     public void NullOrNotIn_renders_the_null_guard()
     {
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.NullOrNotIn, col, CategoryIdsNamed("Tech"));
-        var sql = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToSql().Key;
+        var sql = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { cond }).ToSql().Key;
         sql.Should().Contain($"({col} IS NULL OR {col} NOT IN (SELECT");
     }
 
     [Fact]
     public void Literal_with_apostrophe_is_escaped_inside_the_subquery()
     {
-        var cat = new Category { Id = Guid.NewGuid(), Name = "O'Brien" };
+        var cat = new FxCategory { Id = Guid.NewGuid(), Name = "O'Brien" };
         _db.Insertable(cat).ExecuteCommand();
-        _db.Insertable(new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = cat.Id }).ExecuteCommand();
+        _db.Insertable(new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = cat.Id }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var cond = SubQueryConditional.Wrap(SubQueryKind.In, col, CategoryIdsNamed("O'Brien"));
-        var rows = _db.Queryable<Article>().Where(new List<IConditionalModel> { cond }).ToList();
+        var rows = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { cond }).ToList();
         rows.Should().ContainSingle();
     }
 
@@ -160,33 +160,33 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Outer_and_inner_parameters_with_the_same_generated_name_do_not_collide()
     {
-        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
-        var news = new Category { Id = Guid.NewGuid(), Name = "News" };
+        var tech = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
+        var news = new FxCategory { Id = Guid.NewGuid(), Name = "News" };
         _db.Insertable(new[] { tech, news }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
+        var idCol = _db.EntityMaintenance.GetDbColumnName<FxCategory>("Id");
 
         ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
 
         // Enforce the premise: the outer leaf, built standalone as the sole/first entry of a plain
         // top-level list, gets the SAME generated parameter name SqlSugar assigns to the inner
         // subquery's own (also sole/first, also plain-top-level-list) filter.
-        var outerStandalone = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech") }).ToSql();
+        var outerStandalone = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech") }).ToSql();
         var innerSubTech = CategoryIdsNamed("Tech");
         outerStandalone.Value.Select(p => p.ParameterName).Should().BeEquivalentTo(
             innerSubTech.Value.Select(p => p.ParameterName),
             "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
 
-        // Positive: Category.Name = 'Tech' AND Id IN (SELECT Id FROM categories WHERE Name = 'Tech') -> Tech only.
+        // Positive: Category.Name = 'Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'Tech') -> Tech only.
         var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
-        var rowsPositive = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condTech }).ToList();
+        var rowsPositive = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condTech }).ToList();
         rowsPositive.Should().ContainSingle().Which.Name.Should().Be("Tech");
 
         // Negative: same outer leaf, but the inner subquery now filters 'News' instead. If the outer
         // value ('Tech') had clobbered the inner one (the actual collision symptom), this would still
         // spuriously match Tech; it must instead return ZERO rows.
         var condNews = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("News"));
-        var rowsNegative = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condNews }).ToList();
+        var rowsNegative = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condNews }).ToList();
         rowsNegative.Should().BeEmpty();
     }
 
@@ -197,15 +197,15 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Wrapping_the_same_subquery_twice_does_not_corrupt_either_copy()
     {
-        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
+        var tech = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
         _db.Insertable(tech).ExecuteCommand();
         _db.Insertable(new[]
         {
-            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
-            new Article { Id = Guid.NewGuid(), Status = "published", CategoryId = tech.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "published", CategoryId = tech.Id },
         }).ExecuteCommand();
 
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
         var sub = CategoryIdsNamed("Tech");
         var originalNames = sub.Value.Select(p => p.ParameterName).ToList();
 
@@ -215,12 +215,12 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         // The shared input list must be untouched by either Wrap() call.
         sub.Value.Select(p => p.ParameterName).Should().Equal(originalNames);
 
-        var qDraft = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        var qDraft = _db.Queryable<FxArticle>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "draft" },
             condDraft,
         });
-        var qPublished = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        var qPublished = _db.Queryable<FxArticle>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "published" },
             condPublished,
@@ -245,24 +245,24 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     [Fact]
     public void Two_nesting_levels_compose_through_Wrap()
     {
-        var tech = new Category { Id = Guid.NewGuid(), Name = "Tech" };
-        var news = new Category { Id = Guid.NewGuid(), Name = "News" };
+        var tech = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
+        var news = new FxCategory { Id = Guid.NewGuid(), Name = "News" };
         _db.Insertable(new[] { tech, news }).ExecuteCommand();
         _db.Insertable(new[]
         {
-            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
-            new Article { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = tech.Id },
+            new FxArticle { Id = Guid.NewGuid(), Status = "draft", CategoryId = news.Id },
         }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
-        var categoryIdCol = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
+        var idCol = _db.EntityMaintenance.GetDbColumnName<FxCategory>("Id");
+        var categoryIdCol = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
 
-        // Level 2 (innermost): SELECT Id FROM categories WHERE Name = 'Tech'
+        // Level 2 (innermost): SELECT Id FROM fx_categories WHERE Name = 'Tech'
         var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("Tech"));
 
-        // Level 1 (middle): SELECT Id FROM categories WHERE Name = 'Tech' AND Id IN (level 2)
-        var sel = (Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
-        var level1 = _db.Queryable<Category>()
+        // Level 1 (middle): SELECT Id FROM fx_categories WHERE Name = 'Tech' AND Id IN (level 2)
+        var sel = (Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id");
+        var level1 = _db.Queryable<FxCategory>()
             .Where(new List<IConditionalModel>
             {
                 new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "Tech" },
@@ -272,7 +272,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
         var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, categoryIdCol, level1);
 
         // Outer: Article.Status = 'draft' AND Article.CategoryId IN (level 1)
-        var q = _db.Queryable<Article>().Where(new List<IConditionalModel>
+        var q = _db.Queryable<FxArticle>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "draft" },
             level1Wrapped,
@@ -400,22 +400,22 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
 
     // Task 6 (search union over one translatable + one plain searchable field): SearchGroup builds ONE
     // OR group carrying a plain LIKE (status) alongside a translation-sidecar subquery (title, via
-    // ArticleTranslation) — over the REAL sample Article/ArticleTranslation fixture, so this also pins
-    // down the actual "article_translations" table name appearing in the generated SQL. The
+    // ArticleTranslation) — over the REAL FxArticle/FxArticleTranslation fixture, so this also pins
+    // down the actual "fx_article_translations" table name appearing in the generated SQL. The
     // two-translatable-field OR-merge shape itself (SqlSugar's adjacency defect) is already covered by
     // Search_across_two_translatable_fields_merges_into_one_conditional above (TsItem, which has two
-    // translatable searchable fields; the sample Article/ArticleTranslation fixture has only one).
+    // translatable searchable fields; the FxArticle/FxArticleTranslation fixture has only one).
     [Fact]
     public void Search_over_translatable_and_plain_fields_is_one_or_group_with_a_sidecar_subquery()
     {
-        var translator = BuildSampleTranslator();
-        var conds = translator.Translate("article", null, "x", null, ["title", "status"], "en");
+        var translator = BuildFixtureTranslator();
+        var conds = translator.Translate("fxArticle", null, "x", null, ["title", "status"], "en");
 
         var group = conds.Should().ContainSingle().Which.Should().BeOfType<ConditionalCollections>().Subject;
         group.ConditionalList.Should().HaveCount(2, "one plain LIKE (status) plus one translation-sidecar subquery (title)");
         group.ConditionalList.Should().Contain(kv => kv.Value.CustomConditionalFunc != null);
 
-        var sql = _db.Queryable<Article>().Where(conds).ToSql().Key;
-        sql.Should().Contain("article_translations").And.Contain("OR");
+        var sql = _db.Queryable<FxArticle>().Where(conds).ToSql().Key;
+        sql.Should().Contain("fx_article_translations").And.Contain("OR");
     }
 }

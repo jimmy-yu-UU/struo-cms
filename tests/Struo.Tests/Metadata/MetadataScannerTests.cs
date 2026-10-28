@@ -5,7 +5,7 @@ using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Infrastructure.Metadata;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using SqlSugar;
 using Xunit;
 
@@ -14,23 +14,23 @@ namespace Struo.Tests.Metadata;
 public class MetadataScannerTests
 {
     private static CollectionMetadata ArticleMeta() =>
-        MetadataScanner.ScanTypes([typeof(Article), typeof(Category)])
-            .Single(c => c.Name == "article");
+        MetadataScanner.ScanTypes([typeof(FxArticle), typeof(FxCategory)])
+            .Single(c => c.Name == "fxArticle");
 
     // SafeGetTypes returns the loadable types of a normal assembly without throwing (the
     // ReflectionTypeLoadException path only triggers on an assembly with an unresolvable type).
     [Fact]
     public void SafeGetTypes_returns_loadable_types()
     {
-        var types = MetadataScanner.SafeGetTypes(typeof(Article).Assembly).ToList();
-        types.Should().Contain(typeof(Article));
+        var types = MetadataScanner.SafeGetTypes(typeof(FxArticle).Assembly).ToList();
+        types.Should().Contain(typeof(FxArticle));
     }
 
     [Fact]
     public void Scans_collection_identity_in_camelCase()
     {
         var article = ArticleMeta();
-        article.Name.Should().Be("article");
+        article.Name.Should().Be("fxArticle");
         article.Label.Should().Be("Article");
         article.Group.Should().Be("Content");
         // Title moved to the translation sidecar; display field is now Status.
@@ -77,8 +77,8 @@ public class MetadataScannerTests
     [Fact]
     public void Article_seo_fields_are_translatable_on_the_sidecar()
     {
-        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
-        var article = collections.Single(c => c.Name == "article");
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Tests.Fixtures.FxArticle)]);
+        var article = collections.Single(c => c.Name == "fxArticle");
 
         var seoTitle = article.Fields.SingleOrDefault(f => f.Name == "seoTitle");
         seoTitle.Should().NotBeNull();
@@ -93,8 +93,8 @@ public class MetadataScannerTests
     [Fact]
     public void Scans_multiple_collections()
     {
-        var all = MetadataScanner.ScanTypes([typeof(Article), typeof(Category)]);
-        all.Select(c => c.Name).Should().BeEquivalentTo(["article", "category"]);
+        var all = MetadataScanner.ScanTypes([typeof(FxArticle), typeof(FxCategory)]);
+        all.Select(c => c.Name).Should().BeEquivalentTo(["fxArticle", "fxCategory"]);
     }
 
     [Fact]
@@ -171,8 +171,8 @@ public class MetadataScannerTests
     [Fact]
     public void Article_exposes_multi_value_fields_with_correct_metadata()
     {
-        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
-        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Tests.Fixtures.FxArticle)]);
+        var article = collections.Single(c => string.Equals(c.Name, "fxArticle", StringComparison.OrdinalIgnoreCase));
 
         var regions = article.Fields.Single(f => f.Name == "regions");
         regions.Interface.Should().Be(FieldInterface.MultiSelect);
@@ -194,8 +194,8 @@ public class MetadataScannerTests
     [Fact]
     public void Article_exposes_structured_fields_with_correct_metadata()
     {
-        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
-        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Tests.Fixtures.FxArticle)]);
+        var article = collections.Single(c => string.Equals(c.Name, "fxArticle", StringComparison.OrdinalIgnoreCase));
 
         var attributes = article.Fields.Single(f => f.Name == "attributes");
         attributes.Interface.Should().Be(FieldInterface.Json);
@@ -212,8 +212,8 @@ public class MetadataScannerTests
     [Fact]
     public void Article_exposes_files_field_with_correct_metadata()
     {
-        var collections = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)]);
-        var article = collections.Single(c => string.Equals(c.Name, "article", StringComparison.OrdinalIgnoreCase));
+        var collections = MetadataScanner.ScanTypes([typeof(Struo.Tests.Fixtures.FxArticle)]);
+        var article = collections.Single(c => string.Equals(c.Name, "fxArticle", StringComparison.OrdinalIgnoreCase));
 
         var gallery = article.Fields.Single(f => f.Name == "gallery");
         gallery.Interface.Should().Be(FieldInterface.Files);
@@ -307,10 +307,10 @@ public class MetadataScannerTests
     }
 
     [Fact]
-    public void Article_sample_has_a_repeater_faqs_field()
+    public void Article_fixture_has_a_repeater_faqs_field()
     {
-        var meta = MetadataScanner.ScanTypes([typeof(Struo.Sample.Blog.Article)])
-            .Single(c => c.Name == "article");
+        var meta = MetadataScanner.ScanTypes([typeof(Struo.Tests.Fixtures.FxArticle)])
+            .Single(c => c.Name == "fxArticle");
         var faqs = meta.Fields.Single(f => f.Name == "faqs");
         faqs.Interface.Should().Be(FieldInterface.Repeater);
         faqs.Fields!.Select(f => f.Name).Should().Contain("question");
@@ -341,11 +341,11 @@ public class MetadataScannerTests
     }
 
     [Fact]
-    public void Sample_article_and_category_are_soft_deletable()
+    public void Fixture_article_and_category_are_soft_deletable()
     {
-        var metas = MetadataScanner.Scan(typeof(Struo.Sample.Blog.Article).Assembly);
-        Assert.True(metas.Single(m => m.Name == "article").SoftDelete);
-        Assert.True(metas.Single(m => m.Name == "category").SoftDelete);
+        var metas = MetadataScanner.Scan(typeof(Struo.Tests.Fixtures.FxArticle).Assembly);
+        Assert.True(metas.Single(m => m.Name == "fxArticle").SoftDelete);
+        Assert.True(metas.Single(m => m.Name == "fxCategory").SoftDelete);
     }
 
     [Fact]
@@ -376,19 +376,19 @@ public class MetadataScannerTests
     [Fact]
     public void Descriptor_exposes_Properties_keyed_by_clr_property_name()
     {
-        var d = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)])["article"];
+        var d = MetadataScanner.ScanDescriptors([typeof(FxArticle), typeof(FxCategory)])["fxArticle"];
 
         // Every public instance property of the entity is present, keyed by its exact CLR name,
         // and each entry is the real PropertyInfo declared on that type.
         d.Properties.Should().ContainKey("Status");
-        d.Properties["Status"].Should().BeSameAs(typeof(Article).GetProperty("Status"));
-        d.Properties["Id"].Should().BeSameAs(typeof(Article).GetProperty("Id"));
+        d.Properties["Status"].Should().BeSameAs(typeof(FxArticle).GetProperty("Status"));
+        d.Properties["Id"].Should().BeSameAs(typeof(FxArticle).GetProperty("Id"));
     }
 
     [Fact]
     public void Descriptor_Properties_lookup_is_case_insensitive()
     {
-        var d = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category)])["article"];
+        var d = MetadataScanner.ScanDescriptors([typeof(FxArticle), typeof(FxCategory)])["fxArticle"];
 
         // Case-insensitive keying: a camelCase or lower-cased spelling resolves to the same accessor
         // as the exact CLR name.
@@ -398,30 +398,30 @@ public class MetadataScannerTests
         d.Properties.GetValueOrDefault("noSuchProperty").Should().BeNull();
     }
 
-    // The sample's article<->tag junction (ArticleTag) is a hidden [CmsCollection] carrying a Note
+    // The fixture's article<->tag junction (ArticleTag) is a hidden [CmsCollection] carrying a Note
     // payload and a Sort column (see ArticleTag.cs) — this pins the two things that make it a real
     // demo of the junction-payload feature: the relation names its junction collection, and the M2M
     // descriptor's payload is exactly the one non-FK, non-sort field.
     [Fact]
-    public void Sample_article_tags_relation_names_the_hidden_junction_collection_with_note_payload()
+    public void Fixture_article_tags_relation_names_the_hidden_junction_collection_with_note_payload()
     {
         var article = ArticleMeta();
         var tags = article.Relations.Single(r => r.Name == "tags");
-        tags.JunctionCollection.Should().Be("articleTag");
+        tags.JunctionCollection.Should().Be("fxArticleTag");
 
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(ArticleTag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(FxArticleTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag),
-            ["articleTag"] = typeof(ArticleTag),
+            ["fxArticle"] = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag),
+            ["fxArticleTag"] = typeof(FxArticleTag),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
-        var desc = graph.M2MDescriptors("article").Single(d => d.RelationName == "tags");
+        var desc = graph.M2MDescriptors("fxArticle").Single(d => d.RelationName == "tags");
 
-        desc.JunctionCollection.Should().Be("articleTag");
+        desc.JunctionCollection.Should().Be("fxArticleTag");
         desc.HasPayload.Should().BeTrue();
         desc.JunctionPayload!.Select(p => p.Name).Should().BeEquivalentTo(["note"]);
         desc.SortProperty.Should().Be("Sort");

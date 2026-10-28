@@ -12,7 +12,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -36,22 +36,22 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         var db = _db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
-        Type[] types = [typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)];
+        Type[] types = [typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)];
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
             ["file"] = typeof(Struo.Infrastructure.Files.File), ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -83,7 +83,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     private string Create(string name)
     {
         using var body = JsonDocument.Parse($$"""{"name":"{{name}}"}""");
-        return (string)_svc.CreateAsync("category", body.RootElement).GetAwaiter().GetResult()["id"]!.ToString()!;
+        return (string)_svc.CreateAsync("fxCategory", body.RootElement).GetAwaiter().GetResult()["id"]!.ToString()!;
     }
 
     // Dispose the SqlSugarClient's own connection before releasing the database; on SQLite
@@ -102,27 +102,27 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     public async Task Blank_search_does_not_call_the_provider()
     {
         _script = _ => throw new InvalidOperationException("must not be called");
-        await _svc.QueryAsync("category", Q(null));
-        await _svc.QueryAsync("category", Q("   "));
+        await _svc.QueryAsync("fxCategory", Q(null));
+        await _svc.QueryAsync("fxCategory", Q("   "));
         _provider.Requests.Should().BeEmpty();
     }
 
     [Fact]
     public async Task Provider_receives_collection_term_effective_locale_and_searchable_fields()
     {
-        await _svc.QueryAsync("category", Q("Alp"));
+        await _svc.QueryAsync("fxCategory", Q("Alp"));
         _provider.Requests.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo(new SearchRequest("category", "Alp", await _languages.DefaultCodeAsync(), ["name"]),
+            .Which.Should().BeEquivalentTo(new SearchRequest("fxCategory", "Alp", await _languages.DefaultCodeAsync(), ["name"]),
                 o => o.WithStrictOrdering());
         _provider.Requests.Clear();
-        await _svc.QueryAsync("category", Q("Alp"), locale: "zh-TW");
+        await _svc.QueryAsync("fxCategory", Q("Alp"), locale: "zh-TW");
         _provider.Requests.Single().Locale.Should().Be("zh-TW");
     }
 
     [Fact]
     public async Task Not_handled_falls_back_to_the_built_in_like_search()
     {
-        var r = await _svc.QueryAsync("category", Q("Alp"));
+        var r = await _svc.QueryAsync("fxCategory", Q("Alp"));
         Names(r).Should().Equal("Alpha");
         r.Total.Should().Be(1);
         _sql.Should().Contain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
@@ -132,15 +132,15 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     [Fact]
     public async Task Provider_receives_the_canonical_collection_name_even_for_a_differently_cased_request()
     {
-        await _svc.QueryAsync("Category", Q("Alp"));
-        _provider.Requests.Single().Collection.Should().Be("category");
+        await _svc.QueryAsync("FxCategory", Q("Alp"));
+        _provider.Requests.Single().Collection.Should().Be("fxCategory");
     }
 
     [Fact]
     public async Task Candidates_restrict_rows_and_total_and_ignore_the_term()
     {
         _script = _ => SearchOutcome.Candidates([_beta, _gamma]);
-        var r = await _svc.QueryAsync("category", new QueryModel(null, null, [new SortField("name", Descending: true)], 25, 0, "Alpha"));
+        var r = await _svc.QueryAsync("fxCategory", new QueryModel(null, null, [new SortField("name", Descending: true)], 25, 0, "Alpha"));
         Names(r).Should().Equal("Gamma", "Beta");
         r.Total.Should().Be(2);
         _sql.Should().NotContain(s => s.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
@@ -150,8 +150,8 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     public async Task Candidates_are_anded_with_the_filter()
     {
         _script = _ => SearchOutcome.Candidates([_beta]);
-        (await _svc.QueryAsync("category", Q("x", new ComparisonFilter("name", QueryOperator.Eq, "Alpha")))).Total.Should().Be(0);
-        (await _svc.QueryAsync("category", Q("x", new ComparisonFilter("name", QueryOperator.Eq, "Beta")))).Total.Should().Be(1);
+        (await _svc.QueryAsync("fxCategory", Q("x", new ComparisonFilter("name", QueryOperator.Eq, "Alpha")))).Total.Should().Be(0);
+        (await _svc.QueryAsync("fxCategory", Q("x", new ComparisonFilter("name", QueryOperator.Eq, "Beta")))).Total.Should().Be(1);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     {
         _script = _ => SearchOutcome.Candidates([]);
         var q = Q("x") with { Facets = ["name"], Aggregate = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>> { [AggregateOp.Count] = ["name"] }) };
-        var r = await _svc.QueryAsync("category", q);
+        var r = await _svc.QueryAsync("fxCategory", q);
         r.Total.Should().Be(0);
         r.Data.Should().BeEmpty();
         r.Facets!.Single().Values.Should().BeEmpty();
@@ -172,7 +172,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     {
         _script = _ => SearchOutcome.Candidates([_alpha, _beta]);
         var q = Q("x") with { Facets = ["name"], Aggregate = new AggregateSpec(new Dictionary<AggregateOp, IReadOnlyList<string>> { [AggregateOp.Count] = ["name"] }) };
-        var r = await _svc.QueryAsync("category", q);
+        var r = await _svc.QueryAsync("fxCategory", q);
         r.Total.Should().Be(2);
         r.Facets!.Single().Values.Select(b => ((string?)b.Value, b.Count)).Should().BeEquivalentTo([("Alpha", 1L), ("Beta", 1L)]);
         r.Aggregate!.Values[AggregateOp.Count]["name"].Should().Be(2L);
@@ -182,18 +182,18 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     [Fact]
     public async Task Soft_deleted_candidates_follow_the_deleted_mode_not_the_provider()
     {
-        await _svc.DeleteAsync("category", _beta);
+        await _svc.DeleteAsync("fxCategory", _beta);
         _script = _ => SearchOutcome.Candidates([_alpha, _beta]);
-        (await _svc.QueryAsync("category", Q("x"))).Total.Should().Be(1);
-        (await _svc.QueryAsync("category", Q("x"), deleted: DeletedFilter.With)).Total.Should().Be(2);
-        (await _svc.QueryAsync("category", Q("x"), deleted: DeletedFilter.Only)).Total.Should().Be(1);
+        (await _svc.QueryAsync("fxCategory", Q("x"))).Total.Should().Be(1);
+        (await _svc.QueryAsync("fxCategory", Q("x"), deleted: DeletedFilter.With)).Total.Should().Be(2);
+        (await _svc.QueryAsync("fxCategory", Q("x"), deleted: DeletedFilter.Only)).Total.Should().Be(1);
     }
 
     [Fact]
     public async Task Get_never_calls_the_provider()
     {
         _script = _ => throw new InvalidOperationException("must not be called");
-        (await _svc.GetAsync("category", _alpha)).Should().NotBeNull();
+        (await _svc.GetAsync("fxCategory", _alpha)).Should().NotBeNull();
         _provider.Requests.Should().BeEmpty();
     }
 
@@ -215,12 +215,12 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         var q = Q("a") with { Facets = ["articles"] };
 
         _script = _ => SearchOutcome.NotHandled;
-        var unrestricted = await _svc.QueryAsync("category", q);
+        var unrestricted = await _svc.QueryAsync("fxCategory", q);
         unrestricted.Facets!.Single().Values.Select(b => (string?)b.Value)
             .Should().BeEquivalentTo([articleInAlpha, articleInBeta]);
 
         _script = _ => SearchOutcome.Candidates([_alpha]);
-        var restricted = await _svc.QueryAsync("category", q);
+        var restricted = await _svc.QueryAsync("fxCategory", q);
         restricted.Facets!.Single().Values.Select(b => (string?)b.Value)
             .Should().Equal(articleInAlpha);
     }
@@ -232,7 +232,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
         // an interpolation-close (CS9007) — same fix as ItemServiceChangeNotificationTests.
         using var body = JsonDocument.Parse(
             $$$$"""{"status":"draft","categoryId":"{{{{categoryId}}}}","translations":{"en":{"title":"t"}}}""");
-        var dict = await _svc.CreateAsync("article", body.RootElement);
+        var dict = await _svc.CreateAsync("fxArticle", body.RootElement);
         return dict["id"]!.ToString()!;
     }
 
@@ -241,9 +241,9 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     {
         _options.MaxSearchCandidates = 1;
         _script = _ => SearchOutcome.Candidates([_alpha, _beta]);
-        await FluentActions.Awaiting(() => _svc.QueryAsync("category", Q("x"))).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => _svc.QueryAsync("fxCategory", Q("x"))).Should().ThrowAsync<InvalidOperationException>();
         _options.MaxSearchCandidates = 1000;
         _script = _ => SearchOutcome.Candidates(["nope"]);
-        await FluentActions.Awaiting(() => _svc.QueryAsync("category", Q("x"))).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => _svc.QueryAsync("fxCategory", Q("x"))).Should().ThrowAsync<InvalidOperationException>();
     }
 }

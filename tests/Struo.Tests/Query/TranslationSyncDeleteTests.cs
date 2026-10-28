@@ -5,7 +5,7 @@ using Struo.Application.Configuration;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -29,13 +29,13 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     public TranslationSyncDeleteTests()
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        _db.CodeFirst.InitTables<ArticleTranslation>();
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        _db.CodeFirst.InitTables<FxArticleTranslation>();
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, new CachedMetadataProvider(collections), new StruoQueryOptions());
         _db.Aop.OnLogExecuting = (sql, _) => _sql.Add(sql);
@@ -48,20 +48,20 @@ public sealed class TranslationSyncDeleteTests : IDisposable
         var values = new Dictionary<string, object?> { ["title"] = title };
         if (body is not null) values["body"] = body;
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>> { [locale] = values };
-        string[] fields = [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)];
+        string[] fields = [nameof(FxArticleTranslation.Title), nameof(FxArticleTranslation.Body)];
         return isCreate
             ? _repo.InsertTranslationsAsync(
-                typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
+                typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
                 fields, articleId, perLocale)
             : _repo.SyncTranslationsAsync(
-                typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
+                typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
                 fields, articleId, perLocale);
     }
 
     private Task SyncManyAsync(Guid articleId, params (string Locale, string Title)[] locales) =>
         _repo.SyncTranslationsAsync(
-            typeof(ArticleTranslation), nameof(ArticleTranslation.ArticleId), nameof(ArticleTranslation.Locale),
-            [nameof(ArticleTranslation.Title), nameof(ArticleTranslation.Body)], articleId,
+            typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
+            [nameof(FxArticleTranslation.Title), nameof(FxArticleTranslation.Body)], articleId,
             locales.ToDictionary(
                 l => l.Locale,
                 l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title }));
@@ -69,8 +69,8 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     private bool Deleted() =>
         _sql.Exists(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
 
-    private Task<List<ArticleTranslation>> RowsAsync(Guid id) =>
-        _db.Queryable<ArticleTranslation>().Where(t => t.ArticleId == id).ToListAsync();
+    private Task<List<FxArticleTranslation>> RowsAsync(Guid id) =>
+        _db.Queryable<FxArticleTranslation>().Where(t => t.FxArticleId == id).ToListAsync();
 
     [Fact]
     public async Task Create_inserts_without_deleting_from_the_translation_table()
@@ -138,7 +138,7 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     public async Task A_stored_locale_that_differs_only_in_case_is_updated_not_duplicated()
     {
         var id = Guid.CreateVersion7();
-        await _db.Insertable(new ArticleTranslation { ArticleId = id, Locale = "EN", Title = "Stored" })
+        await _db.Insertable(new FxArticleTranslation { FxArticleId = id, Locale = "EN", Title = "Stored" })
             .ExecuteCommandAsync();
 
         await SyncAsync(id, "en", "Changed", null, isCreate: false);

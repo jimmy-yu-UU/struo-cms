@@ -22,10 +22,10 @@ public sealed class TableNamingTests
     }
 
     [Theory]
-    [InlineData(typeof(Struo.Sample.Blog.Article))]
-    [InlineData(typeof(Struo.Sample.Blog.ArticleTag))]
+    [InlineData(typeof(Struo.Tests.Fixtures.FxArticle))]
+    [InlineData(typeof(Struo.Tests.Fixtures.FxArticleTag))]
     [InlineData(typeof(string))]
-    public void Sample_and_unrelated_types_are_not_framework_tables(Type type)
+    public void Content_and_unrelated_types_are_not_framework_tables(Type type)
     {
         TableNaming.IsFrameworkTable(type).Should().BeFalse();
     }

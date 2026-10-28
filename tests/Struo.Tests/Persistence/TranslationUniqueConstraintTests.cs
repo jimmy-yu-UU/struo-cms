@@ -4,7 +4,7 @@ using Struo.Application.Configuration;
 using Struo.Infrastructure.Files;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -14,7 +14,7 @@ namespace Struo.Tests.Persistence;
 /// A translation sidecar must not hold two rows for the same (foreign key, locale) — that would
 /// make overlay reads non-deterministic. SqlSugarClientFactory's EntityService hook derives the
 /// composite UNIQUE on the FK + Locale columns from a <see cref="TranslationSidecarIndexPolicy"/>
-/// built from the sample's <c>[CmsTranslations]</c> metadata, which CodeFirst <c>InitTables</c>
+/// built from the fixture's <c>[CmsTranslations]</c> metadata, which CodeFirst <c>InitTables</c>
 /// materialises as a unique index (the same mechanism the revisions backstop uses). CodeFirst
 /// creates the matching physical index on any backend where these tables do not already exist.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class TranslationUniqueConstraintTests
 {
     private static readonly TranslationSidecarIndexPolicy Policy = TranslationSidecarIndexPolicy.FromMetadata(
         MetadataScanner.ScanTypes([
-            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(MediaFolder),
         ]));
 
@@ -41,14 +41,14 @@ public sealed class TranslationUniqueConstraintTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables<ArticleTranslation>();
+            client.CodeFirst.InitTables<FxArticleTranslation>();
             var articleId = Guid.NewGuid();
 
-            client.Insertable(new ArticleTranslation { ArticleId = articleId, Locale = "en", Title = "First" })
+            client.Insertable(new FxArticleTranslation { FxArticleId = articleId, Locale = "en", Title = "First" })
                 .ExecuteCommand();
 
             var act = () => client.Insertable(
-                new ArticleTranslation { ArticleId = articleId, Locale = "en", Title = "Dup" }).ExecuteCommand();
+                new FxArticleTranslation { FxArticleId = articleId, Locale = "en", Title = "Dup" }).ExecuteCommand();
 
             act.Should().Throw<Exception>();
         }
@@ -79,14 +79,14 @@ public sealed class TranslationUniqueConstraintTests
         var (db, client) = NewClient();
         using (db)
         {
-            client.CodeFirst.InitTables<ArticleTranslation>();
+            client.CodeFirst.InitTables<FxArticleTranslation>();
             var articleId = Guid.NewGuid();
 
-            client.Insertable(new ArticleTranslation { ArticleId = articleId, Locale = "en", Title = "EN" })
+            client.Insertable(new FxArticleTranslation { FxArticleId = articleId, Locale = "en", Title = "EN" })
                 .ExecuteCommand();
 
             var act = () => client.Insertable(
-                new ArticleTranslation { ArticleId = articleId, Locale = "fr", Title = "FR" }).ExecuteCommand();
+                new FxArticleTranslation { FxArticleId = articleId, Locale = "fr", Title = "FR" }).ExecuteCommand();
 
             act.Should().NotThrow();
         }

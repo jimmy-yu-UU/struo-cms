@@ -9,14 +9,14 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Revisions;
 
 /// <summary>
-/// Wires an <see cref="ItemService"/> + <see cref="RevisionSnapshotBuilder"/> over the sample Blog types
+/// Wires an <see cref="ItemService"/> + <see cref="RevisionSnapshotBuilder"/> over the fixture types
 /// (Article/Category/Tag/File), mirroring <c>ItemServiceTests</c>' harness construction, so a live item
 /// with an M2O relation, an M2M relation, a multi-value own-field, and i18n translations can be seeded
 /// through the normal write path and then snapshotted.
@@ -34,19 +34,19 @@ public sealed class SnapshotBuilderHarness : IDisposable
         var db = SqlSugarClientFactory.Create(
             _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.MediaFolder>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -54,9 +54,9 @@ public sealed class SnapshotBuilderHarness : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]  = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"]      = typeof(Tag),
+            ["fxArticle"]  = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"]      = typeof(FxTag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -98,13 +98,13 @@ public sealed class SnapshotBuilderHarness : IDisposable
     /// multi-value own-field and en/zh-TW translations, via <see cref="ItemService.CreateAsync"/>.</summary>
     public async Task<(Guid articleId, Guid categoryId, Guid tagId)> SeedArticleWithRelationsAndI18nAsync()
     {
-        var category = await Service.CreateAsync("category", Body(new { name = "Tech" }));
+        var category = await Service.CreateAsync("fxCategory", Body(new { name = "Tech" }));
         var categoryId = (Guid)category["id"]!;
 
-        var tag = await Service.CreateAsync("tag", Body(new { name = "AI" }));
+        var tag = await Service.CreateAsync("fxTag", Body(new { name = "AI" }));
         var tagId = (Guid)tag["id"]!;
 
-        var article = await Service.CreateAsync("article", Body(new
+        var article = await Service.CreateAsync("fxArticle", Body(new
         {
             status = "draft",
             categoryId,
@@ -129,9 +129,9 @@ public sealed class RevisionSnapshotBuilderTests
     {
         using var h = SnapshotBuilderHarness.Create();
         var (articleId, categoryId, tagId) = await h.SeedArticleWithRelationsAndI18nAsync();
-        var entity = await h.Repository.GetByIdAsync("article", articleId.ToString(), default);
+        var entity = await h.Repository.GetByIdAsync("fxArticle", articleId.ToString(), default);
 
-        var json = await h.Builder.BuildAsync("article", entity!, default);
+        var json = await h.Builder.BuildAsync("fxArticle", entity!, default);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 

@@ -6,7 +6,7 @@ using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Domain.Query;
 using Struo.Tests.Support;
 using Xunit;
@@ -21,14 +21,14 @@ public partial class ConditionalModelTranslatorTests
         var db = SqlSugarClientFactory.Create(
             file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
+        db.CodeFirst.InitTables<FxArticle>();
         // title moved to the translation sidecar; use own-collection fields (status/publishedAt).
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["status"] = "Status", ["publishedAt"] = "PublishedAt",
                 ["id"] = "Id", ["categoryId"] = "CategoryId"
             };
-        var d = new EntityDescriptor(typeof(Article), fieldToProp, "Id");
+        var d = new EntityDescriptor(typeof(FxArticle), fieldToProp, "Id");
         return (db, d, file);
     }
 
@@ -129,7 +129,7 @@ public partial class ConditionalModelTranslatorTests
         {
             var list = ConditionalModelTranslator.Translate(
                 new ComparisonFilter("status", QueryOperator.Eq, "published"), "hello", ["status"], d, db);
-            var sql = db.Queryable<Article>().Where(list).ToSql().Key;
+            var sql = db.Queryable<FxArticle>().Where(list).ToSql().Key;
 
             sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(\s*[\s\S]*?LIKE");
             sql.Should().NotMatchRegex(@"=\s*@\w+\s+OR\s*\(\s*[\s\S]*?LIKE");
@@ -182,7 +182,7 @@ public partial class ConditionalModelTranslatorTests
 
             // SqlSugar emits irregular internal whitespace (e.g. "  IS NOT  NULL"), so
             // collapse runs of whitespace to single spaces before asserting on phrasing.
-            var sql = Normalize(db.Queryable<Article>().Where(list).ToSqlString());
+            var sql = Normalize(db.Queryable<FxArticle>().Where(list).ToSqlString());
 
             sql.Should().ContainEquivalentOf("IS NULL");
             sql.Should().NotContain("= ''");
@@ -199,7 +199,7 @@ public partial class ConditionalModelTranslatorTests
             var list = ConditionalModelTranslator.Translate(
                 new ComparisonFilter("publishedAt", QueryOperator.NNull, null), null, [], d, db);
 
-            var sql = Normalize(db.Queryable<Article>().Where(list).ToSqlString());
+            var sql = Normalize(db.Queryable<FxArticle>().Where(list).ToSqlString());
 
             sql.Should().ContainEquivalentOf("IS NOT NULL");
             sql.Should().NotContain("= ''");

@@ -20,20 +20,20 @@ public class DeepExpansionTests(ApiFactory factory)
     public async Task Deep_unknown_relation_returns_400()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article",
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "Y" } } })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
-        (await c.GetAsync($"/api/items/article/{id}?deep=ghostrel")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await c.GetAsync($"/api/items/fxArticle/{id}?deep=ghostrel")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
     public async Task List_without_deep_has_no_relation_keys()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        await c.PostAsJsonAsync("/api/items/article",
+        await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "NoDeep" } } });
 
-        var data = Root(await (await c.GetAsync("/api/items/article?limit=50")).Content.ReadAsStringAsync()).GetProperty("data");
+        var data = Root(await (await c.GetAsync("/api/items/fxArticle?limit=50")).Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().BeGreaterThan(0);
         foreach (var row in data.EnumerateArray())
             row.TryGetProperty("category", out _).Should().BeFalse();  // no relation keys without ?deep
@@ -43,15 +43,15 @@ public class DeepExpansionTests(ApiFactory factory)
     public async Task Deep_expands_o2m_articles_for_category()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/category",
+        var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "News" })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
-        await c.PostAsJsonAsync("/api/items/article",
+        await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", categoryId, translations = new { en = new { title = "Child1" } } });
-        await c.PostAsJsonAsync("/api/items/article",
+        await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", categoryId, translations = new { en = new { title = "Child2" } } });
 
-        var resp = await c.GetAsync($"/api/items/category/{categoryId}?deep=articles");
+        var resp = await c.GetAsync($"/api/items/fxCategory/{categoryId}?deep=articles");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var articles = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("articles");
         articles.ValueKind.Should().Be(JsonValueKind.Array);
@@ -64,10 +64,10 @@ public class DeepExpansionTests(ApiFactory factory)
     public async Task Deep_m2o_honors_field_whitelist_via_envelope()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/category",
+        var categoryId = Root(await (await c.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "Whitelisted" })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
-        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article",
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", categoryId, translations = new { en = new { title = "WL" } } })).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
@@ -76,7 +76,7 @@ public class DeepExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = articleId } },
             deep = new { category = new { fields = NameFields } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var first = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var category = first.GetProperty("category");

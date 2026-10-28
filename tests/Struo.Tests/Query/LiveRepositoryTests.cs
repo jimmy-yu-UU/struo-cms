@@ -13,7 +13,7 @@ using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -77,21 +77,21 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         BuildRepoWithGraph()
     {
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
-        _db.CodeFirst.InitTables<Category>();
-        _db.Deleteable<Category>().Where(x => true).ExecuteCommand(); // deterministic start
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.Deleteable<FxCategory>().Where(x => true).ExecuteCommand(); // deterministic start
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
-        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]));
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors([typeof(FxArticle), typeof(FxCategory), typeof(FxTag)]));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag), ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag), ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -108,7 +108,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         BuildRepoWithDeserializer()
     {
         var (repo, graph, _) = BuildRepoWithGraph();
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var provider = new CachedMetadataProvider(MetadataScanner.ScanTypes(types));
         var deserializer = new ItemDeserializer(registry, graph, new RichTextCleaner(new GanssHtmlSanitizer()));
@@ -131,12 +131,12 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         if (!Use(backend)) return;
         var repo = BuildRepo();
         for (var i = 0; i < 5; i++)
-            await repo.CreateAsync("category", new Category { Name = $"C{i}" });
+            await repo.CreateAsync("fxCategory", new FxCategory { Name = $"C{i}" });
 
         var q = new QueryModel(null, null, [new SortField("name", false)], 2, 1, null);
-        var result = await repo.QueryAsync("category", q, []);
+        var result = await repo.QueryAsync("fxCategory", q, []);
         result.Total.Should().Be(5);
-        result.Rows.Select(r => ((Category)r).Name).Should().Equal("C1", "C2");
+        result.Rows.Select(r => ((FxCategory)r).Name).Should().Equal("C1", "C2");
     }
 
     // On real Postgres: compare-and-swap (WHERE id AND version=expected) rejects a stale update.
@@ -145,18 +145,18 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var repo = BuildRepo();
-        var created = (Category)await repo.CreateAsync("category", new Category { Name = "A" });
+        var created = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "A" });
         var id = created.Id.ToString();
 
         // First update: version 0 → 1.
-        var reload1 = (Category)(await repo.GetByIdAsync("category", id))!;
+        var reload1 = (FxCategory)(await repo.GetByIdAsync("fxCategory", id))!;
         reload1.Name = "B"; reload1.Version = 0;
-        await repo.UpdateAsync("category", id, reload1);
+        await repo.UpdateAsync("fxCategory", id, reload1);
 
         // Second writer still holds version 0 → conflict.
-        var stale = (Category)(await repo.GetByIdAsync("category", id))!;
+        var stale = (FxCategory)(await repo.GetByIdAsync("fxCategory", id))!;
         stale.Name = "C"; stale.Version = 0;
-        var act = async () => await repo.UpdateAsync("category", id, stale);
+        var act = async () => await repo.UpdateAsync("fxCategory", id, stale);
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
     }
 
@@ -166,9 +166,9 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var repo = BuildRepo();
-        var created = (Category)await repo.CreateAsync("category", new Category { Name = "Findme" });
-        var rows = await repo.QueryWhereInAsync("category", "id", [created.Id]);
-        rows.Cast<Category>().Select(c => c.Name).Should().Contain("Findme");
+        var created = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "Findme" });
+        var rows = await repo.QueryWhereInAsync("fxCategory", "id", [created.Id]);
+        rows.Cast<FxCategory>().Select(c => c.Name).Should().Contain("Findme");
     }
 
     private static readonly System.Reflection.BindingFlags ReadPropFlags =
@@ -190,20 +190,20 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         var (repo, graph, options) = BuildRepoWithGraph();
 
         // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
-        var root = (Category)await repo.CreateAsync("category", new Category { Name = "PgRoot" });
+        var root = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "PgRoot" });
         var prevId = root.Id;
         for (var lvl = 1; lvl <= 5; lvl++)
         {
-            var node = (Category)await repo.CreateAsync(
-                "category", new Category { Name = $"PgA{lvl}", ParentId = prevId });
+            var node = (FxCategory)await repo.CreateAsync(
+                "fxCategory", new FxCategory { Name = $"PgA{lvl}", ParentId = prevId });
             prevId = node.Id;
         }
-        var leaf = (Category)await repo.CreateAsync(
-            "category", new Category { Name = "PgLeaf", ParentId = prevId });
+        var leaf = (FxCategory)await repo.CreateAsync(
+            "fxCategory", new FxCategory { Name = "PgLeaf", ParentId = prevId });
 
         var counter = new CountingItemRepository(repo);
         var expander = new RelationExpander(counter, graph, options);
-        var parents = await repo.QueryWhereInAsync("category", "id", new object[] { leaf.Id });
+        var parents = await repo.QueryWhereInAsync("fxCategory", "id", new object[] { leaf.Id });
 
         DeepSpec? deep = null;
         for (var i = 0; i < 6; i++)
@@ -214,7 +214,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
 
         counter.ResetCount();
         var result = await expander.ExpandAsync(
-            "category", parents, deep!,
+            "fxCategory", parents, deep!,
             new EntityAccessors(
                 (_, entity, _) => new Dictionary<string, object?>
                 {
@@ -240,19 +240,19 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var (repo, _, _) = BuildRepoWithGraph();
-        _db!.CodeFirst.InitTables<Article>();
+        _db!.CodeFirst.InitTables<FxArticle>();
 
-        var cat = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe O'Brien" });
-        var other = (Category)await repo.CreateAsync("category", new Category { Name = "PgProbe other" });
-        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = cat.Id });
-        await repo.CreateAsync("article", new Article { Status = "draft", CategoryId = other.Id });
+        var cat = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "PgProbe O'Brien" });
+        var other = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "PgProbe other" });
+        await repo.CreateAsync("fxArticle", new FxArticle { Status = "draft", CategoryId = cat.Id });
+        await repo.CreateAsync("fxArticle", new FxArticle { Status = "draft", CategoryId = other.Id });
 
-        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
-        var sub = _db.Queryable<Category>()
+        var sel = (System.Linq.Expressions.Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id");
+        var sub = _db.Queryable<FxCategory>()
             .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgProbe O'Brien" } })
             .Select(sel).ToSql();
-        var col = _db.EntityMaintenance.GetDbColumnName<Article>("CategoryId");
-        var q = _db.Queryable<Article>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
+        var col = _db.EntityMaintenance.GetDbColumnName<FxArticle>("CategoryId");
+        var q = _db.Queryable<FxArticle>().Where(new List<IConditionalModel> { SubQueryConditional.Wrap(SubQueryKind.In, col, sub) });
 
         q.ToSql().Key.Should().NotContain("N'");
         (await q.ToListAsync()).Should().ContainSingle().Which.CategoryId.Should().Be(cat.Id);
@@ -271,30 +271,30 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         if (!Use(backend)) return;
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
-        var tech = new Category { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
-        var news = new Category { Id = Guid.NewGuid(), Name = "PgCollide News" };
+        var tech = new FxCategory { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
+        var news = new FxCategory { Id = Guid.NewGuid(), Name = "PgCollide News" };
         _db!.Insertable(new[] { tech, news }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
-        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var idCol = _db.EntityMaintenance.GetDbColumnName<FxCategory>("Id");
+        var sel = (System.Linq.Expressions.Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id");
 
         KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
-            _db.Queryable<Category>()
+            _db.Queryable<FxCategory>()
                 .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
                 .Select(sel).ToSql();
         ConditionalModel OuterNameLeaf(string name) => new() { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name };
 
         // Enforce the premise: the outer leaf and the inner subquery's own filter are each index-0 of
         // their own plain top-level list, so SqlSugar assigns them the SAME generated name pre-rename.
-        var outerStandalone = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech") }).ToSql();
+        var outerStandalone = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech") }).ToSql();
         var innerSubTech = CategoryIdsNamed("PgCollide Tech");
         outerStandalone.Value.Select(p => p.ParameterName).Should().BeEquivalentTo(
             innerSubTech.Value.Select(p => p.ParameterName),
             "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
 
-        // Positive: Category.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM categories WHERE Name = 'PgCollide Tech') -> Tech only.
+        // Positive: Category.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'PgCollide Tech') -> Tech only.
         var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
-        var qPositive = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condTech });
+        var qPositive = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condTech });
         qPositive.ToSql().Key.Should().NotContain("N'");
         (await qPositive.ToListAsync()).Should().ContainSingle().Which.Name.Should().Be("PgCollide Tech");
 
@@ -302,7 +302,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         // value had clobbered the inner one (the actual collision symptom), this would still spuriously
         // match Tech; it must instead return ZERO rows.
         var condNews = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgCollide News"));
-        var qNegative = _db.Queryable<Category>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condNews });
+        var qNegative = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condNews });
         (await qNegative.ToListAsync()).Should().BeEmpty();
     }
 
@@ -316,23 +316,23 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         if (!Use(backend)) return;
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
-        var x = new Category { Id = Guid.NewGuid(), Name = "PgNest X" };
-        var other = new Category { Id = Guid.NewGuid(), Name = "PgNest Other" };
+        var x = new FxCategory { Id = Guid.NewGuid(), Name = "PgNest X" };
+        var other = new FxCategory { Id = Guid.NewGuid(), Name = "PgNest Other" };
         _db!.Insertable(new[] { x, other }).ExecuteCommand();
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName<Category>("Id");
-        var sel = (System.Linq.Expressions.Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id");
+        var idCol = _db.EntityMaintenance.GetDbColumnName<FxCategory>("Id");
+        var sel = (System.Linq.Expressions.Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id");
 
         KeyValuePair<string, List<SugarParameter>> CategoryIdsNamed(string name) =>
-            _db.Queryable<Category>()
+            _db.Queryable<FxCategory>()
                 .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = name } })
                 .Select(sel).ToSql();
 
-        // Level 2 (innermost): SELECT id FROM categories WHERE name = 'PgNest X'
+        // Level 2 (innermost): SELECT id FROM fx_categories WHERE name = 'PgNest X'
         var level2Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, CategoryIdsNamed("PgNest X"));
 
-        // Level 1 (middle): SELECT id FROM categories WHERE name = 'PgNest X' AND id IN (level 2)
-        var level1 = _db.Queryable<Category>()
+        // Level 1 (middle): SELECT id FROM fx_categories WHERE name = 'PgNest X' AND id IN (level 2)
+        var level1 = _db.Queryable<FxCategory>()
             .Where(new List<IConditionalModel>
             {
                 new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
@@ -342,7 +342,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, level1);
 
         // Outer: Category.Name = 'PgNest X' AND Category.Id IN (level 1) — same top-level list.
-        var q = _db.Queryable<Category>().Where(new List<IConditionalModel>
+        var q = _db.Queryable<FxCategory>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
             level1Wrapped,
@@ -528,29 +528,29 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         var (repo, graph, options) = BuildRepoWithGraph();
 
         var stamp = "PgCapWide" + Guid.NewGuid().ToString("N")[..8];
-        var parent = (Category)await repo.CreateAsync("category", new Category { Name = $"PgCapWideParent-{stamp}" });
-        var children = new List<Category>();
+        var parent = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = $"PgCapWideParent-{stamp}" });
+        var children = new List<FxCategory>();
         for (var i = 0; i < 4; i++)
-            children.Add((Category)await repo.CreateAsync(
-                "category", new Category { Name = $"PgCapWide-p{i}-{stamp}", ParentId = parent.Id }));
+            children.Add((FxCategory)await repo.CreateAsync(
+                "fxCategory", new FxCategory { Name = $"PgCapWide-p{i}-{stamp}", ParentId = parent.Id }));
 
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var metadata = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var translator = new FilterTranslator(_db!, graph, metadata, registry, options);
 
         var conds = translator.Translate(
-            "category", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, null, [], null);
-        var sql = _db!.Queryable<Category>().Where(conds).ToSql();
+            "fxCategory", new ComparisonFilter("parent.name", QueryOperator.Contains, stamp), null, null, [], null);
+        var sql = _db!.Queryable<FxCategory>().Where(conds).ToSql();
         sql.Key.Should().Contain("IN (SELECT");
         sql.Key.Should().NotContain("N'");
 
-        var rows = await _db.Queryable<Category>().Where(conds).ToListAsync();
+        var rows = await _db.Queryable<FxCategory>().Where(conds).ToListAsync();
         rows.Select(c => c.Id).Should().BeEquivalentTo(children.Select(c => c.Id));
     }
 
-    // Task 6, live PG: the translation-sidecar subquery's own shape — article_translations has a
+    // Task 6, live PG: the translation-sidecar subquery's own shape — fx_article_translations has a
     // `long` identity PK (Id) and projects a `uuid` FK (ArticleId) that the outer article query
     // compares its own uuid `id` column against. This is the SQLite-green/Postgres-risky combination
     // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips above): a
@@ -561,34 +561,34 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var (repo, _, _) = BuildRepoWithGraph();
-        _db!.CodeFirst.InitTables<Article>();
-        _db.CodeFirst.InitTables<ArticleTranslation>();
-        _db.Deleteable<ArticleTranslation>().Where(x => true).ExecuteCommand();
-        _db.Deleteable<Article>().Where(x => true).ExecuteCommand();
+        _db!.CodeFirst.InitTables<FxArticle>();
+        _db.CodeFirst.InitTables<FxArticleTranslation>();
+        _db.Deleteable<FxArticleTranslation>().Where(x => true).ExecuteCommand();
+        _db.Deleteable<FxArticle>().Where(x => true).ExecuteCommand();
 
         var stamp = "PgTr" + Guid.NewGuid().ToString("N")[..6];
-        var hit = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
-        var miss = (Article)await repo.CreateAsync("article", new Article { Status = "draft" });
-        _db.Insertable(new ArticleTranslation { ArticleId = hit.Id, Locale = "en", Title = stamp + "-en" }).ExecuteCommand();
-        _db.Insertable(new ArticleTranslation { ArticleId = miss.Id, Locale = "en", Title = "other-" + stamp }).ExecuteCommand();
+        var hit = (FxArticle)await repo.CreateAsync("fxArticle", new FxArticle { Status = "draft" });
+        var miss = (FxArticle)await repo.CreateAsync("fxArticle", new FxArticle { Status = "draft" });
+        _db.Insertable(new FxArticleTranslation { FxArticleId = hit.Id, Locale = "en", Title = stamp + "-en" }).ExecuteCommand();
+        _db.Insertable(new FxArticleTranslation { FxArticleId = miss.Id, Locale = "en", Title = "other-" + stamp }).ExecuteCommand();
 
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var metadata = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         });
         var translator = new FilterTranslator(_db, graph, metadata, registry, new StruoQueryOptions());
 
         var conds = translator.Translate(
-            "article", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, null, [], "en");
-        var sql = _db.Queryable<Article>().Where(conds).ToSql();
-        sql.Key.Should().Contain("article_translations");
+            "fxArticle", new ComparisonFilter("title", QueryOperator.Eq, stamp + "-en"), null, null, [], "en");
+        var sql = _db.Queryable<FxArticle>().Where(conds).ToSql();
+        sql.Key.Should().Contain("fx_article_translations");
         sql.Key.Should().NotContain("N'");
 
-        var rows = await _db.Queryable<Article>().Where(conds).ToListAsync();
+        var rows = await _db.Queryable<FxArticle>().Where(conds).ToListAsync();
         rows.Should().ContainSingle().Which.Id.Should().Be(hit.Id);
     }
 
@@ -607,12 +607,12 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
-        var meta = provider.GetCollection("category")!;
+        var meta = provider.GetCollection("fxCategory")!;
         var clientId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var body = JsonDocument.Parse($$"""{"id":"{{clientId}}","name":"PgAllowlistId"}""").RootElement;
 
-        var first = (Category)await repo.CreateAsync("category", deserializer.DeserializeForCreate("category", body, meta));
-        var second = (Category)await repo.CreateAsync("category", deserializer.DeserializeForCreate("category", body, meta));
+        var first = (FxCategory)await repo.CreateAsync("fxCategory", deserializer.DeserializeForCreate("fxCategory", body, meta));
+        var second = (FxCategory)await repo.CreateAsync("fxCategory", deserializer.DeserializeForCreate("fxCategory", body, meta));
 
         first.Id.Should().NotBe(clientId);
         second.Id.Should().NotBe(clientId);
@@ -634,18 +634,18 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     {
         if (!Use(backend)) return;
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
-        var meta = provider.GetCollection("category")!;
+        var meta = provider.GetCollection("fxCategory")!;
 
         var parentBody = JsonDocument.Parse("""{"name":"PgAllowlistFkParent"}""").RootElement;
-        var parent = (Category)await repo.CreateAsync(
-            "category", deserializer.DeserializeForCreate("category", parentBody, meta));
+        var parent = (FxCategory)await repo.CreateAsync(
+            "fxCategory", deserializer.DeserializeForCreate("fxCategory", parentBody, meta));
 
         var childBody = JsonDocument.Parse(
             "{\"name\":\"PgAllowlistFkChild\",\"parentId\":\"" + parent.Id + "\"}").RootElement;
-        var child = (Category)await repo.CreateAsync(
-            "category", deserializer.DeserializeForCreate("category", childBody, meta));
+        var child = (FxCategory)await repo.CreateAsync(
+            "fxCategory", deserializer.DeserializeForCreate("fxCategory", childBody, meta));
 
-        var reloaded = (Category)(await repo.GetByIdAsync("category", child.Id.ToString()))!;
+        var reloaded = (FxCategory)(await repo.GetByIdAsync("fxCategory", child.Id.ToString()))!;
         reloaded.ParentId.Should().Be(parent.Id);
     }
 
