@@ -128,3 +128,57 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 自己的服務在 `Program.cs` 裡、`AddStruoCms()` 之後註冊，那裡的註冊贏過核心的預設。核心用 `TryAdd`
 註冊的服務，寫在 `AddStruoCms()` 之前的註冊也會被保留。設定來源要在呼叫之前加。可以接上的擴充點見
 [第 18 章：擴充點](18-extension-points.md)。
+
+## 12. 測試：拿掉模板的守衛，加上自己的專案
+
+`tests/Struo.Tests.Template` 放的是模板自己的儲存庫守衛：文件慣例、模板不變式，以及 CI、Docker 與
+健康檢查的慣例。它們檢查的是這個儲存庫的檔案，不是你的產品。可以把專案資料夾連同 `StruoCMS.slnx`
+裡那一行整個刪掉，也可以留下想要的守衛。沒有別的東西參照它。
+
+自己的測試寫在自己的專案裡，參照 `Struo.Tests.Support` 與你的內容專案。測試套件的版本集中在
+`Directory.Packages.props`，所以 `PackageReference` 不寫版本：
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Struo.Tests.Support\Struo.Tests.Support.csproj" />
+    <ProjectReference Include="..\..\src\MyFork.Content\MyFork.Content.csproj" />
+  </ItemGroup>
+</Project>
+```
+
+有兩件設定屬於你的專案，跟 `tests/Struo.Tests` 一樣。`TestFramework` 屬性指向
+`StruoTestFramework`；`[ModuleInitializer]` 透過 `TestHostEnvironment.Pin` 釘住你的內容組件，這要
+在任何主機建起來之前執行。繼承 `StruoApiFactory` 的主機類別列出公開可讀的集合：
+
+```csharp
+using System.Runtime.CompilerServices;
+using Struo.Tests.Support;
+using Xunit;
+
+[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]
+
+namespace MyFork.Tests;
+
+internal static class ContentAssemblyBootstrap
+{
+    [ModuleInitializer]
+    internal static void Pin() => TestHostEnvironment.Pin("MyFork.Content");
+}
+
+public sealed class MyApiFactory : StruoApiFactory
+{
+    protected override IReadOnlyList<string> PublicReadCollections => ["post"];
+}
+```
+
+類別庫的說明見[第 22 章](22-testing.md)。它的公開 API 有變動，會寫在[版本紀錄](changelog.md)。

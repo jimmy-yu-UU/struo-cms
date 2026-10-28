@@ -243,7 +243,7 @@ fixture，照下面的清單逐步走完。
    - `Metadata/ConventionMetadataDiscoveryTests.cs`：第 6 步處理。
    - `GraphQl/FakeMetadataFixtures.cs`、`GraphQl/GraphQlExecutionTests.cs`、
      `Query/TranslatableSearchHarness.cs` 只在註解裡提到範例，第 8 步處理；
-     `Documentation/NarrativeScanScopeTests.cs` 把範例的路徑當成測試資料，留著。
+     `tests/Struo.Tests.Template/Documentation/NarrativeScanScopeTests.cs` 也提到範例，把範例的路徑當成測試資料，留著。
 
 5. 跑一次 `dotnet build` 確認編譯已經乾淨——`src/Struo.*` 底下沒有程式碼參照範例。
    `dotnet test` 這時還是紅的，接下來兩步處理它。

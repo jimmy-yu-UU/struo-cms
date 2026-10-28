@@ -263,7 +263,7 @@ uses the sample's collections as a fixture. Work through the list below in order
    - `Metadata/ConventionMetadataDiscoveryTests.cs`: step 6 handles it.
    - `GraphQl/FakeMetadataFixtures.cs`, `GraphQl/GraphQlExecutionTests.cs` and
      `Query/TranslatableSearchHarness.cs` mention the sample only in comments, which step 8 handles;
-     `Documentation/NarrativeScanScopeTests.cs` uses the sample's path as test data and stays.
+     `tests/Struo.Tests.Template/Documentation/NarrativeScanScopeTests.cs` also names the sample, uses its path as test data, and stays.
 
 5. Run `dotnet build` to confirm the build is clean — nothing under `src/Struo.*` references the
    sample. `dotnet test` is still red at this point; the next two steps handle it.

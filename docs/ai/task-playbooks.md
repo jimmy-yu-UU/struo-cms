@@ -51,7 +51,7 @@ Adding a collection is purely additive to a fork's own content project — it ne
    `src/Struo.Api/appsettings.Development.json` (gitignored, dev-only) or supply it via the
    `Struo__ContentAssemblies__0` environment variable — **not** in the shipped
    `src/Struo.Api/appsettings.json`. That file is the one
-   `tests/Struo.Tests/Template/TemplateInvariantsTests.cs`'s
+   `tests/Struo.Tests.Template/TemplateInvariantsTests.cs`'s
    `Shipped_appsettings_declares_no_content_assemblies` test asserts has an empty
    `Struo:ContentAssemblies`; editing it to wire in permanent content fails that test immediately, and
    contradicts the shipped posture `AGENTS.md`'s "Core vs. sample boundary" records
@@ -233,7 +233,7 @@ conventions), `docs/guide/en/16-authentication.md` (authentication schemes), `do
    arm: derive it from `StruoDomainException` (`src/Struo.Domain/StruoDomainException.cs`), whose code, 400 to
    499 status and message are returned as they are.
 5. **Tests to add**: an integration test under `tests/Struo.Tests/Api/` using the `WebApplicationFactory`
-   -based fixture in `tests/Struo.Tests/Support/ApiFactory.cs` (see `EndpointSmokeTests.cs` for the
+   -based fixture in `tests/Struo.Tests/Support/ApiFactory.cs`, which derives from `StruoApiFactory` in `tests/Struo.Tests.Support/` (see `EndpointSmokeTests.cs` for the
    minimal shape of standing up the factory and asserting a 200 + envelope shape, or
    `RbacEnforcementTests.cs` for asserting a permission-gated action rejects the right way).
 6. **Gate**: `dotnet build && dotnet test`.

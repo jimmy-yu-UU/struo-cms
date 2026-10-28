@@ -5,10 +5,33 @@
 
 ## 後端測試
 
-後端測試在 `tests/Struo.Tests`，用 xUnit，執行指令是 `dotnet test`。預設後端是 SQLite：單元
-測試從 `TestBackend.CreateUnitDatabase()` 拿資料庫，沒有切換後端時那是一個暫存的 SQLite 檔，
-測試結束就刪除，彼此不共用狀態。`tests/Struo.Tests/Support/` 以外的測試直接用
-`SqliteTestDatabase` 的話，`SqliteTestDatabaseUsageTests` 會失敗，所以每個測試都跟著後端切換走。
+後端測試分在 `tests/` 底下三個專案，用 xUnit，在儲存庫根目錄執行 `dotnet test`：
+
+- `tests/Struo.Tests` 放核心的單元與整合測試。
+- `tests/Struo.Tests.Template` 放模板自己的儲存庫守衛：文件慣例、模板不變式，以及 CI、Docker 與
+  健康檢查的慣例。fork 可以整個刪掉（見[第 25 章](25-after-forking.md)）。
+- `tests/Struo.Tests.Support` 是類別庫，不是測試專案，放另外兩個專案共用的輔助程式。
+
+預設後端是 SQLite：單元測試從 `TestBackend.CreateUnitDatabase()` 拿資料庫，沒有切換後端時那是
+一個暫存的 SQLite 檔，測試結束就刪除，彼此不共用狀態。測試直接用 `SqliteTestDatabase` 的話，
+`SqliteTestDatabaseUsageTests` 會失敗，所以每個測試都跟著後端切換走；只有 Support 類別庫與各專案
+自己最上層的 `Support/` 資料夾可以用它。
+
+### Support 類別庫
+
+`Struo.Tests.Support`（命名空間 `Struo.Tests.Support`）裝著測試主機的基底 `StruoApiFactory`；
+`TestBackend` 與下面後端切換背後的實機資料庫輔助程式；`TestHostEnvironment`；以及
+`StruoTestFramework`，它在最後一個測試跑完後放掉實機資料庫池。
+
+每個會起 API 主機的測試專案，要自己設兩樣東西。一個組件屬性指定測試框架：
+`[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`。
+一個 module initializer 呼叫 `TestHostEnvironment.Pin`，帶入該專案的主機要載入的內容組件。
+`Pin` 同時把 Redis 清空、關掉 OIDC 提供者，開發者那份不進版本控制的 Development 設定就碰不到測試。
+它設的是環境變數，因為環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個
+initializer 是 `ContentAssemblyEnvBootstrap`。
+
+`tests/Struo.Tests` 的 `ApiFactory` 繼承 `StruoApiFactory`，並指定主機公開可讀的集合。fork 的測試
+專案照樣做；設定方式見[第 25 章](25-after-forking.md)。
 
 這些單元測試用 CodeFirst 從 entity 建表。fork 自己的測試 entity 宣告了唯一群組索引時，名稱要
 控制在 63 個字元以內，見[第 21 章〈各後端的差異〉](21-schema-and-upgrades.md#各後端的差異)。
@@ -83,9 +106,9 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 
 有幾個測試不是驗證某個功能，而是把一條規則釘死，改壞了規則本身測試就會紅。
 
-- `CodeCitationConventionTests`：手冊與程式碼裡的引用都要指到一個建構，不是行號。
-- `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples`：
-  API 專案（`Struo.Api`）沒有直接參照到任何範例組件。
+- `CodeCitationConventionTests`（在 `tests/Struo.Tests.Template`）：手冊與程式碼裡的引用都要指到一個建構，不是行號。
+- `TemplateInvariantsTests.Host_project_has_no_project_reference_into_samples`（在
+  `tests/Struo.Tests.Template`）：API 專案（`Struo.Api`）沒有直接參照到任何範例組件。
 - `OptionsValidationTests`：驅動真正的啟動流程，確認設定錯誤會在啟動當下就炸開、而不是拖到
   第一個請求：少了資料庫連線字串、`Query:MaxLimit` 設成 0、啟用 OIDC 卻沒填 client id，三種
   情況都必須讓啟動失敗。
@@ -189,8 +212,8 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 `docs` 各自進自己的子目錄。
 
 `backend`：`dotnet restore`、`dotnet build --no-restore --configuration Release`、
-`dotnet test --no-build --configuration Release --verbosity normal`，跑完整的後端測試套
-件。CI 不設定任何 `STRUO_TEST_*` 連線，也不設 `STRUO_TEST_BACKEND`，所以這裡只跑 SQLite，每
+`dotnet test --no-build --configuration Release --verbosity normal`，跑每一個後端測試專
+案。CI 不設定任何 `STRUO_TEST_*` 連線，也不設 `STRUO_TEST_BACKEND`，所以這裡只跑 SQLite，每
 一組實機測試都直接判定通過。
 
 `frontend`：在 `frontend` 目錄下 `pnpm install --frozen-lockfile --ignore-scripts`，然後

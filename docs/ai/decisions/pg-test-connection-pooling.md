@@ -96,5 +96,5 @@ asymmetry.
 
 ## Referenced from
 
-- `tests/Struo.Tests/Support/PgTestConnectionString.cs`
+- `tests/Struo.Tests.Support/PgTestConnectionString.cs`
 - `AGENTS.md` ("Verification")
