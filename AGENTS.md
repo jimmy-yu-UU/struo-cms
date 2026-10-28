@@ -355,8 +355,9 @@ hides length and charset bugs.
 A test that only means something on SQLite carries `[SqliteOnlyFact("reason")]` or
 `[SqliteOnlyTheory("reason")]` and is skipped on a live backend with a reason starting
 "SQLite-only:"; a live run skips 17 of them. `SqliteTestDatabaseUsageTests` fails when a test
-outside `tests/Struo.Tests.Support/` and a project's own top-level `Support/` folder uses `SqliteTestDatabase` or `SqliteTempTestDatabase`
-directly, so every other test follows the switch.
+outside the Support library (`tests/Struo.Tests.Support/`) or a test project's own top-level
+`Support/` folder uses `SqliteTestDatabase` or `SqliteTempTestDatabase` directly, so every other
+test follows the switch.
 
 Pool databases are dropped when the test run finishes. On MySQL and MariaDB a discarded database
 whose holder connection stays open survives until that connection closes, and a crashed or killed

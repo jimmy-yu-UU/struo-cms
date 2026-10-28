@@ -136,7 +136,8 @@ API 預設不信任 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`
 裡那一行整個刪掉，也可以留下想要的守衛。沒有別的東西參照它。
 
 自己的測試寫在自己的專案裡，參照 `Struo.Tests.Support` 與你的內容專案。測試套件的版本集中在
-`Directory.Packages.props`，所以 `PackageReference` 不寫版本：
+`Directory.Packages.props`，所以 `PackageReference` 不寫版本。以下假設專案在 `tests/MyFork.Tests`，內容專案在
+`src/MyFork.Content`：
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">

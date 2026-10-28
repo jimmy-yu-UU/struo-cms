@@ -26,7 +26,8 @@
 每個會起 API 主機的測試專案，要自己設兩樣東西。一個組件屬性指定測試框架：
 `[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`。
 一個 module initializer 呼叫 `TestHostEnvironment.Pin`，帶入該專案的主機要載入的內容組件。
-`Pin` 同時把 Redis 清空、關掉 OIDC 提供者，開發者那份不進版本控制的 Development 設定就碰不到測試。
+`Pin` 同時把 Redis 清空、關掉內建的兩個 OIDC 提供者 `microsoft` 與 `google`，開發者那份不進版本控制的
+Development 設定就碰不到測試；fork 自己加的提供者不在此列。
 它設的是環境變數，因為環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個
 initializer 是 `ContentAssemblyEnvBootstrap`。
 

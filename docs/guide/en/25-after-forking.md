@@ -155,7 +155,8 @@ keep the guards you want. Nothing else references it.
 
 Write your own tests in a project of your own that references `Struo.Tests.Support` and your content
 project. The versions of the test packages are central in `Directory.Packages.props`, so the
-`PackageReference` lines carry none:
+`PackageReference` lines carry none. This is for a project at `tests/MyFork.Tests` whose content
+project is `src/MyFork.Content`:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">

@@ -1,4 +1,4 @@
-// tests/Struo.Tests/Support/TestItemService.cs
+// tests/Struo.Tests.Support/TestItemService.cs
 using Struo.Application.Abstractions;
 using Struo.Application.Changes;
 using Struo.Application.Configuration;

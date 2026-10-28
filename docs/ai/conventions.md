@@ -648,8 +648,8 @@ destructive actions, the user is left with a blocked action and no working way t
   the unit harnesses to a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`
   using a `WebApplicationFactory`-based fixture (`Support/ApiFactory.cs`, a `StruoApiFactory`).
   The shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`)
-  live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project
-  pins its own content assemblies from a `[ModuleInitializer]` that calls `TestHostEnvironment.Pin`
+  live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project that
+  hosts the API pins its own content assemblies from a `[ModuleInitializer]` that calls `TestHostEnvironment.Pin`
   (`tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`).
   `tests/Struo.Tests.Template` holds the template's own repository guards (`Documentation/`,
   `TemplateInvariantsTests`, `CiWorkflowConventionTests`, `DockerIgnoreConventionTests`,

@@ -1,4 +1,4 @@
-// tests/Struo.Tests/Support/HostIsolation.cs
+// tests/Struo.Tests.Support/HostIsolation.cs
 namespace Struo.Tests.Support;
 
 /// <summary>

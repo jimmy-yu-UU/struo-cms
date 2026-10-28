@@ -10,8 +10,9 @@ namespace Struo.Tests.Support;
 public static class TestHostEnvironment
 {
     /// <summary>
-    /// Sets the content assemblies every host in the process loads, and turns Redis and the OIDC
-    /// providers off so a developer's gitignored Development settings cannot reach the suite. Call it
+    /// Sets the content assemblies every host in the process loads, and turns Redis and the two
+    /// shipped OIDC providers (<c>microsoft</c>, <c>google</c>) off so a developer's gitignored
+    /// Development settings cannot reach the suite. A provider a fork adds is not touched. Call it
     /// from a <c>[ModuleInitializer]</c> in each test project.
     /// </summary>
     public static void Pin(params string[] contentAssemblies)

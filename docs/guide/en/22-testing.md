@@ -31,8 +31,9 @@ test.
 Each test project that hosts the API sets up two things of its own. An assembly attribute names the
 test framework: `[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests.Support")]`.
 A module initializer calls `TestHostEnvironment.Pin` with the content assemblies the project's hosts
-load. `Pin` also blanks Redis and turns the OIDC providers off, so a developer's gitignored
-Development settings cannot reach the suite. It sets environment variables, because they are the only
+load. `Pin` also blanks Redis and turns off the two shipped OIDC providers, `microsoft` and `google`, so a
+developer's gitignored Development settings cannot reach the suite. A provider your fork adds is not
+touched. It sets environment variables, because they are the only
 override that reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is
 `ContentAssemblyEnvBootstrap`.
 

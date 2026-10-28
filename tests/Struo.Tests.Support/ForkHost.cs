@@ -1,4 +1,4 @@
-// tests/Struo.Tests/Support/ForkHost.cs
+// tests/Struo.Tests.Support/ForkHost.cs
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
