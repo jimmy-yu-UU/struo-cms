@@ -3,7 +3,7 @@ using Struo.Application.Configuration;
 namespace Struo.Tests.Support;
 
 /// <summary>A database owned by one test or test host; disposing removes it or returns it to its pool.</summary>
-internal interface ITestDatabase : IDisposable
+public interface ITestDatabase : IDisposable
 {
     StruoDbType DbType { get; }
     string ConnectionString { get; }
@@ -11,7 +11,7 @@ internal interface ITestDatabase : IDisposable
 }
 
 /// <summary>SQLite temp file, deleted on dispose.</summary>
-internal sealed class SqliteTempTestDatabase : ITestDatabase
+public sealed class SqliteTempTestDatabase : ITestDatabase
 {
     private readonly SqliteTestDatabase _inner = new();
 
@@ -23,7 +23,7 @@ internal sealed class SqliteTempTestDatabase : ITestDatabase
 }
 
 /// <summary>A database created on a live server; disposing drops it and never throws.</summary>
-internal sealed class LiveTestDatabase : ITestDatabase
+public sealed class LiveTestDatabase : ITestDatabase
 {
     private readonly TestBackendKind _kind;
     private int _disposed;
@@ -49,7 +49,7 @@ internal sealed class LiveTestDatabase : ITestDatabase
 /// A database leased from a <see cref="LiveDatabasePool"/> on first use of <see cref="ConnectionString"/>
 /// or <see cref="Name"/>; disposing returns it to the pool and never throws.
 /// </summary>
-internal sealed class PooledTestDatabase : ITestDatabase
+public sealed class PooledTestDatabase : ITestDatabase
 {
     private readonly LiveDatabasePool _pool;
     private readonly Lock _gate = new();

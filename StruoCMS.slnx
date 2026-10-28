@@ -9,6 +9,7 @@
     <Project Path="src/Struo.Infrastructure/Struo.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Struo.Tests.Support/Struo.Tests.Support.csproj" />
     <Project Path="tests/Struo.Tests/Struo.Tests.csproj" />
   </Folder>
 </Solution>

@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 /// gate compare against — or overwrite — the wrong file, which is exactly the kind of silent
 /// failure that gate exists to prevent.
 /// </summary>
-internal static class RepoRoot
+public static class RepoRoot
 {
     private const string SolutionFileName = "StruoCMS.slnx";
 
@@ -17,7 +17,7 @@ internal static class RepoRoot
     /// Overload seam for testing the fail-loud behavior: lets a test point the walk at a
     /// directory with no .slnx ancestor without needing to relocate the real test binary.
     /// </summary>
-    internal static string Find(string startDirectory)
+    public static string Find(string startDirectory)
     {
         for (var dir = new DirectoryInfo(startDirectory); dir is not null; dir = dir.Parent)
         {

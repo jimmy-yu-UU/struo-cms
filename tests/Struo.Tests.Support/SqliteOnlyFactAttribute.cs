@@ -2,7 +2,7 @@ namespace Struo.Tests.Support;
 
 /// <summary>A <see cref="FactAttribute"/> that is skipped when a live backend is selected.</summary>
 [AttributeUsage(AttributeTargets.Method)]
-internal sealed class SqliteOnlyFactAttribute : FactAttribute
+public sealed class SqliteOnlyFactAttribute : FactAttribute
 {
     public SqliteOnlyFactAttribute(string reason)
     {
@@ -12,7 +12,7 @@ internal sealed class SqliteOnlyFactAttribute : FactAttribute
 
 /// <summary>A <see cref="TheoryAttribute"/> that is skipped when a live backend is selected.</summary>
 [AttributeUsage(AttributeTargets.Method)]
-internal sealed class SqliteOnlyTheoryAttribute : TheoryAttribute
+public sealed class SqliteOnlyTheoryAttribute : TheoryAttribute
 {
     public SqliteOnlyTheoryAttribute(string reason)
     {

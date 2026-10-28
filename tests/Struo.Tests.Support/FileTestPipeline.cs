@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 
 /// <summary>Builds the reference-handling pipeline a <c>FileService</c> needs for trash and purge in
 /// unit harnesses that have no M2M junctions and no revisioned collections.</summary>
-internal static class FileTestPipeline
+public static class FileTestPipeline
 {
     private sealed class NoM2M : IM2MDescriptorSource
     {

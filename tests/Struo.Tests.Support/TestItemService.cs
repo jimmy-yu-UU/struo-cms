@@ -18,7 +18,7 @@ namespace Struo.Tests.Support;
 /// permissions allowed, default query options, the Ganss sanitizer, and no search
 /// provider, notifier, interceptors or delete handlers.
 /// </summary>
-internal static class TestItemService
+public static class TestItemService
 {
     public static ItemService Create(
         IItemRepository repository,

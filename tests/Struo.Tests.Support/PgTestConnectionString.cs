@@ -17,7 +17,7 @@ namespace Struo.Tests.Support;
 ///
 /// Full write-up: docs/ai/decisions/pg-test-connection-pooling.md
 /// </summary>
-internal static partial class PgTestConnectionString
+public static partial class PgTestConnectionString
 {
     // Whole-key match: `Pooling` as a key at the start of the string or after a `;`, up to its `=`.
     // Substring matches (e.g. an "Application Name=Pooling-probe" value) must not count as the key.

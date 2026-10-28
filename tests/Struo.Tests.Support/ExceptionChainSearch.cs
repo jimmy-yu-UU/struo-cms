@@ -8,7 +8,7 @@ namespace Struo.Tests.Support;
 /// traversal because the library under test (the generic host, SqlSugar) may wrap the exception a
 /// hook or validator actually throws.
 /// </summary>
-internal static class ExceptionChainSearch
+public static class ExceptionChainSearch
 {
     public static T? FindInner<T>(Exception? ex) where T : Exception
     {

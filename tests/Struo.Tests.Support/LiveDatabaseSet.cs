@@ -20,13 +20,13 @@ public abstract class LiveDatabaseSet : IDisposable
     {
     }
 
-    internal LiveDatabaseSet(string purpose, Func<TestBackendKind, string, ITestDatabase> create)
+    public LiveDatabaseSet(string purpose, Func<TestBackendKind, string, ITestDatabase> create)
     {
         _purpose = purpose;
         _create = create;
     }
 
-    internal string ConnectionFor(LiveBackend backend)
+    public string ConnectionFor(LiveBackend backend)
     {
         lock (_gate)
         {

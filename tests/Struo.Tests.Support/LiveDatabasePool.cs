@@ -6,7 +6,7 @@ namespace Struo.Tests.Support;
 /// Reusable empty databases on one live backend. A lease hands out an idle database or creates one;
 /// returning it drops every table, and a database that cannot be emptied is dropped instead of reused.
 /// </summary>
-internal sealed class LiveDatabasePool
+public sealed class LiveDatabasePool
 {
     private const string Purpose = "unit";
     private const int ResetCommandTimeoutSeconds = 10;
@@ -18,7 +18,7 @@ internal sealed class LiveDatabasePool
     private readonly ConcurrentDictionary<string, ITestDatabase> _owned = new(StringComparer.Ordinal);
     private int _createdCount;
 
-    internal LiveDatabasePool(TestBackendKind kind)
+    public LiveDatabasePool(TestBackendKind kind)
     {
         if (kind == TestBackendKind.Sqlite)
             throw new ArgumentException("SQLite has no live server to pool databases on.", nameof(kind));
@@ -70,7 +70,7 @@ internal sealed class LiveDatabasePool
         });
     }
 
-    internal ITestDatabase Take()
+    public ITestDatabase Take()
     {
         if (_idle.TryTake(out var idle)) return idle;
         var created = TestBackend.CreateLiveDatabase(Kind, Purpose);
@@ -80,7 +80,7 @@ internal sealed class LiveDatabasePool
     }
 
     /// <summary>Empties <paramref name="db"/> and makes it idle, or drops it. Never throws.</summary>
-    internal void Return(ITestDatabase db)
+    public void Return(ITestDatabase db)
     {
         // Already dropped by DropAll.
         if (!_owned.ContainsKey(db.Name)) return;

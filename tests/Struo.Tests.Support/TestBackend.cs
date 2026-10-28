@@ -10,7 +10,7 @@ public enum TestBackendKind { Sqlite, PostgreSQL, SqlServer, MySql, MariaDb }
 /// backend gets one fresh, uniquely named database per host, dropped on dispose. Unit harnesses get
 /// theirs from <see cref="CreateUnitDatabase"/>, which leases from a pool of emptied databases.
 /// </summary>
-internal static partial class TestBackend
+public static partial class TestBackend
 {
     public const string EnvVar = "STRUO_TEST_BACKEND";
 

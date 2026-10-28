@@ -3,8 +3,6 @@ using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
-[assembly: TestFramework("Struo.Tests.Support.StruoTestFramework", "Struo.Tests")]
-
 namespace Struo.Tests.Support;
 
 /// <summary>
@@ -17,7 +15,7 @@ public sealed class StruoTestFramework(IMessageSink diagnosticMessageSink) : Xun
         new StruoTestFrameworkExecutor(assemblyName, SourceInformationProvider, DiagnosticMessageSink);
 }
 
-internal sealed class StruoTestFrameworkExecutor(
+public sealed class StruoTestFrameworkExecutor(
     AssemblyName assemblyName,
     ISourceInformationProvider sourceInformationProvider,
     IMessageSink diagnosticMessageSink)
@@ -34,7 +32,7 @@ internal sealed class StruoTestFrameworkExecutor(
     }
 }
 
-internal sealed class StruoTestAssemblyRunner(
+public sealed class StruoTestAssemblyRunner(
     ITestAssembly testAssembly,
     IEnumerable<IXunitTestCase> testCases,
     IMessageSink diagnosticMessageSink,

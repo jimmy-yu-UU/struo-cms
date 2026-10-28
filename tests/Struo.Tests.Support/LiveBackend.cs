@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 /// the backend is not configured). MariaDB runs on <see cref="StruoDbType.MySql"/> but is its own case so
 /// test output names it separately.
 /// </summary>
-internal sealed record LiveBackend(string Name, StruoDbType Db, string? Connection)
+public sealed record LiveBackend(string Name, StruoDbType Db, string? Connection)
 {
     public static IReadOnlyList<LiveBackend> All { get; } =
     [

@@ -6,7 +6,7 @@ namespace Struo.Tests.Support;
 /// override, so it never reaches the maintainer's real services: Redis, an S3 or MinIO bucket, the image
 /// cache path and the single-sign-on providers. Layer it as an in-memory source; it wins over the file.
 /// </summary>
-internal static class HostIsolation
+public static class HostIsolation
 {
     public static Dictionary<string, string?> ExternalTargets(string filesRoot, string imageCacheRoot) => new()
     {

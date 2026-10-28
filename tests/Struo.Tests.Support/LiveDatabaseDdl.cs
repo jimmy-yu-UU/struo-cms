@@ -12,7 +12,7 @@ namespace Struo.Tests.Support;
 /// name interpolated into a DROP passes <see cref="ValidateName"/> first; the SQL Server ALTERs
 /// bracket-quote the name (doubling any <c>]</c>) and refuse a database whose name lacks "test".
 /// </summary>
-internal static partial class LiveDatabaseDdl
+public static partial class LiveDatabaseDdl
 {
     // Bounds a drop that waits on a lock the server cannot sever (MySQL and MariaDB metadata locks).
     private const int DropCommandTimeoutSeconds = 30;
@@ -169,7 +169,7 @@ internal static partial class LiveDatabaseDdl
     };
 
     // Clears the client pool of exactly this connection string. Never throws.
-    internal static void ClearPool(TestBackendKind kind, string connectionString)
+    public static void ClearPool(TestBackendKind kind, string connectionString)
     {
         try
         {

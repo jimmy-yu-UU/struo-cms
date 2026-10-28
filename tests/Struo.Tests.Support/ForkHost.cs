@@ -17,7 +17,7 @@ namespace Struo.Tests.Support;
 /// <c>ApiIntegration</c> collection to run serially with the other hosts. Every external target the
 /// gitignored Development settings file may point at is overridden (<see cref="HostIsolation"/>).
 /// </summary>
-internal sealed class ForkHost : IAsyncDisposable
+public sealed class ForkHost : IAsyncDisposable
 {
     private readonly ITestDatabase _db;
     private readonly string _filesRoot;

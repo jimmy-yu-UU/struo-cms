@@ -5,7 +5,8 @@ using Xunit;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// Tests outside <c>Support/</c> get their database from <see cref="TestBackend"/>, so they run on the
+/// Tests in every test project (<c>tests/*</c> except the Support library, and <c>samples/*Tests</c>) get
+/// their database from <see cref="TestBackend"/>, so they run on the
 /// backend <c>STRUO_TEST_BACKEND</c> selects. Using <see cref="SqliteTestDatabase"/> or
 /// <see cref="SqliteTempTestDatabase"/> directly pins a test to SQLite; a SQLite-only test says so with
 /// <see cref="SqliteOnlyFactAttribute"/> instead. <c>TestBackend.CreateSqliteDatabase()</c> pins the same
@@ -22,11 +23,11 @@ public sealed partial class SqliteTestDatabaseUsageTests
     // Files that call TestBackend.CreateSqliteDatabase() on purpose, with the reason.
     private static readonly Dictionary<string, string> SqliteCreators = new()
     {
-        ["DependencyInjection/OptionsValidationTests.cs"] = "[SqliteOnly] cases; the file only satisfies the required connection string",
-        ["Migrations/CrossProviderStartupGateLiveTests.cs"] = "the SQLite side of the cross-provider gate is SQLite by definition",
-        ["Migrations/Schema/IndexCatalogTests.cs"] = "[SqliteOnly] Sqlite_* catalog tests",
-        ["Migrations/StruoMigrationTypeTests.cs"] = "[SqliteOnly] SQLite literal test",
-        ["Persistence/SqlServerIsolationCheckTests.cs"] = "the non-SQL Server cases only need a client that counts statements",
+        ["Struo.Tests/DependencyInjection/OptionsValidationTests.cs"] = "[SqliteOnly] cases; the file only satisfies the required connection string",
+        ["Struo.Tests/Migrations/CrossProviderStartupGateLiveTests.cs"] = "the SQLite side of the cross-provider gate is SQLite by definition",
+        ["Struo.Tests/Migrations/Schema/IndexCatalogTests.cs"] = "[SqliteOnly] Sqlite_* catalog tests",
+        ["Struo.Tests/Migrations/StruoMigrationTypeTests.cs"] = "[SqliteOnly] SQLite literal test",
+        ["Struo.Tests/Persistence/SqlServerIsolationCheckTests.cs"] = "the non-SQL Server cases only need a client that counts statements",
     };
 
     [Fact]
@@ -56,13 +57,35 @@ public sealed partial class SqliteTestDatabaseUsageTests
 
     private static IEnumerable<(string relative, string line, int number)> TestSources()
     {
-        var root = Path.Combine(RepoRoot.Find(), "tests", "Struo.Tests");
-        return Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
-            .Where(relative => !relative.StartsWith("Support/", StringComparison.Ordinal)
-                               && !relative.StartsWith("bin/", StringComparison.Ordinal)
-                               && !relative.StartsWith("obj/", StringComparison.Ordinal))
-            .SelectMany(relative => File.ReadLines(Path.Combine(root, relative))
-                .Select((line, index) => (relative, line, number: index + 1)));
+        var repo = RepoRoot.Find();
+        var roots = new[] { Path.Combine(repo, "tests"), Path.Combine(repo, "samples") }
+            .Where(Directory.Exists)
+            .SelectMany(Directory.EnumerateDirectories)
+            .Where(IsTestProject)
+            .ToList();
+
+        return roots.SelectMany(projectDir =>
+        {
+            var root = Path.GetDirectoryName(projectDir)!;
+            return Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+                .Where(relative => !IsSupport(relative) && !IsBuildOutput(relative))
+                .SelectMany(relative => File.ReadLines(Path.Combine(root, relative))
+                    .Select((line, index) => (relative, line, number: index + 1)));
+        });
     }
+
+    // The Support library is where SqliteTestDatabase lives; every other test project is scanned.
+    private static bool IsTestProject(string dir)
+    {
+        var name = Path.GetFileName(dir);
+        return name != "Struo.Tests.Support"
+               && name.StartsWith("Struo", StringComparison.Ordinal)
+               && name.Contains("Tests", StringComparison.Ordinal);
+    }
+
+    private static bool IsSupport(string relative) => relative.Contains("/Support/", StringComparison.Ordinal);
+
+    private static bool IsBuildOutput(string relative) =>
+        relative.Contains("/bin/", StringComparison.Ordinal) || relative.Contains("/obj/", StringComparison.Ordinal);
 }

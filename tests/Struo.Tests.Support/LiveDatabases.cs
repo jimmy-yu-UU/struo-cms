@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 /// first, then from <c>Testing:*</c> in the API project's appsettings. Null makes live tests return
 /// early, and makes the API hosts fail when that backend is selected via <c>STRUO_TEST_BACKEND</c>.
 /// </summary>
-internal static class LiveDatabases
+public static class LiveDatabases
 {
     public const string PostgresEnvVar = "STRUO_TEST_PG_CONNECTION";
     public const string PostgresConfigKey = "Testing:PostgresConnection";
