@@ -26,7 +26,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
         // No `translations` key at all → the default-locale translation is missing.
         var body = JsonSerializer.SerializeToElement(new { status = "draft" });
 
-        (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode
+        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode
             .Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -45,7 +45,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
             }
         });
 
-        (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode
+        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode
             .Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -63,16 +63,16 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
                 ["en"] = new { title = "Keep-Me", body = "B-en" }
             }
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", createBody)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", createBody)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
         // 2. PUT with no `translations` key — just a status change. Must NOT 400.
         var updBody = JsonSerializer.SerializeToElement(new { status = "published" });
-        var updResp = await c.PutAsJsonAsync($"/api/items/article/{id}", updBody);
+        var updResp = await c.PutAsJsonAsync($"/api/items/fxArticle/{id}", updBody);
         updResp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // 3. The existing translation is preserved (partial update did not clear it).
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Keep-Me");
     }
@@ -91,7 +91,7 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
             }
         });
 
-        (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode
+        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode
             .Should().Be(HttpStatusCode.Created);
     }
 }

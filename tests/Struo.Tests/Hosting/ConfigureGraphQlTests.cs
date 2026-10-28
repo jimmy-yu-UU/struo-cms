@@ -33,16 +33,16 @@ public class ConfigureGraphQlTests
 
     [ExtendObjectType("Query")]
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
-    public sealed class ArticlesClashQuery
+    public sealed class FxArticlesClashQuery
     {
-        public string GetArticles() => "clash";
+        public string GetFxArticles() => "clash";
     }
 
     [ExtendObjectType("Mutation")]
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
     public sealed class MutationClash
     {
-        public string CreateArticle() => "clash";
+        public string CreateFxArticle() => "clash";
     }
 
     [ExtendObjectType("Mutation")]
@@ -57,9 +57,9 @@ public class ConfigureGraphQlTests
                 : throw new GraphQLException("Sign in to run this mutation.");
     }
 
-    [ExtendObjectType("Article")]
+    [ExtendObjectType("FxArticle")]
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "HotChocolate resolves only instance members of a type extension.")]
-    public sealed class ArticleExtension
+    public sealed class FxArticleExtension
     {
         public string GetForkNote() => "note";
     }
@@ -99,11 +99,11 @@ public class ConfigureGraphQlTests
     public async Task A_fork_root_field_named_like_a_generated_field_fails_startup()
     {
         var error = await ForkHost.StartupErrorAsync(cms =>
-            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<ArticlesClashQuery>()));
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<FxArticlesClashQuery>()));
 
         var ex = ExceptionChainSearch.FindInner<MetadataException>(error);
         ex.Should().NotBeNull(error?.ToString());
-        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("'articles'");
+        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("'fxArticles'");
     }
 
     [SqliteOnlyFact("starts a full host on a SQLite temp database")]
@@ -121,11 +121,11 @@ public class ConfigureGraphQlTests
     public async Task A_fork_type_named_like_a_collection_type_fails_startup()
     {
         var error = await ForkHost.StartupErrorAsync(cms =>
-            cms.ConfigureGraphQl(gql => gql.AddObjectType<RevisionClash>(d => d.Name("Article"))));
+            cms.ConfigureGraphQl(gql => gql.AddObjectType<RevisionClash>(d => d.Name("FxArticle"))));
 
         var ex = ExceptionChainSearch.FindInner<MetadataException>(error);
         ex.Should().NotBeNull(error?.ToString());
-        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("'Article'");
+        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("'FxArticle'");
     }
 
     [SqliteOnlyFact("starts a full host on a SQLite temp database")]
@@ -156,17 +156,17 @@ public class ConfigureGraphQlTests
 
         var ex = ExceptionChainSearch.FindInner<MetadataException>(error);
         ex.Should().NotBeNull(error?.ToString());
-        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("Mutation field name 'createArticle'");
+        ex!.Message.Should().Contain("GraphQL name collision").And.Contain("Mutation field name 'createFxArticle'");
     }
 
     [SqliteOnlyFact("starts a full host on a SQLite temp database")]
     public async Task A_fork_field_on_a_generated_type_is_a_legitimate_extension()
     {
         await using var host = await ForkHost.StartAsync(cms =>
-            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<ArticleExtension>()));
+            cms.ConfigureGraphQl(gql => gql.AddTypeExtension<FxArticleExtension>()));
 
         var response = await host.CreateClient().PostAsJsonAsync(
-            "/graphql", new { query = "{ __type(name: \"Article\") { fields { name } } }" });
+            "/graphql", new { query = "{ __type(name: \"FxArticle\") { fields { name } } }" });
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
 

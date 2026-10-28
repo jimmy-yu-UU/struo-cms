@@ -10,7 +10,7 @@ using SqlSugar;
 using Struo.Application.Query;
 using Struo.Domain;
 using Struo.Infrastructure.Revisions;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -43,8 +43,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
         public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
         {
-            if (script.MutateStatus && context.Entity is Article article) article.Status = "published";
-            if (context.Operation == ItemWriteOperation.Update && context.Existing is Article old && context.Entity is Article current)
+            if (script.MutateStatus && context.Entity is FxArticle article) article.Status = "published";
+            if (context.Operation == ItemWriteOperation.Update && context.Existing is FxArticle old && context.Entity is FxArticle current)
                 script.Statuses = (old.Status, current.Status);
             return Step(context, "BeforeWrite");
         }
@@ -67,7 +67,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     private static JsonElement Root(string body) => JsonDocument.Parse(body).RootElement;
 
     private async Task<(WebApplicationFactory<Program> Host, HttpClient Client, Script Script)> HostAsync(
-        string collection = "article", params string[] interceptorNames)
+        string collection = "fxArticle", params string[] interceptorNames)
     {
         var script = new Script();
         var names = interceptorNames.Length == 0 ? new[] { "A" } : interceptorNames;
@@ -87,7 +87,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
     private static async Task<string> CreateArticleAsync(HttpClient client, object? body = null)
     {
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             body ?? new { status = "draft", translations = new { en = new { title = "t-" + Guid.NewGuid().ToString("N")[..6] } } });
         response.StatusCode.Should().Be(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
@@ -106,7 +106,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task Every_operation_runs_every_hook_for_every_interceptor_in_registration_order()
     {
-        var (_, client, script) = await HostAsync("article", "A", "B");
+        var (_, client, script) = await HostAsync("fxArticle", "A", "B");
 
         var id = await CreateArticleAsync(client);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Create));
@@ -115,29 +115,29 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         script.Calls.Skip(2).Should().OnlyContain(c => c.Id == id);
 
         script.Calls.Clear();
-        (await client.PutAsJsonAsync($"/api/items/article/{id}", new { status = "published" }))
+        (await client.PutAsJsonAsync($"/api/items/fxArticle/{id}", new { status = "published" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Update));
         script.Calls.Should().OnlyContain(c => c.Id == id && c.BodyKeys.SequenceEqual(new[] { "status" }));
 
         script.Calls.Clear();
-        (await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null))
+        (await client.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Revert));
         script.Calls.Should().OnlyContain(c => c.Id == id && c.BodyKeys.Contains("status"));
 
         script.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Trash));
         script.Calls.Should().OnlyContain(c => c.Id == id && c.BodyKeys.Length == 0);
 
         script.Calls.Clear();
-        (await client.PostAsync($"/api/items/article/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.PostAsync($"/api/items/fxArticle/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.OK);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Restore));
         script.Calls.Should().OnlyContain(c => c.Id == id && c.BodyKeys.Length == 0);
 
         script.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/article/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Purge));
         script.Calls.Should().OnlyContain(c => c.Id == id && c.BodyKeys.Length == 0);
     }
@@ -148,11 +148,11 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var (_, client, script) = await HostAsync();
         var id = await CreateArticleAsync(client);
         script.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         script.Calls.Single(c => c.Hook == "AfterCommit").Changed.Should().BeTrue();
 
         script.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         Sequence(script).Should().Equal("A:BeforeWrite:Trash", "A:AfterCommit:Trash");
         script.Calls[1].Changed.Should().BeFalse();
@@ -165,7 +165,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var id = await CreateArticleAsync(client);
         script.Calls.Clear();
 
-        (await client.PostAsync($"/api/items/article/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.PostAsync($"/api/items/fxArticle/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         Sequence(script).Should().Equal("A:BeforeWrite:Restore", "A:AfterCommit:Restore");
         script.Calls[1].Changed.Should().BeFalse();
@@ -179,18 +179,18 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeFalse();
         script.Calls.Clear();
 
-        (await client.PutAsJsonAsync($"/api/items/article/{id}", new { status = "published" }))
+        (await client.PutAsJsonAsync($"/api/items/fxArticle/{id}", new { status = "published" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         script.Statuses.Should().Be(("draft", "published"));
         script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeTrue();
 
         script.Calls.Clear();
-        (await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null)).StatusCode.Should().Be(HttpStatusCode.OK);
         script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeTrue();
 
         script.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         script.Calls.Should().OnlyContain(c => !c.HasExisting);
     }
 
@@ -201,7 +201,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         script.ThrowIn = "BeforeWrite";
         script.ThrowQueryException = true;
 
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "refused" } } });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
@@ -215,17 +215,17 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var before = await CountsAsync(host);
         script.ThrowIn = "InTransaction";
 
-        var response = await client.DeleteAsync($"/api/items/article/{id}");
+        var response = await client.DeleteAsync($"/api/items/fxArticle/{id}");
 
         response.StatusCode.Should().Be((HttpStatusCode)429);
         (await CountsAsync(host)).Should().Be(before);
-        (await client.GetAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.GetAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task An_interceptor_that_does_not_apply_to_the_collection_is_never_called()
     {
-        var (_, client, script) = await HostAsync("category");
+        var (_, client, script) = await HostAsync("fxCategory");
 
         await CreateArticleAsync(client);
 
@@ -240,7 +240,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
         var id = await CreateArticleAsync(client, new { status = "draft", translations = new { en = new { title = "m" } } });
 
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         Root(await get.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
             .Should().Be("published");
     }
@@ -252,15 +252,15 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         return new Counts(
-            await db.Queryable<Article>().CountAsync(),
-            await db.Queryable<ArticleTag>().CountAsync(),
-            await db.Queryable<ArticleTranslation>().CountAsync(),
-            await db.Queryable<Revision>().Where(r => r.CollectionName == "article").CountAsync());
+            await db.Queryable<FxArticle>().CountAsync(),
+            await db.Queryable<FxArticleTag>().CountAsync(),
+            await db.Queryable<FxArticleTranslation>().CountAsync(),
+            await db.Queryable<Revision>().Where(r => r.CollectionName == "fxArticle").CountAsync());
     }
 
     private static async Task<string> CreateTagAsync(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync("/api/items/tag", new { name = "tag-" + Guid.NewGuid().ToString("N")[..8] });
+        var response = await client.PostAsJsonAsync("/api/items/fxTag", new { name = "tag-" + Guid.NewGuid().ToString("N")[..8] });
         response.StatusCode.Should().Be(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
     }
@@ -273,7 +273,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var before = await CountsAsync(host);
         script.ThrowIn = "InTransaction";
 
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", tags = new[] { tag }, translations = new { en = new { title = "rolled back" } } });
 
         response.StatusCode.Should().Be((HttpStatusCode)429, await response.Content.ReadAsStringAsync());
@@ -292,12 +292,12 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var before = await CountsAsync(host);
         script.ThrowIn = "InTransaction";
 
-        var response = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var response = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", tags = Array.Empty<string>(), translations = new { en = new { title = "changed" } } });
 
         response.StatusCode.Should().Be((HttpStatusCode)429, await response.Content.ReadAsStringAsync());
         (await CountsAsync(host)).Should().Be(before);
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         var data = Root(await get.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetProperty("status").GetString().Should().Be("draft");
         data.GetProperty("translations").GetProperty("en").GetProperty("title").GetString().Should().Be("keep");
@@ -310,7 +310,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         script.ThrowIn = "BeforeWrite";
         var before = await CountsAsync(host);
 
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "refused" } } });
         var json = await response.Content.ReadAsStringAsync();
 
@@ -322,11 +322,11 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_StruoDomainException_from_BeforeWrite_surfaces_with_its_code_on_GraphQL()
     {
-        var (_, client, script) = await HostAsync("category");
+        var (_, client, script) = await HostAsync("fxCategory");
         script.ThrowIn = "BeforeWrite";
 
         var response = await client.PostAsJsonAsync("/graphql",
-            new { query = "mutation { createCategory(input: { name: \"gql-refused\" }) { id } }" });
+            new { query = "mutation { createFxCategory(input: { name: \"gql-refused\" }) { id } }" });
         var json = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, json);
@@ -342,7 +342,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var before = await CountsAsync(host);
         script.ThrowIn = "AfterCommit";
 
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "committed" } } });
 
         response.StatusCode.Should().Be((HttpStatusCode)429, await response.Content.ReadAsStringAsync());
@@ -358,8 +358,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var listener = new RecordingItemChangeListener();
         var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
         {
-            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "article", script));
-            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("B", "article", script));
+            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "fxArticle", script));
+            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("B", "fxArticle", script));
             s.AddSingleton<Struo.Application.Changes.IItemChangeListener>(listener);
         })).CreateClient();
         await factory.EnsureAdminSeededAsync();
@@ -367,7 +367,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         (await client.PostAsJsonAsync("/api/auth/login",
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
 
-        var response = await client.PostAsJsonAsync("/api/items/article",
+        var response = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "notified" } } });
 
         response.StatusCode.Should().Be((HttpStatusCode)429, await response.Content.ReadAsStringAsync());
@@ -379,7 +379,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task A_cascaded_purge_does_not_invoke_the_interceptor_of_the_affected_children()
     {
         var (host, client, script) = await HostAsync();
-        var category = await client.PostAsJsonAsync("/api/items/category", new { name = "cascade-" + Guid.NewGuid().ToString("N")[..6] });
+        var category = await client.PostAsJsonAsync("/api/items/fxCategory", new { name = "cascade-" + Guid.NewGuid().ToString("N")[..6] });
         var categoryId = Root(await category.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
         var articleId = await CreateArticleAsync(client, new
         {
@@ -387,23 +387,23 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         });
         script.Calls.Clear();
 
-        (await client.DeleteAsync($"/api/items/category/{categoryId}?purge=true")).StatusCode
+        (await client.DeleteAsync($"/api/items/fxCategory/{categoryId}?purge=true")).StatusCode
             .Should().Be(HttpStatusCode.NoContent);
 
         script.Calls.Should().BeEmpty();
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var child = await db.Queryable<Article>().Where(a => a.Id == Guid.Parse(articleId)).FirstAsync();
+        var child = await db.Queryable<FxArticle>().Where(a => a.Id == Guid.Parse(articleId)).FirstAsync();
         child.CategoryId.Should().BeNull("the purge set the child's foreign key to null");
     }
 
     private sealed class FillNameInterceptor : IItemWriteInterceptor
     {
-        public bool AppliesTo(string collection) => collection == "category";
+        public bool AppliesTo(string collection) => collection == "fxCategory";
 
         public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
         {
-            if (context.Operation == ItemWriteOperation.Create && context.Entity is Category category)
+            if (context.Operation == ItemWriteOperation.Create && context.Entity is FxCategory category)
                 category.Name = "generated";
             return Task.CompletedTask;
         }
@@ -419,7 +419,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         (await client.PostAsJsonAsync("/api/auth/login",
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
 
-        var response = await client.PostAsJsonAsync("/api/items/category", new { });
+        var response = await client.PostAsJsonAsync("/api/items/fxCategory", new { });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         Root(await response.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("name").GetString()
@@ -428,7 +428,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
 
     private sealed class RecordingDeleteHandler(List<string> calls) : ICollectionDeleteHandler
     {
-        public bool AppliesTo(string collection) => collection == "category";
+        public bool AppliesTo(string collection) => collection == "fxCategory";
 
         public Task<bool> TrashAsync(string id, CancellationToken ct)
         {
@@ -450,25 +450,25 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
         var calls = new List<string>();
         var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
         {
-            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "category", script));
+            s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "fxCategory", script));
             s.AddScoped<ICollectionDeleteHandler>(_ => new RecordingDeleteHandler(calls));
         })).CreateClient();
         await factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login",
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
-        var created = await client.PostAsJsonAsync("/api/items/category", new { name = "handled-" + Guid.NewGuid().ToString("N")[..6] });
+        var created = await client.PostAsJsonAsync("/api/items/fxCategory", new { name = "handled-" + Guid.NewGuid().ToString("N")[..6] });
         var id = Root(await created.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
         script.Calls.Clear();
 
-        (await client.DeleteAsync($"/api/items/category/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        (await client.DeleteAsync($"/api/items/category/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxCategory/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxCategory/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         calls.Should().Equal($"trash:{id}", $"purge:{id}");
         Sequence(script).Should().Equal(
             "A:BeforeWrite:Trash", "A:AfterCommit:Trash", "A:BeforeWrite:Purge", "A:AfterCommit:Purge");
         script.Calls.Where(c => c.Hook == "AfterCommit").Should().OnlyContain(c => c.Changed);
-        var get = await client.GetAsync($"/api/items/category/{id}");
+        var get = await client.GetAsync($"/api/items/fxCategory/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK, "the handler never touched the row");
     }
 }

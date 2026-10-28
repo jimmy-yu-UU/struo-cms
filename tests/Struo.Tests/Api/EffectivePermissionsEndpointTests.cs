@@ -60,14 +60,14 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
     public async Task Multi_role_grants_are_or_merged()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var readRole = await CreateRoleWithGrantAsync(admin, "article", read: true, write: false);
-        var writeRole = await CreateRoleWithGrantAsync(admin, "article", read: false, write: true);
+        var readRole = await CreateRoleWithGrantAsync(admin, "fxArticle", read: true, write: false);
+        var writeRole = await CreateRoleWithGrantAsync(admin, "fxArticle", read: false, write: true);
         var userId = await CreateUserWithRolesAsync(admin, [readRole, writeRole]);
 
         var data = (await admin.GetFromJsonAsync<JsonElement>($"/api/users/{userId}/effective-permissions"))
             .GetProperty("data");
         data.GetProperty("isSuperAdmin").GetBoolean().Should().BeFalse();
-        var article = data.GetProperty("permissions").GetProperty("article");
+        var article = data.GetProperty("permissions").GetProperty("fxArticle");
         article.GetProperty("read").GetBoolean().Should().BeTrue();
         article.GetProperty("write").GetBoolean().Should().BeTrue();
         article.GetProperty("delete").GetBoolean().Should().BeFalse();
@@ -105,27 +105,27 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
     public async Task Roles_query_overrides_the_stored_role_set()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        // 'article' is public-read, so its WRITE grant here is what distinguishes "stored role still
+        // 'fxArticle' is public-read, so its WRITE grant here is what distinguishes "stored role still
         // applied" (write would leak true) from "stored role ignored" (write must come back false).
-        var storedRole = await CreateRoleWithGrantAsync(admin, "article", read: true, write: true);
-        var hypoRole = await CreateRoleWithGrantAsync(admin, "tag", read: true, write: true);
+        var storedRole = await CreateRoleWithGrantAsync(admin, "fxArticle", read: true, write: true);
+        var hypoRole = await CreateRoleWithGrantAsync(admin, "fxTag", read: true, write: true);
         var userId = await CreateUserWithRolesAsync(admin, [storedRole]);
 
         var data = (await admin.GetFromJsonAsync<JsonElement>(
                 $"/api/users/{userId}/effective-permissions?roles={hypoRole}"))
             .GetProperty("data");
         var perms = data.GetProperty("permissions");
-        // 'article' still appears via the public floor (read-only) even though the stored role — which
+        // 'fxArticle' still appears via the public floor (read-only) even though the stored role — which
         // also granted write — has been overridden by the roles= query.
-        perms.GetProperty("article").GetProperty("write").GetBoolean().Should().BeFalse("stored roles must be ignored");
-        perms.GetProperty("tag").GetProperty("write").GetBoolean().Should().BeTrue();
+        perms.GetProperty("fxArticle").GetProperty("write").GetBoolean().Should().BeFalse("stored roles must be ignored");
+        perms.GetProperty("fxTag").GetProperty("write").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
     public async Task Empty_roles_query_previews_the_public_floor()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var role = await CreateRoleWithGrantAsync(admin, "article", read: true, write: true);
+        var role = await CreateRoleWithGrantAsync(admin, "fxArticle", read: true, write: true);
         var userId = await CreateUserWithRolesAsync(admin, [role]);
 
         var data = (await admin.GetFromJsonAsync<JsonElement>(

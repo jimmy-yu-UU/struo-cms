@@ -30,7 +30,7 @@ public class VersionConflictEndpointTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "V" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
@@ -38,12 +38,12 @@ public class VersionConflictEndpointTests(ApiFactory factory)
         var version = created.GetProperty("version").GetInt64(); // 0 at creation
 
         // First update echoing the loaded version succeeds and advances the row's version.
-        var ok = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var ok = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", version });
         ok.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Second update still echoing the OLD version is a CAS miss.
-        var stale = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var stale = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "draft", version });
         stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
         Root(await stale.Content.ReadAsStringAsync())

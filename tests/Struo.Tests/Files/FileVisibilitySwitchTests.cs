@@ -84,7 +84,7 @@ public class FileVisibilitySwitchTests(ApiFactory factory)
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
         var id = await UploadAsync(admin);
-        var (reader, _) = await _factory.CreateEditorClientAsync(readCollections: ["file"], writeCollections: ["article"]);
+        var (reader, _) = await _factory.CreateEditorClientAsync(readCollections: ["file"], writeCollections: ["fxArticle"]);
 
         var resp = await SetStatusAsync(reader, id, "draft");
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);

@@ -16,20 +16,20 @@ public class RelationSchemaTests(ApiFactory factory)
     public async Task Article_schema_includes_relations()
     {
         var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
-        var body = await (await client.GetAsync("/api/schema/article")).Content.ReadAsStringAsync();
+        var body = await (await client.GetAsync("/api/schema/fxArticle")).Content.ReadAsStringAsync();
         body.Should().Contain("\"relations\"");
         body.Should().Contain("\"name\":\"category\"");
         body.Should().Contain("\"kind\":\"manyToOne\"");
         // seoOgImage parent relation removed (SEO moved to SeoTranslation sidecar)
         body.Should().NotContain("\"name\":\"seoOgImage\"");
-        body.Should().Contain("\"targetCollection\":\"category\"");
+        body.Should().Contain("\"targetCollection\":\"fxCategory\"");
 
         // Removed Author/ArticleFile entities.
         // Tag/ArticleTag M2M reintroduced for TagSelect live-verification.
         body.Should().NotContain("\"name\":\"author\"");
         body.Should().Contain("\"name\":\"tags\"");
         body.Should().Contain("\"kind\":\"manyToMany\"");
-        body.Should().Contain("\"targetCollection\":\"tag\"");
+        body.Should().Contain("\"targetCollection\":\"fxTag\"");
 
         // "gallery" is intentionally present in the body as a scalar Files *field* (not a
         // relation) — a whole-body substring check for its absence would conflict with that, so
@@ -45,7 +45,7 @@ public class RelationSchemaTests(ApiFactory factory)
     public async Task Category_schema_includes_self_referencing_tree()
     {
         var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
-        var body = await (await client.GetAsync("/api/schema/category")).Content.ReadAsStringAsync();
+        var body = await (await client.GetAsync("/api/schema/fxCategory")).Content.ReadAsStringAsync();
         body.Should().Contain("\"name\":\"parent\"");
         body.Should().Contain("\"selfReferencing\":true");
         body.Should().Contain("\"name\":\"children\"");
@@ -55,11 +55,11 @@ public class RelationSchemaTests(ApiFactory factory)
     public async Task Article_tags_relation_exposes_junction_payload_fields_and_sort_field()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var body = await (await client.GetAsync("/api/schema/article")).Content.ReadAsStringAsync();
+        var body = await (await client.GetAsync("/api/schema/fxArticle")).Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
         var relations = doc.RootElement.GetProperty("data").GetProperty("relations").EnumerateArray().ToList();
         var tags = relations.Single(r => r.GetProperty("name").GetString() == "tags");
-        tags.GetProperty("junctionCollection").GetString().Should().Be("articleTag");
+        tags.GetProperty("junctionCollection").GetString().Should().Be("fxArticleTag");
         tags.GetProperty("sortField").GetString().Should().Be("sort");
         tags.GetProperty("junctionPayloadFields").EnumerateArray().Select(e => e.GetString()).Should().Equal("note");
         var category = relations.Single(r => r.GetProperty("name").GetString() == "category");

@@ -20,23 +20,23 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "Hello" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdData = Root(await create.Content.ReadAsStringAsync()).GetProperty("data");
         var id = createdData.GetProperty("id").GetString()!;
         createdData.GetProperty("createdBy").GetString().Should().Be(_factory.AdminUserId.ToString());
 
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var put = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", translations = new { en = new { title = "Updated" } } });
         put.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await put.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString().Should().Be("published");
 
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        (await client.GetAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.GetAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -44,12 +44,12 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
         for (var i = 0; i < 4; i++)
-            await client.PostAsJsonAsync("/api/items/article",
+            await client.PostAsJsonAsync("/api/items/fxArticle",
                 new { status = i % 2 == 0 ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
 
         // NOTE: sort/filter/fields by the translatable `title` is locale-aware querying.
         // Here we filter+sort+select by non-translatable own-collection fields (status, id).
-        var resp = await client.GetAsync("/api/items/article?filter[status][_eq]=published&sort=-id&limit=1&offset=0&fields=id,status");
+        var resp = await client.GetAsync("/api/items/fxArticle?filter[status][_eq]=published&sort=-id&limit=1&offset=0&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.GetProperty("meta").GetProperty("total").GetInt32().Should().BeGreaterThanOrEqualTo(2);
@@ -62,7 +62,7 @@ public class ItemsEndpointTests(ApiFactory factory)
     public async Task Unknown_field_returns_400()
     {
         var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/items/article?filter[ghost][_eq]=x");
+        var resp = await client.GetAsync("/api/items/fxArticle?filter[ghost][_eq]=x");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -78,12 +78,12 @@ public class ItemsEndpointTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "IdFilterTest" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
-        var resp = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&fields=id,status");
+        var resp = await client.GetAsync($"/api/items/fxArticle?filter[id][_eq]={id}&fields=id,status");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().Be(1);
@@ -94,7 +94,7 @@ public class ItemsEndpointTests(ApiFactory factory)
     public async Task Sort_by_id_descending_succeeds()
     {
         var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/items/article?sort=-id&limit=2");
+        var resp = await client.GetAsync("/api/items/fxArticle?sort=-id&limit=2");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

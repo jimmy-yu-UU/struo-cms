@@ -30,7 +30,7 @@ public class CsrfProtectionTests(ApiFactory factory)
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword });
         login.EnsureSuccessStatusCode();
 
-        var resp = await bare.PostAsJsonAsync("/api/items/article", ArticleBody);
+        var resp = await bare.PostAsJsonAsync("/api/items/fxArticle", ArticleBody);
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -39,7 +39,7 @@ public class CsrfProtectionTests(ApiFactory factory)
     {
         // The standard helper client sends the CSRF header (like the SPA).
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await client.PostAsJsonAsync("/api/items/article", ArticleBody);
+        var resp = await client.PostAsJsonAsync("/api/items/fxArticle", ArticleBody);
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
@@ -54,7 +54,7 @@ public class CsrfProtectionTests(ApiFactory factory)
         // Bearer auth is not forgeable via ambient credentials → CSRF header not required.
         var bearer = _factory.CreateClient();
         bearer.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var resp = await bearer.PostAsJsonAsync("/api/items/article", ArticleBody);
+        var resp = await bearer.PostAsJsonAsync("/api/items/fxArticle", ArticleBody);
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 }

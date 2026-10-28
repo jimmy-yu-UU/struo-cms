@@ -27,7 +27,7 @@ public class SearchProviderApiTests(ApiFactory factory)
     private async Task<(string CategoryId, string GammaId)> SeedAsync()
     {
         var (client, cat, _) = await FacetSeed.SeedAsync(_factory);
-        var drafts = await Json(await client.GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&filter[status][_eq]=draft"));
+        var drafts = await Json(await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&filter[status][_eq]=draft"));
         var gamma = drafts.RootElement.GetProperty("data").EnumerateArray().Single().GetProperty("id").GetString()!;
         return (cat, gamma);
     }
@@ -44,14 +44,14 @@ public class SearchProviderApiTests(ApiFactory factory)
     {
         var (cat, gammaId) = await SeedAsync();
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.Candidates([gammaId]));
-        var r = await HostWith(provider).GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&search=zzz&facets=status");
+        var r = await HostWith(provider).GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=zzz&facets=status");
         r.StatusCode.Should().Be(HttpStatusCode.OK, await r.Content.ReadAsStringAsync());
         var root = (await Json(r)).RootElement;
         root.GetProperty("meta").GetProperty("total").GetInt64().Should().Be(1);
         root.GetProperty("data")[0].GetProperty("id").GetString().Should().Be(gammaId);
         var status = root.GetProperty("meta").GetProperty("facets").GetProperty("status").EnumerateArray().ToList();
         status.Should().ContainSingle().Which.GetProperty("value").GetString().Should().Be("draft");
-        provider.Requests.Should().ContainSingle().Which.Should().BeEquivalentTo(new { Collection = "article", Term = "zzz" });
+        provider.Requests.Should().ContainSingle().Which.Should().BeEquivalentTo(new { Collection = "fxArticle", Term = "zzz" });
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class SearchProviderApiTests(ApiFactory factory)
     {
         var (cat, _) = await SeedAsync();
         var client = HostWith(new ScriptedSearchProvider(_ => SearchOutcome.NotHandled));
-        var r = (await Json(await client.GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&search=Alpha"))).RootElement;
+        var r = (await Json(await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=Alpha"))).RootElement;
         r.GetProperty("meta").GetProperty("total").GetInt64().Should().Be(1);
     }
 
@@ -68,7 +68,7 @@ public class SearchProviderApiTests(ApiFactory factory)
     {
         var (cat, _) = await SeedAsync();
         var client = HostWith(new ScriptedSearchProvider(_ => throw new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
-        var r = await client.GetAsync($"/api/items/article?filter[categoryId][_eq]={cat}&search=zzz");
+        var r = await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=zzz");
         r.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
         var body = await r.Content.ReadAsStringAsync();
         body.Should().NotContain("10.0.0.5");

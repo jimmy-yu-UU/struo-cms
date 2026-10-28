@@ -21,15 +21,15 @@ public class SchemaEndpointTests(ApiFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("\"name\":\"article\"");
-        body.Should().Contain("\"name\":\"category\"");
+        body.Should().Contain("\"name\":\"fxArticle\"");
+        body.Should().Contain("\"name\":\"fxCategory\"");
     }
 
     [Fact]
     public async Task Schema_for_collection_includes_interfaces_options_and_seo()
     {
         var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
-        var response = await client.GetAsync("/api/schema/article");
+        var response = await client.GetAsync("/api/schema/fxArticle");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync();

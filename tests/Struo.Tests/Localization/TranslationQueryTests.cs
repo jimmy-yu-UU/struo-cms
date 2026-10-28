@@ -25,7 +25,7 @@ public class TranslationQueryTests(ApiFactory factory)
                 ["zh-TW"] = new { title = zhTitle, body = (string?)null }
             }
         });
-        return Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        return Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
     }
 
@@ -37,7 +37,7 @@ public class TranslationQueryTests(ApiFactory factory)
         await NewArticle(c, "EnOther", "ZhOther");
 
         var env = JsonSerializer.SerializeToElement(new { filter = new Dictionary<string, object> { ["title"] = Eq("ZhUniqueAAA") } });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
     }
 
@@ -56,7 +56,7 @@ public class TranslationQueryTests(ApiFactory factory)
         await NewArticle(c, "EnC", $"Other-{tag}");
 
         var env = JsonSerializer.SerializeToElement(new { filter = new Dictionary<string, object> { ["title"] = Eq(zhTitle) } });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         ids.Should().BeEquivalentTo([hit1, hit2]);
     }
@@ -84,7 +84,7 @@ public class TranslationQueryTests(ApiFactory factory)
                 ["title"] = new Dictionary<string, object> { ["_in"] = new[] { aaaTitle, zzzTitle } }
             }
         });
-        var order = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=en", env)).Content.ReadAsStringAsync())
+        var order = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=en", env)).Content.ReadAsStringAsync())
             .GetProperty("data").EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
         order.Should().Equal(zzz, aaa);   // desc by title: Zzz before Aaa, and ONLY these two rows
     }

@@ -25,7 +25,7 @@ public class UnauthorizedDriftTests(ApiFactory factory)
     public async Task Rest_anonymous_viewing_deleted_is_UNAUTHORIZED()
     {
         var client = _factory.CreateClient(); // anonymous; article is public-read in test config
-        var resp = await client.GetAsync("/api/items/article?deleted=with");
+        var resp = await client.GetAsync("/api/items/fxArticle?deleted=with");
         resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         Root(await resp.Content.ReadAsStringAsync())
             .GetProperty("error").GetProperty("code").GetString().Should().Be("UNAUTHORIZED");
@@ -36,7 +36,7 @@ public class UnauthorizedDriftTests(ApiFactory factory)
     {
         var client = _factory.CreateClient(); // anonymous
         var resp = await client.PostAsJsonAsync(
-            "/graphql", new { query = "{ articles(deleted: WITH) { total } }" });
+            "/graphql", new { query = "{ fxArticles(deleted: WITH) { total } }" });
         resp.StatusCode.Should().Be(HttpStatusCode.OK); // GraphQL keeps HTTP 200 semantics
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.TryGetProperty("errors", out var errors).Should().BeTrue();
@@ -56,9 +56,9 @@ public class UnauthorizedDriftTests(ApiFactory factory)
     public async Task GraphQl_authenticated_without_delete_grant_viewing_deleted_is_FORBIDDEN()
     {
         var (client, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []); // authenticated, CanDelete=false
+            readCollections: ["fxArticle"], writeCollections: []); // authenticated, CanDelete=false
         var resp = await client.PostAsJsonAsync(
-            "/graphql", new { query = "{ articles(deleted: WITH) { total } }" });
+            "/graphql", new { query = "{ fxArticles(deleted: WITH) { total } }" });
         resp.StatusCode.Should().Be(HttpStatusCode.OK); // GraphQL keeps HTTP 200 semantics
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.TryGetProperty("errors", out var errors).Should().BeTrue();

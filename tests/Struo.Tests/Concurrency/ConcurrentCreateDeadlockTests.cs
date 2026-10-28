@@ -6,7 +6,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Infrastructure.Revisions;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -41,7 +41,7 @@ public class ConcurrentCreateDeadlockTests(ApiFactory factory)
                     status = "draft",
                     translations = new { en = new { title = $"{marker}-{r}-{worker}" } }
                 };
-                using var response = await admin.PostAsJsonAsync("/api/items/article", body);
+                using var response = await admin.PostAsJsonAsync("/api/items/fxArticle", body);
                 var text = await response.Content.ReadAsStringAsync();
                 if (response.StatusCode != HttpStatusCode.Created)
                 {
@@ -60,10 +60,10 @@ public class ConcurrentCreateDeadlockTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var ids = created.ToList();
         var itemIds = ids.Select(id => id.ToString()).ToList();
-        (await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).CountAsync())
+        (await db.Queryable<FxArticleTranslation>().Where(t => ids.Contains(t.FxArticleId)).CountAsync())
             .Should().Be(ids.Count);
         (await db.Queryable<Revision>()
-                .Where(rv => rv.CollectionName == "article" && itemIds.Contains(rv.ItemId)).CountAsync())
+                .Where(rv => rv.CollectionName == "fxArticle" && itemIds.Contains(rv.ItemId)).CountAsync())
             .Should().Be(ids.Count);
     }
 }

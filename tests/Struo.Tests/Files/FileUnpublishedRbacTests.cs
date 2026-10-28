@@ -50,7 +50,7 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
 
         // Authenticated, has a role, inherits the public read floor on "file" — but NO "file" write grant.
         var (editor, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: ["article"]);
+            readCollections: ["fxArticle"], writeCollections: ["fxArticle"]);
 
         (await editor.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await editor.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -103,7 +103,7 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
         var id = await UploadDraftAsync(admin);
 
         var (_, editorId) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: ["article"]);
+            readCollections: ["fxArticle"], writeCollections: ["fxArticle"]);
         var bearer = await BearerClientForAsync(admin, editorId);
 
         (await bearer.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
