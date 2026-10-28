@@ -22,7 +22,7 @@ public sealed class NarrativeScanScopeTests
     [InlineData("frontend/src/App.vue", true)]
     [InlineData("frontend/e2e/fixtures.ts", true)]
     [InlineData("README.md", false)]
-    [InlineData("docs/guide/en/notes.txt", false)]
+    [InlineData("docs/guide/en/notes.txt", false)] // citation-guard:allow: literal fixture, not a real citation
     [InlineData("samples/Struo.Sample.Blog/Article.cs", false)]
     public void Includes_exempts_only_the_two_locale_changelogs(string path, bool expected)
     {

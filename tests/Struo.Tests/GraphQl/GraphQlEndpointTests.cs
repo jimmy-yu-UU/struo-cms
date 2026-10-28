@@ -22,7 +22,7 @@ public class GraphQlEndpointTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
 
     /// <summary>
-    /// The schema/permission layers (RBAC, per-collection ItemService checks) sit inside collection
+    /// The schema and permission layers (RBAC, per-collection ItemService checks) sit inside collection
     /// field resolvers, not on the endpoint itself, so an anonymous "{ __typename }" request must
     /// clear the whole real pipeline (auth + CSRF + permission middleware, then HotChocolate) and
     /// resolve against the root Query type without any credentials.

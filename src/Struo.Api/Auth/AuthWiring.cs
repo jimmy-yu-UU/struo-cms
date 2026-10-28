@@ -28,7 +28,7 @@ public static class AuthWiring
         services.AddHttpContextAccessor();
         services.Replace(ServiceDescriptor.Singleton<ICurrentUserAccessor, HttpContextCurrentUserAccessor>());
 
-        // Session store backend: real Redis when configured, in-memory otherwise (tests/dev fallback).
+        // Session store backend: real Redis when configured, in-memory otherwise (test and dev fallback).
         var redis = config.GetValue<string>("Redis:ConnectionString");
         if (!string.IsNullOrWhiteSpace(redis))
             services.AddStackExchangeRedisCache(o => o.Configuration = redis);

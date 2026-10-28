@@ -7,7 +7,7 @@ namespace Struo.Tests.GraphQl;
 
 /// <summary>
 /// Hand-built (not scanner-produced) metadata for four collections — article, category, tag, file —
-/// used by GraphQL schema/execution tests so they can run with no DB and no reflection over real
+/// used by GraphQL schema and execution tests so they can run with no DB and no reflection over real
 /// [CmsCollection] entities. Mirrors the shapes the real MetadataScanner would produce for an
 /// equivalent entity set (see tests/Struo.Tests.Fixtures/FxArticle.cs), including leaving translatable
 /// fields (title) off the backing POCO's FieldToProperty map — on the real Article entity, Title

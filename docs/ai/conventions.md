@@ -203,19 +203,26 @@ no per-citation upstream exception. Write upstream citations in the extension-an
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
 "Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on
 that same physical line — the guard checks line by line, so a marker on an adjacent line does not
-help — and it is not a general-purpose suppression. Markdown fenced code blocks get no exemption
+help — and it is not a general-purpose suppression. The other legitimate use is a path a walkthrough
+tells the reader to create, which cannot exist yet. Markdown fenced code blocks get no exemption
 from this scan either — a citation written inside a fence is a real citation and stays caught. A
 bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
 distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
 
 A repo-relative path cited **without** a line number is checked for existence by the same test
-(`BarePathCitations`): a token that starts at one of the resolution roots above and names a
-known-extension file, or ends in a slash, must resolve to a real file or directory. A path in the
+(`BarePathCitations`). A candidate is a token that starts at one of the resolution roots above, with
+or without a file extension, and it must resolve to a real file or directory. The check asks the
+operating system, so a case error passes on Windows and fails on the Linux CI run. A path in the
 frontend's own shorthand, which drops the leading `frontend/`, starts at the wrong root and fails;
-write the full path. Globs, `<placeholder>` and `{placeholder}` segments, `MyFork`, `MyApp` and
-`MyProject` example paths, anything under `docs/_archive-local/`, and a path with a `:line` suffix
-(owned by the check above) are skipped. A path that a walkthrough tells the reader to create takes
-the same `citation-guard:allow` marker on its line.
+write the full path. A token that starts anywhere else, such as an upstream URL or `../src/x`, is not
+a candidate.
+
+Not checked: globs; `<placeholder>` and `{placeholder}` segments; paths with a whole segment equal to,
+or starting with `MyFork.`, `MyApp.`, `MyProject.` or `Acme.` (the fork example names); anything under
+`docs/_archive-local/`; a path with a `:line` suffix (owned by the check above); and the two
+`docs/guide/<locale>/changelog.md` files, which name paths that do not exist in the current tree
+(the same exemption `NarrativeScanScope` gives them). While the top-level `samples/` directory is
+absent, as in a fork that deleted it, paths under `samples/` are skipped too.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
 records — is excluded from the walk entirely (`CodeCitationConventionTests`'s

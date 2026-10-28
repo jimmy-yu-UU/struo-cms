@@ -146,7 +146,7 @@ Every `[CmsField]` setting is written as a named argument:
 | `Sortable` | `bool` | `false` | admin list header becomes clickable to sort |
 | `Sort` | `int` | `0` | field order in the form and list columns |
 | `ReadOnly` | `bool` | `false` | read-only protection; disables admin input |
-| `Hidden` | `bool` | `false` | hidden from schema/API; write unaffected |
+| `Hidden` | `bool` | `false` | hidden from schema and API; write unaffected |
 | `HelpText` | `string?` | `null` | help text under the admin form input |
 | `Translatable` | `bool` | `false` | merged into the translation sidecar |
 | `Group` | `string?` | `null` | the `[CmsFieldGroup]` it belongs to |

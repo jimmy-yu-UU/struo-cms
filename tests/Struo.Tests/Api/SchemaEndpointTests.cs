@@ -40,7 +40,7 @@ public class SchemaEndpointTests(ApiFactory factory)
         body.Should().Contain("\"isSystem\":true");            // audit fields
 
         // seoOgImageId deliberately uses the Image interface, not Hidden: it is a user-editable SEO
-        // field (pick a social-share image), so it must appear in the schema/admin UI like any other
+        // field (pick a social-share image), so it must appear in the schema or admin UI like any other
         // file-picker field, unlike Hidden fields (e.g. Password) which are never exposed to clients.
         // Parse as JsonDocument so we assert the "image" interface belongs specifically to the seoOgImageId field
         // (a global string scan would pass even if some other field carried the image interface).

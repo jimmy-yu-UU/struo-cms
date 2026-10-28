@@ -60,11 +60,11 @@ public sealed partial class CodeCitationConventionTests
     private static readonly string[] ScanRootFiles = ["AGENTS.md", "CLAUDE.md"];
     private static readonly string[] ScanRootDirs = ["docs/ai", "docs/guide", "frontend/src"];
     private static readonly string[] CsOnlyScanRootDirs = ["src", "tests"];
-    private static readonly string[] ResolutionRootFiles = ["AGENTS.md", "CLAUDE.md"];
-    private static readonly string[] ResolutionRootDirs =
+    internal static readonly string[] ResolutionRootFiles = ["AGENTS.md", "CLAUDE.md"];
+    internal static readonly string[] ResolutionRootDirs =
         ["src", "tests", "frontend/src", "schema", "docs", "samples"];
     private static readonly string[] ExcludedDirNames = ["obj", "bin", "node_modules", ".git"];
-    private const string ExcludedRelativePrefix = "docs/_archive-local";
+    internal const string ExcludedRelativePrefix = "docs/_archive-local";
 
     internal static bool IsKnownFileExtension(string extension) => KnownFileExtensions.Contains(extension);
 
@@ -150,6 +150,9 @@ public sealed partial class CodeCitationConventionTests
         var violations = new List<string>();
         foreach (var relativePath in scanFiles)
         {
+            if (NarrativeScanScope.IsLocaleChangelog(relativePath))
+                continue; // a changelog is exempt; it names paths absent from the current tree.
+
             var lines = File.ReadAllLines(Path.Combine(repoRoot, relativePath));
             for (var i = 0; i < lines.Length; i++)
             {

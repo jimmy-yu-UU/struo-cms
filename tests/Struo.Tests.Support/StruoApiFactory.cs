@@ -23,7 +23,7 @@ public class StruoApiFactory : WebApplicationFactory<Program>
     public string FilesRoot { get; } =
         Path.Combine(Path.GetTempPath(), "struo-files-it-" + Guid.NewGuid().ToString("N"));
 
-    // Isolates the image-variant cache from the repo's src/Struo.Api/App_Data default (same
+    // Isolates the image-variant cache from the API project's App_Data default (same
     // rationale as FilesRoot above) — otherwise the IT suite would write real variant files under
     // the checked-out working tree.
     public string ImageCacheRoot { get; } =

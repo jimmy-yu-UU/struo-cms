@@ -206,8 +206,8 @@ ASCII：查詢字會先轉小寫、別名卻照原樣比對，別名裡有大寫
 
 後台介面自己的語言，跟內容語言各自獨立；選定的語言不會送到 API，可選的集合是登錄的訊息目錄，
 而不是伺服器設定，見[第 7 章：多語內容](07-i18n.md)。它是 `vue-i18n` 的非 legacy 模式，訊息
-目錄集中登錄在 `frontend/src/locales/index.ts` 的 `catalogs` 物件裡，出貨兩份：`zh-TW.ts` 與 `en.ts`，
-各是一個巢狀物件，頂層按畫面分命名空間（`nav`、`login`、`itemForm`、`settings` 之類），
+目錄集中登錄在 `frontend/src/locales/index.ts` 的 `catalogs` 物件裡，出貨兩份：
+`zh-TW.ts` 與 `en.ts`，各是一個巢狀物件，頂層按畫面分命名空間（`nav`、`login`、`itemForm`、`settings` 之類），
 `fields` 底下另有一個 `richtext` 子命名空間。`UiLocale` 型別、i18n 的訊息表、切換器的選項、
 鍵集合對稱的測試，全部從這個登錄表推導。
 

@@ -245,9 +245,10 @@ Every file except `tokens.css` is under `frontend/src/components/fields/`.
 The admin UI's own language is independent of content locales; the chosen locale is never sent to
 the API, and the set on offer is the registered catalogs, not server configuration —
 see [Chapter 7: Multilingual Content](07-i18n.md). It runs `vue-i18n`'s non-legacy mode; the
-message catalogs are registered in one place, the `catalogs` object in `frontend/src/locales/index.ts`, and two
-ship: `zh-TW.ts` and `en.ts`, each a nested object with top-level namespaces by screen (`nav`,
-`login`, `itemForm`, `settings`, and so on) and a `richtext` sub-namespace under `fields`. The
+message catalogs are registered in one place, the `catalogs` object in
+`frontend/src/locales/index.ts`, and two ship: `zh-TW.ts` and `en.ts`, each a nested object with
+top-level namespaces by screen (`nav`, `login`, `itemForm`, `settings`, and so on) and a `richtext`
+sub-namespace under `fields`. The
 `UiLocale` type, the i18n message table, the switcher's options and the key-symmetry test are all
 derived from that registry.
 
