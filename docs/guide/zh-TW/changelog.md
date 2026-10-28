@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.15.0
+## 0.15.0 — 2026-10-28
 
 ::: danger 破壞性變更
 - `ItemService` 的建構子變了。`IUserSessionRevocationService`、`ILanguageCollectionRules`、

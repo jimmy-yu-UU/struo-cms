@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.15.0
+## 0.15.0 — 2026-10-28
 
 ::: danger Breaking
 - The `ItemService` constructor changed. The `IUserSessionRevocationService`, `ILanguageCollectionRules`,
