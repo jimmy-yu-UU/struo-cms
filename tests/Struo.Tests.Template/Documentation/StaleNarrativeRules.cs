@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Pure functions behind the repo-wide narrative guard: check a source line's already-extracted

@@ -1,4 +1,4 @@
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Walks a fixed set of root files and root directories under a repository root and returns every

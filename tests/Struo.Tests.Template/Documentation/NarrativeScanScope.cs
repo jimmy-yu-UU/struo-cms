@@ -1,4 +1,4 @@
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Decides which repo-relative paths the "current state only" guard reads. The two changelog files,

@@ -1,10 +1,10 @@
-// tests/Struo.Tests/Template/CiWorkflowConventionTests.cs
+// tests/Struo.Tests.Template/Template/CiWorkflowConventionTests.cs
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Template;
+namespace Struo.Tests.Template.Template;
 
 /// <summary>
 /// Guards <c>.github/workflows/ci.yml</c>: every job bounds its run time, and no step installs a

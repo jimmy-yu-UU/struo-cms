@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Struo.Tests.Support;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Repo-wide guard for the "current state only" convention: comments and prose must carry no change

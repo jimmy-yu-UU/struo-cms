@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 public sealed class NarrativeScanScopeTests
 {
@@ -17,7 +17,7 @@ public sealed class NarrativeScanScopeTests
     [InlineData("AGENTS.md", true)]
     [InlineData("CLAUDE.md", true)]
     [InlineData("src/Struo.Api/Program.cs", true)]
-    [InlineData("tests/Struo.Tests/Documentation/RepositoryFiles.cs", true)]
+    [InlineData("tests/Struo.Tests.Template/Documentation/RepositoryFiles.cs", true)]
     [InlineData("frontend/src/main.ts", true)]
     [InlineData("frontend/src/App.vue", true)]
     [InlineData("frontend/e2e/fixtures.ts", true)]

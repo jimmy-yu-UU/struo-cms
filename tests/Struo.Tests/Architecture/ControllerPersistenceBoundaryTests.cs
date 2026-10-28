@@ -1,8 +1,8 @@
-// tests/Struo.Tests/Template/ControllerPersistenceBoundaryTests.cs
+// tests/Struo.Tests/Architecture/ControllerPersistenceBoundaryTests.cs
 using AwesomeAssertions;
 using Xunit;
 
-namespace Struo.Tests.Template;
+namespace Struo.Tests.Architecture;
 
 /// <summary>
 /// Layering guard: no controller performs its own ORM access. Every data concern the HTTP layer has
@@ -18,8 +18,8 @@ namespace Struo.Tests.Template;
 /// would silently make that untrue. Second, being off the repository path also misses its
 /// audit-stamping and version-bump behavior — the defect <c>UserCredentialWriteAuditTests</c> pins.
 /// </para>
-/// A repo-shape check (it reads the controller sources on disk), so it lives beside
-/// <see cref="TemplateInvariantsTests"/> rather than with the endpoint tests.
+/// A repo-shape check (it reads the controller sources on disk), so it lives here rather than
+/// with the endpoint tests.
 /// </summary>
 public sealed class ControllerPersistenceBoundaryTests
 {
@@ -63,7 +63,7 @@ public sealed class ControllerPersistenceBoundaryTests
             "IRolePermissionStore / IItemRepository already do.");
     }
 
-    // Same walk-up-from-BaseDirectory approach as TemplateInvariantsTests.FindApiDir.
+    // Walk up from BaseDirectory to the first ancestor holding src/Struo.Api.
     private static string? FindApiDir()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)

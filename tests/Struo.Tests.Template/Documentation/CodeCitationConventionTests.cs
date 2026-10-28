@@ -4,7 +4,7 @@ using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Enforces the citing convention (docs/ai/conventions.md, "Citing code from docs and comments") for two
@@ -62,7 +62,7 @@ public sealed partial class CodeCitationConventionTests
     private static readonly string[] CsOnlyScanRootDirs = ["src", "tests"];
     private static readonly string[] ResolutionRootFiles = ["AGENTS.md", "CLAUDE.md"];
     private static readonly string[] ResolutionRootDirs =
-        ["src", "tests", "frontend/src", "schema", "db", "docs", "samples"];
+        ["src", "tests", "frontend/src", "schema", "docs", "samples"];
     private static readonly string[] ExcludedDirNames = ["obj", "bin", "node_modules", ".git"];
     private const string ExcludedRelativePrefix = "docs/_archive-local";
 

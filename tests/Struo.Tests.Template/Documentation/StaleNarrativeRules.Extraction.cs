@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 /// <summary>
 /// Pulls the comment/prose text out of a source line, by language. A comment start (<c>//</c>,

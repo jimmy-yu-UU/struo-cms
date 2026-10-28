@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 
-namespace Struo.Tests.Documentation;
+namespace Struo.Tests.Template.Documentation;
 
 public sealed class StaleNarrativeRulesTests
 {

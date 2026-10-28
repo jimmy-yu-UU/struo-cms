@@ -1,8 +1,8 @@
-// tests/Struo.Tests/Template/TemplateInvariantsTests.cs
+// tests/Struo.Tests.Template/Template/TemplateInvariantsTests.cs
 using AwesomeAssertions;
 using Xunit;
 
-namespace Struo.Tests.Template;
+namespace Struo.Tests.Template.Template;
 
 /// <summary>
 /// Guards two template-level invariants: the dependency rule ("framework code never references
@@ -56,7 +56,7 @@ public sealed class TemplateInvariantsTests
     }
 
     // Same walk-up-from-BaseDirectory approach as LiveDatabases.FindApiDir - see
-    // tests/Struo.Tests/Support/LiveDatabases.cs.
+    // tests/Struo.Tests.Support/LiveDatabases.cs.
     private static string? FindApiDir()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
