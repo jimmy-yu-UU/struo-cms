@@ -134,8 +134,8 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Purge_raises_Updated_for_live_parents_that_lose_an_inbound_M2M_link()
     {
-        // Spec R4 extension: purging a Tag deletes the INBOUND fx_article_tags junction
-        // rows (Article declares the M2M, Tag does not), so every LIVE article that carried the tag
+        // Spec R4 extension: purging an FxTag deletes the INBOUND fx_article_tags junction
+        // rows (FxArticle declares the M2M, FxTag does not), so every LIVE article that carried the tag
         // must itself get an Updated. a3 is linked too but trashed before the purge — mirroring
         // CollectSetNullUpdatesAsync's live-only semantics, a trashed parent must NOT be raised.
         var tag = await CreateAsync("fxTag", """{"name":"t"}""");

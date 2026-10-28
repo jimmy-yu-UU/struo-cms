@@ -21,8 +21,8 @@ namespace Struo.Tests.Revisions;
 /// <summary>
 /// Wires a real <see cref="ItemService"/> + <see cref="SqlSugarRevisionStore"/> +
 /// <see cref="RevisionSnapshotBuilder"/> over the fixture types, mirroring
-/// <c>SnapshotBuilderHarness</c>'s construction. Article is revisioned
-/// (<c>Revisions = true</c>); Category is not, so it exercises the <c>meta.Revisions</c> gate.
+/// <c>SnapshotBuilderHarness</c>'s construction. FxArticle is revisioned
+/// (<c>Revisions = true</c>); FxCategory is not, so it exercises the <c>meta.Revisions</c> gate.
 /// <para>
 /// When <paramref name="FailCapture"/>-equivalent (<see cref="Create"/>'s <c>failCapture</c> flag)
 /// is set, the <see cref="ItemService"/> is wired with a stub <see cref="IRevisionStore"/> whose
@@ -114,7 +114,7 @@ public sealed class RevisionServiceHarness : IDisposable
     /// <summary>A partial update body (e.g. <c>{"status":"published"}</c>).</summary>
     public static JsonElement Body(string status) => BodyOf(new { status });
 
-    /// <summary>A create body setting Article's Hidden own-field <c>internalNote</c> (fixture).</summary>
+    /// <summary>A create body setting FxArticle's Hidden own-field <c>internalNote</c> (fixture).</summary>
     public static JsonElement ArticleBodyWithInternalNote(string status, string internalNote) => BodyOf(new
     {
         status,
@@ -123,7 +123,7 @@ public sealed class RevisionServiceHarness : IDisposable
     });
 
     /// <summary>A create body with en/zh-TW translations that also set the Hidden+Translatable
-    /// <c>internalSlug</c> field on Article's translation sidecar (fixture).</summary>
+    /// <c>internalSlug</c> field on FxArticle's translation sidecar (fixture).</summary>
     public static JsonElement ArticleBodyWithInternalSlug() => BodyOf(new
     {
         status = "draft",
@@ -332,7 +332,7 @@ public sealed class RevisionServiceTests
 
     /// <summary><c>GetRevisionAsync</c> is the externally-facing read (backs REST/GraphQL) — its
     /// snapshot must have <c>internalNote</c> (a <c>[CmsField(Hidden = true)]</c> own-field on the fixture
-    /// Article) redacted, even though <see cref="RevisionSnapshotBuilder"/> captured it in full.</summary>
+    /// FxArticle) redacted, even though <see cref="RevisionSnapshotBuilder"/> captured it in full.</summary>
     [Fact]
     public async Task GetRevision_redacts_hidden_own_field()
     {
@@ -348,7 +348,7 @@ public sealed class RevisionServiceTests
     }
 
     /// <summary>The same hidden field must also be stripped out of every
-    /// <c>translations.{locale}</c> object (Article's <c>internalSlug</c> is Hidden+Translatable).</summary>
+    /// <c>translations.{locale}</c> object (FxArticle's <c>internalSlug</c> is Hidden+Translatable).</summary>
     [Fact]
     public async Task GetRevision_redacts_hidden_translatable_field_in_every_locale()
     {

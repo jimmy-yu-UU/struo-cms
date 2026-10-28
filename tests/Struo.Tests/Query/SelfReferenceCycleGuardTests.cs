@@ -25,8 +25,8 @@ namespace Struo.Tests.Query;
 /// Self-reference cycle guard: <see cref="SelfReferenceCycleGuard"/> rejects an
 /// UpdateAsync that would set a self-referencing ManyToOne FK (parentId) to the item itself or one of
 /// its descendants. Metadata-driven via <c>RelationMetadata.SelfReferencing</c> — covers both the core
-/// MediaFolder tree and the fixture Category tree, proving the guard is not special-cased to
-/// mediafolder. Fixture mirrors ItemServiceTests's combined Article+Category+Tag+File+MediaFolder
+/// MediaFolder tree and the fixture FxCategory tree, proving the guard is not special-cased to
+/// mediafolder. Fixture mirrors ItemServiceTests's combined FxArticle+FxCategory+FxTag+File+MediaFolder
 /// registration, extended with the File/MediaFolder InitTables from MediaFolderTests so mediafolder
 /// rows can actually be created/updated here.
 /// </summary>
@@ -169,7 +169,7 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
     public async Task Category_fixture_collection_is_also_guarded()
     {
         // Proves the guard is metadata-driven (RelationMetadata.SelfReferencing), not hardcoded to
-        // "mediafolder": the fixture Category collection has its own self-referencing ParentId tree.
+        // "mediafolder": the fixture FxCategory collection has its own self-referencing ParentId tree.
         var x = await _svc.CreateAsync("fxCategory", BodyOf(new { name = "X" }));
         var xId = ((Guid)x["id"]!).ToString();
 
@@ -181,7 +181,7 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
     [Fact]
     public async Task Cycle_through_a_trashed_intermediate_node_is_still_rejected()
     {
-        // Category is ISoftDeletable. The guard reasons about FK topology, not row visibility, so a
+        // FxCategory is ISoftDeletable. The guard reasons about FK topology, not row visibility, so a
         // trashed ancestor must still be walked — repro for the reviewer-found bug where the
         // ancestor-walk fetch defaulted to DeletedFilter.Exclude and silently treated a trashed
         // intermediate node as a dangling (non-existent) parent, letting a cycle through it escape

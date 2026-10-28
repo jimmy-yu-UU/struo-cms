@@ -31,7 +31,7 @@ public sealed partial class LiveRepositoryTests
         _db.CodeFirst.InitTables<FxTag>();
         _db.CodeFirst.InitTables<FxArticleTag>();
         _db.CodeFirst.InitTables<FxArticleTranslation>();
-        // Deterministic start: clear the four fixture tables this suite writes plus Category.
+        // Deterministic start: clear the four fixture tables this suite writes plus FxCategory.
         _db.Deleteable<FxArticleTag>().Where(x => true).ExecuteCommand();
         _db.Deleteable<FxArticleTranslation>().Where(x => true).ExecuteCommand();
         _db.Deleteable<FxArticle>().Where(x => true).ExecuteCommand();

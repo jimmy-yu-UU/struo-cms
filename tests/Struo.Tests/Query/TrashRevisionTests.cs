@@ -30,7 +30,7 @@ namespace Struo.Tests.Query;
 /// </summary>
 public sealed class TrashRevisionTests
 {
-    // ── (a) soft-delete an Article: Version +1, one "delete" revision with a live snapshot ────────
+    // ── (a) soft-delete an FxArticle: Version +1, one "delete" revision with a live snapshot ────────
 
     [Fact]
     public async Task Soft_delete_article_bumps_version_and_records_delete_revision()
@@ -59,7 +59,7 @@ public sealed class TrashRevisionTests
         Assert.Equal("published", snap.RootElement.GetProperty("status").GetString()); // deletion-time field value
     }
 
-    // ── (b) restore the trashed Article: Version +1 again, one "restore" revision ─────────────────
+    // ── (b) restore the trashed FxArticle: Version +1 again, one "restore" revision ─────────────────
 
     [Fact]
     public async Task Restore_article_bumps_version_again_and_records_restore_revision()
@@ -84,7 +84,7 @@ public sealed class TrashRevisionTests
         Assert.Equal(1, revs.Count(r => r.Operation == "delete"));
     }
 
-    // ── (c) Category is soft-deletable + AuditableEntity but NOT revisioned ───────────────────────
+    // ── (c) FxCategory is soft-deletable + AuditableEntity but NOT revisioned ───────────────────────
     //        Version still +1; zero revisions captured.
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class TrashRevisionTests
         Assert.NotNull(trashed.DeletedAt);
         Assert.Equal(versionBefore + 1, trashed.Version);
 
-        // Category has no [CmsCollection(Revisions=true)] -> no revision history at all.
+        // FxCategory has no [CmsCollection(Revisions=true)] -> no revision history at all.
         Assert.Empty(await h.RevisionStore.ListAsync("fxCategory", categoryId));
     }
 

@@ -274,7 +274,7 @@ public class SoftDeleteRepositoryTests
         var t1 = (FxTag)await h.Repository.CreateAsync("fxTag", new FxTag { Name = "Alpha" });
         var t2 = (FxTag)await h.Repository.CreateAsync("fxTag", new FxTag { Name = "Beta" });
 
-        // Tag does not implement ISoftDeletable, so the global <ISoftDeletable> table filter never
+        // FxTag does not implement ISoftDeletable, so the global <ISoftDeletable> table filter never
         // attaches to it (SqlSugar's AddTableFilter<T> only applies to types assignable to T), and the
         // Only/With DeletedFilter branches in RunQueryAsync are gated on `isSoftDeletable`. Exclude and
         // Only must therefore both see the full, unfiltered set for a non-soft-deletable collection.

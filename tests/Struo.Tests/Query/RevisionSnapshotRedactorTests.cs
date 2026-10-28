@@ -17,7 +17,7 @@ namespace Struo.Tests.Query;
 public sealed class RevisionSnapshotRedactorTests
 {
     /// <summary>A mix of a hidden own-field, a hidden translatable field, and non-hidden fields of
-    /// several JSON shapes (mirrors an Article-shaped snapshot).</summary>
+    /// several JSON shapes (mirrors an FxArticle-shaped snapshot).</summary>
     private static readonly CollectionMetadata Meta = new()
     {
         Name = "article", Label = "Article", FieldGroups = [],

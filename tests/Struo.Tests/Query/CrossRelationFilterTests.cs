@@ -7,8 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Filter_m2m_tags_name_exists was deleted (Tag entity removed) and
-// restored below as Filter_m2m_articles_by_tag_name (de-risk).
+// Cross-relation filters over the fixture domain, including M2M filtering of articles by tag name.
 
 [Collection("ApiIntegration")]
 public class CrossRelationFilterTests(ApiFactory factory)

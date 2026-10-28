@@ -24,7 +24,7 @@ namespace Struo.Tests.Query;
 
 // ── Test-local entities ─────────────────────────────────────────────
 //
-// The fixture M2M target (Tag) is NOT ISoftDeletable, so it cannot be trashed — and the
+// The fixture M2M target (FxTag) is NOT ISoftDeletable, so it cannot be trashed — and the
 // "revert tolerates a trashed M2M target" case requires exactly that. Following the precedent set by
 // PurgeIntegrityTests (which declares its own [CmsCollection] fixtures for scenarios the fixture domain
 // can't express), this file declares a revisioned parent (Doc) with an M2M relation to a

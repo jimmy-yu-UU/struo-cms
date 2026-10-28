@@ -4,11 +4,6 @@ using Xunit;
 
 namespace Struo.Tests.Files;
 
-// NOTE: Gallery_m2m_with_guid_file_ids_round_trips was deleted
-// (ArticleFile junction entity removed from the fixture domain).
-// NOTE: Single_image_relation_expands was deleted
-// (parent Article.SeoOgImage relation removed; SEO moved to SeoTranslation sidecar).
-
 [Collection("ApiIntegration")]
 public class FileReferenceTests(ApiFactory factory)
 {

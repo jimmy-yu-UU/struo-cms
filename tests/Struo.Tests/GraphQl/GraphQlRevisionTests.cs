@@ -123,7 +123,7 @@ public class GraphQlRevisionTests(ApiFactory factory)
     }
 
     /// <summary><c>xArticleRevision</c> shares <c>ItemService.GetRevisionAsync</c> with the REST
-    /// endpoint, so it must return the same redacted snapshot. Article's Hidden fields
+    /// endpoint, so it must return the same redacted snapshot. FxArticle's Hidden fields
     /// (<c>internalNote</c>, <c>internalSlug</c>) are excluded from the GraphQL schema entirely (by
     /// design — <see cref="GraphQlSchemaTests"/>), so they cannot be set via a GraphQL mutation; this
     /// test seeds them over REST (which does not filter Hidden fields on write) on the SAME host/DB the
@@ -167,7 +167,7 @@ public class GraphQlRevisionTests(ApiFactory factory)
         result.GetProperty("data").GetProperty("revertFxArticle").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
-    /// <summary>Category has no [CmsCollection(Revisions=true)] — these fields must not exist at all.</summary>
+    /// <summary>FxCategory has no [CmsCollection(Revisions=true)] — these fields must not exist at all.</summary>
     [Fact]
     public async Task Non_revisioned_collection_has_no_revision_fields()
     {

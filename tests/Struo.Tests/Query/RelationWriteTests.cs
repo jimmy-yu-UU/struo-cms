@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Tests that exercised Author (Restrict delete), Tag M2M, and ArticleFile gallery
-// were deleted when those entities were removed from the fixture domain.
-// Remaining: category SetNull relation (still present on Article.CategoryId).
+// Relation writes over the fixture domain: the category SetNull relation (FxArticle.CategoryId).
 
 [Collection("ApiIntegration")]
 public class RelationWriteTests(ApiFactory factory)
@@ -23,7 +21,7 @@ public class RelationWriteTests(ApiFactory factory)
     public async Task Delete_category_referenced_by_setnull_relation_is_allowed()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        // Article.categoryId is OnDelete.SetNull (not Restrict), so deleting a referenced category is permitted.
+        // FxArticle.categoryId is OnDelete.SetNull (not Restrict), so deleting a referenced category is permitted.
         var categoryId = await Id(await c.PostAsJsonAsync("/api/items/fxCategory", new { name = "Doomed" }));
         await c.PostAsJsonAsync("/api/items/fxArticle", new
         {

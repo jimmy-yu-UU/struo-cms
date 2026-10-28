@@ -208,11 +208,11 @@ public partial class ConditionalModelTranslatorTests
     }
 
     // ── culture round-trip (translator render -> SqlSugar re-parse) ────────────────────────
-    // A dedicated fixture with REAL decimal/DateTime columns: Article has neither (its own fields
+    // A dedicated fixture with REAL decimal/DateTime columns: FxArticle has neither (its own fields
     // are string/Guid/nullable-DateTime-as-null-check only), and SqlSugar only re-parses
     // ConditionalModel.FieldValue through CSharpTypeName-driven type conversion when the column's
-    // CLR type is actually numeric/date. Kept separate from Setup()/Article so the rest of this
-    // file (and its Article-based fixture) stays untouched.
+    // CLR type is actually numeric/date. Kept separate from Setup()/FxArticle so the rest of this
+    // file (and its FxArticle-based fixture) stays untouched.
 
     [SugarTable("cmt_culture_probe")]
     private sealed class CultureProbeRow

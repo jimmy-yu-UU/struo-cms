@@ -27,7 +27,7 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
         ["fxTag"] = [],
     };
 
-    // Article selection holding exactly `nodes` relation nodes, kept acyclic enough (a field repeats
+    // FxArticle selection holding exactly `nodes` relation nodes, kept acyclic enough (a field repeats
     // at most twice per path) for the schema's cycle-depth rule.
     private static string Selection(int nodes)
     {

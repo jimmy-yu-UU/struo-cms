@@ -16,8 +16,7 @@ namespace Struo.Tests.Persistence;
 /// every backend — there is no separate hand-maintained baseline SQL file to check parity against —
 /// asserting against InitTables directly is the whole check. Declared indexes are discovered
 /// by reflecting [SugarIndex] off FrameworkEntityTypes.All rather than hardcoded, so a new core entity's
-/// index is covered automatically. Sample (Blog) index parity is the sample's own concern and is not
-/// asserted here.
+/// index is covered automatically. Only core entities are asserted here.
 /// (FileTranslation's (fileid, locale) lookup is served by the composite UNIQUE index, so
 /// FileTranslation contributes no separate mapped plain btree here.)
 /// </summary>

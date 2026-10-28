@@ -259,12 +259,12 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // U3 primitive probe: reproduces the exact collision the fix targets, on real Postgres. An outer
-    // ConditionalModel and an inner (wrapped) subquery both filter Category.Name at conditional-list
+    // ConditionalModel and an inner (wrapped) subquery both filter FxCategory.Name at conditional-list
     // index 0, in ONE plain top-level list — NOT inside a ConditionalCollections OR group, whose
     // members get a 1000-offset index and so never actually collide with a plain list's own naming.
     // The premise is enforced, not just commented: the outer leaf's own generated parameter name,
     // built standalone exactly as it will be built inside the real combined list below, is asserted
-    // equal to the inner subquery's pre-rename parameter name. Categories only — no Article needed.
+    // equal to the inner subquery's pre-rename parameter name. Categories only — no FxArticle needed.
     [Theory, MemberData(nameof(Backends))]
     public async Task Subquery_conditional_parameters_do_not_collide(string backend)
     {
@@ -292,7 +292,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
             innerSubTech.Value.Select(p => p.ParameterName),
             "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
 
-        // Positive: Category.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'PgCollide Tech') -> Tech only.
+        // Positive: FxCategory.Name = 'PgCollide Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'PgCollide Tech') -> Tech only.
         var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
         var qPositive = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("PgCollide Tech"), condTech });
         qPositive.ToSql().Key.Should().NotContain("N'");
@@ -307,8 +307,8 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // Mirrors Two_nesting_levels_compose_through_Wrap on a live backend, categories only: an outer
-    // Category.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
-    // is ALSO Category.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
+    // FxCategory.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
+    // is ALSO FxCategory.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
     // composition through Wrap works at nesting depth 2 with two distinct parameter prefixes, on PG.
     [Theory, MemberData(nameof(Backends))]
     public async Task Two_nesting_levels_compose_through_Wrap(string backend)
@@ -341,7 +341,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
             .Select(sel).ToSql();
         var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, idCol, level1);
 
-        // Outer: Category.Name = 'PgNest X' AND Category.Id IN (level 1) — same top-level list.
+        // Outer: FxCategory.Name = 'PgNest X' AND FxCategory.Id IN (level 1) — same top-level list.
         var q = _db.Queryable<FxCategory>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "PgNest X" },
@@ -622,7 +622,7 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
             "instead of reaching this assertion");
     }
 
-    // Companion to the id-minting test above: a declared ManyToOne FK (Category.ParentId, a uuid
+    // Companion to the id-minting test above: a declared ManyToOne FK (FxCategory.ParentId, a uuid
     // column on Postgres) must still bind through the create allowlist and persist. Guid/uuid FK
     // binding is this suite's own catalogued PG-specific risk class — see
     // Uuid_id_filter_round_trips and

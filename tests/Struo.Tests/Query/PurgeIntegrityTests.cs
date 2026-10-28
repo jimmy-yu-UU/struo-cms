@@ -25,8 +25,8 @@ namespace Struo.Tests.Query;
 
 // ── Test-local entities ────────────────────────────────
 //
-// The fixture domain has no OnDelete.Restrict or OnDelete.Cascade relation (Article.Category
-// and Category.Parent are both SetNull — see SoftDeleteRepositoryTests's note on this), so the
+// The fixture domain has no OnDelete.Restrict or OnDelete.Cascade relation (FxArticle.Category
+// and FxCategory.Parent are both SetNull — see SoftDeleteRepositoryTests's note on this), so the
 // Restrict and Cascade purge scenarios need dedicated fixtures, mirroring the brief's guidance to
 // add "test-local entity pairs" the same way MetadataScannerTests declares local [CmsCollection]
 // types for a single test file.
@@ -74,7 +74,7 @@ internal sealed class CascadeNodeTranslation
 }
 
 /// <summary>
-/// A plain M2O-to-Category relation declared OnDelete.Restrict — the fixture domain has none (both
+/// A plain M2O-to-FxCategory relation declared OnDelete.Restrict — the fixture domain has none (both
 /// of its M2O relations are SetNull), so this fixture is the only way to exercise the Restrict
 /// purge-guard against a real database-backed pipeline.
 /// </summary>
@@ -294,7 +294,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 /// </summary>
 public sealed class PurgeIntegrityTests
 {
-    // ── Scenario 1: purge Article clears its translations, M2M tag junctions, and revisions ──────
+    // ── Scenario 1: purge FxArticle clears its translations, M2M tag junctions, and revisions ──────
 
     [Fact]
     public async Task Purge_article_clears_translations_tags_and_revisions()
@@ -321,7 +321,7 @@ public sealed class PurgeIntegrityTests
         Assert.NotNull(await h.Repository.GetByIdAsync("fxTag", tagId.ToString()));
     }
 
-    // ── Scenario 2: purge Tag clears the INBOUND (target-side) fx_article_tags junction rows ────────
+    // ── Scenario 2: purge FxTag clears the INBOUND (target-side) fx_article_tags junction rows ────────
 
     [Fact]
     public async Task Purge_tag_clears_inbound_article_tag_junctions()
@@ -340,7 +340,7 @@ public sealed class PurgeIntegrityTests
         Assert.NotNull(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString()));
     }
 
-    // ── Scenario 3: purge a referenced Category (Article.Category is SetNull) ──────────────────
+    // ── Scenario 3: purge a referenced FxCategory (FxArticle.Category is SetNull) ──────────────────
 
     [Fact]
     public async Task Purge_category_nulls_referencing_article_fk_and_article_survives()

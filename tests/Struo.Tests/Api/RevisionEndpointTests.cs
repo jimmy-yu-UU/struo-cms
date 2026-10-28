@@ -71,7 +71,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         data2[0].GetProperty("revisionNumber").GetInt64().Should().Be(3);
     }
 
-    /// <summary>The REST revision-get endpoint must not leak Article's Hidden own-field
+    /// <summary>The REST revision-get endpoint must not leak FxArticle's Hidden own-field
     /// (<c>internalNote</c>) or its Hidden+Translatable field (<c>internalSlug</c>, nested under every
     /// <c>translations.{locale}</c>), even though both were captured in full by the snapshot builder.</summary>
     [Fact]

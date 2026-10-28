@@ -215,17 +215,15 @@ or without a file extension, and it must resolve to a real file or directory. Th
 operating system, so a case error passes on Windows and fails on the Linux CI run. A path also
 counts as existing when `<path>.example` does: a gitignored local file such as
 `src/Struo.Api/appsettings.Development.json` is tracked as its `.example`, and is absent on a clean
-checkout. A path in the
-frontend's own shorthand, which drops the leading `frontend/`, starts at the wrong root and fails;
-write the full path. A token that starts anywhere else, such as an upstream URL or `../src/x`, is not
-a candidate.
+checkout. A path in the frontend's own shorthand, which drops the leading `frontend/`, starts at the
+wrong root and fails; write the full path. A token that starts anywhere else, such as an upstream
+URL or `../src/x`, is not a candidate.
 
 Not checked: globs; `<placeholder>` and `{placeholder}` segments; paths with a path segment equal to
 `MyFork`, `MyApp`, `MyProject` or `Acme`, or starting with that name and a dot (the fork example
-names); anything under
-`docs/_archive-local/`; a path with a `:line` suffix (owned by the check above); and the two
-`docs/guide/<locale>/changelog.md` files, which name paths that do not exist in the current tree
-(the same exemption `NarrativeScanScope` gives them). While the top-level `samples/` directory is
+names); anything under `docs/_archive-local/`; a path with a `:line` suffix (owned by the check
+above); and the two `docs/guide/<locale>/changelog.md` files, which name paths that do not exist in
+the current tree (the same exemption `NarrativeScanScope` gives them). While the top-level `samples/` directory is
 absent, as in a fork that deleted it, paths under `samples/` are skipped too.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
@@ -701,9 +699,10 @@ destructive actions, the user is left with a blocked action and no working way t
   template with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and
   needs the Blog sample opted in first and is added to the config only while `e2e/sample/` exists.
   Neither is run by CI — see `AGENTS.md`, "Verification", for the five standing gates CI does run —
-  and both need a live API and database, not just a build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two container images and
-  the Compose stack — `docs/guide/en/20-deployment.md`'s "The two container images" and "The
-  local Compose stack" sections) and two `sonar-*` jobs; none of the three is a standing gate.
+  and both need a live API and database, not just a build. `ci.yml` also runs a `docker` job
+  (builds and smoke-tests the two container images and the Compose stack —
+  `docs/guide/en/20-deployment.md`'s "The two container images" and "The local Compose stack"
+  sections) and two `sonar-*` jobs; none of the three is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"

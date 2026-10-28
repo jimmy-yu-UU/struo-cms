@@ -28,7 +28,7 @@ public class QueryValidatorTests
             new FieldMetadata { Name = "regions", Label = "Regions", Interface = FieldInterface.MultiSelect },
         ],
         // A OneToMany relation sharing its FK column name ("categoryId") with the ManyToOne "category"
-        // relation below — mirrors the fixture Category collection (M2O "parent" FK "parentId" / O2M
+        // relation below — mirrors the fixture FxCategory collection (M2O "parent" FK "parentId" / O2M
         // "children" whose ForeignKey is also "parentId"). Listed FIRST so a permission-target lookup
         // that naively does `Relations.FirstOrDefault(r => r.ForeignKey == head)` without a Kind guard
         // would pick this one — the wrong collection — instead of the ManyToOne "category" relation

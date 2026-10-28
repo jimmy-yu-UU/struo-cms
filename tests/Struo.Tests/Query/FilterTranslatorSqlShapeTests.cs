@@ -151,7 +151,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     }
 
     // Reproduces the exact collision the fix targets: an outer ConditionalModel and an inner (wrapped)
-    // subquery both filter Category.Name at conditional-list index 0, in ONE plain top-level list —
+    // subquery both filter FxCategory.Name at conditional-list index 0, in ONE plain top-level list —
     // NOT inside a ConditionalCollections OR group, whose members get a 1000-offset index
     // ("@ConditStatus1000") and so never actually collide with a plain list's "@ConditName0". The
     // premise is enforced, not just commented: the outer leaf's OWN generated parameter name — built
@@ -177,7 +177,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
             innerSubTech.Value.Select(p => p.ParameterName),
             "the outer leaf and the inner subquery are each index-0 of their own plain top-level list, so SqlSugar assigns them the same generated name before renaming");
 
-        // Positive: Category.Name = 'Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'Tech') -> Tech only.
+        // Positive: FxCategory.Name = 'Tech' AND Id IN (SELECT Id FROM fx_categories WHERE Name = 'Tech') -> Tech only.
         var condTech = SubQueryConditional.Wrap(SubQueryKind.In, idCol, innerSubTech);
         var rowsPositive = _db.Queryable<FxCategory>().Where(new List<IConditionalModel> { OuterNameLeaf("Tech"), condTech }).ToList();
         rowsPositive.Should().ContainSingle().Which.Name.Should().Be("Tech");
@@ -238,9 +238,9 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
     }
 
     // Two independent Wrap() calls, each nesting the previous level's ToSql() output: level 2 (a
-    // plain Category-by-Name filter) is wrapped into level 1's own Where list (also filtering
-    // Category.Name — same field/index as level 2's internal filter), and level 1's ToSql() is then
-    // wrapped again for the Article-level outer query. Proves composition through Wrap works at
+    // plain FxCategory-by-Name filter) is wrapped into level 1's own Where list (also filtering
+    // FxCategory.Name — same field/index as level 2's internal filter), and level 1's ToSql() is then
+    // wrapped again for the FxArticle-level outer query. Proves composition through Wrap works at
     // arbitrary nesting depth, and that each level gets its own unique parameter prefix.
     [Fact]
     public void Two_nesting_levels_compose_through_Wrap()
@@ -271,7 +271,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
             .Select(sel).ToSql();
         var level1Wrapped = SubQueryConditional.Wrap(SubQueryKind.In, categoryIdCol, level1);
 
-        // Outer: Article.Status = 'draft' AND Article.CategoryId IN (level 1)
+        // Outer: FxArticle.Status = 'draft' AND FxArticle.CategoryId IN (level 1)
         var q = _db.Queryable<FxArticle>().Where(new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = "Status", ConditionalType = ConditionalType.Equal, FieldValue = "draft" },
@@ -400,7 +400,7 @@ public partial class FilterTranslatorSqlShapeTests : IDisposable
 
     // Task 6 (search union over one translatable + one plain searchable field): SearchGroup builds ONE
     // OR group carrying a plain LIKE (status) alongside a translation-sidecar subquery (title, via
-    // ArticleTranslation) — over the REAL FxArticle/FxArticleTranslation fixture, so this also pins
+    // FxArticleTranslation) — over the REAL FxArticle/FxArticleTranslation fixture, so this also pins
     // down the actual "fx_article_translations" table name appearing in the generated SQL. The
     // two-translatable-field OR-merge shape itself (SqlSugar's adjacency defect) is already covered by
     // Search_across_two_translatable_fields_merges_into_one_conditional above (TsItem, which has two

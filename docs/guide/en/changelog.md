@@ -24,9 +24,9 @@
   `tests/Struo.Tests` gets a one-time merge conflict. On a conflict this change causes (a file under
   `tests/Struo.Tests` that your fork deleted or edited because of the sample), take upstream's
   version: those files now run on the fixtures, and the pin in `Support/ContentAssemblyEnvBootstrap.cs`
-  and the `Struo.Tests.Fixtures` `ProjectReference` in `Struo.Tests.csproj` must stay, or the suite fails and its tests reach your development Redis and
-  OIDC providers. Only the sample's own tests, which moved to `samples/Struo.Sample.Blog.Tests`, may
-  stay deleted. See [Chapter 22](22-testing.md) and
+  and the `Struo.Tests.Fixtures` `ProjectReference` in `Struo.Tests.csproj` must stay, or the suite
+  fails and its tests reach your development Redis and OIDC providers. Only the sample's own tests,
+  which moved to `samples/Struo.Sample.Blog.Tests`, may stay deleted. See [Chapter 22](22-testing.md) and
   [Chapter 23](23-sample-walkthrough.md).
 
 ## 0.15.0 — 2026-10-28

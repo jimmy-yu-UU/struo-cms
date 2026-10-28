@@ -200,7 +200,7 @@ public sealed class SearchProviderItemServiceTests : IDisposable
     [Fact]
     public async Task Candidates_restrict_a_to_many_facets_buckets_to_the_candidate_rows()
     {
-        // "articles" is category's O2M relation (Category.Articles, reverse of Article.CategoryId) —
+        // "articles" is category's O2M relation (FxCategory.Articles, reverse of FxArticle.CategoryId) —
         // a to-many facet path, unlike every other facet exercised in this file. One article under
         // Alpha, one under Beta: with no candidate restriction both show up; restricting the
         // candidate set to Alpha alone must drop Beta's article from the bucket count entirely, not

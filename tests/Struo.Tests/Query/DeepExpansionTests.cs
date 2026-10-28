@@ -7,8 +7,7 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// NOTE: Deep_expands_m2o_author was deleted (Author entity removed).
-// Deep_m2o_honors_field_whitelist_via_envelope now tests category (M2O) instead of author.
+// Deep expansion over the fixture domain; the field-whitelist envelope test uses the category (M2O) relation.
 
 [Collection("ApiIntegration")]
 public class DeepExpansionTests(ApiFactory factory)
