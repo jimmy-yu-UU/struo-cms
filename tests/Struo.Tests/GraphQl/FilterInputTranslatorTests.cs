@@ -85,7 +85,7 @@ public class FilterInputTranslatorTests
         => FilterInputTranslator.OperatorInputTypeName(iface, clr).Should().Be(expected);
 
     // relationTarget stub: "category" and "parent" are M2O relations whose target is "category"
-    // (mirrors the sample Article.category and Category.parent self-relation). Everything else is a
+    // (mirrors the fixture Article.category and Category.parent self-relation). Everything else is a
     // plain field. Independent of real fixtures/DB.
     private static readonly Func<string, string, string?> Rel =
         (_, key) => key is "category" or "parent" ? "category" : null;

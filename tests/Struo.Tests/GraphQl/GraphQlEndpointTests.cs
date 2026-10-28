@@ -40,7 +40,7 @@ public class GraphQlEndpointTests(ApiFactory factory)
     }
 
     /// <summary>
-    /// Category is self-referential (parent: Category) in the sample schema, which lets a single
+    /// FxCategory is self-referential (parent: FxCategory) in the fixtures schema, which lets a single
     /// selection set recurse arbitrarily deep without needing 12+ distinct collections. The rule is
     /// registered with GraphQl:MaxExecutionDepth (default 12) in GraphQlServiceCollectionExtensions and
     /// runs at document-validation time — before any resolver executes — so the query is rejected
@@ -53,11 +53,11 @@ public class GraphQlEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Over_depth_query_is_rejected_by_max_execution_depth_rule()
     {
-        // categories -> items -> parent{parent{...{name}...}} : 25 nested "parent" selections,
+        // fxCategories -> items -> parent{parent{...{name}...}} : 25 nested "parent" selections,
         // comfortably past the configured max of 12 regardless of exactly how the root/list levels
         // are counted.
         const int nestedParents = 25;
-        var query = "{ categories { items { " +
+        var query = "{ fxCategories { items { " +
                     string.Concat(Enumerable.Repeat("parent { ", nestedParents)) +
                     "name" +
                     string.Concat(Enumerable.Repeat(" }", nestedParents)) +
@@ -82,8 +82,8 @@ public class GraphQlEndpointTests(ApiFactory factory)
     /// the production AddMutationType anchor plus the mutation type extension — actually exposes
     /// per-collection mutations through the real host. This test closes that gap: it introspects
     /// the live schema's mutation root through the same ApiFactory pipeline used by
-    /// Typename_query_reaches_resolver_through_real_pipeline and asserts the discovered sample
-    /// "article" [CmsCollection] contributed createArticle/updateArticle/deleteArticle, proving
+    /// Typename_query_reaches_resolver_through_real_pipeline and asserts the discovered fixture
+    /// "fxArticle" [CmsCollection] contributed createFxArticle/updateFxArticle/deleteFxArticle, proving
     /// AddStruoGraphQl actually wires mutations end-to-end rather than only in test-local executors.
     /// </summary>
     [Fact]
@@ -106,6 +106,6 @@ public class GraphQlEndpointTests(ApiFactory factory)
             .Select(f => f.GetProperty("name").GetString())
             .ToList();
 
-        fieldNames.Should().Contain(["createArticle", "updateArticle", "deleteArticle"]);
+        fieldNames.Should().Contain(["createFxArticle", "updateFxArticle", "deleteFxArticle"]);
     }
 }

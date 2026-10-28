@@ -19,12 +19,12 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
         return (JsonDocument.Parse(raw).RootElement, raw);
     }
 
-    // Relations per sample type: (field, target type). Leaf scalar per type: title/name.
+    // Relations per fixture type: (field, target type). Leaf scalar per type: title/name.
     private static readonly Dictionary<string, (string Field, string Target)[]> Graph = new()
     {
-        ["article"] = [("category", "category"), ("tags", "tag")],
-        ["category"] = [("parent", "category"), ("children", "category"), ("articles", "article")],
-        ["tag"] = [],
+        ["fxArticle"] = [("category", "fxCategory"), ("tags", "fxTag")],
+        ["fxCategory"] = [("parent", "fxCategory"), ("children", "fxCategory"), ("articles", "fxArticle")],
+        ["fxTag"] = [],
     };
 
     // Article selection holding exactly `nodes` relation nodes, kept acyclic enough (a field repeats
@@ -32,12 +32,12 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
     private static string Selection(int nodes)
     {
         var remaining = nodes;
-        return Fill("article", ref remaining, depthLeft: 6, []);
+        return Fill("fxArticle", ref remaining, depthLeft: 6, []);
     }
 
     private static string Fill(string type, ref int remaining, int depthLeft, Dictionary<string, int> path)
     {
-        var parts = new List<string> { type == "article" ? "title" : "name" };
+        var parts = new List<string> { type == "fxArticle" ? "title" : "name" };
         foreach (var (field, target) in Graph[type])
         {
             if (remaining == 0 || depthLeft == 0 || path.GetValueOrDefault(field) >= 2) continue;
@@ -51,7 +51,7 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
     [Fact]
     public async Task Six_sort_fields_are_rejected()
     {
-        var (root, raw) = await Run("{ categories(sort: [\"name\",\"-name\",\"createdAt\",\"-createdAt\",\"id\",\"-id\"]) { total } }");
+        var (root, raw) = await Run("{ fxCategories(sort: [\"name\",\"-name\",\"createdAt\",\"-createdAt\",\"id\",\"-id\"]) { total } }");
         root.TryGetProperty("errors", out var errors).Should().BeTrue(raw);
         raw.Should().Contain("Too many sort fields");
         errors.GetArrayLength().Should().BeGreaterThan(0);
@@ -60,14 +60,14 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
     [Fact]
     public async Task Five_sort_fields_are_accepted()
     {
-        var (root, raw) = await Run("{ categories(sort: [\"name\",\"-name\",\"createdAt\",\"-createdAt\",\"id\"]) { total } }");
+        var (root, raw) = await Run("{ fxCategories(sort: [\"name\",\"-name\",\"createdAt\",\"-createdAt\",\"id\"]) { total } }");
         root.TryGetProperty("errors", out _).Should().BeFalse(raw);
     }
 
     [Fact]
     public async Task Twenty_one_relation_nodes_are_rejected()
     {
-        var (root, raw) = await Run($"{{ articles {{ items {{ {Selection(21)} }} }} }}");
+        var (root, raw) = await Run($"{{ fxArticles {{ items {{ {Selection(21)} }} }} }}");
         root.TryGetProperty("errors", out _).Should().BeTrue(raw);
         raw.Should().Contain("Too many relations in deep");
     }
@@ -75,7 +75,7 @@ public class GraphQlQueryCapsTests(ApiFactory factory)
     [Fact]
     public async Task Twenty_relation_nodes_are_accepted()
     {
-        var (root, raw) = await Run($"{{ articles {{ items {{ {Selection(20)} }} }} }}");
+        var (root, raw) = await Run($"{{ fxArticles {{ items {{ {Selection(20)} }} }} }}");
         root.TryGetProperty("errors", out _).Should().BeFalse(raw);
     }
 }

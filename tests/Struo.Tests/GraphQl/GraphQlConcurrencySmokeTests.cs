@@ -9,7 +9,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Regression guard: a single query selecting multiple root fields (articles/categories/tags) can
+/// Regression guard: a single query selecting multiple root fields (fxArticles/fxCategories/fxTags) can
 /// have HotChocolate execute those sibling resolvers in parallel against the one process-wide
 /// ISqlSugarClient. SqlSugarClientFactory.Create returns a SqlSugarScope, SqlSugar's thread-safe
 /// wrapper, rather than a bare `new SqlSugarClient(config)`: a bare client is not thread-safe, so
@@ -30,7 +30,7 @@ public class GraphQlConcurrencySmokeTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
 
     private const string MultiRootQuery =
-        "{ articles { items { id } } categories { items { id } } tags { items { id } } }";
+        "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
 
     [Fact]
     public async Task Concurrent_multi_root_queries_all_succeed_with_no_errors()

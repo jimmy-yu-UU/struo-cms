@@ -116,7 +116,7 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
             .GetExecutorAsync();
         var schema = executor.Schema;
 
-        // The shipped Blog sample and framework collections generate no clashing names.
+        // The fixtures and framework collections generate no clashing names.
         FluentActions.Invoking(module.ValidateNames).Should().NotThrow();
 
         var collectionTypes = surfaces.SelectMany(s => s.TypeNames).ToHashSet(StringComparer.Ordinal);
@@ -154,8 +154,8 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
     [Fact]
     public async Task A_colliding_collection_stops_the_host_from_starting()
     {
-        // A second collection named articleList next to the Blog sample's article: both generate the
-        // type ArticleList. Starting the host builds the GraphQL schema eagerly. WebApplicationFactory
+        // A second collection named fxArticleList next to the fixtures' fxArticle: both generate the
+        // type FxArticleList. Starting the host builds the GraphQL schema eagerly. WebApplicationFactory
         // disposes the half-started host, so what reaches the caller here is an ObjectDisposedException
         // and not the MetadataException; Schema_build_surfaces_the_collision_message covers the chain
         // that carries the collision message.
@@ -164,7 +164,7 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
             var original = (IMetadataProvider)services.Single(d => d.ServiceType == typeof(IMetadataProvider))
                 .ImplementationInstance!;
             services.AddSingleton<IMetadataProvider>(
-                new SetProvider([.. original.GetCollections(), Bare("articleList")]));
+                new SetProvider([.. original.GetCollections(), Bare("fxArticleList")]));
         }));
 
         var start = () => { _ = host.Services; return Task.CompletedTask; };

@@ -24,13 +24,13 @@ public class FacetsGraphQlTests(ApiFactory factory)
     {
         var (client, cat, _) = await FacetSeed.SeedAsync(_factory);
         var data = await Data(client, $$"""
-            { articles(filter: { categoryId: { eq: "{{cat}}" } }, facets: ["status", "tags.name"], aggregate: { count: ["publishedAt"], max: ["publishedAt"] }) {
+            { fxArticles(filter: { categoryId: { eq: "{{cat}}" } }, facets: ["status", "tags.name"], aggregate: { count: ["publishedAt"], max: ["publishedAt"] }) {
                 total
                 facets { field values { value count } }
                 aggregate
             } }
             """);
-        var list = data.GetProperty("articles");
+        var list = data.GetProperty("fxArticles");
         list.GetProperty("total").GetInt32().Should().Be(3);
         var facets = list.GetProperty("facets").EnumerateArray().ToList();
         facets.Select(f => f.GetProperty("field").GetString()).Should().Equal("status", "tags.name");
@@ -45,19 +45,19 @@ public class FacetsGraphQlTests(ApiFactory factory)
     public async Task Without_the_arguments_facets_is_empty_and_aggregate_is_null()
     {
         var (client, cat, _) = await FacetSeed.SeedAsync(_factory);
-        var data = await Data(client, $$"""{ articles(filter: { categoryId: { eq: "{{cat}}" } }) { total facets { field } aggregate } }""");
-        data.GetProperty("articles").GetProperty("facets").GetArrayLength().Should().Be(0);
-        data.GetProperty("articles").GetProperty("aggregate").ValueKind.Should().Be(JsonValueKind.Null);
+        var data = await Data(client, $$"""{ fxArticles(filter: { categoryId: { eq: "{{cat}}" } }) { total facets { field } aggregate } }""");
+        data.GetProperty("fxArticles").GetProperty("facets").GetArrayLength().Should().Be(0);
+        data.GetProperty("fxArticles").GetProperty("aggregate").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]
     public async Task Invalid_facet_path_is_a_BAD_USER_INPUT_error()
     {
         var (client, _, _) = await FacetSeed.SeedAsync(_factory);
-        var r = await client.PostAsJsonAsync("/graphql", new { query = """{ articles(facets: ["nope"]) { total } }""" });
+        var r = await client.PostAsJsonAsync("/graphql", new { query = """{ fxArticles(facets: ["nope"]) { total } }""" });
         var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
         var err = doc.RootElement.GetProperty("errors")[0];
-        err.GetProperty("message").GetString().Should().Be("Unknown field 'nope' on collection 'article'.");
+        err.GetProperty("message").GetString().Should().Be("Unknown field 'nope' on collection 'fxArticle'.");
         err.GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
 
@@ -65,7 +65,7 @@ public class FacetsGraphQlTests(ApiFactory factory)
     public async Task Nested_to_many_list_fields_do_not_expose_the_facets_argument()
     {
         var (client, cat, _) = await FacetSeed.SeedAsync(_factory);
-        var r = await client.PostAsJsonAsync("/graphql", new { query = $$"""{ articles(filter: { categoryId: { eq: "{{cat}}" } }) { items { tags(facets: ["name"]) { id } } } }""" });
+        var r = await client.PostAsJsonAsync("/graphql", new { query = $$"""{ fxArticles(filter: { categoryId: { eq: "{{cat}}" } }) { items { tags(facets: ["name"]) { id } } } }""" });
         var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
         doc.RootElement.TryGetProperty("errors", out var errors).Should().BeTrue();
         errors[0].GetProperty("message").GetString().Should().Contain("facets");

@@ -515,7 +515,7 @@ public class GraphQlExecutionTests
         faqs[0].GetProperty("answer").GetString().Should().Be("A1");
     }
 
-    // PascalCase properties mirroring a real Repeater sub-field POCO (e.g. Struo.Sample.Blog.FaqItem)
+    // PascalCase properties mirroring a real Repeater sub-field POCO (e.g. Struo.Tests.Fixtures.FxFaqItem)
     // — the sub-field names in the GraphQL query ("question"/"answer") are camelCase.
     private sealed record FaqRow(string Question, string Answer);
 
