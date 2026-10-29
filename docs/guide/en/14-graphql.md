@@ -345,6 +345,11 @@ The resolver converts this array back into the locale-keyed object the write pat
 applying the same "only the keys actually sent" pruning before that conversion; when the same locale
 appears twice, the later entry wins.
 
+On update the stored row is merged field by field: a field the input sends is updated, one it leaves
+out keeps its value, and an explicit `null` clears it. A required translation that's missing comes
+back with `extensions.code` `BAD_USER_INPUT` and `extensions.details`, a list of
+`{ field, message, locale }`.
+
 A translatable own field never appears on the create or update input directly — it's only
 reachable through this typed `translations` input; create still requires one translation for the
 default locale.
