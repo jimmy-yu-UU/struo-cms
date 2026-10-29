@@ -235,8 +235,11 @@ async function onSubmit(): Promise<void> {
       // Server-side (ASP.NET model-binding) validation: map details back to
       // per-field errors; anything not matching a field falls to the banner.
       const knownFields = new Set((meta.value?.fields ?? []).map((f) => f.name))
-      const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields)
-      // Replace (not mutate) so ItemForm's watch(props.errors) flips to the default locale tab.
+      const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields, {
+        defaultLocale: langStore.defaultCode,
+        locales: new Set(langStore.languages.map((l) => l.code)),
+      })
+      // Replace (not mutate) so ItemForm's watch(props.errors) jumps to the first tab with an error.
       errors.value = { ...fieldErrors }
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')

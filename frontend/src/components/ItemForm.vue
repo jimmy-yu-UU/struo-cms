@@ -8,6 +8,7 @@ import FieldInput from './fields/FieldInput.vue'
 import RelationInput from './fields/RelationInput.vue'
 import { splitFields } from '../lib/splitFields'
 import { hasLocaleContent } from '../lib/localeCompleteness'
+import { localeHasErrors, translationErrorKey } from '../lib/translationErrors'
 import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
@@ -51,9 +52,22 @@ function sharedFieldId(name: string): string { return `${uid}-shared-${name}` }
 function translatableFieldId(name: string, locale: string): string { return `${uid}-translatable-${name}-${locale}` }
 function relationFieldId(name: string): string { return `${uid}-relation-${name}` }
 
-// Surface default-locale validation errors even if the user is on another locale's tab.
+function tabHasErrors(code: string): boolean {
+  return localeHasErrors(props.errors, code, fields.value.translatable, defaultCode.value)
+}
+function tabErrorLabel(name: string): string {
+  return t('itemForm.tabHasErrors', { name })
+}
+function fieldError(code: string, name: string): string | undefined {
+  return props.errors[translationErrorKey(code, name, defaultCode.value)]
+}
+
+// Surface validation errors even if the user is on another tab: jump to the first locale tab that
+// has an error, the default locale first. Errors that live outside the tabs fall back to the default tab.
 watch(() => props.errors, (e) => {
-  if (Object.keys(e).length > 0) activeLocale.value = defaultCode.value
+  if (Object.keys(e).length === 0) return
+  const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
+  activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
 })
 
 defineExpose({ activeLocale })
@@ -74,6 +88,13 @@ defineExpose({ activeLocale })
             :aria-label="dotLabel(loc.code)"
           />
           {{ loc.name }}<span v-if="loc.isDefault"> *</span>
+          <span
+            v-if="tabHasErrors(loc.code)"
+            class="tab-error text-destructive ml-1.5 font-bold"
+            role="img"
+            :aria-label="tabErrorLabel(loc.name)"
+            :title="tabErrorLabel(loc.name)"
+          >!</span>
         </TabsTrigger>
       </TabsList>
       <TabsContent v-for="loc in locales" :key="loc.code" :value="loc.code" class="grid gap-[18px]">
@@ -84,7 +105,7 @@ defineExpose({ activeLocale })
               <Badge variant="secondary" class="tr-badge">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
             <FieldInput :id="translatableFieldId(f.name, loc.code)" :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
-            <FieldError v-if="loc.isDefault && errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
+            <FieldError v-if="fieldError(loc.code, f.name)" role="alert">{{ fieldError(loc.code, f.name) }}</FieldError>
           </Field>
         </template>
       </TabsContent>

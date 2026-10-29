@@ -169,6 +169,7 @@ export default {
     translatableBadge: '可翻譯',
     localeComplete: '已有內容',
     localeIncomplete: '尚無內容',
+    tabHasErrors: '{name},有錯誤',
     conflictText: '此項目已被他人變更。檢視您的編輯後再次儲存以覆寫,或重新載入最新版本。',
     reloadLatest: '重新載入最新版本',
   },
