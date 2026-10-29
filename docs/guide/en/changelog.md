@@ -34,6 +34,9 @@
 - A missing required translation carries `error.details`, one `{ field, message, locale }` entry per
   missing field per locale (`extensions.details` over GraphQL). The `message` text and the
   `BAD_USER_INPUT` code are unchanged. See [Chapter 12](12-rest-conventions.md).
+- `Database:ReadinessTimeoutSeconds` (default `3`, range 1-60): `/health/ready` reports the database
+  unhealthy (503) when the probe has not answered in that time, instead of waiting for the driver
+  connect timeout. See [Chapter 4](04-configuration.md).
 
 ### Fixed
 

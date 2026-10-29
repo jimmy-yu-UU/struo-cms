@@ -30,6 +30,8 @@
 - 缺必填翻譯的錯誤帶有 `error.details`，每個 locale 的每個缺漏欄位各一筆 `{ field, message, locale }`
   （GraphQL 是 `extensions.details`）。`message` 文字與 `BAD_USER_INPUT` 代碼不變。見
   [第 12 章](12-rest-conventions.md)。
+- `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1-60）：資料庫探測在這段時間內沒有回應，`/health/ready`
+  就回報資料庫不健康（503），不再等到驅動程式的連線逾時。見[第 4 章](04-configuration.md)。
 
 ### 修正
 

@@ -65,6 +65,7 @@
 | `Database:TablePrefix` | 字串（可留空） | `struo_` |
 | `Database:MigrateOnStartup` | 布林 | `false` |
 | `Database:MigrationLockTimeoutSeconds` | 整數（秒） | `60` |
+| `Database:ReadinessTimeoutSeconds` | 整數（秒） | `3` |
 
 以下是實際值，不是 `appsettings.json` 的巢狀寫法：
 ```text
@@ -74,6 +75,9 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 `ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。API 自己不建表：資料表由
 `migrate` 命令建立，或在 `MigrateOnStartup` 為 `true` 時由啟動建立，見
 [第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
+
+`ReadinessTimeoutSeconds` 是 `/health/ready` 等資料庫回應的秒數，逾時就回 503。範圍 1-60。
+請設得比負載平衡器的探測逾時短。
 
 `TablePrefix` 接在框架自帶 12 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 11 個 entity 加上
 版本表 `schema_versions`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是

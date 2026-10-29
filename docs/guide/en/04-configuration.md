@@ -76,6 +76,7 @@ too.
 | `Database:TablePrefix` | string (may be empty) | `struo_` |
 | `Database:MigrateOnStartup` | bool | `false` |
 | `Database:MigrationLockTimeoutSeconds` | integer (seconds) | `60` |
+| `Database:ReadinessTimeoutSeconds` | integer (seconds) | `3` |
 
 This is the actual value, not the nested form used in `appsettings.json`:
 ```text
@@ -85,6 +86,9 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 Leaving `ConnectionString` empty or omitted fails startup, not the first query. The API never
 creates tables itself: the `migrate` command creates them, or startup does when `MigrateOnStartup`
 is `true` — see [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
+
+`ReadinessTimeoutSeconds` is how long `/health/ready` waits for the database before it answers 503.
+Range 1-60. Keep it below the timeout your load balancer's probe uses.
 
 `TablePrefix` is prepended to the base name of the framework's 12 tables (the 11 entities in
 `FrameworkEntityTypes.All` plus the version table, `schema_versions`). Lower-case letters, digits and

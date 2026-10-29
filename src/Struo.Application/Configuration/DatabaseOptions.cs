@@ -28,6 +28,12 @@ public sealed class DatabaseOptions
     public int MigrationLockTimeoutSeconds { get; set; } = 60;
 
     /// <summary>
+    /// Seconds <c>/health/ready</c> waits for the database probe before reporting it unhealthy. Range 1-60.
+    /// </summary>
+    [Range(1, 60)]
+    public int ReadinessTimeoutSeconds { get; set; } = 3;
+
+    /// <summary>
     /// Applies pending migrations at startup, under the migration lock, before the host starts serving.
     /// Default <c>false</c>: the host then refuses to start until the <c>migrate</c> command has run.
     /// </summary>
