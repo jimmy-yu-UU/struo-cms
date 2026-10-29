@@ -16,26 +16,33 @@ function makeAuth(outcomes: Array<'ok' | 'down' | 'anon'>): Auth {
   return auth
 }
 
+function makeScreen(waitForRetry: () => Promise<void> = async () => undefined) {
+  return { waitForRetry: vi.fn(waitForRetry), setBusy: vi.fn(), close: vi.fn() }
+}
+
 describe('bootSession', () => {
   it('proceeds without showing the failure screen when the session check succeeds', async () => {
     const auth = makeAuth(['ok'])
-    const waitForRetry = vi.fn(async () => undefined)
-    await bootSession(auth, vi.fn(async () => undefined), waitForRetry)
+    const screen = makeScreen()
+    const waitForRetry = screen.waitForRetry
+    await bootSession(auth, vi.fn(async () => undefined), screen)
     expect(waitForRetry).not.toHaveBeenCalled()
   })
 
   it('proceeds on a 401 (signed out) without the failure screen', async () => {
     const auth = makeAuth(['anon'])
-    const waitForRetry = vi.fn(async () => undefined)
-    await bootSession(auth, vi.fn(async () => undefined), waitForRetry)
+    const screen = makeScreen()
+    const waitForRetry = screen.waitForRetry
+    await bootSession(auth, vi.fn(async () => undefined), screen)
     expect(waitForRetry).not.toHaveBeenCalled()
     expect(auth.user).toBeNull()
   })
 
   it('shows the failure screen on a connection error and re-runs the check on retry', async () => {
     const auth = makeAuth(['down', 'ok'])
-    const waitForRetry = vi.fn(async () => undefined)
-    await bootSession(auth, vi.fn(async () => undefined), waitForRetry)
+    const screen = makeScreen()
+    const waitForRetry = screen.waitForRetry
+    await bootSession(auth, vi.fn(async () => undefined), screen)
     expect(waitForRetry).toHaveBeenCalledTimes(1)
     expect(auth.fetchCurrentUser).toHaveBeenCalledTimes(2)
     expect(auth.user).toEqual({ id: 'u1' })
@@ -43,8 +50,9 @@ describe('bootSession', () => {
 
   it('keeps showing the screen while the check keeps failing, with no automatic retry', async () => {
     const auth = makeAuth(['down', 'down', 'ok'])
-    const waitForRetry = vi.fn(async () => undefined)
-    await bootSession(auth, vi.fn(async () => undefined), waitForRetry)
+    const screen = makeScreen()
+    const waitForRetry = screen.waitForRetry
+    await bootSession(auth, vi.fn(async () => undefined), screen)
     expect(waitForRetry).toHaveBeenCalledTimes(2)
     expect(auth.fetchCurrentUser).toHaveBeenCalledTimes(3)
   })
@@ -52,13 +60,28 @@ describe('bootSession', () => {
   it('does not call the check again until the user retries', async () => {
     const auth = makeAuth(['down', 'ok'])
     let release: () => void = () => undefined
-    const waitForRetry = vi.fn(() => new Promise<void>((r) => { release = r }))
-    const done = bootSession(auth, vi.fn(async () => undefined), waitForRetry)
+    const screen = makeScreen(() => new Promise<void>((r) => { release = r }))
+    const done = bootSession(auth, vi.fn(async () => undefined), screen)
     await Promise.resolve()
     await Promise.resolve()
     expect(auth.fetchCurrentUser).toHaveBeenCalledTimes(1)
     release()
     await done
     expect(auth.fetchCurrentUser).toHaveBeenCalledTimes(2)
+  })
+
+  it('marks the screen busy around each retry and closes it exactly once', async () => {
+    const auth = makeAuth(['down', 'down', 'ok'])
+    const screen = makeScreen()
+    await bootSession(auth, vi.fn(async () => undefined), screen)
+    expect(screen.setBusy.mock.calls).toEqual([[true], [false], [true], [false]])
+    expect(screen.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes the screen even when no failure screen was needed', async () => {
+    const screen = makeScreen()
+    await bootSession(makeAuth(['ok']), vi.fn(async () => undefined), screen)
+    expect(screen.setBusy).not.toHaveBeenCalled()
+    expect(screen.close).toHaveBeenCalledTimes(1)
   })
 })

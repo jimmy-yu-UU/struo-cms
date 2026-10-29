@@ -70,6 +70,7 @@ export default {
   errors: {
     serverUnreachable: 'Cannot reach the server. Your session has not changed.',
     connectionTitle: 'Cannot reach the server',
+    connectionRetrying: 'Retrying…',
     connectionBody: 'The server did not answer. Check your connection and try again.',
     tooManyRequests: 'Too many attempts. Please try again later.',
     tooManyRequestsWithWait: 'Too many attempts. Please try again in {seconds} seconds.',

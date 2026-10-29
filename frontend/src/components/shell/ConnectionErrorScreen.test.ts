@@ -16,8 +16,26 @@ describe('ConnectionErrorScreen', () => {
     expect(w.emitted('retry')).toHaveLength(1)
   })
 
+  it('disables Retry and shows the retrying label while busy', () => {
+    const w = mount(ConnectionErrorScreen, { props: { busy: true }, global: { plugins: [i18n] } })
+    const button = w.get('button')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.text()).toBe(en.errors.connectionRetrying)
+  })
+
+  it('moves focus to the heading on mount and again after a failed retry', async () => {
+    const w = mount(ConnectionErrorScreen, { attachTo: document.body, global: { plugins: [i18n] } })
+    const heading = w.get('h1').element
+    expect(document.activeElement).toBe(heading)
+    ;(document.activeElement as HTMLElement).blur()
+    await w.setProps({ busy: true })
+    await w.setProps({ busy: false })
+    expect(document.activeElement).toBe(heading)
+    w.unmount()
+  })
+
   it('has zh-TW strings for every new key', () => {
-    for (const key of ['serverUnreachable', 'connectionTitle', 'connectionBody'] as const) {
+    for (const key of ['serverUnreachable', 'connectionTitle', 'connectionBody', 'connectionRetrying'] as const) {
       expect(zhTW.errors[key]).toBeTruthy()
       expect(en.errors[key]).toBeTruthy()
     }

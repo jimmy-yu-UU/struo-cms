@@ -1,4 +1,4 @@
-import { createApp, h, watch } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 // tokens.css first: it brings Tailwind in. theme.css's rules are unlayered, so they outrank
 // every Tailwind layer on the same element whatever the import order.
@@ -18,7 +18,7 @@ import { useThemeStore } from './stores/themeStore'
 import { useUiLocaleStore } from './stores/uiLocaleStore'
 import { useAppConfigStore } from './stores/appConfigStore'
 import { bootSession } from './boot/bootSession'
-import ConnectionErrorScreen from './components/shell/ConnectionErrorScreen.vue'
+import { createConnectionScreenHost } from './boot/connectionScreenHost'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -35,17 +35,9 @@ apiClient.setUnauthorizedHandler(() => { void handleUnauthorized(auth, router) }
 // /auth/me holds boot on the connection-error screen until a retry gets an answer.
 const appConfig = useAppConfigStore(pinia)
 
-function showConnectionError(): Promise<void> {
-  return new Promise((resolve) => {
-    const screen = createApp({
-      render: () => h(ConnectionErrorScreen, { onRetry: () => { screen.unmount(); resolve() } }),
-    })
-    screen.use(i18n)
-    screen.mount('#app')
-  })
-}
+const connectionScreen = createConnectionScreenHost(app._context, document.getElementById('app')!)
 
-await bootSession(auth, () => appConfig.load(), showConnectionError)
+await bootSession(auth, () => appConfig.load(), connectionScreen)
 useUiLocaleStore(pinia).init()
 // Keep the tab title in sync with the brand name reactively: it changes at runtime when a
 // super-admin edits branding (Site Settings), not only at bootstrap. `immediate` sets it now.
