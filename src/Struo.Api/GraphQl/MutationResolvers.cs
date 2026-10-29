@@ -277,6 +277,7 @@ internal static class MutationResolvers
             resolver: ctx => ResolveRevert(ctx, collection));
         config.Arguments.Add(new ArgumentConfiguration("id", null, TypeReference.Parse("ID!")));
         config.Arguments.Add(new ArgumentConfiguration("revisionNumber", null, TypeReference.Parse("Int!")));
+        config.Arguments.Add(new ArgumentConfiguration("version", null, TypeReference.Parse("Long")));
         return config;
     }
 
@@ -284,7 +285,8 @@ internal static class MutationResolvers
     {
         var id = ctx.ArgumentValue<string>("id");
         var n = (long)ctx.ArgumentValue<int>("revisionNumber");
-        var reverted = await ctx.Service<IGraphQlDataSource>().RevertAsync(collection, id, n, ctx.RequestAborted);
+        var version = ctx.ArgumentValue<long?>("version");
+        var reverted = await ctx.Service<IGraphQlDataSource>().RevertAsync(collection, id, n, version, ctx.RequestAborted);
         return reverted;   // null -> GraphQL null (REST 404 parity); shape already matches a query node
     }
 }

@@ -257,7 +257,7 @@ public sealed class RevisionServiceTests
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1 (create), status=draft
         await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2, status=published
 
-        var reverted = await h.Service.RevertAsync("fxArticle", id, 1, default);      // revert to rev 1 (draft)
+        var reverted = await h.Service.RevertAsync("fxArticle", id, 1);      // revert to rev 1 (draft)
         Assert.NotNull(reverted);
         Assert.Equal("draft", reverted!["status"]);                                 // current state matches rev 1
 
@@ -273,7 +273,7 @@ public sealed class RevisionServiceTests
         var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
         await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(category: catB, tags: []), default); // rev2: catB, no tags
 
-        await h.Service.RevertAsync("fxArticle", id, 1, default);
+        await h.Service.RevertAsync("fxArticle", id, 1);
         var now = await h.Service.GetAsync("fxArticle", id, DeepFor("category", "tags"), null, default);
         Assert.Equal(catA.ToString(), CategoryIdOf(now!));                          // M2O FK restored
         Assert.Single(TagsOf(now!));                                                // M2M restored
@@ -288,7 +288,7 @@ public sealed class RevisionServiceTests
         var id = await h.CreateArticleAsync(status: "draft");                       // rev 1
         await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(status: "published"), default); // rev 2
 
-        await h.Service.RevertAsync("fxArticle", id, 1, default);                     // rev 3, reverting to 1
+        await h.Service.RevertAsync("fxArticle", id, 1);                     // rev 3, reverting to 1
 
         var list = await h.Store.ListAsync("fxArticle", id, default);
         var newest = list[0];                                                       // newest-first
@@ -313,7 +313,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var id = await h.CreateArticleAsync(status: "draft");
-        Assert.Null(await h.Service.RevertAsync("fxArticle", id, 99, default));       // -> 404
+        Assert.Null(await h.Service.RevertAsync("fxArticle", id, 99));       // -> 404
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public sealed class RevisionServiceTests
         // Hidden fields on every read). Because rev 2 set InternalNote to "changed-token", this assert
         // can only pass if RevertAsync applied the unredacted snapshot from the revision store — a
         // redacted snapshot has no internalNote key, so partial-merge would keep "changed-token".
-        var reverted = await h.Service.RevertAsync("fxArticle", id, 1, default);
+        var reverted = await h.Service.RevertAsync("fxArticle", id, 1);
         Assert.NotNull(reverted);
         var rawEntity = (Struo.Tests.Fixtures.FxArticle)(await h.Repository.GetByIdAsync("fxArticle", id, DeletedFilter.Exclude, default))!;
         Assert.Equal("secret-token", rawEntity.InternalNote);

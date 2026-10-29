@@ -27,6 +27,25 @@ internal static class JsonBodyUtil
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Serialises <paramref name="source"/> with its top-level <c>version</c> key replaced by
+    /// <paramref name="version"/>, or removed when <paramref name="version"/> is null.
+    /// </summary>
+    internal static byte[] WithVersion(JsonElement source, long? version)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in source.EnumerateObject()
+                         .Where(p => !string.Equals(p.Name, "version", StringComparison.OrdinalIgnoreCase)))
+                prop.WriteTo(writer);
+            if (version is { } v) writer.WriteNumber("version", v);
+            writer.WriteEndObject();
+        }
+        return ms.ToArray();
+    }
+
     /// <summary>Converts a JSON value to a CLR primitive for translation field storage.</summary>
     internal static object? JsonValue(JsonElement e) => e.ValueKind switch
     {

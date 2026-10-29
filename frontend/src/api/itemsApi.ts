@@ -67,7 +67,8 @@ export const itemsApi = {
   async getRevision(collection: string, id: string, n: number): Promise<RevisionDetail> {
     return apiClient.get<RevisionDetail>(`/items/${collection}/${id}/revisions/${n}`)
   },
-  async revert(collection: string, id: string, n: number): Promise<Record<string, unknown>> {
-    return apiClient.post<Record<string, unknown>>(`/items/${collection}/${id}/revisions/${n}/revert`)
+  async revert(collection: string, id: string, n: number, version?: number): Promise<Record<string, unknown>> {
+    const qs = version === undefined ? '' : `?version=${version}`
+    return apiClient.post<Record<string, unknown>>(`/items/${collection}/${id}/revisions/${n}/revert${qs}`)
   },
 }

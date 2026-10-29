@@ -1,5 +1,38 @@
 # 版本紀錄
 
+## 0.17.0
+
+::: danger 破壞性變更
+- 更新項目時，`translations` 改成逐欄位合併，不再整列替換某個 locale。請求沒送的欄位保留已存的值，
+  以前則會落到屬性預設值。靠「不送就清掉」來清欄位的用戶端，要改成明確送 `null`。適用於
+  `PUT /api/items/{collection}/{id}` 與 GraphQL 的 `update<X>` mutation。必填的可翻譯欄位改以已存的值
+  加本次送來的值一起判斷，所以已經有這個欄位的 locale，更新時不必再重送。見
+  [第 7 章](07-i18n.md)。
+- `IItemUseCases.RevertAsync` 在 `CancellationToken ct` 之前多了 `long? expectedVersion = null`，
+  `IGraphQlDataSource.RevertAsync` 在 `ct` 之前多了必填的 `long? expectedVersion`。實作了這兩個介面的
+  fork 必須補上這個參數（自訂的 `IItemUseCases` 可以忽略它，或轉交給 `ItemService`）。把 `ct`
+  當成第四個位置引數傳給 `IItemUseCases.RevertAsync` 的呼叫端，要改成 `ct: ct`，或在它前面補上版本
+  （不指定就傳 `null`）。HTTP 與 GraphQL 的線上契約對現有的用戶端沒有變。
+:::
+
+### 新增
+
+- 還原可以帶呼叫端最後看到的項目版本：REST 是
+  `POST /api/items/{collection}/{id}/revisions/{n}/revert?version=<n>`，GraphQL 的 `revert<X>` mutation
+  多一個可選的 `version: Long` 引數。版本過期時回傳 `409 VERSION_CONFLICT` 且什麼都不寫入；不帶版本時行為跟以前一樣。見
+  [第 9 章](09-revisions-and-trash.md)。
+- 缺必填翻譯的錯誤帶有 `error.details`，每個 locale 的每個缺漏欄位各一筆 `{ field, message, locale }`
+  （GraphQL 是 `extensions.details`）。`message` 文字與 `BAD_USER_INPUT` 代碼不變。見
+  [第 12 章](12-rest-conventions.md)。
+
+### 修正
+
+- 後台編輯畫面只載入預設語言，其他分頁一打開都是空的，儲存其中一個會蓋掉已存的翻譯。現在會載入
+  所有語言。
+- 非預設語言的驗證錯誤看不到。現在表單會逐一驗證有內容的語言，把錯誤顯示在該語言的分頁並標記分頁，
+  跳到第一個有錯誤的分頁；預設語言一律會驗證。
+- 從後台還原版本紀錄可能蓋掉並行的編輯。現在還原會帶上載入時的項目版本，版本過期就顯示一般的衝突橫幅。
+
 ## 0.16.0 — 2026-10-29
 
 ### 變更

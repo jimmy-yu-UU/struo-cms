@@ -80,3 +80,31 @@ describe('validateItem junction links', () => {
     })
   })
 })
+
+describe('validateItem per-locale translations', () => {
+  const fm = (translations: FormModel['translations']): FormModel => ({ shared: { status: 'draft' }, translations, relations: {} })
+  const twoFields: CollectionMeta = { name: 'article', label: 'Article', fields: [
+    field('status'),
+    field('title', { label: 'Title', translatable: true, required: true }),
+    field('body', { label: 'Body', translatable: true, required: true }),
+  ], relations: [] }
+
+  it('flags a required field missing in a non-default locale that has content, keyed by locale', () => {
+    const errs = validateItem(twoFields, fm({ en: { title: 'a', body: 'b' }, 'zh-TW': { title: '標', body: '' } }), 'en')
+    expect(errs).toEqual({ 'zh-TW:body': 'Body is required.' })
+  })
+  it('does not flag an untouched non-default locale', () => {
+    expect(validateItem(twoFields, fm({ en: { title: 'a', body: 'b' }, 'zh-TW': { title: '', body: '' } }), 'en')).toEqual({})
+  })
+  it('keeps the bare field key for the default locale', () => {
+    const errs = validateItem(twoFields, fm({ en: { title: '', body: 'b' }, 'zh-TW': { title: '', body: '' } }), 'en')
+    expect(errs).toEqual({ title: 'Title is required.' })
+  })
+  it('applies maxLength to a non-default locale that has content', () => {
+    const lenMeta: CollectionMeta = { name: 'a', label: 'A', fields: [
+      field('title', { label: 'Title', translatable: true, maxLength: 3 }),
+    ], relations: [] }
+    expect(validateItem(lenMeta, fm({ en: { title: 'ok' }, fr: { title: 'toolong' } }), 'en'))
+      .toEqual({ 'fr:title': 'Title must be at most 3 characters.' })
+  })
+})

@@ -114,35 +114,37 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
 
         var type = typeof(T);
         var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var rows = BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, perLocale);
+        var fieldProps = ResolveFieldProperties(type, fieldProperties);
 
         await transactions.InTransactionAsync(async () =>
         {
-            // An update replaces the stored row of each supplied locale in place (by primary key) and
-            // inserts a row for a locale that has none. It issues no DELETE: a delete that matches
+            // An update merges the sent fields onto the stored row of each supplied locale in place (by
+            // primary key): a field the request omits keeps its stored value, an explicit null clears it.
+            // A locale with no stored row is inserted. It issues no DELETE: a delete that matches
             // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
             // updates of different items on InnoDB. The existing rows come from a plain consistent read.
             // Two concurrent updates of the same item are kept apart by the parent's version check
             // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
             var existing = await LoadExistingAsync<T>(fkColumn, parentId, ct);
-            var pk = PrimaryKeyOf(type);
             var updates = new List<T>();
-            var inserts = new List<T>();
-            foreach (var row in rows)
+            var insertLocales = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (locale, values) in perLocale)
             {
                 var stored = existing.Find(e => string.Equals(
-                    (string?)localeProp.GetValue(e), (string?)localeProp.GetValue(row), StringComparison.OrdinalIgnoreCase));
-                if (stored is null) { inserts.Add(row); continue; }
-                pk.SetValue(row, pk.GetValue(stored));
-                updates.Add(row);
+                    (string?)localeProp.GetValue(e), locale, StringComparison.OrdinalIgnoreCase));
+                if (stored is null) { insertLocales[locale] = values; continue; }
+                ApplyValues(stored, fieldProps, values);
+                updates.Add(stored);
             }
 
             if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
-            if (inserts.Count > 0) await db.Insertable(inserts).ExecuteCommandAsync(ct);
+            if (insertLocales.Count > 0)
+                await db.Insertable(BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, insertLocales))
+                    .ExecuteCommandAsync(ct);
         }, ct);
     }
 
-    // One row per supplied locale, built by reflection outside the transaction.
+    // One row per supplied locale, built by reflection.
     private static List<T> BuildRows<T>(
         string fkProperty,
         string localeProperty,
@@ -153,12 +155,7 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         var type = typeof(T);
         var fkProp = type.GetProperty(fkProperty, BindingFlags.Public | BindingFlags.Instance)!;
         var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var fieldProps = fieldProperties.ToDictionary(
-            f => f,
-            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                 ?? throw new InvalidOperationException(
-                     $"Translation entity '{type.Name}' has no field property '{f}'."),
-            StringComparer.OrdinalIgnoreCase);
+        var fieldProps = ResolveFieldProperties(type, fieldProperties);
 
         var rows = new List<T>(perLocale.Count);
         foreach (var (locale, values) in perLocale)
@@ -166,14 +163,30 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             var row = new T();
             fkProp.SetValue(row, IdCoercion.Coerce(parentId, fkProp.PropertyType));
             localeProp.SetValue(row, locale);
-            foreach (var (fieldName, prop) in fieldProps)
-            {
-                if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
-                    prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
-            }
+            ApplyValues(row, fieldProps, values);
             rows.Add(row);
         }
         return rows;
+    }
+
+    private static Dictionary<string, PropertyInfo> ResolveFieldProperties(Type type, IReadOnlyList<string> fieldProperties) =>
+        fieldProperties.ToDictionary(
+            f => f,
+            f => type.GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                 ?? throw new InvalidOperationException(
+                     $"Translation entity '{type.Name}' has no field property '{f}'."),
+            StringComparer.OrdinalIgnoreCase);
+
+    // Sets only the fields present in `values` (an explicit null is present); the rest keep the row's value.
+    private static void ApplyValues<T>(
+        T row, Dictionary<string, PropertyInfo> fieldProps, IReadOnlyDictionary<string, object?> values)
+        where T : class
+    {
+        foreach (var (fieldName, prop) in fieldProps)
+        {
+            if (TryGetValueCaseInsensitive(values, fieldName, out var raw))
+                prop.SetValue(row, CoerceValue(raw, prop.PropertyType));
+        }
     }
 
     private async Task<List<T>> LoadExistingAsync<T>(string fkColumn, object parentId, CancellationToken ct)
@@ -188,12 +201,6 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
                 CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
             }
         ]).ToListAsync(ct);
-
-    private PropertyInfo PrimaryKeyOf(Type type)
-    {
-        var column = db.EntityMaintenance.GetEntityInfo(type).Columns.Single(c => c.IsPrimarykey);
-        return type.GetProperty(column.PropertyName, BindingFlags.Public | BindingFlags.Instance)!;
-    }
 
     private static bool TryGetValueCaseInsensitive(
         IReadOnlyDictionary<string, object?> dict, string key, out object? value)

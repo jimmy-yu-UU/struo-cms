@@ -10,7 +10,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
     translatableBadge: 'Translatable',
-    localeComplete: 'Has content', localeIncomplete: 'No content yet',
+    localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: 'has errors',
   } } },
 })
 type ItemFormProps = InstanceType<typeof ItemForm>['$props']
@@ -220,5 +220,61 @@ describe('ItemForm', () => {
     await status.vm.$emit('update:modelValue', 'published')
     expect(own.shared.status).toBe('published')
     expect(w.emitted('update:model')).toBeUndefined()
+  })
+})
+
+describe('ItemForm per-locale errors', () => {
+  const reqMeta: CollectionMeta = { name: 'article', label: 'Article', fields: [
+    field('status', { sort: 1 }),
+    field('title', { translatable: true, required: true, sort: 2 }),
+  ], relations: [] }
+  const three: LanguageInfo[] = [
+    { code: 'en', name: 'English', isDefault: true },
+    { code: 'zh-TW', name: '繁中', isDefault: false },
+    { code: 'fr', name: 'Français', isDefault: false },
+  ]
+  const m3: FormModel = { shared: { status: 'd' }, translations: { en: { title: 'a' }, 'zh-TW': { title: '' }, fr: { title: '' } }, relations: {} }
+  const vmLocale = (w: ReturnType<typeof mountForm>) => (w.vm as unknown as { activeLocale: string }).activeLocale
+
+  it('jumps to the first tab with an error, default first', async () => {
+    const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
+    await w.setProps({ errors: { 'fr:title': 'Title is required.' } })
+    expect(vmLocale(w)).toBe('fr')
+    await w.setProps({ errors: { 'fr:title': 'x', 'zh-TW:title': 'y' } })
+    expect(vmLocale(w)).toBe('zh-TW')
+    await w.setProps({ errors: { 'fr:title': 'x', title: 'z' } })
+    expect(vmLocale(w)).toBe('en')
+  })
+  it('shows a non-default locale error on its own tab only', async () => {
+    const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
+    await w.setProps({ errors: { 'fr:title': 'Title is required.' } })
+    await flushPromises()
+    expect(w.text()).toContain('Title is required.')
+    await w.findAll('[role="tab"]')[0].trigger('mousedown')
+    await flushPromises()
+    expect(w.text()).not.toContain('Title is required.')
+  })
+  it('marks tabs with errors with a visible marker and an accessible name', () => {
+    const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: { 'fr:title': 'e' } })
+    const tabs = w.findAll('[role="tab"]')
+    expect(tabs[2].find('.tab-error').exists()).toBe(true)
+    expect(tabs[2].find('.tab-error').attributes('aria-hidden')).toBe('true')
+    expect(tabs[2].find('.tab-error-text').text()).toBe('has errors')
+    expect(tabs[2].text()).toContain('Français')
+    expect(tabs[0].find('.tab-error').exists()).toBe(false)
+    expect(tabs[1].find('.tab-error').exists()).toBe(false)
+  })
+  it('puts the required asterisk only on the default tab', async () => {
+    const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
+    expect(w.find('.field label .text-destructive').exists()).toBe(true)
+    await w.findAll('[role="tab"]')[1].trigger('mousedown')
+    await flushPromises()
+    expect(w.find('.field label .text-destructive').exists()).toBe(false)
+  })
+  it('has the tab error string in both catalogs', async () => {
+    const { default: en } = await import('../locales/en')
+    const { default: zh } = await import('../locales/zh-TW')
+    for (const cat of [en, zh] as unknown as Array<{ itemForm: Record<string, string> }>)
+      expect(cat.itemForm.tabHasErrors).toBeTruthy()
   })
 })

@@ -18,11 +18,12 @@ On failure:
 { "success": false, "error": { "code": "…", "message": "…", "details": … } }
 ```
 
-`details` appears only when the error code is `VALIDATION`; every other code omits the key
-entirely. `meta` is omitted the same way: it appears only on a paginated list result. A single-item
-read, a create, and an update all omit the key outright rather than sending `null`. When `meta` is
-present, it can also carry two more keys, `facets` and `aggregate`, each showing up only when the
-request actually asked for it; the two are independent of each other.
+`details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` a missing
+required translation produces; every other code omits the key entirely. `meta` is omitted the same
+way: it appears only on a paginated list result. A single-item read, a create, and an update all
+omit the key outright rather than sending `null`. When `meta` is present, it can also carry two more
+keys, `facets` and `aggregate`, each showing up only when the request actually asked for it; the two
+are independent of each other.
 
 Three different sources all end up in the same envelope: an ordinary controller response, an
 exception the framework catches on its own, and the handful of requests that end early during
@@ -152,8 +153,9 @@ usual error envelope carrying your code and message; GraphQL stamps the same cod
 
 ## Validation error `details`
 
-`details` only appears with the `VALIDATION` code — it's what model binding or data-annotation
-validation produces, and it happens before the action itself ever runs. Each array entry
+`details` appears with the `VALIDATION` code — it's what model binding or data-annotation
+validation produces, and it happens before the action itself ever runs. The one other source is the
+`BAD_USER_INPUT` for a missing required translation, covered below. Each array entry
 corresponds to one validation failure, not one field: a field that violates two checks at once
 produces two entries sharing the same `field`. When ASP.NET Core gives no message of its own, it
 falls back to the fixed `Invalid value.`.
@@ -181,8 +183,9 @@ HTTP_STATUS:400
 The required `email` field is missing, and that is caught before the action ever runs; `details`
 carries exactly one entry, naming `Email`.
 
-An error the application layer works out for itself is a different matter — it's always
-`BAD_USER_INPUT`, with no `details` key at all; the message itself carries the whole story:
+An error the application layer works out for itself is a different matter — it's `BAD_USER_INPUT`,
+with no `details` key, and the message itself carries the whole story. The one exception is a
+missing required translation, described below:
 
 ```text
 $ POST /api/users
@@ -195,14 +198,24 @@ HTTP_STATUS:400
 Same endpoint — this time `email` is present, and a too-short password is an application-layer
 rule, so it comes back as `BAD_USER_INPUT` instead of `VALIDATION`.
 
+A missing required translatable field is that exception. It is a `400 BAD_USER_INPUT` whose
+`details` holds one entry per missing field per locale, and each entry adds a `locale` key:
+
+```json
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Required translation field 'title' is missing for locale 'zh-TW'.","details":[{"field":"title","message":"Required translation field 'title' is missing for locale 'zh-TW'.","locale":"zh-TW"}]}}
+```
+
+Over GraphQL the same list is `extensions.details`. The `locale` key is present only on these
+entries. See [Chapter 7](07-i18n.md#default-locale-and-write-rules) for the rule itself.
+
 An update can leave a required field out entirely and keep its existing value; but explicitly
 sending `null` or blank still gets rejected — the merged item as a whole still has to pass the
 required check. A required list or map field follows the same logic: omit it and the stored value
 stands; send it — even as an empty array or empty object — and it must pass full validation.
 Create has no such concern, since there's no existing row to merge into.
 
-A translatable field's required check runs on a separate path, per locale against the translation
-content, and isn't affected by this rule. On update, field-level checks such as a length cap run
+A translatable field's required check runs on a separate path: per locale, on the stored
+translation row merged with the sent fields. On update, field-level checks such as a length cap run
 before this merged-required check does; when both are violated, whichever one runs first is the one
 reported — which can differ from create, where the required check runs first.
 

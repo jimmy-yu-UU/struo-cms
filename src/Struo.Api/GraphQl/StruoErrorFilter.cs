@@ -13,8 +13,9 @@ namespace Struo.Api.GraphQl;
 /// The exception→code decision is delegated to the shared <see cref="DomainErrorMap"/> — the same
 /// single source the REST <see cref="StruoExceptionHandler"/> uses — so the two protocols can never
 /// drift (notably: an unauthenticated <c>PermissionDeniedException</c> is <c>UNAUTHORIZED</c> on
-/// both). GraphQL only stamps the code and message (HTTP 200 semantics are unchanged); it does not
-/// carry an HTTP status. Unmapped exceptions are masked and logged server-side.
+/// both). GraphQL stamps the code and message, plus <c>extensions.details</c> when the exception
+/// carries them (HTTP 200 semantics are unchanged); it does not carry an HTTP status. Unmapped
+/// exceptions are masked and logged server-side.
 /// </summary>
 public sealed class StruoErrorFilter(
     ILogger<StruoErrorFilter> logger,
@@ -57,6 +58,17 @@ public sealed class StruoErrorFilter(
             return error.WithMessage(message).WithCode(code).WithException(null!);
         }
 
-        return error.WithMessage(message).WithCode(code);
+        var mapped = error.WithMessage(message).WithCode(code);
+        var details = DomainErrorMap.DetailsFor(exception);
+        return details is null
+            ? mapped
+            : mapped.SetExtension("details", details.Select(ToExtension).ToList());
+    }
+
+    private static Dictionary<string, object?> ToExtension(ValidationDetail d)
+    {
+        var item = new Dictionary<string, object?> { ["field"] = d.Field, ["message"] = d.Message };
+        if (d.Locale is not null) item["locale"] = d.Locale;
+        return item;
     }
 }

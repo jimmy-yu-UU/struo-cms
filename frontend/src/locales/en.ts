@@ -169,6 +169,7 @@ export default {
     translatableBadge: 'Translatable',
     localeComplete: 'Has content',
     localeIncomplete: 'No content yet',
+    tabHasErrors: 'has errors',
     conflictText: 'This item was changed by someone else. Review your edits and save again to overwrite, or reload the latest version.',
     reloadLatest: 'Reload latest',
   },

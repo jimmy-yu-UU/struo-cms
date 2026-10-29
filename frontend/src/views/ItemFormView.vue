@@ -141,7 +141,6 @@ async function init(): Promise<void> {
     try {
       const item = await itemsApi.get(name.value, id.value!, {
         deep: editableRelations.value,
-        locale: langStore.defaultCode,
       })
       setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
       // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
@@ -236,8 +235,11 @@ async function onSubmit(): Promise<void> {
       // Server-side (ASP.NET model-binding) validation: map details back to
       // per-field errors; anything not matching a field falls to the banner.
       const knownFields = new Set((meta.value?.fields ?? []).map((f) => f.name))
-      const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields)
-      // Replace (not mutate) so ItemForm's watch(props.errors) flips to the default locale tab.
+      const { fieldErrors, leftover } = splitServerErrors(e.details, knownFields, {
+        defaultLocale: langStore.defaultCode,
+        locales: new Set(langStore.languages.map((l) => l.code)),
+      })
+      // Replace (not mutate) so ItemForm's watch(props.errors) jumps to the first tab with an error.
       errors.value = { ...fieldErrors }
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
@@ -254,7 +256,6 @@ async function recoverFromConflict(): Promise<void> {
   try {
     const latest = await itemsApi.get(name.value, id.value!, {
       deep: editableRelations.value,
-      locale: langStore.defaultCode,
     })
     latestFromServer = parseItemToForm(meta.value, latest, langStore.languages, resolveCollection)
     // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
@@ -290,9 +291,11 @@ async function onReverted(): Promise<void> {
   try {
     const item = await itemsApi.get(name.value, id.value, {
       deep: editableRelations.value,
-      locale: langStore.defaultCode,
     })
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
+    // The reverted copy is the committed state: a pending conflict banner and its cached server copy are void.
+    conflict.value = false
+    latestFromServer = null
     errors.value = {}
     serverError.value = ''
   } catch (e) {
@@ -436,7 +439,9 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :collection="name"
         :item-id="idStr"
         :can-revert="canWrite"
+        :version="model.version"
         @reverted="onReverted"
+        @conflict="recoverFromConflict"
       />
     </template>
   </section>

@@ -194,7 +194,7 @@ HTTP_STATUS:200
 | `update<X>` | `(id: ID!, input: <X>UpdateInput!, locale: String): <X>` |
 | `delete<X>` | `(id: ID!, purge: Boolean): Boolean` |
 | `restore<X>` | `(id: ID!): <X>` |
-| `revert<X>` | `(id: ID!, revisionNumber: Int!): <X>` |
+| `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
 `locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都
 沒有。建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份
@@ -281,6 +281,10 @@ resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物
 欄位」這層修剪；同一個 locale 出現兩次，後面那筆贏。可翻譯的自有欄位不在建立與更新輸入裡出現，只能
 透過這個型別化的 `translations` 輸入去改；建立時一樣要求有一筆預設 locale 的翻譯。
 
+更新時，已存的那一列是逐欄位合併：輸入有送的欄位會更新，沒送的保留原值，明確送 `null` 則清空。缺必填
+翻譯時，錯誤的 `extensions.code` 是 `BAD_USER_INPUT`，並帶 `extensions.details`，是
+`{ field, message, locale }` 的清單。
+
 改一篇文章 `en` 翻譯的標題、其餘欄位不動，`updateArticle` 回傳的 `translations` 陣列裡只有 `title`
 換了新值，`zh-TW` 那筆完全沒被動到。
 
@@ -289,7 +293,7 @@ resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物
 一個宣告 `Revisions = true` 的集合，額外多三個介面：
 `{collection}Revisions(id: ID!): [Revision!]!`、
 `{collection}Revision(id: ID!, revisionNumber: Int!): Revision`、
-`revert{X}(id: ID!, revisionNumber: Int!): X`。
+`revert{X}(id: ID!, revisionNumber: Int!, version: Long): X`。
 
 共用的 `Revision` 型別是
 `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`；列表欄位上

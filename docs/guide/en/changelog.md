@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.17.0
+
+::: danger Breaking
+- An item update merges `translations` per field instead of replacing each locale's row. A field the
+  request leaves out keeps its stored value, where it used to fall back to the property default. A
+  client that cleared a field by omitting it must send an explicit `null`. This applies to
+  `PUT /api/items/{collection}/{id}` and to the GraphQL `update<X>` mutation. A required
+  translatable field is judged on the stored and sent values together, so an update no longer has to
+  resend it for a locale that already holds it. See [Chapter 7](07-i18n.md).
+- `IItemUseCases.RevertAsync` gains `long? expectedVersion = null` before `CancellationToken ct`, and
+  `IGraphQlDataSource.RevertAsync` gains a required `long? expectedVersion` before `ct`. A fork that
+  implements either interface must add the parameter (a custom `IItemUseCases` can ignore it or pass it
+  on to `ItemService`). A caller that passes `ct` as the fourth positional argument to
+  `IItemUseCases.RevertAsync` must pass `ct: ct` or insert the version (`null` for none) before it. The HTTP
+  and GraphQL wire contract is unchanged for existing clients.
+:::
+
+### Added
+
+- A revert accepts the item version the caller last saw: `POST /api/items/{collection}/{id}/revisions/{n}/revert?version=<n>`
+  over REST, and an optional `version: Long` argument on the `revert<X>` GraphQL mutation. A stale version
+  returns `409 VERSION_CONFLICT` and writes nothing; without a version the revert behaves as before. See
+  [Chapter 9](09-revisions-and-trash.md).
+- A missing required translation carries `error.details`, one `{ field, message, locale }` entry per
+  missing field per locale (`extensions.details` over GraphQL). The `message` text and the
+  `BAD_USER_INPUT` code are unchanged. See [Chapter 12](12-rest-conventions.md).
+
+### Fixed
+
+- The admin edit view loaded only the default locale, so every other tab opened empty and saving
+  one of them overwrote the stored translation. The view now loads every locale.
+- A validation error on a non-default locale was invisible. The form now validates each locale that
+  holds content, shows the error on that locale's tab, marks the tab, and jumps to the first tab with
+  an error. The default locale is always validated.
+- A revision revert from the admin could overwrite a concurrent edit. It now sends the loaded item
+  version, and a stale one shows the usual conflict banner.
+
 ## 0.16.0 — 2026-10-29
 
 ### Changed

@@ -1,6 +1,6 @@
 import { i18n } from '../i18n'
 
-export type ValidationDetail = { field: string; message: string }
+export type ValidationDetail = { field: string; message: string; locale?: string }
 
 // The shape of the server's error envelope body.
 export type ApiErrorBody = {

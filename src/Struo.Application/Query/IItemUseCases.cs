@@ -51,6 +51,8 @@ public interface IItemUseCases
     Task<RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct = default);
 
     /// <summary>Reverts an item to a past revision by re-applying its snapshot as a normal update
-    /// (append-only). Requires write permission. Null for an unknown revision/item (→ 404).</summary>
-    Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, CancellationToken ct = default);
+    /// (append-only). Requires write permission. Null for an unknown revision/item (→ 404). A non-null
+    /// <paramref name="expectedVersion"/> must equal the item's current version, otherwise the call fails with
+    /// a version conflict (→ 409).</summary>
+    Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, long? expectedVersion = null, CancellationToken ct = default);
 }

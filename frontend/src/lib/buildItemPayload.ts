@@ -4,6 +4,7 @@ import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
 import { getFieldType } from './fieldTypes/registry'
 import { isEmpty } from './fieldTypes/types'
+import { localeIsSent } from './translationErrors'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
 
 function camel(s: string): string {
@@ -54,7 +55,7 @@ export function buildItemPayload(
   const translations: Record<string, Record<string, unknown>> = {}
   for (const loc of locales) {
     const values = model.translations[loc.code] ?? {}
-    const hasContent = translatable.some((f) => !isEmpty(values[f.name]))
+    const hasContent = localeIsSent(translatable, values)
     const isDefault = loc.code === defaultCode
     // create: always send default locale; else only when it has content.
     // update: send only locales the user actually filled.

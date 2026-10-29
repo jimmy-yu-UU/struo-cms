@@ -9,6 +9,7 @@ import RevisionSnapshotView from './RevisionSnapshotView.vue'
 import { revisionOperationLabel } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import { createLatestWins } from '../../lib/latestWins'
+import { ApiError } from '../../api/apiClient'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
 
 const props = defineProps<{
@@ -16,10 +17,13 @@ const props = defineProps<{
   collection: string
   itemId: string
   canRevert: boolean
+  // The item version the edit form loaded; the server rejects the revert when the item has moved on.
+  version?: number
 }>()
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'reverted', item: Record<string, unknown>): void
+  (e: 'conflict'): void
 }>()
 
 const confirm = useConfirm()
@@ -94,12 +98,17 @@ async function onRevert(n: number): Promise<void> {
   if (!accepted) return
   reverting.value = true
   try {
-    const item = await itemsApi.revert(props.collection, props.itemId, n)
+    const item = await itemsApi.revert(props.collection, props.itemId, n, props.version)
     emit('reverted', item)
     await load()
     toast.add({ severity: 'success', summary: t('revisions.reverted', { n }), life: 2500 })
-  } catch {
-    toast.add({ severity: 'error', summary: t('revisions.revertFailed'), life: 3500 })
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
+      emit('update:visible', false)
+      emit('conflict')
+    } else {
+      toast.add({ severity: 'error', summary: t('revisions.revertFailed'), life: 3500 })
+    }
   } finally {
     reverting.value = false
   }

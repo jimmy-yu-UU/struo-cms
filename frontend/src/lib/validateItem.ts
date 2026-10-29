@@ -1,6 +1,7 @@
 import type { CollectionMeta, FieldMeta, RelationMeta } from '../types/schema'
 import type { FormModel, RelationLink } from '../types/itemForm'
 import { splitFields } from './splitFields'
+import { localeIsSent, translationErrorKey } from './translationErrors'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
 
 function isEmpty(v: unknown): boolean {
@@ -26,10 +27,30 @@ function firstLinkError(rel: RelationMeta, links: RelationLink[], fields: FieldM
 
 // Shared per-field precedence (required first, then maxLength), used for both the shared and the
 // translatable field loops in validateItem.
-function validateFields(fields: FieldMeta[], values: Record<string, unknown>, errors: Record<string, string>): void {
+function validateFields(
+  fields: FieldMeta[],
+  values: Record<string, unknown>,
+  errors: Record<string, string>,
+  keyOf: (name: string) => string = (name) => name,
+): void {
   for (const f of fields) {
-    if (f.required && isEmpty(values[f.name])) errors[f.name] = `${f.label} is required.`
-    else if (tooLong(f, values[f.name])) errors[f.name] = `${f.label} must be at most ${f.maxLength} characters.`
+    if (f.required && isEmpty(values[f.name])) errors[keyOf(f.name)] = `${f.label} is required.`
+    else if (tooLong(f, values[f.name])) errors[keyOf(f.name)] = `${f.label} must be at most ${f.maxLength} characters.`
+  }
+}
+
+// The default locale is always validated; every other locale only when it carries content, i.e. when
+// buildItemPayload would send it.
+function validateTranslations(
+  translatable: FieldMeta[],
+  model: FormModel,
+  defaultCode: string,
+  errors: Record<string, string>,
+): void {
+  validateFields(translatable, model.translations[defaultCode] ?? {}, errors)
+  for (const [code, values] of Object.entries(model.translations)) {
+    if (code === defaultCode || !localeIsSent(translatable, values)) continue
+    validateFields(translatable, values, errors, (name) => translationErrorKey(code, name, defaultCode))
   }
 }
 
@@ -63,8 +84,7 @@ export function validateItem(
   const { shared, translatable } = splitFields(meta)
   const errors: Record<string, string> = {}
   validateFields(shared, model.shared, errors)
-  const defaultValues = model.translations[defaultCode] ?? {}
-  validateFields(translatable, defaultValues, errors)
+  validateTranslations(translatable, model, defaultCode, errors)
   if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors)
   return errors
 }

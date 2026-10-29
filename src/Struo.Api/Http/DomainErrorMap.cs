@@ -12,7 +12,7 @@ namespace Struo.Api.Http;
 /// <c>StruoErrorFilter</c> so the two protocols can never drift. Pure and side-effect free:
 /// it never logs (the REST handler owns logging/masking of unmapped exceptions) and it never
 /// touches HTTP — callers layer transport concerns on top (REST derives an HTTP status via
-/// <see cref="StatusFor"/>; GraphQL only stamps the code and keeps HTTP 200 semantics).
+/// <see cref="StatusFor"/>; GraphQL stamps the code, message and details and keeps HTTP 200 semantics).
 /// </summary>
 public static class DomainErrorMap
 {
@@ -48,6 +48,16 @@ public static class DomainErrorMap
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
+
+    /// <summary>
+    /// The field-level details a <see cref="QueryException"/> carries, or null when
+    /// <paramref name="exception"/> has none. Shared by REST (<c>error.details</c>) and GraphQL
+    /// (the <c>details</c> error extension).
+    /// </summary>
+    public static IReadOnlyList<ValidationDetail>? DetailsFor(Exception exception) =>
+        exception is QueryException { Details: { Count: > 0 } details }
+            ? details.Select(d => new ValidationDetail(d.Field, d.Message, d.Locale)).ToList()
+            : null;
 
     /// <summary>
     /// Fixed client-facing message for <see cref="ErrorCodes.SearchUnavailable"/>. Never the
