@@ -7,7 +7,7 @@ namespace Struo.Application.Security;
 /// drift (which is exactly what this type replaced).
 /// <para>
 /// The core seed migration applies it too: <c>CoreSeedData</c> refuses a configured
-/// <c>Auth:BootstrapAdmin:Password</c> that fails this validator, and generates a password when it is blank.
+/// <c>Auth:BootstrapAdmin:Password</c> that fails this validator, and refuses a blank one when a bootstrap admin email is set.
 /// </para></summary>
 public static class PasswordPolicy
 {

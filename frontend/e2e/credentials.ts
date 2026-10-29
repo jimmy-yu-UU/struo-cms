@@ -4,7 +4,7 @@ export function e2ePassword(): string {
   if (!password) {
     throw new Error(
       'E2E_PASSWORD is not set. Set it to the password of the seeded bootstrap admin ' +
-        '(Auth__BootstrapAdmin__Password, or the generated one printed by the migrate run).',
+        '(Auth__BootstrapAdmin__Password).',
     )
   }
   return password

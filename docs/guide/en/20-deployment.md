@@ -47,20 +47,19 @@ The API never changes the setting itself. After the migration step it reads the 
 it is off, logs one warning that names `READ_COMMITTED_SNAPSHOT` and the statement above. The
 warning does not stop startup, and no other backend runs the check.
 
-### Choose or capture the bootstrap password at the first `migrate`
+### Set the bootstrap password before the first `migrate`
 
 `Auth:BootstrapAdmin:Password` seeds the account the first time the core seed migration runs;
 changing this value afterward has no effect on the account that already exists. When `migrate` runs
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-The template ships no bootstrap password. Leave it empty and the seed generates a random
-password of at least 24 characters, logged once as a Warning in the `migrate` output (or the API log, when the API
-runs the migrations); copy it from there, because nothing prints it again. A password you set must
-satisfy `Auth:Password` and may not be `admin`, in any environment. While a weak value is
-configured, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
+The template ships no bootstrap password and never generates one: the password is required in every
+environment. It must satisfy `Auth:Password` and may not be `admin`. While it is empty or weak,
+`migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
 naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded; remove the value
-once the account exists.
+once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
+`STRUO_ADMIN_PASSWORD` and refuses to start without it.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 

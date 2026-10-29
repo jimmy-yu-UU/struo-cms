@@ -49,6 +49,7 @@ public class StruoApiFactory : WebApplicationFactory<Program>
                 // The host builds its schema and seed data from the migrations; the startup gate then
                 // checks the result against the entity model (Development).
                 ["Database:MigrateOnStartup"] = "true",
+                ["Auth:BootstrapAdmin:Password"] = TestBootstrapAdmin.Password,
                 // Struo:ContentAssemblies is read before Build(); see TestHostEnvironment.Pin.
                 ["Struo:Files:Backend"] = "local",
                 ["Struo:Files:Local:RootPath"] = FilesRoot,

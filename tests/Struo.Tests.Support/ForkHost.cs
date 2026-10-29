@@ -48,6 +48,7 @@ public sealed class ForkHost : IAsyncDisposable
                 ["Database:DbType"] = "Sqlite",
                 ["Database:ConnectionString"] = db.ConnectionString,
                 ["Database:MigrateOnStartup"] = "true",
+                ["Auth:BootstrapAdmin:Password"] = TestBootstrapAdmin.Password,
             };
             foreach (var (key, value) in HostIsolation.ExternalTargets(filesRoot, Path.Combine(filesRoot, "image-cache")))
                 settings[key] = value;

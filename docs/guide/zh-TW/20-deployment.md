@@ -39,17 +39,16 @@ Azure SQL Database 預設就是開啟的。
 API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，旗標是關的就記一筆警告，內容點出
 `READ_COMMITTED_SNAPSHOT` 與上面那行語句。警告不會讓啟動失敗，其他後端也不做這個檢查。
 
-### 第一次 `migrate` 時指定或記下 bootstrap 密碼
+### 第一次 `migrate` 之前先設 bootstrap 密碼
 
 `Auth:BootstrapAdmin:Password` 在核心的 seed migration 第一次執行時用來植入帳號，之後再怎麼改這個
 值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
 那個 job 的環境裡，API 自己的環境跟植入無關。
 
-範本不附 bootstrap 密碼。留空的話，seed 會隨機產生至少 24 個字元的密碼，在 `migrate` 的輸出（由 API
-自己跑 migration 時則是 API 的 log）以 Warning 印出一次；請當場複製，之後不會再印。自己指定的密碼
-在任何環境都必須符合 `Auth:Password`，而且不能是 `admin`。只要設定的是弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
+範本不附 bootstrap 密碼，也不會產生：密碼在任何環境都必填，而且必須符合 `Auth:Password`、不能是 `admin`。
+只要它是空的或弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
 啟動都會拒絕（資料庫已經植入過也一樣），錯誤訊息點名 `Auth__BootstrapAdmin__Password`；帳號建立之後就把
-它移除。
+它移除。預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
 ### 登入速率限制：帳號層開、IP 層看拓樸
 

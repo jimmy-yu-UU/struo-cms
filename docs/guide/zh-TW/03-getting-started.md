@@ -20,11 +20,12 @@
 這是最簡單的啟動服務進行開發及測試的方式：
 
 ```bash
+cp .env.example .env   # 然後設 STRUO_ADMIN_PASSWORD（並改掉 STRUO_ADMIN_EMAIL）
 docker compose up -d --build
 ```
 
 這會建置 API 與後台兩個映像，起 `postgres`、`redis`、`api`、`admin` 四個服務。第一次啟動時，
-API 會跑完資料庫 migration，並植入管理員帳號，密碼是隨機產生的。
+API 會跑完資料庫 migration，並植入管理員帳號；密碼要先由你決定，下面會設。
 
 等它們都起來：
 
@@ -35,14 +36,8 @@ docker compose ps
 `postgres`、`redis`、`api` 的狀態要是 `healthy`；`admin` 沒有健康檢查，顯示 `Up` 就好。也可以
 改用 `docker compose up -d --build --wait`，全部就緒才回到命令列。
 
-打開 `http://localhost:8080`，用 `admin@admin.com` 登入。密碼在第一次啟動時隨機產生，只會在 `api` 的
-log 印出一次：
-
-```bash
-docker compose logs api
-```
-
-找開頭是 `Bootstrap admin created` 的那筆 Warning。API 本身在 `http://localhost:8081`。
+打開 `http://localhost:8080`，用 `STRUO_ADMIN_EMAIL`（沒改就是 `admin@admin.com`）與
+`STRUO_ADMIN_PASSWORD` 登入。密碼是空的話，Compose 不會啟動。API 本身在 `http://localhost:8081`。
 
 對外的埠預設是後台 8080、API 8081、PostgreSQL 5432、Redis 6379。被佔用的話，複製
 `.env.example` 成 `.env`，用 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、`STRUO_PG_PORT`、
@@ -93,7 +88,9 @@ docker compose ps
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
 ```
 
-複製過來就能直接用：連線字串與 `Redis:ConnectionString` 都對上上一步容器的預設值。
+打開複製出來的檔案，把 `Auth:BootstrapAdmin:Password` 設成管理員帳號的密碼；沒設的話，下一步的 seed
+會拒絕執行。`Auth:BootstrapAdmin:Email` 也請改掉預設的 `admin@admin.com`。其餘照樣能直接用：連線字串與
+`Redis:ConnectionString` 都對上上一步容器的預設值。
 `appsettings.Development.json` 有列進 `.gitignore`，不會被提交。
 
 任何一個設定鍵都可以用環境變數覆寫，把 `:` 換成 `__`，例如 `Database__ConnectionString`；例
@@ -119,7 +116,6 @@ $ dotnet run --project src/Struo.Api -- migrate
 …
 [16:47:28 INF] 202610080001: SeedCoreData migrated
 [16:47:28 INF] => 0.0019894s
-[16:47:28 WRN] Bootstrap admin created: admin@admin.com with the generated password Yo43Ui4K7N3WJB92vKVIxFL8. It is shown only once; change it after the first login.
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 ```
@@ -199,14 +195,12 @@ pnpm dev
 
 ### 6. 第一次登入
 
-打開 `http://localhost:5173`，用 `admin@admin.com` 與第 3 步 `migrate` 印出的密碼登入。它是 `migrate`
-輸出裡的一筆 Warning，只印一次，之後不會再出現。
+打開 `http://localhost:5173`，用 `admin@admin.com` 與第 2 步設的密碼登入。
+若改過 `Auth:BootstrapAdmin:Email`，就用改過的 email。
 
-登入後先把密碼改掉。
-
-這組帳密由第 3 步的 `migrate` 植入，只在空資料庫上植入一次。要自己指定帳號密碼，在跑
-`migrate` 之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`；植入之後，
-只能登入後台改。
+這組帳密由第 3 步的 `migrate` 植入，只在空資料庫上植入一次。它讀
+`Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`（或設定檔裡同名的鍵），沒有密碼就
+失敗；植入之後，只能登入後台改。
 
 ## 你會看到什麼
 

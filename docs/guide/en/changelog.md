@@ -15,6 +15,14 @@
   on to `ItemService`). A caller that passes `ct` as the fourth positional argument to
   `IItemUseCases.RevertAsync` must pass `ct: ct` or insert the version (`null` for none) before it. The HTTP
   and GraphQL wire contract is unchanged for existing clients.
+- The core seed no longer generates a bootstrap admin password, in any environment, and no password
+  is logged any more. Creating the admin now requires `Auth:BootstrapAdmin:Password`
+  (`Auth__BootstrapAdmin__Password`); an empty value makes `migrate`, `migrate:preview` and a
+  `Database:MigrateOnStartup` start fail with an error that names that key, even when the admin
+  already exists. `docker-compose.yml` now requires `STRUO_ADMIN_PASSWORD` and refuses to start
+  without it. Set the password before the next `migrate` or `docker compose up`. A fork's own test
+  hosts that run the core migrations need to supply one too. The default email `admin@admin.com` is
+  kept; change it. See [Chapter 4](04-configuration.md) and [Chapter 20](20-deployment.md).
 :::
 
 ### Added

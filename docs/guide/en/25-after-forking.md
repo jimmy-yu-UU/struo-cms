@@ -211,3 +211,13 @@ a host must not run in parallel. Put each of them in the serial collection with
 
 [Chapter 22](22-testing.md) describes the library. Changes to its public API are announced in the
 [changelog](changelog.md).
+
+## 13. The bootstrap admin: set a password and change the default email
+
+The core seed creates one administrator on an empty database, and it needs
+`Auth__BootstrapAdmin__Password` in every environment; it never generates one. Set it in the
+environment that runs `migrate`, and in `STRUO_ADMIN_PASSWORD` for Compose. The default email
+`admin@admin.com` works but is well known, so set `Auth__BootstrapAdmin__Email` to your own address.
+Your own test hosts that run the core migrations need a password too; the template's hosts use
+`TestBootstrapAdmin.Password` from `Struo.Tests.Support`. See
+[Chapter 20: Deployment](20-deployment.md).

@@ -63,8 +63,9 @@ If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to m
 
 `STRUO_ADMIN_EMAIL` and `STRUO_ADMIN_PASSWORD` are different: Compose passes them to its `api`
 service as `Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password`. They only affect the
-API that Compose starts, not one you run yourself. `STRUO_ADMIN_PASSWORD` is empty by default, so
-the seed generates a password and prints it once in the `api` log.
+API that Compose starts, not one you run yourself. `STRUO_ADMIN_PASSWORD` has no default and is
+required: Compose refuses to start while it is empty. Change `STRUO_ADMIN_EMAIL` from the default
+too.
 
 ## Database
 
@@ -328,9 +329,10 @@ exception (500) instead.
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
 migration reads them straight from configuration as strings, so the environment that runs `migrate`
-needs them. An empty password means the seed generates a random password of at least 24 characters and logs
-it once as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
-and may not be `admin` in any letter case. While it holds a weak value, `migrate`,
+needs them. The password is required in every environment and the template ships it empty: when the admin is
+about to be created and the password is empty, the seed refuses, and nothing is generated or logged.
+The default email `admin@admin.com` is accepted, but change it. A password you set must satisfy
+`Auth:Password` and may not be `admin` in any letter case. While it is empty or weak, `migrate`,
 `migrate:preview` and a start with `Database:MigrateOnStartup` all refuse, with an error that names
 `Auth__BootstrapAdmin__Password`. The value only seeds the account, so once the account exists it can
 be removed.

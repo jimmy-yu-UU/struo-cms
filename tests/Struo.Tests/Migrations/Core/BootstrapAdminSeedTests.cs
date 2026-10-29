@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +18,7 @@ using Xunit;
 namespace Struo.Tests.Migrations.Core;
 
 [Collection("MigrationCli")] // the CLI tests set a static options override; keep these serial with them
-public sealed partial class BootstrapAdminSeedTests : IDisposable
+public sealed class BootstrapAdminSeedTests : IDisposable
 {
     private readonly CoreMigrationHarness _h = new();
 
@@ -32,12 +31,6 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
         _h.Dispose();
     }
 
-    [GeneratedRegex("password ([A-Za-z0-9]{24})")]
-    private static partial Regex LoggedPassword();
-
-    [GeneratedRegex("password [A-Za-z0-9]{24}")]
-    private static partial Regex LoggedPasswordAnywhere();
-
     private sealed class CapturingProvider(ListLogger logger) : ILoggerProvider
     {
         public ILogger CreateLogger(string categoryName) => logger;
@@ -48,45 +41,36 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
-    public void Blank_password_generates_a_strong_one(string? blank)
+    public void Blank_password_with_an_email_is_refused(string? blank)
     {
-        var hasher = new Argon2idPasswordHasher();
+        var act = () => CoreMigrationHarness.Seed("a@b.c", blank);
 
-        var seed = CoreMigrationHarness.Seed("a@b.c", blank, hasher: hasher);
-
-        seed.HasAdmin.Should().BeTrue();
-        seed.GeneratedPassword.Should().NotBeNull().And.HaveLength(24);
-        seed.GeneratedPassword.Should().MatchRegex("^[A-Za-z0-9]{24}$");
-        hasher.Verify(seed.AdminPasswordHash!, seed.GeneratedPassword!).Should().BeTrue();
+        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*Auth__BootstrapAdmin__Password*");
     }
 
     [Fact]
-    public void A_configured_password_is_hashed_and_nothing_is_generated()
+    public void A_configured_password_is_hashed()
     {
         var seed = CoreMigrationHarness.Seed("a@b.c", "configured-pw");
 
-        seed.GeneratedPassword.Should().BeNull();
+        seed.HasAdmin.Should().BeTrue();
         new Argon2idPasswordHasher().Verify(seed.AdminPasswordHash!, "configured-pw").Should().BeTrue();
     }
 
     [Fact]
-    public void No_email_means_no_admin_and_no_generated_password()
+    public void No_email_means_no_admin_and_no_password_is_needed()
     {
         var seed = CoreMigrationHarness.Seed(email: null, password: "");
 
         seed.HasAdmin.Should().BeFalse();
-        seed.GeneratedPassword.Should().BeNull();
     }
 
     [Fact]
-    public void Generated_password_is_redacted()
+    public void The_hash_is_redacted()
     {
-        var seed = CoreMigrationHarness.Seed("a@b.c", "");
+        var seed = CoreMigrationHarness.Seed("a@b.c", "configured-pw");
 
-        var redacted = seed.Redacted();
-
-        redacted.GeneratedPassword.Should().BeNull();
-        redacted.AdminPasswordHash.Should().Be(CoreSeedData.RedactionPlaceholder);
+        seed.Redacted().AdminPasswordHash.Should().Be(CoreSeedData.RedactionPlaceholder);
     }
 
     [Theory]
@@ -110,13 +94,14 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
         act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*12 characters*");
     }
 
+    private const string ConfiguredPassword = "configured-pw-123";
+
     [Fact]
-    public async Task Migrate_prints_generated_password_once()
+    public async Task Migrate_logs_no_password_or_hash()
     {
         var capture = new ListLogger();
-        var provider = new CapturingProvider(capture);
-        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
-        using var sp = Services(factory);
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CapturingProvider(capture)));
+        using var sp = Services(factory, password: ConfiguredPassword);
 
         var first = await Run(sp, "migrate");
         var second = await Run(sp, "migrate");
@@ -124,22 +109,17 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
         first.Code.Should().Be(MigrationCli.Success, first.Err);
         second.Code.Should().Be(MigrationCli.Success, second.Err);
         var hash = _h.Db().Queryable<User>().Single().Password;
-        var warnings = capture.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message).ToList();
-        var line = warnings.Should().ContainSingle(m => m.Contains("gen@example.com")).Subject;
-        var password = LoggedPassword().Match(line).Groups[1].Value;
-        password.Should().HaveLength(24);
-        new Argon2idPasswordHasher().Verify(hash, password).Should().BeTrue();
-        capture.Entries.Count(e => e.Message.Contains(password)).Should().Be(1);
-        (first.Out + first.Err + second.Out + second.Err).Should().NotContain(password).And.NotContain(hash);
+        new Argon2idPasswordHasher().Verify(hash, ConfiguredPassword).Should().BeTrue();
+        capture.Entries.Select(e => e.Message).Should().NotContain(m => m.Contains(ConfiguredPassword) || m.Contains(hash));
+        (first.Out + first.Err + second.Out + second.Err).Should().NotContain(ConfiguredPassword).And.NotContain(hash);
     }
 
     [Fact]
     public async Task Preview_never_prints_password()
     {
         var capture = new ListLogger();
-        var provider = new CapturingProvider(capture);
-        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
-        using var sp = Services(factory);
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CapturingProvider(capture)));
+        using var sp = Services(factory, password: ConfiguredPassword);
 
         var preview = await Run(sp, "migrate:preview");
         var status = await Run(sp, "migrate:status");
@@ -148,28 +128,36 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
         preview.Out.Should().Contain("INSERT INTO").And.Contain("<redacted>").And.NotContain("$argon2id");
         var everything = preview.Out + preview.Err + status.Out + status.Err
             + string.Join("\n", capture.Entries.Select(e => e.Message));
-        LoggedPasswordAnywhere().IsMatch(everything).Should().BeFalse();
-        everything.Should().NotContain("generated password");
+        everything.Should().NotContain(ConfiguredPassword);
     }
 
     [Fact]
-    public async Task A_failing_later_migration_still_reports_the_generated_password()
+    public async Task A_failing_later_migration_logs_no_password()
     {
         var capture = new ListLogger();
-        var provider = new CapturingProvider(capture);
-        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(provider));
+        using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CapturingProvider(capture)));
         MigrationCli.OptionsOverride = o => o with { NamespaceFilter = "Struo.Infrastructure.Migrations" };
-        using var sp = Services(factory, FailAfterSeedProbe.TriggerEmail, [typeof(StruoMigration).Assembly, typeof(FailAfterSeedProbe).Assembly]);
+        using var sp = Services(
+            factory, FailAfterSeedProbe.TriggerEmail,
+            [typeof(StruoMigration).Assembly, typeof(FailAfterSeedProbe).Assembly], ConfiguredPassword);
 
         var run = await Run(sp, "migrate");
 
         run.Code.Should().Be(MigrationCli.Failure);
         run.Err.Should().Contain(FailAfterSeedProbe.Message);
         var hash = _h.Db().Queryable<User>().Single().Password;
-        var line = capture.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message)
-            .Should().ContainSingle(m => m.Contains(FailAfterSeedProbe.TriggerEmail)).Subject;
-        var password = LoggedPassword().Match(line).Groups[1].Value;
-        new Argon2idPasswordHasher().Verify(hash, password).Should().BeTrue();
+        capture.Entries.Select(e => e.Message).Should().NotContain(m => m.Contains(ConfiguredPassword) || m.Contains(hash));
+    }
+
+    [Fact]
+    public async Task A_missing_bootstrap_password_fails_the_command_naming_the_setting()
+    {
+        using var sp = Services(NullLoggerFactory.Instance, "gen@example.com", [typeof(StruoMigration).Assembly], "");
+
+        var run = await Run(sp, "migrate");
+
+        run.Code.Should().Be(MigrationCli.Failure);
+        run.Err.Should().Contain("migrate failed:").And.Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
     }
 
     [Fact]
@@ -185,7 +173,7 @@ public sealed partial class BootstrapAdminSeedTests : IDisposable
 
     private ServiceProvider Services(
         ILoggerFactory factory, string email = "gen@example.com",
-        Assembly[]? assemblies = null, string password = "")
+        Assembly[]? assemblies = null, string password = ConfiguredPassword)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {

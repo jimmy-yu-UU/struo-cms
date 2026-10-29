@@ -40,9 +40,8 @@ docker compose ps   # 等 postgres、redis、api 都顯示 (healthy)
 ```
 
 開啟 `http://localhost:8080`，用 `admin@admin.com` 登入。API 在 `http://localhost:8081`。
-第一次啟動會建立資料表並植入這個帳號，密碼是隨機產生的，只會在 api 的 log 印出一次
-（`docker compose logs api`）。要自己指定，第一次啟動前在 `.env` 設
-`STRUO_ADMIN_EMAIL`／`STRUO_ADMIN_PASSWORD`。
+第一次啟動會建立資料表並植入這個帳號。先在 `.env` 設 `STRUO_ADMIN_PASSWORD`，沒設的話 compose
+不會啟動。`STRUO_ADMIN_EMAIL` 也請改掉預設值。
 
 - 埠號：被佔用時，複製 `.env.example` 成 `.env`，覆寫 `STRUO_ADMIN_PORT`、`STRUO_API_PORT`、
   `STRUO_PG_PORT` 或 `STRUO_REDIS_PORT`。
@@ -75,8 +74,8 @@ pnpm dev
 # 監聽 http://localhost:5173，並將 /api 轉發到 :5221
 ```
 
-開啟 `http://localhost:5173`，用 `admin@admin.com` 登入。這個帳號由 `migrate` 指令植入，並只印出一次隨機產生的密碼；
-要自己指定，執行它之前先設 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password`。完整
+開啟 `http://localhost:5173`，用 `admin@admin.com` 登入。這個帳號由 `migrate` 指令植入，執行它之前要先設
+`Auth__BootstrapAdmin__Password`（建議一併設 `Auth__BootstrapAdmin__Email` 換掉預設值）。完整
 步驟，包括 PostgreSQL／Redis 埠號覆寫與健康檢查，見
 [第 3 章：快速開始](docs/guide/zh-TW/03-getting-started.md)。
 

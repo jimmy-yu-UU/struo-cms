@@ -53,8 +53,8 @@
 
 `STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD` 不一樣：Compose 會把它們當成
 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password` 傳給 `api` 服務，只影響 Compose
-起的那個 API，自己跑的 API 不受影響。`STRUO_ADMIN_PASSWORD` 預設是空的，所以 seed 會隨機產生密碼，
-並在 `api` 的 log 印出一次。
+起的那個 API，自己跑的 API 不受影響。`STRUO_ADMIN_PASSWORD` 沒有預設值，一定要設：
+它是空的時候 Compose 不會啟動。`STRUO_ADMIN_EMAIL` 也請改掉預設值。
 
 ## Database
 
@@ -280,8 +280,9 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
-密碼留空時，seed 會隨機產生至少 24 個字元的密碼，並在建立管理員的那次執行裡以 Warning 印出一次。自己指定
-的密碼必須符合 `Auth:Password`，而且不能是 `admin`（不分大小寫）。只要它還是弱值，`migrate`、`migrate:preview`
+密碼在任何環境都是必填，範本出貨時是空的：要建立管理員而密碼是空的，seed 就拒絕，不會產生也不會印出任何密碼。
+預設 email `admin@admin.com` 可以用，但請改掉。自己指定的密碼必須符合 `Auth:Password`，而且不能是 `admin`
+（不分大小寫）。只要它是空的或弱值，`migrate`、`migrate:preview`
 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。這個值只用來
 植入帳號，帳號建立之後就可以移除。
 
