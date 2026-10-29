@@ -2,6 +2,15 @@
 
 ## 0.17.0
 
+::: danger Breaking
+- `IItemUseCases.RevertAsync` gains `long? expectedVersion = null` before `CancellationToken ct`, and
+  `IGraphQlDataSource.RevertAsync` gains a required `long? expectedVersion` before `ct`. A fork that
+  implements either interface must add the parameter (a custom `IItemUseCases` can ignore it or pass it
+  on to `ItemService`). A caller that passes `ct` as the fourth positional argument to
+  `IItemUseCases.RevertAsync` must pass `ct: ct` or insert the version (`null` for none) before it. The HTTP
+  and GraphQL wire contract is unchanged for existing clients.
+:::
+
 ### Added
 
 - A revert accepts the item version the caller last saw: `POST /api/items/{collection}/{id}/revisions/{n}/revert?version=<n>`

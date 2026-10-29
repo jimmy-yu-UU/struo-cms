@@ -2,6 +2,14 @@
 
 ## 0.17.0
 
+::: danger 破壞性變更
+- `IItemUseCases.RevertAsync` 在 `CancellationToken ct` 之前多了 `long? expectedVersion = null`，
+  `IGraphQlDataSource.RevertAsync` 在 `ct` 之前多了必填的 `long? expectedVersion`。實作了這兩個介面的
+  fork 必須補上這個參數（自訂的 `IItemUseCases` 可以忽略它，或轉交給 `ItemService`）。把 `ct`
+  當成第四個位置引數傳給 `IItemUseCases.RevertAsync` 的呼叫端，要改成 `ct: ct`，或在它前面補上版本
+  （不指定就傳 `null`）。HTTP 與 GraphQL 的線上契約對現有的用戶端沒有變。
+:::
+
 ### 新增
 
 - 還原可以帶呼叫端最後看到的項目版本：REST 是
