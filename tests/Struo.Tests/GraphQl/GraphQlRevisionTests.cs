@@ -190,4 +190,47 @@ public class GraphQlRevisionTests(ApiFactory factory)
         queryFields.Should().NotContain(["fxCategoryRevisions", "fxCategoryRevision"]);
         mutationFields.Should().NotContain("revertFxCategory");
     }
+
+    private static async Task<long> CurrentVersionAsync(HttpClient client, string id)
+    {
+        var root = await PostGraphQlAsync(client, $"{{ fxArticle(id: \"{id}\") {{ version }} }}");
+        root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
+        return root.GetProperty("data").GetProperty("fxArticle").GetProperty("version").GetInt64();
+    }
+
+    [Fact]
+    public async Task RevertArticle_with_a_stale_version_is_VERSION_CONFLICT()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "GqlRevertStale", status: "draft");
+        var stale = await CurrentVersionAsync(client, id);
+        var update = await PostGraphQlAsync(client,
+            $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ status: \"published\" }}) {{ status }} }}");
+        update.TryGetProperty("errors", out var updateErrors).Should().BeFalse($"unexpected errors: {updateErrors}");
+
+        var revert = await PostGraphQlAsync(client,
+            $"mutation {{ revertFxArticle(id: \"{id}\", revisionNumber: 1, version: {stale}) {{ status }} }}");
+
+        revert.GetProperty("errors")[0].GetProperty("extensions").GetProperty("code").GetString()
+            .Should().Be("VERSION_CONFLICT");
+        (await CurrentVersionAsync(client, id)).Should().BeGreaterThan(stale);
+    }
+
+    [Fact]
+    public async Task RevertArticle_with_the_current_version_succeeds()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "GqlRevertCurrent", status: "draft");
+        var update = await PostGraphQlAsync(client,
+            $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ status: \"published\" }}) {{ status }} }}");
+        update.TryGetProperty("errors", out var updateErrors).Should().BeFalse($"unexpected errors: {updateErrors}");
+        var current = await CurrentVersionAsync(client, id);
+
+        var revert = await PostGraphQlAsync(client,
+            $"mutation {{ revertFxArticle(id: \"{id}\", revisionNumber: 1, version: {current}) {{ status }} }}");
+
+        revert.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
+        revert.GetProperty("data").GetProperty("revertFxArticle").GetProperty("status").GetString()
+            .Should().Be("draft");
+    }
 }

@@ -80,7 +80,7 @@ internal sealed class FakeGraphQlDataSource : IGraphQlDataSource
     public Task<RevisionRecord?> GetRevisionAsync(string collection, string id, long revisionNumber, CancellationToken ct)
         => Task.FromResult(OnGetRevision(collection, id, revisionNumber));
 
-    public Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, CancellationToken ct)
+    public Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, long? expectedVersion, CancellationToken ct)
     {
         RevertedCollections.Add(collection);
         return Task.FromResult(OnRevert(collection, id, revisionNumber));

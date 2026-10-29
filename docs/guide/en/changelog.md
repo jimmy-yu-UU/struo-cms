@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0
+
+### Added
+
+- A revert accepts the item version the caller last saw: `POST /api/items/{collection}/{id}/revisions/{n}/revert?version=<n>`
+  over REST, and an optional `version: Long` argument on the `revert<X>` GraphQL mutation. A stale version
+  returns `409 VERSION_CONFLICT` and writes nothing; without a version the revert behaves as before. See
+  [Chapter 9](09-revisions-and-trash.md).
+
 ## 0.16.0 — 2026-10-29
 
 ### Changed

@@ -550,6 +550,8 @@ public sealed class ItemService(
     /// Reverts an item to a past revision by re-applying that revision's snapshot as a normal update
     /// (append-only: a new "revert" revision is recorded; forward history is never deleted). Returns the
     /// re-read item, or null for an unknown collection-revision/item (→ 404). Requires write permission.
+    /// A non-null <c>expectedVersion</c> must equal the item's current version, otherwise the update path
+    /// throws <see cref="ConcurrencyConflictException"/> (→ 409 VERSION_CONFLICT).
     /// <para>
     /// PINNED BEHAVIOUR: because a payload M2M relation's snapshot is captured as
     /// <c>[{id, ...payload}]</c> object elements (not bare ids), reverting such a relation goes through
@@ -563,7 +565,8 @@ public sealed class ItemService(
     /// </para>
     /// </summary>
     public async Task<IReadOnlyDictionary<string, object?>?> RevertAsync(
-        string collection, string id, long revisionNumber, CancellationToken ct = default)
+        string collection, string id, long revisionNumber, long? expectedVersion = null,
+        CancellationToken ct = default)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -573,12 +576,13 @@ public sealed class ItemService(
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;                                       // unknown revision/item -> 404
 
-        // The snapshot IS a valid update body by construction; drop `version` so revert does not echo a
-        // stale optimistic-concurrency token (it would 409 against the current row). Keep the JsonDocument
-        // alive across the awaited update (the body's JsonElement must stay valid).
+        // The snapshot IS a valid update body by construction. Its own `version` is the token of the
+        // past revision, so it is replaced by the caller's expected version (the update path's
+        // compare-and-swap then raises the 409 when the row has moved on), or dropped when the caller
+        // sent none. Keep the JsonDocument alive across the awaited update (the body's JsonElement must
+        // stay valid).
         using var src = JsonDocument.Parse(rec.Snapshot);
-        using var doc = JsonDocument.Parse(
-            JsonBodyUtil.StripKeys(src.RootElement, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "version" }));
+        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(src.RootElement, expectedVersion));
         return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, ct: ct);
     }
 

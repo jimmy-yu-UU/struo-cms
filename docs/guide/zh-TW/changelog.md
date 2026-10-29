@@ -1,5 +1,14 @@
 # 版本紀錄
 
+## 0.17.0
+
+### 新增
+
+- 還原可以帶呼叫端最後看到的項目版本：REST 是
+  `POST /api/items/{collection}/{id}/revisions/{n}/revert?version=<n>`，GraphQL 的 `revert<X>` mutation
+  多一個可選的 `version: Long` 引數。版本過期時回傳 `409 VERSION_CONFLICT` 且什麼都不寫入；不帶版本時行為跟以前一樣。見
+  [第 9 章](09-revisions-and-trash.md)。
+
 ## 0.16.0 — 2026-10-29
 
 ### 變更

@@ -139,9 +139,10 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
 
     [HttpPost("{id}/revisions/{revisionNumber:long}/revert")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
-    public async Task<IActionResult> Revert(string collection, string id, long revisionNumber, CancellationToken ct)
+    public async Task<IActionResult> Revert(string collection, string id, long revisionNumber,
+        [FromQuery] long? version, CancellationToken ct)
     {
-        var reverted = await items.RevertAsync(collection, id, revisionNumber, ct);
+        var reverted = await items.RevertAsync(collection, id, revisionNumber, version, ct);
         return reverted is null ? NotFound() : Ok(reverted);
     }
 }

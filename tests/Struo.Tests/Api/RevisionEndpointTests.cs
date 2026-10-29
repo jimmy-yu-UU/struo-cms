@@ -158,4 +158,49 @@ public class RevisionEndpointTests(ApiFactory factory)
         var resp = await editor.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    private static async Task<long> CurrentVersionAsync(HttpClient client, string id)
+    {
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
+        return Root(await get.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("version").GetInt64();
+    }
+
+    [Fact]
+    public async Task Revert_with_a_stale_version_is_409_and_leaves_the_item_untouched()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "RevertStaleVersion", status: "draft");
+        var staleVersion = await CurrentVersionAsync(client, id);
+        var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
+            new { status = "published", translations = new { en = new { title = "RevertStaleVersion" } } });
+        put.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var revert = await client.PostAsync(
+            $"/api/items/fxArticle/{id}/revisions/1/revert?version={staleVersion}", null);
+
+        revert.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        Root(await revert.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("VERSION_CONFLICT");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
+        Root(await get.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
+            .Should().Be("published");
+    }
+
+    [Fact]
+    public async Task Revert_with_the_current_version_succeeds()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateArticleAsync(client, "RevertCurrentVersion", status: "draft");
+        var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
+            new { status = "published", translations = new { en = new { title = "RevertCurrentVersion" } } });
+        put.StatusCode.Should().Be(HttpStatusCode.OK);
+        var current = await CurrentVersionAsync(client, id);
+
+        var revert = await client.PostAsync(
+            $"/api/items/fxArticle/{id}/revisions/1/revert?version={current}", null);
+
+        revert.StatusCode.Should().Be(HttpStatusCode.OK);
+        Root(await revert.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
+            .Should().Be("draft");
+    }
 }

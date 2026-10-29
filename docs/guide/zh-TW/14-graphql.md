@@ -194,7 +194,7 @@ HTTP_STATUS:200
 | `update<X>` | `(id: ID!, input: <X>UpdateInput!, locale: String): <X>` |
 | `delete<X>` | `(id: ID!, purge: Boolean): Boolean` |
 | `restore<X>` | `(id: ID!): <X>` |
-| `revert<X>` | `(id: ID!, revisionNumber: Int!): <X>` |
+| `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
 `locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都
 沒有。建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份
@@ -289,7 +289,7 @@ resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物
 一個宣告 `Revisions = true` 的集合，額外多三個介面：
 `{collection}Revisions(id: ID!): [Revision!]!`、
 `{collection}Revision(id: ID!, revisionNumber: Int!): Revision`、
-`revert{X}(id: ID!, revisionNumber: Int!): X`。
+`revert{X}(id: ID!, revisionNumber: Int!, version: Long): X`。
 
 共用的 `Revision` 型別是
 `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`；列表欄位上

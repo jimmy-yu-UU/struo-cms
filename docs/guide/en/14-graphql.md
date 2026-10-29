@@ -245,7 +245,7 @@ REST write. Queries stay open to anonymous callers within their read grants.
 | `update<X>` | `(id: ID!, input: <X>UpdateInput!, locale: String): <X>` |
 | `delete<X>` | `(id: ID!, purge: Boolean): Boolean` |
 | `restore<X>` | `(id: ID!): <X>` |
-| `revert<X>` | `(id: ID!, revisionNumber: Int!): <X>` |
+| `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
 The `locale` argument only appears on the single-item query, the list query, `create`, and
 `update` — `delete`/`restore`/`revert` all have none. A create input carries writable own fields,
@@ -358,7 +358,7 @@ completely untouched.
 A collection declaring `Revisions = true` gets three extra fields:
 `{collection}Revisions(id: ID!): [Revision!]!`,
 `{collection}Revision(id: ID!, revisionNumber: Int!): Revision`,
-`revert{X}(id: ID!, revisionNumber: Int!): X`.
+`revert{X}(id: ID!, revisionNumber: Int!, version: Long): X`.
 
 The shared `Revision` type is
 `{ revisionNumber, operation, createdAt, createdBy, sourceRevisionNumber, snapshot }`; on the list

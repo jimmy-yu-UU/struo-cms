@@ -115,7 +115,7 @@ Revisions are exposed as three REST endpoints:
 - `GET /api/items/{collection}/{id}/revisions/{n}` — returns one revision, together with a
   redacted `snapshot`, rendered as structured JSON rather than a string.
 - `POST /api/items/{collection}/{id}/revisions/{n}/revert` — applies that snapshot; it takes no
-  body.
+  body. An optional `?version=` query parameter carries the item version the caller last saw.
 
 Listing and viewing need only the collection's ordinary read grant, and reverting needs its
 ordinary write grant — revisions have no permission tier of their own. For a collection with
@@ -146,10 +146,14 @@ HTTP_STATUS:200
 
 The snapshot itself is visible only by calling the single-revision endpoint separately.
 
-A revert reads the target version's raw snapshot, strips its `version` key first — so a stale
-concurrency token does not get compared against the current row and spuriously conflict — and
-then applies the result through the exact same update path an ordinary write uses, tagged
-`revert`.
+A revert reads the target version's raw snapshot, drops its own `version` key — the old token
+would spuriously conflict with the current row — and then applies the result through the exact
+same update path an ordinary write uses, tagged `revert`.
+
+A caller can guard the revert against a concurrent edit by passing the item version it last saw
+(`?version=` over REST, the `version` argument over GraphQL). If the item has moved on since, the
+revert fails with the same `409 VERSION_CONFLICT` an update returns, and nothing is written.
+Without a version, the revert applies to whatever the item currently is.
 
 A revert itself writes one more new `revert` revision rather than rewinding history — the
 timeline only ever accumulates forward, and undoing a revert means reverting again to an earlier
