@@ -290,6 +290,9 @@ async function onReverted(): Promise<void> {
       deep: editableRelations.value,
     })
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
+    // The reverted copy is the committed state: a pending conflict banner and its cached server copy are void.
+    conflict.value = false
+    latestFromServer = null
     errors.value = {}
     serverError.value = ''
   } catch (e) {

@@ -889,6 +889,24 @@ describe('ItemFormView', () => {
     expect((w.vm as any).model.version).toBe(8)
   })
 
+  it('a successful revert after a conflict clears the banner and the cached server copy', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupTwoLocales()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 3 })
+    const w = mountView()
+    await w.vm.init()
+    get.mockResolvedValueOnce({ id: '5', status: 'pre-revert-copy', translations: twoLocales, version: 8 })
+    await (w.vm as any).recoverFromConflict()
+    expect((w.vm as any).conflict).toBe(true)
+    get.mockResolvedValueOnce({ id: '5', status: 'reverted', translations: twoLocales, version: 9 })
+    await (w.vm as any).onReverted()
+    expect((w.vm as any).conflict).toBe(false)
+    ;(w.vm as any).reloadLatest()
+    expect((w.vm as any).model.shared.status).toBe('reverted')
+    expect((w.vm as any).model.version).toBe(9)
+  })
+
   // ---- language list refresh after editing the Language collection -------
 
   const languageMeta = { name: 'language', label: 'Language', fields: [
