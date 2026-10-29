@@ -55,9 +55,6 @@ function relationFieldId(name: string): string { return `${uid}-relation-${name}
 function tabHasErrors(code: string): boolean {
   return localeHasErrors(props.errors, code, fields.value.translatable, defaultCode.value)
 }
-function tabErrorLabel(name: string): string {
-  return t('itemForm.tabHasErrors', { name })
-}
 function fieldError(code: string, name: string): string | undefined {
   return props.errors[translationErrorKey(code, name, defaultCode.value)]
 }
@@ -88,13 +85,10 @@ defineExpose({ activeLocale })
             :aria-label="dotLabel(loc.code)"
           />
           {{ loc.name }}<span v-if="loc.isDefault"> *</span>
-          <span
-            v-if="tabHasErrors(loc.code)"
-            class="tab-error text-destructive ml-1.5 font-bold"
-            role="img"
-            :aria-label="tabErrorLabel(loc.name)"
-            :title="tabErrorLabel(loc.name)"
-          >!</span>
+          <template v-if="tabHasErrors(loc.code)">
+            <span class="tab-error text-destructive ml-1.5 font-bold" aria-hidden="true">!</span>
+            <span class="tab-error-text sr-only">{{ t('itemForm.tabHasErrors') }}</span>
+          </template>
         </TabsTrigger>
       </TabsList>
       <TabsContent v-for="loc in locales" :key="loc.code" :value="loc.code" class="grid gap-[18px]">

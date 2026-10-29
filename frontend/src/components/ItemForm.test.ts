@@ -10,7 +10,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
     translatableBadge: 'Translatable',
-    localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: '{name}, has errors',
+    localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: 'has errors',
   } } },
 })
 type ItemFormProps = InstanceType<typeof ItemForm>['$props']
@@ -258,7 +258,9 @@ describe('ItemForm per-locale errors', () => {
     const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: { 'fr:title': 'e' } })
     const tabs = w.findAll('[role="tab"]')
     expect(tabs[2].find('.tab-error').exists()).toBe(true)
-    expect(tabs[2].find('.tab-error').attributes('aria-label')).toBe('Français, has errors')
+    expect(tabs[2].find('.tab-error').attributes('aria-hidden')).toBe('true')
+    expect(tabs[2].find('.tab-error-text').text()).toBe('has errors')
+    expect(tabs[2].text()).toContain('Français')
     expect(tabs[0].find('.tab-error').exists()).toBe(false)
     expect(tabs[1].find('.tab-error').exists()).toBe(false)
   })
@@ -273,6 +275,6 @@ describe('ItemForm per-locale errors', () => {
     const { default: en } = await import('../locales/en')
     const { default: zh } = await import('../locales/zh-TW')
     for (const cat of [en, zh] as unknown as Array<{ itemForm: Record<string, string> }>)
-      expect(cat.itemForm.tabHasErrors).toContain('{name}')
+      expect(cat.itemForm.tabHasErrors).toBeTruthy()
   })
 })

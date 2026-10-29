@@ -18,7 +18,7 @@ public class TranslationUpdateMergeTests(ApiFactory factory)
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
-    private async Task<string> CreateAsync(HttpClient c, object translations)
+    private static async Task<string> CreateAsync(HttpClient c, object translations)
     {
         var body = JsonSerializer.SerializeToElement(new { status = "draft", translations });
         var resp = await c.PostAsJsonAsync("/api/items/fxArticle", body);
