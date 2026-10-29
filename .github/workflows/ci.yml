@@ -206,9 +206,9 @@ jobs:
       # The named volume is created from the image's /app/App_Data, so the non-root `app`
       # user can write the SQLite file in both containers.
       - name: Smoke-test the API image against SQLite
-        env:
-          Auth__BootstrapAdmin__Password: ci-smoke-bootstrap-pw-1
         run: |
+          Auth__BootstrapAdmin__Password="$(openssl rand -hex 16)"
+          export Auth__BootstrapAdmin__Password
           # A failed volume cleanup on the throwaway runner must not turn a passing smoke test red.
           trap 'docker rm --force api; docker volume rm struo-ci-data || true' EXIT
           db_env=(--env Database__DbType=Sqlite
@@ -237,9 +237,9 @@ jobs:
       # The compose stack builds its own images from the same Dockerfiles. It must
       # come up healthy, serve the built SPA, and proxy an anonymous API call through nginx.
       - name: Smoke-test the compose stack
-        env:
-          STRUO_ADMIN_PASSWORD: ci-smoke-bootstrap-pw-1
         run: |
+          STRUO_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+          export STRUO_ADMIN_PASSWORD
           trap 'rc=$?; if [ $rc -ne 0 ]; then docker compose ps --all; docker compose logs; fi; docker compose down --volumes' EXIT
           docker compose up --detach --build --wait --wait-timeout 300
           curl --fail --silent --show-error http://localhost:8081/health/ready
