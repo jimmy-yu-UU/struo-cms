@@ -40,6 +40,7 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
             logger?.LogWarning(exception, "Search provider unavailable");
         else if (DomainErrorMap.IsUniqueViolation(exception))
             logger?.LogWarning(exception, "Unique constraint violation");
-        return (DomainErrorMap.StatusFor(exception, code), new ErrorBody(code, message));
+        return (DomainErrorMap.StatusFor(exception, code),
+            new ErrorBody(code, message, DomainErrorMap.DetailsFor(exception)));
     }
 }

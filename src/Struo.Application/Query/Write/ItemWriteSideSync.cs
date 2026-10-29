@@ -71,6 +71,7 @@ public sealed class ItemWriteSideSync(
             .ToDictionary(f => f.Name, f => f.MaxLength!.Value, StringComparer.OrdinalIgnoreCase);
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+        var missing = new List<QueryErrorDetail>();
 
         // On update a required field is judged on the merged value (stored + sent), because the store keeps
         // the stored value of a field the request omits.
@@ -104,7 +105,8 @@ public sealed class ItemWriteSideSync(
             {
                 var has = fieldValues.TryGetValue(rf, out var v);
                 if (!has && storedValues is not null) has = storedValues.TryGetValue(rf, out v);
-                FieldValueRules.RequireTranslation(rf, locale, has, v);
+                if (FieldValueRules.IsTranslationMissing(has, v))
+                    missing.Add(FieldValueRules.MissingTranslationDetail(rf, locale));
             }
 
             // Max length — a CMS-layer limit, measured after RichText sanitization.
@@ -116,6 +118,9 @@ public sealed class ItemWriteSideSync(
 
             perLocale[locale] = fieldValues;
         }
+
+        if (missing.Count > 0)
+            throw FieldValueRules.MissingTranslationsError(missing);
 
         // On create, the default locale's translation must be supplied.
         if (isCreate)

@@ -25,12 +25,13 @@ internal static class FieldValueRules
             throw new QueryException($"Field '{fieldName}' is required.");
     }
 
-    internal static void RequireTranslation(string fieldName, string locale, bool present, object? value)
-    {
-        if (!present || IsMissing(value))
-            throw new QueryException(
-                $"Required translation field '{fieldName}' is missing for locale '{locale}'.");
-    }
+    internal static bool IsTranslationMissing(bool present, object? value) => !present || IsMissing(value);
+
+    internal static QueryErrorDetail MissingTranslationDetail(string fieldName, string locale) =>
+        new(fieldName, locale, $"Required translation field '{fieldName}' is missing for locale '{locale}'.");
+
+    internal static QueryException MissingTranslationsError(IReadOnlyList<QueryErrorDetail> details) =>
+        new(details[0].Message, details);
 
     internal static void CheckMaxLengthParent(string fieldName, int max, string? value)
     {

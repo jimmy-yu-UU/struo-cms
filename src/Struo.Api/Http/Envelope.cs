@@ -3,7 +3,11 @@ using Struo.Domain.Query;
 
 namespace Struo.Api.Http;
 
-public sealed record ValidationDetail(string Field, string Message);
+public sealed record ValidationDetail(
+    string Field,
+    string Message,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? Locale = null);
 
 public sealed record ErrorBody(
     string Code,

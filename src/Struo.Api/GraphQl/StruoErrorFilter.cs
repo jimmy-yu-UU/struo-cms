@@ -57,6 +57,17 @@ public sealed class StruoErrorFilter(
             return error.WithMessage(message).WithCode(code).WithException(null!);
         }
 
-        return error.WithMessage(message).WithCode(code);
+        var mapped = error.WithMessage(message).WithCode(code);
+        var details = DomainErrorMap.DetailsFor(exception);
+        return details is null
+            ? mapped
+            : mapped.SetExtension("details", details.Select(ToExtension).ToList());
+    }
+
+    private static Dictionary<string, object?> ToExtension(ValidationDetail d)
+    {
+        var item = new Dictionary<string, object?> { ["field"] = d.Field, ["message"] = d.Message };
+        if (d.Locale is not null) item["locale"] = d.Locale;
+        return item;
     }
 }

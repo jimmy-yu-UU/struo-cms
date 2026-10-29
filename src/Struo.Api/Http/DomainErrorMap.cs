@@ -50,6 +50,16 @@ public static class DomainErrorMap
         };
 
     /// <summary>
+    /// The field-level details a <see cref="QueryException"/> carries, or null when
+    /// <paramref name="exception"/> has none. Shared by REST (<c>error.details</c>) and GraphQL
+    /// (the <c>details</c> error extension).
+    /// </summary>
+    public static IReadOnlyList<ValidationDetail>? DetailsFor(Exception exception) =>
+        exception is QueryException { Details: { Count: > 0 } details }
+            ? details.Select(d => new ValidationDetail(d.Field, d.Message, d.Locale)).ToList()
+            : null;
+
+    /// <summary>
     /// Fixed client-facing message for <see cref="ErrorCodes.SearchUnavailable"/>. Never the
     /// exception's own <see cref="System.Exception.Message"/>, which may name an internal provider
     /// host — that detail only ever reaches the Warning-level server log.
