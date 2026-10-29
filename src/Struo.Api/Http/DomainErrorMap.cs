@@ -12,7 +12,7 @@ namespace Struo.Api.Http;
 /// <c>StruoErrorFilter</c> so the two protocols can never drift. Pure and side-effect free:
 /// it never logs (the REST handler owns logging/masking of unmapped exceptions) and it never
 /// touches HTTP — callers layer transport concerns on top (REST derives an HTTP status via
-/// <see cref="StatusFor"/>; GraphQL only stamps the code and keeps HTTP 200 semantics).
+/// <see cref="StatusFor"/>; GraphQL stamps the code, message and details and keeps HTTP 200 semantics).
 /// </summary>
 public static class DomainErrorMap
 {

@@ -158,4 +158,19 @@ public class TranslationUpdateMergeTests(ApiFactory factory)
         en.GetProperty("title").GetString().Should().Be("A");
         en.GetProperty("body").GetString().Should().Be("B");
     }
+
+    [Fact]
+    public async Task Revert_restores_a_field_that_was_null_in_the_snapshot_to_null()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateAsync(c, new { en = new { title = "A" } });
+        (await PutTranslationsAsync(c, id, new { en = new { body = "filled later" } })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var revert = await c.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
+        revert.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var en = (await TranslationsAsync(c, id)).GetProperty("en");
+        en.GetProperty("title").GetString().Should().Be("A");
+        en.GetProperty("body").ValueKind.Should().Be(JsonValueKind.Null);
+    }
 }

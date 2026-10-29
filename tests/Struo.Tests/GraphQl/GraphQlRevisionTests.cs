@@ -213,7 +213,9 @@ public class GraphQlRevisionTests(ApiFactory factory)
 
         revert.GetProperty("errors")[0].GetProperty("extensions").GetProperty("code").GetString()
             .Should().Be("VERSION_CONFLICT");
-        (await CurrentVersionAsync(client, id)).Should().BeGreaterThan(stale);
+        var after = await PostGraphQlAsync(client, $"{{ fxArticle(id: \"{id}\") {{ status }} }}");
+        after.GetProperty("data").GetProperty("fxArticle").GetProperty("status").GetString()
+            .Should().Be("published");
     }
 
     [Fact]

@@ -109,18 +109,21 @@ public sealed class ItemWriteSideSync(
                     missing.Add(FieldValueRules.MissingTranslationDetail(rf, locale));
             }
 
-            // Max length — a CMS-layer limit, measured after RichText sanitization.
-            foreach (var (name, value) in fieldValues)
-            {
-                if (value is string sv && maxLengths.TryGetValue(name, out var max))
-                    FieldValueRules.CheckMaxLengthTranslation(name, max, locale, sv);
-            }
-
             perLocale[locale] = fieldValues;
         }
 
         if (missing.Count > 0)
             throw FieldValueRules.MissingTranslationsError(missing);
+
+        // Max length — a CMS-layer limit, measured after RichText sanitization and after every required check.
+        foreach (var (locale, fieldValues) in perLocale)
+        {
+            foreach (var (name, value) in fieldValues)
+            {
+                if (value is string sv && maxLengths.TryGetValue(name, out var max))
+                    FieldValueRules.CheckMaxLengthTranslation(name, max, locale, sv);
+            }
+        }
 
         // On create, the default locale's translation must be supplied.
         if (isCreate)
@@ -142,7 +145,7 @@ public sealed class ItemWriteSideSync(
                 parentId, perLocale, ct);
     }
 
-    // The stored translation rows of one parent as { locale: { requiredFieldName: value } }, keyed by the
+    // The stored translation rows of one parent as { locale: { translatableFieldName: value } }, keyed by the
     // translatable field names in camelCase as the request carries them.
     private async Task<Dictionary<string, IReadOnlyDictionary<string, object?>>> LoadStoredTranslationsAsync(
         TranslationMetadata tm, object parentId, CancellationToken ct)
