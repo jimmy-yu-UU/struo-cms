@@ -36,6 +36,10 @@ public sealed class ItemWriteSideSync(
     /// an absent/non-object <c>translations</c> payload is a no-op (partial updates supported) and
     /// the default locale is NOT forced.
     /// </para>
+    /// <para>
+    /// On update the store merges each sent locale per field: a field the request omits keeps its stored
+    /// value and an explicit null clears it, so required fields are judged on the merged value.
+    /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
         CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct)
@@ -68,6 +72,12 @@ public sealed class ItemWriteSideSync(
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
 
+        // On update a required field is judged on the merged value (stored + sent), because the store keeps
+        // the stored value of a field the request omits.
+        var stored = isCreate || requiredFields.Count == 0
+            ? new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
+            : await LoadStoredTranslationsAsync(tm, parentId, ct);
+
         foreach (var localeProp in trElem.EnumerateObject())
         {
             var locale = await languages.CanonicalizeAsync(localeProp.Name)
@@ -87,10 +97,13 @@ public sealed class ItemWriteSideSync(
                 fieldValues[field.Name] = value;
             }
 
-            // Required: every required translatable field must be present and non-empty.
+            // Required: every required translatable field must be present and non-empty. A create judges
+            // the sent values; an update judges the stored row overlaid with the sent values.
+            stored.TryGetValue(locale, out var storedValues);
             foreach (var rf in requiredFields)
             {
                 var has = fieldValues.TryGetValue(rf, out var v);
+                if (!has && storedValues is not null) has = storedValues.TryGetValue(rf, out v);
                 FieldValueRules.RequireTranslation(rf, locale, has, v);
             }
 
@@ -122,6 +135,23 @@ public sealed class ItemWriteSideSync(
             await repository.SyncTranslationsAsync(
                 tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields,
                 parentId, perLocale, ct);
+    }
+
+    // The stored translation rows of one parent as { locale: { requiredFieldName: value } }, keyed by the
+    // translatable field names in camelCase as the request carries them.
+    private async Task<Dictionary<string, IReadOnlyDictionary<string, object?>>> LoadStoredTranslationsAsync(
+        TranslationMetadata tm, object parentId, CancellationToken ct)
+    {
+        var rows = await repository.LoadTranslationsAsync(
+            tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, [parentId], null, ct);
+        var result = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            if (PropertyAccessorCache.Read(row, tm.LocaleProperty) is not string locale) continue;
+            result[locale] = tm.Fields.ToDictionary(
+                f => f, f => PropertyAccessorCache.Read(row, f), StringComparer.OrdinalIgnoreCase);
+        }
+        return result;
     }
 
     /// <summary>

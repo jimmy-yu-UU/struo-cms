@@ -14,7 +14,7 @@ namespace Struo.Tests.Query;
 /// <summary>
 /// A create inserts translation rows under a parent id that is new in its transaction, so it issues
 /// no DELETE against the translation table (the DELETE's next-key locks deadlock concurrent creates
-/// on InnoDB). An update replaces the stored row of each supplied locale in place and inserts a row
+/// on InnoDB). An update merges the sent fields onto the stored row of each supplied locale in place and inserts a row
 /// for a new locale; it never deletes from the translation table, whose gap locks deadlock concurrent
 /// updates of different items on InnoDB. Captures the SQL the repository executes, so the guard holds
 /// on every backend the default suite runs on.
@@ -84,7 +84,7 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     }
 
     [Fact]
-    public async Task Update_of_an_existing_locale_replaces_the_row_in_place_without_deleting()
+    public async Task Update_of_an_existing_locale_merges_into_the_row_in_place_without_deleting()
     {
         var id = Guid.CreateVersion7();
         await SyncAsync(id, "en", "First", "kept?", isCreate: true);
@@ -97,7 +97,7 @@ public sealed class TranslationSyncDeleteTests : IDisposable
         var row = (await RowsAsync(id)).Should().ContainSingle().Which;
         row.Id.Should().Be(original.Id);
         row.Title.Should().Be("Second");
-        row.Body.Should().BeNull("the update replaces the whole row, so a field it does not send is cleared");
+        row.Body.Should().Be("kept?", "an update keeps the stored value of a field it does not send");
     }
 
     [Fact]
