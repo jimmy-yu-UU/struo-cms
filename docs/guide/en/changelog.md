@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.0
+## 0.17.0 — 2026-10-29
 
 ::: danger Breaking
 - An item update merges `translations` per field instead of replacing each locale's row. A field the
