@@ -42,7 +42,6 @@
 - `Database:ReadinessTimeoutSeconds` (default `3`, range 1-60): `/health/ready` reports the database
   unhealthy (503) when the probe has not answered in that time, instead of waiting for the driver
   connect timeout. See [Chapter 4](04-configuration.md).
-
 - `Struo:Files:S3:ChecksumMode` (`WhenRequired` default, or `WhenSupported`): whether the S3 client adds a
   checksum to every request and checks one on every response, or only where the operation demands it.
   Some S3-compatible services reject the checksums the client would otherwise send. Any other value stops
@@ -70,6 +69,9 @@
   an error. The default locale is always validated.
 - A revision revert from the admin could overwrite a concurrent edit. It now sends the loaded item
   version, and a stale one shows the usual conflict banner.
+- The admin app no longer drops the session when `GET /api/auth/me` fails with anything other than a 401
+  (a network error, a 5xx, a timeout). At boot such a failure shows a "cannot connect" screen with a Retry
+  button instead of the sign-in page; there is no automatic retry.
 
 ## 0.16.0 — 2026-10-29
 

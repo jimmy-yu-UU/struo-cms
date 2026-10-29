@@ -19,6 +19,10 @@ job、init container，或 `docker run --rm … <映像> migrate`。也可以設
 `Database:MigrationLockTimeoutSeconds` 的副本啟動失敗。SQLite 與 Oracle 都不拿鎖，要確定只有一
 處在跑 `migrate`。
 
+有一個以上的副本時，把 `migrate` 當成獨立的 job 只跑一次，跑完再推出 API，不要在每個副本上都設
+`MigrateOnStartup`。PostgreSQL 的鎖是 session 層級的 advisory lock，交易模式的連線池（例如
+PgBouncer）可能把取得和釋放分給不同的伺服器 session。`migrate` 這一步要直接連資料庫，不要經過連線池。
+
 Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
 自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
 
@@ -38,6 +42,18 @@ Azure SQL Database 預設就是開啟的。
 
 API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，旗標是關的就記一筆警告，內容點出
 `READ_COMMITTED_SNAPSHOT` 與上面那行語句。警告不會讓啟動失敗，其他後端也不做這個檢查。
+
+### 資料庫連線：TLS、連線池大小、密碼
+
+PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`，並給 CA 憑證（`Root
+Certificate=/path/to/ca.crt`）。`Require` 會加密連線，卻不檢查對方是誰。其他後端就用該驅動程式自己的 TLS
+選項寫在連線字串裡。
+
+每個 API 行程最多開 `Maximum Pool Size` 條連線（Npgsql 預設 100）。把它乘上副本數，結果要低於伺服器的
+`max_connections`，還要留空間給 `migrate` job 與你自己的工具。
+
+連線字串裡有資料庫密碼。用環境變數（`Database__ConnectionString`）或密鑰管理工具注入，不要放在映像或儲存庫
+的檔案裡。
 
 ### 第一次 `migrate` 之前先設 bootstrap 密碼
 
@@ -73,10 +89,17 @@ API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出�
 再列出那個 network 的範圍。不要信任整段共用的 Docker network 範圍：它包含 bridge 閘道，而打到 API 已發布
 連接埠的請求會經由這個閘道進來，等於能偽造 `X-Forwarded-*`。API 躲在 nginx 後面時，根本不要發布它的連接埠。
 
-TLS 終結在那個容器前面的另一個代理時，中間有兩跳，API 只採信其中一跳。它看到的用戶端位址因此是外層
-代理的，每個用戶端的每 IP 登入限流都落進同一個桶；scheme 與 host 仍會正確送達。外層代理必須把
-`X-Forwarded-Proto: https` 設成覆寫而不是附加，因為映像的 nginx 會把收到的值原樣帶過去，沒收到才用自己
-連線的 scheme。
+`ForwardedHeaders:ForwardLimit` 是用戶端與 API 之間的代理數量，預設 `1`。負載平衡器前面接 nginx、
+nginx 再接 API，就是兩個，要設 `ForwardedHeaders__ForwardLimit=2`。設 `1` 時 API 會把負載平衡器的位址當成
+用戶端，每 IP 登入限流就把所有用戶端放進同一個桶。鏈上每個代理都要受信任：`KnownProxies` 或
+`KnownNetworks` 要涵蓋負載平衡器的位址，也要涵蓋 nginx 容器的位址，否則 API 讀到第一個不受信任的位址就
+停止往鏈的上游讀。
+
+映像的 nginx 只送一個 `X-Forwarded-Proto`。收到代理送來的值就原樣帶過去，沒收到才用自己連線的 scheme。
+前面有終結 TLS 的代理時這樣正好，該代理應該覆寫收到的值而不是附加。這個 nginx 本身是用戶端直連的邊緣
+時，用戶端可以自己送這個標頭並被原樣帶過去。這種情況下，在 `frontend/nginx/default.conf.template` 的
+`server` 區塊，把兩行 `proxy_set_header X-Forwarded-Proto` 裡的 `$struo_forwarded_proto` 換成
+`$scheme`。
 
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 
@@ -86,6 +109,24 @@ TLS 終結在那個容器前面的另一個代理時，中間有兩跳，API 只
 的一份，同一個使用者打到不同副本會看起來像沒登入過。設了 Redis，登入嘗試計數是所有副本共用的
 Redis 原子計數器，Redis 連不上時登入會回 5xx。沒設 Redis 時，每個行程各自計數，並在驗證密碼之前
 於帳號層級的鎖內把每次嘗試算進去，所以單一副本不會少算，但副本之間看不到彼此的嘗試。
+
+設了 Redis，它也存放 DataProtection 金鑰圈，見下面的「DataProtection 金鑰」。
+
+### S3 相容儲存：`ChecksumMode`
+
+`Struo:Files:S3:ChecksumMode` 預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上 checksum、
+才檢查回應的 checksum。這能配合最多種 S3 相容服務。有些服務會拒絕用戶端預設送出的 checksum，上傳就會失敗。
+服務的文件說有支援時，`WhenSupported` 會對每個能帶 checksum 的操作都開啟。其他任何值，在
+`Struo:Files:Backend` 為 `s3` 時都會讓啟動失敗。症狀見第 15 章。
+
+### 設定 `AllowedHosts`
+
+範本沒有設 `AllowedHosts`，沒設時 ASP.NET Core 的主機過濾接受任何 `Host` 標頭。正式環境把它設成你的主機名稱，
+例如 `AllowedHosts=cms.example.com`，多個名稱用 `;` 分隔。後台映像的 nginx 會轉送用戶端的 `Host` 標頭，所以
+要列公開的名稱。
+
+主機不在清單內的請求會得到 400。這包括用 pod IP 或其他名稱打 API 的探針：映像自己的 `HEALTHCHECK` 要把
+`localhost` 列進去，編排系統的探針要帶一個允許的 `Host` 標頭。
 
 ### Cookie 只在 HTTPS 下送回
 
@@ -208,7 +249,7 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
   PostgreSQL 連線字串，不能直接拿去用。
 - `Database__MigrateOnStartup`（選填）——留空就是 `false`，部署時要另外跑 `migrate`；設成
   `true`，API 啟動時自己套用 migration。
-- `Redis__ConnectionString`——留空就是單副本、不撐重啟的行程內快取。
+- `Redis__ConnectionString`——留空就是單副本，行程內快取與容器內的金鑰圈都不在副本之間共用。
 - `Struo__Files__Backend`——預設 `local`，寫進 `/app/App_Data`（落在宣告的 volume 裡）；要
   用 `s3`，還得配上對應的四個 `Struo__Files__S3__*` 鍵。
 
@@ -220,14 +261,21 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token 用的）寫在容器內的
 `/home/app/.aspnet/DataProtection-Keys`，這個映像沒有把它宣告成 volume，也沒有掛載。
 
-不持久化這個目錄有兩個後果：換掉容器，現有的每一張認證 cookie 跟 antiforgery token 全部失
-效，所有使用者都要重新登入；跑一個以上的副本，每個副本各自有一份不共用的金鑰圈，一個請求打
-到跟核發時不同的副本，cookie 驗證或 antiforgery 會直接失敗。
+設了 `Redis:ConnectionString` 時，金鑰圈改存在 Redis 的 `DataProtection-Keys` 這個鍵，所有副本讀同一份金鑰。
+請求可以落在任何副本，換掉容器也不會讓人被登出。這種情況下上面那個目錄不會被使用。登入要 Redis
+連得上，直到金鑰圈載入為止，所以啟動時 Redis 掛了，登入會失敗到它恢復。
 
-單一副本，把這個路徑掛成 volume 就夠了，金鑰能撐過容器重建；一個以上的副本，得自己配一個共
-享的金鑰存放區——共享檔案系統、Redis，或雲端供應商的金鑰圈服務，這個專案沒有替任何一種做好
-設定。不論掛在哪裡，金鑰都是明文存放的：沒有配置 XML 加密器，金鑰圈目錄裡是可以直接讀的金
-鑰材料，要比照其他密鑰保護。
+`DataProtection:ApplicationName`（預設 `StruoCMS`）決定金鑰圈的範圍。同一個部署的每個副本必須用同一個值。
+共用同一個 Redis 的不同部署，各自要用不同的名稱，或不同的 Redis 資料庫，以免讀到彼此的金鑰。改了名稱，
+所有使用者會被登出一次。
+
+沒有 Redis 時，金鑰留在容器內的金鑰目錄。不持久化它有兩個後果：換掉容器，每一張認證 cookie 與 antiforgery
+token 都失效；跑一個以上的副本，每個副本各自有一份金鑰圈，一個請求打到跟核發時不同的副本，cookie 驗證或
+antiforgery 會直接失敗。單一副本，把這個路徑掛成 volume 就夠了，金鑰能撐過容器重建；一個以上的副本就要設
+`Redis:ConnectionString`。
+
+不論存在哪裡，金鑰都沒有靜態加密：這個專案沒有配置 XML 加密器，Redis 的那個鍵或金鑰圈目錄裡都是可以直接讀的
+金鑰材料，要比照其他密鑰保護。限制誰能讀那個 Redis 資料庫，並要求認證。
 
 ### 後台 SPA 映像
 
@@ -250,7 +298,8 @@ SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI
 第 16 章。
 
 `HSTS_VALUE` 預設空字串，nginx 遇到值是空字串的 `add_header` 就完全不送這個標頭；只有在這裡
-或前面的代理已經終結 TLS 的每一個可觸達請求上，才該把它設起來。不管 `HSTS_VALUE` 怎麼設，
+或前面的代理已經終結 TLS 的每一個可觸達請求上，才該把它設起來。正式環境建議設，例如
+`max-age=31536000`：API 自己不送 HSTS 標頭，而 TLS 可能終結在這個映像前面的代理。不管 `HSTS_VALUE` 怎麼設，
 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
 `Referrer-Policy: strict-origin-when-cross-origin` 這三個標頭一律都送；API 自己的
 `nosniff` 在代理到 `/api/*` 的回應上被隱藏掉，讓這個標頭只出現一次。
@@ -283,7 +332,8 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 `NGINX_RESOLVER`（預設 `127.0.0.11`，Docker 內建 DNS，5 秒逾時）只有在使用者自訂的 Docker
 network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*` 請求都會在解析逾時之後收
-到 502。
+到 502。在 Kubernetes 上要設成叢集的 DNS，例如 `NGINX_RESOLVER=kube-dns.kube-system.svc.cluster.local`；
+`127.0.0.11` 是 Docker 的，pod 裡沒有東西在那裡監聽。
 
 要讓 SPA 部署在跟 API 不同的來源，設定 `VITE_API_BASE_URL` 的方式與生效時機，見
 [第 19 章：後台客製化](19-admin-customization.md)；建這個映像時，值要放在你自己新增並提交的
@@ -324,6 +374,9 @@ admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是
 `/health/ready` 執行兩項標了 `ready` 的檢查：`DbReadinessCheck` 對資料庫做一次真正的連線往
 返，`CacheReadinessCheck` 對設定好的 `IDistributedCache`（Redis 或行程內快取）做一次寫入再
 讀回；readiness 探針該等兩項都連得上，才把流量導進來。
+
+資料庫檢查不會等驅動程式的連線逾時。資料庫在 `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1 到 60）
+內沒有回應時，`/health/ready` 回 503。
 
 兩個路由怎麼打，[第 3 章：快速開始](03-getting-started.md)已經介紹過；下面是對一個匿名請求的
 完整回應：
@@ -438,9 +491,9 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 `docker compose up --wait` 不必等映像預設的 30 秒間隔。映像的健康檢查與 Compose 的探測都從
 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設就是 8080；值是以 `;` 分隔的清單時取第一個）。
 
-DataProtection 金鑰掛在 volume `struo-dpkeys`，容器重建也撐得住，但是明文存放：第一次啟動的
-log 會出現一筆 `No XML encryptor configured` 警告。開發與測試這樣就夠了；正式環境要照上面
-「DataProtection 金鑰」一節，自己保護金鑰。
+這個環境設了 `Redis__ConnectionString`，所以 DataProtection 金鑰圈存在它的 `redis` 服務裡，沒有加密，
+為檔案位置掛上的 volume `struo-dpkeys` 用不到。`redis` 服務沒有 volume：重建它會丟掉金鑰圈，連同所有
+工作階段。開發與測試這樣就夠了；正式環境要照上面「DataProtection 金鑰」一節，自己保護金鑰。
 
 ### S3 相容儲存
 
