@@ -153,8 +153,9 @@ usual error envelope carrying your code and message; GraphQL stamps the same cod
 
 ## Validation error `details`
 
-`details` only appears with the `VALIDATION` code — it's what model binding or data-annotation
-validation produces, and it happens before the action itself ever runs. Each array entry
+`details` appears with the `VALIDATION` code — it's what model binding or data-annotation
+validation produces, and it happens before the action itself ever runs. The one other source is the
+`BAD_USER_INPUT` for a missing required translation, covered below. Each array entry
 corresponds to one validation failure, not one field: a field that violates two checks at once
 produces two entries sharing the same `field`. When ASP.NET Core gives no message of its own, it
 falls back to the fixed `Invalid value.`.
@@ -213,8 +214,8 @@ required check. A required list or map field follows the same logic: omit it and
 stands; send it — even as an empty array or empty object — and it must pass full validation.
 Create has no such concern, since there's no existing row to merge into.
 
-A translatable field's required check runs on a separate path, per locale against the translation
-content, and isn't affected by this rule. On update, field-level checks such as a length cap run
+A translatable field's required check runs on a separate path: per locale, on the stored
+translation row merged with the sent fields. On update, field-level checks such as a length cap run
 before this merged-required check does; when both are violated, whichever one runs first is the one
 reported — which can differ from create, where the required check runs first.
 
