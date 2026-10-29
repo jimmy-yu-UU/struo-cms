@@ -38,7 +38,7 @@
   就回報資料庫不健康（503），不再等到驅動程式的連線逾時。見[第 4 章](04-configuration.md)。
 
 - `Struo:Files:S3:ChecksumMode`（預設 `WhenRequired`，或 `WhenSupported`）：S3 用戶端是對每個請求加上
-  檢查碼、並檢查每個回應的檢查碼，還是只在操作要求時才這麼做。有些 S3 相容服務會拒絕用戶端預設送出的
+  檢查碼、並檢查每個回應的檢查碼，還是只在操作要求時才這麼做。有些 S3 相容服務會拒絕用戶端原本會送出的
   檢查碼。`Backend=s3` 時，其他值會讓啟動失敗。見[第 4 章](04-configuration.md)與
   [第 15 章](15-files-and-media.md)。
 - `ForwardedHeaders:ForwardLimit`（預設 `1`，至少 1）：用戶端與 API 之間的代理層數。前面有負載平衡器
@@ -46,6 +46,9 @@
 
 ### 變更
 
+- S3 上傳與下載不再加上或驗證檢查碼，除非該操作要求（`Struo:Files:S3:ChecksumMode` 現在預設為
+  `WhenRequired`）。以前每個 S3 部署都會在每次上傳送出檢查碼、每次下載驗證檢查碼。把 `ChecksumMode`
+  設成 `WhenSupported` 即可恢復原本的行為。
 - DataProtection 的應用程式名稱現在明確指定（`DataProtection:ApplicationName`，預設 `StruoCMS`），和以前
   ASP.NET Core 自行推導的名稱不同。第一次部署這個版本會讓所有使用者登出一次，有沒有 Redis 都一樣；
   重新登入即可，不需要其他動作。

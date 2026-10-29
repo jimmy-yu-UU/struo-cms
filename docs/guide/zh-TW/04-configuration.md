@@ -172,7 +172,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
 
 `ChecksumMode` 決定 S3 用戶端何時在請求加上檢查碼、何時檢查回應的檢查碼。`WhenRequired` 只在操作
-要求時才這麼做，相容的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
+要求時才這麼做，能搭配的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
 `Backend="s3"` 時，其他值會讓啟動失敗。
 
 ### ImageTransform

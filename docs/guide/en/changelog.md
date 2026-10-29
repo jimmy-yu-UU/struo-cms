@@ -45,7 +45,7 @@
 
 - `Struo:Files:S3:ChecksumMode` (`WhenRequired` default, or `WhenSupported`): whether the S3 client adds a
   checksum to every request and checks one on every response, or only where the operation demands it.
-  Some S3-compatible services reject the checksums the client sends by default. Any other value stops
+  Some S3-compatible services reject the checksums the client would otherwise send. Any other value stops
   startup when `Backend=s3`. See [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
 - `ForwardedHeaders:ForwardLimit` (default `1`, at least 1): the number of proxies between the client and
   the API. Behind a load balancer and nginx set `2`, so the API sees the client instead of the load
@@ -53,6 +53,10 @@
 
 ### Changed
 
+- S3 uploads and downloads no longer add or validate checksums unless the operation requires one
+  (`Struo:Files:S3:ChecksumMode` now defaults to `WhenRequired`). Before, every S3 deployment sent a
+  checksum on each upload and validated it on each download. Set `ChecksumMode` to `WhenSupported` to
+  restore that behaviour.
 - The DataProtection application name is now set explicitly (`DataProtection:ApplicationName`, default
   `StruoCMS`), which differs from the name ASP.NET Core derived before. The first deploy of this version
   signs every user out once, with or without Redis; nothing needs doing beyond signing in again.
