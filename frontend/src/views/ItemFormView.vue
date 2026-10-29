@@ -141,7 +141,6 @@ async function init(): Promise<void> {
     try {
       const item = await itemsApi.get(name.value, id.value!, {
         deep: editableRelations.value,
-        locale: langStore.defaultCode,
       })
       setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
       // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
@@ -254,7 +253,6 @@ async function recoverFromConflict(): Promise<void> {
   try {
     const latest = await itemsApi.get(name.value, id.value!, {
       deep: editableRelations.value,
-      locale: langStore.defaultCode,
     })
     latestFromServer = parseItemToForm(meta.value, latest, langStore.languages, resolveCollection)
     // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
@@ -290,7 +288,6 @@ async function onReverted(): Promise<void> {
   try {
     const item = await itemsApi.get(name.value, id.value, {
       deep: editableRelations.value,
-      locale: langStore.defaultCode,
     })
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
     errors.value = {}
@@ -436,7 +433,9 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :collection="name"
         :item-id="idStr"
         :can-revert="canWrite"
+        :version="model.version"
         @reverted="onReverted"
+        @conflict="recoverFromConflict"
       />
     </template>
   </section>

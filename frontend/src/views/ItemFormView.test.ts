@@ -146,7 +146,8 @@ describe('ItemFormView', () => {
     const spy = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {} })
     const w = mountView()
     await w.vm.init()
-    expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'], locale: 'en' }))
+    expect(spy).toHaveBeenCalledWith('article', '5', expect.objectContaining({ deep: ['category'] }))
+    expect(spy.mock.calls[0][2]).not.toHaveProperty('locale')
     expect((w.vm as any).model.shared.status).toBe('published')
   })
 
@@ -807,6 +808,85 @@ describe('ItemFormView', () => {
     // re-baselined: leaving must not prompt
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  // ---- every locale is loaded, not just the default ------------------------
+
+  const i18nMeta = { ...meta, fields: [
+    ...meta.fields,
+    { name: 'title', label: 'Title', interface: 'text', required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false },
+  ], revisions: true }
+  const twoLocales = { en: { title: 'Hello' }, fr: { title: 'Bonjour' } }
+
+  function setupTwoLocales() {
+    const stores = setupStores()
+    ;(stores.schema.get as any).mockReturnValue(i18nMeta)
+    stores.lang.languages = [
+      { code: 'en', name: 'English', isDefault: true },
+      { code: 'fr', name: 'French', isDefault: false },
+    ]
+    return stores
+  }
+
+  it('initial load fills the non-default locale and requests no locale filter', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupTwoLocales()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 1 })
+    const w = mountView()
+    await w.vm.init()
+    expect((w.vm as any).model.translations.fr.title).toBe('Bonjour')
+    for (const call of get.mock.calls) expect(call[2]).not.toHaveProperty('locale')
+  })
+
+  it('conflict recovery fetches every locale', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupTwoLocales()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 1 })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mountView()
+    await w.vm.init()
+    get.mockClear()
+    get.mockResolvedValueOnce({ id: '5', status: 'x', translations: { en: { title: 'H2' }, fr: { title: 'B2' } }, version: 5 })
+    await (w.vm as any).onSubmit()
+    expect(get.mock.calls[0][2]).not.toHaveProperty('locale')
+    ;(w.vm as any).reloadLatest()
+    expect((w.vm as any).model.translations.fr.title).toBe('B2')
+  })
+
+  it('onReverted fetches every locale', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupTwoLocales()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 1 })
+    const w = mountView()
+    await w.vm.init()
+    get.mockClear()
+    get.mockResolvedValueOnce({ id: '5', status: 'x', translations: { en: { title: 'R' }, fr: { title: 'RF' } }, version: 4 })
+    await (w.vm as any).onReverted()
+    expect(get.mock.calls[0][2]).not.toHaveProperty('locale')
+    expect((w.vm as any).model.translations.fr.title).toBe('RF')
+  })
+
+  // ---- revert carries the loaded version ------------------------------------
+
+  it('passes the loaded version to the history drawer and recovers from a revert conflict', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupTwoLocales()
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 3 })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    const drawer = w.findComponent({ name: 'RevisionHistoryDrawer' })
+    expect(drawer.attributes('version')).toBe('3')
+    get.mockResolvedValueOnce({ id: '5', status: 'x', translations: twoLocales, version: 8 })
+    await drawer.vm.$emit('conflict')
+    await flushPromises()
+    expect((w.vm as any).conflict).toBe(true)
+    expect((w.vm as any).model.version).toBe(8)
   })
 
   // ---- language list refresh after editing the Language collection -------

@@ -149,4 +149,10 @@ describe('itemsApi revisions', () => {
     expect(spy).toHaveBeenCalledWith('/items/article/5/revisions/2/revert')
     expect(res).toEqual({ id: '5', status: 'draft' })
   })
+
+  it('revert sends the expected version as a query parameter', async () => {
+    const spy = vi.spyOn(apiClient, 'post').mockResolvedValue({ id: '5' })
+    await itemsApi.revert('article', '5', 2, 7)
+    expect(spy).toHaveBeenCalledWith('/items/article/5/revisions/2/revert?version=7')
+  })
 })

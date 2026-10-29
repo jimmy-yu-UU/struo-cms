@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import RevisionHistoryDrawer from './RevisionHistoryDrawer.vue'
 import { itemsApi } from '../../api/itemsApi'
+import { ApiError } from '../../api/apiClient'
 
 const confirmRequire = vi.fn<(req: unknown) => Promise<boolean>>(() => Promise.resolve(true))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
@@ -22,7 +23,7 @@ const i18n = createI18n({
   } } },
 })
 
-type DrawerProps = { visible?: boolean; collection?: string; itemId?: string; canRevert?: boolean }
+type DrawerProps = { visible?: boolean; collection?: string; itemId?: string; canRevert?: boolean; version?: number }
 
 function mountDrawer(props: DrawerProps = {}) {
   return mount(RevisionHistoryDrawer, {
@@ -199,10 +200,31 @@ describe('RevisionHistoryDrawer', () => {
     confirmRequire.mockResolvedValueOnce(true)
     await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
     await flushPromises()
-    expect(revert).toHaveBeenCalledWith('article', '5', 2)
+    expect(revert).toHaveBeenCalledWith('article', '5', 2, undefined)
     expect(w.emitted('reverted')).toBeTruthy()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success' }))
     expect(confirmRequire.mock.calls[0][0]).not.toHaveProperty('group')
+  })
+
+  it('sends the loaded version with the revert', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+    const revert = vi.spyOn(itemsApi, 'revert').mockResolvedValue({ id: '5' } as never)
+    const w = mountDrawer({ version: 4 })
+    await flushPromises()
+    await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+    expect(revert).toHaveBeenCalledWith('article', '5', 2, 4)
+  })
+
+  it('a VERSION_CONFLICT revert emits conflict, closes the drawer and shows no generic error', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+    vi.spyOn(itemsApi, 'revert').mockRejectedValue(new ApiError(409, 'stale', 'VERSION_CONFLICT'))
+    const w = mountDrawer({ version: 4 })
+    await flushPromises()
+    await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+    expect(w.emitted('conflict')).toBeTruthy()
+    expect(w.emitted('update:visible')?.[0]).toEqual([false])
+    expect(w.emitted('reverted')).toBeUndefined()
+    expect(toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
 
   it('onRevert toasts an error and does not emit when revert fails', async () => {
@@ -231,7 +253,7 @@ describe('RevisionHistoryDrawer', () => {
     await w.findComponent({ name: 'RevisionSnapshotView' }).vm.$emit('revert', 2)
     await flushPromises()
 
-    expect(revert).toHaveBeenCalledWith('article', '5', 2)
+    expect(revert).toHaveBeenCalledWith('article', '5', 2, undefined)
     expect(w.emitted('reverted')).toBeTruthy()
   })
 
