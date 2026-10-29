@@ -450,6 +450,19 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 者都會落到這個記憶體內分支。這個鍵同時決定登入節流的計數存在哪裡：
 留空時用上面的記憶體內快取，設了就直接在 Redis 計數。
 
+## DataProtection
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `DataProtection:ApplicationName` | 字串（不可空白） | `"StruoCMS"` |
+
+DataProtection 金鑰用來簽章、加密認證 cookie、antiforgery token 與 OpenID Connect 的 correlation
+cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataProtection-Keys` 這個鍵底下，
+每個副本讀到同一組金鑰，請求打到哪個副本都可以。沒有 Redis 時，金鑰圈留在預設的檔案位置。
+
+`ApplicationName` 兩種情況都會套用。共用同一個金鑰圈的副本必須用相同的值，空白的值會讓主機啟動失敗。
+改它會讓所有使用者登出一次。
+
 ## Oidc
 
 外部登入以身分提供者為單位設定。`Oidc:ReturnUrlDefault` 對所有提供者通用，每個提供者是

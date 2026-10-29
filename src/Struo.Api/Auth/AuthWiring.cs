@@ -47,6 +47,8 @@ public static class AuthWiring
                 : new RedisLoginAttemptThrottle(connection, accountOptions);
         }));
 
+        services.AddStruoDataProtection();
+
         services.AddSingleton<DistributedCacheTicketStore>();
         services.AddSingleton<SessionRotation>();
 

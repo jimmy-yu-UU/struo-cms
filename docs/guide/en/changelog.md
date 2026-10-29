@@ -34,9 +34,20 @@
 - A missing required translation carries `error.details`, one `{ field, message, locale }` entry per
   missing field per locale (`extensions.details` over GraphQL). The `message` text and the
   `BAD_USER_INPUT` code are unchanged. See [Chapter 12](12-rest-conventions.md).
+- `DataProtection:ApplicationName` (default `StruoCMS`, must not be blank). With `Redis:ConnectionString`
+  set, the DataProtection key ring (authentication cookie, antiforgery tokens, OpenID Connect
+  correlation cookies) is stored in Redis under the key `DataProtection-Keys`, so a request that lands
+  on another replica no longer signs the user out. Without Redis the key ring stays in the default file
+  location. See [Chapter 4](04-configuration.md).
 - `Database:ReadinessTimeoutSeconds` (default `3`, range 1-60): `/health/ready` reports the database
   unhealthy (503) when the probe has not answered in that time, instead of waiting for the driver
   connect timeout. See [Chapter 4](04-configuration.md).
+
+### Changed
+
+- The DataProtection application name is now set explicitly (`DataProtection:ApplicationName`, default
+  `StruoCMS`), which differs from the name ASP.NET Core derived before. The first deploy of this version
+  signs every user out once, with or without Redis; nothing needs doing beyond signing in again.
 
 ### Fixed
 

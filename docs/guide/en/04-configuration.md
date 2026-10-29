@@ -525,6 +525,20 @@ key yields `null`; both land on the same in-memory branch. This key also decides
 `RateLimiting:LoginAccount` counts: left empty, each process counts in its own memory; when set, the
 login throttle counts in Redis directly.
 
+## DataProtection
+
+| Key | Type | Default |
+|---|---|---|
+| `DataProtection:ApplicationName` | string (not blank) | `"StruoCMS"` |
+
+DataProtection keys sign and encrypt the authentication cookie, the antiforgery tokens and the OpenID
+Connect correlation cookies. With `Redis:ConnectionString` set, the key ring is stored in Redis under
+the key `DataProtection-Keys`, so every replica reads the same keys and a request can land on any of
+them. Without Redis, the key ring stays in the default file location.
+
+`ApplicationName` is applied in both cases. Replicas that share a key ring must use the same value,
+and a blank value stops the host at startup. Changing it signs every user out once.
+
 ## Oidc
 
 External sign-in is configured per identity provider. `Oidc:ReturnUrlDefault` applies to all of

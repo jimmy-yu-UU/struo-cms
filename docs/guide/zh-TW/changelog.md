@@ -30,8 +30,18 @@
 - 缺必填翻譯的錯誤帶有 `error.details`，每個 locale 的每個缺漏欄位各一筆 `{ field, message, locale }`
   （GraphQL 是 `extensions.details`）。`message` 文字與 `BAD_USER_INPUT` 代碼不變。見
   [第 12 章](12-rest-conventions.md)。
+- `DataProtection:ApplicationName`（預設 `StruoCMS`，不可空白）。設了 `Redis:ConnectionString` 時，
+  DataProtection 金鑰圈（認證 cookie、antiforgery token、OpenID Connect correlation cookie）存在 Redis 的
+  `DataProtection-Keys` 鍵底下，請求打到別的副本不會再把使用者登出。沒有 Redis 時金鑰圈留在預設的檔案位置。
+  見[第 4 章](04-configuration.md)。
 - `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1-60）：資料庫探測在這段時間內沒有回應，`/health/ready`
   就回報資料庫不健康（503），不再等到驅動程式的連線逾時。見[第 4 章](04-configuration.md)。
+
+### 變更
+
+- DataProtection 的應用程式名稱現在明確指定（`DataProtection:ApplicationName`，預設 `StruoCMS`），和以前
+  ASP.NET Core 自行推導的名稱不同。第一次部署這個版本會讓所有使用者登出一次，有沒有 Redis 都一樣；
+  重新登入即可，不需要其他動作。
 
 ### 修正
 
