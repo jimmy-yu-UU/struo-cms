@@ -27,7 +27,11 @@ public class RedisMissingWarningTests(ApiFactory factory)
             b.UseEnvironment(environment);
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["Redis:ConnectionString"] = redis }));
-            b.ConfigureServices(s => s.AddSingleton<ILogEventSink>(sink));
+            b.ConfigureServices(s =>
+            {
+                s.AddSingleton<ILogEventSink>(sink);
+                if (redis.Trim().Length > 0) DataProtectionTestHost.RemoveKeyRingLoader(s);
+            });
         });
         _ = host.Services;
         return sink.Entries.ToList();

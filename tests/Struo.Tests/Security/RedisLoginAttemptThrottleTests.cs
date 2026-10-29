@@ -164,7 +164,11 @@ public class UnreachableRedisThrottleTests(ApiFactory factory)
                 ["Redis:ConnectionString"] = "127.0.0.1:1,connectTimeout=1000,syncTimeout=1000",
                 ["RateLimiting:Login:Enabled"] = "false",
             }));
-            b.ConfigureServices(s => s.AddSingleton<IPasswordHasher>(hasher));
+            b.ConfigureServices(s =>
+            {
+                s.AddSingleton<IPasswordHasher>(hasher);
+                DataProtectionTestHost.RemoveKeyRingLoader(s);
+            });
         });
 
         var response = await host.CreateClient().PostAsJsonAsync(

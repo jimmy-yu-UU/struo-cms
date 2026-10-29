@@ -34,14 +34,7 @@ public class DataProtectionWiringTests(ApiFactory factory)
                 if (applicationName is not null) settings["DataProtection:ApplicationName"] = applicationName;
                 c.AddInMemoryCollection(settings);
             });
-            b.ConfigureServices(services =>
-            {
-                foreach (var descriptor in services
-                             .Where(d => d.ServiceType == typeof(IHostedService)
-                                         && d.ImplementationType?.Name == "DataProtectionHostedService")
-                             .ToList())
-                    services.Remove(descriptor);
-            });
+            b.ConfigureServices(DataProtectionTestHost.RemoveKeyRingLoader);
         });
         return host.Services;
     }
