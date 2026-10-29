@@ -55,9 +55,10 @@ warning does not stop startup, and no other backend runs the check.
 
 ### The database connection: TLS, pool size, secrets
 
-On PostgreSQL, set `SSL Mode=VerifyFull` in production and give the CA certificate (`Root
-Certificate=/path/to/ca.crt`). `Require` encrypts the connection but does not check who answered.
-For the other backends, use the driver's own TLS options in the connection string.
+On PostgreSQL, set `SSL Mode=Require` in production and leave `Trust Server Certificate` unset: the
+driver then encrypts the connection and validates the server's certificate. When the server uses a
+private CA, add `Root Certificate=/path/to/ca.crt`. `Trust Server Certificate=true` turns the
+certificate validation off, so never use it in production. For the other backends, use the driver's own TLS options in the connection string.
 
 Each API process opens up to `Maximum Pool Size` connections (Npgsql defaults to 100). Multiply it by
 the number of replicas, and keep the result under the server's `max_connections` with room left for
@@ -124,7 +125,7 @@ The image's nginx sends a single `X-Forwarded-Proto`. It passes on the value a p
 sent and falls back to its own scheme only when none arrives. That suits a TLS-terminating proxy in
 front of it, which should overwrite any incoming value rather than append to it. When this nginx is
 the edge that clients connect to, a client could send that header itself and have it passed through.
-In that case set the header from the connection's own scheme in the `server` blocks of
+In that case set the header from the connection's own scheme in
 `frontend/nginx/default.conf.template`: replace `$struo_forwarded_proto` in the two
 `proxy_set_header X-Forwarded-Proto` lines with `$scheme`.
 
@@ -408,7 +409,9 @@ page.
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
 request gets a 502 after the resolution times out. On Kubernetes, set it to the cluster DNS, for
 example `NGINX_RESOLVER=kube-dns.kube-system.svc.cluster.local`; `127.0.0.11` is Docker's and
-nothing listens there in a pod.
+nothing listens there in a pod. nginx's `resolver` does not apply the pod's search domains, so
+`API_UPSTREAM` must use a fully qualified service name, for example
+`http://api.<namespace>.svc.cluster.local:8080`.
 
 For deploying the SPA on a different origin from the API, how to set `VITE_API_BASE_URL` and
 when the setting takes effect are in [Chapter 19: Admin Customization](19-admin-customization.md);

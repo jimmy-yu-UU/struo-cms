@@ -45,8 +45,9 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 
 ### 資料庫連線：TLS、連線池大小、密碼
 
-PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`，並給 CA 憑證（`Root
-Certificate=/path/to/ca.crt`）。`Require` 會加密連線，卻不檢查對方是誰。其他後端就用該驅動程式自己的 TLS
+PostgreSQL 在正式環境要設 `SSL Mode=Require`，並且不要設 `Trust Server Certificate`：驅動程式這時會加密連線，
+並驗證伺服器的憑證。伺服器用私有 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
+`Trust Server Certificate=true` 會關掉憑證驗證，正式環境絕對不要用。其他後端就用該驅動程式自己的 TLS
 選項寫在連線字串裡。
 
 每個 API 行程最多開 `Maximum Pool Size` 條連線（Npgsql 預設 100）。把它乘上副本數，結果要低於伺服器的
@@ -97,9 +98,8 @@ nginx 再接 API，就是兩個，要設 `ForwardedHeaders__ForwardLimit=2`。�
 
 映像的 nginx 只送一個 `X-Forwarded-Proto`。收到代理送來的值就原樣帶過去，沒收到才用自己連線的 scheme。
 前面有終結 TLS 的代理時這樣正好，該代理應該覆寫收到的值而不是附加。這個 nginx 本身是用戶端直連的邊緣
-時，用戶端可以自己送這個標頭並被原樣帶過去。這種情況下，在 `frontend/nginx/default.conf.template` 的
-`server` 區塊，把兩行 `proxy_set_header X-Forwarded-Proto` 裡的 `$struo_forwarded_proto` 換成
-`$scheme`。
+時，用戶端可以自己送這個標頭並被原樣帶過去。這種情況下，在 `frontend/nginx/default.conf.template` 裡，
+把兩行 `proxy_set_header X-Forwarded-Proto` 的 `$struo_forwarded_proto` 換成 `$scheme`。
 
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 
@@ -333,7 +333,8 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 `NGINX_RESOLVER`（預設 `127.0.0.11`，Docker 內建 DNS，5 秒逾時）只有在使用者自訂的 Docker
 network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*` 請求都會在解析逾時之後收
 到 502。在 Kubernetes 上要設成叢集的 DNS，例如 `NGINX_RESOLVER=kube-dns.kube-system.svc.cluster.local`；
-`127.0.0.11` 是 Docker 的，pod 裡沒有東西在那裡監聽。
+`127.0.0.11` 是 Docker 的，pod 裡沒有東西在那裡監聽。nginx 的 `resolver` 不會套用 pod 的搜尋網域，所以 `API_UPSTREAM` 要用完整的服務名稱，
+例如 `http://api.<namespace>.svc.cluster.local:8080`。
 
 要讓 SPA 部署在跟 API 不同的來源，設定 `VITE_API_BASE_URL` 的方式與生效時機，見
 [第 19 章：後台客製化](19-admin-customization.md)；建這個映像時，值要放在你自己新增並提交的
