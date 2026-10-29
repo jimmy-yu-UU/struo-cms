@@ -8,7 +8,7 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// GraphQL to-many relation fields (e.g. <c>category { articles(...) }</c>) accept
+/// GraphQL to-many relation fields (e.g. <c>fxCategory { articles(...) }</c>) accept
 /// <c>filter</c>/<c>sort</c>/<c>limit</c>/<c>offset</c> arguments, and
 /// <see cref="Struo.Api.GraphQl.CollectionResolvers"/>'s selection-walk (<c>BuildDeep</c>) reads
 /// them into the <see cref="Struo.Domain.Query.DeepRelationSpec"/> the query engine consumes. These
@@ -46,14 +46,14 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
     public async Task Nested_list_filter_and_limit_via_inline_literal()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "GqlArgsCat-8c3b" });
-        await Post(c, "article", new
+        var cat = await Post(c, "fxCategory", new { name = "GqlArgsCat-8c3b" });
+        await Post(c, "fxArticle", new
         {
             status = "published",
             categoryId = cat,
             translations = new { en = new { title = "GA-pub-8c3b" } }
         });
-        await Post(c, "article", new
+        await Post(c, "fxArticle", new
         {
             status = "draft",
             categoryId = cat,
@@ -61,12 +61,12 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
         });
 
         var query = $$"""
-        query { category(id: "{{cat}}") {
+        query { fxCategory(id: "{{cat}}") {
             articles(filter: { status: { eq: "published" } }, limit: 5) { status }
         } }
         """;
         var data = await PostGraphQl(c, query);
-        var articles = data.GetProperty("category").GetProperty("articles");
+        var articles = data.GetProperty("fxCategory").GetProperty("articles");
         articles.GetArrayLength().Should().Be(1,
             "the draft sibling must be excluded by the nested filter, not just the published one included");
         articles[0].GetProperty("status").GetString().Should().Be("published");
@@ -76,14 +76,14 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
     public async Task Nested_list_filter_via_variable()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "GqlVarCat-8c3b" });
-        await Post(c, "article", new
+        var cat = await Post(c, "fxCategory", new { name = "GqlVarCat-8c3b" });
+        await Post(c, "fxArticle", new
         {
             status = "published",
             categoryId = cat,
             translations = new { en = new { title = "GV-pub-8c3b" } }
         });
-        await Post(c, "article", new
+        await Post(c, "fxArticle", new
         {
             status = "draft",
             categoryId = cat,
@@ -91,13 +91,13 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
         });
 
         var query = $$"""
-        query($f: ArticleFilterInput) { category(id: "{{cat}}") {
+        query($f: FxArticleFilterInput) { fxCategory(id: "{{cat}}") {
             articles(filter: $f) { status }
         } }
         """;
         var variables = new { f = new { status = new { eq = "published" } } };
         var data = await PostGraphQl(c, query, variables);
-        var articles = data.GetProperty("category").GetProperty("articles");
+        var articles = data.GetProperty("fxCategory").GetProperty("articles");
         articles.GetArrayLength().Should().Be(1,
             "the $variable-passed filter must coerce and reach the engine exactly like the inline literal does");
     }

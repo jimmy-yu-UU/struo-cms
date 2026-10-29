@@ -36,7 +36,7 @@ public class GraphQlLimitOptionsTests
         await using var host = await ForkHost.StartAsync(mutate: s => s["GraphQl:MaxExecutionDepth"] = "2");
 
         var response = await host.CreateClient().PostAsJsonAsync(
-            "/graphql", new { query = "{ articles { items { id } } }" });
+            "/graphql", new { query = "{ fxArticles { items { id } } }" });
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
 
@@ -54,7 +54,7 @@ public class GraphQlLimitOptionsTests
         });
 
         var response = await host.CreateClient().PostAsJsonAsync(
-            "/graphql", new { query = "{ articles { items { id } } }" });
+            "/graphql", new { query = "{ fxArticles { items { id } } }" });
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
 

@@ -17,7 +17,7 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
 
     private static async Task<string> CreateArticleAsync(HttpClient client, string title)
     {
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         return Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
@@ -29,26 +29,26 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateArticleAsync(client, "SoftDeleteRoundTrip");
 
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Default list excludes the soft-deleted row.
-        var excluded = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}");
+        var excluded = await client.GetAsync($"/api/items/fxArticle?filter[id][_eq]={id}");
         excluded.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await excluded.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(0);
 
         // ?deleted=only surfaces it.
-        var only = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}&deleted=only");
+        var only = await client.GetAsync($"/api/items/fxArticle?filter[id][_eq]={id}&deleted=only");
         only.StatusCode.Should().Be(HttpStatusCode.OK);
         var onlyData = Root(await only.Content.ReadAsStringAsync()).GetProperty("data");
         onlyData.GetArrayLength().Should().Be(1);
         onlyData[0].GetProperty("id").GetString().Should().Be(id);
 
         // Restore brings it back.
-        var restore = await client.PostAsync($"/api/items/article/{id}/restore", null);
+        var restore = await client.PostAsync($"/api/items/fxArticle/{id}/restore", null);
         restore.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await restore.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString().Should().Be(id);
 
-        var reappeared = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}");
+        var reappeared = await client.GetAsync($"/api/items/fxArticle?filter[id][_eq]={id}");
         reappeared.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await reappeared.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().Be(1);
     }
@@ -59,10 +59,10 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateArticleAsync(client, "PurgeMe");
 
-        (await client.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        (await client.DeleteAsync($"/api/items/article/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxArticle/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var withDeleted = await client.GetAsync($"/api/items/article/{id}?deleted=with");
+        var withDeleted = await client.GetAsync($"/api/items/fxArticle/{id}?deleted=with");
         withDeleted.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -70,9 +70,9 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
     public async Task Deleted_only_requires_delete_permission()
     {
         var (client, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []);
+            readCollections: ["fxArticle"], writeCollections: []);
 
-        var resp = await client.GetAsync("/api/items/article?deleted=only");
+        var resp = await client.GetAsync("/api/items/fxArticle?deleted=only");
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -80,7 +80,7 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
     public async Task Unknown_deleted_value_is_400()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await client.GetAsync("/api/items/article?deleted=banana");
+        var resp = await client.GetAsync("/api/items/fxArticle?deleted=banana");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -90,12 +90,12 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
     public async Task Query_only_via_POST_requires_delete_permission()
     {
         // Read-granted, delete-lacking editor: CreateEditorClientAsync never sets Permission.CanDelete,
-        // so this role has CanRead=true/CanWrite=false/CanDelete=false on 'article'.
+        // so this role has CanRead=true/CanWrite=false/CanDelete=false on 'fxArticle'.
         var (client, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []);
+            readCollections: ["fxArticle"], writeCollections: []);
 
         var envelope = JsonSerializer.SerializeToElement(new { });
-        var resp = await client.PostAsJsonAsync("/api/items/article/query?deleted=only", envelope);
+        var resp = await client.PostAsJsonAsync("/api/items/fxArticle/query?deleted=only", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -107,11 +107,11 @@ public class SoftDeleteEndpointTests(ApiFactory factory)
 
         // Read+write granted, delete-lacking editor (same reasoning as above).
         var (editor, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: ["article"]);
+            readCollections: ["fxArticle"], writeCollections: ["fxArticle"]);
 
-        (await editor.DeleteAsync($"/api/items/article/{id}")).StatusCode
+        (await editor.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode
             .Should().Be(HttpStatusCode.Forbidden);
-        (await editor.PostAsync($"/api/items/article/{id}/restore", null)).StatusCode
+        (await editor.PostAsync($"/api/items/fxArticle/{id}/restore", null)).StatusCode
             .Should().Be(HttpStatusCode.Forbidden);
     }
 }

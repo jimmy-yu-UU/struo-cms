@@ -28,9 +28,10 @@ it alongside `src/Struo.*`.
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
 to define collections using the same primitives a fork would use. It is not shipped capability: the
 host has no `ProjectReference` to it, `Struo:ContentAssemblies` ships as `[]`, and framework code never
-references it. It is listed as a solution member in `StruoCMS.slnx`, and only `tests/Struo.Tests`
-carries an actual code reference to it — which is what makes it truly deletable — doing so also means
-removing it from `StruoCMS.slnx` and deleting the many test files that use it as a fixture.
+references it. It is listed as a solution member in `StruoCMS.slnx` together with its own test project
+`samples/Struo.Sample.Blog.Tests`; nothing under `tests/` references either, which is what makes it
+truly deletable (delete `samples/`, its `StruoCMS.slnx` block and `frontend/e2e/sample/`). The core
+tests run on `tests/Struo.Tests.Fixtures` instead.
 
 ## Repo map
 
@@ -42,9 +43,11 @@ removing it from `StruoCMS.slnx` and deleting the many test files that use it as
 | `src/Struo.Api` | The ASP.NET Core host: controllers, GraphQL, Scalar, Serilog, the host composition (`Hosting/`: `AddStruoCms`, `UseStruoCmsAsync`) and the fork-owned `Program.cs`. |
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
+| `samples/Struo.Sample.Blog.Tests` | The sample's own tests; deleted together with the sample. |
 | `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
 | `tests/Struo.Tests` | The backend xUnit suite (unit and integration). |
+| `tests/Struo.Tests.Fixtures` | Test-only content project (collections prefixed `fx`, tables `fx_*`) with its own migration; the core tests' content assembly. No host registers it. |
 | `tests/Struo.Tests.Support` | Class library of shared test helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`). Fork test projects reference it. |
 | `tests/Struo.Tests.Template` | The template's own repository guards (documentation conventions, template invariants, CI/Docker/health conventions). A fork may delete it. |
 
@@ -390,8 +393,9 @@ against a real PostgreSQL. Two things worth knowing before you touch it:
 `PgTestConnectionString`'s class doc points to `docs/ai/decisions/pg-test-connection-pooling.md` for the
 full write-up.
 
-**E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in) is a
-further check for changes to user-facing flows — it needs a live API and a migrated database (run
+**E2E** (`pnpm e2e` for the `core` Playwright project; `pnpm e2e:sample` needs the sample opted in;
+the `sample` project exists only while `frontend/e2e/sample/` does) is a further check for changes
+to user-facing flows — it needs a live API and a migrated database (run
 `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local
 configuration; a local database built by v0.8.x CodeFirst needs `migrate:baseline` once instead), is
 not one of the five standing gates, and is not run by CI.

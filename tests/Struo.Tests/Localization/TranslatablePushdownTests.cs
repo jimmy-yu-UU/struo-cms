@@ -40,7 +40,7 @@ public class TranslatablePushdownTests(ApiFactory factory)
         // "zh-TW" cannot be spelled as a C# anonymous-object property name, so the translations payload
         // is a Dictionary<string, object> here (System.Text.Json serializes both shapes identically;
         // TranslationQueryTests uses the same pattern for the same reason).
-        var hit = await Post(c, "article", new
+        var hit = await Post(c, "fxArticle", new
         {
             status = "draft",
             translations = new Dictionary<string, object>
@@ -50,9 +50,9 @@ public class TranslatablePushdownTests(ApiFactory factory)
             }
         });
 
-        (await Ids(c, $"/api/items/article?filter%5Btitle%5D%5B_eq%5D={stamp}-en")).Should().Contain(hit);
-        (await Ids(c, $"/api/items/article?filter%5Btitle%5D%5B_eq%5D={stamp}-zh")).Should().NotContain(hit);
-        (await Ids(c, $"/api/items/article?locale=zh-TW&filter%5Btitle%5D%5B_eq%5D={stamp}-zh")).Should().Contain(hit);
+        (await Ids(c, $"/api/items/fxArticle?filter%5Btitle%5D%5B_eq%5D={stamp}-en")).Should().Contain(hit);
+        (await Ids(c, $"/api/items/fxArticle?filter%5Btitle%5D%5B_eq%5D={stamp}-zh")).Should().NotContain(hit);
+        (await Ids(c, $"/api/items/fxArticle?locale=zh-TW&filter%5Btitle%5D%5B_eq%5D={stamp}-zh")).Should().Contain(hit);
     }
 
     // R4: category has no translation sidecar of its own; the translatable leaf lives on articles, one
@@ -65,16 +65,16 @@ public class TranslatablePushdownTests(ApiFactory factory)
     {
         var c = await factory.CreateAuthenticatedClientAsync();
         var stamp = "Hop" + Guid.NewGuid().ToString("N")[..6];
-        var cat = await Post(c, "category", new { name = stamp });
-        await Post(c, "article", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "-title" } } });
+        var cat = await Post(c, "fxCategory", new { name = stamp });
+        await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = new { en = new { title = stamp + "-title" } } });
 
-        (await Ids(c, $"/api/items/category?filter%5Barticles.title%5D%5B_eq%5D={stamp}-title"))
-            .Should().Contain(cat, "dotted-path each-exists form: category -> articles.title, resolved via the article_translations sidecar");
+        (await Ids(c, $"/api/items/fxCategory?filter%5Barticles.title%5D%5B_eq%5D={stamp}-title"))
+            .Should().Contain(cat, "dotted-path each-exists form: category -> articles.title, resolved via the fx_article_translations sidecar");
 
-        (await Ids(c, $"/api/items/category?filter%5Barticles._some.title%5D%5B_contains%5D={stamp}&filter%5Barticles._some.status%5D%5B_eq%5D=draft"))
+        (await Ids(c, $"/api/items/fxCategory?filter%5Barticles._some.title%5D%5B_contains%5D={stamp}&filter%5Barticles._some.status%5D%5B_eq%5D=draft"))
             .Should().Contain(cat, "_some binds both conditions to the SAME related article, which is status=draft");
 
-        (await Ids(c, $"/api/items/category?filter%5Barticles._some.title%5D%5B_contains%5D={stamp}&filter%5Barticles._some.status%5D%5B_eq%5D=published"))
+        (await Ids(c, $"/api/items/fxCategory?filter%5Barticles._some.title%5D%5B_contains%5D={stamp}&filter%5Barticles._some.status%5D%5B_eq%5D=published"))
             .Should().NotContain(cat, "no related article is both title-matching and status=published");
     }
 
@@ -83,11 +83,11 @@ public class TranslatablePushdownTests(ApiFactory factory)
     {
         var c = await factory.CreateAuthenticatedClientAsync();
         var stamp = "Srch" + Guid.NewGuid().ToString("N")[..6];
-        var byTitle = await Post(c, "article", new { status = "draft", translations = new { en = new { title = stamp + "-only-title" } } });
+        var byTitle = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = stamp + "-only-title" } } });
 
-        var resp = await c.GetAsync($"/api/items/article?search={stamp}");
+        var resp = await c.GetAsync($"/api/items/fxArticle?search={stamp}");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await Ids(c, $"/api/items/article?search={stamp}")).Should().Contain(byTitle);
+        (await Ids(c, $"/api/items/fxArticle?search={stamp}")).Should().Contain(byTitle);
     }
 
     // Moved from the retired resolved-id-set-cap test suite: the translatable-field search union
@@ -101,10 +101,10 @@ public class TranslatablePushdownTests(ApiFactory factory)
         var stamp = "WideSrch" + Guid.NewGuid().ToString("N")[..6];
         const int matchCount = 3;
         for (var i = 0; i < matchCount; i++)
-            await Post(c, "article", new { status = "draft", translations = new { en = new { title = $"{stamp} number {i}" } } });
+            await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = $"{stamp} number {i}" } } });
 
-        var resp = await c.GetAsync($"/api/items/article?search={stamp}");
+        var resp = await c.GetAsync($"/api/items/fxArticle?search={stamp}");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await Ids(c, $"/api/items/article?search={stamp}")).Should().HaveCount(matchCount);
+        (await Ids(c, $"/api/items/fxArticle?search={stamp}")).Should().HaveCount(matchCount);
     }
 }

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -18,7 +18,7 @@ public class DbReadinessCheckTests
         var client = SqlSugarClientFactory.Create(
             db.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        client.CodeFirst.InitTables<Article>();
+        client.CodeFirst.InitTables<FxArticle>();
 
         var check = new DbReadinessCheck(client);
         var result = await check.CheckHealthAsync(new HealthCheckContext());

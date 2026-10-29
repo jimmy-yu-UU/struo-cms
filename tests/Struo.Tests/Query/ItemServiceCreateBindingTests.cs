@@ -15,7 +15,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -191,7 +191,7 @@ public sealed class ItemServiceCreateBindingTests : IDisposable
 /// <summary>
 /// Broad happy-path check that the create allowlist did not narrow the legitimate write surface —
 /// declared fields, translations and an M2M relation still bind exactly as before. Reuses the
-/// Article/Category/Tag sample-domain wiring from <c>ItemServiceTests</c>.
+/// FxArticle/FxCategory/FxTag fixture-domain wiring from <c>ItemServiceTests</c>.
 /// </summary>
 public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
 {
@@ -203,18 +203,18 @@ public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -222,9 +222,9 @@ public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag),
             ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -255,16 +255,16 @@ public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
     [Fact]
     public async Task Create_still_accepts_declared_fields_translations_and_m2m()
     {
-        var category = await _svc.CreateAsync("category", Body("""{"name":"Category A"}"""));
+        var category = await _svc.CreateAsync("fxCategory", Body("""{"name":"Category A"}"""));
         var categoryId = (Guid)category["id"]!;
 
-        var tag = await _svc.CreateAsync("tag", Body("""{"name":"Tag A"}"""));
+        var tag = await _svc.CreateAsync("fxTag", Body("""{"name":"Tag A"}"""));
         var tagId = tag["id"]!.ToString();
 
         var body = Body(
             "{\"status\":\"published\",\"categoryId\":\"" + categoryId + "\",\"tags\":[\"" + tagId +
             "\"],\"translations\":{\"en\":{\"title\":\"Hello\"}}}");
-        var created = await _svc.CreateAsync("article", body);
+        var created = await _svc.CreateAsync("fxArticle", body);
 
         created["status"].Should().Be("published");
 
@@ -273,7 +273,7 @@ public sealed class ItemServiceCreateBindingHappyPathTests : IDisposable
             ["category"] = new DeepRelationSpec(null, null),
             ["tags"] = new DeepRelationSpec(null, null),
         });
-        var reloaded = await _svc.GetAsync("article", created["id"]!.ToString()!, deep, locale: "en");
+        var reloaded = await _svc.GetAsync("fxArticle", created["id"]!.ToString()!, deep, locale: "en");
 
         reloaded.Should().NotBeNull();
         var loadedCategory = (IReadOnlyDictionary<string, object?>)reloaded!["category"]!;

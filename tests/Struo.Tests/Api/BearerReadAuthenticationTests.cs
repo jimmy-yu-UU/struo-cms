@@ -65,13 +65,13 @@ public class BearerReadAuthenticationTests(ApiFactory factory)
     [Fact]
     public async Task Bearer_caller_keeps_the_public_floor_on_a_collection_its_role_omits()
     {
-        // The fix must not narrow anyone: 'category' is public-read and this role never mentions it.
+        // The fix must not narrow anyone: 'fxCategory' is public-read and this role never mentions it.
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (_, userId) = await factory.CreateEditorClientAsync(
             readCollections: ["mediaFolder"], writeCollections: []);
         var bearer = await BearerClientForAsync(admin, userId);
 
-        (await bearer.GetAsync("/api/items/category")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await bearer.GetAsync("/api/items/fxCategory")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class BearerReadAuthenticationTests(ApiFactory factory)
     {
         var anon = factory.CreateClient();
 
-        (await anon.GetAsync("/api/items/category")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await anon.GetAsync("/api/items/fxCategory")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     // Pins AuthWiring.AddStruoAuth's ForwardDefaultSelector comment: the Authorization header alone

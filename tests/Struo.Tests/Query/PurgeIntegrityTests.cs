@@ -17,7 +17,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -25,8 +25,8 @@ namespace Struo.Tests.Query;
 
 // ── Test-local entities ────────────────────────────────
 //
-// The sample Blog domain has no OnDelete.Restrict or OnDelete.Cascade relation (Article.Category
-// and Category.Parent are both SetNull — see SoftDeleteRepositoryTests's note on this), so the
+// The fixture domain has no OnDelete.Restrict or OnDelete.Cascade relation (FxArticle.Category
+// and FxCategory.Parent are both SetNull — see SoftDeleteRepositoryTests's note on this), so the
 // Restrict and Cascade purge scenarios need dedicated fixtures, mirroring the brief's guidance to
 // add "test-local entity pairs" the same way MetadataScannerTests declares local [CmsCollection]
 // types for a single test file.
@@ -74,7 +74,7 @@ internal sealed class CascadeNodeTranslation
 }
 
 /// <summary>
-/// A plain M2O-to-Category relation declared OnDelete.Restrict — the sample domain has none (both
+/// A plain M2O-to-FxCategory relation declared OnDelete.Restrict — the fixture domain has none (both
 /// of its M2O relations are SetNull), so this fixture is the only way to exercise the Restrict
 /// purge-guard against a real database-backed pipeline.
 /// </summary>
@@ -92,11 +92,11 @@ internal sealed class RestrictRef
     [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
     [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Restrict)]
     [SugarColumn(IsIgnore = true)]
-    public Category? Category { get; set; }
+    public FxCategory? Category { get; set; }
 }
 
 /// <summary>
-/// Wires a real <see cref="ItemService"/> over the sample Blog types PLUS the local
+/// Wires a real <see cref="ItemService"/> over the fixture types PLUS the local
 /// <see cref="CascadeNode"/>/<see cref="RestrictRef"/> fixtures above, mirroring
 /// <c>RevisionServiceHarness</c>'s construction. When <paramref name="failDeleteRevision"/> is set,
 /// the wired <see cref="IRevisionStore"/> throws from <c>DeleteForItemAsync</c> only (capture/list/get
@@ -128,12 +128,12 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         var db = SqlSugarClientFactory.Create(
             _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<CascadeNode>();
         db.CodeFirst.InitTables<CascadeNodeTranslation>();
@@ -142,7 +142,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(CascadeNode), typeof(RestrictRef), typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -150,9 +150,9 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]     = typeof(Article),
-            ["category"]    = typeof(Category),
-            ["tag"]         = typeof(Tag),
+            ["fxArticle"]     = typeof(FxArticle),
+            ["fxCategory"]    = typeof(FxCategory),
+            ["fxTag"]         = typeof(FxTag),
             ["file"]        = typeof(Struo.Infrastructure.Files.File),
             ["cascadeNode"] = typeof(CascadeNode),
             ["restrictRef"] = typeof(RestrictRef),
@@ -198,13 +198,13 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 
     public async Task<string> CreateTagAsync(string name)
     {
-        var created = await Service.CreateAsync("tag", BodyOf(new { name }));
+        var created = await Service.CreateAsync("fxTag", BodyOf(new { name }));
         return created["id"]!.ToString()!;
     }
 
     public async Task<string> CreateCategoryAsync(string name)
     {
-        var created = await Service.CreateAsync("category", BodyOf(new { name }));
+        var created = await Service.CreateAsync("fxCategory", BodyOf(new { name }));
         return created["id"]!.ToString()!;
     }
 
@@ -217,7 +217,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         };
         if (categoryId is not null) body["categoryId"] = categoryId.Value;
         if (tags is not null) body["tags"] = tags;
-        var created = await Service.CreateAsync("article", BodyOf(body));
+        var created = await Service.CreateAsync("fxArticle", BodyOf(body));
         return created["id"]!.ToString()!;
     }
 
@@ -258,13 +258,13 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     // ── raw junction/translation existence checks (via the repository, not the DB directly) ────
 
     public Task<IReadOnlyList<object>> ArticleTagsByArticleAsync(Guid articleId) =>
-        Repository.QueryEntityWhereInAsync(typeof(ArticleTag), "ArticleId", [articleId]);
+        Repository.QueryEntityWhereInAsync(typeof(FxArticleTag), "ArticleId", [articleId]);
 
     public Task<IReadOnlyList<object>> ArticleTagsByTagAsync(Guid tagId) =>
-        Repository.QueryEntityWhereInAsync(typeof(ArticleTag), "TagId", [tagId]);
+        Repository.QueryEntityWhereInAsync(typeof(FxArticleTag), "TagId", [tagId]);
 
     public Task<IReadOnlyList<object>> ArticleTranslationsAsync(Guid articleId) =>
-        Repository.QueryEntityWhereInAsync(typeof(ArticleTranslation), "ArticleId", [articleId]);
+        Repository.QueryEntityWhereInAsync(typeof(FxArticleTranslation), "FxArticleId", [articleId]);
 
     public Task<IReadOnlyList<object>> CascadeNodeTranslationsAsync(Guid nodeId) =>
         Repository.QueryEntityWhereInAsync(typeof(CascadeNodeTranslation), "CascadeNodeId", [nodeId]);
@@ -294,7 +294,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
 /// </summary>
 public sealed class PurgeIntegrityTests
 {
-    // ── Scenario 1: purge Article clears its translations, M2M tag junctions, and revisions ──────
+    // ── Scenario 1: purge FxArticle clears its translations, M2M tag junctions, and revisions ──────
 
     [Fact]
     public async Task Purge_article_clears_translations_tags_and_revisions()
@@ -302,26 +302,26 @@ public sealed class PurgeIntegrityTests
         using var h = PurgeIntegrityHarness.Create();
         var tagId = Guid.Parse(await h.CreateTagAsync("T1"));
         var articleId = Guid.Parse(await h.CreateArticleAsync(tags: [tagId]));
-        await h.Service.UpdateAsync("article", articleId.ToString(),
+        await h.Service.UpdateAsync("fxArticle", articleId.ToString(),
             JsonSerializer.SerializeToElement(new { status = "published" })); // 2nd revision
 
         // Sanity: all three row kinds exist before purge.
         Assert.NotEmpty(await h.ArticleTranslationsAsync(articleId));
         Assert.NotEmpty(await h.ArticleTagsByArticleAsync(articleId));
-        Assert.Equal(2, (await h.RevisionStore.ListAsync("article", articleId.ToString())).Count);
+        Assert.Equal(2, (await h.RevisionStore.ListAsync("fxArticle", articleId.ToString())).Count);
 
-        var purged = await h.Service.DeleteAsync("article", articleId.ToString(), purge: true);
+        var purged = await h.Service.DeleteAsync("fxArticle", articleId.ToString(), purge: true);
 
         Assert.True(purged);
         Assert.Empty(await h.ArticleTranslationsAsync(articleId));
         Assert.Empty(await h.ArticleTagsByArticleAsync(articleId));
-        Assert.Empty(await h.RevisionStore.ListAsync("article", articleId.ToString()));
-        Assert.Null(await h.Repository.GetByIdAsync("article", articleId.ToString(), DeletedFilter.With));
+        Assert.Empty(await h.RevisionStore.ListAsync("fxArticle", articleId.ToString()));
+        Assert.Null(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString(), DeletedFilter.With));
         // The tag itself (the M2M's OTHER side) must survive an article purge.
-        Assert.NotNull(await h.Repository.GetByIdAsync("tag", tagId.ToString()));
+        Assert.NotNull(await h.Repository.GetByIdAsync("fxTag", tagId.ToString()));
     }
 
-    // ── Scenario 2: purge Tag clears the INBOUND (target-side) article_tags junction rows ────────
+    // ── Scenario 2: purge FxTag clears the INBOUND (target-side) fx_article_tags junction rows ────────
 
     [Fact]
     public async Task Purge_tag_clears_inbound_article_tag_junctions()
@@ -331,16 +331,16 @@ public sealed class PurgeIntegrityTests
         var articleId = Guid.Parse(await h.CreateArticleAsync(tags: [tagId]));
         Assert.NotEmpty(await h.ArticleTagsByTagAsync(tagId));
 
-        var purged = await h.Service.DeleteAsync("tag", tagId.ToString(), purge: true);
+        var purged = await h.Service.DeleteAsync("fxTag", tagId.ToString(), purge: true);
 
         Assert.True(purged);
         Assert.Empty(await h.ArticleTagsByTagAsync(tagId));
-        Assert.Null(await h.Repository.GetByIdAsync("tag", tagId.ToString(), DeletedFilter.With));
+        Assert.Null(await h.Repository.GetByIdAsync("fxTag", tagId.ToString(), DeletedFilter.With));
         // The article itself (owning side of the relation) must survive a tag purge.
-        Assert.NotNull(await h.Repository.GetByIdAsync("article", articleId.ToString()));
+        Assert.NotNull(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString()));
     }
 
-    // ── Scenario 3: purge a referenced Category (Article.Category is SetNull) ──────────────────
+    // ── Scenario 3: purge a referenced FxCategory (FxArticle.Category is SetNull) ──────────────────
 
     [Fact]
     public async Task Purge_category_nulls_referencing_article_fk_and_article_survives()
@@ -349,12 +349,12 @@ public sealed class PurgeIntegrityTests
         var categoryId = Guid.Parse(await h.CreateCategoryAsync("Cat"));
         var articleId = Guid.Parse(await h.CreateArticleAsync(categoryId: categoryId));
 
-        var purged = await h.Service.DeleteAsync("category", categoryId.ToString(), purge: true);
+        var purged = await h.Service.DeleteAsync("fxCategory", categoryId.ToString(), purge: true);
 
         Assert.True(purged);
-        var article = (Article)(await h.Repository.GetByIdAsync("article", articleId.ToString()))!;
+        var article = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString()))!;
         Assert.Null(article.CategoryId);
-        Assert.Null(await h.Repository.GetByIdAsync("category", categoryId.ToString(), DeletedFilter.With));
+        Assert.Null(await h.Repository.GetByIdAsync("fxCategory", categoryId.ToString(), DeletedFilter.With));
     }
 
     // ── Scenario 4a: Cascade — purge parent deletes child, incl. child's translations/revisions ──
@@ -409,9 +409,9 @@ public sealed class PurgeIntegrityTests
         var refId = Guid.Parse(await h.CreateRestrictRefAsync("Ref", categoryId));
 
         await Assert.ThrowsAsync<RelationConflictException>(
-            () => h.Service.DeleteAsync("category", categoryId.ToString(), purge: true));
+            () => h.Service.DeleteAsync("fxCategory", categoryId.ToString(), purge: true));
 
-        Assert.NotNull(await h.Repository.GetByIdAsync("category", categoryId.ToString()));
+        Assert.NotNull(await h.Repository.GetByIdAsync("fxCategory", categoryId.ToString()));
         Assert.NotNull(await h.Repository.GetByIdAsync("restrictRef", refId.ToString()));
     }
 
@@ -429,12 +429,12 @@ public sealed class PurgeIntegrityTests
         // deletes already executed inside the SAME transaction — proving those get rolled back too,
         // not just the (never-reached) parent-row delete.
         await Assert.ThrowsAnyAsync<Exception>(
-            () => h.Service.DeleteAsync("article", articleId.ToString(), purge: true));
+            () => h.Service.DeleteAsync("fxArticle", articleId.ToString(), purge: true));
 
-        Assert.NotNull(await h.Repository.GetByIdAsync("article", articleId.ToString()));
+        Assert.NotNull(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString()));
         Assert.NotEmpty(await h.ArticleTagsByArticleAsync(articleId));
         Assert.NotEmpty(await h.ArticleTranslationsAsync(articleId));
-        Assert.NotEmpty(await h.RevisionStore.ListAsync("article", articleId.ToString()));
+        Assert.NotEmpty(await h.RevisionStore.ListAsync("fxArticle", articleId.ToString()));
     }
 
     // ── Soft-deleted-source handling (context callout, not one of the 6 numbered scenarios) ──────
@@ -450,14 +450,14 @@ public sealed class PurgeIntegrityTests
         using var h = PurgeIntegrityHarness.Create();
         var categoryId = Guid.Parse(await h.CreateCategoryAsync("Cat"));
         var articleId = Guid.Parse(await h.CreateArticleAsync(categoryId: categoryId));
-        await h.Service.DeleteAsync("article", articleId.ToString(), purge: false); // trash (not purge)
-        Assert.Null(await h.Repository.GetByIdAsync("article", articleId.ToString(), DeletedFilter.Exclude));
+        await h.Service.DeleteAsync("fxArticle", articleId.ToString(), purge: false); // trash (not purge)
+        Assert.Null(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString(), DeletedFilter.Exclude));
 
-        var purged = await h.Service.DeleteAsync("category", categoryId.ToString(), purge: true);
+        var purged = await h.Service.DeleteAsync("fxCategory", categoryId.ToString(), purge: true);
 
         Assert.True(purged);
-        var trashedArticle = (Article)(await h.Repository.GetByIdAsync(
-            "article", articleId.ToString(), DeletedFilter.With))!;
+        var trashedArticle = (FxArticle)(await h.Repository.GetByIdAsync(
+            "fxArticle", articleId.ToString(), DeletedFilter.With))!;
         Assert.Null(trashedArticle.CategoryId);
     }
 

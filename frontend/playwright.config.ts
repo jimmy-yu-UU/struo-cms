@@ -1,4 +1,10 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
+
+// Present only while `e2e/sample/` exists; deleting it removes the project.
+const sampleSpecsDir = fileURLToPath(new URL('./e2e/sample', import.meta.url))
+const hasSampleSpecs = existsSync(sampleSpecsDir)
 
 export default defineConfig({
   // Single worker: the specs share one Vite dev server and one seeded admin account. The dev
@@ -21,7 +27,8 @@ export default defineConfig({
   projects: [
     // Framework-only: runs against the default template, no content collections required.
     { name: 'core', testDir: './e2e', testIgnore: '**/e2e/sample/**' },
-    // Requires the Blog sample to be opted in — see docs/guide/en/23-sample-walkthrough.md.
-    { name: 'sample', testDir: './e2e/sample' },
+    // Present only while `e2e/sample/` exists. Requires the Blog sample to be opted in — see
+    // docs/guide/en/23-sample-walkthrough.md.
+    ...(hasSampleSpecs ? [{ name: 'sample', testDir: './e2e/sample' }] : []),
   ],
 })

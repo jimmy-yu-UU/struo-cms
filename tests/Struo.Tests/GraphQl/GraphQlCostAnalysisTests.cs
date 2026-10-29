@@ -22,7 +22,7 @@ public class GraphQlCostAnalysisTests(ApiFactory factory)
     {
         const int aliases = 50;
         var body = string.Concat(Enumerable.Range(0, aliases)
-            .Select(i => $"a{i}: articles {{ items {{ id }} }} "));
+            .Select(i => $"a{i}: fxArticles {{ items {{ id }} }} "));
         var query = "{ " + body + "}";
 
         var client = _factory.CreateClient();
@@ -52,7 +52,7 @@ public class GraphQlCostAnalysisTests(ApiFactory factory)
         // Authenticated (super-admin) so RBAC lets every root through — this isolates the assertion
         // to the cost analyzer rather than per-collection read grants.
         const string query =
-            "{ articles { items { id } } categories { items { id } } tags { items { id } } }";
+            "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
         var client = await _factory.CreateAuthenticatedClientAsync();
         var response = await client.PostAsJsonAsync("/graphql", new { query });
         var json = await response.Content.ReadAsStringAsync();

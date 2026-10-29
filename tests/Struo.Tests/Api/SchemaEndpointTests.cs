@@ -21,15 +21,15 @@ public class SchemaEndpointTests(ApiFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("\"name\":\"article\"");
-        body.Should().Contain("\"name\":\"category\"");
+        body.Should().Contain("\"name\":\"fxArticle\"");
+        body.Should().Contain("\"name\":\"fxCategory\"");
     }
 
     [Fact]
     public async Task Schema_for_collection_includes_interfaces_options_and_seo()
     {
         var client = await _factory.CreateAuthenticatedClientAsync(); // /api/schema now requires auth
-        var response = await client.GetAsync("/api/schema/article");
+        var response = await client.GetAsync("/api/schema/fxArticle");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync();
@@ -40,7 +40,7 @@ public class SchemaEndpointTests(ApiFactory factory)
         body.Should().Contain("\"isSystem\":true");            // audit fields
 
         // seoOgImageId deliberately uses the Image interface, not Hidden: it is a user-editable SEO
-        // field (pick a social-share image), so it must appear in the schema/admin UI like any other
+        // field (pick a social-share image), so it must appear in the schema or admin UI like any other
         // file-picker field, unlike Hidden fields (e.g. Password) which are never exposed to clients.
         // Parse as JsonDocument so we assert the "image" interface belongs specifically to the seoOgImageId field
         // (a global string scan would pass even if some other field carried the image interface).

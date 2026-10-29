@@ -6,7 +6,7 @@ using Struo.Application.Changes;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Changes;
 using Struo.Infrastructure.Persistence;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Query;
 using Struo.Tests.Support;
 using Xunit;
@@ -63,17 +63,17 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Create_raises_one_Created_with_the_canonical_collection_and_lowercase_id()
     {
-        var created = await _h.Service.CreateAsync("Category", Body("""{"name":"c"}"""));
+        var created = await _h.Service.CreateAsync("FxCategory", Body("""{"name":"c"}"""));
         var id = created["id"]!.ToString()!;
-        Only().Should().Be(("category", id.ToLowerInvariant(), ItemChangeKind.Created));
+        Only().Should().Be(("fxCategory", id.ToLowerInvariant(), ItemChangeKind.Created));
     }
 
     [Fact]
     public async Task Update_and_revert_raise_Updated()
     {
-        var id = await CreateAsync("category", """{"name":"c"}""");
-        await _h.Service.UpdateAsync("category", id, Body("""{"name":"c2"}"""));
-        Only().Should().Be(("category", id, ItemChangeKind.Updated));
+        var id = await CreateAsync("fxCategory", """{"name":"c"}""");
+        await _h.Service.UpdateAsync("fxCategory", id, Body("""{"name":"c2"}"""));
+        Only().Should().Be(("fxCategory", id, ItemChangeKind.Updated));
 
         _listener.Calls.Clear();
         var nodeId = await CreateAsync("cascadeNode", CascadeNodeBody("n"));
@@ -86,24 +86,24 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Trash_raises_Trashed_once_and_a_repeat_trash_raises_nothing()
     {
-        var id = await CreateAsync("category", """{"name":"c"}""");
-        await _h.Service.DeleteAsync("category", id.ToUpperInvariant());
-        Only().Should().Be(("category", id, ItemChangeKind.Trashed));
+        var id = await CreateAsync("fxCategory", """{"name":"c"}""");
+        await _h.Service.DeleteAsync("fxCategory", id.ToUpperInvariant());
+        Only().Should().Be(("fxCategory", id, ItemChangeKind.Trashed));
         _listener.Calls.Clear();
-        await _h.Service.DeleteAsync("category", id);
+        await _h.Service.DeleteAsync("fxCategory", id);
         _listener.Calls.Should().BeEmpty();
     }
 
     [Fact]
     public async Task Restore_raises_Restored_once_and_a_repeat_restore_raises_nothing()
     {
-        var id = await CreateAsync("category", """{"name":"c"}""");
-        await _h.Service.DeleteAsync("category", id);
+        var id = await CreateAsync("fxCategory", """{"name":"c"}""");
+        await _h.Service.DeleteAsync("fxCategory", id);
         _listener.Calls.Clear();
-        await _h.Service.RestoreAsync("category", id);
-        Only().Should().Be(("category", id, ItemChangeKind.Restored));
+        await _h.Service.RestoreAsync("fxCategory", id);
+        Only().Should().Be(("fxCategory", id, ItemChangeKind.Restored));
         _listener.Calls.Clear();
-        await _h.Service.RestoreAsync("category", id);
+        await _h.Service.RestoreAsync("fxCategory", id);
         _listener.Calls.Should().BeEmpty();
     }
 
@@ -122,10 +122,10 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Purge_raises_Updated_for_rows_whose_foreign_key_was_set_to_null()
     {
-        var parent = await CreateAsync("category", """{"name":"p"}""");
-        var childA = await CreateAsync("category", $$$"""{"name":"a","parentId":"{{{parent}}}"}""");
-        var childB = await CreateAsync("category", $$$"""{"name":"b","parentId":"{{{parent}}}"}""");
-        await _h.Service.DeleteAsync("category", parent, purge: true);
+        var parent = await CreateAsync("fxCategory", """{"name":"p"}""");
+        var childA = await CreateAsync("fxCategory", $$$"""{"name":"a","parentId":"{{{parent}}}"}""");
+        var childB = await CreateAsync("fxCategory", $$$"""{"name":"b","parentId":"{{{parent}}}"}""");
+        await _h.Service.DeleteAsync("fxCategory", parent, purge: true);
         var call = _listener.Calls.Should().ContainSingle().Subject;
         call.Select(c => (c.Id, c.Kind)).Should().BeEquivalentTo(
             [(parent, ItemChangeKind.Purged), (childA, ItemChangeKind.Updated), (childB, ItemChangeKind.Updated)]);
@@ -134,28 +134,28 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     [Fact]
     public async Task Purge_raises_Updated_for_live_parents_that_lose_an_inbound_M2M_link()
     {
-        // Spec R4 extension: purging a Tag deletes the INBOUND article_tags junction
-        // rows (Article declares the M2M, Tag does not), so every LIVE article that carried the tag
+        // Spec R4 extension: purging an FxTag deletes the INBOUND fx_article_tags junction
+        // rows (FxArticle declares the M2M, FxTag does not), so every LIVE article that carried the tag
         // must itself get an Updated. a3 is linked too but trashed before the purge — mirroring
         // CollectSetNullUpdatesAsync's live-only semantics, a trashed parent must NOT be raised.
-        var tag = await CreateAsync("tag", """{"name":"t"}""");
-        var a1 = await CreateAsync("article", ArticleBody("A1", tag));
-        var a2 = await CreateAsync("article", ArticleBody("A2", tag));
-        var a3 = await CreateAsync("article", ArticleBody("A3", tag));
-        await _h.Service.DeleteAsync("article", a3); // trash a3 — must be excluded below
+        var tag = await CreateAsync("fxTag", """{"name":"t"}""");
+        var a1 = await CreateAsync("fxArticle", ArticleBody("A1", tag));
+        var a2 = await CreateAsync("fxArticle", ArticleBody("A2", tag));
+        var a3 = await CreateAsync("fxArticle", ArticleBody("A3", tag));
+        await _h.Service.DeleteAsync("fxArticle", a3); // trash a3 — must be excluded below
         _listener.Calls.Clear();
 
-        await _h.Service.DeleteAsync("tag", tag, purge: true);
+        await _h.Service.DeleteAsync("fxTag", tag, purge: true);
 
         var call = _listener.Calls.Should().ContainSingle().Subject;
         call.Select(c => (c.Collection, c.Id, c.Kind)).Should().BeEquivalentTo(
-            [("tag", tag, ItemChangeKind.Purged), ("article", a1, ItemChangeKind.Updated), ("article", a2, ItemChangeKind.Updated)]);
+            [("fxTag", tag, ItemChangeKind.Purged), ("fxArticle", a1, ItemChangeKind.Updated), ("fxArticle", a2, ItemChangeKind.Updated)]);
     }
 
     [Fact]
     public async Task Purge_of_an_unknown_id_raises_nothing()
     {
-        await _h.Service.DeleteAsync("category", Guid.NewGuid().ToString(), purge: true);
+        await _h.Service.DeleteAsync("fxCategory", Guid.NewGuid().ToString(), purge: true);
         _listener.Calls.Should().BeEmpty();
     }
 
@@ -167,7 +167,7 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
         // connection would see its own uncommitted row too, so it would "pass" even if NotifyAsync
         // ran BEFORE the commit. A separate connection only sees the row once the write has
         // committed, which is the property this test proves.
-        Category? seen = null;
+        FxCategory? seen = null;
         PurgeIntegrityHarness h = null!;
         var probe = new RecordingItemChangeListener
         {
@@ -176,13 +176,13 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
                 using var db = SqlSugarClientFactory.Create(
                     h.Database.Options(),
                     new TestCurrentUserAccessor(Guid.Empty));
-                seen = await db.Queryable<Category>().In(Guid.Parse(changes[0].Id)).FirstAsync();
+                seen = await db.Queryable<FxCategory>().In(Guid.Parse(changes[0].Id)).FirstAsync();
             },
         };
         h = PurgeIntegrityHarness.Create(notifier: new ItemChangeNotifier([probe], _log));
         using (h)
         {
-            await h.Service.CreateAsync("category", Body("""{"name":"c"}"""));
+            await h.Service.CreateAsync("fxCategory", Body("""{"name":"c"}"""));
         }
         seen.Should().NotBeNull();
     }
@@ -192,20 +192,20 @@ public sealed class ItemServiceChangeNotificationTests : IDisposable
     {
         var bad = new RecordingItemChangeListener { OnCall = _ => throw new InvalidOperationException("index down") };
         using var h = PurgeIntegrityHarness.Create(notifier: new ItemChangeNotifier([bad], _log));
-        var created = await h.Service.CreateAsync("category", Body("""{"name":"c"}"""));
-        (await h.Repository.GetByIdAsync("category", created["id"]!.ToString()!)).Should().NotBeNull();
+        var created = await h.Service.CreateAsync("fxCategory", Body("""{"name":"c"}"""));
+        (await h.Repository.GetByIdAsync("fxCategory", created["id"]!.ToString()!)).Should().NotBeNull();
         _log.Entries.Should().ContainSingle().Which.Level.Should().Be(LogLevel.Error);
     }
 
     [Fact]
     public async Task Create_with_relations_and_translations_is_still_one_call()
     {
-        var cat = await CreateAsync("category", """{"name":"c"}""");
-        var tag = await CreateAsync("tag", """{"name":"t"}""");
+        var cat = await CreateAsync("fxCategory", """{"name":"c"}""");
+        var tag = await CreateAsync("fxTag", """{"name":"t"}""");
         // $$$$ (not the brief's $$$): the JSON literally ends in three consecutive closing braces
         // ("...{"title":"T"}}}"), which a 3-dollar raw interpolated string cannot disambiguate from an
         // interpolation-close (CS9007) — bumping to 4 dollars/braces resolves it without changing the JSON.
-        await _h.Service.CreateAsync("article", Body($$$$"""{"status":"draft","categoryId":"{{{{cat}}}}","tags":["{{{{tag}}}}"],"translations":{"en":{"title":"T"}}}"""));
+        await _h.Service.CreateAsync("fxArticle", Body($$$$"""{"status":"draft","categoryId":"{{{{cat}}}}","tags":["{{{{tag}}}}"],"translations":{"en":{"title":"T"}}}"""));
         _listener.Calls.Should().ContainSingle().Which.Should().ContainSingle().Which.Kind.Should().Be(ItemChangeKind.Created);
     }
 }

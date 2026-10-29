@@ -115,8 +115,8 @@ public sealed class CoreSchemaSnapshotTests
     /// Core = the FrameworkEntityTypes that actually carry [CmsCollection] (7 of the 11). Derived by
     /// running the real scanner over that list instead of hard-coding names, so a future core
     /// collection cannot be silently left out of this gate. Filtering is required because the test
-    /// host has the Blog sample wired in process-wide (Support/ContentAssemblyEnvBootstrap.cs), so
-    /// /api/schema also serves article/category/tag — sample collections, deleted on fork.
+    /// host has the fixtures wired in process-wide (Support/ContentAssemblyEnvBootstrap.cs), so
+    /// /api/schema also serves fxArticle/fxCategory/fxTag — fixture collections.
     /// </summary>
     private static HashSet<string> CoreCollectionNames() =>
         MetadataScanner.ScanTypes(FrameworkEntityTypes.All)

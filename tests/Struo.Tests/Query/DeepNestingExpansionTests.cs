@@ -21,10 +21,10 @@ public class DeepNestingExpansionTests(ApiFactory factory)
     public async Task Depth2_m2o_chain_article_category_parent_resolves()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var grandparent = await Post(c, "category", new { name = "GP-8c3a" });
-        var parent = await Post(c, "category", new { name = "P-8c3a", parentId = grandparent });
-        var child = await Post(c, "category", new { name = "C-8c3a", parentId = parent });
-        var articleId = await Post(c, "article",
+        var grandparent = await Post(c, "fxCategory", new { name = "GP-8c3a" });
+        var parent = await Post(c, "fxCategory", new { name = "P-8c3a", parentId = grandparent });
+        var child = await Post(c, "fxCategory", new { name = "C-8c3a", parentId = parent });
+        var articleId = await Post(c, "fxArticle",
             new { status = "draft", categoryId = child, translations = new { en = new { title = "A-8c3a" } } });
 
         // article -> category (child) -> parent (P) -> parent (GP): depth-3 M2O chain.
@@ -33,7 +33,7 @@ public class DeepNestingExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = articleId } },
             deep = new { category = new { deep = new { parent = new { deep = new { parent = new { } } } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
@@ -48,8 +48,8 @@ public class DeepNestingExpansionTests(ApiFactory factory)
     public async Task Depth2_o2m_then_m2o_category_articles_category_resolves()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "O2MParent-8c3a" });
-        await Post(c, "article",
+        var cat = await Post(c, "fxCategory", new { name = "O2MParent-8c3a" });
+        await Post(c, "fxArticle",
             new { status = "draft", categoryId = cat, translations = new { en = new { title = "Kid-8c3a" } } });
 
         // category -> articles (O2M) -> category (M2O back to the same category): mixed-kind depth-2.
@@ -61,7 +61,7 @@ public class DeepNestingExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { deep = new { category = new { } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
@@ -74,8 +74,8 @@ public class DeepNestingExpansionTests(ApiFactory factory)
     public async Task Depth2_self_ref_o2m_children_resolves_cjk()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var root = await Post(c, "category", new { name = "根-8c3a" });   // CJK: 根 = U+6839
-        await Post(c, "category", new { name = "子-8c3a", parentId = root }); // 子 = U+5B50
+        var root = await Post(c, "fxCategory", new { name = "根-8c3a" });   // CJK: 根 = U+6839
+        await Post(c, "fxCategory", new { name = "子-8c3a", parentId = root }); // 子 = U+5B50
 
         // category -> children (O2M self-ref) -> children (empty, but the level resolves).
         // NOTE: see comment in the previous test — nested `deep` goes through the POST /query envelope,
@@ -85,7 +85,7 @@ public class DeepNestingExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = root } },
             deep = new { children = new { deep = new { children = new { } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
@@ -100,9 +100,9 @@ public class DeepNestingExpansionTests(ApiFactory factory)
     public async Task Depth2_o2m_then_m2m_category_articles_tags_resolves()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var cat = await Post(c, "category", new { name = "M2MParent-8c3a" });
-        var tag = await Post(c, "tag", new { name = "標籤-8c3a" }); // CJK: 標籤 = U+6A19 U+7C64
-        await Post(c, "article", new
+        var cat = await Post(c, "fxCategory", new { name = "M2MParent-8c3a" });
+        var tag = await Post(c, "fxTag", new { name = "標籤-8c3a" }); // CJK: 標籤 = U+6A19 U+7C64
+        await Post(c, "fxArticle", new
         {
             status = "draft",
             categoryId = cat,
@@ -118,7 +118,7 @@ public class DeepNestingExpansionTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
             deep = new { articles = new { deep = new { tags = new { } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];

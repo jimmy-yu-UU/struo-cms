@@ -25,10 +25,10 @@ public class DeepNestingValidationTests(ApiFactory factory)
         var c = await _factory.CreateAuthenticatedClientAsync();
         // ExpandDeepAsync only validates when there's at least one parent row to expand
         // (the entities.Count==0 guard is existing, unchanged behaviour) — seed one category.
-        await c.PostAsJsonAsync("/api/items/category", new { name = "DepthSeed" });
+        await c.PostAsJsonAsync("/api/items/fxCategory", new { name = "DepthSeed" });
         // MaxRelationDepth = 6 => a 7-level nested chain must be rejected before any query runs.
         var envelope = JsonSerializer.SerializeToElement(new { deep = NestParent(7) });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -37,13 +37,13 @@ public class DeepNestingValidationTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         // Seed one article row so the parent query returns entities and validation actually runs.
-        await c.PostAsJsonAsync("/api/items/article",
+        await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "UnknownNestedSeed" } } });
         var envelope = JsonSerializer.SerializeToElement(new
         {
             deep = new { category = new { deep = new { ghostrel = new { } } } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -58,7 +58,7 @@ public class DeepNestingValidationTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_eq"] = System.Guid.NewGuid().ToString() } }, // matches nothing
             deep = NestParent(7)
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -68,13 +68,13 @@ public class DeepNestingValidationTests(ApiFactory factory)
         // Sibling relations at the same nesting depth do not count toward MaxRelationDepth: article
         // has category + tags (2 siblings) at depth 1, which must return 200.
         var c = await _factory.CreateAuthenticatedClientAsync();
-        await c.PostAsJsonAsync("/api/items/article",
+        await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "SiblingSeed" } } });
         var envelope = JsonSerializer.SerializeToElement(new
         {
             deep = new { category = new { }, tags = new { } }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

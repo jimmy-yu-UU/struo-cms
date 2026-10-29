@@ -23,13 +23,13 @@ public class PermissionGrantReplaceTransactionTests(ApiFactory factory)
         var store = scope.ServiceProvider.GetRequiredService<IPermissionGrantStore>();
         var roleId = Guid.CreateVersion7();
         await db.Insertable(new Role { Id = roleId, Name = $"grant-tx-{roleId:N}" }).ExecuteCommandAsync();
-        await store.ReplaceAsync(roleId, [new PermissionGrant("article", true, false, false)]);
+        await store.ReplaceAsync(roleId, [new PermissionGrant("fxArticle", true, false, false)]);
 
         await db.Ado.BeginTranAsync();
-        await store.ReplaceAsync(roleId, [new PermissionGrant("category", true, true, true)]);
+        await store.ReplaceAsync(roleId, [new PermissionGrant("fxCategory", true, true, true)]);
         await db.Ado.RollbackTranAsync();
 
         var grants = await store.ListAsync(roleId);
-        grants.Should().ContainSingle().Which.Collection.Should().Be("article");
+        grants.Should().ContainSingle().Which.Collection.Should().Be("fxArticle");
     }
 }

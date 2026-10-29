@@ -3,7 +3,7 @@ using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Infrastructure.Metadata;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -12,7 +12,7 @@ public class RelationshipGraphValidationTests
 {
     private static readonly CollectionMetadata CategoryCollection = new()
     {
-        Name = "category",
+        Name = "fxCategory",
         Label = "Category",
         FieldGroups = [],
         Fields = [],
@@ -22,7 +22,7 @@ public class RelationshipGraphValidationTests
     private static readonly IReadOnlyDictionary<string, Type> CategoryTypes =
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["category"] = typeof(Category)
+            ["fxCategory"] = typeof(FxCategory)
         };
 
     [Fact]
@@ -52,7 +52,7 @@ public class RelationshipGraphValidationTests
 
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["widget"] = typeof(Category)
+            ["widget"] = typeof(FxCategory)
         };
 
         var act = () => new RelationshipGraph([widgetMeta], collectionTypes);
@@ -77,7 +77,7 @@ public class RelationshipGraphValidationTests
                     Name = "category",
                     Label = "Category",
                     Kind = RelationKind.ManyToOne,
-                    TargetCollection = "category",
+                    TargetCollection = "fxCategory",
                     Interface = RelationInterface.Dropdown,
                     ForeignKey = null,
                     OnDelete = OnDelete.Restrict,
@@ -88,8 +88,8 @@ public class RelationshipGraphValidationTests
 
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["widget"] = typeof(Category),
-            ["category"] = typeof(Category)
+            ["widget"] = typeof(FxCategory),
+            ["fxCategory"] = typeof(FxCategory)
         };
 
         var act = () => new RelationshipGraph([widgetMeta, CategoryCollection], collectionTypes);

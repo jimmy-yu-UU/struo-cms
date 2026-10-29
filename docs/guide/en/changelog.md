@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The backend tests are split into three projects. `tests/Struo.Tests.Support` is a class library with
+- The backend tests are split into separate projects. `tests/Struo.Tests.Support` is a class library with
   the shared helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`) in
   the namespace `Struo.Tests.Support`. `tests/Struo.Tests.Template` holds the template's own
   repository guards, the documentation conventions, the template invariants and the CI, Docker and
@@ -15,6 +15,19 @@
   `tests/Struo.Tests/Support`, `Documentation` or `Template` gets a one-time merge conflict on the
   moved files: apply the edit to the file's new location. The Support library's public API is what a
   fork's tests depend on, and later changes to it are listed here.
+- The core tests run on test-only fixture collections instead of the sample. `tests/Struo.Tests.Fixtures`
+  declares them with an `fx` prefix (`fxArticle`, tables `fx_*`) and its own migration, and no shipped
+  host registers it. The sample's own tests moved to `samples/Struo.Sample.Blog.Tests`, next to the
+  sample. Removing the sample no longer touches `tests/`: follow
+  [Chapter 23](23-sample-walkthrough.md). The Playwright config adds the `sample` project only while
+  `frontend/e2e/sample/` exists. A fork that already deleted or edited the sample's tests under
+  `tests/Struo.Tests` gets a one-time merge conflict. On a conflict this change causes (a file under
+  `tests/Struo.Tests` that your fork deleted or edited because of the sample), take upstream's
+  version: those files now run on the fixtures, and the pin in `Support/ContentAssemblyEnvBootstrap.cs`
+  and the `Struo.Tests.Fixtures` `ProjectReference` in `Struo.Tests.csproj` must stay, or the suite
+  fails and its tests reach your development Redis and OIDC providers. Only the sample's own tests,
+  which moved to `samples/Struo.Sample.Blog.Tests`, may stay deleted. See [Chapter 22](22-testing.md) and
+  [Chapter 23](23-sample-walkthrough.md).
 
 ## 0.15.0 — 2026-10-28
 

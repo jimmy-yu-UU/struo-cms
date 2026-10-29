@@ -11,7 +11,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -19,8 +19,8 @@ namespace Struo.Tests.Query;
 
 // A handful of malformed write-path request bodies fell through to an
 // unhandled InvalidOperationException/FormatException (-> 500) instead of the established
-// QueryException (-> 400) client-error path. This harness mirrors ItemServiceTests' sample-domain
-// wiring (Article/Category/Tag, M2M via "tags") and additionally scans Language so the "language"
+// QueryException (-> 400) client-error path. This harness mirrors ItemServiceTests' fixture-domain
+// wiring (FxArticle/FxCategory/FxTag, M2M via "tags") and additionally scans Language so the "language"
 // collection's code-format guard (Site 3) can be exercised directly.
 internal sealed class MalformedBodyHarness : IDisposable
 {
@@ -33,18 +33,18 @@ internal sealed class MalformedBodyHarness : IDisposable
         var db = SqlSugarClientFactory.Create(
             _database.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(Language),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
@@ -53,9 +53,9 @@ internal sealed class MalformedBodyHarness : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]  = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"]      = typeof(Tag),
+            ["fxArticle"]  = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"]      = typeof(FxTag),
             ["file"]     = typeof(Struo.Infrastructure.Files.File),
             ["language"] = typeof(Language),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
@@ -95,12 +95,12 @@ internal sealed class MalformedBodyHarness : IDisposable
         var tagsJson = tags is null ? "" : $",\"tags\":[{string.Join(",", tags.Select(t => $"\"{t}\""))}]";
         var body = BodyOf(
             "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"T\"}}" + tagsJson + "}");
-        var created = await Service.CreateAsync("article", body);
+        var created = await Service.CreateAsync("fxArticle", body);
         return created["id"]!.ToString()!;
     }
 
     public Task<string> CreateTagAsync(string name) =>
-        Service.CreateAsync("tag", BodyOf("{\"name\":\"" + name + "\"}"))
+        Service.CreateAsync("fxTag", BodyOf("{\"name\":\"" + name + "\"}"))
             .ContinueWith(t => t.Result["id"]!.ToString()!);
 }
 
@@ -120,7 +120,7 @@ public sealed class ItemServiceMalformedBodyTests
         using var h = MalformedBodyHarness.Create();
         var body = MalformedBodyHarness.BodyOf("[1,2]");
 
-        await Assert.ThrowsAsync<QueryException>(() => h.Service.CreateAsync("article", body));
+        await Assert.ThrowsAsync<QueryException>(() => h.Service.CreateAsync("fxArticle", body));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class ItemServiceMalformedBodyTests
         using var h = MalformedBodyHarness.Create();
         var body = MalformedBodyHarness.BodyOf("\"x\"");
 
-        await Assert.ThrowsAsync<QueryException>(() => h.Service.CreateAsync("article", body));
+        await Assert.ThrowsAsync<QueryException>(() => h.Service.CreateAsync("fxArticle", body));
     }
 
     // ── Site 3: the "language" collection's own guard must not 500 on a malformed body either ──
@@ -152,7 +152,7 @@ public sealed class ItemServiceMalformedBodyTests
         var articleId = await h.CreateArticleAsync();
         var body = MalformedBodyHarness.BodyOf("5");
 
-        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("article", articleId, body));
+        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("fxArticle", articleId, body));
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class ItemServiceMalformedBodyTests
         var articleId = await h.CreateArticleAsync();
         var body = MalformedBodyHarness.BodyOf("{\"tags\":[1.5]}");
 
-        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("article", articleId, body));
+        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("fxArticle", articleId, body));
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class ItemServiceMalformedBodyTests
         var articleId = await h.CreateArticleAsync();
         var body = MalformedBodyHarness.BodyOf("{\"tags\":[true]}");
 
-        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("article", articleId, body));
+        await Assert.ThrowsAsync<QueryException>(() => h.Service.UpdateAsync("fxArticle", articleId, body));
     }
 
     // ── Regression: a valid object body with a valid M2M id array still succeeds ────────────────
@@ -198,7 +198,7 @@ public sealed class ItemServiceMalformedBodyTests
         var articleId = await h.CreateArticleAsync();
         var body = MalformedBodyHarness.BodyOf("{\"tags\":[\"" + tagId + "\"]}");
 
-        var updated = await h.Service.UpdateAsync("article", articleId, body);
+        var updated = await h.Service.UpdateAsync("fxArticle", articleId, body);
 
         updated.Should().NotBeNull();
     }

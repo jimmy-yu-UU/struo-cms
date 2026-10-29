@@ -26,8 +26,9 @@ references the `SqlSugarCore` package directly, and it also references `Struo.In
 reference as the minimum for a library that only declares entities. The sample's own migration
 derives from `Struo.Infrastructure`'s `StruoMigration`, so it needs the second reference as well.
 
-The only project that references it is the test project, `tests/Struo.Tests`, and it does so
-deeply — "Removing the sample completely" below lists every file that has to change.
+The only project that references it is its own test project, `samples/Struo.Sample.Blog.Tests`.
+The core tests in `tests/` don't touch it: they run on the test-only fixtures in
+`tests/Struo.Tests.Fixtures` ([Chapter 22](22-testing.md)).
 `src/Struo.Api/Struo.Api.csproj` carries no `ProjectReference` to it, and
 `Struo:ContentAssemblies` defaults to an empty array.
 
@@ -228,83 +229,40 @@ seed-data notes are in `frontend/e2e/README.md`; `relations.spec.ts` in particul
 
 ## Removing the sample completely
 
-The cleanup reaches wider than the `samples/Struo.Sample.Blog/` directory: the backend test suite
-uses the sample's collections as a fixture. Work through the list below in order.
+The sample and its tests sit side by side, so removing it is four steps. `tests/` needs no change:
+the core tests run on `tests/Struo.Tests.Fixtures`, not on the sample.
 
-1. Revert both opt-in edits: remove the `ProjectReference` to `Struo.Sample.Blog.csproj` from
-   `Struo.Api.csproj`, and re-comment (or delete) the `"ContentAssemblies"` line in your
-   `appsettings.Development.json`. Then delete that line and the two comment lines above `"Struo"`
-   from the tracked `appsettings.Development.json.example` too — otherwise the tracked example keeps
-   pointing at a sample that doesn't exist.
+1. If you opted the sample in, revert both edits: remove the `ProjectReference` to
+   `Struo.Sample.Blog.csproj` from `Struo.Api.csproj`, and re-comment (or delete) the
+   `"ContentAssemblies"` line in your `appsettings.Development.json`. Whether or not you did,
+   delete the sample's `"ContentAssemblies"` line and the two comment lines above `"Struo"` from the
+   tracked `src/Struo.Api/appsettings.Development.json.example`; otherwise it keeps pointing at a
+   sample that doesn't exist.
 
-2. Delete the whole `samples/Struo.Sample.Blog/` directory; remove the `<Folder Name="/samples/">`
-   block from `StruoCMS.slnx`; remove the `ProjectReference` to it from
-   `tests/Struo.Tests/Struo.Tests.csproj`.
+2. Delete the whole `samples/` directory, which holds the sample and its test project
+   `Struo.Sample.Blog.Tests`, and remove the `<Folder Name="/samples/">` block from `StruoCMS.slnx`.
 
-3. Delete `tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs` — the `[ModuleInitializer]`
-   that sets `Struo__ContentAssemblies__0=Struo.Sample.Blog` into the process environment before
-   any test runs; without it, the test host `ApiFactory` builds never see the sample's collections.
+3. Delete `frontend/e2e/sample/`. `frontend/playwright.config.ts` adds the `sample` project only
+   while that directory exists, so the config needs no edit. Remove the `"e2e:sample"` and
+   `"e2e:all"` scripts from `frontend/package.json`: `e2e:sample` would name a project that is gone,
+   and `e2e:all` would only repeat `e2e`. Trim the sample's section out of `frontend/e2e/README.md`,
+   and the "Manually verifying sample-only flows" section out of `frontend/README.md`.
 
-4. Find the test files that still mention the sample:
+4. Clean up the five tables in any database the sample has run against, and the sample migration's
+   row in the version table. The tables the sample migration created don't go away with the code;
+   left in place, the row shows up as `Orphaned` in `migrate:status` — it doesn't block startup,
+   but it stays there:
 
    ```
-   grep -rl "Struo.Sample.Blog" tests/Struo.Tests --include=*.cs
+   DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
+   DELETE FROM struo_schema_versions WHERE version = 202610080100;
    ```
 
-   After step 3 it lists 45 files. Handle them by kind:
+   Replace `struo_` with your `Database:TablePrefix`. The sample's tables have no foreign keys
+   between them, so no `CASCADE` is needed. Both statements were run on PostgreSQL, SQL Server,
+   MySQL and MariaDB; SQLite's `DROP TABLE` takes one table at a time, so split it into five.
 
-   - The 36 files with `using Struo.Sample.Blog;` (see [Chapter 22](22-testing.md) for how they're
-     distributed), plus `Migrations/SampleBlogMigrationTests.cs` and
-     `Query/NestedListArgsExpansionTests.cs`, which name the sample's types fully qualified: delete
-     them whole.
-   - `Persistence/SqlSugarClientFactoryTests.cs` and `Persistence/TableNamingTests.cs`: delete only
-     the one assertion and the two `InlineData` lines that name a `Struo.Sample.Blog.` type; the
-     rest of their tests stay.
-   - `Metadata/ConventionMetadataDiscoveryTests.cs`: step 6 handles it.
-   - `GraphQl/FakeMetadataFixtures.cs`, `GraphQl/GraphQlExecutionTests.cs` and
-     `Query/TranslatableSearchHarness.cs` mention the sample only in comments, which step 8 handles.
-
-5. Run `dotnet build` to confirm the build is clean — nothing under `src/Struo.*` references the
-   sample. `dotnet test` is still red at this point; the next two steps handle it.
-
-6. Fix `tests/Struo.Tests/Metadata/ConventionMetadataDiscoveryTests.cs`: two of its four tests set
-   the string `"Struo.Sample.Blog"` as the assembly to scan — delete
-   `Configured_content_assembly_is_scanned` and `Registers_entity_type_collector`, or point them at
-   your own fork's assembly instead; the other two don't involve the sample and stay.
-
-7. Delete the test files that carry no `using` for the sample's namespace but exercise
-   `article`/`category`/`tag` over REST or GraphQL — they depend entirely on step 3's module
-   initializer, so the compiler can't catch them. Run `dotnet test` once and look for
-   `404`/`KeyNotFoundException` failures under `Api/`, `Query/`, `GraphQl/`, `Localization/`,
-   and `Identity/`.
-
-8. Clean up the seven comments that mention the sample: `CorsAndCookieTests.cs`,
-   `CoreSchemaSnapshotTests.cs`, `OidcEndpointTests.cs` and `HostIsolationTests.cs` reference
-   `ContentAssemblyEnvBootstrap`, which step 3 deleted;
-   the comments in `FakeMetadataFixtures.cs`, `GraphQlExecutionTests.cs` and
-   `TranslatableSearchHarness.cs` point at the sample's paths and types.
-
-9. In `frontend/`: delete `frontend/e2e/sample/` (8 spec files); remove the `"sample"`
-   project and the now-unneeded `testIgnore: '**/e2e/sample/**'` for `core` from
-   `frontend/playwright.config.ts`; remove `"e2e:sample"` and `"e2e:all"` from
-   `frontend/package.json`, keeping only `"e2e"`; trim the sample's section out of
-   `frontend/e2e/README.md`.
-
-10. Clean up the five tables in any database the sample has run against, and the sample migration's
-    row in the version table. The tables the sample migration created don't go away with the code;
-    left in place, the row shows up as `Orphaned` in `migrate:status` — it doesn't block startup,
-    but it stays there:
-
-    ```
-    DROP TABLE IF EXISTS article_tags, article_translations, articles, categories, tags;
-    DELETE FROM struo_schema_versions WHERE version = 202610080100;
-    ```
-
-    Replace `struo_` with your `Database:TablePrefix`. The sample's tables have no foreign keys
-    between them, so no `CASCADE` is needed. Both statements were run on PostgreSQL, SQL Server,
-    MySQL and MariaDB; SQLite's `DROP TABLE` takes one table at a time, so split it into five.
-
-After step 10, `migrate:status` lists only the two core migrations:
+After step 4, `migrate:status` lists only the two core migrations:
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status

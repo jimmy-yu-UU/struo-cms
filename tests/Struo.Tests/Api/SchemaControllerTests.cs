@@ -33,7 +33,7 @@ public sealed class SchemaControllerTests
     {
         using var factory = new ApiFactory();
         var client = factory.CreateClient();
-        var res = await client.GetAsync("/api/schema/article");
+        var res = await client.GetAsync("/api/schema/fxArticle");
         res.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -50,7 +50,7 @@ public sealed class SchemaControllerTests
         var arr = doc.RootElement.GetProperty("data");
         arr.GetArrayLength().Should().BeGreaterThan(0);
         arr.EnumerateArray().Select(e => e.GetProperty("name").GetString())
-           .Should().Contain("article");
+           .Should().Contain("fxArticle");
     }
 
     [Fact]
@@ -59,13 +59,13 @@ public sealed class SchemaControllerTests
         using var factory = new ApiFactory();
         var client = await factory.CreateAuthenticatedClientAsync();
 
-        var res = await client.GetAsync("/api/schema/article");
+        var res = await client.GetAsync("/api/schema/fxArticle");
         res.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var body = await res.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
         var data = doc.RootElement.GetProperty("data");
-        data.GetProperty("name").GetString().Should().Be("article");
+        data.GetProperty("name").GetString().Should().Be("fxArticle");
         // SchemaService.WithoutHiddenFields still applies for authenticated callers -- gating schema
         // access only changes anonymous access, it doesn't relax the pre-existing Hidden-field guarantee: the
         // Hidden top-level field (internalNote) and the Hidden+Translatable field (internalSlug) must

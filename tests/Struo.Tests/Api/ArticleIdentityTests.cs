@@ -23,7 +23,7 @@ public class ArticleIdentityTests(ApiFactory factory)
             translations = new { en = new { title = "Hello", body = "World" } }
         };
 
-        var create = await client.PostAsJsonAsync("/api/items/article", body);
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle", body);
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         using var created = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var idStr = created.RootElement.GetProperty("data").GetProperty("id").GetString();
@@ -31,7 +31,7 @@ public class ArticleIdentityTests(ApiFactory factory)
         Guid.TryParse(idStr, out var id).Should().BeTrue();
         id.Version.Should().Be(7);
 
-        var get = await client.GetAsync($"/api/items/article/{idStr}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{idStr}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

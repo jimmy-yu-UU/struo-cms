@@ -16,7 +16,7 @@ namespace Struo.Tests.Api;
 /// inside a request) is the provable, non-overkill check here: it is the exact static AddStruoCms sets,
 /// its effect (every new thread defaults to it) is what actually protects SqlSugar's re-parse of
 /// ConditionalModel.FieldValue, and — unlike issuing a REST filter query — it needs no decimal-typed
-/// field on a real seeded collection (none of the shipped core/sample collections has one).
+/// field on a real seeded collection (none of the collections the test fixtures declare has one).
 /// </summary>
 [Collection("ApiIntegration")]
 public class ProgramCultureTests(ApiFactory factory)

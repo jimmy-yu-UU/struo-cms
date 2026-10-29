@@ -6,7 +6,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -29,16 +29,16 @@ public sealed class TypedOrderBySecurityTests : IDisposable
     public TypedOrderBySecurityTests()
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Tester));
-        _db.CodeFirst.InitTables<Category>();
-        _db.CodeFirst.InitTables<Article>();
-        _db.CodeFirst.InitTables<ArticleTranslation>();
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag) };
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.CodeFirst.InitTables<FxArticle>();
+        _db.CodeFirst.InitTables<FxArticleTranslation>();
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         Seed();
@@ -49,24 +49,24 @@ public sealed class TypedOrderBySecurityTests : IDisposable
 
     private void Seed()
     {
-        var pz = new Category { Id = Guid.CreateVersion7(), Name = "Zeta" };
-        var pa = new Category { Id = Guid.CreateVersion7(), Name = "Alpha" };
-        var c1 = new Category { Id = Guid.CreateVersion7(), Name = "c1", ParentId = pz.Id };
-        var c2 = new Category { Id = Guid.CreateVersion7(), Name = "c2", ParentId = pa.Id };
-        var c3 = new Category { Id = Guid.CreateVersion7(), Name = "c3" };
-        _db.Insertable(new List<Category> { pz, pa, c1, c2, c3 }).ExecuteCommand();
-        _db.Insertable(new List<Article>
+        var pz = new FxCategory { Id = Guid.CreateVersion7(), Name = "Zeta" };
+        var pa = new FxCategory { Id = Guid.CreateVersion7(), Name = "Alpha" };
+        var c1 = new FxCategory { Id = Guid.CreateVersion7(), Name = "c1", ParentId = pz.Id };
+        var c2 = new FxCategory { Id = Guid.CreateVersion7(), Name = "c2", ParentId = pa.Id };
+        var c3 = new FxCategory { Id = Guid.CreateVersion7(), Name = "c3" };
+        _db.Insertable(new List<FxCategory> { pz, pa, c1, c2, c3 }).ExecuteCommand();
+        _db.Insertable(new List<FxArticle>
         {
             new() { Id = _a1, CategoryId = c1.Id, Status = "published" },
             new() { Id = _a2, CategoryId = c2.Id, Status = "published" },
             new() { Id = _a3, CategoryId = null, Status = "draft" },
             new() { Id = _a4, CategoryId = c3.Id, Status = "published" },
         }).ExecuteCommand();
-        _db.Insertable(new List<ArticleTranslation>
+        _db.Insertable(new List<FxArticleTranslation>
         {
-            new() { ArticleId = _a1, Locale = "en", Title = "Charlie" },
-            new() { ArticleId = _a2, Locale = "en", Title = "Alpha" },
-            new() { ArticleId = _a4, Locale = "en", Title = "Bravo" },
+            new() { FxArticleId = _a1, Locale = "en", Title = "Charlie" },
+            new() { FxArticleId = _a2, Locale = "en", Title = "Alpha" },
+            new() { FxArticleId = _a4, Locale = "en", Title = "Bravo" },
         }).ExecuteCommand();
     }
 
@@ -74,7 +74,7 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         new(null, null, fields.Select(f => f.StartsWith('-') ? new SortField(f[1..], true) : new SortField(f, false)).ToList(), 50, 0, null);
 
     private async Task<List<Guid>> Ids(QueryModel q, string? locale = null) =>
-        (await _repo.QueryAsync("article", q, [], locale)).Rows.Select(r => ((Article)r).Id).ToList();
+        (await _repo.QueryAsync("fxArticle", q, [], locale)).Rows.Select(r => ((FxArticle)r).Id).ToList();
 
     [Fact]
     public async Task Translatable_sort_binds_locale_as_parameter()
@@ -94,7 +94,7 @@ public sealed class TypedOrderBySecurityTests : IDisposable
     [InlineData("'")]
     public async Task Hostile_locale_is_inert(string hostile)
     {
-        _db.Insertable(new ArticleTranslation { ArticleId = _a3, Locale = hostile, Title = "Evil" }).ExecuteCommand();
+        _db.Insertable(new FxArticleTranslation { FxArticleId = _a3, Locale = hostile, Title = "Evil" }).ExecuteCommand();
 
         var desc = await Ids(Sorted("-title"), hostile);
         var asc = await Ids(Sorted("title"), hostile);
@@ -119,7 +119,7 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         // NULLs form one contiguous block, tied rows are in PK order.
         var firstNull = ids.IndexOf(nulls[0]);
         ids.Skip(firstNull).Take(2).Should().BeEquivalentTo(nulls);
-        var dbOrder = _db.Queryable<Article>().Where(a => a.Id == _a3 || a.Id == _a4).OrderBy(a => a.Id).Select(a => a.Id).ToList();
+        var dbOrder = _db.Queryable<FxArticle>().Where(a => a.Id == _a3 || a.Id == _a4).OrderBy(a => a.Id).Select(a => a.Id).ToList();
         nulls.Should().Equal(dbOrder);
     }
 
@@ -129,8 +129,8 @@ public sealed class TypedOrderBySecurityTests : IDisposable
         _log.Clear();
         await Ids(Sorted("-id"));
 
-        var idCol = _db.EntityMaintenance.GetDbColumnName<Article>(nameof(Article.Id));
-        var select = _log.Single(l => l.Sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) && l.Sql.Contains("articles"));
+        var idCol = _db.EntityMaintenance.GetDbColumnName<FxArticle>(nameof(FxArticle.Id));
+        var select = _log.Single(l => l.Sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) && l.Sql.Contains("fx_articles"));
         var orderBy = select.Sql[select.Sql.LastIndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase)..];
         System.Text.RegularExpressions.Regex.Count(orderBy, $@"\b{idCol}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             .Should().Be(1);

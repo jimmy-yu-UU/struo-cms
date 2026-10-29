@@ -20,11 +20,11 @@ public class RevisionTrashGateTests(ApiFactory factory)
     private async Task<(HttpClient Admin, string Id)> CreateTrashedArticleAsync(string title)
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
-        var create = await admin.PostAsJsonAsync("/api/items/article",
+        var create = await admin.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        (await admin.DeleteAsync($"/api/items/article/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await admin.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         return (admin, id);
     }
 
@@ -34,8 +34,8 @@ public class RevisionTrashGateTests(ApiFactory factory)
         var (_, id) = await CreateTrashedArticleAsync("TrashGateAnon");
         var anon = _factory.CreateClient();
 
-        (await anon.GetAsync($"/api/items/article/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await anon.GetAsync($"/api/items/article/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await anon.GetAsync($"/api/items/fxArticle/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await anon.GetAsync($"/api/items/fxArticle/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -43,10 +43,10 @@ public class RevisionTrashGateTests(ApiFactory factory)
     {
         var (_, id) = await CreateTrashedArticleAsync("TrashGateReader");
         var (reader, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []);
+            readCollections: ["fxArticle"], writeCollections: []);
 
-        (await reader.GetAsync($"/api/items/article/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await reader.GetAsync($"/api/items/article/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/items/fxArticle/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/items/fxArticle/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -54,17 +54,17 @@ public class RevisionTrashGateTests(ApiFactory factory)
     {
         var (admin, id) = await CreateTrashedArticleAsync("TrashGateAdmin");
 
-        var list = await admin.GetAsync($"/api/items/article/{id}/revisions");
+        var list = await admin.GetAsync($"/api/items/fxArticle/{id}/revisions");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await list.Content.ReadAsStringAsync()).GetProperty("data").GetArrayLength().Should().BeGreaterThan(0);
-        (await admin.GetAsync($"/api/items/article/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await admin.GetAsync($"/api/items/fxArticle/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task Unknown_id_is_404_on_the_revision_list()
     {
         var anon = _factory.CreateClient();
-        var resp = await anon.GetAsync($"/api/items/article/{Guid.CreateVersion7()}/revisions");
+        var resp = await anon.GetAsync($"/api/items/fxArticle/{Guid.CreateVersion7()}/revisions");
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -72,14 +72,14 @@ public class RevisionTrashGateTests(ApiFactory factory)
     public async Task Live_item_revisions_stay_readable_by_a_reader()
     {
         var admin = await _factory.CreateAuthenticatedClientAsync();
-        var create = await admin.PostAsJsonAsync("/api/items/article",
+        var create = await admin.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "TrashGateLive" } } });
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
         var (reader, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []);
+            readCollections: ["fxArticle"], writeCollections: []);
 
-        (await reader.GetAsync($"/api/items/article/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.OK);
-        (await reader.GetAsync($"/api/items/article/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/items/fxArticle/{id}/revisions")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await reader.GetAsync($"/api/items/fxArticle/{id}/revisions/1")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -89,15 +89,15 @@ public class RevisionTrashGateTests(ApiFactory factory)
         var anon = _factory.CreateClient();
 
         var list = await anon.PostAsJsonAsync("/graphql",
-            new { query = $"{{ articleRevisions(id: \"{id}\") {{ revisionNumber }} }}" });
+            new { query = $"{{ fxArticleRevisions(id: \"{id}\") {{ revisionNumber }} }}" });
         var listRoot = Root(await list.Content.ReadAsStringAsync());
         listRoot.TryGetProperty("errors", out _).Should().BeFalse();
-        listRoot.GetProperty("data").GetProperty("articleRevisions").GetArrayLength().Should().Be(0);
+        listRoot.GetProperty("data").GetProperty("fxArticleRevisions").GetArrayLength().Should().Be(0);
 
         var single = await anon.PostAsJsonAsync("/graphql",
-            new { query = $"{{ articleRevision(id: \"{id}\", revisionNumber: 1) {{ revisionNumber }} }}" });
+            new { query = $"{{ fxArticleRevision(id: \"{id}\", revisionNumber: 1) {{ revisionNumber }} }}" });
         var singleRoot = Root(await single.Content.ReadAsStringAsync());
         singleRoot.TryGetProperty("errors", out _).Should().BeFalse();
-        singleRoot.GetProperty("data").GetProperty("articleRevision").ValueKind.Should().Be(JsonValueKind.Null);
+        singleRoot.GetProperty("data").GetProperty("fxArticleRevision").ValueKind.Should().Be(JsonValueKind.Null);
     }
 }

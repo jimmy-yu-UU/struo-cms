@@ -42,7 +42,7 @@ Type-checks (`vue-tsc -b`) and produces a production bundle in `dist/`.
 
 ```bash
 pnpm e2e         # core project: framework-only specs
-pnpm e2e:sample  # sample project: requires the Blog sample opted in
+pnpm e2e:sample  # sample project: requires the Blog sample opted in; absent once e2e/sample/ is deleted
 pnpm e2e:all     # both
 ```
 

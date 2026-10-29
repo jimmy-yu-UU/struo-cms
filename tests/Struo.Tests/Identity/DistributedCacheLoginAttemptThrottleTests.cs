@@ -12,7 +12,7 @@ namespace Struo.Tests.Identity;
 
 // Unit-level coverage of DistributedCacheLoginAttemptThrottle against a real MemoryDistributedCache
 // (not a mock) — this class's whole job is a read/write contract against IDistributedCache, so a mock
-// would only assert what the mock was told to return. tests/Struo.Tests/Api/LoginAccountThrottleTests
+// would only assert what the mock was told to return. tests/Struo.Tests/Api/LoginAccountThrottleTests.cs
 // covers the same mechanism wired through AuthController/the real HTTP pipeline instead.
 public class DistributedCacheLoginAttemptThrottleTests
 {

@@ -56,7 +56,7 @@ public class SessionCookieNameTests(ApiFactory factory)
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
 
         // Signed in under the custom name and no CSRF header: the guard must fire.
-        var forged = await client.PostAsJsonAsync("/api/items/article", ArticleBody);
+        var forged = await client.PostAsJsonAsync("/api/items/fxArticle", ArticleBody);
 
         forged.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -64,8 +64,8 @@ public class SessionCookieNameTests(ApiFactory factory)
     [Fact]
     public async Task Session_rotation_follows_the_configured_name()
     {
-        var (emailA, passwordA, _) = await factory.SeedEditorAsync(["article"], []);
-        var (emailB, passwordB, idB) = await factory.SeedEditorAsync(["article"], []);
+        var (emailA, passwordA, _) = await factory.SeedEditorAsync(["fxArticle"], []);
+        var (emailB, passwordB, idB) = await factory.SeedEditorAsync(["fxArticle"], []);
         using var client = CustomNameClient(handleCookies: false);
         client.DefaultRequestHeaders.Add(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName, "1");
 
@@ -99,7 +99,7 @@ public class SessionCookieNameTests(ApiFactory factory)
     public async Task A_cookie_under_the_old_name_is_not_a_session_cookie_any_more()
     {
         using var client = CustomNameClient(handleCookies: false);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/article")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/fxArticle")
         {
             Content = JsonContent.Create(ArticleBody),
         };

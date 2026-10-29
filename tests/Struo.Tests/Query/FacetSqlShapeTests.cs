@@ -7,7 +7,7 @@ using Struo.Application.Configuration;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -21,8 +21,8 @@ public class FacetSqlShapeTests : IDisposable
     public FacetSqlShapeTests()
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        _db.CodeFirst.InitTables<Category>();
-        _db.CodeFirst.InitTables<ArticleTag>();
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.CodeFirst.InitTables<FxArticleTag>();
     }
 
     public void Dispose() { _file.Dispose(); GC.SuppressFinalize(this); }
@@ -31,7 +31,7 @@ public class FacetSqlShapeTests : IDisposable
     private string Col<T>(string property) where T : class, new() =>
         Quoted<T>(_db.EntityMaintenance.GetDbColumnName<T>(property));
 
-    private string Alias(string name) => Quoted<Category>(name);
+    private string Alias(string name) => Quoted<FxCategory>(name);
 
     private string Table<T>() where T : class, new() =>
         Regex.Escape(_db.Queryable<T>().QueryBuilder.Builder.GetTranslationTableName(_db.EntityMaintenance.GetTableName<T>()));
@@ -56,14 +56,14 @@ public class FacetSqlShapeTests : IDisposable
         var a = Guid.NewGuid();
         _db.Insertable(new[]
         {
-            new Category { Id = a, Name = "A" }, new Category { Id = Guid.NewGuid(), Name = "B", ParentId = a },
-            new Category { Id = Guid.NewGuid(), Name = "C", ParentId = a }, new Category { Id = Guid.NewGuid(), Name = "D" },
+            new FxCategory { Id = a, Name = "A" }, new FxCategory { Id = Guid.NewGuid(), Name = "B", ParentId = a },
+            new FxCategory { Id = Guid.NewGuid(), Name = "C", ParentId = a }, new FxCategory { Id = Guid.NewGuid(), Name = "D" },
         }).ExecuteCommand();
 
-        var q = Facet<Category, Guid?>(_db.Queryable<Category>(), "ParentId", "Id", distinct: false, take: 10);
+        var q = Facet<FxCategory, Guid?>(_db.Queryable<FxCategory>(), "ParentId", "Id", distinct: false, take: 10);
         var sql = q.ToSql().Key;
-        var parentId = Col<Category>("ParentId");
-        var id = Col<Category>("Id");
+        var parentId = Col<FxCategory>("ParentId");
+        var id = Col<FxCategory>("Id");
         sql.Should().MatchRegex($@"GROUP BY\s+{parentId}");
         sql.Should().MatchRegex($@"COUNT\({id}\)\s+AS\s+{Alias("Count")}");
         sql.Should().MatchRegex($@"ORDER BY\s+COUNT\({id}\)\s+DESC,\s*{parentId}\s+ASC");
@@ -80,13 +80,13 @@ public class FacetSqlShapeTests : IDisposable
         var a1 = Guid.NewGuid(); var a2 = Guid.NewGuid(); var t1 = Guid.NewGuid(); var t2 = Guid.NewGuid();
         _db.Insertable(new[]
         {
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a1, TagId = t1, Sort = 1 },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a1, TagId = t2, Sort = 2 },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = a2, TagId = t1, Sort = 3 },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a1, TagId = t1, Sort = 1 },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a1, TagId = t2, Sort = 2 },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = a2, TagId = t1, Sort = 3 },
         }).ExecuteCommand();
 
-        var q = Facet<ArticleTag, Guid>(_db.Queryable<ArticleTag>(), "TagId", "ArticleId", distinct: true, take: 10);
-        q.ToSql().Key.Should().MatchRegex($@"COUNT\(DISTINCT\s+{Col<ArticleTag>("ArticleId")}\s*\)\s+AS\s+{Alias("Count")}");
+        var q = Facet<FxArticleTag, Guid>(_db.Queryable<FxArticleTag>(), "TagId", "ArticleId", distinct: true, take: 10);
+        q.ToSql().Key.Should().MatchRegex($@"COUNT\(DISTINCT\s+{Col<FxArticleTag>("ArticleId")}\s*\)\s+AS\s+{Alias("Count")}");
         var rows = q.ToList();
         rows[0].Value.Should().Be(t1); rows[0].Count.Should().Be(2);
         rows[1].Value.Should().Be(t2); rows[1].Count.Should().Be(1);
@@ -95,8 +95,8 @@ public class FacetSqlShapeTests : IDisposable
     [Fact]
     public void Take_limits_the_number_of_buckets()
     {
-        _db.Insertable(new[] { new Category { Id = Guid.NewGuid(), Name = "A" }, new Category { Id = Guid.NewGuid(), Name = "B" }, new Category { Id = Guid.NewGuid(), Name = "C" } }).ExecuteCommand();
-        var rows = Facet<Category, string>(_db.Queryable<Category>(), "Name", "Id", false, take: 2).ToList();
+        _db.Insertable(new[] { new FxCategory { Id = Guid.NewGuid(), Name = "A" }, new FxCategory { Id = Guid.NewGuid(), Name = "B" }, new FxCategory { Id = Guid.NewGuid(), Name = "C" } }).ExecuteCommand();
+        var rows = Facet<FxCategory, string>(_db.Queryable<FxCategory>(), "Name", "Id", false, take: 2).ToList();
         rows.Select(r => r.Value).Should().Equal("A", "B");
     }
 
@@ -104,13 +104,13 @@ public class FacetSqlShapeTests : IDisposable
     public void Facet_composes_with_a_subquery_wrapped_root_condition()
     {
         var a = Guid.NewGuid();
-        _db.Insertable(new[] { new Category { Id = a, Name = "A" }, new Category { Id = Guid.NewGuid(), Name = "B", ParentId = a }, new Category { Id = Guid.NewGuid(), Name = "D" } }).ExecuteCommand();
-        var sub = _db.Queryable<Category>()
+        _db.Insertable(new[] { new FxCategory { Id = a, Name = "A" }, new FxCategory { Id = Guid.NewGuid(), Name = "B", ParentId = a }, new FxCategory { Id = Guid.NewGuid(), Name = "D" } }).ExecuteCommand();
+        var sub = _db.Queryable<FxCategory>()
             .Where(new List<IConditionalModel> { new ConditionalModel { FieldName = "Name", ConditionalType = ConditionalType.Equal, FieldValue = "A" } })
-            .Select((Expression<Func<Category, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(Category), "Id")).ToSql();
-        var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, _db.EntityMaintenance.GetDbColumnName<Category>("ParentId"), sub);
-        var q = Facet<Category, string>(_db.Queryable<Category>().Where(new List<IConditionalModel> { wrapped }), "Name", "Id", false, 10);
-        q.ToSql().Key.Should().MatchRegex($@"IN \(SELECT {Col<Category>("Id")} FROM {Table<Category>()}");
+            .Select((Expression<Func<FxCategory, Guid>>)ColumnSelectorFactory.TypedSelector(typeof(FxCategory), "Id")).ToSql();
+        var wrapped = SubQueryConditional.Wrap(SubQueryKind.In, _db.EntityMaintenance.GetDbColumnName<FxCategory>("ParentId"), sub);
+        var q = Facet<FxCategory, string>(_db.Queryable<FxCategory>().Where(new List<IConditionalModel> { wrapped }), "Name", "Id", false, 10);
+        q.ToSql().Key.Should().MatchRegex($@"IN \(SELECT {Col<FxCategory>("Id")} FROM {Table<FxCategory>()}");
         q.ToList().Select(r => r.Value).Should().Equal("B");
     }
 
@@ -119,22 +119,22 @@ public class FacetSqlShapeTests : IDisposable
     {
         _db.Insertable(new[]
         {
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 1, Note = "x" },
-            new ArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 4, Note = null },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 1, Note = "x" },
+            new FxArticleTag { Id = Guid.NewGuid(), ArticleId = Guid.NewGuid(), TagId = Guid.NewGuid(), Sort = 4, Note = null },
         }).ExecuteCommand();
-        var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
+        var proj = (Expression<Func<FxArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(FxArticleTag),
             [(AggregateOp.Sum, "Sort"), (AggregateOp.Min, "Sort"), (AggregateOp.Max, "Sort"), (AggregateOp.Avg, "Sort"), (AggregateOp.Count, "Note")],
             SqlServerIntegerAggregates);
-        var q = _db.Queryable<ArticleTag>().Select(proj);
+        var q = _db.Queryable<FxArticleTag>().Select(proj);
         var sql = q.ToSql().Key;
-        var sort = Col<ArticleTag>("Sort");
+        var sort = Col<FxArticleTag>("Sort");
         var summed = SqlServerIntegerAggregates ? $@"\s*CAST\({sort} AS BIGINT\)\s*" : sort;
         sql.Should().MatchRegex($@"SUM\({summed}\)\s+AS\s+{Alias("V0")}");
         sql.Should().MatchRegex($@"MIN\({sort}\)\s+AS\s+{Alias("V1")}");
         sql.Should().MatchRegex($@"MAX\({sort}\)\s+AS\s+{Alias("V2")}");
         var averaged = SqlServerIntegerAggregates ? $@"\s*CAST\({sort} AS FLOAT\)\s*" : sort;
         sql.Should().MatchRegex($@"AVG\({averaged}\)\s+AS\s+{Alias("V3")}");
-        sql.Should().MatchRegex($@"COUNT\({Col<ArticleTag>("Note")}\)\s+AS\s+{Alias("V4")}");
+        sql.Should().MatchRegex($@"COUNT\({Col<FxArticleTag>("Note")}\)\s+AS\s+{Alias("V4")}");
         var r = q.First()!;
         Convert.ToInt64(r.V0).Should().Be(5);
         Convert.ToInt64(r.V4).Should().Be(1);
@@ -176,9 +176,9 @@ public class FacetSqlShapeTests : IDisposable
     [Fact]
     public void Aggregate_over_an_empty_set_returns_nulls_and_zero_count()
     {
-        var proj = (Expression<Func<ArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag),
+        var proj = (Expression<Func<FxArticleTag, AggregateRow>>)ColumnSelectorFactory.AggregateProjection(typeof(FxArticleTag),
             [(AggregateOp.Sum, "Sort"), (AggregateOp.Count, "Note")], false);
-        var r = _db.Queryable<ArticleTag>().Select(proj).First()!;
+        var r = _db.Queryable<FxArticleTag>().Select(proj).First()!;
         r.V0.Should().BeNull();
         Convert.ToInt64(r.V1).Should().Be(0);
     }
@@ -187,11 +187,11 @@ public class FacetSqlShapeTests : IDisposable
     public void Aggregate_projection_rejects_more_than_ten_slots()
     {
         var slots = Enumerable.Range(0, 11).Select(_ => (AggregateOp.Count, "Sort")).ToList();
-        var act = () => ColumnSelectorFactory.AggregateProjection(typeof(ArticleTag), slots, false);
+        var act = () => ColumnSelectorFactory.AggregateProjection(typeof(FxArticleTag), slots, false);
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
-    // Category is [SugarTable("categories")] with no per-column [SugarColumn(Name=...)] override, so
+    // FxCategory is [SugarTable("fx_categories")] with no per-column [SugarColumn(Name=...)] override, so
     // SqlSugar's default SELECT lists every mapped property by its own name — including the literal
     // column "DeletedAt" — regardless of DeletedFilter. That means "does the rendered SQL contain the
     // substring DeletedAt" can never distinguish the three scopes; the actual scope-defining signal is
@@ -200,10 +200,10 @@ public class FacetSqlShapeTests : IDisposable
     [Fact]
     public void DeletedScope_only_adds_the_deleted_at_guard_and_lifts_the_global_filter()
     {
-        var exclude = DeletedScope.Root<Category>(_db, [], DeletedFilter.Exclude).ToSql().Key;
-        var with = DeletedScope.Root<Category>(_db, [], DeletedFilter.With).ToSql().Key;
-        var only = DeletedScope.Root<Category>(_db, [], DeletedFilter.Only).ToSql().Key;
-        var deletedAt = Col<Category>("DeletedAt");
+        var exclude = DeletedScope.Root<FxCategory>(_db, [], DeletedFilter.Exclude).ToSql().Key;
+        var with = DeletedScope.Root<FxCategory>(_db, [], DeletedFilter.With).ToSql().Key;
+        var only = DeletedScope.Root<FxCategory>(_db, [], DeletedFilter.Only).ToSql().Key;
+        var deletedAt = Col<FxCategory>("DeletedAt");
         exclude.Should().MatchRegex($@"{deletedAt}\s+IS\s+NULL");
         with.Should().NotMatchRegex($@"{deletedAt}\s+IS\s+(NOT\s+)?NULL");
         only.Should().MatchRegex($@"{deletedAt}\s+IS\s+NOT\s+NULL");

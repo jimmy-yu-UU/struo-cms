@@ -38,8 +38,8 @@ public class StartsWithEndsWithFilterTests(ApiFactory factory)
         // Under the pre-fix swapped mapping (_starts_with => LikeRight = %value), this
         // would instead match suffixRow (which does end with the token) and the
         // assertion below would fail.
-        var prefixRow = await Post(c, "category", new { name = $"{token}-prefix-row" });
-        var suffixRow = await Post(c, "category", new { name = $"suffix-row-{token}" });
+        var prefixRow = await Post(c, "fxCategory", new { name = $"{token}-prefix-row" });
+        var suffixRow = await Post(c, "fxCategory", new { name = $"suffix-row-{token}" });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -49,7 +49,7 @@ public class StartsWithEndsWithFilterTests(ApiFactory factory)
                 name = new Dictionary<string, object> { ["_starts_with"] = token }
             }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
 
@@ -66,8 +66,8 @@ public class StartsWithEndsWithFilterTests(ApiFactory factory)
         // Under the pre-fix swapped mapping (_ends_with => LikeLeft = value%), this
         // would instead match prefixRow (which does start with the token) and the
         // assertion below would fail.
-        var prefixRow = await Post(c, "category", new { name = $"{token}-prefix-row" });
-        var suffixRow = await Post(c, "category", new { name = $"suffix-row-{token}" });
+        var prefixRow = await Post(c, "fxCategory", new { name = $"{token}-prefix-row" });
+        var suffixRow = await Post(c, "fxCategory", new { name = $"suffix-row-{token}" });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
@@ -77,7 +77,7 @@ public class StartsWithEndsWithFilterTests(ApiFactory factory)
                 name = new Dictionary<string, object> { ["_ends_with"] = token }
             }
         });
-        var resp = await c.PostAsJsonAsync("/api/items/category/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
 

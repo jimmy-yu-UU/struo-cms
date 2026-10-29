@@ -51,26 +51,26 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
 
         var put1 = await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions", new[]
         {
-            new { collection = "article", canRead = true, canWrite = true, canDelete = false },
-            new { collection = "tag", canRead = true, canWrite = false, canDelete = false },
+            new { collection = "fxArticle", canRead = true, canWrite = true, canDelete = false },
+            new { collection = "fxTag", canRead = true, canWrite = false, canDelete = false },
         });
         put1.IsSuccessStatusCode.Should().BeTrue($"PUT failed: {await put1.Content.ReadAsStringAsync()}");
 
         var got = await admin.GetFromJsonAsync<JsonElement>($"/api/roles/{roleId}/permissions");
         Entries(got.GetProperty("data")).Should().BeEquivalentTo(
         [
-            ("article", true, true, false),
-            ("tag", true, false, false),
+            ("fxArticle", true, true, false),
+            ("fxTag", true, false, false),
         ]);
 
         // Replace: tag vanishes; category comes in all-false and must not be stored.
         await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions", new[]
         {
-            new { collection = "article", canRead = true, canWrite = false, canDelete = false },
-            new { collection = "category", canRead = false, canWrite = false, canDelete = false },
+            new { collection = "fxArticle", canRead = true, canWrite = false, canDelete = false },
+            new { collection = "fxCategory", canRead = false, canWrite = false, canDelete = false },
         });
         var after = await admin.GetFromJsonAsync<JsonElement>($"/api/roles/{roleId}/permissions");
-        Entries(after.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
+        Entries(after.GetProperty("data")).Should().BeEquivalentTo([("fxArticle", true, false, false)]);
     }
 
     [Fact]
@@ -79,14 +79,14 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var roleId = await CreateRoleAsync(admin);
         await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions",
-            new[] { new { collection = "article", canRead = true, canWrite = false, canDelete = false } });
+            new[] { new { collection = "fxArticle", canRead = true, canWrite = false, canDelete = false } });
 
         var bad = await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions",
             new[] { new { collection = "no-such-collection", canRead = true, canWrite = false, canDelete = false } });
         bad.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         var got = await admin.GetFromJsonAsync<JsonElement>($"/api/roles/{roleId}/permissions");
-        Entries(got.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
+        Entries(got.GetProperty("data")).Should().BeEquivalentTo([("fxArticle", true, false, false)]);
     }
 
     // Grants are stored under the canonical collection name regardless of
@@ -97,11 +97,11 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var roleId = await CreateRoleAsync(admin);
         var put = await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions",
-            new[] { new { collection = "ARTICLE", canRead = true, canWrite = false, canDelete = false } });
+            new[] { new { collection = "FXARTICLE", canRead = true, canWrite = false, canDelete = false } });
         put.IsSuccessStatusCode.Should().BeTrue($"PUT failed: {await put.Content.ReadAsStringAsync()}");
 
         var got = await admin.GetFromJsonAsync<JsonElement>($"/api/roles/{roleId}/permissions");
-        Entries(got.GetProperty("data")).Should().BeEquivalentTo([("article", true, false, false)]);
+        Entries(got.GetProperty("data")).Should().BeEquivalentTo([("fxArticle", true, false, false)]);
     }
 
     [Fact]
@@ -111,8 +111,8 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
         var roleId = await CreateRoleAsync(admin);
         var bad = await admin.PutAsJsonAsync($"/api/roles/{roleId}/permissions", new[]
         {
-            new { collection = "article", canRead = true, canWrite = false, canDelete = false },
-            new { collection = "Article", canRead = false, canWrite = true, canDelete = false },
+            new { collection = "fxArticle", canRead = true, canWrite = false, canDelete = false },
+            new { collection = "FxArticle", canRead = false, canWrite = true, canDelete = false },
         });
         bad.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

@@ -36,8 +36,8 @@ secret `SONAR_TOKEN`。變數與 secret 都在儲存庫的 Settings → Secrets 
 
 ## 4. `samples/Struo.Sample.Blog`：刪掉
 
-`samples/Struo.Sample.Blog` 是學習用的範例，不是你的專案的一部分。看完就刪；它不只是一個目錄，
-測試專案也拿它的集合當 fixture，所以要按清單清乾淨。完整步驟在
+`samples/Struo.Sample.Blog` 是學習用的範例，不是你的專案的一部分。看完就刪；它附帶自己的測試專案，
+solution 檔與 `frontend/e2e/sample/` 的規格也都指向它，所以要按清單清乾淨。`tests/` 不用動。完整步驟在
 [第 23 章：範例專案導覽](23-sample-walkthrough.md)的〈完全移除範例〉。
 
 ## 5. `SECURITY.md`：換成自己的回報管道

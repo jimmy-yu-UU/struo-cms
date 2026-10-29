@@ -14,8 +14,8 @@ namespace Struo.Tests.Api;
 /// unlike <see cref="Struo.Application.Query.Projection.ItemProjector"/> (guards top-level fields) and
 /// <see cref="Struo.Application.Query.RevisionSnapshotRedactor"/> (guards revision snapshots). This is
 /// the third and last leak in the "Hidden field never reaches an external caller" guarantee family.
-/// Article's <c>internalSlug</c> (Hidden + Translatable, on <c>ArticleTranslation</c>) is the existing
-/// existing fixture, reused here for the plain REST item-read path (GET /api/items/article/{id}), which
+/// FxArticle's <c>internalSlug</c> (Hidden + Translatable, on <c>FxArticleTranslation</c>) is the
+/// fixture, reused here for the plain REST item-read path (GET /api/items/fxArticle/{id}), which
 /// goes through <c>ItemService.GetAsync</c> -> <c>ItemProjector.Project</c> -> <c>TranslationOverlay.ApplyAsync</c>.
 /// </summary>
 [Collection("ApiIntegration")]
@@ -30,7 +30,7 @@ public class TranslationOverlayHiddenFieldTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 
-        var create = await client.PostAsJsonAsync("/api/items/article", new
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             translations = new Dictionary<string, object>
@@ -42,7 +42,7 @@ public class TranslationOverlayHiddenFieldTests(ApiFactory factory)
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         get.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await get.Content.ReadAsStringAsync();
 
@@ -69,7 +69,7 @@ public class TranslationOverlayHiddenFieldTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 
-        var create = await client.PostAsJsonAsync("/api/items/article", new
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             translations = new Dictionary<string, object>
@@ -81,7 +81,7 @@ public class TranslationOverlayHiddenFieldTests(ApiFactory factory)
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
-        var list = await client.GetAsync($"/api/items/article?filter[id][_eq]={id}");
+        var list = await client.GetAsync($"/api/items/fxArticle?filter[id][_eq]={id}");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await list.Content.ReadAsStringAsync();
 

@@ -12,8 +12,8 @@
 @plugin "@tailwindcss/typography";
 
 /* shadcn defaults to `.dark`; this app has always toggled `.app-dark` and persists it in
-   localStorage['struo.theme'] (src/theme/resolveInitialTheme.ts). Re-point the variant
-   rather than renaming the class — the class name is load-bearing for e2e and for the
+   localStorage['struo.theme'] (frontend/src/theme/resolveInitialTheme.ts). Re-point the
+   variant rather than renaming the class — the class name is load-bearing for e2e and for the
    first-paint script that runs before Vue mounts. */
 @custom-variant dark (&:is(.app-dark *));
 
@@ -160,9 +160,9 @@
      element. That is what produced a foreground-coloured line down the sidebar (#111827 in
      light, #fafafa in dark) instead of a subtle border. This is Tailwind's own documented v4
      upgrade shim: restore a sane default so every OTHER bare border utility across
-     src/components/ui/ (read-only, can't be edited directly) gets one too. Utility classes that
-     DO specify a colour (`border-destructive`, `border-input`, ...) still win — they live in
-     Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
+     frontend/src/components/ui/ (read-only, can't be edited directly) gets one too. Utility
+     classes that DO specify a colour (`border-destructive`, `border-input`, ...) still win — they
+     live in Tailwind's `utilities` layer, which the cascade always ranks above `base`. */
   *,
   ::before,
   ::after,

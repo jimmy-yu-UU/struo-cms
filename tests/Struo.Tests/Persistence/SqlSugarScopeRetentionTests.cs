@@ -17,7 +17,7 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
 {
     private const int Requests = 2000;
     private const string MultiRootQuery =
-        "{ articles { items { id } } categories { items { id } } tags { items { id } } }";
+        "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
 
     [Fact]
     public void ISqlSugarClient_is_one_instance_for_the_whole_host()
@@ -38,10 +38,10 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
         using var anon = factory.CreateClient();
         var requests = new Func<Task<HttpResponseMessage>>[]
         {
-            () => admin.GetAsync("/api/items/category"),
+            () => admin.GetAsync("/api/items/fxCategory"),
             () => admin.PostAsJsonAsync("/graphql", new { query = MultiRootQuery }),
             () => anon.GetAsync("/health/ready"),
-            () => anon.GetAsync("/api/items/article"),
+            () => anon.GetAsync("/api/items/fxArticle"),
         };
         await Drive(requests, 40);
         var (asyncBefore, threadBefore) = (SqlSugarStaticContext.AsyncKeys, SqlSugarStaticContext.ThreadKeys);

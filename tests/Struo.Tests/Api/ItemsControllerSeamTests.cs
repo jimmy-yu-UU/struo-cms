@@ -89,13 +89,13 @@ public class ItemsControllerSeamTests
             }
         };
 
-        var result = await controller.List("article", CancellationToken.None);
+        var result = await controller.List("fxArticle", CancellationToken.None);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var envelope = ok.Value.Should().BeOfType<Struo.Api.Http.PagedResult>().Subject;
         envelope.Total.Should().Be(1);
         envelope.Limit.Should().Be(25);
         envelope.Offset.Should().Be(0);
-        useCases.LastCollection.Should().Be("article");
+        useCases.LastCollection.Should().Be("fxArticle");
     }
 }

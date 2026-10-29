@@ -97,7 +97,7 @@ public class FacetFilterPrunerTests
         FacetFilterPruner.Prune(f, CategoryIdFacet).Should().BeSameAs(f);
     }
 
-    // Mirrors the sample Category collection: a ManyToOne "parent" (FK "parentId") and a OneToMany
+    // Mirrors the fixture FxCategory collection: a ManyToOne "parent" (FK "parentId") and a OneToMany
     // "children" whose ForeignKey also happens to be "parentId" (the child's reverse-FK column, per
     // MetadataScanner) — the two relations share an FK string but only the ManyToOne one names a
     // root-level column.

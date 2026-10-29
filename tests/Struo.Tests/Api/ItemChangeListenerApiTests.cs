@@ -48,18 +48,18 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     {
         var (client, a, b) = await HostAsync();
 
-        var created = await client.PostAsJsonAsync("/api/items/category",
+        var created = await client.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "u5b-" + Guid.NewGuid().ToString("N")[..8] });
         created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var id = await IdOf(created);
         foreach (var l in new[] { a, b })
             l.Calls.Should().ContainSingle()
                 .Which.Should().ContainSingle()
-                .Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Created));
+                .Which.Should().Be(new ItemChange("fxCategory", id, ItemChangeKind.Created));
 
         a.Calls.Clear();
         b.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/category/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxCategory/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         a.Calls.Should().ContainSingle();
         b.Calls.Should().ContainSingle();
         a.All.Should().ContainSingle().Which.Kind.Should().Be(ItemChangeKind.Trashed);
@@ -67,11 +67,11 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
 
         a.Calls.Clear();
         b.Calls.Clear();
-        (await client.DeleteAsync($"/api/items/category/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/items/fxCategory/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         a.Calls.Should().ContainSingle();
         b.Calls.Should().ContainSingle();
-        a.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Purged));
-        b.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Purged));
+        a.All.Should().ContainSingle().Which.Should().Be(new ItemChange("fxCategory", id, ItemChangeKind.Purged));
+        b.All.Should().ContainSingle().Which.Should().Be(new ItemChange("fxCategory", id, ItemChangeKind.Purged));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     {
         var (client, a, b) = await HostAsync();
 
-        var created = await client.PostAsJsonAsync("/api/items/category",
+        var created = await client.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "u5b-gql-" + Guid.NewGuid().ToString("N")[..8] });
         created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var id = await IdOf(created);
@@ -87,15 +87,15 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
         b.Calls.Clear();
 
         var r = await client.PostAsJsonAsync("/graphql",
-            new { query = $$"""mutation { deleteCategory(id: "{{id}}") }""" });
+            new { query = $$"""mutation { deleteFxCategory(id: "{{id}}") }""" });
         r.StatusCode.Should().Be(HttpStatusCode.OK, await r.Content.ReadAsStringAsync());
         var root = JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
         root.TryGetProperty("errors", out _).Should().BeFalse(root.GetRawText());
 
         a.Calls.Should().ContainSingle();
         b.Calls.Should().ContainSingle();
-        a.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Trashed));
-        b.All.Should().ContainSingle().Which.Should().Be(new ItemChange("category", id, ItemChangeKind.Trashed));
+        a.All.Should().ContainSingle().Which.Should().Be(new ItemChange("fxCategory", id, ItemChangeKind.Trashed));
+        b.All.Should().ContainSingle().Which.Should().Be(new ItemChange("fxCategory", id, ItemChangeKind.Trashed));
     }
 
     // Proves DI actually injects the notifier into FileService: it is registered in AddStruoFiles(),
@@ -131,7 +131,7 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
         (await client.PostAsJsonAsync("/api/auth/login",
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
 
-        var created = await client.PostAsJsonAsync("/api/items/category",
+        var created = await client.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "u5b-bad-" + Guid.NewGuid().ToString("N")[..8] });
         created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         bad.Calls.Should().ContainSingle();

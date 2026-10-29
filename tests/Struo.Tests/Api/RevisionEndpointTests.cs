@@ -18,7 +18,7 @@ public class RevisionEndpointTests(ApiFactory factory)
 
     private static async Task<string> CreateArticleAsync(HttpClient client, string title, string status = "draft")
     {
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status, translations = new { en = new { title } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         return Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
@@ -30,12 +30,12 @@ public class RevisionEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateArticleAsync(client, "RevisionRoundTrip", status: "draft"); // rev 1: create, status=draft
 
-        var put = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", translations = new { en = new { title = "RevisionRoundTrip" } } });
         put.StatusCode.Should().Be(HttpStatusCode.OK); // rev 2: update, status=published
 
         // List is newest-first: [update, create].
-        var list1 = await client.GetAsync($"/api/items/article/{id}/revisions");
+        var list1 = await client.GetAsync($"/api/items/fxArticle/{id}/revisions");
         list1.StatusCode.Should().Be(HttpStatusCode.OK);
         var data1 = Root(await list1.Content.ReadAsStringAsync()).GetProperty("data");
         data1.GetArrayLength().Should().Be(2);
@@ -45,7 +45,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         data1[1].GetProperty("revisionNumber").GetInt64().Should().Be(1);
 
         // Get revision 1 -> structured snapshot (not a quoted string) reflecting the draft state.
-        var rev1 = await client.GetAsync($"/api/items/article/{id}/revisions/1");
+        var rev1 = await client.GetAsync($"/api/items/fxArticle/{id}/revisions/1");
         rev1.StatusCode.Should().Be(HttpStatusCode.OK);
         var rev1Data = Root(await rev1.Content.ReadAsStringAsync()).GetProperty("data");
         rev1Data.GetProperty("operation").GetString().Should().Be("create");
@@ -54,31 +54,31 @@ public class RevisionEndpointTests(ApiFactory factory)
         snapshot.GetProperty("status").GetString().Should().Be("draft");
 
         // Revert to rev 1 -> current item reflects the draft snapshot again.
-        var revert = await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null);
+        var revert = await client.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
         revert.StatusCode.Should().Be(HttpStatusCode.OK);
         Root(await revert.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
             .Should().Be("draft");
 
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         Root(await get.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
             .Should().Be("draft");
 
         // Revert appends a new revision (append-only) -> now 3, newest "revert".
-        var list2 = await client.GetAsync($"/api/items/article/{id}/revisions");
+        var list2 = await client.GetAsync($"/api/items/fxArticle/{id}/revisions");
         var data2 = Root(await list2.Content.ReadAsStringAsync()).GetProperty("data");
         data2.GetArrayLength().Should().Be(3);
         data2[0].GetProperty("operation").GetString().Should().Be("revert");
         data2[0].GetProperty("revisionNumber").GetInt64().Should().Be(3);
     }
 
-    /// <summary>The REST revision-get endpoint must not leak Article's Hidden own-field
+    /// <summary>The REST revision-get endpoint must not leak FxArticle's Hidden own-field
     /// (<c>internalNote</c>) or its Hidden+Translatable field (<c>internalSlug</c>, nested under every
     /// <c>translations.{locale}</c>), even though both were captured in full by the snapshot builder.</summary>
     [Fact]
     public async Task Get_revision_redacts_hidden_fields()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var create = await client.PostAsJsonAsync("/api/items/article", new
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             internalNote = "secret-token",
@@ -91,7 +91,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
-        var rev1 = await client.GetAsync($"/api/items/article/{id}/revisions/1");
+        var rev1 = await client.GetAsync($"/api/items/fxArticle/{id}/revisions/1");
         rev1.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await rev1.Content.ReadAsStringAsync();
         body.Should().NotContain("secret-token");
@@ -113,14 +113,14 @@ public class RevisionEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateArticleAsync(client, "RevisionSourceRoundTrip", status: "draft"); // rev 1
 
-        var put = await client.PutAsJsonAsync($"/api/items/article/{id}",
+        var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", translations = new { en = new { title = "RevisionSourceRoundTrip" } } });
         put.StatusCode.Should().Be(HttpStatusCode.OK); // rev 2: update, status=published
 
-        var revert = await client.PostAsync($"/api/items/article/{id}/revisions/1/revert", null);
+        var revert = await client.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
         revert.StatusCode.Should().Be(HttpStatusCode.OK); // rev 3: revert to 1
 
-        var list = await client.GetAsync($"/api/items/article/{id}/revisions");
+        var list = await client.GetAsync($"/api/items/fxArticle/{id}/revisions");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await list.Content.ReadAsStringAsync()).GetProperty("data");
         var newest = data[0];
@@ -130,7 +130,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         var update = data.EnumerateArray().Single(e => e.GetProperty("operation").GetString() == "update");
         update.GetProperty("sourceRevisionNumber").ValueKind.Should().Be(JsonValueKind.Null);
 
-        var rev3 = await client.GetAsync($"/api/items/article/{id}/revisions/3");
+        var rev3 = await client.GetAsync($"/api/items/fxArticle/{id}/revisions/3");
         rev3.StatusCode.Should().Be(HttpStatusCode.OK);
         var rev3Data = Root(await rev3.Content.ReadAsStringAsync()).GetProperty("data");
         rev3Data.GetProperty("sourceRevisionNumber").GetInt64().Should().Be(1);
@@ -142,7 +142,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateArticleAsync(client, "UnknownRevisionTarget");
 
-        var resp = await client.GetAsync($"/api/items/article/{id}/revisions/999");
+        var resp = await client.GetAsync($"/api/items/fxArticle/{id}/revisions/999");
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -153,9 +153,9 @@ public class RevisionEndpointTests(ApiFactory factory)
         var id = await CreateArticleAsync(admin, "NeedsWriteToRevert");
 
         var (editor, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: []);
+            readCollections: ["fxArticle"], writeCollections: []);
 
-        var resp = await editor.PostAsync($"/api/items/article/{id}/revisions/1/revert", null);
+        var resp = await editor.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

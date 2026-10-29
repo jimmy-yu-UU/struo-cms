@@ -26,7 +26,7 @@ internal static class NarrativeScanScope
     }
 
     // docs/guide/<locale>/changelog.md — one locale segment, then the file name, nothing deeper.
-    private static bool IsLocaleChangelog(string relativePath)
+    internal static bool IsLocaleChangelog(string relativePath)
     {
         if (!StartsWith(relativePath, GuideRoot)) return false;
         var rest = relativePath[GuideRoot.Length..];

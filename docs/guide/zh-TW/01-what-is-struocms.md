@@ -46,7 +46,7 @@ migration 建立，`make:migration` 從同一個類別產生它。
 `samples/Struo.Sample.Blog` 是一個可選的示範專案，用 Article、Category 這類集合示範怎麼用核心
 提供的工具定義自己的內容模型；API 專案完全不會參照到它，學完之後就可以刪掉。
 
-刪除它不只是刪資料夾：它同時寫進了 solution 檔和測試專案，直接刪除資料夾會讓 solution 層級的
+刪除它不只是刪資料夾：它同時寫進了 solution 檔，直接刪除資料夾會讓 solution 層級的
 build 失敗；完整的移除步驟見[第 23 章：範例專案導覽](23-sample-walkthrough.md)。
 
 ## 全新安裝看起來是什麼樣

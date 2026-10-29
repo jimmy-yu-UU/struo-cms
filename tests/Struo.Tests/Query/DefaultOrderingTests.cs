@@ -7,7 +7,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -24,14 +24,14 @@ public sealed class DefaultOrderingTests : IDisposable
     public DefaultOrderingTests()
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Tester));
-        _db.CodeFirst.InitTables<Category>();
-        var collections = MetadataScanner.ScanTypes([typeof(Article), typeof(Category), typeof(Tag)]);
+        _db.CodeFirst.InitTables<FxCategory>();
+        var collections = MetadataScanner.ScanTypes([typeof(FxArticle), typeof(FxCategory), typeof(FxTag)]);
         var provider = new CachedMetadataProvider(collections);
-        var descriptors = MetadataScanner.ScanDescriptors([typeof(Article), typeof(Category), typeof(Tag)]);
+        var descriptors = MetadataScanner.ScanDescriptors([typeof(FxArticle), typeof(FxCategory), typeof(FxTag)]);
         var registry = new EntityRegistry(descriptors);
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
@@ -46,10 +46,10 @@ public sealed class DefaultOrderingTests : IDisposable
     // control it directly, per the brief's NOTE.
     private async Task SeedWithCreatedAt(string name, DateTime createdAt, Guid? id = null)
     {
-        var row = new Category { Id = id ?? Guid.CreateVersion7(), Name = name };
+        var row = new FxCategory { Id = id ?? Guid.CreateVersion7(), Name = name };
         await _db.Insertable(row).ExecuteCommandAsync();
-        await _db.Updateable<Category>()
-            .SetColumns(c => new Category { CreatedAt = createdAt, UpdatedAt = createdAt })
+        await _db.Updateable<FxCategory>()
+            .SetColumns(c => new FxCategory { CreatedAt = createdAt, UpdatedAt = createdAt })
             .Where(c => c.Id == row.Id)
             .ExecuteCommandAsync();
     }
@@ -64,9 +64,9 @@ public sealed class DefaultOrderingTests : IDisposable
         await SeedWithCreatedAt("New", t0.AddMinutes(2));
 
         var q = new QueryModel(null, null, [], 10, 0, null);
-        var result = await _repo.QueryAsync("category", q, []);
+        var result = await _repo.QueryAsync("fxCategory", q, []);
 
-        result.Rows.Select(r => ((Category)r).Name).Should().Equal("New", "Mid", "Old");
+        result.Rows.Select(r => ((FxCategory)r).Name).Should().Equal("New", "Mid", "Old");
     }
 
     // Updating a row must not change its list position (the PG heap-order symptom). Uses a direct
@@ -82,15 +82,15 @@ public sealed class DefaultOrderingTests : IDisposable
         await SeedWithCreatedAt("C", t0.AddMinutes(2));
 
         var q = new QueryModel(null, null, [], 10, 0, null);
-        var before = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
+        var before = (await _repo.QueryAsync("fxCategory", q, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
 
-        var newest = (Category)(await _repo.QueryAsync("category", q, [])).Rows[0];
-        await _db.Updateable<Category>()
-            .SetColumns(c => new Category { Name = "C-renamed", UpdatedAt = DateTime.UtcNow })
+        var newest = (FxCategory)(await _repo.QueryAsync("fxCategory", q, [])).Rows[0];
+        await _db.Updateable<FxCategory>()
+            .SetColumns(c => new FxCategory { Name = "C-renamed", UpdatedAt = DateTime.UtcNow })
             .Where(c => c.Id == newest.Id)
             .ExecuteCommandAsync();
 
-        var after = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
+        var after = (await _repo.QueryAsync("fxCategory", q, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
         after.Should().Equal(before);
     }
 
@@ -106,10 +106,10 @@ public sealed class DefaultOrderingTests : IDisposable
             await SeedWithCreatedAt($"Row{i}", t0, Guid.NewGuid());
 
         var q = new QueryModel(null, null, [], 10, 0, null);
-        var r1 = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
-        var r2 = (await _repo.QueryAsync("category", q, [])).Rows.Select(r => ((Category)r).Id).ToList();
+        var r1 = (await _repo.QueryAsync("fxCategory", q, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
+        var r2 = (await _repo.QueryAsync("fxCategory", q, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
 
-        var databaseIdOrder = await _db.Queryable<Category>().OrderBy(c => c.Id).Select(c => c.Id).ToListAsync();
+        var databaseIdOrder = await _db.Queryable<FxCategory>().OrderBy(c => c.Id).Select(c => c.Id).ToListAsync();
 
         r1.Should().Equal(r2);
         r1.Should().Equal(databaseIdOrder);
@@ -125,8 +125,8 @@ public sealed class DefaultOrderingTests : IDisposable
 
         var q1 = new QueryModel(null, null, [new SortField("name", false)], 2, 0, null);
         var q2 = new QueryModel(null, null, [new SortField("name", false)], 2, 2, null);
-        var page1 = (await _repo.QueryAsync("category", q1, [])).Rows.Select(r => ((Category)r).Id).ToList();
-        var page2 = (await _repo.QueryAsync("category", q2, [])).Rows.Select(r => ((Category)r).Id).ToList();
+        var page1 = (await _repo.QueryAsync("fxCategory", q1, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
+        var page2 = (await _repo.QueryAsync("fxCategory", q2, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
 
         page1.Should().NotIntersectWith(page2, "an unstable sort would repeat/skip rows across pages");
         page1.Concat(page2).Should().OnlyHaveUniqueItems();

@@ -18,7 +18,7 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
     public async Task Domain_query_exception_is_bad_user_input_envelope()
     {
         var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/items/article?filter[ghost][_eq]=x");
+        var resp = await client.GetAsync("/api/items/fxArticle?filter[ghost][_eq]=x");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.GetProperty("success").GetBoolean().Should().BeFalse();
@@ -41,7 +41,7 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
         var content = new StringContent("{ not json", Encoding.UTF8, "application/json");
-        var resp = await client.PostAsync("/api/items/article", content);
+        var resp = await client.PostAsync("/api/items/fxArticle", content);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("VALIDATION");
@@ -52,7 +52,7 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
     public async Task Bare_not_found_has_clean_human_message()
     {
         var client = _factory.CreateClient(); // article is public-read in test config
-        var resp = await client.GetAsync($"/api/items/article/{System.Guid.NewGuid()}"); // valid collection, nonexistent id -> bare NotFound()
+        var resp = await client.GetAsync($"/api/items/fxArticle/{System.Guid.NewGuid()}"); // valid collection, nonexistent id -> bare NotFound()
         resp.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
         var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("NOT_FOUND");
@@ -65,7 +65,7 @@ public class ErrorEnvelopeEndpointTests(ApiFactory factory)
     public async Task Malformed_id_is_bad_user_input_envelope_not_masked_500()
     {
         var client = _factory.CreateClient(); // article is public-read in test config
-        var resp = await client.GetAsync("/api/items/article/not-a-guid");
+        var resp = await client.GetAsync("/api/items/fxArticle/not-a-guid");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");

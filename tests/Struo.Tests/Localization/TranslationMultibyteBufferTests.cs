@@ -37,10 +37,10 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
             }
         });
 
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
@@ -60,14 +60,14 @@ public class TranslationMultibyteBufferTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "獨特標題", body = (string?)null }
             }
         });
-        var hit = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var hit = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
         var env = JsonSerializer.SerializeToElement(new
         {
             filter = new Dictionary<string, object> { ["title"] = Eq("獨特標題") }
         });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", env)).Content.ReadAsStringAsync())
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=zh-TW", env)).Content.ReadAsStringAsync())
             .GetProperty("data");
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit);
     }

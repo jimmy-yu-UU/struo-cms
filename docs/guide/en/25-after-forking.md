@@ -41,9 +41,9 @@ for them.
 ## 4. `samples/Struo.Sample.Blog`: delete it
 
 `samples/Struo.Sample.Blog` is a learning aid, not part of your project. Delete it once you've read
-it. It reaches beyond its own directory, because the test project uses its collections as a fixture,
-so follow the checklist rather than just removing the folder. The steps are in "Removing the sample
-completely" in [Chapter 23: Sample Walkthrough](23-sample-walkthrough.md).
+it. It comes with its own test project, and the solution file and the `frontend/e2e/sample/` specs
+refer to it, so follow the checklist rather than just removing the folder. `tests/` needs no change.
+The steps are in "Removing the sample completely" in [Chapter 23: Sample Walkthrough](23-sample-walkthrough.md).
 
 ## 5. `SECURITY.md`: replace the reporting channel
 

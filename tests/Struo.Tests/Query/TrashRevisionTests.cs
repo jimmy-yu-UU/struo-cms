@@ -14,7 +14,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -30,7 +30,7 @@ namespace Struo.Tests.Query;
 /// </summary>
 public sealed class TrashRevisionTests
 {
-    // ── (a) soft-delete an Article: Version +1, one "delete" revision with a live snapshot ────────
+    // ── (a) soft-delete an FxArticle: Version +1, one "delete" revision with a live snapshot ────────
 
     [Fact]
     public async Task Soft_delete_article_bumps_version_and_records_delete_revision()
@@ -38,53 +38,53 @@ public sealed class TrashRevisionTests
         using var h = TrashRevisionHarness.Create();
         var articleId = await h.CreateArticleAsync(status: "published");
 
-        var before = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var before = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionBefore = before.Version;
-        var revsBefore = (await h.RevisionStore.ListAsync("article", articleId)).Count; // 1 = "create"
+        var revsBefore = (await h.RevisionStore.ListAsync("fxArticle", articleId)).Count; // 1 = "create"
 
-        var deleted = await h.Service.DeleteAsync("article", articleId, purge: false);
+        var deleted = await h.Service.DeleteAsync("fxArticle", articleId, purge: false);
 
         Assert.True(deleted);
-        var trashed = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var trashed = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         Assert.NotNull(trashed.DeletedAt);
         Assert.Equal(versionBefore + 1, trashed.Version);
 
-        var revs = await h.RevisionStore.ListAsync("article", articleId);
+        var revs = await h.RevisionStore.ListAsync("fxArticle", articleId);
         Assert.Equal(revsBefore + 1, revs.Count);
         Assert.Equal("delete", revs[0].Operation); // newest-first
 
-        var rec = await h.RevisionStore.GetAsync("article", articleId, revs[0].RevisionNumber);
+        var rec = await h.RevisionStore.GetAsync("fxArticle", articleId, revs[0].RevisionNumber);
         Assert.NotNull(rec);
         using var snap = JsonDocument.Parse(rec!.Snapshot);
         Assert.Equal("published", snap.RootElement.GetProperty("status").GetString()); // deletion-time field value
     }
 
-    // ── (b) restore the trashed Article: Version +1 again, one "restore" revision ─────────────────
+    // ── (b) restore the trashed FxArticle: Version +1 again, one "restore" revision ─────────────────
 
     [Fact]
     public async Task Restore_article_bumps_version_again_and_records_restore_revision()
     {
         using var h = TrashRevisionHarness.Create();
         var articleId = await h.CreateArticleAsync(status: "draft");
-        await h.Service.DeleteAsync("article", articleId, purge: false); // trash (version -> 1, "delete")
+        await h.Service.DeleteAsync("fxArticle", articleId, purge: false); // trash (version -> 1, "delete")
 
-        var afterTrash = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var afterTrash = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionAfterTrash = afterTrash.Version;
 
-        var restored = await h.Service.RestoreAsync("article", articleId);
+        var restored = await h.Service.RestoreAsync("fxArticle", articleId);
 
         Assert.NotNull(restored);
-        var live = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.Exclude))!;
+        var live = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.Exclude))!;
         Assert.Null(live.DeletedAt);
         Assert.Equal(versionAfterTrash + 1, live.Version);
 
-        var revs = await h.RevisionStore.ListAsync("article", articleId);
+        var revs = await h.RevisionStore.ListAsync("fxArticle", articleId);
         Assert.Equal("restore", revs[0].Operation); // newest-first
         Assert.Equal(1, revs.Count(r => r.Operation == "restore"));
         Assert.Equal(1, revs.Count(r => r.Operation == "delete"));
     }
 
-    // ── (c) Category is soft-deletable + AuditableEntity but NOT revisioned ───────────────────────
+    // ── (c) FxCategory is soft-deletable + AuditableEntity but NOT revisioned ───────────────────────
     //        Version still +1; zero revisions captured.
 
     [Fact]
@@ -93,18 +93,18 @@ public sealed class TrashRevisionTests
         using var h = TrashRevisionHarness.Create();
         var categoryId = await h.CreateCategoryAsync("Cat");
 
-        var before = (Category)(await h.Repository.GetByIdAsync("category", categoryId, DeletedFilter.With))!;
+        var before = (FxCategory)(await h.Repository.GetByIdAsync("fxCategory", categoryId, DeletedFilter.With))!;
         var versionBefore = before.Version;
 
-        var deleted = await h.Service.DeleteAsync("category", categoryId, purge: false);
+        var deleted = await h.Service.DeleteAsync("fxCategory", categoryId, purge: false);
 
         Assert.True(deleted);
-        var trashed = (Category)(await h.Repository.GetByIdAsync("category", categoryId, DeletedFilter.With))!;
+        var trashed = (FxCategory)(await h.Repository.GetByIdAsync("fxCategory", categoryId, DeletedFilter.With))!;
         Assert.NotNull(trashed.DeletedAt);
         Assert.Equal(versionBefore + 1, trashed.Version);
 
-        // Category has no [CmsCollection(Revisions=true)] -> no revision history at all.
-        Assert.Empty(await h.RevisionStore.ListAsync("category", categoryId));
+        // FxCategory has no [CmsCollection(Revisions=true)] -> no revision history at all.
+        Assert.Empty(await h.RevisionStore.ListAsync("fxCategory", categoryId));
     }
 
     // ── (c') Non-AuditableEntity ISoftDeletable (CascadeNode) keeps current behavior: no Version to ─
@@ -135,21 +135,21 @@ public sealed class TrashRevisionTests
     {
         using var h = TrashRevisionHarness.Create();
         var articleId = await h.CreateArticleAsync(status: "published");
-        Assert.True(await h.Service.DeleteAsync("article", articleId, purge: false)); // first trash
+        Assert.True(await h.Service.DeleteAsync("fxArticle", articleId, purge: false)); // first trash
 
-        var afterFirst = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var afterFirst = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionAfterFirst = afterFirst.Version;
-        var deleteRevsAfterFirst = (await h.RevisionStore.ListAsync("article", articleId))
+        var deleteRevsAfterFirst = (await h.RevisionStore.ListAsync("fxArticle", articleId))
             .Count(r => r.Operation == "delete");
         Assert.Equal(1, deleteRevsAfterFirst);
 
         // Second DELETE on the already-trashed row still reports success (unchanged semantics)…
-        Assert.True(await h.Service.DeleteAsync("article", articleId, purge: false));
+        Assert.True(await h.Service.DeleteAsync("fxArticle", articleId, purge: false));
 
         // …but must NOT re-stamp / bump Version / append another "delete" revision.
-        var afterSecond = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var afterSecond = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         Assert.Equal(versionAfterFirst, afterSecond.Version);
-        Assert.Equal(1, (await h.RevisionStore.ListAsync("article", articleId)).Count(r => r.Operation == "delete"));
+        Assert.Equal(1, (await h.RevisionStore.ListAsync("fxArticle", articleId)).Count(r => r.Operation == "delete"));
     }
 
     // ── (g) restoring an already-live row is a true no-op: no version bump, no "restore" revision ──
@@ -160,15 +160,15 @@ public sealed class TrashRevisionTests
         using var h = TrashRevisionHarness.Create();
         var articleId = await h.CreateArticleAsync(status: "published"); // never trashed
 
-        var before = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var before = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionBefore = before.Version;
 
-        var restored = await h.Service.RestoreAsync("article", articleId); // already live
+        var restored = await h.Service.RestoreAsync("fxArticle", articleId); // already live
 
         Assert.NotNull(restored); // still returns the live projection
-        var after = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var after = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         Assert.Equal(versionBefore, after.Version);
-        Assert.DoesNotContain(await h.RevisionStore.ListAsync("article", articleId), r => r.Operation == "restore");
+        Assert.DoesNotContain(await h.RevisionStore.ListAsync("fxArticle", articleId), r => r.Operation == "restore");
     }
 
     // ── (d) a mid-transaction failure at the revision-capture step rolls EVERYTHING back ──────────
@@ -179,25 +179,25 @@ public sealed class TrashRevisionTests
         using var h = TrashRevisionHarness.Create(failCaptureRevision: true);
         var articleId = await h.CreateArticleAsync(status: "published"); // rev 1 "create" via real store
 
-        var before = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var before = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionBefore = before.Version;
 
         await Assert.ThrowsAnyAsync<Exception>(
-            () => h.Service.DeleteAsync("article", articleId, purge: false));
+            () => h.Service.DeleteAsync("fxArticle", articleId, purge: false));
 
         // The soft-delete stamp AND the version bump must have rolled back with the failed capture.
-        var stillLive = (Article)(await h.Repository.GetByIdAsync("article", articleId, DeletedFilter.With))!;
+        var stillLive = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         Assert.Null(stillLive.DeletedAt);
         Assert.Equal(versionBefore, stillLive.Version);
 
         // No half-written "delete" revision — only the original "create".
-        var revs = await h.RevisionStore.ListAsync("article", articleId);
+        var revs = await h.RevisionStore.ListAsync("fxArticle", articleId);
         Assert.DoesNotContain(revs, r => r.Operation == "delete");
     }
 }
 
 /// <summary>
-/// Wires a real <see cref="ItemService"/> over the sample Blog types plus the shared
+/// Wires a real <see cref="ItemService"/> over the fixture types plus the shared
 /// <see cref="CascadeNode"/> fixture (declared in <c>PurgeIntegrityTests.cs</c>). Mirrors
 /// <c>PurgeIntegrityHarness</c>. When <paramref name="failCaptureRevision"/> is set, the wired
 /// <see cref="IRevisionStore"/> throws from <c>CaptureAsync</c> only (list/get still delegate to the
@@ -221,12 +221,12 @@ internal sealed class TrashRevisionHarness : IDisposable
         var db = SqlSugarClientFactory.Create(
             _database.Options(),
             currentUser);
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         db.CodeFirst.InitTables<CascadeNode>();
         db.CodeFirst.InitTables<CascadeNodeTranslation>();
@@ -234,7 +234,7 @@ internal sealed class TrashRevisionHarness : IDisposable
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(CascadeNode), typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -242,9 +242,9 @@ internal sealed class TrashRevisionHarness : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"]     = typeof(Article),
-            ["category"]    = typeof(Category),
-            ["tag"]         = typeof(Tag),
+            ["fxArticle"]     = typeof(FxArticle),
+            ["fxCategory"]    = typeof(FxCategory),
+            ["fxTag"]         = typeof(FxTag),
             ["file"]        = typeof(Struo.Infrastructure.Files.File),
             ["cascadeNode"] = typeof(CascadeNode),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
@@ -289,13 +289,13 @@ internal sealed class TrashRevisionHarness : IDisposable
             ["status"] = status,
             ["translations"] = new Dictionary<string, object> { ["en"] = new { title = "T" } },
         };
-        var created = await Service.CreateAsync("article", BodyOf(body));
+        var created = await Service.CreateAsync("fxArticle", BodyOf(body));
         return created["id"]!.ToString()!;
     }
 
     public async Task<string> CreateCategoryAsync(string name)
     {
-        var created = await Service.CreateAsync("category", BodyOf(new { name }));
+        var created = await Service.CreateAsync("fxCategory", BodyOf(new { name }));
         return created["id"]!.ToString()!;
     }
 

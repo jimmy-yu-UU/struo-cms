@@ -6,7 +6,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Application.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 using FileRow = Struo.Infrastructure.Files.File;
@@ -22,16 +22,16 @@ namespace Struo.Tests.Api;
 public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
 {
     private const string FourRootQuery =
-        "{ articles { items { id } } categories { items { id } } tags { items { id } } files { items { id } } }";
+        "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } files { items { id } } }";
 
     [Fact]
     public async Task Concurrent_multi_root_queries_each_return_the_complete_data()
     {
         using var admin = await factory.CreateAuthenticatedClientAsync();
         var tags = new List<string>();
-        for (var i = 0; i < 3; i++) tags.Add(await CreateAsync(admin, "tag", new { name = $"gq-{Guid.NewGuid():N}" }));
+        for (var i = 0; i < 3; i++) tags.Add(await CreateAsync(admin, "fxTag", new { name = $"gq-{Guid.NewGuid():N}" }));
         var categories = new List<string>();
-        for (var i = 0; i < 2; i++) categories.Add(await CreateAsync(admin, "category", new { name = $"gc-{Guid.NewGuid():N}" }));
+        for (var i = 0; i < 2; i++) categories.Add(await CreateAsync(admin, "fxCategory", new { name = $"gc-{Guid.NewGuid():N}" }));
         var files = new List<string>();
         using (var scope = factory.Services.CreateScope())
         {
@@ -62,7 +62,7 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
                     return;
                 }
                 var data = doc.RootElement.GetProperty("data");
-                if (!Contains(data, "tags", tags) || !Contains(data, "categories", categories) || !Contains(data, "files", files))
+                if (!Contains(data, "fxTags", tags) || !Contains(data, "fxCategories", categories) || !Contains(data, "files", files))
                     failures.Add("incomplete: " + body);
             }));
         }
@@ -92,7 +92,7 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
                 {
                     // A REST write that fails is unexpected, including a deadlock victim: the API masks it
                     // as a 500, and plain tag inserts do not deadlock.
-                    try { acknowledged.Add(Guid.Parse(await CreateAsync(admin, "tag", new { name = okName }))); }
+                    try { acknowledged.Add(Guid.Parse(await CreateAsync(admin, "fxTag", new { name = okName }))); }
                     catch (Exception ex) { unexpected.Add(ex.Message); }
                 }));
             }
@@ -103,9 +103,9 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            leaked = await db.Queryable<Tag>().Where(t => t.Name.StartsWith(marker)).CountAsync();
+            leaked = await db.Queryable<FxTag>().Where(t => t.Name.StartsWith(marker)).CountAsync();
             var ids = acknowledged.ToList();
-            present = await db.Queryable<Tag>().Where(t => ids.Contains(t.Id)).CountAsync();
+            present = await db.Queryable<FxTag>().Where(t => ids.Contains(t.Id)).CountAsync();
         }
 
         unexpected.Should().BeEmpty();
@@ -124,14 +124,14 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
         using var admin = await factory.CreateAuthenticatedClientAsync();
         users.Add((admin, factory.AdminUserId));
         for (var i = 0; i < 3; i++)
-            users.Add(await factory.CreateEditorClientAsync(["tag"], ["tag"]));
+            users.Add(await factory.CreateEditorClientAsync(["fxTag"], ["fxTag"]));
         var created = new ConcurrentBag<(Guid TagId, Guid User)>();
 
         await Task.WhenAll(users.Select(user => Task.Run(async () =>
         {
             for (var i = 0; i < 25; i++)
             {
-                var id = await CreateAsync(user.Client, "tag", new { name = $"au-{user.Id:N}-{i}" });
+                var id = await CreateAsync(user.Client, "fxTag", new { name = $"au-{user.Id:N}-{i}" });
                 created.Add((Guid.Parse(id), user.Id));
             }
         })));
@@ -139,7 +139,7 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var ids = created.Select(c => c.TagId).ToList();
-        var stamps = (await db.Queryable<Tag>().Where(t => ids.Contains(t.Id)).ToListAsync())
+        var stamps = (await db.Queryable<FxTag>().Where(t => ids.Contains(t.Id)).ToListAsync())
             .ToDictionary(t => t.Id);
         created.Should().HaveCount(users.Count * 25);
         foreach (var (tagId, user) in created)
@@ -158,8 +158,8 @@ public class SqlSugarSingletonScopeApiTests(ApiFactory factory)
         {
             await repo.InTransactionAsync(async () =>
             {
-                await db.Insertable(new Tag { Id = Guid.CreateVersion7(), Name = name }).ExecuteCommandAsync();
-                seenInside.Add(await db.Queryable<Tag>().Where(t => t.Name == name).CountAsync());
+                await db.Insertable(new FxTag { Id = Guid.CreateVersion7(), Name = name }).ExecuteCommandAsync();
+                seenInside.Add(await db.Queryable<FxTag>().Where(t => t.Name == name).CountAsync());
                 await Task.Delay(50);
                 throw new RollbackRequested();
             });

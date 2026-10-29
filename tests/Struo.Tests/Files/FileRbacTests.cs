@@ -43,9 +43,9 @@ public class FileRbacTests(ApiFactory factory)
     [Fact]
     public async Task Editor_without_file_write_upload_is_forbidden()
     {
-        // Write grant on "article" only — no "file" write.
+        // Write grant on "fxArticle" only — no "file" write.
         var (client, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["article"], writeCollections: ["article"]);
+            readCollections: ["fxArticle"], writeCollections: ["fxArticle"]);
         var resp = await client.PostAsync("/api/files",
             Multipart(Encoding.UTF8.GetBytes("x"), "n.txt", "text/plain"));
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);

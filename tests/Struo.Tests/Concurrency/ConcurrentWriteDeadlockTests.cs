@@ -6,7 +6,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Infrastructure.Revisions;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -30,7 +30,7 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         var marker = $"cu-{Guid.NewGuid():N}";
         var articles = new List<string>();
         for (var i = 0; i < Workers; i++)
-            articles.Add(await CreateAsync(admin, "article",
+            articles.Add(await CreateAsync(admin, "fxArticle",
                 new { status = "draft", translations = new { en = new { title = $"{marker}-{i}-create" } } }));
 
         var failures = new ConcurrentBag<string>();
@@ -48,7 +48,7 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
                         ["zh-TW"] = new { title = $"{marker}-{worker}-zh-{r}" },
                     }
                 };
-                using var response = await admin.PutAsJsonAsync($"/api/items/article/{id}", body);
+                using var response = await admin.PutAsJsonAsync($"/api/items/fxArticle/{id}", body);
                 if (response.StatusCode != HttpStatusCode.OK)
                     failures.Add($"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
             })));
@@ -60,17 +60,17 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var ids = articles.Select(Guid.Parse).ToList();
         var itemIds = articles.ToList();
-        var translations = await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).ToListAsync();
+        var translations = await db.Queryable<FxArticleTranslation>().Where(t => ids.Contains(t.FxArticleId)).ToListAsync();
         translations.Should().HaveCount(Workers * 2);
         for (var worker = 0; worker < Workers; worker++)
         {
-            translations.Single(t => t.ArticleId == ids[worker] && t.Locale == "en").Title
+            translations.Single(t => t.FxArticleId == ids[worker] && t.Locale == "en").Title
                 .Should().Be($"{marker}-{worker}-{Rounds - 1}");
-            translations.Single(t => t.ArticleId == ids[worker] && t.Locale == "zh-TW").Title
+            translations.Single(t => t.FxArticleId == ids[worker] && t.Locale == "zh-TW").Title
                 .Should().Be($"{marker}-{worker}-zh-{Rounds - 1}");
         }
         (await db.Queryable<Revision>()
-                .Where(rv => rv.CollectionName == "article" && itemIds.Contains(rv.ItemId)).CountAsync())
+                .Where(rv => rv.CollectionName == "fxArticle" && itemIds.Contains(rv.ItemId)).CountAsync())
             .Should().Be(Workers * (Rounds + 1));
     }
 
@@ -80,7 +80,7 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         using var admin = await factory.CreateAuthenticatedClientAsync();
         var marker = $"ct-{Guid.NewGuid():N}";
         var tags = new List<string>();
-        for (var i = 0; i < 6; i++) tags.Add(await CreateAsync(admin, "tag", new { name = $"{marker}-tag-{i}" }));
+        for (var i = 0; i < 6; i++) tags.Add(await CreateAsync(admin, "fxTag", new { name = $"{marker}-tag-{i}" }));
 
         var failures = new ConcurrentBag<string>();
         var created = new ConcurrentDictionary<Guid, string[]>();
@@ -96,7 +96,7 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
                     tags = linked,
                     translations = new { en = new { title = $"{marker}-{r}-{worker}" } }
                 };
-                using var response = await admin.PostAsJsonAsync("/api/items/article", body);
+                using var response = await admin.PostAsJsonAsync("/api/items/fxArticle", body);
                 var text = await response.Content.ReadAsStringAsync();
                 if (response.StatusCode != HttpStatusCode.Created)
                 {
@@ -115,15 +115,15 @@ public class ConcurrentWriteDeadlockTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var ids = created.Keys.ToList();
         var itemIds = ids.Select(id => id.ToString()).ToList();
-        var links = await db.Queryable<ArticleTag>().Where(l => ids.Contains(l.ArticleId)).ToListAsync();
+        var links = await db.Queryable<FxArticleTag>().Where(l => ids.Contains(l.ArticleId)).ToListAsync();
         links.Should().HaveCount(ids.Count * 3);
         foreach (var (articleId, expected) in created)
             links.Where(l => l.ArticleId == articleId).Select(l => l.TagId.ToString()).Should()
                 .BeEquivalentTo(expected);
-        (await db.Queryable<ArticleTranslation>().Where(t => ids.Contains(t.ArticleId)).CountAsync())
+        (await db.Queryable<FxArticleTranslation>().Where(t => ids.Contains(t.FxArticleId)).CountAsync())
             .Should().Be(ids.Count);
         (await db.Queryable<Revision>()
-                .Where(rv => rv.CollectionName == "article" && itemIds.Contains(rv.ItemId)).CountAsync())
+                .Where(rv => rv.CollectionName == "fxArticle" && itemIds.Contains(rv.ItemId)).CountAsync())
             .Should().Be(ids.Count);
     }
 

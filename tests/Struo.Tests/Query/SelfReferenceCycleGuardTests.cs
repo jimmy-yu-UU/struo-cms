@@ -12,7 +12,7 @@ using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 using File = Struo.Infrastructure.Files.File;
@@ -25,8 +25,8 @@ namespace Struo.Tests.Query;
 /// Self-reference cycle guard: <see cref="SelfReferenceCycleGuard"/> rejects an
 /// UpdateAsync that would set a self-referencing ManyToOne FK (parentId) to the item itself or one of
 /// its descendants. Metadata-driven via <c>RelationMetadata.SelfReferencing</c> — covers both the core
-/// MediaFolder tree and the sample Category tree, proving the guard is not special-cased to
-/// mediafolder. Fixture mirrors ItemServiceTests's combined Article+Category+Tag+File+MediaFolder
+/// MediaFolder tree and the fixture FxCategory tree, proving the guard is not special-cased to
+/// mediafolder. Fixture mirrors ItemServiceTests's combined FxArticle+FxCategory+FxTag+File+MediaFolder
 /// registration, extended with the File/MediaFolder InitTables from MediaFolderTests so mediafolder
 /// rows can actually be created/updated here.
 /// </summary>
@@ -40,12 +40,12 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<MediaFolder>();
         db.CodeFirst.InitTables<File>();
         db.CodeFirst.InitTables<FileTranslation>();
@@ -54,16 +54,16 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(File), typeof(MediaFolder),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(File), typeof(MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article),
-            ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag),
+            ["fxArticle"] = typeof(FxArticle),
+            ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag),
             ["file"] = typeof(File),
             ["mediafolder"] = typeof(MediaFolder),
         };
@@ -166,41 +166,41 @@ public sealed class SelfReferenceCycleGuardTests : IDisposable
     }
 
     [Fact]
-    public async Task Category_sample_collection_is_also_guarded()
+    public async Task Category_fixture_collection_is_also_guarded()
     {
         // Proves the guard is metadata-driven (RelationMetadata.SelfReferencing), not hardcoded to
-        // "mediafolder": the sample Category collection has its own self-referencing ParentId tree.
-        var x = await _svc.CreateAsync("category", BodyOf(new { name = "X" }));
+        // "mediafolder": the fixture FxCategory collection has its own self-referencing ParentId tree.
+        var x = await _svc.CreateAsync("fxCategory", BodyOf(new { name = "X" }));
         var xId = ((Guid)x["id"]!).ToString();
 
         var ex = await Assert.ThrowsAsync<QueryException>(
-            () => _svc.UpdateAsync("category", xId, BodyOf(new { name = "X", parentId = xId })));
+            () => _svc.UpdateAsync("fxCategory", xId, BodyOf(new { name = "X", parentId = xId })));
         ex.Message.Should().Contain("cycle");
     }
 
     [Fact]
     public async Task Cycle_through_a_trashed_intermediate_node_is_still_rejected()
     {
-        // Category is ISoftDeletable. The guard reasons about FK topology, not row visibility, so a
+        // FxCategory is ISoftDeletable. The guard reasons about FK topology, not row visibility, so a
         // trashed ancestor must still be walked — repro for the reviewer-found bug where the
         // ancestor-walk fetch defaulted to DeletedFilter.Exclude and silently treated a trashed
         // intermediate node as a dangling (non-existent) parent, letting a cycle through it escape
         // detection.
-        var a = await _svc.CreateAsync("category", BodyOf(new { name = "A" }));
+        var a = await _svc.CreateAsync("fxCategory", BodyOf(new { name = "A" }));
         var aId = (Guid)a["id"]!;
-        var b = await _svc.CreateAsync("category", BodyOf(new { name = "B", parentId = aId }));
+        var b = await _svc.CreateAsync("fxCategory", BodyOf(new { name = "B", parentId = aId }));
         var bId = (Guid)b["id"]!;
-        var c = await _svc.CreateAsync("category", BodyOf(new { name = "C", parentId = bId }));
+        var c = await _svc.CreateAsync("fxCategory", BodyOf(new { name = "C", parentId = bId }));
         var cId = (Guid)c["id"]!;
 
         // Trash B (soft delete) — B.parentId = A still persists on the trashed row.
-        var trashed = await _svc.DeleteAsync("category", bId.ToString());
+        var trashed = await _svc.DeleteAsync("fxCategory", bId.ToString());
         trashed.Should().BeTrue();
 
         // A ← B(trashed) ← C. Repointing A's parent at C creates A→C→B→A: the walk must pass THROUGH
         // the trashed B to detect it, not stop there as if B did not exist.
         var ex = await Assert.ThrowsAsync<QueryException>(
-            () => _svc.UpdateAsync("category", aId.ToString(), BodyOf(new { name = "A", parentId = cId })));
+            () => _svc.UpdateAsync("fxCategory", aId.ToString(), BodyOf(new { name = "A", parentId = cId })));
         ex.Message.Should().Contain("cycle");
     }
 }

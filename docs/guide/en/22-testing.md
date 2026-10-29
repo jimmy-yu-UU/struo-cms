@@ -5,15 +5,18 @@ each layer tests, which jobs CI runs, and what it deliberately doesn't run.
 
 ## Backend tests
 
-Backend tests live in three projects under `tests/`, use xUnit, and run with `dotnet test` from
-the repository root:
+Backend tests live in projects under `tests/` and `samples/`, use xUnit, and run with `dotnet test`
+from the repository root:
 
 - `tests/Struo.Tests` holds the core's unit and integration tests.
+- `samples/Struo.Sample.Blog.Tests` holds the sample's own tests. It is deleted together with the
+  sample.
 - `tests/Struo.Tests.Template` holds the template's own repository guards: the documentation
   conventions, the template invariants, and the CI, Docker and health conventions. A fork can delete
   it (see [Chapter 25](25-after-forking.md)).
-- `tests/Struo.Tests.Support` is a class library, not a test project. It holds the helpers the other
-  two share.
+- `tests/Struo.Tests.Fixtures` is a test-only content project, described below.
+- `tests/Struo.Tests.Support` is a class library, not a test project. It holds the helpers the test
+  projects share.
 
 The default backend is SQLite: unit tests get their database from `TestBackend.CreateUnitDatabase()`,
 which, with no backend switch set, is a temp SQLite file deleted when the test ends, so no test shares
@@ -115,16 +118,20 @@ STRUO_TEST_BACKEND=<backend> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "F
 It force-drops every other run's databases, so don't run it while another suite uses the same
 server.
 
-### The test suite uses the sample as its fixture
+### The core tests run on test-only fixtures
 
-Across the backend test suite, 36 files have `using Struo.Sample.Blog;` — most under `Query`, the
-rest scattered across `Metadata`, `Persistence`, `Revisions`, `Search`, `Changes`, and `Health` —
-loaded through the `[ModuleInitializer]` `ContentAssemblyEnvBootstrap`.
+`tests/Struo.Tests.Fixtures` is a small content project that exists only for the tests. It declares
+one collection of each shape the core has to handle: an article with a translation sidecar,
+revisions and soft delete, tags joined through a junction that carries its own payload, and a
+self-referencing category tree, plus a plain class used as a `Repeater` child type. It has its own
+migration, and `tests/Struo.Tests` pins it as its content assembly through
+`ContentAssemblyEnvBootstrap`.
 
-The sample project isn't only a demonstration; it's the fixture these tests actually query and
-assert against. Remove the sample, and these tests either get rewritten or switch to a different
-fixture. The full steps for removing the sample are in
-[Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
+No shipped host registers it. Its collections carry an `fx` prefix (`fxArticle`, `fxTag`) and its
+tables are named `fx_*`, so they can never collide with a collection of your own, whatever you call
+it. The sample is not part of this: the core tests don't reference `samples/`, and a test in
+`tests/Struo.Tests.Template` fails if one ever does. Removing the sample leaves `tests/` untouched;
+the steps are in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 
 ### Tests that pin a rule
 
@@ -160,16 +167,16 @@ environment is `jsdom`, `globals`/`restoreMocks`/`clearMocks` are all on, and `s
 at `vitest.setup.ts`. Every command in this section runs from `frontend/`.
 
 Component- and `lib/`-level `*.test.ts` files sit next to the code they test rather than being
-collected into a separate directory; the cross-file guard tests mostly live under `tests/`,
-except the locale one, which sits with `src/locales/`.
+collected into a separate directory; the cross-file guard tests mostly live under `frontend/tests/`,
+except the locale one, which sits with `frontend/src/locales/`.
 
 Three guard tests each pin one thing down:
 
-- `tests/iconCoverage.test.ts` — scans `src/` and confirms every `pi-` icon token that appears in
-  source has a matching key in `ICON_MAP`.
-- `src/locales/locales.test.ts` — the `zh-TW` and `en` UI-language directories have exactly
+- `frontend/tests/iconCoverage.test.ts` — scans `frontend/src/` and confirms every `pi-` icon token
+  that appears in source has a matching key in `ICON_MAP`.
+- `frontend/src/locales/locales.test.ts` — the `zh-TW` and `en` UI-language directories have exactly
   symmetric key sets.
-- `tests/schemaContract.test.ts` — feeds the two JSON files under `schema/` into the real
+- `frontend/tests/schemaContract.test.ts` — feeds the two JSON files under `schema/` into the real
   field-interface registry, verifying the field types the admin SPA recognizes match what the
   backend declares; covered below under "The schema contract".
 
@@ -181,7 +188,8 @@ unit tests passing alone doesn't mean the types are right too.
 End-to-end tests use Playwright, configured in `frontend/playwright.config.ts`, split into two
 projects: `core` (`pnpm e2e`) runs the specs under `e2e/`, excluding `e2e/sample/**`, against a
 setup with no content collections opted in; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**`,
-which needs the sample collections opted in first. `pnpm e2e:all` runs both.
+which needs the sample collections opted in first. The config adds the `sample` project only while
+`e2e/sample/` exists. `pnpm e2e:all` runs both.
 
 The `webServer` block only starts the admin SPA's dev server (`pnpm dev`,
 `reuseExistingServer: true`) — it doesn't start the API or the database for you. Both projects
@@ -191,7 +199,8 @@ target.
 The config sets `workers: 1`, and `use.baseURL` is `http://localhost:5173`; `core`'s `testDir` is
 `./e2e`, whose scope already covers `e2e/sample/`, so it relies on
 `testIgnore: '**/e2e/sample/**'` to keep the sample specs out; `sample`'s `testDir` points
-straight at `./e2e/sample` and has nothing left to exclude.
+straight at `./e2e/sample` and has nothing left to exclude. With `e2e/sample/` deleted, only
+`core` remains.
 
 The database has to be migrated first (`migrate`, or `Database:MigrateOnStartup=true`), which seeds
 the bootstrap administrator account used for login; the rest of the prerequisites and how to

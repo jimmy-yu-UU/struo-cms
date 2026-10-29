@@ -1,5 +1,6 @@
 // tests/Struo.Tests.Template/TemplateInvariantsTests.cs
 using AwesomeAssertions;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Template;
@@ -54,6 +55,60 @@ public sealed class TemplateInvariantsTests
             "never references samples/*; the sample is a demo, deleted on fork, and pulling it back " +
             "in via a ProjectReference would re-couple the shipped framework to business content).");
     }
+
+    [Fact]
+    public void No_test_project_has_a_project_reference_into_samples()
+    {
+        // The core suite exercises core through tests/Struo.Tests.Fixtures; the sample has its own test
+        // project next to it. A reference from any project under tests/ into samples/ would make
+        // deleting the sample break it.
+        var offenders = ProjectReferences(Path.Combine(RepoRoot.Find(), "tests"))
+            .Where(x => ReferencesFolder(x.reference, "samples"))
+            .Select(x => $"{x.project}: {x.reference}")
+            .ToList();
+
+        offenders.Should().BeEmpty("no project under tests/ may reference samples/*");
+    }
+
+    [Fact]
+    public void Shipped_src_projects_have_no_project_reference_into_tests()
+    {
+        // Test fixtures and test support never ship; framework code must not depend on them.
+        var offenders = ProjectReferences(Path.Combine(RepoRoot.Find(), "src"))
+            .Where(x => ReferencesFolder(x.reference, "tests"))
+            .Select(x => $"{x.project}: {x.reference}")
+            .ToList();
+
+        offenders.Should().BeEmpty("src/ must not reference tests/* (fixtures and support are non-shipping)");
+    }
+
+    [Theory]
+    [InlineData(@"..\..\tests\Struo.Tests.Fixtures\Struo.Tests.Fixtures.csproj", "tests", true)]
+    [InlineData("../../tests/Struo.Tests.Fixtures/Struo.Tests.Fixtures.csproj", "tests", true)]
+    [InlineData(@"..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj", "samples", true)]
+    [InlineData("../../samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj", "samples", true)]
+    [InlineData(@"..\Struo.Domain\Struo.Domain.csproj", "tests", false)]
+    [InlineData("../Struo.Application/Struo.Application.csproj", "samples", false)]
+    [InlineData(@"..\Struo.Tests.Support\Struo.Tests.Support.csproj", "tests", false)]
+    public void ReferencesFolder_matches_either_separator_on_any_os(string reference, string folder, bool expected) =>
+        ReferencesFolder(reference, folder).Should().Be(expected);
+
+    // Both csproj separators, so the checks do not depend on the OS running the test.
+    private static readonly char[] Separators = [(char)92, (char)47];
+
+    // True when a path segment of the reference is exactly the folder name, whichever separator the
+    // csproj uses and whichever OS runs the test.
+    private static bool ReferencesFolder(string reference, string folder) =>
+        reference.Split(Separators).Any(segment => segment.Equals(folder, StringComparison.OrdinalIgnoreCase));
+
+    private static IEnumerable<(string project, string reference)> ProjectReferences(string directory) =>
+        Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Separators).Contains("obj"))
+            .SelectMany(path => System.Xml.Linq.XDocument.Load(path)
+                .Descendants("ProjectReference")
+                .Select(e => e.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => (Path.GetFileName(path), include)));
 
     // Same walk-up-from-BaseDirectory approach as LiveDatabases.FindApiDir - see
     // tests/Struo.Tests.Support/LiveDatabases.cs.

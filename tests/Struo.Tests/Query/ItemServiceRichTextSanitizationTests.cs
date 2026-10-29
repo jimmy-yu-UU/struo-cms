@@ -9,7 +9,7 @@ using Struo.Infrastructure.Query;
 using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Revisions;
 using Struo.Infrastructure.Security;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -25,18 +25,18 @@ public sealed class ItemServiceRichTextSanitizationTests : IDisposable
         var db = SqlSugarClientFactory.Create(
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables<Article>();
-        db.CodeFirst.InitTables<ArticleTranslation>();
+        db.CodeFirst.InitTables<FxArticle>();
+        db.CodeFirst.InitTables<FxArticleTranslation>();
         db.CodeFirst.InitTables<Language>();
-        db.CodeFirst.InitTables<Tag>();
-        db.CodeFirst.InitTables<ArticleTag>();
-        db.CodeFirst.InitTables<Category>();
+        db.CodeFirst.InitTables<FxTag>();
+        db.CodeFirst.InitTables<FxArticleTag>();
+        db.CodeFirst.InitTables<FxCategory>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
-            typeof(Article), typeof(Category), typeof(Tag), typeof(Struo.Infrastructure.Files.File),
+            typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -44,8 +44,8 @@ public sealed class ItemServiceRichTextSanitizationTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category),
-            ["tag"] = typeof(Tag), ["file"] = typeof(Struo.Infrastructure.Files.File),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory),
+            ["fxTag"] = typeof(FxTag), ["file"] = typeof(Struo.Infrastructure.Files.File),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -75,10 +75,10 @@ public sealed class ItemServiceRichTextSanitizationTests : IDisposable
     {
         using var body = System.Text.Json.JsonDocument.Parse(
             """{"status":"draft","translations":{"en":{"title":"T","body":"<p>ok</p><script>alert(1)</script><p onclick=\"x()\">y</p>"}}}""");
-        var created = await _svc.CreateAsync("article", body.RootElement);
+        var created = await _svc.CreateAsync("fxArticle", body.RootElement);
         var id = created["id"]!.ToString()!;
 
-        var reloaded = await _svc.GetAsync("article", id, locale: "en");
+        var reloaded = await _svc.GetAsync("fxArticle", id, locale: "en");
         var translations = (IReadOnlyDictionary<string, Dictionary<string, object?>>)reloaded!["translations"]!;
         var en = translations["en"];
         var stored = en["body"] as string;
@@ -91,10 +91,10 @@ public sealed class ItemServiceRichTextSanitizationTests : IDisposable
     {
         using var body = System.Text.Json.JsonDocument.Parse(
             """{"status":"draft","translations":{"en":{"title":"T","body":"<p></p>"}}}""");
-        var created = await _svc.CreateAsync("article", body.RootElement);
+        var created = await _svc.CreateAsync("fxArticle", body.RootElement);
         var id = created["id"]!.ToString()!;
 
-        var reloaded = await _svc.GetAsync("article", id, locale: "en");
+        var reloaded = await _svc.GetAsync("fxArticle", id, locale: "en");
         var translations = (IReadOnlyDictionary<string, Dictionary<string, object?>>)reloaded!["translations"]!;
         var en = translations["en"];
         en["body"].Should().BeNull();

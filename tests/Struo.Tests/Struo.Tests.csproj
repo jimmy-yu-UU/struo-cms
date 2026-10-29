@@ -25,7 +25,7 @@
     <ProjectReference Include="..\..\src\Struo.Infrastructure\Struo.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Struo.Api\Struo.Api.csproj" />
     <ProjectReference Include="..\Struo.Tests.Support\Struo.Tests.Support.csproj" />
-    <ProjectReference Include="..\..\samples\Struo.Sample.Blog\Struo.Sample.Blog.csproj" />
+    <ProjectReference Include="..\Struo.Tests.Fixtures\Struo.Tests.Fixtures.csproj" />
   </ItemGroup>
 
 </Project>

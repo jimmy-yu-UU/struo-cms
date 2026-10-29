@@ -36,7 +36,7 @@ public class UtcInstantJsonTests(ApiFactory factory)
     public async Task Written_offset_value_is_stored_as_its_instant_and_found_by_that_instant()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var created = await admin.PostAsJsonAsync("/api/items/article", new
+        var created = await admin.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             publishedAt = "2026-10-14T10:00:00+08:00",
@@ -46,12 +46,12 @@ public class UtcInstantJsonTests(ApiFactory factory)
         var id = JsonDocument.Parse(await created.Content.ReadAsStringAsync())
             .RootElement.GetProperty("data").GetProperty("id").GetString()!;
 
-        var body = await admin.GetStringAsync($"/api/items/article/{id}");
+        var body = await admin.GetStringAsync($"/api/items/fxArticle/{id}");
         JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("publishedAt").GetString()
             .Should().Be("2026-10-14T02:00:00Z");
 
         var found = await admin.GetStringAsync(
-            "/api/items/article?filter[publishedAt][_eq]=2026-10-14T02:00:00Z&limit=500");
+            "/api/items/fxArticle?filter[publishedAt][_eq]=2026-10-14T02:00:00Z&limit=500");
         JsonDocument.Parse(found).RootElement.GetProperty("data").EnumerateArray()
             .Select(e => e.GetProperty("id").GetString()).Should().Contain(id);
     }
@@ -62,14 +62,14 @@ public class UtcInstantJsonTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var response = await admin.PostAsJsonAsync("/graphql", new
         {
-            query = "mutation { createArticle(input: { status: \"draft\", publishedAt: \"2026-10-14T10:00:00+08:00\", " +
+            query = "mutation { createFxArticle(input: { status: \"draft\", publishedAt: \"2026-10-14T10:00:00+08:00\", " +
                     "translations: [ { locale: \"en\", fields: { title: \"utc-gql-probe\" } } ] }) { id } }"
         });
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
-        var id = root.GetProperty("data").GetProperty("createArticle").GetProperty("id").GetString()!;
+        var id = root.GetProperty("data").GetProperty("createFxArticle").GetProperty("id").GetString()!;
 
-        var body = await admin.GetStringAsync($"/api/items/article/{id}");
+        var body = await admin.GetStringAsync($"/api/items/fxArticle/{id}");
         JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("publishedAt").GetString()
             .Should().Be("2026-10-14T02:00:00Z");
     }
@@ -78,7 +78,7 @@ public class UtcInstantJsonTests(ApiFactory factory)
     public async Task A_new_revision_snapshot_carries_dates_ending_in_Z()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var created = await admin.PostAsJsonAsync("/api/items/article", new
+        var created = await admin.PostAsJsonAsync("/api/items/fxArticle", new
         {
             status = "draft",
             publishedAt = "2026-10-14T10:00:00+08:00",
@@ -87,7 +87,7 @@ public class UtcInstantJsonTests(ApiFactory factory)
         var id = JsonDocument.Parse(await created.Content.ReadAsStringAsync())
             .RootElement.GetProperty("data").GetProperty("id").GetString()!;
 
-        var body = await admin.GetStringAsync($"/api/items/article/{id}/revisions/1");
+        var body = await admin.GetStringAsync($"/api/items/fxArticle/{id}/revisions/1");
         JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("snapshot")
             .GetProperty("publishedAt").GetString().Should().Be("2026-10-14T02:00:00Z");
     }

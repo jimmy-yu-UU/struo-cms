@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/Struo.Sample.Blog/Struo.Sample.Blog.csproj" />
+    <Project Path="samples/Struo.Sample.Blog.Tests/Struo.Sample.Blog.Tests.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Struo.Api/Struo.Api.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="src/Struo.Infrastructure/Struo.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Struo.Tests.Fixtures/Struo.Tests.Fixtures.csproj" />
     <Project Path="tests/Struo.Tests.Support/Struo.Tests.Support.csproj" />
     <Project Path="tests/Struo.Tests.Template/Struo.Tests.Template.csproj" />
     <Project Path="tests/Struo.Tests/Struo.Tests.csproj" />

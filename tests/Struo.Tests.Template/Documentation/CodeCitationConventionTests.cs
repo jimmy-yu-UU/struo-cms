@@ -17,8 +17,9 @@ namespace Struo.Tests.Template.Documentation;
 public sealed partial class CodeCitationConventionTests
 {
     /// <summary>
-    /// A line carrying this literal marker is skipped by both citation regexes below; no real citation
-    /// in this repository carries it, so it cannot be used to launder an actual violation.
+    /// A line carrying this literal marker is skipped by both citation regexes below. It has two
+    /// sanctioned uses: a regex false positive in a guard fixture, and a path a walkthrough tells the
+    /// reader to create, which cannot exist yet. It is not a general-purpose suppression.
     /// </summary>
     private const string AllowMarker = "citation-guard:allow";
 
@@ -60,11 +61,13 @@ public sealed partial class CodeCitationConventionTests
     private static readonly string[] ScanRootFiles = ["AGENTS.md", "CLAUDE.md"];
     private static readonly string[] ScanRootDirs = ["docs/ai", "docs/guide", "frontend/src"];
     private static readonly string[] CsOnlyScanRootDirs = ["src", "tests"];
-    private static readonly string[] ResolutionRootFiles = ["AGENTS.md", "CLAUDE.md"];
-    private static readonly string[] ResolutionRootDirs =
+    internal static readonly string[] ResolutionRootFiles = ["AGENTS.md", "CLAUDE.md"];
+    internal static readonly string[] ResolutionRootDirs =
         ["src", "tests", "frontend/src", "schema", "docs", "samples"];
     private static readonly string[] ExcludedDirNames = ["obj", "bin", "node_modules", ".git"];
-    private const string ExcludedRelativePrefix = "docs/_archive-local";
+    internal const string ExcludedRelativePrefix = "docs/_archive-local";
+
+    internal static bool IsKnownFileExtension(string extension) => KnownFileExtensions.Contains(extension);
 
     private sealed record Violation(string RelativePath, int LineNumber, string Citation, string Reason)
     {
@@ -137,6 +140,36 @@ public sealed partial class CodeCitationConventionTests
         CollectConstructWithRangeViolations("doc.md", 1, line, violations);
 
         violations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void No_bare_path_citations_into_files_or_directories_that_do_not_exist()
+    {
+        var repoRoot = RepoRoot.Find();
+        var (scanFiles, _) = WalkRepositoryOnce(repoRoot);
+
+        var violations = new List<string>();
+        foreach (var relativePath in scanFiles)
+        {
+            if (NarrativeScanScope.IsLocaleChangelog(relativePath))
+                continue; // a changelog is exempt; it names paths absent from the current tree.
+
+            var lines = File.ReadAllLines(Path.Combine(repoRoot, relativePath));
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains(AllowMarker, StringComparison.Ordinal))
+                    continue;
+
+                violations.AddRange(BarePathCitations
+                    .FindUnresolved(lines[i], path => BarePathCitations.Exists(repoRoot, path))
+                    .Select(path => $"{relativePath}:{i + 1} → {path}"));
+            }
+        }
+
+        violations.Should().BeEmpty(
+            "a repo-relative path cited without a line number must name a file or directory that exists " +
+            "(docs/ai/conventions.md, \"Citing code from docs and comments\") — violations:\n" +
+            string.Join("\n", violations));
     }
 
     private static void CollectExtensionAnchoredViolations(

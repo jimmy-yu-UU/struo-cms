@@ -8,7 +8,7 @@ using Struo.Domain.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -43,16 +43,16 @@ public sealed class TypedWhereTests : IDisposable
     public TypedWhereTests()
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Tester));
-        _db.CodeFirst.InitTables<Category>();
-        _db.CodeFirst.InitTables<Article>();
+        _db.CodeFirst.InitTables<FxCategory>();
+        _db.CodeFirst.InitTables<FxArticle>();
         _db.CodeFirst.InitTables<Reserved>();
-        var types = new[] { typeof(Article), typeof(Category), typeof(Tag), typeof(Reserved) };
+        var types = new[] { typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Reserved) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["article"] = typeof(Article), ["category"] = typeof(Category), ["tag"] = typeof(Tag), ["reserved"] = typeof(Reserved),
+            ["fxArticle"] = typeof(FxArticle), ["fxCategory"] = typeof(FxCategory), ["fxTag"] = typeof(FxTag), ["reserved"] = typeof(Reserved),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _db.Aop.OnLogExecuting = (sql, pars) => _log.Add((sql, (pars ?? []).ToList()));
@@ -63,7 +63,7 @@ public sealed class TypedWhereTests : IDisposable
     private Guid SeedArticle(Guid? categoryId = null)
     {
         var id = Guid.CreateVersion7();
-        _db.Insertable(new Article { Id = id, CategoryId = categoryId, Status = "draft" }).ExecuteCommand();
+        _db.Insertable(new FxArticle { Id = id, CategoryId = categoryId, Status = "draft" }).ExecuteCommand();
         return id;
     }
 
@@ -95,7 +95,7 @@ public sealed class TypedWhereTests : IDisposable
         var id = SeedArticle();
         _log.Clear();
 
-        await _repo.UpdateAsync("article", id.ToString(), new Article { Status = "published", Version = 0 });
+        await _repo.UpdateAsync("fxArticle", id.ToString(), new FxArticle { Status = "published", Version = 0 });
 
         AssertBound(Updates(), id, 0L);
     }
@@ -104,12 +104,12 @@ public sealed class TypedWhereTests : IDisposable
     public async Task Stale_version_update_conflicts()
     {
         var id = SeedArticle();
-        await _repo.UpdateAsync("article", id.ToString(), new Article { Status = "published", Version = 0 });
+        await _repo.UpdateAsync("fxArticle", id.ToString(), new FxArticle { Status = "published", Version = 0 });
 
-        var act = () => _repo.UpdateAsync("article", id.ToString(), new Article { Status = "draft", Version = 0 });
+        var act = () => _repo.UpdateAsync("fxArticle", id.ToString(), new FxArticle { Status = "draft", Version = 0 });
 
         await act.Should().ThrowAsync<ConcurrencyConflictException>();
-        var row = (Article)(await _repo.GetByIdAsync("article", id.ToString()))!;
+        var row = (FxArticle)(await _repo.GetByIdAsync("fxArticle", id.ToString()))!;
         row.Status.Should().Be("published");
         row.Version.Should().Be(1);
     }
@@ -120,33 +120,33 @@ public sealed class TypedWhereTests : IDisposable
         var id = SeedArticle();
         _log.Clear();
 
-        (await _repo.SoftDeleteAsync("article", id.ToString(), DateTime.UtcNow, null)).Should().BeTrue();
+        (await _repo.SoftDeleteAsync("fxArticle", id.ToString(), DateTime.UtcNow, null)).Should().BeTrue();
         AssertBound(Updates(), id);
-        (await _repo.SoftDeleteAsync("article", id.ToString(), DateTime.UtcNow, null)).Should().BeFalse();
+        (await _repo.SoftDeleteAsync("fxArticle", id.ToString(), DateTime.UtcNow, null)).Should().BeFalse();
 
         _log.Clear();
-        (await _repo.RestoreAsync("article", id.ToString())).Should().BeTrue();
+        (await _repo.RestoreAsync("fxArticle", id.ToString())).Should().BeTrue();
         AssertBound(Updates(), id);
-        (await _repo.RestoreAsync("article", id.ToString())).Should().BeFalse();
+        (await _repo.RestoreAsync("fxArticle", id.ToString())).Should().BeFalse();
     }
 
     [Fact]
     public async Task Purge_nulls_the_referencing_foreign_key_including_trashed_rows()
     {
         var categoryId = Guid.CreateVersion7();
-        _db.Insertable(new Category { Id = categoryId, Name = "c" }).ExecuteCommand();
+        _db.Insertable(new FxCategory { Id = categoryId, Name = "c" }).ExecuteCommand();
         var live = SeedArticle(categoryId);
         var trashed = SeedArticle(categoryId);
         var other = SeedArticle(null);
-        await _repo.SoftDeleteAsync("article", trashed.ToString(), DateTime.UtcNow, null);
+        await _repo.SoftDeleteAsync("fxArticle", trashed.ToString(), DateTime.UtcNow, null);
         _log.Clear();
 
-        await _repo.SetForeignKeyNullAsync("article", "categoryId", categoryId);
+        await _repo.SetForeignKeyNullAsync("fxArticle", "categoryId", categoryId);
 
         AssertBound(Updates(), categoryId);
         foreach (var id in new[] { live, trashed, other })
         {
-            var row = (Article)(await _repo.GetByIdAsync("article", id.ToString(), DeletedFilter.With))!;
+            var row = (FxArticle)(await _repo.GetByIdAsync("fxArticle", id.ToString(), DeletedFilter.With))!;
             row.CategoryId.Should().BeNull();
         }
     }

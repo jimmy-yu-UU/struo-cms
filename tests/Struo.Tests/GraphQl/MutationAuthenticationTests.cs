@@ -5,7 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Infrastructure.Identity;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -19,7 +19,7 @@ namespace Struo.Tests.GraphQl;
 [Collection("ApiIntegration")]
 public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLifetime
 {
-    private const string Collection = "category";
+    private const string Collection = "fxCategory";
     private const string CreatedName = "signed-in";
     private Guid _publicRoleId;
 
@@ -37,7 +37,7 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         await SetPublicWriteAsync(db, canWrite: false);
-        await db.Deleteable<Category>().Where(c => c.Name == CreatedName).ExecuteCommandAsync();
+        await db.Deleteable<FxCategory>().Where(c => c.Name == CreatedName).ExecuteCommandAsync();
     }
 
     private async Task SetPublicWriteAsync(ISqlSugarClient db, bool canWrite) =>
@@ -56,10 +56,10 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
         root.GetProperty("errors")[0].GetProperty("extensions").GetProperty("code").GetString()!;
 
     [Theory]
-    [InlineData("mutation { createCategory(input: { name: \"anon\" }) { id } }")]
-    [InlineData("mutation { updateCategory(id: \"1\", input: { name: \"anon\" }) { id } }")]
-    [InlineData("mutation { deleteCategory(id: \"1\") }")]
-    [InlineData("mutation { restoreCategory(id: \"1\") { id } }")]
+    [InlineData("mutation { createFxCategory(input: { name: \"anon\" }) { id } }")]
+    [InlineData("mutation { updateFxCategory(id: \"1\", input: { name: \"anon\" }) { id } }")]
+    [InlineData("mutation { deleteFxCategory(id: \"1\") }")]
+    [InlineData("mutation { restoreFxCategory(id: \"1\") { id } }")]
     [InlineData("mutation { _service }")]
     public async Task Anonymous_mutation_is_unauthorized_even_with_public_write_grant(string mutation)
     {
@@ -76,20 +76,20 @@ public sealed class MutationAuthenticationTests(ApiFactory factory) : IAsyncLife
         var (client, _) = await factory.CreateRolelessClientAsync();
 
         var root = await PostAsync(client,
-            $"mutation {{ createCategory(input: {{ name: \"{CreatedName}\" }}) {{ id name }} }}");
+            $"mutation {{ createFxCategory(input: {{ name: \"{CreatedName}\" }}) {{ id name }} }}");
 
         root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
-        root.GetProperty("data").GetProperty("createCategory").GetProperty("name").GetString()
+        root.GetProperty("data").GetProperty("createFxCategory").GetProperty("name").GetString()
             .Should().Be(CreatedName);
     }
 
     [Fact]
     public async Task Anonymous_query_still_succeeds()
     {
-        var root = await PostAsync(factory.CreateClient(), "{ categories { items { id } } }");
+        var root = await PostAsync(factory.CreateClient(), "{ fxCategories { items { id } } }");
 
         root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
-        root.GetProperty("data").GetProperty("categories").GetProperty("items").ValueKind
+        root.GetProperty("data").GetProperty("fxCategories").GetProperty("items").ValueKind
             .Should().Be(JsonValueKind.Array);
     }
 }

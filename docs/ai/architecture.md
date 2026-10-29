@@ -53,8 +53,10 @@ referencing `samples/*`: `tests/Struo.Tests.Template/TemplateInvariantsTests.cs`
 `Host_project_has_no_project_reference_into_samples` reads `Struo.Api.csproj` directly and fails if any
 `<ProjectReference>` line mentions `samples`; its sibling
 `Shipped_appsettings_declares_no_content_assemblies` asserts the shipped `appsettings.json`'s
-`Struo:ContentAssemblies` is empty. Only `tests/Struo.Tests` references the sample project — that is
+`Struo:ContentAssemblies` is empty. Only `samples/Struo.Sample.Blog.Tests` references the sample
+project; `Core_test_project_has_no_project_reference_into_samples` fails if `tests/Struo.Tests` references `samples/` — that is
 what makes `samples/Struo.Sample.Blog` truly optional and deletable.
+`tests/Struo.Tests.Fixtures` is a test-only content project (collections prefixed `fx`) with its own migration; no host registers it.
 
 See `docs/guide/en/02-architecture.md` for the conceptual introduction to this layering.
 

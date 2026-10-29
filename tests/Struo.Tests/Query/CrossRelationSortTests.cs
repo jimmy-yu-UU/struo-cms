@@ -23,10 +23,10 @@ public class CrossRelationSortTests(ApiFactory factory)
     public async Task Sort_descending_by_category_name()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var catA = await Post(c, "category", new { name = "AAA_sort" });
-        var catZ = await Post(c, "category", new { name = "ZZZ_sort" });
-        var artA = await Post(c, "article", new { status = "draft", categoryId = catA, translations = new { en = new { title = "sortA" } } });
-        var artZ = await Post(c, "article", new { status = "draft", categoryId = catZ, translations = new { en = new { title = "sortZ" } } });
+        var catA = await Post(c, "fxCategory", new { name = "AAA_sort" });
+        var catZ = await Post(c, "fxCategory", new { name = "ZZZ_sort" });
+        var artA = await Post(c, "fxArticle", new { status = "draft", categoryId = catA, translations = new { en = new { title = "sortA" } } });
+        var artZ = await Post(c, "fxArticle", new { status = "draft", categoryId = catZ, translations = new { en = new { title = "sortZ" } } });
 
         // sort=-category.name should put the ZZZ-category article before the AAA-category one.
         // Scoped to just these two articles (id _in) so the assertion doesn't depend on the
@@ -37,7 +37,7 @@ public class CrossRelationSortTests(ApiFactory factory)
             filter = new { id = new Dictionary<string, object> { ["_in"] = new[] { artA, artZ } } },
             sort = SortByCategoryNameDesc
         });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query", envelope);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query", envelope);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var order = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
@@ -52,7 +52,7 @@ public class CrossRelationSortTests(ApiFactory factory)
         var c = _factory.CreateClient();
         // children is a O2M relation on category — sorting across to-many must be rejected.
         var envelope = JsonSerializer.SerializeToElement(new { sort = SortByChildrenNameDesc });
-        (await c.PostAsJsonAsync("/api/items/category/query", envelope)).StatusCode
+        (await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope)).StatusCode
             .Should().Be(HttpStatusCode.BadRequest);
     }
 }

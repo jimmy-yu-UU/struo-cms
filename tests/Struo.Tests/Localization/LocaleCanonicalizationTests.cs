@@ -31,7 +31,7 @@ public class LocaleCanonicalizationTests(ApiFactory factory)
                 ["ZH-tw"] = new { title = "Z1", body = (string?)null },
             },
         });
-        var created = await c.PostAsJsonAsync("/api/items/article", create);
+        var created = await c.PostAsJsonAsync("/api/items/fxArticle", create);
         created.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await created.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
@@ -39,9 +39,9 @@ public class LocaleCanonicalizationTests(ApiFactory factory)
         {
             translations = new Dictionary<string, object> { ["zh-TW"] = new { title = "Z2", body = (string?)null } },
         });
-        (await c.PutAsJsonAsync($"/api/items/article/{id}", update)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await c.PutAsJsonAsync($"/api/items/fxArticle/{id}", update)).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var tr = Translations(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync());
+        var tr = Translations(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync());
         tr.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["en", "zh-TW"]);
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z2");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("E1");
@@ -60,10 +60,10 @@ public class LocaleCanonicalizationTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "Z1", body = (string?)null },
             },
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", create)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", create)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
-        var tr = Translations(await (await c.GetAsync($"/api/items/article/{id}?locale=ZH-tw")).Content.ReadAsStringAsync());
+        var tr = Translations(await (await c.GetAsync($"/api/items/fxArticle/{id}?locale=ZH-tw")).Content.ReadAsStringAsync());
 
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z1");
         tr.TryGetProperty("en", out _).Should().BeFalse();

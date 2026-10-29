@@ -17,7 +17,7 @@ public class SuccessEnvelopeEndpointTests(ApiFactory factory)
     public async Task List_has_success_data_and_meta()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await client.GetAsync("/api/items/article?limit=2&offset=0");
+        var resp = await client.GetAsync("/api/items/fxArticle?limit=2&offset=0");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var root = Root(await resp.Content.ReadAsStringAsync());
         root.GetProperty("success").GetBoolean().Should().BeTrue();
@@ -32,7 +32,7 @@ public class SuccessEnvelopeEndpointTests(ApiFactory factory)
     public async Task Create_get_are_success_data_without_meta()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "EnvOk" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = Root(await create.Content.ReadAsStringAsync());
@@ -40,7 +40,7 @@ public class SuccessEnvelopeEndpointTests(ApiFactory factory)
         created.TryGetProperty("meta", out _).Should().BeFalse();
         var id = created.GetProperty("data").GetProperty("id").GetString()!;
 
-        var get = await client.GetAsync($"/api/items/article/{id}");
+        var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         var got = Root(await get.Content.ReadAsStringAsync());
         got.GetProperty("success").GetBoolean().Should().BeTrue();
         got.GetProperty("data").GetProperty("id").GetString().Should().Be(id);
@@ -50,10 +50,10 @@ public class SuccessEnvelopeEndpointTests(ApiFactory factory)
     public async Task Delete_stays_bare_204()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
-        var create = await client.PostAsJsonAsync("/api/items/article",
+        var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "ToDelete" } } });
         var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        var del = await client.DeleteAsync($"/api/items/article/{id}?purge=true");
+        var del = await client.DeleteAsync($"/api/items/fxArticle/{id}?purge=true");
         del.StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await del.Content.ReadAsStringAsync()).Should().BeEmpty();
     }

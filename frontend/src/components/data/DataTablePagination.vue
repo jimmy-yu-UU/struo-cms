@@ -40,8 +40,9 @@ const isLast = computed(() => props.page >= pageCount.value - 1)
 // and each SelectItem's own `value` are strings below -- never the underlying number; the pageSize
 // contract everywhere else (DataTableState, buildListQuery) is a number, so the boundary
 // conversion still happens once, here. `value: unknown`, not a typed payload: matches
-// UiLanguageSwitcher's same-shaped handler (src/components/shell/UiLanguageSwitcher.vue), which
-// takes the same `@update:model-value` from this vendored Select.
+// UiLanguageSwitcher's same-shaped handler
+// (frontend/src/components/shell/UiLanguageSwitcher.vue), which takes the same
+// `@update:model-value` from this vendored Select.
 function onPageSizeChange(value: unknown): void {
   emit('update:pageSize', Number(value))
 }

@@ -4,7 +4,7 @@ using SqlSugar;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -41,12 +41,12 @@ public sealed partial class LiveRepositoryTests
         _db?.Dispose();
         Use(backend);
         var (repo, graph, md) = BuildFacetRepo();
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "published" });
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "published" });
-        await repo.CreateAsync("article", new Article { Id = Guid.NewGuid(), Status = "draft" });
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "published" });
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "published" });
+        await repo.CreateAsync("fxArticle", new FxArticle { Id = Guid.NewGuid(), Status = "draft" });
 
-        var facet = FacetPathResolver.Resolve(md.GetCollection("article")!, "status", graph, md);
+        var facet = FacetPathResolver.Resolve(md.GetCollection("fxArticle")!, "status", graph, md);
         return await repo.FacetAsync(new FacetRequest(
-            "article", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
+            "fxArticle", new QueryModel(null, null, [], 100, 0, null), facet, [], null, DeletedFilter.Exclude, 50));
     }
 }

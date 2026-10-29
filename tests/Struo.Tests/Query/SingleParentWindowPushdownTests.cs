@@ -7,7 +7,7 @@ using SqlSugar;
 using Struo.Application.Configuration;
 using Struo.Application.Query;
 using Struo.Domain.Query;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -37,10 +37,10 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var parent = new Category { Id = Guid.NewGuid(), Name = $"{label}-parent" };
+        var parent = new FxCategory { Id = Guid.NewGuid(), Name = $"{label}-parent" };
         await db.Insertable(parent).ExecuteCommandAsync();
         var children = childNames
-            .Select(n => new Category { Id = Guid.NewGuid(), Name = n, ParentId = parent.Id })
+            .Select(n => new FxCategory { Id = Guid.NewGuid(), Name = n, ParentId = parent.Id })
             .ToList();
         await db.Insertable(children).ExecuteCommandAsync();
         return parent.Id;
@@ -52,8 +52,8 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         foreach (var id in parentIds)
         {
-            await db.Deleteable<Category>().Where(x => x.ParentId == id).ExecuteCommandAsync();
-            await db.Deleteable<Category>().Where(x => x.Id == id).ExecuteCommandAsync();
+            await db.Deleteable<FxCategory>().Where(x => x.ParentId == id).ExecuteCommandAsync();
+            await db.Deleteable<FxCategory>().Where(x => x.Id == id).ExecuteCommandAsync();
         }
     }
 
@@ -87,7 +87,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await WithSmallCap(() => Query(c, "category",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(ParentById(parentId), new { sort = SortByName, offset = 2, limit = 3 })));
             status.Should().Be(HttpStatusCode.OK);
             Children(body).Select(e => e.GetProperty("name").GetString()).Should().Equal("c", "d", "e");
@@ -105,7 +105,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
             var ids = new List<string>();
             foreach (var offset in new[] { 0, 3, 6 })
             {
-                var (status, body) = await WithSmallCap(() => Query(c, "category",
+                var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                     Envelope(ParentById(parentId), new { sort = SortByName, offset, limit = 3 })));
                 status.Should().Be(HttpStatusCode.OK);
                 ids.AddRange(Children(body).Select(e => e.GetProperty("id").GetString()!));
@@ -122,7 +122,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await WithSmallCap(() => Query(c, "category",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(ParentById(parentId), new { filter = new { name = Op("_eq", "dup") }, limit = 2 })));
             status.Should().Be(HttpStatusCode.OK);
             Children(body).Select(e => e.GetProperty("name").GetString()).Should().Equal("dup", "dup");
@@ -137,7 +137,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await WithSmallCap(() => Query(c, "category",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(ParentById(parentId), new { sort = SortByName, offset = 1 })));
             status.Should().Be(HttpStatusCode.BadRequest);
             body.Should().Contain("children");
@@ -153,7 +153,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await WithSmallCap(() => Query(c, "category",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(new { id = Op("_in", new[] { first, second }) }, new { sort = SortByName, limit = 1 })));
             status.Should().Be(HttpStatusCode.BadRequest);
             body.Should().Contain("children");
@@ -168,17 +168,17 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         var tagIds = new List<Guid>();
         foreach (var n in new[] { "pw-1", "pw-2", "pw-3", "pw-4" })
         {
-            var r = await c.PostAsJsonAsync("/api/items/tag", new { name = n });
+            var r = await c.PostAsJsonAsync("/api/items/fxTag", new { name = n });
             using var d = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
             tagIds.Add(Guid.Parse(d.RootElement.GetProperty("data").GetProperty("id").GetString()!));
         }
-        var created = await c.PostAsJsonAsync("/api/items/article",
+        var created = await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "PushdownM2M" } }, tags = tagIds });
         using var cd = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var articleId = Guid.Parse(cd.RootElement.GetProperty("data").GetProperty("id").GetString()!);
         try
         {
-            var (status, body) = await WithSmallCap(() => Query(c, "article",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxArticle",
                 new { filter = ParentById(articleId), deep = new { tags = new { limit = 2 } } }));
             status.Should().Be(HttpStatusCode.BadRequest);
             body.Should().Contain("'tags'").And.Contain("junction rows");
@@ -187,9 +187,9 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            await db.Deleteable<ArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
-            await db.Deleteable<Tag>().Where(t => tagIds.Contains(t.Id)).ExecuteCommandAsync();
-            await db.Deleteable<Article>().Where(a => a.Id == articleId).ExecuteCommandAsync();
+            await db.Deleteable<FxArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
+            await db.Deleteable<FxTag>().Where(t => tagIds.Contains(t.Id)).ExecuteCommandAsync();
+            await db.Deleteable<FxArticle>().Where(a => a.Id == articleId).ExecuteCommandAsync();
         }
     }
 
@@ -202,11 +202,11 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         {
             foreach (var n in new[] { "first", "second", "third", "fourth" })
             {
-                (await c.PostAsJsonAsync("/api/items/category", new { name = n, parentId }))
+                (await c.PostAsJsonAsync("/api/items/fxCategory", new { name = n, parentId }))
                     .StatusCode.Should().Be(HttpStatusCode.Created);
                 await Task.Delay(30);
             }
-            var (status, body) = await WithSmallCap(() => Query(c, "category",
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(ParentById(parentId), new { limit = 2 })));
             status.Should().Be(HttpStatusCode.OK);
             Children(body).Select(e => e.GetProperty("name").GetString()).Should().Equal("fourth", "third");
@@ -223,12 +223,12 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
             using (var scope = _factory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-                var first = await db.Queryable<Category>().Where(x => x.ParentId == parentId && x.Name == "a").FirstAsync();
-                await db.Insertable(new Category { Id = Guid.NewGuid(), Name = "a-kid", ParentId = first.Id })
+                var first = await db.Queryable<FxCategory>().Where(x => x.ParentId == parentId && x.Name == "a").FirstAsync();
+                await db.Insertable(new FxCategory { Id = Guid.NewGuid(), Name = "a-kid", ParentId = first.Id })
                     .ExecuteCommandAsync();
             }
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await WithSmallCap(() => Query(c, "category", Envelope(ParentById(parentId),
+            var (status, body) = await WithSmallCap(() => Query(c, "fxCategory", Envelope(ParentById(parentId),
                 new { sort = SortByName, limit = 2, deep = new { children = new { } } })));
             status.Should().Be(HttpStatusCode.OK);
             var window = Children(body);
@@ -241,9 +241,9 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         {
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            var childIds = (await db.Queryable<Category>().Where(x => x.ParentId == parentId).ToListAsync())
+            var childIds = (await db.Queryable<FxCategory>().Where(x => x.ParentId == parentId).ToListAsync())
                 .Select(x => x.Id).ToList();
-            await db.Deleteable<Category>().Where(x => childIds.Contains(x.ParentId!.Value)).ExecuteCommandAsync();
+            await db.Deleteable<FxCategory>().Where(x => childIds.Contains(x.ParentId!.Value)).ExecuteCommandAsync();
             await DeleteFamilies(parentId);
         }
     }
@@ -260,9 +260,9 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         var byTitle = new[] { new SortField("title", false) };
 
         var withoutLocale = await harness.Repository.QueryWhereInWindowAsync(
-            new WhereInWindowRequest("article", "categoryId", parent, null, byTitle, 0, 1, null));
+            new WhereInWindowRequest("fxArticle", "categoryId", parent, null, byTitle, 0, 1, null));
         var withLocale = await harness.Repository.QueryWhereInWindowAsync(
-            new WhereInWindowRequest("article", "categoryId", parent, null, byTitle, 0, 1, "en"));
+            new WhereInWindowRequest("fxArticle", "categoryId", parent, null, byTitle, 0, 1, "en"));
 
         withoutLocale.Should().BeNull();
         withLocale.Should().HaveCount(1);

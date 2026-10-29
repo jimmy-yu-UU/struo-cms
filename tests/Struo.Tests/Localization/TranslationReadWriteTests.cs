@@ -26,10 +26,10 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "你好", body = "B-zh" }
             }
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
-        var all = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync()).GetProperty("data");
+        var all = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync()).GetProperty("data");
         var tr = all.GetProperty("translations");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
@@ -49,10 +49,10 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "只中", body = (string?)null }
             }
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}?locale=zh-TW")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}?locale=zh-TW")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.TryGetProperty("zh-TW", out _).Should().BeTrue();
         tr.TryGetProperty("en", out _).Should().BeFalse();
@@ -71,7 +71,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "Z1", body = (string?)null }
             }
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
         var upd = JsonSerializer.SerializeToElement(new
@@ -79,9 +79,9 @@ public class TranslationReadWriteTests(ApiFactory factory)
             status = "draft",
             translations = new Dictionary<string, object> { ["zh-TW"] = new { title = "Z2", body = (string?)null } }
         });
-        await c.PutAsJsonAsync($"/api/items/article/{id}", upd);
+        await c.PutAsJsonAsync($"/api/items/fxArticle/{id}", upd);
 
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z2");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("E1");
@@ -96,7 +96,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
             status = "draft",
             translations = new Dictionary<string, object> { ["xx"] = new { title = "x", body = (string?)null } }
         });
-        (await c.PostAsJsonAsync("/api/items/article", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -112,10 +112,10 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "哈囉", seoTitle = "哈囉 SEO", seoMetaDescription = "zh desc" }
             }
         });
-        var id = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{id}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{id}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.GetProperty("en").GetProperty("seoTitle").GetString().Should().Be("Hello SEO");
         tr.GetProperty("en").GetProperty("seoMetaDescription").GetString().Should().Be("en desc");
@@ -146,11 +146,11 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "OG 測試" }
             }
         });
-        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
         // 3. GET the article (all locales)
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{articleId}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{articleId}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
 
         // 4. Assert
@@ -175,11 +175,11 @@ public class TranslationReadWriteTests(ApiFactory factory)
                 ["en"] = new { title = "Dangling", seoOgImageId = danglingId }
             }
         });
-        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/article", body)).Content.ReadAsStringAsync())
+        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("id").GetString()!;
 
         // GET → seoOgImage must be null, no throw
-        var tr = Root(await (await c.GetAsync($"/api/items/article/{articleId}")).Content.ReadAsStringAsync())
+        var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{articleId}")).Content.ReadAsStringAsync())
             .GetProperty("data").GetProperty("translations");
         tr.GetProperty("en").GetProperty("seoOgImage").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
     }

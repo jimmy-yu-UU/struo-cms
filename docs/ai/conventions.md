@@ -203,10 +203,28 @@ no per-citation upstream exception. Write upstream citations in the extension-an
 this one. A genuine false positive on ordinary prose (the test's own example is a version range like
 "Supported Node.js: 20-22", `citation-guard:allow`) can only be cleared by putting the marker on
 that same physical line — the guard checks line by line, so a marker on an adjacent line does not
-help — and it is not a general-purpose suppression. Markdown fenced code blocks get no exemption
+help — and it is not a general-purpose suppression. The other legitimate use is a path a walkthrough
+tells the reader to create, which cannot exist yet. Markdown fenced code blocks get no exemption
 from this scan either — a citation written inside a fence is a real citation and stays caught. A
 bare trailing number with no filename (`` `:145` ``) or a prose reference ("line 74") is not reliably
 distinguishable from a port or a time and is not covered; a reviewer still has to catch those by hand.
+
+A repo-relative path cited **without** a line number is checked for existence by the same test
+(`BarePathCitations`). A candidate is a token that starts at one of the resolution roots above, with
+or without a file extension, and it must resolve to a real file or directory. The check asks the
+operating system, so a case error passes on Windows and fails on the Linux CI run. A path also
+counts as existing when `<path>.example` does: a gitignored local file such as
+`src/Struo.Api/appsettings.Development.json` is tracked as its `.example`, and is absent on a clean
+checkout. A path in the frontend's own shorthand, which drops the leading `frontend/`, starts at the
+wrong root and fails; write the full path. A token that starts anywhere else, such as an upstream
+URL or `../src/x`, is not a candidate.
+
+Not checked: globs; `<placeholder>` and `{placeholder}` segments; paths with a path segment equal to
+`MyFork`, `MyApp`, `MyProject` or `Acme`, or starting with that name and a dot (the fork example
+names); anything under `docs/_archive-local/`; a path with a `:line` suffix (owned by the check
+above); and the two `docs/guide/<locale>/changelog.md` files, which name paths that do not exist in
+the current tree (the same exemption `NarrativeScanScope` gives them). While the top-level `samples/` directory is
+absent, as in a fork that deleted it, paths under `samples/` are skipped too.
 
 Every file under `docs/_archive-local/` — including this repository's own specs and audit
 records — is excluded from the walk entirely (`CodeCitationConventionTests`'s
@@ -679,11 +697,12 @@ destructive actions, the user is left with a blocked action and no working way t
 - **E2E** (Playwright, `frontend/playwright.config.ts`): two projects — `core` (`pnpm e2e`) runs
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped
   template with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and
-  needs the Blog sample opted in first. Neither is run by CI — see `AGENTS.md`, "Verification",
-  for the five standing gates CI does run — and both need a live API and database, not just a
-  build. `ci.yml` also runs a `docker` job (builds and smoke-tests the two container images and
-  the Compose stack — `docs/guide/en/20-deployment.md`'s "The two container images" and "The
-  local Compose stack" sections) and two `sonar-*` jobs; none of the three is a standing gate.
+  needs the Blog sample opted in first and is added to the config only while `e2e/sample/` exists.
+  Neither is run by CI — see `AGENTS.md`, "Verification", for the five standing gates CI does run —
+  and both need a live API and database, not just a build. `ci.yml` also runs a `docker` job
+  (builds and smoke-tests the two container images and the Compose stack —
+  `docs/guide/en/20-deployment.md`'s "The two container images" and "The local Compose stack"
+  sections) and two `sonar-*` jobs; none of the three is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"

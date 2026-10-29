@@ -17,10 +17,10 @@ internal static class FacetSeed
     public static async Task<(HttpClient Client, string CategoryId, string TagId)> SeedAsync(ApiFactory factory)
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var cat = await client.PostAsJsonAsync("/api/items/category", new { name = "u4-" + Guid.NewGuid().ToString("N")[..8] });
+        var cat = await client.PostAsJsonAsync("/api/items/fxCategory", new { name = "u4-" + Guid.NewGuid().ToString("N")[..8] });
         cat.StatusCode.Should().Be(HttpStatusCode.Created);
         var categoryId = (await Json(cat)).RootElement.GetProperty("data").GetProperty("id").GetString()!;
-        var tag = await client.PostAsJsonAsync("/api/items/tag", new { name = "u4tag-" + Guid.NewGuid().ToString("N")[..8] });
+        var tag = await client.PostAsJsonAsync("/api/items/fxTag", new { name = "u4tag-" + Guid.NewGuid().ToString("N")[..8] });
         var tagId = (await Json(tag)).RootElement.GetProperty("data").GetProperty("id").GetString()!;
         foreach (var (status, withTag, title) in new[] { ("published", true, "Alpha"), ("published", false, "Beta"), ("draft", true, "Gamma") })
         {
@@ -30,7 +30,7 @@ internal static class FacetSeed
                 ["translations"] = new { en = new { title, body = "x" } },
             };
             if (withTag) body["tags"] = new[] { tagId };
-            var r = await client.PostAsJsonAsync("/api/items/article", body);
+            var r = await client.PostAsJsonAsync("/api/items/fxArticle", body);
             r.StatusCode.Should().Be(HttpStatusCode.Created, await r.Content.ReadAsStringAsync());
         }
         return (client, categoryId, tagId);

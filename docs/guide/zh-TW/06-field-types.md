@@ -303,7 +303,7 @@ defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 ```
 
-**1. 寫元件**——`frontend/src/components/fields/ColorSwatchField.vue`：
+**1. 寫元件**——`frontend/src/components/fields/ColorSwatchField.vue`： <!-- citation-guard:allow: 本段步驟要讀者自己建立的檔案 -->
 
 ```vue
 <script setup lang="ts">

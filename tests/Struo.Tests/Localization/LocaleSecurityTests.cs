@@ -97,7 +97,7 @@ public class LocaleSecurityTests(ApiFactory factory)
         var c = _factory.CreateClient();
         // A quote-bearing ?locale must be rejected before reaching the sort subquery builder.
         var body = JsonSerializer.SerializeToElement(new { sort = SortByTitle });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query?locale=en'--", body);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=en'--", body);
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -107,7 +107,7 @@ public class LocaleSecurityTests(ApiFactory factory)
         // Sanity: a valid locale code must not be rejected by the format guard.
         var c = _factory.CreateClient();
         var body = JsonSerializer.SerializeToElement(new { sort = SortByTitle });
-        var resp = await c.PostAsJsonAsync("/api/items/article/query?locale=en", body);
+        var resp = await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=en", body);
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -132,7 +132,7 @@ public class LocaleSecurityTests(ApiFactory factory)
                     ["zh-TW"] = new { title = zhTitle,  body = (string?)null }
                 }
             });
-            var resp = await c.PostAsJsonAsync("/api/items/article", body);
+            var resp = await c.PostAsJsonAsync("/api/items/fxArticle", body);
             return Root(await resp.Content.ReadAsStringAsync())
                 .GetProperty("data").GetProperty("id").GetString()!;
         }
@@ -142,7 +142,7 @@ public class LocaleSecurityTests(ApiFactory factory)
 
         // Search at en locale — should find only the "hit" article.
         var qBody = JsonSerializer.SerializeToElement(new { search = "UniqueOrSearchHit" });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=en", qBody))
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=en", qBody))
             .Content.ReadAsStringAsync()).GetProperty("data");
 
         var ids = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
@@ -164,11 +164,11 @@ public class LocaleSecurityTests(ApiFactory factory)
                 ["zh-TW"] = new { title = "獨特搜尋目標",     body = (string?)null }
             }
         });
-        var hitId = Root(await (await c.PostAsJsonAsync("/api/items/article", body))
+        var hitId = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body))
             .Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
 
         var qBody = JsonSerializer.SerializeToElement(new { search = "獨特搜尋目標" });
-        var data = Root(await (await c.PostAsJsonAsync("/api/items/article/query?locale=zh-TW", qBody))
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=zh-TW", qBody))
             .Content.ReadAsStringAsync()).GetProperty("data");
 
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString())

@@ -12,8 +12,8 @@ namespace Struo.Tests.GraphQl;
 /// GraphQL read/write parity for soft delete — proves the same round trip
 /// <see cref="Struo.Tests.Api.SoftDeleteEndpointTests"/> drives over REST also works over
 /// <c>/graphql</c> through the real host pipeline (ApiFactory): the <c>deleted</c> list-query
-/// argument, <c>deleteX(purge)</c>, and <c>restoreX</c>. Drives via "category" (no translation
-/// sidecar, so create needs no locale-gated fields) rather than "article".
+/// argument, <c>deleteX(purge)</c>, and <c>restoreX</c>. Drives via "fxCategory" (no translation
+/// sidecar, so create needs no locale-gated fields) rather than "fxArticle".
 /// </summary>
 [Collection("ApiIntegration")]
 public class GraphQlSoftDeleteTests(ApiFactory factory)
@@ -32,9 +32,9 @@ public class GraphQlSoftDeleteTests(ApiFactory factory)
     private static async Task<string> CreateCategoryAsync(HttpClient client, string name)
     {
         var root = await PostGraphQlAsync(client,
-            $"mutation {{ createCategory(input: {{ name: \"{name}\" }}) {{ id }} }}");
+            $"mutation {{ createFxCategory(input: {{ name: \"{name}\" }}) {{ id }} }}");
         root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
-        return root.GetProperty("data").GetProperty("createCategory").GetProperty("id").GetString()!;
+        return root.GetProperty("data").GetProperty("createFxCategory").GetProperty("id").GetString()!;
     }
 
     [Fact]
@@ -43,19 +43,19 @@ public class GraphQlSoftDeleteTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateCategoryAsync(client, "GqlSoftDeleteExcludeOnly");
 
-        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteCategory(id: \"{id}\") }}");
-        deleted.GetProperty("data").GetProperty("deleteCategory").GetBoolean().Should().BeTrue();
+        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteFxCategory(id: \"{id}\") }}");
+        deleted.GetProperty("data").GetProperty("deleteFxCategory").GetBoolean().Should().BeTrue();
 
         // Default (deleted: EXCLUDE) omits the soft-deleted row.
         var excluded = await PostGraphQlAsync(client,
-            $"{{ categories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ items {{ id }} total }} }}");
-        excluded.GetProperty("data").GetProperty("categories").GetProperty("total").GetInt32().Should().Be(0);
+            $"{{ fxCategories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ items {{ id }} total }} }}");
+        excluded.GetProperty("data").GetProperty("fxCategories").GetProperty("total").GetInt32().Should().Be(0);
 
         // deleted: ONLY surfaces it.
         var only = await PostGraphQlAsync(client,
-            $"{{ categories(filter: {{ id: {{ eq: \"{id}\" }} }}, deleted: ONLY) {{ items {{ id }} total }} }}");
-        only.GetProperty("data").GetProperty("categories").GetProperty("total").GetInt32().Should().Be(1);
-        only.GetProperty("data").GetProperty("categories").GetProperty("items")[0]
+            $"{{ fxCategories(filter: {{ id: {{ eq: \"{id}\" }} }}, deleted: ONLY) {{ items {{ id }} total }} }}");
+        only.GetProperty("data").GetProperty("fxCategories").GetProperty("total").GetInt32().Should().Be(1);
+        only.GetProperty("data").GetProperty("fxCategories").GetProperty("items")[0]
             .GetProperty("id").GetString().Should().Be(id);
     }
 
@@ -65,20 +65,20 @@ public class GraphQlSoftDeleteTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateCategoryAsync(client, "GqlSoftDeleteRestoreRoundTrip");
 
-        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteCategory(id: \"{id}\") }}");
-        deleted.GetProperty("data").GetProperty("deleteCategory").GetBoolean().Should().BeTrue();
+        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteFxCategory(id: \"{id}\") }}");
+        deleted.GetProperty("data").GetProperty("deleteFxCategory").GetBoolean().Should().BeTrue();
 
         var absent = await PostGraphQlAsync(client,
-            $"{{ categories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ total }} }}");
-        absent.GetProperty("data").GetProperty("categories").GetProperty("total").GetInt32().Should().Be(0);
+            $"{{ fxCategories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ total }} }}");
+        absent.GetProperty("data").GetProperty("fxCategories").GetProperty("total").GetInt32().Should().Be(0);
 
-        var restored = await PostGraphQlAsync(client, $"mutation {{ restoreCategory(id: \"{id}\") {{ id }} }}");
+        var restored = await PostGraphQlAsync(client, $"mutation {{ restoreFxCategory(id: \"{id}\") {{ id }} }}");
         restored.TryGetProperty("errors", out var restoreErrors).Should().BeFalse($"unexpected errors: {restoreErrors}");
-        restored.GetProperty("data").GetProperty("restoreCategory").GetProperty("id").GetString().Should().Be(id);
+        restored.GetProperty("data").GetProperty("restoreFxCategory").GetProperty("id").GetString().Should().Be(id);
 
         var reappeared = await PostGraphQlAsync(client,
-            $"{{ categories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ total }} }}");
-        reappeared.GetProperty("data").GetProperty("categories").GetProperty("total").GetInt32().Should().Be(1);
+            $"{{ fxCategories(filter: {{ id: {{ eq: \"{id}\" }} }}) {{ total }} }}");
+        reappeared.GetProperty("data").GetProperty("fxCategories").GetProperty("total").GetInt32().Should().Be(1);
     }
 
     [Fact]
@@ -87,26 +87,26 @@ public class GraphQlSoftDeleteTests(ApiFactory factory)
         var client = await _factory.CreateAuthenticatedClientAsync();
         var id = await CreateCategoryAsync(client, "GqlSoftDeletePurge");
 
-        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteCategory(id: \"{id}\") }}");
-        deleted.GetProperty("data").GetProperty("deleteCategory").GetBoolean().Should().BeTrue();
+        var deleted = await PostGraphQlAsync(client, $"mutation {{ deleteFxCategory(id: \"{id}\") }}");
+        deleted.GetProperty("data").GetProperty("deleteFxCategory").GetBoolean().Should().BeTrue();
 
-        var purged = await PostGraphQlAsync(client, $"mutation {{ deleteCategory(id: \"{id}\", purge: true) }}");
-        purged.GetProperty("data").GetProperty("deleteCategory").GetBoolean().Should().BeTrue();
+        var purged = await PostGraphQlAsync(client, $"mutation {{ deleteFxCategory(id: \"{id}\", purge: true) }}");
+        purged.GetProperty("data").GetProperty("deleteFxCategory").GetBoolean().Should().BeTrue();
 
         // deleted: WITH — the row is gone even ignoring the soft-delete floor.
         var withDeleted = await PostGraphQlAsync(client,
-            $"{{ categories(filter: {{ id: {{ eq: \"{id}\" }} }}, deleted: WITH) {{ total }} }}");
-        withDeleted.GetProperty("data").GetProperty("categories").GetProperty("total").GetInt32().Should().Be(0);
+            $"{{ fxCategories(filter: {{ id: {{ eq: \"{id}\" }} }}, deleted: WITH) {{ total }} }}");
+        withDeleted.GetProperty("data").GetProperty("fxCategories").GetProperty("total").GetInt32().Should().Be(0);
     }
 
     [Fact]
     public async Task Deleted_ONLY_without_delete_permission_is_FORBIDDEN()
     {
         var (client, _) = await _factory.CreateEditorClientAsync(
-            readCollections: ["category"], writeCollections: []);
+            readCollections: ["fxCategory"], writeCollections: []);
 
         var response = await client.PostAsJsonAsync("/graphql",
-            new { query = "{ categories(deleted: ONLY) { total } }" });
+            new { query = "{ fxCategories(deleted: ONLY) { total } }" });
         response.StatusCode.Should().Be(HttpStatusCode.OK); // execution error, not a request-validation error
         var json = await response.Content.ReadAsStringAsync();
         json.Should().Contain("FORBIDDEN");

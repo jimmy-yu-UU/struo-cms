@@ -7,11 +7,11 @@ namespace Struo.Tests.GraphQl;
 
 /// <summary>
 /// Hand-built (not scanner-produced) metadata for four collections — article, category, tag, file —
-/// used by GraphQL schema/execution tests so they can run with no DB and no reflection over real
+/// used by GraphQL schema and execution tests so they can run with no DB and no reflection over real
 /// [CmsCollection] entities. Mirrors the shapes the real MetadataScanner would produce for an
-/// equivalent entity set (see samples/Struo.Sample.Blog/Article.cs), including leaving translatable
-/// fields (title) off the backing POCO's FieldToProperty map — on the real Article entity, Title
-/// lives on the ArticleTranslation sidecar, not on Article itself, so the scanner never maps it either.
+/// equivalent entity set (see tests/Struo.Tests.Fixtures/FxArticle.cs), including leaving translatable
+/// fields (title) off the backing POCO's FieldToProperty map — on the real FxArticle entity, Title
+/// lives on the FxArticleTranslation sidecar, not on FxArticle itself, so the scanner never maps it either.
 /// </summary>
 internal static class FakeMetadataFixtures
 {
@@ -319,9 +319,9 @@ internal static class FakeMetadataFixtures
     {
         public Guid Id { get; set; }
 
-        // Title intentionally NOT modelled here: it is translatable and, on the real Article
-        // entity, lives on the ArticleTranslation sidecar rather than on Article itself — the real
-        // scanner never maps it into Article's FieldToProperty either.
+        // Title intentionally NOT modelled here: it is translatable and, on the real FxArticle
+        // entity, lives on the FxArticleTranslation sidecar rather than on FxArticle itself — the real
+        // scanner never maps it into FxArticle's FieldToProperty either.
         public string Status { get; set; } = "draft";
         public DateTime? PublishedAt { get; set; }
         public Guid? HeroImageId { get; set; }

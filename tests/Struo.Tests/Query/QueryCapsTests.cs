@@ -5,7 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Application.Configuration;
-using Struo.Sample.Blog;
+using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -28,7 +28,7 @@ public class QueryCapsTests(ApiFactory factory)
     private static Dictionary<string, object> Eq(string field, object value) =>
         new() { [field] = new Dictionary<string, object> { ["_eq"] = value } };
 
-    // A filter holding `n` own-field conditions on the sample's `name` field.
+    // A filter holding `n` own-field conditions on the fixture's `name` field.
     private static Dictionary<string, object> Conditions(int n) => new()
     {
         ["_and"] = Enumerable.Range(0, n).Select(i => (object)Eq("name", $"cap-{i}")).ToList(),
@@ -58,7 +58,7 @@ public class QueryCapsTests(ApiFactory factory)
     private async Task<HttpClient> SeededClient()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        await c.PostAsJsonAsync("/api/items/category", new { name = "CapsSeed" });
+        await c.PostAsJsonAsync("/api/items/fxCategory", new { name = "CapsSeed" });
         return c;
     }
 
@@ -66,14 +66,14 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Five_sort_fields_are_accepted()
     {
         var c = await SeededClient();
-        (await Query(c, "category", new { sort = FiveSorts })).Status.Should().Be(HttpStatusCode.OK);
+        (await Query(c, "fxCategory", new { sort = FiveSorts })).Status.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task Six_sort_fields_return_400()
     {
         var c = await SeededClient();
-        var (status, body) = await Query(c, "category", new { sort = SixSorts });
+        var (status, body) = await Query(c, "fxCategory", new { sort = SixSorts });
         status.Should().Be(HttpStatusCode.BadRequest);
         body.Should().Contain("sort");
     }
@@ -82,7 +82,7 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Six_nested_sort_fields_return_400()
     {
         var c = await SeededClient();
-        var (status, _) = await Query(c, "category",
+        var (status, _) = await Query(c, "fxCategory",
             new { deep = new { children = new { sort = SixSorts } } });
         status.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -91,14 +91,14 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Twenty_relation_nodes_are_accepted()
     {
         var c = await SeededClient();
-        (await Query(c, "category", new { deep = Tree(20) })).Status.Should().Be(HttpStatusCode.OK);
+        (await Query(c, "fxCategory", new { deep = Tree(20) })).Status.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task Twenty_one_relation_nodes_return_400()
     {
         var c = await SeededClient();
-        var (status, body) = await Query(c, "category", new { deep = Tree(21) });
+        var (status, body) = await Query(c, "fxCategory", new { deep = Tree(21) });
         status.Should().Be(HttpStatusCode.BadRequest);
         body.Should().Contain("Too many relations in deep (max 20)");
     }
@@ -107,7 +107,7 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Filter_conditions_share_one_budget_across_root_and_nested_filters()
     {
         var c = await SeededClient();
-        var (status, body) = await Query(c, "category", new
+        var (status, body) = await Query(c, "fxCategory", new
         {
             filter = Conditions(30),
             deep = new { children = new { filter = Conditions(30) } },
@@ -120,7 +120,7 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Root_and_nested_conditions_within_the_budget_are_accepted()
     {
         var c = await SeededClient();
-        (await Query(c, "category", new
+        (await Query(c, "fxCategory", new
         {
             filter = Conditions(25),
             deep = new { children = new { filter = Conditions(25) } },
@@ -131,17 +131,17 @@ public class QueryCapsTests(ApiFactory factory)
     public async Task Large_offset_is_still_accepted()
     {
         var c = await SeededClient();
-        (await Query(c, "category", new { offset = 100000 })).Status.Should().Be(HttpStatusCode.OK);
+        (await Query(c, "fxCategory", new { offset = 100000 })).Status.Should().Be(HttpStatusCode.OK);
     }
 
     private async Task<Guid> SeedParentWithChildren(int count, string label)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var parent = new Category { Id = Guid.NewGuid(), Name = $"{label}-parent" };
+        var parent = new FxCategory { Id = Guid.NewGuid(), Name = $"{label}-parent" };
         await db.Insertable(parent).ExecuteCommandAsync();
         var children = Enumerable.Range(0, count)
-            .Select(i => new Category { Id = Guid.NewGuid(), Name = $"{label}-child-{i}", ParentId = parent.Id })
+            .Select(i => new FxCategory { Id = Guid.NewGuid(), Name = $"{label}-child-{i}", ParentId = parent.Id })
             .ToList();
         await db.Insertable(children).ExecuteCommandAsync();
         return parent.Id;
@@ -151,8 +151,8 @@ public class QueryCapsTests(ApiFactory factory)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        await db.Deleteable<Category>().Where(x => x.ParentId == parentId).ExecuteCommandAsync();
-        await db.Deleteable<Category>().Where(x => x.Id == parentId).ExecuteCommandAsync();
+        await db.Deleteable<FxCategory>().Where(x => x.ParentId == parentId).ExecuteCommandAsync();
+        await db.Deleteable<FxCategory>().Where(x => x.Id == parentId).ExecuteCommandAsync();
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class QueryCapsTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await Query(c, "category",
+            var (status, body) = await Query(c, "fxCategory",
                 new { filter = Eq("id", parentId), deep = new { children = new { } } });
             status.Should().Be(HttpStatusCode.BadRequest);
             body.Should().Contain("children");
@@ -179,7 +179,7 @@ public class QueryCapsTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await Query(c, "category",
+            var (status, body) = await Query(c, "fxCategory",
                 new { filter = Eq("id", parentId), deep = new { children = new { } } });
             status.Should().Be(HttpStatusCode.OK);
             using var doc = JsonDocument.Parse(body);
@@ -194,14 +194,14 @@ public class QueryCapsTests(ApiFactory factory)
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var created = await c.PostAsJsonAsync("/api/items/article",
+        var created = await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "CapsJunctions" } } });
         using var cd = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var articleId = Guid.Parse(cd.RootElement.GetProperty("data").GetProperty("id").GetString()!);
         var tags = Enumerable.Range(0, count)
-            .Select(i => new Tag { Id = Guid.NewGuid(), Name = $"caps-j-{i}" }).ToList();
+            .Select(i => new FxTag { Id = Guid.NewGuid(), Name = $"caps-j-{i}" }).ToList();
         await db.Insertable(tags).ExecuteCommandAsync();
-        var links = tags.Select((t, i) => new ArticleTag { Id = Guid.NewGuid(), ArticleId = articleId, TagId = t.Id, Sort = i }).ToList();
+        var links = tags.Select((t, i) => new FxArticleTag { Id = Guid.NewGuid(), ArticleId = articleId, TagId = t.Id, Sort = i }).ToList();
         await db.Insertable(links).ExecuteCommandAsync();
         return articleId;
     }
@@ -210,12 +210,12 @@ public class QueryCapsTests(ApiFactory factory)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var tagIds = (await db.Queryable<ArticleTag>().Where(x => x.ArticleId == articleId).ToListAsync())
+        var tagIds = (await db.Queryable<FxArticleTag>().Where(x => x.ArticleId == articleId).ToListAsync())
             .Select(x => x.TagId).ToList();
-        await db.Deleteable<ArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
+        await db.Deleteable<FxArticleTag>().Where(x => x.ArticleId == articleId).ExecuteCommandAsync();
         foreach (var chunk in tagIds.Chunk(500))
-            await db.Deleteable<Tag>().Where(t => chunk.Contains(t.Id)).ExecuteCommandAsync();
-        await db.Deleteable<Article>().Where(a => a.Id == articleId).ExecuteCommandAsync();
+            await db.Deleteable<FxTag>().Where(t => chunk.Contains(t.Id)).ExecuteCommandAsync();
+        await db.Deleteable<FxArticle>().Where(a => a.Id == articleId).ExecuteCommandAsync();
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public class QueryCapsTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await Query(c, "article",
+            var (status, body) = await Query(c, "fxArticle",
                 new { filter = Eq("id", articleId), deep = new { tags = new { } } });
             status.Should().Be(HttpStatusCode.BadRequest);
             body.Should().Contain("'tags'").And.Contain("junction rows");
@@ -242,7 +242,7 @@ public class QueryCapsTests(ApiFactory factory)
         try
         {
             var c = await _factory.CreateAuthenticatedClientAsync();
-            var (status, body) = await Query(c, "article",
+            var (status, body) = await Query(c, "fxArticle",
                 new { filter = Eq("id", articleId), deep = new { tags = new { } } });
             status.Should().Be(HttpStatusCode.OK);
             using var doc = JsonDocument.Parse(body);
@@ -258,17 +258,17 @@ public class QueryCapsTests(ApiFactory factory)
         var tags = new List<string>();
         foreach (var n in new[] { "caps-t1", "caps-t2", "caps-t3" })
         {
-            var r = await c.PostAsJsonAsync("/api/items/tag", new { name = n });
+            var r = await c.PostAsJsonAsync("/api/items/fxTag", new { name = n });
             using var d = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
             tags.Add(d.RootElement.GetProperty("data").GetProperty("id").GetString()!);
         }
         var order = new[] { tags[2], tags[0], tags[1] };
-        var created = await c.PostAsJsonAsync("/api/items/article",
+        var created = await c.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "CapsM2M" } }, tags = order });
         using var cd = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var articleId = cd.RootElement.GetProperty("data").GetProperty("id").GetString()!;
 
-        var (status, body) = await Query(c, "article",
+        var (status, body) = await Query(c, "fxArticle",
             new { filter = Eq("id", articleId), deep = new { tags = new { } } });
         status.Should().Be(HttpStatusCode.OK);
         using var doc = JsonDocument.Parse(body);
