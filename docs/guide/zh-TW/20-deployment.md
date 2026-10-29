@@ -45,10 +45,10 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
 那個 job 的環境裡，API 自己的環境跟植入無關。
 
-範本不附 bootstrap 密碼，也不會產生：密碼在任何環境都必填，而且必須符合 `Auth:Password`、不能是 `admin`。
-只要它是空的或弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
-啟動都會拒絕（資料庫已經植入過也一樣），錯誤訊息點名 `Auth__BootstrapAdmin__Password`；帳號建立之後就把
-它移除。預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
+範本不附 bootstrap 密碼，也不會產生：建立帳號一定要有密碼，而且必須符合 `Auth:Password`、不能是 `admin`。
+seed 要執行的時候，密碼是空的或弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
+啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`；已經植入過的資料庫不會被拒絕，
+帳號建立之後就可以把這個值移除。預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
 ### 登入速率限制：帳號層開、IP 層看拓樸
 

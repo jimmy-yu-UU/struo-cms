@@ -329,13 +329,12 @@ exception (500) instead.
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
 migration reads them straight from configuration as strings, so the environment that runs `migrate`
-needs them. The password is required in every environment and the template ships it empty: when the admin is
-about to be created and the password is empty, the seed refuses, and nothing is generated or logged.
-The default email `admin@admin.com` is accepted, but change it. A password you set must satisfy
-`Auth:Password` and may not be `admin` in any letter case. While it is empty or weak, `migrate`,
-`migrate:preview` and a start with `Database:MigrateOnStartup` all refuse, with an error that names
-`Auth__BootstrapAdmin__Password`. The value only seeds the account, so once the account exists it can
-be removed.
+needs them. The password is required to create the admin, and the template ships it empty. Nothing is generated or
+logged. The default email `admin@admin.com` is accepted, but change it. A password you set must satisfy
+`Auth:Password` and may not be `admin` in any letter case. When the seed runs and the password is
+empty or weak, `migrate`, `migrate:preview` and a start with `Database:MigrateOnStartup` refuse, with
+an error that names `Auth__BootstrapAdmin__Password`. Once the seed has been applied the value is never
+read again, so it can be removed.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.

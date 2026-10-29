@@ -54,11 +54,11 @@ changing this value afterward has no effect on the account that already exists. 
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-The template ships no bootstrap password and never generates one: the password is required in every
-environment. It must satisfy `Auth:Password` and may not be `admin`. While it is empty or weak,
-`migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
-naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded; remove the value
-once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
+The template ships no bootstrap password and never generates one: the password is required to create the
+account. It must satisfy `Auth:Password` and may not be `admin`. When the seed runs and the password
+is empty or weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an
+error naming `Auth__BootstrapAdmin__Password`. A database that is already seeded is never refused,
+and the value can be removed once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
 `STRUO_ADMIN_PASSWORD` and refuses to start without it.
 
 ### Login rate limiting: account layer on, IP layer depends on topology

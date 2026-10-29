@@ -41,11 +41,22 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
-    public void Blank_password_with_an_email_is_refused(string? blank)
+    public void Blank_password_with_an_email_carries_a_refusal_and_no_hash(string? blank)
     {
-        var act = () => CoreMigrationHarness.Seed("a@b.c", blank);
+        var seed = CoreMigrationHarness.Seed("a@b.c", blank);
 
-        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*Auth__BootstrapAdmin__Password*");
+        seed.AdminRefusal.Should().Contain("Auth__BootstrapAdmin__Password");
+        seed.AdminPasswordHash.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task The_seed_migration_throws_the_refusal_on_an_empty_database()
+    {
+        var host = _h.Host(CoreMigrationHarness.Seed("a@b.c", ""));
+
+        var act = () => host.ApplyAsync(default);
+
+        await act.Should().ThrowAsync<MigrationFailedException>().WithMessage("*Auth__BootstrapAdmin__Password*");
     }
 
     [Fact]
@@ -77,21 +88,21 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     [InlineData("admin")]
     [InlineData("ADMIN")]
     [InlineData("short")]
-    public void Weak_password_is_refused(string weak)
+    public void Weak_password_carries_a_refusal(string weak)
     {
-        var act = () => CoreMigrationHarness.Seed("a@b.c", weak);
+        var seed = CoreMigrationHarness.Seed("a@b.c", weak);
 
-        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*Auth__BootstrapAdmin__Password*");
+        seed.AdminRefusal.Should().Contain("Auth__BootstrapAdmin__Password");
     }
 
     [Fact]
     public void The_refusal_names_the_configured_minimum_length()
     {
-        var act = () => CoreSeedData.From(
+        var seed = CoreSeedData.From(
             new LocalizationOptions(), new Argon2idPasswordHasher(), "a@b.c", "only-ten-ch", [],
             new PasswordPolicyOptions { MinLength = 12 });
 
-        act.Should().Throw<BootstrapPasswordRefusedException>().WithMessage("*12 characters*");
+        seed.AdminRefusal.Should().Contain("12 characters");
     }
 
     private const string ConfiguredPassword = "configured-pw-123";
@@ -147,6 +158,34 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         run.Err.Should().Contain(FailAfterSeedProbe.Message);
         var hash = _h.Db().Queryable<User>().Single().Password;
         capture.Entries.Select(e => e.Message).Should().NotContain(m => m.Contains(ConfiguredPassword) || m.Contains(hash));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("admin")]
+    public async Task An_already_seeded_database_migrates_when_the_password_is_cleared_or_weak(string later)
+    {
+        using var first = Services(NullLoggerFactory.Instance, password: ConfiguredPassword);
+        (await Run(first, "migrate")).Code.Should().Be(MigrationCli.Success);
+
+        using var again = Services(NullLoggerFactory.Instance, password: later);
+        var migrate = await Run(again, "migrate");
+        var preview = await Run(again, "migrate:preview");
+
+        migrate.Code.Should().Be(MigrationCli.Success, migrate.Err);
+        preview.Code.Should().Be(MigrationCli.Success, preview.Err);
+        _h.Db().Queryable<User>().Count().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_weak_bootstrap_password_on_an_empty_database_fails_the_command()
+    {
+        using var sp = Services(NullLoggerFactory.Instance, password: "short");
+
+        var run = await Run(sp, "migrate");
+
+        run.Code.Should().Be(MigrationCli.Failure);
+        run.Err.Should().Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
     }
 
     [Fact]

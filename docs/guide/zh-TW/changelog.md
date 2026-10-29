@@ -15,7 +15,7 @@
   （不指定就傳 `null`）。HTTP 與 GraphQL 的線上契約對現有的用戶端沒有變。
 - 核心 seed 不再產生 bootstrap 管理員密碼，任何環境都一樣，也不再把任何密碼寫進 log。建立管理員現在一定要有
   `Auth:BootstrapAdmin:Password`（`Auth__BootstrapAdmin__Password`）；它是空的，`migrate`、`migrate:preview`
-  與 `Database:MigrateOnStartup` 啟動都會失敗，錯誤訊息點名這個鍵，管理員已經存在時也一樣。
+  與 `Database:MigrateOnStartup` 啟動都會失敗，錯誤訊息點名這個鍵；已經植入過的資料庫不受影響。
   `docker-compose.yml` 現在要求 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。下一次 `migrate` 或
   `docker compose up` 之前先設好密碼。fork 自己會跑核心 migration 的測試主機，也要提供密碼。預設 email
   `admin@admin.com` 保持不變，請改掉。見[第 4 章](04-configuration.md)與[第 20 章](20-deployment.md)。

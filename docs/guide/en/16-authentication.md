@@ -17,11 +17,11 @@ from `Auth:BootstrapAdmin`. This happens exactly
 once — changing the setting and restarting does nothing to an existing database.
 
 The template ships no bootstrap password, and none is ever generated. `Auth:BootstrapAdmin:Password`
-must be set in every environment. The password goes through the password policy the next section
-covers, and `admin` is refused in any letter case; while it is empty or weak, `migrate`,
-`migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that names
-`Auth__BootstrapAdmin__Password`. The value only seeds the account, so it can be removed
-afterwards. The transcripts log in with a placeholder for that password. The default email
+must be set to create the account. The password goes through the password policy the next section
+covers, and `admin` is refused in any letter case; when the seed runs and the password is empty or
+weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
+names `Auth__BootstrapAdmin__Password`. Once the seed has been applied the value is never read
+again, so it can be removed. The transcripts log in with a placeholder for that password. The default email
 `admin@admin.com` is accepted; change it too.
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator

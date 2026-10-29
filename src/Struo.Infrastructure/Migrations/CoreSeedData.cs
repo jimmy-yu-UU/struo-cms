@@ -11,7 +11,8 @@ public sealed record SeedLanguage(string Code, string Name, bool IsDefault, int 
 
 /// <summary>
 /// Inputs of the core seed migration: languages, the optional bootstrap admin (email and password hash
-/// are both set or both null; an email without a password is refused) and the collections the <c>public</c> role may read.
+/// are both set or both null) and the collections the <c>public</c> role may read. An email whose password is
+/// missing or weak carries <see cref="AdminRefusal"/> instead of a hash; the seed migration throws it when it runs.
 /// </summary>
 public sealed record CoreSeedData(
     IReadOnlyList<SeedLanguage> Languages, string? AdminEmail, string? AdminPasswordHash,
@@ -19,6 +20,10 @@ public sealed record CoreSeedData(
 {
     /// <summary>The placeholder that stands in for the hidden admin credential in previewed SQL.</summary>
     public const string RedactionPlaceholder = "<redacted>";
+
+    /// <summary>Why the bootstrap admin cannot be created (missing or weak password), or null. Only the seed
+    /// migration acts on it, so a database that is already seeded is never refused.</summary>
+    public string? AdminRefusal { get; init; }
 
     private const string RefusedBootstrapValue = "admin";
 
@@ -41,25 +46,25 @@ public sealed record CoreSeedData(
             .ToList();
         var effectivePolicy = policy ?? new PasswordPolicyOptions();
         var hasAdmin = !string.IsNullOrWhiteSpace(email);
-        if (hasAdmin) RefuseMissingOrWeakPassword(password, effectivePolicy);
+        var refusal = hasAdmin ? RefusalFor(password, effectivePolicy) : null;
         return new CoreSeedData(
             languages,
             hasAdmin ? EmailAddress.Normalize(email!) : null,
-            hasAdmin ? hasher.Hash(password!) : null,
-            publicRead.Distinct(StringComparer.Ordinal).ToList());
+            hasAdmin && refusal is null ? hasher.Hash(password!) : null,
+            publicRead.Distinct(StringComparer.Ordinal).ToList())
+        { AdminRefusal = refusal };
     }
 
-    private static void RefuseMissingOrWeakPassword(string? password, PasswordPolicyOptions policy)
+    private static string? RefusalFor(string? password, PasswordPolicyOptions policy)
     {
         if (string.IsNullOrWhiteSpace(password))
-            throw new BootstrapPasswordRefusedException(
-                "Auth__BootstrapAdmin__Password is required to create the bootstrap admin: set it to at least " +
-                $"{policy.MinLength} characters, or clear Auth__BootstrapAdmin__Email to seed no admin.");
+            return "Auth__BootstrapAdmin__Password is required to create the bootstrap admin: set it to at least " +
+                $"{policy.MinLength} characters, or clear Auth__BootstrapAdmin__Email to seed no admin.";
         if (PasswordPolicy.Validate(password, policy) is null
-            && !string.Equals(password, RefusedBootstrapValue, StringComparison.OrdinalIgnoreCase)) return;
-        throw new BootstrapPasswordRefusedException(
+            && !string.Equals(password, RefusedBootstrapValue, StringComparison.OrdinalIgnoreCase)) return null;
+        return
             $"Auth__BootstrapAdmin__Password is too weak: use at least {policy.MinLength} characters and not " +
-            $"'{RefusedBootstrapValue}'.");
+            $"'{RefusedBootstrapValue}'.";
     }
 
     /// <summary>Reads the seed inputs from application configuration and hashes the bootstrap password.</summary>
