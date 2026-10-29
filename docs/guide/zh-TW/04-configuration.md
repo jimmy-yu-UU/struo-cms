@@ -293,7 +293,7 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 預設 email `admin@admin.com` 可以用，但請改掉。自己指定的密碼必須符合 `Auth:Password`，而且不能是 `admin`
 （不分大小寫）。seed 要執行的時候，密碼是空的或弱值，`migrate`、`migrate:preview`
 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。seed 套用過之後
-就不會再讀這個值，可以移除。
+就用不到這個值，可以移除。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有

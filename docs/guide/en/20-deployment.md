@@ -320,8 +320,9 @@ neither declares it as a volume nor mounts it.
 With `Redis:ConnectionString` set, the key ring is stored in Redis under the key
 `DataProtection-Keys` instead, and every replica reads the same keys. A request can then land on any
 replica, and replacing a container signs nobody out. The directory above is not used in that case.
-Sign-in needs Redis to be reachable until the key ring has loaded, so a Redis outage at startup
-fails logins until it comes back.
+Until the key ring has loaded, the API needs Redis to be reachable: a Redis outage at startup fails
+sign-ins, and existing sessions too, because their cookies cannot be unprotected and signed-in users
+are treated as signed out, until it comes back.
 
 `DataProtection:ApplicationName` (default `StruoCMS`) names the key ring's scope. Every replica of
 one deployment must use the same value. Separate deployments that share one Redis must each use a

@@ -343,8 +343,8 @@ needs them. The password is required to create the admin, and the template ships
 logged. The default email `admin@admin.com` is accepted, but change it. A password you set must satisfy
 `Auth:Password` and may not be `admin` in any letter case. When the seed runs and the password is
 empty or weak, `migrate`, `migrate:preview` and a start with `Database:MigrateOnStartup` refuse, with
-an error that names `Auth__BootstrapAdmin__Password`. Once the seed has been applied the value is never
-read again, so it can be removed.
+an error that names `Auth__BootstrapAdmin__Password`. Once the seed has been applied nothing needs the value
+any more, so it can be removed.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.

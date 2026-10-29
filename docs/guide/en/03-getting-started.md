@@ -29,7 +29,7 @@ docker compose up -d --build
 
 It builds the API and admin images and starts four services: `postgres`, `redis`, `api` and
 `admin`. On the first start the API runs the database migrations and seeds the admin account.
-It needs a password you choose first; the command below sets it up.
+It needs a password you choose first; the `cp` line above creates the `.env` file where you set it.
 
 Wait for them to come up:
 

@@ -262,8 +262,9 @@ DataProtection 金鑰圈（簽章、加密認證 cookie 與 antiforgery token �
 `/home/app/.aspnet/DataProtection-Keys`，這個映像沒有把它宣告成 volume，也沒有掛載。
 
 設了 `Redis:ConnectionString` 時，金鑰圈改存在 Redis 的 `DataProtection-Keys` 這個鍵，所有副本讀同一份金鑰。
-請求可以落在任何副本，換掉容器也不會讓人被登出。這種情況下上面那個目錄不會被使用。登入要 Redis
-連得上，直到金鑰圈載入為止，所以啟動時 Redis 掛了，登入會失敗到它恢復。
+請求可以落在任何副本，換掉容器也不會讓人被登出。這種情況下上面那個目錄不會被使用。金鑰圈載入之前
+都要連得上 Redis，所以啟動時 Redis 掛了，登入會失敗，既有的工作階段也一樣：cookie 解不開，已登入的人會被當成
+未登入，直到它恢復。
 
 `DataProtection:ApplicationName`（預設 `StruoCMS`）決定金鑰圈的範圍。同一個部署的每個副本必須用同一個值。
 共用同一個 Redis 的不同部署，各自要用不同的名稱，或不同的 Redis 資料庫，以免讀到彼此的金鑰。改了名稱，

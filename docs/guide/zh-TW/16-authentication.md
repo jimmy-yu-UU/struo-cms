@@ -15,7 +15,7 @@
 範本不附 bootstrap 密碼，也不會替你產生。建立帳號一定要設 `Auth:BootstrapAdmin:Password`。密碼會經過下一節的
 密碼原則，而且 `admin`（不分大小寫）會被拒絕；seed 要執行的時候，密碼是空的或弱值，`migrate`、
 `migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
-`Auth__BootstrapAdmin__Password`。seed 套用過之後就不會再讀這個值，可以移除。示範裡登入用的是這組密碼的佔位符。預設 email `admin@admin.com` 可以用，但請改掉。
+`Auth__BootstrapAdmin__Password`。seed 套用過之後就用不到這個值，可以移除。示範裡登入用的是這組密碼的佔位符。預設 email `admin@admin.com` 可以用，但請改掉。
 
 同一批種子資料也會建立 `admin`、`public` 兩個角色，並把第一個管理者加進 `admin`，細節留給
 [第 17 章：角色與權限](17-roles-and-permissions.md)。

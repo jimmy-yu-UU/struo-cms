@@ -25,7 +25,7 @@ docker compose up -d --build
 ```
 
 這會建置 API 與後台兩個映像，起 `postgres`、`redis`、`api`、`admin` 四個服務。第一次啟動時，
-API 會跑完資料庫 migration，並植入管理員帳號；密碼要先由你決定，下面會設。
+API 會跑完資料庫 migration，並植入管理員帳號；密碼要先由你決定，上面 `cp` 建出來的 `.env` 就是設它的地方。
 
 等它們都起來：
 
