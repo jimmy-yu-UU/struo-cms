@@ -43,7 +43,7 @@ public class DbReadinessCheckTests
         release.Set();
 
         result.Status.Should().Be(HealthStatus.Unhealthy);
-        result.Description.Should().Contain("1");
+        result.Description.Should().Be("Database did not answer within the 1-second timeout.");
         watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
     }
 
@@ -58,22 +58,39 @@ public class DbReadinessCheckTests
         result.Status.Should().Be(HealthStatus.Healthy);
     }
 
+    private sealed class LateProbeFailure() : Exception("late failure");
+
     [Fact]
     public async Task A_probe_that_fails_after_the_timeout_raises_no_unobserved_exception()
     {
-        var unobserved = new List<Exception>();
-        void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e) => unobserved.Add(e.Exception);
+        var unobserved = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e)
+        {
+            if (e.Exception.Flatten().InnerExceptions.OfType<LateProbeFailure>().Any())
+            {
+                unobserved.Enqueue(e.Exception);
+            }
+        }
+
         TaskScheduler.UnobservedTaskException += OnUnobserved;
         try
         {
             using var release = new ManualResetEventSlim();
+            using var thrown = new ManualResetEventSlim();
             var check = new DbReadinessCheck(
                 null!, Options.Create(new DatabaseOptions { ReadinessTimeoutSeconds = 1 }),
-                () => { release.Wait(); throw new InvalidOperationException("late failure"); });
+                () =>
+                {
+                    release.Wait();
+                    thrown.Set();
+                    throw new LateProbeFailure();
+                });
 
             var result = await check.CheckHealthAsync(new HealthCheckContext());
             release.Set();
-            await Task.Delay(200);
+            thrown.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
             GC.Collect();
             GC.WaitForPendingFinalizers();
 

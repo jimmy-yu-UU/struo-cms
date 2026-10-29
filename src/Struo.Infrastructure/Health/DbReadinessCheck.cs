@@ -65,7 +65,7 @@ public sealed class DbReadinessCheck : IHealthCheck
 
             cancellationToken.ThrowIfCancellationRequested();
             return HealthCheckResult.Unhealthy(
-                $"Database did not answer within {_timeoutSeconds} seconds.");
+                $"Database did not answer within the {_timeoutSeconds}-second timeout.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
