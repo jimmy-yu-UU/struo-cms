@@ -15,6 +15,14 @@
   on to `ItemService`). A caller that passes `ct` as the fourth positional argument to
   `IItemUseCases.RevertAsync` must pass `ct: ct` or insert the version (`null` for none) before it. The HTTP
   and GraphQL wire contract is unchanged for existing clients.
+- The core seed no longer generates a bootstrap admin password, in any environment, and no password
+  is logged any more. Creating the admin now requires `Auth:BootstrapAdmin:Password`
+  (`Auth__BootstrapAdmin__Password`); an empty value makes `migrate`, `migrate:preview` and a
+  `Database:MigrateOnStartup` start fail with an error that names that key, on a database where the
+  seed has yet to run. `docker-compose.yml` now requires `STRUO_ADMIN_PASSWORD` and refuses to start
+  without it. Set the password before the next `migrate` or `docker compose up`. A fork's own test
+  hosts that run the core migrations need to supply one too. The default email `admin@admin.com` is
+  kept; change it. See [Chapter 4](04-configuration.md) and [Chapter 20](20-deployment.md).
 :::
 
 ### Added
@@ -26,6 +34,31 @@
 - A missing required translation carries `error.details`, one `{ field, message, locale }` entry per
   missing field per locale (`extensions.details` over GraphQL). The `message` text and the
   `BAD_USER_INPUT` code are unchanged. See [Chapter 12](12-rest-conventions.md).
+- `DataProtection:ApplicationName` (default `StruoCMS`, must not be blank). With `Redis:ConnectionString`
+  set, the DataProtection key ring (authentication cookie, antiforgery tokens, OpenID Connect
+  correlation cookies) is stored in Redis under the key `DataProtection-Keys`, so a request that lands
+  on another replica no longer signs the user out. Without Redis the key ring stays in the default file
+  location. See [Chapter 4](04-configuration.md).
+- `Database:ReadinessTimeoutSeconds` (default `3`, range 1-60): `/health/ready` reports the database
+  unhealthy (503) when the probe has not answered in that time, instead of waiting for the driver
+  connect timeout. See [Chapter 4](04-configuration.md).
+- `Struo:Files:S3:ChecksumMode` (`WhenRequired` default, or `WhenSupported`): whether the S3 client adds a
+  checksum to every request and checks one on every response, or only where the operation demands it.
+  Some S3-compatible services reject the checksums the client would otherwise send. Any other value stops
+  startup when `Backend=s3`. See [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
+- `ForwardedHeaders:ForwardLimit` (default `1`, at least 1): the number of proxies between the client and
+  the API. Behind a load balancer and nginx set `2`, so the API sees the client instead of the load
+  balancer. See [Chapter 4](04-configuration.md).
+
+### Changed
+
+- S3 uploads and downloads no longer add or validate checksums unless the operation requires one
+  (`Struo:Files:S3:ChecksumMode` now defaults to `WhenRequired`). Before, every S3 deployment sent a
+  checksum on each upload and validated it on each download. Set `ChecksumMode` to `WhenSupported` to
+  restore that behaviour.
+- The DataProtection application name is now set explicitly (`DataProtection:ApplicationName`, default
+  `StruoCMS`), which differs from the name ASP.NET Core derived before. The first deploy of this version
+  signs every user out once, with or without Redis; nothing needs doing beyond signing in again.
 
 ### Fixed
 
@@ -36,6 +69,9 @@
   an error. The default locale is always validated.
 - A revision revert from the admin could overwrite a concurrent edit. It now sends the loaded item
   version, and a stale one shows the usual conflict banner.
+- The admin app no longer drops the session when `GET /api/auth/me` fails with anything other than a 401
+  (a network error, a 5xx, a timeout). At boot such a failure shows a "cannot connect" screen with a Retry
+  button instead of the sign-in page; there is no automatic retry.
 
 ## 0.16.0 — 2026-10-29
 

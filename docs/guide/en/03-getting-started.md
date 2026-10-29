@@ -23,12 +23,13 @@ You'll need:
 This is the simplest way to start the services for development and testing:
 
 ```bash
+cp .env.example .env   # then set STRUO_ADMIN_PASSWORD (and change STRUO_ADMIN_EMAIL)
 docker compose up -d --build
 ```
 
 It builds the API and admin images and starts four services: `postgres`, `redis`, `api` and
-`admin`. On the first start the API runs the database migrations and seeds the admin account
-with a generated password.
+`admin`. On the first start the API runs the database migrations and seeds the admin account.
+It needs a password you choose first; the `cp` line above creates the `.env` file where you set it.
 
 Wait for them to come up:
 
@@ -39,15 +40,9 @@ docker compose ps
 `postgres`, `redis` and `api` must read `healthy`; `admin` has no health check, so `Up` is enough.
 You can also run `docker compose up -d --build --wait`, which returns only once everything is ready.
 
-Open `http://localhost:8080` and log in as `admin@admin.com`. The password is generated on the first
-start and printed once in the `api` log:
-
-```bash
-docker compose logs api
-```
-
-Look for the Warning that begins `Bootstrap admin created`. The API itself is at
-`http://localhost:8081`.
+Open `http://localhost:8080` and log in with `STRUO_ADMIN_EMAIL` (`admin@admin.com` unless you changed
+it) and `STRUO_ADMIN_PASSWORD`. Compose refuses to start while the password is empty. The API itself is
+at `http://localhost:8081`.
 
 The host ports default to 8080 for the admin, 8081 for the API, 5432 for PostgreSQL and 6379 for
 Redis. If any is taken, copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`,
@@ -106,8 +101,10 @@ string too.
 cp src/Struo.Api/appsettings.Development.json.example src/Struo.Api/appsettings.Development.json
 ```
 
-The copy works as-is: both the connection string and `Redis:ConnectionString` already match the
-previous step's container defaults. `appsettings.Development.json` is listed in `.gitignore`, so it
+Open the copy and set `Auth:BootstrapAdmin:Password` to the password of the admin account; the seed
+in the next step refuses to run without it. Change `Auth:BootstrapAdmin:Email` from the default
+`admin@admin.com` too. Everything else works as-is: both the connection string and
+`Redis:ConnectionString` already match the previous step's container defaults. `appsettings.Development.json` is listed in `.gitignore`, so it
 is never committed.
 
 You can override any config key with an environment variable: replace `:` with `__` — for example,
@@ -135,7 +132,6 @@ $ dotnet run --project src/Struo.Api -- migrate
 …
 [16:47:28 INF] 202610080001: SeedCoreData migrated
 [16:47:28 INF] => 0.0019894s
-[16:47:28 WRN] Bootstrap admin created: admin@admin.com with the generated password Yo43Ui4K7N3WJB92vKVIxFL8. It is shown only once; change it after the first login.
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 ```
@@ -220,14 +216,13 @@ for Entra and `http://localhost:5173/signin-oidc-google` for Google ([Chapter 16
 
 ### 6. First login
 
-Open `http://localhost:5173` and log in as `admin@admin.com` with the password that step 3's `migrate`
-printed. It is a Warning in the `migrate` output, shown once and never again.
+Open `http://localhost:5173` and log in as `admin@admin.com` with the password you set in step 2.
+If you changed `Auth:BootstrapAdmin:Email`, use that email instead.
 
-Change the password right after logging in.
-
-Step 3's `migrate` seeds this account, once, on an empty database. To choose the email
-and password yourself, set `Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` before running
-`migrate`; once it is seeded, the only way to change them is to log in to the admin UI.
+Step 3's `migrate` seeds this account, once, on an empty database. It reads
+`Auth__BootstrapAdmin__Email`/`Auth__BootstrapAdmin__Password` (or the same keys in the settings file)
+and fails without a password; once the account is seeded, the only way to change them is to log in to
+the admin UI.
 
 ## What you'll see
 

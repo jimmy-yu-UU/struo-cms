@@ -38,6 +38,7 @@ public class CorsAndCookieTests
                     ["Database:DbType"] = _db.DbType.ToString(),
                     ["Database:ConnectionString"] = _db.ConnectionString,
                     ["Database:MigrateOnStartup"] = "true",
+                    ["Auth:BootstrapAdmin:Password"] = TestBootstrapAdmin.Password,
                     // Struo:ContentAssemblies cannot be set here - it is read before Build(). See Support/ContentAssemblyEnvBootstrap.cs.
                     ["Struo:Cors:AllowedOrigins:0"] = "https://admin.example.test"
                 }));

@@ -260,8 +260,8 @@ public sealed class ShippedConfigurationBindingTests
     /// creates no admin when the email is null or blank, so a shipped file whose keys have moved from
     /// those literal paths seeds NO admin at all on a fresh install, and nothing logs an error.
     /// <para>
-    /// The shipped password is empty: <c>CoreSeedData.From</c> generates one when it is blank, so no
-    /// fork ships a known credential.
+    /// The shipped password is empty: <c>CoreSeedData.From</c> records a refusal when an email is set and
+    /// the password is blank, and the seed migration throws it, so no fork ships a known credential.
     /// </para>
     /// <para>
     /// The literal paths below are spelled the way <c>CoreSeedData</c> spells them. That is the coupling under
@@ -279,7 +279,7 @@ public sealed class ShippedConfigurationBindingTests
             "the core seed creates no admin when the email is null or blank, leaving a fresh install " +
             "with no account to log in with");
         configuration["Auth:BootstrapAdmin:Password"].Should().BeNullOrEmpty(
-            "the template ships no bootstrap password; a blank one is replaced by a generated password");
+            "the template ships no bootstrap password; the seed refuses to run until one is configured");
     }
 
     /// <summary>

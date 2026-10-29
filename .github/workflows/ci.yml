@@ -207,9 +207,12 @@ jobs:
       # user can write the SQLite file in both containers.
       - name: Smoke-test the API image against SQLite
         run: |
+          Auth__BootstrapAdmin__Password="$(openssl rand -hex 16)"
+          export Auth__BootstrapAdmin__Password
           # A failed volume cleanup on the throwaway runner must not turn a passing smoke test red.
           trap 'docker rm --force api; docker volume rm struo-ci-data || true' EXIT
           db_env=(--env Database__DbType=Sqlite
+                  --env Auth__BootstrapAdmin__Password
                   --env 'Database__ConnectionString=Data Source=/app/App_Data/struo-ci.db')
           docker volume create struo-ci-data
           docker run --rm --volume struo-ci-data:/app/App_Data "${db_env[@]}" struo-api:ci migrate
@@ -235,6 +238,8 @@ jobs:
       # come up healthy, serve the built SPA, and proxy an anonymous API call through nginx.
       - name: Smoke-test the compose stack
         run: |
+          STRUO_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+          export STRUO_ADMIN_PASSWORD
           trap 'rc=$?; if [ $rc -ne 0 ]; then docker compose ps --all; docker compose logs; fi; docker compose down --volumes' EXIT
           docker compose up --detach --build --wait --wait-timeout 300
           curl --fail --silent --show-error http://localhost:8081/health/ready

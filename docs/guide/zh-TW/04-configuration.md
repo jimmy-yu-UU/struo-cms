@@ -53,8 +53,8 @@
 
 `STRUO_ADMIN_EMAIL`、`STRUO_ADMIN_PASSWORD` 不一樣：Compose 會把它們當成
 `Auth__BootstrapAdmin__Email`／`Auth__BootstrapAdmin__Password` 傳給 `api` 服務，只影響 Compose
-起的那個 API，自己跑的 API 不受影響。`STRUO_ADMIN_PASSWORD` 預設是空的，所以 seed 會隨機產生密碼，
-並在 `api` 的 log 印出一次。
+起的那個 API，自己跑的 API 不受影響。`STRUO_ADMIN_PASSWORD` 沒有預設值，一定要設：
+它是空的時候 Compose 不會啟動。`STRUO_ADMIN_EMAIL` 也請改掉預設值。
 
 ## Database
 
@@ -65,6 +65,7 @@
 | `Database:TablePrefix` | 字串（可留空） | `struo_` |
 | `Database:MigrateOnStartup` | 布林 | `false` |
 | `Database:MigrationLockTimeoutSeconds` | 整數（秒） | `60` |
+| `Database:ReadinessTimeoutSeconds` | 整數（秒） | `3` |
 
 以下是實際值，不是 `appsettings.json` 的巢狀寫法：
 ```text
@@ -74,6 +75,9 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 `ConnectionString` 留空或省略會直接讓啟動失敗，不會等到查詢時才出錯。API 自己不建表：資料表由
 `migrate` 命令建立，或在 `MigrateOnStartup` 為 `true` 時由啟動建立，見
 [第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
+
+`ReadinessTimeoutSeconds` 是 `/health/ready` 等資料庫回應的秒數，逾時就回 503。範圍 1-60。
+請設得比負載平衡器的探測逾時短。
 
 `TablePrefix` 接在框架自帶 12 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 11 個 entity 加上
 版本表 `schema_versions`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是
@@ -161,10 +165,15 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:S3:Region` | 字串 | `"us-east-1"` |
 | `Struo:Files:S3:ForcePathStyle` | 布林 | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
+| `Struo:Files:S3:ChecksumMode` | `WhenRequired` 或 `WhenSupported` | `"WhenRequired"` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
 會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
+
+`ChecksumMode` 決定 S3 用戶端何時在請求加上檢查碼、何時檢查回應的檢查碼。`WhenRequired` 只在操作
+要求時才這麼做，能搭配的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
+`Backend="s3"` 時，其他值會讓啟動失敗。
 
 ### ImageTransform
 
@@ -280,10 +289,11 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
-密碼留空時，seed 會隨機產生至少 24 個字元的密碼，並在建立管理員的那次執行裡以 Warning 印出一次。自己指定
-的密碼必須符合 `Auth:Password`，而且不能是 `admin`（不分大小寫）。只要它還是弱值，`migrate`、`migrate:preview`
-與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。這個值只用來
-植入帳號，帳號建立之後就可以移除。
+建立管理員一定要有密碼，範本出貨時是空的；不會產生，也不會印出任何密碼。
+預設 email `admin@admin.com` 可以用，但請改掉。自己指定的密碼必須符合 `Auth:Password`，而且不能是 `admin`
+（不分大小寫）。seed 要執行的時候，密碼是空的或弱值，`migrate`、`migrate:preview`
+與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。seed 套用過之後
+就用不到這個值，可以移除。
 
 密碼原則在 `POST /api/users` 與 `PUT /api/users/{id}/password` 共用同一個驗證；
 `MinLength`／`MaxLength` 只是輸入合理性的界線。這兩個鍵本身有
@@ -345,6 +355,7 @@ IDE 另外只認開發環境，不受這個鍵控制。
 | `ForwardedHeaders:Enabled` | 布林 | `false` |
 | `ForwardedHeaders:KnownProxies` | 字串陣列（IP 位址） | `[]` |
 | `ForwardedHeaders:KnownNetworks` | 字串陣列（CIDR 範圍） | `[]` |
+| `ForwardedHeaders:ForwardLimit` | 整數（至少 1） | `1` |
 
 預設關閉，`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host` 都會被忽略，API 看到的是它實際
 收到的那條連線的位址、scheme 與 host。反向代理擋在 API 前面、而 API 需要知道真正的用戶端時才打開：
@@ -355,8 +366,12 @@ IDE 另外只認開發環境，不受這個鍵控制。
 CIDR 範圍，或兩個清單都空，主機會在啟動時拒絕，並在錯誤訊息點名鍵，例如
 `ForwardedHeaders:KnownNetworks:0`。`Enabled=false` 時不會讀這兩個清單。
 
-這個中介軟體排在請求記錄、驗證、工作階段輪替與速率限制之前，只認一層代理。環境變數用索引給陣列，
+這個中介軟體排在請求記錄、驗證、工作階段輪替與速率限制之前，認 `ForwardLimit` 層代理。環境變數用索引給陣列，
 例如 `ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`。
+
+`ForwardLimit` 是用戶端與 API 之間的代理層數。預設 `1` 適合單一反向代理。負載平衡器後面接 nginx、
+nginx 後面才是 API 時，設成 `2`，並把兩層代理都列進清單：設 `1` 的話，API 會把負載平衡器的位址當成
+用戶端。小於 1 的值，會在 `Enabled=true` 時讓主機啟動失敗。
 
 ## RateLimiting
 
@@ -444,6 +459,19 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 副本、或需要 session 撐過重啟時，一定要設定這個鍵。預設值是空字串，鍵整個不見時是 `null`，兩
 者都會落到這個記憶體內分支。這個鍵同時決定登入節流的計數存在哪裡：
 留空時用上面的記憶體內快取，設了就直接在 Redis 計數。
+
+## DataProtection
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `DataProtection:ApplicationName` | 字串（不可空白） | `"StruoCMS"` |
+
+DataProtection 金鑰用來簽章、加密認證 cookie、antiforgery token 與 OpenID Connect 的 correlation
+cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataProtection-Keys` 這個鍵底下，
+每個副本讀到同一組金鑰，請求打到哪個副本都可以。沒有 Redis 時，金鑰圈留在預設的檔案位置。
+
+`ApplicationName` 兩種情況都會套用。共用同一個金鑰圈的副本必須用相同的值，空白的值會讓主機啟動失敗。
+改它會讓所有使用者登出一次。
 
 ## Oidc
 

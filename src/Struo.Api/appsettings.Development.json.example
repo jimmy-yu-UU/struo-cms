@@ -14,6 +14,15 @@
     "MigrateOnStartup": false
   },
 
+  // The core seed creates this admin on the first migrate and refuses to run without a password.
+  // Set one (at least Auth:Password:MinLength characters, not "admin") and change the default email.
+  "Auth": {
+    "BootstrapAdmin": {
+      "Email": "admin@admin.com",
+      "Password": ""
+    }
+  },
+
   // Uncomment to enable the Blog sample (see docs/guide/en/23-sample-walkthrough.md).
   // The Struo.Sample.Blog project reference must be added to Struo.Api.csproj as well.
   "Struo": {

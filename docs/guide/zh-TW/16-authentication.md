@@ -9,14 +9,13 @@
 ## 第一個管理者
 
 `struo_users` 資料表剛建好、裡面還是空的時候，會一併建立第一個管理者帳號：啟用狀態，名稱固定是
-`Administrator`，帳密取自 `Auth:BootstrapAdmin`，密碼留空就改用隨機產生的。這件事只做一次，之後改設定再重開，對既有
+`Administrator`，帳密取自 `Auth:BootstrapAdmin`。這件事只做一次，之後改設定再重開，對既有
 資料庫什麼都不會發生。
 
-範本不附 bootstrap 密碼。`Auth:BootstrapAdmin:Password` 留空時，seed 會隨機產生至少 24 個字元的密碼，並在
-建立帳號的那次執行裡以 Warning 印出一次。自己設定的密碼會經過下一節的密碼原則，而且 `admin`（不分
-大小寫）會被拒絕；設定的值還是弱值時，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
-`Auth__BootstrapAdmin__Password`。這個值只用來植入帳號，之後可以移除。
-示範裡登入用的是這組密碼的佔位符。第一次登入之後就把它換掉。
+範本不附 bootstrap 密碼，也不會替你產生。建立帳號一定要設 `Auth:BootstrapAdmin:Password`。密碼會經過下一節的
+密碼原則，而且 `admin`（不分大小寫）會被拒絕；seed 要執行的時候，密碼是空的或弱值，`migrate`、
+`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
+`Auth__BootstrapAdmin__Password`。seed 套用過之後就用不到這個值，可以移除。示範裡登入用的是這組密碼的佔位符。預設 email `admin@admin.com` 可以用，但請改掉。
 
 同一批種子資料也會建立 `admin`、`public` 兩個角色，並把第一個管理者加進 `admin`，細節留給
 [第 17 章：角色與權限](17-roles-and-permissions.md)。

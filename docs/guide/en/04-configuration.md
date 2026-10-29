@@ -63,8 +63,9 @@ If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to m
 
 `STRUO_ADMIN_EMAIL` and `STRUO_ADMIN_PASSWORD` are different: Compose passes them to its `api`
 service as `Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password`. They only affect the
-API that Compose starts, not one you run yourself. `STRUO_ADMIN_PASSWORD` is empty by default, so
-the seed generates a password and prints it once in the `api` log.
+API that Compose starts, not one you run yourself. `STRUO_ADMIN_PASSWORD` has no default and is
+required: Compose refuses to start while it is empty. Change `STRUO_ADMIN_EMAIL` from the default
+too.
 
 ## Database
 
@@ -75,6 +76,7 @@ the seed generates a password and prints it once in the `api` log.
 | `Database:TablePrefix` | string (may be empty) | `struo_` |
 | `Database:MigrateOnStartup` | bool | `false` |
 | `Database:MigrationLockTimeoutSeconds` | integer (seconds) | `60` |
+| `Database:ReadinessTimeoutSeconds` | integer (seconds) | `3` |
 
 This is the actual value, not the nested form used in `appsettings.json`:
 ```text
@@ -84,6 +86,9 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 Leaving `ConnectionString` empty or omitted fails startup, not the first query. The API never
 creates tables itself: the `migrate` command creates them, or startup does when `MigrateOnStartup`
 is `true` — see [Chapter 21: Schema Management and Upgrades](21-schema-and-upgrades.md).
+
+`ReadinessTimeoutSeconds` is how long `/health/ready` waits for the database before it answers 503.
+Range 1-60. Keep it below the timeout your load balancer's probe uses.
 
 `TablePrefix` is prepended to the base name of the framework's 12 tables (the 11 entities in
 `FrameworkEntityTypes.All` plus the version table, `schema_versions`). Lower-case letters, digits and
@@ -190,10 +195,16 @@ the Local nor the S3 keys are validated.
 | `Struo:Files:S3:Region` | string | `"us-east-1"` |
 | `Struo:Files:S3:ForcePathStyle` | bool | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | integer (seconds) | `300` |
+| `Struo:Files:S3:ChecksumMode` | `WhenRequired` or `WhenSupported` | `"WhenRequired"` |
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
 startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
 `Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup. `PresignTtlSeconds` also sets the lifetime of presigned URLs from a `custom` storage.
+
+`ChecksumMode` decides when the S3 client adds a checksum to a request and checks one on a response.
+`WhenRequired` does so only where the operation demands it, which works with the widest range of
+S3-compatible services. `WhenSupported` does so for every operation that supports it. Any other
+value stops startup when `Backend="s3"`.
 
 ### ImageTransform
 
@@ -328,12 +339,12 @@ exception (500) instead.
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
 migration reads them straight from configuration as strings, so the environment that runs `migrate`
-needs them. An empty password means the seed generates a random password of at least 24 characters and logs
-it once as a Warning, in the run that creates the admin. A password you set must satisfy `Auth:Password`
-and may not be `admin` in any letter case. While it holds a weak value, `migrate`,
-`migrate:preview` and a start with `Database:MigrateOnStartup` all refuse, with an error that names
-`Auth__BootstrapAdmin__Password`. The value only seeds the account, so once the account exists it can
-be removed.
+needs them. The password is required to create the admin, and the template ships it empty. Nothing is generated or
+logged. The default email `admin@admin.com` is accepted, but change it. A password you set must satisfy
+`Auth:Password` and may not be `admin` in any letter case. When the seed runs and the password is
+empty or weak, `migrate`, `migrate:preview` and a start with `Database:MigrateOnStartup` refuse, with
+an error that names `Auth__BootstrapAdmin__Password`. Once the seed has been applied nothing needs the value
+any more, so it can be removed.
 
 The password policy is shared by the same validation on `POST /api/users` and
 `PUT /api/users/{id}/password`; `MinLength`/`MaxLength` are just the bounds on a reasonable input.
@@ -402,6 +413,7 @@ are read from configuration only: configuring `GraphQlOptions` in code has no ef
 | `ForwardedHeaders:Enabled` | bool | `false` |
 | `ForwardedHeaders:KnownProxies` | string array (IP addresses) | `[]` |
 | `ForwardedHeaders:KnownNetworks` | string array (CIDR ranges) | `[]` |
+| `ForwardedHeaders:ForwardLimit` | integer (at least 1) | `1` |
 
 Off by default, so the `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` headers are
 ignored and the API sees the address, scheme and host of the connection it actually receives.
@@ -416,8 +428,13 @@ CIDR range, or both lists empty, stops the host at startup with an error naming 
 example `ForwardedHeaders:KnownNetworks:0`. While `Enabled=false` the lists are not read.
 
 The middleware runs ahead of request logging, authentication, session rotation and rate limiting,
-and honours one proxy hop. Give the arrays by index in the environment, for example
+and honours `ForwardLimit` proxy hops. Give the arrays by index in the environment, for example
 `ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`.
+
+`ForwardLimit` is the number of proxies between the client and the API. The default `1` fits a single
+reverse proxy. With a load balancer in front of nginx in front of the API, set `2` and list both
+proxies: at `1` the API would take the load balancer's address for the client. A value below 1 stops
+the host at startup while `Enabled=true`.
 
 ## RateLimiting
 
@@ -519,6 +536,20 @@ replica, or need sessions to survive a restart. The default value is an empty st
 key yields `null`; both land on the same in-memory branch. This key also decides where
 `RateLimiting:LoginAccount` counts: left empty, each process counts in its own memory; when set, the
 login throttle counts in Redis directly.
+
+## DataProtection
+
+| Key | Type | Default |
+|---|---|---|
+| `DataProtection:ApplicationName` | string (not blank) | `"StruoCMS"` |
+
+DataProtection keys sign and encrypt the authentication cookie, the antiforgery tokens and the OpenID
+Connect correlation cookies. With `Redis:ConnectionString` set, the key ring is stored in Redis under
+the key `DataProtection-Keys`, so every replica reads the same keys and a request can land on any of
+them. Without Redis, the key ring stays in the default file location.
+
+`ApplicationName` is applied in both cases. Replicas that share a key ring must use the same value,
+and a blank value stops the host at startup. Changing it signs every user out once.
 
 ## Oidc
 

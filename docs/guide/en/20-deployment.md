@@ -23,6 +23,12 @@ When several replicas all have `MigrateOnStartup` set, they queue on the migrati
 applies; a replica that waits longer than `Database:MigrationLockTimeoutSeconds` fails to start.
 SQLite and Oracle take no lock, so make sure `migrate` runs in one place only.
 
+With more than one replica, run `migrate` once as its own job and roll the API out after it
+finishes, instead of setting `MigrateOnStartup` on every replica. On PostgreSQL the lock is a
+session-level advisory lock, and a pooler in transaction mode (PgBouncer, for example) can hand the
+acquire and the release to different server sessions. Point the `migrate` step at the database
+directly, not through the pooler.
+
 Migrations only go forward and there is no rollback command, so back up the database first.
 Production does not run the schema check at startup; run `migrate:check` yourself after `migrate`.
 The commands and the lock are covered in
@@ -47,20 +53,34 @@ The API never changes the setting itself. After the migration step it reads the 
 it is off, logs one warning that names `READ_COMMITTED_SNAPSHOT` and the statement above. The
 warning does not stop startup, and no other backend runs the check.
 
-### Choose or capture the bootstrap password at the first `migrate`
+### The database connection: TLS, pool size, secrets
+
+On PostgreSQL, set `SSL Mode=Require` in production and leave `Trust Server Certificate` unset: the
+driver then encrypts the connection and validates the server's certificate. When the server uses a
+private CA, add `Root Certificate=/path/to/ca.crt`. `Trust Server Certificate=true` turns the
+certificate validation off, so never use it in production. For the other backends, use the driver's own TLS options in the connection string.
+
+Each API process opens up to `Maximum Pool Size` connections (Npgsql defaults to 100). Multiply it by
+the number of replicas, and keep the result under the server's `max_connections` with room left for
+the `migrate` job and your own tools.
+
+The connection string holds the database password. Inject it through the environment
+(`Database__ConnectionString`) or a secret manager rather than a file in the image or the
+repository.
+
+### Set the bootstrap password before the first `migrate`
 
 `Auth:BootstrapAdmin:Password` seeds the account the first time the core seed migration runs;
 changing this value afterward has no effect on the account that already exists. When `migrate` runs
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-The template ships no bootstrap password. Leave it empty and the seed generates a random
-password of at least 24 characters, logged once as a Warning in the `migrate` output (or the API log, when the API
-runs the migrations); copy it from there, because nothing prints it again. A password you set must
-satisfy `Auth:Password` and may not be `admin`, in any environment. While a weak value is
-configured, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error
-naming `Auth__BootstrapAdmin__Password`, even on a database that is already seeded; remove the value
-once the account exists.
+The template ships no bootstrap password and never generates one: the password is required to create the
+account. It must satisfy `Auth:Password` and may not be `admin`. When the seed runs and the password
+is empty or weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an
+error naming `Auth__BootstrapAdmin__Password`. A database that is already seeded is never refused,
+and the value can be removed once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
+`STRUO_ADMIN_PASSWORD` and refuses to start without it.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 
@@ -94,12 +114,20 @@ trust a whole shared Docker network range: it includes the bridge gateway, and a
 published port arrives through that gateway, so it could forge `X-Forwarded-*`. When the API sits
 behind nginx, do not publish its port at all.
 
-When TLS ends at another proxy in front of that container, there are two hops, and the API honours
-only one. The client address it sees is therefore the outer proxy's, so the per-IP login limiter
-puts every client in one bucket; the scheme and host still arrive correctly. That outer proxy must
-set `X-Forwarded-Proto: https`, overwriting rather than appending to any incoming value, because the
-image's nginx passes an incoming value on unchanged and falls back to its own scheme only when none
-arrives.
+`ForwardedHeaders:ForwardLimit` is the number of proxies between the client and the API, and it
+defaults to `1`. With a load balancer in front of nginx in front of the API there are two, so set
+`ForwardedHeaders__ForwardLimit=2`. At `1` the API takes the load balancer's address for the client,
+and the per-IP login limiter puts every client in one bucket. Every proxy in the chain has to be
+trusted: `KnownProxies` or `KnownNetworks` must cover the load balancer's address as well as the
+nginx container's, or the API stops reading the chain at the first address it does not trust.
+
+The image's nginx sends a single `X-Forwarded-Proto`. It passes on the value a proxy in front of it
+sent and falls back to its own scheme only when none arrives. That suits a TLS-terminating proxy in
+front of it, which should overwrite any incoming value rather than append to it. When this nginx is
+the edge that clients connect to, a client could send that header itself and have it passed through.
+In that case set the header from the connection's own scheme in
+`frontend/nginx/default.conf.template`: replace `$struo_forwarded_proto` in the two
+`proxy_set_header X-Forwarded-Proto` lines with `$scheme`.
 
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
@@ -114,6 +142,28 @@ Redis set, the login-attempt counter is one atomic Redis counter shared by every
 login fails with a 5xx error while Redis is unreachable. Without Redis, each process keeps its own
 counter and counts every attempt under a per-account lock before the password is verified, so one
 replica never undercounts, but replicas do not see each other's attempts.
+
+With Redis set, it also holds the DataProtection key ring; see "DataProtection keys" below.
+
+### S3-compatible storage: `ChecksumMode`
+
+`Struo:Files:S3:ChecksumMode` defaults to `WhenRequired`: the S3 client adds a checksum to a request,
+and checks one on a response, only where the operation demands it. That works with the widest range
+of S3-compatible services. Some of them reject the checksums a client sends by default, and uploads
+then fail. If your service documents support for them, `WhenSupported` turns them on for every
+operation that can carry one. Any other value stops startup when `Struo:Files:Backend` is `s3`.
+Chapter 15 covers the symptoms.
+
+### Set `AllowedHosts`
+
+The template does not set `AllowedHosts`, and without it ASP.NET Core's host filtering accepts any
+`Host` header. In production set it to your host name or names, for example
+`AllowedHosts=cms.example.com`, with several names separated by `;`. The admin image's nginx
+forwards the client's `Host` header, so list the public name.
+
+A request whose host is not listed gets a 400. That includes probes that address the API by pod IP
+or another name: list `localhost` for the image's own `HEALTHCHECK`, and have an orchestrator probe
+send an allowed `Host` header.
 
 ### Cookies come back only over HTTPS
 
@@ -253,7 +303,7 @@ it has; the full meaning of every other setting key is in [Chapter 4](04-configu
 - `Database__MigrateOnStartup` (optional) — unset means `false`, and the deployment runs
   `migrate` separately; set to `true`, the API applies migrations itself when it starts.
 - `Redis__ConnectionString` — leaving it empty means a single replica with an in-process cache
-  that doesn't survive a restart.
+  and a key ring in the container, neither of which is shared between replicas.
 - `Struo__Files__Backend` — defaults to `local`, writing into `/app/App_Data` (inside the
   declared volume); using `s3` also needs the matching four `Struo__Files__S3__*` keys.
 
@@ -267,20 +317,29 @@ The DataProtection key ring (it signs and encrypts the authentication cookie and
 tokens) is written inside the container at `/home/app/.aspnet/DataProtection-Keys`; this image
 neither declares it as a volume nor mounts it.
 
-Not persisting this directory has two consequences: replacing the container invalidates every
-existing authentication cookie and antiforgery token, and every user has to log in again; running
-more than one replica means each replica keeps its own key ring that the others don't share, and a
-request that lands on a different replica from the one that issued it fails cookie validation or
-antiforgery outright.
+With `Redis:ConnectionString` set, the key ring is stored in Redis under the key
+`DataProtection-Keys` instead, and every replica reads the same keys. A request can then land on any
+replica, and replacing a container signs nobody out. The directory above is not used in that case.
+Until the key ring has loaded, the API needs Redis to be reachable: a Redis outage at startup fails
+sign-ins, and existing sessions too, because their cookies cannot be unprotected and signed-in users
+are treated as signed out, until it comes back.
 
-With a single replica, mounting this path as a volume is enough for the keys to survive rebuilding
-the container; with more than one replica, a shared key store has to be configured — a shared
-filesystem, Redis, or a cloud provider's key-ring service. This project doesn't come configured for
-any of them.
+`DataProtection:ApplicationName` (default `StruoCMS`) names the key ring's scope. Every replica of
+one deployment must use the same value. Separate deployments that share one Redis must each use a
+different name, or a different Redis database, so they do not read each other's keys. Changing the
+name signs every user out once.
 
-Wherever it's mounted, these keys are stored in plain text — this project hasn't configured an XML
-encryptor, so the key-ring directory holds directly readable key material that needs the same
-protection as any other secret.
+Without Redis, the keys stay in the container's key directory. Not persisting it has two
+consequences: replacing the container invalidates every authentication cookie and antiforgery token,
+and with more than one replica each keeps its own key ring, so a request that lands on a different
+replica from the one that issued it fails cookie validation or antiforgery outright. With a single
+replica, mounting this path as a volume is enough for the keys to survive rebuilding the container;
+with several replicas, set `Redis:ConnectionString`.
+
+Wherever they are stored, the keys are not encrypted at rest: this project configures no XML
+encryptor, so the Redis key or the key-ring directory holds directly readable key material that needs
+the same protection as any other secret. Restrict who can read that Redis database, and require
+authentication on it.
 
 ### The admin SPA image
 
@@ -302,7 +361,8 @@ replaces the request's URI instead of being prepended to it.
 
 `HSTS_VALUE` defaults to an empty string, and nginx sends no header at all for an `add_header`
 whose value is empty; it should only be set once every reachable request has TLS terminated here or
-by an upstream proxy.
+by an upstream proxy. Set it in production, for example `max-age=31536000`: the API sends no HSTS
+header itself, and TLS may end at a proxy in front of this image.
 
 The image proxies `/api/*` and the OIDC paths `/signin-oidc` and `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
 `/signout-oidc-{id}` to the API, forwarding the
@@ -348,7 +408,11 @@ page.
 
 `NGINX_RESOLVER` (defaulting to `127.0.0.11`, Docker's built-in DNS, with a 5-second timeout) only
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
-request gets a 502 after the resolution times out.
+request gets a 502 after the resolution times out. On Kubernetes, set it to the cluster DNS, for
+example `NGINX_RESOLVER=kube-dns.kube-system.svc.cluster.local`; `127.0.0.11` is Docker's and
+nothing listens there in a pod. nginx's `resolver` does not apply the pod's search domains, so
+`API_UPSTREAM` must use a fully qualified service name, for example
+`http://api.<namespace>.svc.cluster.local:8080`.
 
 For deploying the SPA on a different origin from the API, how to set `VITE_API_BASE_URL` and
 when the setting takes effect are in [Chapter 19: Admin Customization](19-admin-customization.md);
@@ -396,6 +460,10 @@ responding.
 the database, and `CacheReadinessCheck` writes to and reads back from the configured
 `IDistributedCache` (Redis or the in-process cache); a readiness probe should wait until both are
 reachable before routing traffic in.
+
+The database check does not wait for the driver's connect timeout. When the database has not
+answered within `Database:ReadinessTimeoutSeconds` (default `3`, range 1 to 60), `/health/ready`
+answers 503.
 
 How to hit both routes is already covered in [Chapter 3: Getting Started](03-getting-started.md);
 below is the full response to an anonymous request:
@@ -528,10 +596,11 @@ health check every 5 seconds, so `docker compose up --wait` doesn't wait out the
 30-second interval. Both the image's health check and Compose's probe read the port from
 `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry when it is a `;`-separated list).
 
-The DataProtection keys live in the `struo-dpkeys` volume and survive rebuilding the container, but
-in plain text: the first start logs a `No XML encryptor configured` warning. That's fine for
-development and testing; in production, protect the keys yourself as the "DataProtection keys"
-section above describes.
+This stack sets `Redis__ConnectionString`, so the DataProtection key ring is stored in its `redis`
+service, unencrypted, and the `struo-dpkeys` volume mounted for the file location goes unused. The
+`redis` service has no volume: recreating it drops the key ring, and with it every session. That's
+fine for development and testing; in production, protect the keys yourself as the "DataProtection
+keys" section above describes.
 
 ### An S3-compatible store
 

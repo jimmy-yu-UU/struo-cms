@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using AwesomeAssertions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Health;
 using Struo.Infrastructure.Persistence;
@@ -20,11 +23,103 @@ public class DbReadinessCheckTests
             new TestCurrentUserAccessor(Guid.Empty));
         client.CodeFirst.InitTables<FxArticle>();
 
-        var check = new DbReadinessCheck(client);
+        var check = new DbReadinessCheck(client, Options.Create(new DatabaseOptions()));
         var result = await check.CheckHealthAsync(new HealthCheckContext());
 
         result.Status.Should().Be(HealthStatus.Healthy);
     }
+
+    [Fact]
+    public async Task Reports_unhealthy_within_the_timeout_when_the_probe_blocks()
+    {
+        using var release = new ManualResetEventSlim();
+        var check = new DbReadinessCheck(
+            null!, Options.Create(new DatabaseOptions { ReadinessTimeoutSeconds = 1 }),
+            () => { release.Wait(); return true; });
+
+        var watch = Stopwatch.StartNew();
+        var result = await check.CheckHealthAsync(new HealthCheckContext());
+        watch.Stop();
+        release.Set();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Be("Database did not answer within the 1-second timeout.");
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Reports_healthy_when_a_probe_answers_inside_the_timeout()
+    {
+        var check = new DbReadinessCheck(
+            null!, Options.Create(new DatabaseOptions { ReadinessTimeoutSeconds = 1 }), () => true);
+
+        var result = await check.CheckHealthAsync(new HealthCheckContext());
+
+        result.Status.Should().Be(HealthStatus.Healthy);
+    }
+
+    private sealed class LateProbeFailure() : Exception("late failure");
+
+    [Fact]
+    public async Task A_probe_that_fails_after_the_timeout_raises_no_unobserved_exception()
+    {
+        var unobserved = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e)
+        {
+            if (e.Exception.Flatten().InnerExceptions.OfType<LateProbeFailure>().Any())
+            {
+                unobserved.Enqueue(e.Exception);
+            }
+        }
+
+        TaskScheduler.UnobservedTaskException += OnUnobserved;
+        try
+        {
+            using var release = new ManualResetEventSlim();
+            using var thrown = new ManualResetEventSlim();
+            var check = new DbReadinessCheck(
+                null!, Options.Create(new DatabaseOptions { ReadinessTimeoutSeconds = 1 }),
+                () =>
+                {
+                    release.Wait();
+                    thrown.Set();
+                    throw new LateProbeFailure();
+                });
+
+            var result = await check.CheckHealthAsync(new HealthCheckContext());
+            release.Set();
+            thrown.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            result.Status.Should().Be(HealthStatus.Unhealthy);
+            unobserved.Should().BeEmpty();
+        }
+        finally
+        {
+            TaskScheduler.UnobservedTaskException -= OnUnobserved;
+        }
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(-1, false)]
+    [InlineData(61, false)]
+    [InlineData(1, true)]
+    [InlineData(3, true)]
+    [InlineData(60, true)]
+    public void ReadinessTimeoutSeconds_is_validated(int seconds, bool valid)
+    {
+        var options = new DatabaseOptions { ConnectionString = "x", ReadinessTimeoutSeconds = seconds };
+
+        Validator.TryValidateObject(options, new ValidationContext(options), null, true).Should().Be(valid);
+    }
+
+    [Fact]
+    public void ReadinessTimeoutSeconds_defaults_to_three()
+        => new DatabaseOptions().ReadinessTimeoutSeconds.Should().Be(3);
 
     [SqliteOnlyFact("unreachable database simulated by a read-only SQLite path in a missing directory")]
     public async Task Reports_unhealthy_when_database_unreachable()
@@ -37,7 +132,7 @@ public class DbReadinessCheckTests
             },
             new TestCurrentUserAccessor(Guid.Empty));
 
-        var check = new DbReadinessCheck(client);
+        var check = new DbReadinessCheck(client, Options.Create(new DatabaseOptions()));
         var result = await check.CheckHealthAsync(new HealthCheckContext());
 
         result.Status.Should().Be(HealthStatus.Unhealthy);

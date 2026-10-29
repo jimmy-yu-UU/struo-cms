@@ -189,3 +189,11 @@ public sealed class MyApiCollection : ICollectionFixture<MyApiFactory>;
 平行執行。把它們都放進這個序列集合：標上 `[Collection("MyApi")]`，並從建構函式取得 factory。
 
 類別庫的說明見[第 22 章](22-testing.md)。它的公開 API 有變動，會寫在[版本紀錄](changelog.md)。
+
+## 13. Bootstrap 管理員：設密碼，並改掉預設 email
+
+核心的 seed 會在空資料庫上建立一個管理員，任何環境都需要 `Auth__BootstrapAdmin__Password`，不會替你產生。
+請設在跑 `migrate` 的環境裡，Compose 則用 `STRUO_ADMIN_PASSWORD`。預設 email `admin@admin.com` 可以用，但太
+容易被猜到，請把 `Auth__BootstrapAdmin__Email` 設成你自己的地址。你自己會跑核心 migration 的測試主機同樣需要
+密碼；範本的主機用的是 `Struo.Tests.Support` 裡的 `TestBootstrapAdmin.Password`。見
+[第 20 章：部署](20-deployment.md)。

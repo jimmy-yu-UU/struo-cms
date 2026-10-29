@@ -13,17 +13,16 @@ it expires, and how it's revoked. What a caller can do once authenticated is in
 
 The moment the `struo_users` table is created and still empty, the first administrator account is
 created along with it: active, its name fixed at `Administrator`, its email and password taken
-from `Auth:BootstrapAdmin`; an empty password is replaced by a generated one. This happens exactly
+from `Auth:BootstrapAdmin`. This happens exactly
 once — changing the setting and restarting does nothing to an existing database.
 
-The template ships no bootstrap password. When `Auth:BootstrapAdmin:Password` is empty, the seed
-generates a random password of at least 24 characters and logs it once, as a Warning, in the run
-that creates the account. A password you configure goes through the password policy the next
-section covers, and `admin` is refused in any letter case; while a weak value is configured,
-`migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
-names `Auth__BootstrapAdmin__Password`. The value only seeds the account, so it can be removed
-afterwards. The transcripts log in with a placeholder for that password. Change it after the first
-login.
+The template ships no bootstrap password, and none is ever generated. `Auth:BootstrapAdmin:Password`
+must be set to create the account. The password goes through the password policy the next section
+covers, and `admin` is refused in any letter case; when the seed runs and the password is empty or
+weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
+names `Auth__BootstrapAdmin__Password`. Once the seed has been applied nothing needs the value
+any more, so it can be removed. The transcripts log in with a placeholder for that password. The default email
+`admin@admin.com` is accepted; change it too.
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator
 to `admin` — the detail is left to

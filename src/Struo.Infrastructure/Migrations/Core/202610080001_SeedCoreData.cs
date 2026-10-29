@@ -12,6 +12,7 @@ public sealed class SeedCoreData : StruoMigration
     {
         var seed = Seed ?? throw new InvalidOperationException(
             "SeedCoreData needs seed data: pass CoreSeedData through MigrationHostOptions.Seed.");
+        if (seed.AdminRefusal is { } refusal) throw new BootstrapPasswordRefusedException(refusal);
         var now = DateTime.UtcNow;
         var adminRoleId = Guid.CreateVersion7();
         var publicRoleId = Guid.CreateVersion7();

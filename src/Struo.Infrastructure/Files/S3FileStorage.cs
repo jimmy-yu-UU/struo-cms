@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Struo.Application.Files;
@@ -40,12 +41,20 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
     }
 
-    internal static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3)
+    internal static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3) =>
+        new AmazonS3Client(s3.AccessKey, s3.SecretKey, BuildConfig(s3));
+
+    internal static AmazonS3Config BuildConfig(FileStorageOptions.S3Options s3)
     {
+        var whenSupported = s3.ChecksumMode == FileStorageOptions.S3Options.ChecksumWhenSupported;
         var config = new AmazonS3Config
         {
             ForcePathStyle = s3.ForcePathStyle,
             AuthenticationRegion = s3.Region,
+            RequestChecksumCalculation = whenSupported
+                ? RequestChecksumCalculation.WHEN_SUPPORTED : RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = whenSupported
+                ? ResponseChecksumValidation.WHEN_SUPPORTED : ResponseChecksumValidation.WHEN_REQUIRED,
             // Presigned URLs must carry the endpoint's real scheme: the SDK defaults to https,
             // which an http-only MinIO refuses after the redirect.
             UseHttp = s3.Endpoint?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true,
@@ -56,7 +65,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         // (e.g. unit tests), never on the real save/read/presign path.
         if (s3.Endpoint is null) config.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(s3.Region);
         else config.ServiceURL = s3.Endpoint;
-        return new AmazonS3Client(s3.AccessKey, s3.SecretKey, config);
+        return config;
     }
 
     public async Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default) =>

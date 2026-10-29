@@ -23,9 +23,8 @@ Both suites need, at minimum:
   `dotnet run --project src/Struo.Api -- migrate` once, or set `Database:MigrateOnStartup=true` in local
   configuration. A local database built by v0.8.x CodeFirst needs `migrate:baseline` once instead.
   `E2E_PASSWORD` is required: the template ships no bootstrap password, so the specs fail at load
-  without it. Set it to the seeded admin's password (`Auth__BootstrapAdmin__Password`, or the one the
-  `migrate` run printed when none was configured). `E2E_EMAIL` defaults to the shipped
-  `admin@admin.com`.
+  without it. Set it to the seeded admin's password (`Auth__BootstrapAdmin__Password`).
+  `E2E_EMAIL` defaults to the shipped `admin@admin.com`.
 - No login-rate-limit override needed for a default checkout. `RateLimiting:Login` (the per-client-IP
   limiter, which counts every attempt — success or failure — against its window) ships **disabled** by
   default, and `RateLimiting:LoginAccount` (the per-account throttle, on by default) only counts

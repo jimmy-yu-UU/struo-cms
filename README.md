@@ -50,9 +50,8 @@ docker compose ps   # wait until postgres, redis and api show (healthy)
 ```
 
 Open `http://localhost:8080` and log in as `admin@admin.com`. The API is at `http://localhost:8081`.
-The first start migrates the database and seeds that account with a generated password, printed once
-in the api log (`docker compose logs api`). To choose the account yourself, set `STRUO_ADMIN_EMAIL` /
-`STRUO_ADMIN_PASSWORD` in `.env` before it.
+The first start migrates the database and seeds that account. Set `STRUO_ADMIN_PASSWORD` in `.env`
+first: compose refuses to start without it. Change `STRUO_ADMIN_EMAIL` from the default as well.
 
 - Ports: copy `.env.example` to `.env` and override `STRUO_ADMIN_PORT`, `STRUO_API_PORT`,
   `STRUO_PG_PORT` or `STRUO_REDIS_PORT` when one is taken.
@@ -87,8 +86,8 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` and log in as `admin@admin.com`. The account is seeded by the `migrate`
-command, which prints a generated password once; to choose your own, set
-`Auth__BootstrapAdmin__Email` / `Auth__BootstrapAdmin__Password` before running it. The
+command, which needs `Auth__BootstrapAdmin__Password` set (and `Auth__BootstrapAdmin__Email`, to
+replace the default). The
 full steps, including the PostgreSQL/Redis port overrides and health checks, are in
 [Chapter 3: Getting Started](docs/guide/en/03-getting-started.md).
 

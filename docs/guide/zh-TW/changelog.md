@@ -13,6 +13,12 @@
   fork 必須補上這個參數（自訂的 `IItemUseCases` 可以忽略它，或轉交給 `ItemService`）。把 `ct`
   當成第四個位置引數傳給 `IItemUseCases.RevertAsync` 的呼叫端，要改成 `ct: ct`，或在它前面補上版本
   （不指定就傳 `null`）。HTTP 與 GraphQL 的線上契約對現有的用戶端沒有變。
+- 核心 seed 不再產生 bootstrap 管理員密碼，任何環境都一樣，也不再把任何密碼寫進 log。建立管理員現在一定要有
+  `Auth:BootstrapAdmin:Password`（`Auth__BootstrapAdmin__Password`）；它是空的，`migrate`、`migrate:preview`
+  與 `Database:MigrateOnStartup` 啟動都會失敗，錯誤訊息點名這個鍵；已經植入過的資料庫不受影響。
+  `docker-compose.yml` 現在要求 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。下一次 `migrate` 或
+  `docker compose up` 之前先設好密碼。fork 自己會跑核心 migration 的測試主機，也要提供密碼。預設 email
+  `admin@admin.com` 保持不變，請改掉。見[第 4 章](04-configuration.md)與[第 20 章](20-deployment.md)。
 :::
 
 ### 新增
@@ -24,6 +30,27 @@
 - 缺必填翻譯的錯誤帶有 `error.details`，每個 locale 的每個缺漏欄位各一筆 `{ field, message, locale }`
   （GraphQL 是 `extensions.details`）。`message` 文字與 `BAD_USER_INPUT` 代碼不變。見
   [第 12 章](12-rest-conventions.md)。
+- `DataProtection:ApplicationName`（預設 `StruoCMS`，不可空白）。設了 `Redis:ConnectionString` 時，
+  DataProtection 金鑰圈（認證 cookie、antiforgery token、OpenID Connect correlation cookie）存在 Redis 的
+  `DataProtection-Keys` 鍵底下，請求打到別的副本不會再把使用者登出。沒有 Redis 時金鑰圈留在預設的檔案位置。
+  見[第 4 章](04-configuration.md)。
+- `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1-60）：資料庫探測在這段時間內沒有回應，`/health/ready`
+  就回報資料庫不健康（503），不再等到驅動程式的連線逾時。見[第 4 章](04-configuration.md)。
+- `Struo:Files:S3:ChecksumMode`（預設 `WhenRequired`，或 `WhenSupported`）：S3 用戶端是對每個請求加上
+  檢查碼、並檢查每個回應的檢查碼，還是只在操作要求時才這麼做。有些 S3 相容服務會拒絕用戶端原本會送出的
+  檢查碼。`Backend=s3` 時，其他值會讓啟動失敗。見[第 4 章](04-configuration.md)與
+  [第 15 章](15-files-and-media.md)。
+- `ForwardedHeaders:ForwardLimit`（預設 `1`，至少 1）：用戶端與 API 之間的代理層數。前面有負載平衡器
+  再加 nginx 時設成 `2`，API 才會看到用戶端，而不是負載平衡器。見[第 4 章](04-configuration.md)。
+
+### 變更
+
+- S3 上傳與下載不再加上或驗證檢查碼，除非該操作要求（`Struo:Files:S3:ChecksumMode` 現在預設為
+  `WhenRequired`）。以前每個 S3 部署都會在每次上傳送出檢查碼、每次下載驗證檢查碼。把 `ChecksumMode`
+  設成 `WhenSupported` 即可恢復原本的行為。
+- DataProtection 的應用程式名稱現在明確指定（`DataProtection:ApplicationName`，預設 `StruoCMS`），和以前
+  ASP.NET Core 自行推導的名稱不同。第一次部署這個版本會讓所有使用者登出一次，有沒有 Redis 都一樣；
+  重新登入即可，不需要其他動作。
 
 ### 修正
 
@@ -32,6 +59,8 @@
 - 非預設語言的驗證錯誤看不到。現在表單會逐一驗證有內容的語言，把錯誤顯示在該語言的分頁並標記分頁，
   跳到第一個有錯誤的分頁；預設語言一律會驗證。
 - 從後台還原版本紀錄可能蓋掉並行的編輯。現在還原會帶上載入時的項目版本，版本過期就顯示一般的衝突橫幅。
+- `GET /api/auth/me` 失敗、而且不是 401 時（網路錯誤、5xx、逾時），後台不再丟掉登入狀態。啟動時遇到這種
+  失敗，會顯示附「重試」按鈕的「無法連線」畫面，而不是登入頁；不會自動重試。
 
 ## 0.16.0 — 2026-10-29
 
