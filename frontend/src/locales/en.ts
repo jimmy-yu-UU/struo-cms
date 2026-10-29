@@ -68,6 +68,9 @@ export default {
     logoutIncomplete: 'You were signed out here, but the server could not confirm it. If this is a shared computer, close the browser.',
   },
   errors: {
+    serverUnreachable: 'Cannot reach the server. Your session has not changed.',
+    connectionTitle: 'Cannot reach the server',
+    connectionBody: 'The server did not answer. Check your connection and try again.',
     tooManyRequests: 'Too many attempts. Please try again later.',
     tooManyRequestsWithWait: 'Too many attempts. Please try again in {seconds} seconds.',
   },

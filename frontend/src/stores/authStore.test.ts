@@ -8,6 +8,9 @@ vi.mock('../api/apiClient', async (importOriginal) => ({
   apiClient: { get: vi.fn(), post: vi.fn(), setUnauthorizedHandler: vi.fn() },
 }))
 
+const toastAdd = vi.fn()
+vi.mock('../composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
+
 describe('authStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -38,12 +41,57 @@ describe('authStore', () => {
     expect(store.user).toEqual({ id: 'u9', isSuperAdmin: false, permissions: {} })
   })
 
-  it('fetchCurrentUser clears user on error (401)', async () => {
-    vi.mocked(apiClient.get).mockRejectedValue(new Error('unauth'))
+  it('fetchCurrentUser clears user on 401', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new ApiError(401, 'unauth'))
     const store = useAuthStore()
+    store.user = { id: 'u1', isSuperAdmin: false, permissions: {} }
     await store.fetchCurrentUser()
     expect(store.user).toBeNull()
     expect(store.isAuthenticated).toBe(false)
+    expect(store.connectionError).toBe(false)
+    expect(toastAdd).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a 500', () => new ApiError(500, 'boom')],
+    ['a 503', () => new ApiError(503, 'down')],
+    ['a network error', () => new TypeError('Failed to fetch')],
+  ])('fetchCurrentUser keeps the signed-in user on %s and surfaces a notice', async (_n, make) => {
+    vi.mocked(apiClient.get).mockRejectedValue(make())
+    const store = useAuthStore()
+    const user = { id: 'u1', isSuperAdmin: false, permissions: {} }
+    store.user = user
+    await store.fetchCurrentUser()
+    expect(store.user).toEqual(user)
+    expect(store.connectionError).toBe(true)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+  })
+
+  it('fetchCurrentUser with no user flags the connection error without a toast', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new ApiError(502, 'boom'))
+    const store = useAuthStore()
+    await store.fetchCurrentUser()
+    expect(store.user).toBeNull()
+    expect(store.connectionError).toBe(true)
+    expect(toastAdd).not.toHaveBeenCalled()
+  })
+
+  it('a later successful fetch clears the connection error', async () => {
+    const store = useAuthStore()
+    vi.mocked(apiClient.get).mockRejectedValueOnce(new ApiError(500, 'boom'))
+    await store.fetchCurrentUser()
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ id: 'u2', isSuperAdmin: false, permissions: {} })
+    await store.fetchCurrentUser()
+    expect(store.connectionError).toBe(false)
+    expect(store.user?.id).toBe('u2')
+  })
+
+  it('login rethrows when /auth/me cannot be reached, leaving no user', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ id: 'u1' })
+    vi.mocked(apiClient.get).mockRejectedValue(new ApiError(503, 'boom'))
+    const store = useAuthStore()
+    await expect(store.login('a@b.com', 'pw')).rejects.toThrow()
+    expect(store.user).toBeNull()
   })
 
   it('logout clears the user', async () => {

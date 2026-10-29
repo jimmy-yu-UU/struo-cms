@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { apiClient, ApiError } from '../api/apiClient'
+import { i18n } from '../i18n'
+import { useToast } from '../composables/useToast'
 import type { CollectionPermission } from '../types/schema'
 
 export type CurrentUser = {
@@ -20,6 +22,9 @@ export const useAuthStore = defineStore('auth', {
     // request's own 401 is not taken for an expiry, and unsaved-changes guards let the logout
     // through (it drops edits, like an expiry). The caller clears it with endLogout().
     loggingOut: false,
+    // True while the last /auth/me failed for a reason other than 401 (server error, network):
+    // the session state is unknown, not signed out. Cleared by the next /auth/me that answers.
+    connectionError: false,
   }),
   getters: {
     skipsLeaveGuards: (state) => state.sessionExpired || state.loggingOut,
@@ -36,6 +41,10 @@ export const useAuthStore = defineStore('auth', {
       // Login returns { id }; then confirm via /me for a canonical session (id + perms).
       await apiClient.post('/auth/login', { email, password })
       await this.fetchCurrentUser()
+      if (!this.user && this.connectionError) {
+        this.connectionError = false
+        throw new Error(i18n.global.t('errors.serverUnreachable'))
+      }
       if (this.user) this.sessionExpired = false
     },
     // Always ends signed out locally. A 401 means there was no server session left to end, which is
@@ -59,11 +68,22 @@ export const useAuthStore = defineStore('auth', {
     endLogout(): void {
       this.loggingOut = false
     },
+    // Only a 401 means "no session". Any other failure leaves the current user in place and flags
+    // connectionError; a signed-in user also gets a notice (boot has no shell to show one in).
     async fetchCurrentUser(): Promise<void> {
       try {
         this.user = await apiClient.get<CurrentUser>('/auth/me')
-      } catch {
-        this.user = null // unauthenticated / no session
+        this.connectionError = false
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          this.user = null
+          this.connectionError = false
+          return
+        }
+        this.connectionError = true
+        if (this.user) {
+          useToast().add({ severity: 'error', summary: i18n.global.t('errors.serverUnreachable') })
+        }
       }
     },
   },

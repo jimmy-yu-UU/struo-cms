@@ -68,6 +68,9 @@ export default {
     logoutIncomplete: '已在此處登出,但伺服器未能確認。若這是共用電腦,請關閉瀏覽器。',
   },
   errors: {
+    serverUnreachable: '無法連線到伺服器,登入狀態未受影響。',
+    connectionTitle: '無法連線到伺服器',
+    connectionBody: '伺服器沒有回應。請檢查網路連線後再試一次。',
     tooManyRequests: '嘗試次數過多,請稍後再試。',
     tooManyRequestsWithWait: '嘗試次數過多,請於 {seconds} 秒後再試。',
   },
