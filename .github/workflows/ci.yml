@@ -182,7 +182,7 @@ jobs:
           cache-dir: ${{ runner.temp }}/trivy
       - name: Upload the api scan to code scanning
         if: ${{ !cancelled() && steps.build-api.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy-api.sarif
           category: trivy-api
@@ -199,7 +199,7 @@ jobs:
           cache-dir: ${{ runner.temp }}/trivy
       - name: Upload the admin scan to code scanning
         if: ${{ !cancelled() && steps.build-admin.outcome == 'success' && steps.sarif-gate.outputs.upload == 'true' }}
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy-admin.sarif
           category: trivy-admin
