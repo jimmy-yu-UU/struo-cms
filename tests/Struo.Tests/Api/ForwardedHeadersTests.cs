@@ -111,6 +111,57 @@ public class ForwardedHeadersTests
     }
 
     [Fact]
+    public async Task ForwardLimit_defaults_to_one_hop()
+    {
+        using var server = await StartAsync(new()
+        {
+            ["ForwardedHeaders:Enabled"] = "true",
+            ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
+            ["ForwardedHeaders:KnownProxies:1"] = "10.1.2.4",
+        });
+        (await ObserveChainAsync(server, Client, "203.0.113.9, 10.1.2.4")).Should().Be("10.1.2.4");
+    }
+
+    [Fact]
+    public async Task ForwardLimit_two_resolves_the_client_behind_two_known_proxies()
+    {
+        using var server = await StartAsync(new()
+        {
+            ["ForwardedHeaders:Enabled"] = "true",
+            ["ForwardedHeaders:ForwardLimit"] = "2",
+            ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
+            ["ForwardedHeaders:KnownProxies:1"] = "10.1.2.4",
+        });
+        (await ObserveChainAsync(server, Client, "203.0.113.9, 10.1.2.4")).Should().Be("203.0.113.9");
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public async Task ForwardLimit_below_one_refuses_to_start_naming_the_key(string value)
+    {
+        var act = () => StartAsync(new()
+        {
+            ["ForwardedHeaders:Enabled"] = "true",
+            ["ForwardedHeaders:ForwardLimit"] = value,
+            ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
+        });
+        (await act.Should().ThrowAsync<InvalidOperationException>()).Which.Message
+            .Should().Contain("ForwardedHeaders:ForwardLimit");
+    }
+
+    private static async Task<string> ObserveChainAsync(TestServer server, IPAddress source, string forwardedFor)
+    {
+        var ctx = await server.SendAsync(c =>
+        {
+            c.Connection.RemoteIpAddress = source;
+            c.Request.Headers["X-Forwarded-For"] = forwardedFor;
+        });
+        using var reader = new StreamReader(ctx.Response.Body);
+        return (await reader.ReadToEndAsync()).Split('|')[1];
+    }
+
+    [Fact]
     public async Task Invalid_entries_are_ignored_while_disabled()
     {
         using var server = await StartAsync(new()

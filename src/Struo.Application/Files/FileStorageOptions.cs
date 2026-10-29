@@ -35,6 +35,14 @@ public sealed class FileStorageOptions
         public string Region { get; set; } = "us-east-1";
         public bool ForcePathStyle { get; set; } = true;
         public int PresignTtlSeconds { get; set; } = 300;
+
+        /// <summary><see cref="ChecksumWhenRequired"/> adds a checksum to a request, and checks one on
+        /// a response, only where the operation demands it. <see cref="ChecksumWhenSupported"/> does so
+        /// for every operation that supports it, which some S3-compatible services reject.</summary>
+        public string ChecksumMode { get; set; } = ChecksumWhenRequired;
+
+        public const string ChecksumWhenRequired = "WhenRequired";
+        public const string ChecksumWhenSupported = "WhenSupported";
     }
 
     public sealed class ImageTransformOptions
@@ -146,6 +154,9 @@ public sealed class FileStorageOptions
                     || string.IsNullOrWhiteSpace(S3.AccessKey) || string.IsNullOrWhiteSpace(S3.SecretKey))
                     throw new InvalidOperationException(
                         "Struo:Files:S3 Endpoint, Bucket, AccessKey and SecretKey are required when Backend=s3.");
+                if (S3.ChecksumMode is not (S3Options.ChecksumWhenRequired or S3Options.ChecksumWhenSupported))
+                    throw new InvalidOperationException(
+                        $"Unknown Struo:Files:S3:ChecksumMode '{S3.ChecksumMode}' (expected '{S3Options.ChecksumWhenRequired}' or '{S3Options.ChecksumWhenSupported}').");
                 break;
             case "custom":
                 // The fork registers its own IFileStorage; nothing here to check.

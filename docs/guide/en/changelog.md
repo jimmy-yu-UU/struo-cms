@@ -43,6 +43,14 @@
   unhealthy (503) when the probe has not answered in that time, instead of waiting for the driver
   connect timeout. See [Chapter 4](04-configuration.md).
 
+- `Struo:Files:S3:ChecksumMode` (`WhenRequired` default, or `WhenSupported`): whether the S3 client adds a
+  checksum to every request and checks one on every response, or only where the operation demands it.
+  Some S3-compatible services reject the checksums the client sends by default. Any other value stops
+  startup when `Backend=s3`. See [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
+- `ForwardedHeaders:ForwardLimit` (default `1`, at least 1): the number of proxies between the client and
+  the API. Behind a load balancer and nginx set `2`, so the API sees the client instead of the load
+  balancer. See [Chapter 4](04-configuration.md).
+
 ### Changed
 
 - The DataProtection application name is now set explicitly (`DataProtection:ApplicationName`, default

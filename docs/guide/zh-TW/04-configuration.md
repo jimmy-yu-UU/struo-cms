@@ -165,10 +165,15 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:S3:Region` | 字串 | `"us-east-1"` |
 | `Struo:Files:S3:ForcePathStyle` | 布林 | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
+| `Struo:Files:S3:ChecksumMode` | `WhenRequired` 或 `WhenSupported` | `"WhenRequired"` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
 會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
+
+`ChecksumMode` 決定 S3 用戶端何時在請求加上檢查碼、何時檢查回應的檢查碼。`WhenRequired` 只在操作
+要求時才這麼做，相容的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
+`Backend="s3"` 時，其他值會讓啟動失敗。
 
 ### ImageTransform
 
@@ -350,6 +355,7 @@ IDE 另外只認開發環境，不受這個鍵控制。
 | `ForwardedHeaders:Enabled` | 布林 | `false` |
 | `ForwardedHeaders:KnownProxies` | 字串陣列（IP 位址） | `[]` |
 | `ForwardedHeaders:KnownNetworks` | 字串陣列（CIDR 範圍） | `[]` |
+| `ForwardedHeaders:ForwardLimit` | 整數（至少 1） | `1` |
 
 預設關閉，`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host` 都會被忽略，API 看到的是它實際
 收到的那條連線的位址、scheme 與 host。反向代理擋在 API 前面、而 API 需要知道真正的用戶端時才打開：
@@ -360,8 +366,12 @@ IDE 另外只認開發環境，不受這個鍵控制。
 CIDR 範圍，或兩個清單都空，主機會在啟動時拒絕，並在錯誤訊息點名鍵，例如
 `ForwardedHeaders:KnownNetworks:0`。`Enabled=false` 時不會讀這兩個清單。
 
-這個中介軟體排在請求記錄、驗證、工作階段輪替與速率限制之前，只認一層代理。環境變數用索引給陣列，
+這個中介軟體排在請求記錄、驗證、工作階段輪替與速率限制之前，認 `ForwardLimit` 層代理。環境變數用索引給陣列，
 例如 `ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`。
+
+`ForwardLimit` 是用戶端與 API 之間的代理層數。預設 `1` 適合單一反向代理。負載平衡器後面接 nginx、
+nginx 後面才是 API 時，設成 `2`，並把兩層代理都列進清單：設 `1` 的話，API 會把負載平衡器的位址當成
+用戶端。小於 1 的值，會在 `Enabled=true` 時讓主機啟動失敗。
 
 ## RateLimiting
 

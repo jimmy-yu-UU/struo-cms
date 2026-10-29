@@ -163,6 +163,12 @@ allowed.`。
 
 自訂儲存若回傳預簽章網址，網址的有效時間由 `Struo:Files:S3:PresignTtlSeconds` 決定，跟 S3 後端用的是同一個鍵。
 
+### S3 相容服務與檢查碼
+
+S3 用戶端可以在每個請求加上檢查碼，也可以檢查每個回應的檢查碼。有些 S3 相容服務會拒絕這樣的請求，
+上傳就會失敗。`Struo:Files:S3:ChecksumMode` 預設是 `WhenRequired`，只在操作要求時才送檢查碼。服務
+要求每個操作都帶檢查碼時，改設 `WhenSupported`。見[第 4 章](04-configuration.md)。
+
 ## 提供檔案：誰看得到
 
 `GET /api/files/{id}` 與 `GET /api/files/{id}/content` 完全沒有 `[Authorize]`，匿名請求兩者

@@ -195,10 +195,16 @@ the Local nor the S3 keys are validated.
 | `Struo:Files:S3:Region` | string | `"us-east-1"` |
 | `Struo:Files:S3:ForcePathStyle` | bool | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | integer (seconds) | `300` |
+| `Struo:Files:S3:ChecksumMode` | `WhenRequired` or `WhenSupported` | `"WhenRequired"` |
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
 startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
 `Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup. `PresignTtlSeconds` also sets the lifetime of presigned URLs from a `custom` storage.
+
+`ChecksumMode` decides when the S3 client adds a checksum to a request and checks one on a response.
+`WhenRequired` does so only where the operation demands it, which works with the widest range of
+S3-compatible services. `WhenSupported` does so for every operation that supports it. Any other
+value stops startup when `Backend="s3"`.
 
 ### ImageTransform
 
@@ -407,6 +413,7 @@ are read from configuration only: configuring `GraphQlOptions` in code has no ef
 | `ForwardedHeaders:Enabled` | bool | `false` |
 | `ForwardedHeaders:KnownProxies` | string array (IP addresses) | `[]` |
 | `ForwardedHeaders:KnownNetworks` | string array (CIDR ranges) | `[]` |
+| `ForwardedHeaders:ForwardLimit` | integer (at least 1) | `1` |
 
 Off by default, so the `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` headers are
 ignored and the API sees the address, scheme and host of the connection it actually receives.
@@ -421,8 +428,13 @@ CIDR range, or both lists empty, stops the host at startup with an error naming 
 example `ForwardedHeaders:KnownNetworks:0`. While `Enabled=false` the lists are not read.
 
 The middleware runs ahead of request logging, authentication, session rotation and rate limiting,
-and honours one proxy hop. Give the arrays by index in the environment, for example
+and honours `ForwardLimit` proxy hops. Give the arrays by index in the environment, for example
 `ForwardedHeaders__KnownNetworks__0=172.16.0.0/12`.
+
+`ForwardLimit` is the number of proxies between the client and the API. The default `1` fits a single
+reverse proxy. With a load balancer in front of nginx in front of the API, set `2` and list both
+proxies: at `1` the API would take the load balancer's address for the client. A value below 1 stops
+the host at startup while `Enabled=true`.
 
 ## RateLimiting
 

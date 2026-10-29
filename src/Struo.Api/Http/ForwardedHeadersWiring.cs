@@ -18,12 +18,17 @@ public sealed class ForwardedHeadersSettings
 
     /// <summary>CIDR ranges (e.g. 172.16.0.0/12) whose X-Forwarded-* headers are trusted.</summary>
     public string[] KnownNetworks { get; set; } = [];
+
+    /// <summary>How many entries of the forwarded chain are processed, counted from the proxy nearest
+    /// the API: the number of proxies between the client and the API. At least 1.</summary>
+    public int ForwardLimit { get; set; } = 1;
 }
 
 public static class ForwardedHeadersWiring
 {
     private const string ProxiesKey = SectionName + ":KnownProxies";
     private const string NetworksKey = SectionName + ":KnownNetworks";
+    private const string LimitKey = SectionName + ":ForwardLimit";
     private const string SectionName = ForwardedHeadersSettings.SectionName;
 
     /// <summary>Binds the section and, when enabled, derives the middleware options from it. Resolved
@@ -57,11 +62,15 @@ public static class ForwardedHeadersWiring
             throw new InvalidOperationException(
                 $"{SectionName}:Enabled requires {ProxiesKey} or {NetworksKey}; without either no sender is trusted.");
 
+        if (settings.ForwardLimit < 1)
+            throw new InvalidOperationException($"{LimitKey} must be at least 1, got {settings.ForwardLimit}.");
+
         var proxies = settings.KnownProxies.Select(ParseProxy).ToList();
         var networks = settings.KnownNetworks.Select(ParseNetwork).ToList();
 
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
             | ForwardedHeaders.XForwardedHost;
+        options.ForwardLimit = settings.ForwardLimit;
         // The defaults trust loopback only; the configured lists replace them.
         options.KnownProxies.Clear();
         options.KnownIPNetworks.Clear();

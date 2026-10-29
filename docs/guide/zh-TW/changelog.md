@@ -37,6 +37,13 @@
 - `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1-60）：資料庫探測在這段時間內沒有回應，`/health/ready`
   就回報資料庫不健康（503），不再等到驅動程式的連線逾時。見[第 4 章](04-configuration.md)。
 
+- `Struo:Files:S3:ChecksumMode`（預設 `WhenRequired`，或 `WhenSupported`）：S3 用戶端是對每個請求加上
+  檢查碼、並檢查每個回應的檢查碼，還是只在操作要求時才這麼做。有些 S3 相容服務會拒絕用戶端預設送出的
+  檢查碼。`Backend=s3` 時，其他值會讓啟動失敗。見[第 4 章](04-configuration.md)與
+  [第 15 章](15-files-and-media.md)。
+- `ForwardedHeaders:ForwardLimit`（預設 `1`，至少 1）：用戶端與 API 之間的代理層數。前面有負載平衡器
+  再加 nginx 時設成 `2`，API 才會看到用戶端，而不是負載平衡器。見[第 4 章](04-configuration.md)。
+
 ### 變更
 
 - DataProtection 的應用程式名稱現在明確指定（`DataProtection:ApplicationName`，預設 `StruoCMS`），和以前
