@@ -188,7 +188,8 @@ token, so a password change does not cut off an integration that authenticates w
 token may have leaked, revoke it or issue a new one instead.
 
 A super-admin editing a user in the admin UI can issue, regenerate or revoke the token in the
-"Access token" section. The raw token is shown only once, in the dialog that opens after it is
+"Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke
+button. The raw token is shown only once, in the dialog that opens after it is
 issued, with a copy button; closing the dialog discards it for good. Regenerating and revoking ask
 for confirmation first, because the old token stops working immediately. The section also lists
 when the token was issued and last used, and the same data is available from

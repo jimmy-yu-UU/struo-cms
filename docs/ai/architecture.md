@@ -427,7 +427,8 @@ identity god-interface, split by *consumer* rather than by table:
   bypasses the generic projection to keep them off the normal read path — which is also why the
   by-id lookup lives here rather than on `IUserAccountStore`.
 - **`IUserAccountStore`** → `SqlSugarUserAccountStore`. User-account administration: create, exists,
-  profile and access-token-info projections, and the three credential mutations (set password, issue/revoke access token).
+  profile and access-token-info projections, and the three credential mutations (set password,
+  issue/revoke access token).
   Those three stamp `UpdatedAt`/`UpdatedBy` and increment `Version` themselves, because they are
   column-scoped `SetColumns` updates and therefore outside both `AuditAop` (which hooks only
   `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump; `CreateAsync` is an

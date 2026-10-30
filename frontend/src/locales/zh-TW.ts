@@ -121,7 +121,7 @@ export default {
     generateFailed: '無法產生存取權杖。',
     revokeFailed: '無法撤銷存取權杖。',
     hint: '最後使用時間最多每分鐘記錄一次,可能落後於最近一次請求。',
-    loadFailed: '存取權杖資訊載入失敗',
+    loadFailed: '存取權杖資訊載入失敗。',
   },
   createUser: {
     title: '新增使用者',

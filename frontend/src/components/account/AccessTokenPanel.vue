@@ -132,7 +132,9 @@ defineExpose({ reload })
     </div>
 
     <Dialog :open="issuedToken !== null" @update:open="(v: boolean) => { if (!v) dismissToken() }">
-      <DialogScrollContent>
+      <!-- An outside click is not a deliberate dismissal: the token is shown once, so only the Close
+           button, the X and Esc discard it. -->
+      <DialogScrollContent @interact-outside="(e: Event) => e.preventDefault()">
         <DialogHeader>
           <DialogTitle>{{ t('accessToken.issuedTitle') }}</DialogTitle>
           <DialogDescription>{{ t('accessToken.issuedDescription') }}</DialogDescription>

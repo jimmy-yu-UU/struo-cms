@@ -6,6 +6,8 @@ import AccessTokenPanel from './AccessTokenPanel.vue'
 import { usersApi } from '../../api/usersApi'
 import { ApiError } from '../../api/apiClient'
 import { formatDateTime } from '../../lib/formatDateTime'
+import { DialogClose, DialogContent } from 'reka-ui'
+import { Dialog } from '@/components/ui/dialog'
 
 vi.mock('../../api/usersApi', () => ({
   usersApi: { getAccessTokenInfo: vi.fn(), generateAccessToken: vi.fn(), revokeAccessToken: vi.fn() },
@@ -153,7 +155,7 @@ describe('AccessTokenPanel', () => {
       expect(w.text()).toContain(SECRET)
     })
 
-    it('drops the token from the page once the dialog is dismissed', async () => {
+    async function openTokenDialog() {
       vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(NO_TOKEN)
       vi.mocked(usersApi.generateAccessToken).mockResolvedValue({ token: SECRET })
       const w = mountPanel()
@@ -161,10 +163,65 @@ describe('AccessTokenPanel', () => {
       await button(w, en.accessToken.generate)!.trigger('click')
       await flushPromises()
       expect(w.html()).toContain(SECRET)
-      await button(w, en.common.close)!.trigger('click')
+      return w
+    }
+    const issuedToken = (w: ReturnType<typeof mountPanel>) =>
+      (w.vm as unknown as { $: { setupState: { issuedToken: string | null } } }).$.setupState.issuedToken
+
+    async function expectDiscarded(w: ReturnType<typeof mountPanel>) {
       await flushPromises()
       expect(w.html()).not.toContain(SECRET)
       expect(w.text()).not.toContain(en.accessToken.issuedNote)
+      expect(issuedToken(w)).toBeNull()
+    }
+
+    it('drops the token from the page and from state when the Close button is used', async () => {
+      const w = await openTokenDialog()
+      expect(issuedToken(w)).toBe(SECRET)
+      await w.findAll('button').filter((b) => b.text() === en.common.close).at(-1)!.trigger('click')
+      await expectDiscarded(w)
+    })
+
+    it('drops the token when the dialog is dismissed through its X', async () => {
+      const w = await openTokenDialog()
+      await w.findComponent(DialogClose).trigger('click')
+      await expectDiscarded(w)
+    })
+
+    it('drops the token when the dialog asks to close, as Esc does', async () => {
+      const w = await openTokenDialog()
+      w.findComponent(Dialog).vm.$emit('update:open', false)
+      await expectDiscarded(w)
+    })
+
+    it('keeps the token when the user clicks outside the dialog', async () => {
+      const w = await openTokenDialog()
+      const outside = new Event('pointerdown', { cancelable: true })
+      w.findComponent(DialogContent).vm.$emit('interactOutside', outside)
+      await flushPromises()
+      expect(outside.defaultPrevented).toBe(true)
+      expect(w.html()).toContain(SECRET)
+      expect(issuedToken(w)).toBe(SECRET)
+    })
+
+    it('disables the buttons while a request is in flight and sends one request per click', async () => {
+      vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(HAS_TOKEN)
+      let resolve!: (v: { token: string }) => void
+      vi.mocked(usersApi.generateAccessToken).mockReturnValue(new Promise((r) => { resolve = r }))
+      const w = mountPanel()
+      await flushPromises()
+      await button(w, en.accessToken.regenerate)!.trigger('click')
+      await flushPromises()
+      expect(button(w, en.accessToken.regenerate)!.attributes('disabled')).toBeDefined()
+      expect(button(w, en.accessToken.revoke)!.attributes('disabled')).toBeDefined()
+      await button(w, en.accessToken.regenerate)!.trigger('click')
+      await flushPromises()
+      expect(usersApi.generateAccessToken).toHaveBeenCalledTimes(1)
+      expect(confirmRequire).toHaveBeenCalledTimes(1)
+      resolve({ token: SECRET })
+      await flushPromises()
+      expect(button(w, en.accessToken.regenerate)!.attributes('disabled')).toBeUndefined()
+      expect(button(w, en.accessToken.revoke)!.attributes('disabled')).toBeUndefined()
     })
 
     it('asks before regenerating, and does nothing when declined', async () => {
