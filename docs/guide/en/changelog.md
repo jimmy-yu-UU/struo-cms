@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.19.0
+## 0.19.0 — 2026-10-30
 
 ::: danger Breaking
 - With `Struo:Cors:AllowedOrigins` set, the session cookie is `SameSite=Lax` (it used to be
