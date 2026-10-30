@@ -170,6 +170,11 @@ public class LocalRedirectTests
     }
 
     [Fact]
+    public void LoginFailureUrl_keeps_the_brackets_of_an_ipv6_literal_origin() =>
+        LocalRedirect.LoginFailureUrl("x", "http://[::1]:5173/a", "/", ["http://[::1]:5173"])
+            .Should().Be("http://[::1]:5173/login?error=x");
+
+    [Fact]
     public void LoginFailureUrl_is_relative_when_no_origin_is_configured() =>
         LocalRedirect.LoginFailureUrl("external_login_denied", "https://admin.example.com/", "https://admin.example.com/", [])
             .Should().Be("/login?error=external_login_denied");

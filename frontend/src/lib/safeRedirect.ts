@@ -31,7 +31,8 @@ export function loginRedirectQuery(fullPath: string | undefined): { redirect: st
 
 // The SSO returnUrl for a validated path: the path itself when the API base URL resolves to the
 // page's own origin, origin + path otherwise so the API can send the browser back to this host.
-// Resolved the way the browser does, so protocol-relative and same-origin absolute bases both count.
+// Resolved the way the browser does, so a protocol-relative base counts as cross-origin and an
+// absolute base on this page's origin as same-origin.
 export function ssoReturnUrl(apiBase: string, path: string, origin: string): string {
   return new URL(apiBase, origin).origin === origin ? path : origin + path
 }

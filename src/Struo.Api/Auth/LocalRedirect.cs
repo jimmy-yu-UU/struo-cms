@@ -10,9 +10,10 @@ public static class LocalRedirect
 
     /// <summary>The origin of <paramref name="url"/> when it is an absolute URL on an allowed origin;
     /// otherwise null. Entries match the way the CORS policy matches: the browser's serialized origin
-    /// (lowercase scheme and host, punycode, no default port) compared exactly with the entry, which is
-    /// lowercased, or rebuilt from scheme, host and port in punycode when its host is non-ASCII.
-    /// An ASCII-host entry with a trailing slash, path or wildcard matches nothing.</summary>
+    /// (lowercase scheme and host, punycode, no default port) compared exactly with the entry. An entry
+    /// whose host is non-ASCII or an IPv6 literal is rebuilt from its scheme, host and port first; any
+    /// other entry is only lowercased, so one with a trailing slash, path, wildcard or explicit default
+    /// port matches nothing.</summary>
     public static string? AllowedOrigin(string? url, IReadOnlyCollection<string>? allowedOrigins)
     {
         if (allowedOrigins is not { Count: > 0 } || !TryGetOrigin(url, out var origin))
@@ -69,6 +70,9 @@ public static class LocalRedirect
         value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
         || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-    private static string Serialize(Uri uri) =>
-        $"{uri.Scheme}://{uri.IdnHost}{(uri.IsDefaultPort ? "" : ":" + uri.Port)}";
+    private static string Serialize(Uri uri)
+    {
+        var host = uri.HostNameType == UriHostNameType.IPv6 ? uri.Host : uri.IdnHost;
+        return $"{uri.Scheme}://{host}{(uri.IsDefaultPort ? "" : ":" + uri.Port)}";
+    }
 }
