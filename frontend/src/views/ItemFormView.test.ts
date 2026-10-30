@@ -7,6 +7,7 @@ import ItemFormView from './ItemFormView.vue'
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '../components/account/ChangePasswordDialog.vue'
+import AccessTokenPanel from '../components/account/AccessTokenPanel.vue'
 import JunctionLinksEditor from '../components/fields/JunctionLinksEditor.vue'
 import { itemsApi } from '../api/itemsApi'
 import { ApiError } from '../api/apiClient'
@@ -19,6 +20,9 @@ import type { ConfirmRequest } from '@/composables/useConfirm'
 
 // PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
+vi.mock('../api/usersApi', () => ({
+  usersApi: { getAccessTokenInfo: vi.fn().mockResolvedValue({ hasToken: false, createdAt: null, lastUsedAt: null }) },
+}))
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
     getRolePermissions: vi.fn(),
@@ -104,6 +108,7 @@ const i18n = createI18n({
       grantsSaveFailedAfterCreate: "The role was created, but saving its permissions failed — retry from the role's edit page.",
     },
     password: { resetTitle: 'Reset password' },
+    accessToken: { title: 'Access token', none: 'No token' },
   } },
 })
 function mountView() {
@@ -1057,6 +1062,10 @@ describe('ItemFormView', () => {
     const dialog = w.findComponent(ChangePasswordDialog)
     expect(dialog.exists()).toBe(true)
     expect(dialog.props('targetUserId')).toBe('u9')
+
+    const tokenPanel = w.findComponent(AccessTokenPanel)
+    expect(tokenPanel.exists()).toBe(true)
+    expect(tokenPanel.props('userId')).toBe('u9')
   })
 
   it('hides the reset-password action for a non-super-admin', async () => {
@@ -1076,6 +1085,7 @@ describe('ItemFormView', () => {
     expect(w.get('.page-head h1').text()).toBe('Edit User')
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
+    expect(w.findComponent(AccessTokenPanel).exists()).toBe(false)
   })
 
   it('hides the reset-password action on a non-user collection', async () => {
@@ -1091,6 +1101,7 @@ describe('ItemFormView', () => {
     expect(w.get('.page-head h1').text()).toBe('Edit Article')
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
+    expect(w.findComponent(AccessTokenPanel).exists()).toBe(false)
   })
 
   // ---- unified leave guard + form Save flushes a dirty permission matrix ----

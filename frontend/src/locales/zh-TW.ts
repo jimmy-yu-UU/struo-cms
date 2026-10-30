@@ -98,6 +98,15 @@ export default {
     notFound: '該使用者已不存在。',
     failed: '無法更新密碼。',
   },
+  accessToken: {
+    title: '存取權杖',
+    none: '這位使用者沒有存取權杖。',
+    createdAt: '核發時間',
+    lastUsedAt: '最後使用',
+    neverUsed: '從未使用',
+    hint: '最後使用時間最多每分鐘記錄一次,可能落後於最近一次請求。',
+    loadFailed: '存取權杖資訊載入失敗',
+  },
   createUser: {
     title: '新增使用者',
     description: '以電子郵件與密碼建立本機帳號,之後在使用者頁面指派角色。',

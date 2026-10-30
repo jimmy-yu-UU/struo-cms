@@ -98,6 +98,15 @@ export default {
     notFound: 'That user no longer exists.',
     failed: 'Could not update the password.',
   },
+  accessToken: {
+    title: 'Access token',
+    none: 'This user has no access token.',
+    createdAt: 'Issued',
+    lastUsedAt: 'Last used',
+    neverUsed: 'Never used',
+    hint: 'The last-used time is recorded at most once a minute, so it can trail the latest request.',
+    loadFailed: 'Failed to load the access token details',
+  },
   createUser: {
     title: 'New user',
     description: "Create a local account with an email and password. Assign roles on the user's page afterwards.",

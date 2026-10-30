@@ -12,6 +12,7 @@ import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
+import AccessTokenPanel from '@/components/account/AccessTokenPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -419,6 +420,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :create-mode="isCreate"
       />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
+      <AccessTokenPanel v-if="showResetPassword" :user-id="idStr" />
 
       <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
            ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
