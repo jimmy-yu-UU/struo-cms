@@ -48,12 +48,17 @@ public class AccessTokenLifecycleTests(ApiFactory factory)
         var afterUse = await LoadAdminAsync();
         afterUse.AccessTokenLastUsedAt.Should().NotBeNull("a bearer-authenticated request records last use");
     }
-    private static async Task<JsonElement> ReadInfoAsync(HttpClient client, Guid userId)
+
+    private static async Task<(JsonElement Data, string Raw)> ReadInfoWithRawAsync(HttpClient client, Guid userId)
     {
         var res = await client.GetAsync($"/api/users/{userId}/access-token");
         res.StatusCode.Should().Be(HttpStatusCode.OK);
-        return Root(await res.Content.ReadAsStringAsync()).GetProperty("data");
+        var raw = await res.Content.ReadAsStringAsync();
+        return (Root(raw).GetProperty("data"), raw);
     }
+
+    private static async Task<JsonElement> ReadInfoAsync(HttpClient client, Guid userId) =>
+        (await ReadInfoWithRawAsync(client, userId)).Data;
 
     [Fact]
     public async Task Info_reports_issue_and_last_use_in_utc_and_never_the_hash()
@@ -75,12 +80,11 @@ public class AccessTokenLifecycleTests(ApiFactory factory)
         var gen = await admin.PostAsync($"/api/users/{target}/access-token", null);
         var token = Root(await gen.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("token").GetString()!;
 
-        var issued = await ReadInfoAsync(admin, target);
+        var (issued, raw) = await ReadInfoWithRawAsync(admin, target);
         issued.GetProperty("hasToken").GetBoolean().Should().BeTrue();
         issued.GetProperty("createdAt").GetString().Should().EndWith("Z");
         issued.GetProperty("lastUsedAt").ValueKind.Should().Be(JsonValueKind.Null, "a fresh token has not been used");
 
-        var raw = await (await admin.GetAsync($"/api/users/{target}/access-token")).Content.ReadAsStringAsync();
         raw.Should().NotContain(AccessTokenHasher.Hash(token), "the stored hash is never serialized");
         raw.Should().NotContain(token);
         issued.EnumerateObject().Select(p => p.Name).Should()
@@ -105,6 +109,8 @@ public class AccessTokenLifecycleTests(ApiFactory factory)
     public async Task Info_is_admin_only_and_404_for_unknown_user()
     {
         var (editor, editorId) = await _factory.CreateEditorClientAsync(["user"], []);
+        (await _factory.CreateClient().GetAsync($"/api/users/{editorId}/access-token")).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized, "an anonymous caller is rejected before any admin check");
         (await editor.GetAsync($"/api/users/{editorId}/access-token")).StatusCode
             .Should().Be(HttpStatusCode.Forbidden, "even a user with read access on `user` is not an admin");
 

@@ -48,6 +48,17 @@ describe('AccessTokenPanel', () => {
     expect(w.text()).not.toContain(en.accessToken.createdAt)
   })
 
+  it('shows a loading line until the request settles', async () => {
+    let resolve!: (v: { hasToken: boolean; createdAt: null; lastUsedAt: null }) => void
+    vi.mocked(usersApi.getAccessTokenInfo).mockReturnValue(new Promise((r) => { resolve = r }))
+    const w = mountPanel()
+    expect(w.text()).toContain(en.common.loading)
+    resolve({ hasToken: false, createdAt: null, lastUsedAt: null })
+    await flushPromises()
+    expect(w.text()).not.toContain(en.common.loading)
+    expect(w.text()).toContain(en.accessToken.none)
+  })
+
   it('reports a load failure instead of a misleading empty state', async () => {
     vi.mocked(usersApi.getAccessTokenInfo).mockRejectedValue(new Error('boom'))
     const w = mountPanel()

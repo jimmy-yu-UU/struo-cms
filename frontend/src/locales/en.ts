@@ -105,7 +105,7 @@ export default {
     lastUsedAt: 'Last used',
     neverUsed: 'Never used',
     hint: 'The last-used time is recorded at most once a minute, so it can trail the latest request.',
-    loadFailed: 'Failed to load the access token details',
+    loadFailed: 'Failed to load the access token details.',
   },
   createUser: {
     title: 'New user',

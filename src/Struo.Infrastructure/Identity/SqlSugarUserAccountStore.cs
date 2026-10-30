@@ -30,7 +30,10 @@ public sealed class SqlSugarUserAccountStore(ISqlSugarClient db) : IUserAccountS
 
     public async Task<AccessTokenInfo?> FindAccessTokenInfoAsync(Guid id, CancellationToken ct = default)
     {
-        var u = await db.Queryable<User>().Where(x => x.Id == id).FirstAsync(ct);
+        // Projected to the three columns so the password and token hashes never enter this path.
+        var u = await db.Queryable<User>().Where(x => x.Id == id)
+            .Select(x => new { x.AccessToken, x.AccessTokenCreatedAt, x.AccessTokenLastUsedAt })
+            .FirstAsync(ct);
         if (u is null) return null;
         if (string.IsNullOrEmpty(u.AccessToken)) return new AccessTokenInfo(false, null, null);
         return new AccessTokenInfo(true, AsUtc(u.AccessTokenCreatedAt), AsUtc(u.AccessTokenLastUsedAt));

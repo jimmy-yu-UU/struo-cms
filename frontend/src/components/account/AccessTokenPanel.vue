@@ -40,7 +40,8 @@ defineExpose({ reload })
 <template>
   <section class="access-token">
     <h2 class="panel-title">{{ t('accessToken.title') }}</h2>
-    <p v-if="loadFailed" class="text-muted-foreground">{{ t('accessToken.loadFailed') }}</p>
+    <p v-if="!info && !loadFailed" class="text-muted-foreground">{{ t('common.loading') }}</p>
+    <p v-else-if="loadFailed" class="text-muted-foreground">{{ t('accessToken.loadFailed') }}</p>
     <p v-else-if="info && !info.hasToken" class="text-muted-foreground">{{ t('accessToken.none') }}</p>
     <template v-else-if="info">
       <dl class="times">
