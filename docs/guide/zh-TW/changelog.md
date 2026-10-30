@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.19.0
+## 0.19.0 — 2026-10-30
 
 ::: danger 破壞性變更
 - 設定了 `Struo:Cors:AllowedOrigins` 時，session cookie 改為 `SameSite=Lax`（以前是 `SameSite=None`）；
