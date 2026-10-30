@@ -4,8 +4,10 @@
 
 ### Added
 
-- Editing a user in the admin UI now has an "Access token" section showing when the token was issued
-  and last used. `GET /api/users/{id}/access-token` is new, readable by a super-admin only, and its
+- Editing a user in the admin UI now has an "Access token" section where a super-admin can issue,
+  regenerate or revoke the token and see when it was issued and last used. The raw token is shown
+  once after issuing, with a copy button; regenerating and revoking ask for confirmation first.
+  `GET /api/users/{id}/access-token` is new, readable by a super-admin only, and its
   response never contains the token or its hash. The last-used time is written at most once a
   minute. See [Chapter 16](16-authentication.md) and [Chapter 13](13-rest-endpoints.md).
 - [Chapter 16](16-authentication.md) recommends a dedicated account with a least-permission role for

@@ -187,8 +187,12 @@ Each user has at most one token. Changing a password revokes that user's session
 token, so a password change does not cut off an integration that authenticates with a token; if a
 token may have leaked, revoke it or issue a new one instead.
 
-A super-admin can see when a token was issued and last used in the "Access token" section when
-editing a user in the admin UI, or by calling `GET /api/users/{id}/access-token`, which returns
+A super-admin editing a user in the admin UI can issue, regenerate or revoke the token in the
+"Access token" section. The raw token is shown only once, in the dialog that opens after it is
+issued, with a copy button; closing the dialog discards it for good. Regenerating and revoking ask
+for confirmation first, because the old token stops working immediately. The section also lists
+when the token was issued and last used, and the same data is available from
+`GET /api/users/{id}/access-token`, which returns
 `{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with no token both are `null`, and a
 token that has not been used since it was issued has only `lastUsedAt` as `null`. The last-used
 time is written at most once a minute, so it can trail the latest request: it is enough to spot a
