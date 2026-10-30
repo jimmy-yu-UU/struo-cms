@@ -4,8 +4,8 @@
 
 ::: danger 破壞性變更
 - 設定了 `Struo:Cors:AllowedOrigins` 時，session cookie 改為 `SameSite=Lax`（以前是 `SameSite=None`）；
-  `Secure` 照舊強制為 `Always`。只有後台與 API 是同一個主網域底下兄弟子網域
-  （`admin.example.com` 與 `api.example.com`）的部署還能運作。靠 `SameSite=None` 的跨主網域部署
+  `Secure` 照舊強制為 `Always`。後台與 API 屬於同一個 site 的部署（例如同一個主網域底下的兄弟子網域
+  `admin.example.com` 與 `api.example.com`）照常運作。靠 `SameSite=None` 的跨主網域部署
   將無法登入，這種架構不在支援範圍內。見[第 4 章](04-configuration.md)與
   [第 20 章](20-deployment.md)。
 - `Oidc:ReturnUrlDefault` 必須是以 `/` 開頭的站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins`

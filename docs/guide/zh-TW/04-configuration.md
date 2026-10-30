@@ -241,12 +241,13 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 的 cookie 只在 HTTPS 下才會送回，所以一旦這個鍵非空，前後端都要走 HTTPS，否則驗證會悄悄失效。
 
 因為 cookie 維持 `SameSite=Lax`，只有同一個主網域底下的兄弟子網域能用，例如
-`https://admin.example.com` 搭配 `https://api.example.com`。後台與 API 在不同主網域不支援：瀏覽器把
-API 的 cookie 當成第三方 cookie 擋掉。
+`https://admin.example.com` 搭配 `https://api.example.com`。後台與 API 在不同主網域不支援：這時 SPA
+對 API 的請求是跨站請求，`SameSite=Lax` 的 cookie 不會隨之送出。
 
 每一筆要寫成精確的來源，例如 `https://admin.example.com`。比對方式與 ASP.NET Core 的 CORS 政策相同：
 項目以小寫比對，主機含非 ASCII 字元時先轉成 punycode。結尾有斜線、帶路徑、帶萬用字元，或明寫預設埠
-（`https://admin.example.com:443`）的項目不與任何來源相符，在 CORS 與下面的登入轉址都一樣。同一份清單也決定
+（`https://admin.example.com:443`）的項目不與任何來源相符，在 CORS 與下面的登入轉址都一樣
+（主機為非 ASCII 或 IPv6 的項目會先重建，不在此限）。同一份清單也決定
 OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication.md)。把後台放在靜態託管服務的做法見
 [第 20 章](20-deployment.md)。
 

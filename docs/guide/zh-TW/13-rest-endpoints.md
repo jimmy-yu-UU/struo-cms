@@ -201,7 +201,8 @@ HTTP_STATUS:200
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
 `me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
 
-`login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，`?returnUrl=` 會先被淨化成站內路徑；
+`login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，`?returnUrl=` 只有在是站內相對路徑，或來源列在
+`Struo:Cors:AllowedOrigins` 的絕對網址時才沿用，否則改用 `Oidc:ReturnUrlDefault`；
 登出之後立刻讀 `me` 就是 `401`，不必等 cookie 過期。OIDC 回呼的細節留給認證那一章。
 
 ## Config `api/config`

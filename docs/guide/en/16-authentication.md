@@ -91,9 +91,10 @@ environment except Development, which follows the request itself.
 As soon as any CORS origin is configured at all, the `Secure` policy is forced to `Always`, so the
 admin and the API both have to run HTTPS. `SameSite` stays `Lax`, which means the setup works only
 when the admin and the API are sibling subdomains of one registrable domain
-(`admin.example.com` and `api.example.com`). A different registrable domain is not supported:
-browsers block the cookie as a third-party cookie. The OIDC correlation and nonce cookies are separate:
-they stay `SameSite=None; Secure`, because the provider's `form_post` callback is a cross-site request.
+(`admin.example.com` and `api.example.com`). A different registrable domain is not supported: the
+SPA's requests to the API are then cross-site, and a `SameSite=Lax` cookie is not sent on them. The
+OIDC correlation and nonce cookies are separate: they are `SameSite=None; Secure`, because the
+provider's `form_post` callback is a cross-site request.
 
 The cookie itself is only an opaque key. The actual session state behind it lives in a distributed
 cache: setting `Redis:ConnectionString` uses Redis, and leaving it unset falls back to an
@@ -439,7 +440,7 @@ The login page shows the generic message for any other value. `GET /api/auth/log
 `returnUrl`. It is used in the challenge only when it is a site-relative path, or an absolute URL
 whose origin is listed in `Struo:Cors:AllowedOrigins`; any other value, or none, falls back to
 `Oidc:ReturnUrlDefault`. When the API base URL points at another origin than the page, the SPA sends
-its own full URL as `returnUrl`. Logout answers in JSON and never redirects.
+its own full URL as `returnUrl`. Logout answers `204 No Content` and never redirects.
 
 ## What's next
 

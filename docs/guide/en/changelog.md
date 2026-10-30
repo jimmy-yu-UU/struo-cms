@@ -4,9 +4,9 @@
 
 ::: danger Breaking
 - With `Struo:Cors:AllowedOrigins` set, the session cookie is `SameSite=Lax` (it used to be
-  `SameSite=None`); `Secure` stays forced to `Always`. Only a deployment where the admin and the API
-  are sibling subdomains of one registrable domain (`admin.example.com` and `api.example.com`) keeps
-  working. A deployment on different registrable domains, which relied on `SameSite=None`, can no
+  `SameSite=None`); `Secure` stays forced to `Always`. A deployment where the admin and the API
+  are on the same site, such as sibling subdomains of one registrable domain (`admin.example.com` and
+  `api.example.com`), keeps working. A deployment on different registrable domains, which relied on `SameSite=None`, can no
   longer sign in; that setup is not supported. See [Chapter 4](04-configuration.md) and
   [Chapter 20](20-deployment.md).
 - `Oidc:ReturnUrlDefault` must be a site-relative path starting with `/`, or an absolute URL whose

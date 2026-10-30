@@ -65,10 +65,11 @@ IP：超級管理員連續幫多個使用者重設密碼，扣的是自己的額
 
 沒有帶 `Authorization: Bearer …` 標頭的請求一律走 cookie：名稱 `struo.session`（`Auth:Cookie:Name` 可改），
 `HttpOnly`，`SameSite` 預設 `Lax`；安全政策跟隨 `Auth:Cookie:RequireSecure`，留空時除了 Development
-之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策就強制為 `Always`，後台與 API 雙邊都得跑 HTTPS。`SameSite`
-維持 `Lax`，所以只有後台與 API 是同一個主網域底下的兄弟子網域（`admin.example.com` 與 `api.example.com`）
-時才行得通；不同主網域不支援，瀏覽器會把 cookie 當第三方 cookie 擋掉。OIDC 的 correlation 與 nonce cookie 是另外
-的，它們維持 `SameSite=None; Secure`，因為提供者的 `form_post` 回呼是跨站請求。
+之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策就強制為
+`Always`，後台與 API 雙邊都得跑 HTTPS。`SameSite` 維持 `Lax`，所以只有後台與 API 是同一個主網域底下的
+兄弟子網域（`admin.example.com` 與 `api.example.com`）時才行得通；不同主網域不支援：這時 SPA 對 API 的
+請求是跨站請求，`SameSite=Lax` 的 cookie 不會隨之送出。OIDC 的 correlation 與 nonce cookie 是另外的，
+它們是 `SameSite=None; Secure`，因為提供者的 `form_post` 回呼是跨站請求。
 
 cookie 本身只是一把不透明的鑰匙——背後真正的工作階段狀態存在一個分散式快取裡：設定了
 `Redis:ConnectionString` 就用 Redis，沒設就退回行程內的快取，實際差別是重開一次行程就會遺失所有
@@ -346,7 +347,7 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
 路徑，或是來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時，才會拿去挑戰；其他任何值或留空，都退回
 `Oidc:ReturnUrlDefault`。API 的 base URL 指向與頁面不同的來源時，SPA 會把自己的完整網址當 `returnUrl` 送出。
-登出只回 JSON，不做轉址。
+登出回 `204`，沒有內容，也不做轉址。
 
 ## 接下來
 

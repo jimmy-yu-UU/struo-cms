@@ -284,14 +284,15 @@ admin SPA and the API must run over HTTPS, or authentication silently stops work
 
 Because the cookie stays `SameSite=Lax`, only sibling subdomains of one registrable domain work, for
 example `https://admin.example.com` with `https://api.example.com`. An SPA on a different
-registrable domain than the API is not supported: browsers treat the API's cookie as a third-party
-cookie and block it.
+registrable domain than the API is not supported: the SPA's requests to the API are then cross-site,
+and a `SameSite=Lax` cookie is not sent on them.
 
 Write each entry as an exact origin, such as `https://admin.example.com`. The match is the same one
 ASP.NET Core's CORS policy makes: an entry is compared in lowercase, and a host with non-ASCII
 characters is converted to punycode first. An entry with a trailing slash, a path, a wildcard, or an
 explicit default port (`https://admin.example.com:443`) matches no origin, in CORS or in the sign-in
-redirects below. The same list decides which absolute `returnUrl` values OIDC sign-in accepts; see
+redirects below (an entry with a non-ASCII or IPv6 host is rebuilt first, so this does not apply to
+it). The same list decides which absolute `returnUrl` values OIDC sign-in accepts; see
 [Chapter 16](16-authentication.md). Hosting the admin SPA on a static host is covered in
 [Chapter 20](20-deployment.md).
 
