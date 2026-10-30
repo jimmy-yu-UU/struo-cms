@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.18.0
+
+::: danger Breaking
+- The PostgreSQL driver is upgraded: Npgsql is now referenced directly at 10.0.3, where it used to come
+  in as 5.0.18 through SqlSugarCore. `SSL Mode=Require` only encrypts and no longer validates the server
+  certificate, and `Trust Server Certificate` has no effect. A deployment that relied on `Require` for
+  certificate validation must switch to `SSL Mode=VerifyFull`, plus `Root Certificate=/path/to/ca.crt`
+  when the server's certificate comes from a private CA. See [Chapter 20](20-deployment.md).
+:::
+
+### Changed
+
+- Without Kerberos, add `GSS Encryption Mode=Disable` to the PostgreSQL connection string. Otherwise
+  the driver tries GSS encryption first on every new physical connection, which adds latency. See
+  [Chapter 20](20-deployment.md).
+
 ## 0.17.0 — 2026-10-29
 
 ::: danger Breaking

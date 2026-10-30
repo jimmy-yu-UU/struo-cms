@@ -1,5 +1,19 @@
 # 版本紀錄
 
+## 0.18.0
+
+::: danger 破壞性變更
+- PostgreSQL 驅動程式升級：Npgsql 現在直接引用 10.0.3，以前是經由 SqlSugarCore 帶進來的 5.0.18。
+  `SSL Mode=Require` 只加密，不再驗證伺服器憑證，`Trust Server Certificate` 也沒有作用。靠 `Require`
+  來驗證憑證的部署，要改成 `SSL Mode=VerifyFull`；伺服器的憑證來自私有 CA 時，再加上
+  `Root Certificate=/path/to/ca.crt`。見[第 20 章](20-deployment.md)。
+:::
+
+### 變更
+
+- 沒有使用 Kerberos 的話，PostgreSQL 連線字串建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式
+  每開一條新的實體連線，都會先試 GSS 加密，多花一段延遲。見[第 20 章](20-deployment.md)。
+
 ## 0.17.0 — 2026-10-29
 
 ::: danger 破壞性變更
