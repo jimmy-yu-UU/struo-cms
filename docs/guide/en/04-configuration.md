@@ -277,11 +277,24 @@ header; leave it empty for any same-origin setup (the Vite dev proxy, or deployi
 the API on the same domain). This key is read directly from `IConfiguration` and has no validation
 rule of its own.
 
-Configuring even one origin also switches the session cookie to `SameSite=None` plus
-`SecurePolicy=Always`, and opens the CORS policy to those origins with `AllowCredentials`, any
-header, and any method. Browsers only honor `SameSite=None` over HTTPS, so once this key is
-non-empty, both the admin SPA and the API must run over HTTPS, or authentication silently stops
-working.
+Configuring even one origin also forces the session cookie's `SecurePolicy=Always` (`SameSite`
+stays `Lax`), and opens the CORS policy to those origins with `AllowCredentials`, any header, and
+any method. A `Secure` cookie is only sent over HTTPS, so once this key is non-empty, both the
+admin SPA and the API must run over HTTPS, or authentication silently stops working.
+
+Because the cookie stays `SameSite=Lax`, only sibling subdomains of one registrable domain work, for
+example `https://admin.example.com` with `https://api.example.com`. An SPA on a different
+registrable domain than the API is not supported: the SPA's requests to the API are then cross-site,
+and a `SameSite=Lax` cookie is not sent on them.
+
+Write each entry as an exact origin, such as `https://admin.example.com`. The match is the same one
+ASP.NET Core's CORS policy makes: an entry is compared in lowercase, and a host with non-ASCII
+characters is converted to punycode first. An entry with a trailing slash, a path, a wildcard, or an
+explicit default port (`https://admin.example.com:443`) matches no origin, in CORS or in the sign-in
+redirects below (an entry with a non-ASCII or IPv6 host is rebuilt first, so this does not apply to
+it). The same list decides which absolute `returnUrl` values OIDC sign-in accepts; see
+[Chapter 16](16-authentication.md). Hosting the admin SPA on a static host is covered in
+[Chapter 20](20-deployment.md).
 
 ## Query
 
@@ -626,6 +639,11 @@ an error naming that provider's key. The same applies to these rules:
 A provider id that breaks the id rule fails startup, whether or not the provider is enabled. A
 provider that is disabled or absent makes `/api/auth/login/oidc/{provider}` return 404; that is not a
 configuration error.
+
+`Oidc:ReturnUrlDefault` is where a sign-in ends when the request carries no usable `returnUrl`. It
+is either a site-relative path starting with `/`, or an absolute URL whose origin is listed in
+`Struo:Cors:AllowedOrigins` (the SPA on another origin). Any other value fails startup with an error
+naming the key, whether or not CORS is configured. Without CORS, only a relative path is valid.
 
 `DisplayName` is the label on the provider's sign-in button. `Icon` is a token the admin UI maps to a
 glyph; the built-in tokens and how to add one are in [Chapter 16](16-authentication.md). The buttons

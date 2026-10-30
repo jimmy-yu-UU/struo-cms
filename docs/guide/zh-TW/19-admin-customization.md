@@ -284,8 +284,9 @@ Vite 這一個來源。
 用。
 
 這個模式也需要後端配合：`Struo:Cors:AllowedOrigins` 得列出 SPA 的來源；設了之後 session
-cookie 與 HTTPS 的要求跟著改變，兩邊都得走 HTTPS，見
-[第 4 章：設定參考](04-configuration.md)。
+cookie 會強制 `Secure`，兩邊都得走 HTTPS，而且只支援 SPA 與 API 是同一個主網域底下兄弟子網域的情形，見
+[第 4 章：設定參考](04-configuration.md)。放在靜態託管服務的完整做法與需要的回應標頭，見
+[第 20 章](20-deployment.md)的〈後台放在靜態託管服務〉。
 
 ## 接下來
 

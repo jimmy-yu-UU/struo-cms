@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { safeRedirect, encodeRedirectParam, loginRedirectQuery } from './safeRedirect'
+import { safeRedirect, encodeRedirectParam, loginRedirectQuery, ssoReturnUrl } from './safeRedirect'
 
 const BACKSLASH = String.fromCharCode(92)
 
@@ -47,5 +47,18 @@ describe('encodeRedirectParam', () => {
   it('keeps slashes readable and encodes the query delimiters', () => {
     expect(encodeRedirectParam('/')).toBe('/')
     expect(encodeRedirectParam('/c/a?x=1&y=2')).toBe('/c/a%3Fx%3D1%26y%3D2')
+  })
+})
+
+describe('ssoReturnUrl', () => {
+  const ORIGIN = 'https://admin.example.com'
+  it.each([
+    ['/api', '/x?a=1', '/x?a=1'],
+    ['https://api.example.com/api', '/x?a=1', ORIGIN + '/x?a=1'],
+    ['HTTPS://API.EXAMPLE.COM/api', '/x', ORIGIN + '/x'],
+    ['//api.example.com/api', '/x', ORIGIN + '/x'],
+    [ORIGIN + '/api', '/x', '/x'],
+  ])('apiBase %s with path %s gives %s', (apiBase, path, expected) => {
+    expect(ssoReturnUrl(apiBase, path, ORIGIN)).toBe(expected)
   })
 })

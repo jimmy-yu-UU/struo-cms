@@ -232,9 +232,10 @@ super-admin, because every grant is already implied by that identity.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
 disabled provider, and a `302` redirect to that provider when it is enabled, with
-`?returnUrl=` sanitized to an in-site path first; reading `me` right after logging out is `401`
-immediately, with no need to wait for the cookie to expire. The details of the OIDC callback are
-left to the authentication chapter.
+`?returnUrl=` kept only when it is a site-relative path or an absolute URL on an origin listed in
+`Struo:Cors:AllowedOrigins` (otherwise `Oidc:ReturnUrlDefault` is used);
+reading `me` right after logging out is `401` immediately, with no need to wait for the cookie to
+expire. The details of the OIDC callback are left to the authentication chapter.
 
 ## Config `api/config`
 

@@ -236,10 +236,20 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 代理、後台與 API 同網域部署）都該留空。這個鍵直接讀 `IConfiguration`，本身沒有驗證
 規則。
 
-只要設定了任何一個來源，就會同時把 session cookie 改成 `SameSite=None`＋
-`SecurePolicy=Always`，並讓 CORS 政策對這些來源開放 `AllowCredentials`、任意 header 與任意方
-法。瀏覽器只在 HTTPS 下才認 `SameSite=None`，所以一旦這個鍵非空，前後端都要走 HTTPS，否則驗證
-會悄悄失效。
+只要設定了任何一個來源，就會強制 session cookie 的 `SecurePolicy=Always`（`SameSite` 維持
+`Lax`），並讓 CORS 政策對這些來源開放 `AllowCredentials`、任意 header 與任意方法。`Secure`
+的 cookie 只在 HTTPS 下才會送回，所以一旦這個鍵非空，前後端都要走 HTTPS，否則驗證會悄悄失效。
+
+因為 cookie 維持 `SameSite=Lax`，只有同一個主網域底下的兄弟子網域能用，例如
+`https://admin.example.com` 搭配 `https://api.example.com`。後台與 API 在不同主網域不支援：這時 SPA
+對 API 的請求是跨站請求，`SameSite=Lax` 的 cookie 不會隨之送出。
+
+每一筆要寫成精確的來源，例如 `https://admin.example.com`。比對方式與 ASP.NET Core 的 CORS 政策相同：
+項目以小寫比對，主機含非 ASCII 字元時先轉成 punycode。結尾有斜線、帶路徑、帶萬用字元，或明寫預設埠
+（`https://admin.example.com:443`）的項目不與任何來源相符，在 CORS 與下面的登入轉址都一樣
+（主機為非 ASCII 或 IPv6 的項目會先重建，不在此限）。同一份清單也決定
+OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication.md)。把後台放在靜態託管服務的做法見
+[第 20 章](20-deployment.md)。
 
 ## Query
 
@@ -545,6 +555,10 @@ cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataPr
 
 提供者 id 不符合 id 規則時，不論有沒有啟用，啟動都會失敗。提供者停用或不存在時，
 `/api/auth/login/oidc/{provider}` 回 404，這不是設定錯誤。
+
+`Oidc:ReturnUrlDefault` 是請求沒帶可用的 `returnUrl` 時，登入結束後去的地方。它要嘛是以 `/` 開頭的站內相對路徑，
+要嘛是絕對網址，且它的來源列在 `Struo:Cors:AllowedOrigins`（SPA 在另一個來源的情形）。其他任何值都會讓啟動失敗，
+錯誤訊息指名這個鍵，不論有沒有設 CORS。沒設 CORS 時，只有相對路徑合法。
 
 `DisplayName` 是該提供者登入按鈕上的文字。`Icon` 是一個代號，由後台介面對應到圖示；內建的代號與新增
 的做法見[第 16 章](16-authentication.md)。按鈕依 `Order` 由小到大排列，相同時依 id。之所以要有

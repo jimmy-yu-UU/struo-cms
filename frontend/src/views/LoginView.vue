@@ -10,7 +10,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
 import { apiBaseUrl, ApiError } from '../api/apiClient'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
-import { encodeRedirectParam, safeRedirect } from '@/lib/safeRedirect'
+import { encodeRedirectParam, safeRedirect, ssoReturnUrl } from '@/lib/safeRedirect'
 import { resolveSsoIcon } from '@/lib/ssoIcons'
 import BrandMark from '../components/shell/BrandMark.vue'
 
@@ -102,7 +102,7 @@ onMounted(() => {
 })
 
 function onSso(providerId: string) {
-  window.location.href = `${apiBaseUrl}/auth/login/oidc/${encodeURIComponent(providerId)}?returnUrl=${encodeRedirectParam(redirectTarget ?? '/')}`
+  window.location.href = `${apiBaseUrl}/auth/login/oidc/${encodeURIComponent(providerId)}?returnUrl=${encodeRedirectParam(ssoReturnUrl(apiBaseUrl, redirectTarget ?? '/', window.location.origin))}`
 }
 </script>
 

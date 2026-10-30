@@ -1,5 +1,28 @@
 # 版本紀錄
 
+## 0.19.0
+
+::: danger 破壞性變更
+- 設定了 `Struo:Cors:AllowedOrigins` 時，session cookie 改為 `SameSite=Lax`（以前是 `SameSite=None`）；
+  `Secure` 照舊強制為 `Always`。後台與 API 屬於同一個 site 的部署（例如同一個主網域底下的兄弟子網域
+  `admin.example.com` 與 `api.example.com`）照常運作。靠 `SameSite=None` 的跨主網域部署
+  將無法登入，這種架構不在支援範圍內。見[第 4 章](04-configuration.md)與
+  [第 20 章](20-deployment.md)。
+- `Oidc:ReturnUrlDefault` 必須是以 `/` 開頭的站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins`
+  的絕對網址。其他任何值都會讓啟動失敗，錯誤訊息指名這個鍵，不論有沒有設 CORS。
+:::
+
+### 新增
+
+- OIDC 的 `returnUrl` 與 `Oidc:ReturnUrlDefault` 接受絕對網址，只要它的來源列在
+  `Struo:Cors:AllowedOrigins`。項目的比對方式與 CORS 政策相同，所以要寫成精確的來源，例如
+  `https://admin.example.com`。
+- 外部登入失敗或被拒絕時，回到後台來源上的 `/login?error=<code>`：已核准的 `returnUrl` 的來源，
+  沒有的話是絕對 `Oidc:ReturnUrlDefault` 的來源，再沒有就是相對的 `/login`。沒設 CORS 來源時，
+  轉址維持相對。
+- API 的 base URL 指向與頁面不同的來源時，SPA 會把自己的完整網址當作 SSO 的 `returnUrl` 送出。
+- [第 20 章](20-deployment.md)新增「後台放在靜態託管服務」一節，附一份與 nginx 映像標頭一致的 `_headers` 範例。
+
 ## 0.18.0 — 2026-10-30
 
 ::: danger 破壞性變更

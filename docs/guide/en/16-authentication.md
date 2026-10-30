@@ -88,9 +88,13 @@ A request that carries no `Authorization: Bearer …` header always goes through
 The `Secure` policy follows `Auth:Cookie:RequireSecure`; left unset, it is `Always` in every
 environment except Development, which follows the request itself.
 
-As soon as any CORS origin is configured at all, both the `Secure` policy and `SameSite` switch to
-`Always`/`None`, because a browser only accepts `SameSite=None` under `Secure` — meaning a
-cross-origin deployment has to run HTTPS on both sides.
+As soon as any CORS origin is configured at all, the `Secure` policy is forced to `Always`, so the
+admin and the API both have to run HTTPS. `SameSite` stays `Lax`, which means the setup works only
+when the admin and the API are sibling subdomains of one registrable domain
+(`admin.example.com` and `api.example.com`). A different registrable domain is not supported: the
+SPA's requests to the API are then cross-site, and a `SameSite=Lax` cookie is not sent on them. The
+OIDC correlation and nonce cookies are separate: they are `SameSite=None; Secure`, because the
+provider's `form_post` callback is a cross-site request.
 
 The cookie itself is only an opaque key. The actual session state behind it lives in a distributed
 cache: setting `Redis:ConnectionString` uses Redis, and leaving it unset falls back to an
@@ -417,7 +421,9 @@ slash): the provider needs a non-empty `AllowedEmailDomains`, because Google has
 error names that key. A single-tenant authority, or a disabled provider, is never affected.
 
 A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
-shows a localized message and removes the parameter from the address. The code is one of a fixed
+shows a localized message and removes the parameter from the address. When CORS origins are
+configured, that page is on the origin of the approved `returnUrl`; without one, on the origin of an
+absolute `Oidc:ReturnUrlDefault`; otherwise it is the relative `/login`. The code is one of a fixed
 set and never carries exception text:
 
 | Code | Cause |
@@ -431,8 +437,10 @@ set and never carries exception text:
 | `external_login_Inactive` | The matched local account is deactivated |
 
 The login page shows the generic message for any other value. `GET /api/auth/login/oidc/{provider}` accepts a
-`returnUrl`, sanitized to an in-site path before it's used in the challenge; leaving it out falls
-back to `Oidc:ReturnUrlDefault`.
+`returnUrl`. It is used in the challenge only when it is a site-relative path, or an absolute URL
+whose origin is listed in `Struo:Cors:AllowedOrigins`; any other value, or none, falls back to
+`Oidc:ReturnUrlDefault`. When the API base URL points at another origin than the page, the SPA sends
+its own full URL as `returnUrl`. Logout answers `204 No Content` and never redirects.
 
 ## What's next
 
