@@ -6,22 +6,23 @@ namespace Struo.Api.Auth;
 public static class LocalRedirect
 {
     public static string Sanitize(string? returnUrl, string fallback, IReadOnlyCollection<string>? allowedOrigins = null) =>
-        IsValidDefault(returnUrl, allowedOrigins) ? returnUrl! : fallback;
+        IsAllowedDestination(returnUrl, allowedOrigins) ? returnUrl! : fallback;
 
-    /// <summary>The normalized origin of <paramref name="url"/> when it is an absolute URL on an allowed
-    /// origin; otherwise null.</summary>
+    /// <summary>The origin of <paramref name="url"/> when it is an absolute URL on an allowed origin;
+    /// otherwise null. Entries match the way the CORS policy matches: the browser's serialized origin
+    /// (lowercase scheme and host, punycode, no default port) compared exactly with the entry, which is
+    /// lowercased, or rebuilt in punycode when its host is non-ASCII. An entry with a trailing slash,
+    /// path or wildcard matches nothing.</summary>
     public static string? AllowedOrigin(string? url, IReadOnlyCollection<string>? allowedOrigins)
     {
-        if (allowedOrigins is not { Count: > 0 } || !TryGetOrigin(url, requireOriginOnly: false, out var origin))
+        if (allowedOrigins is not { Count: > 0 } || !TryGetOrigin(url, out var origin))
             return null;
-        return allowedOrigins.Any(a => TryGetOrigin(a, requireOriginOnly: true, out var o) && o == origin)
-            ? origin
-            : null;
+        return allowedOrigins.Any(a => NormalizeEntry(a) == origin) ? origin : null;
     }
 
     /// <summary>Whether <paramref name="value"/> is an acceptable sign-in destination: a relative path,
     /// or an absolute URL on an allowed origin.</summary>
-    public static bool IsValidDefault(string? value, IReadOnlyCollection<string>? allowedOrigins) =>
+    public static bool IsAllowedDestination(string? value, IReadOnlyCollection<string>? allowedOrigins) =>
         IsRelative(value) || AllowedOrigin(value, allowedOrigins) is not null;
 
     /// <summary>The login page a failed sign-in ends on. With origins configured it is on the origin of
@@ -45,21 +46,29 @@ public static class LocalRedirect
 
     // Requiring the literal "http(s)://" prefix and refusing backslashes, whitespace, control
     // characters and userinfo keeps the parser from accepting what a browser would read differently.
-    private static bool TryGetOrigin(string? url, bool requireOriginOnly, out string origin)
+    private static bool TryGetOrigin(string? url, out string origin)
     {
         origin = "";
         if (string.IsNullOrEmpty(url)
             || url.Any(c => char.IsControl(c) || char.IsWhiteSpace(c) || c == '\\')
-            || !(url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                 || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            || !HasHttpPrefix(url)
             || !Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || uri.UserInfo.Length > 0
-            || uri.Host.Length == 0
-            || uri.Host.Contains('*'))
+            || uri.Host.Length == 0)
             return false;
-        if (requireOriginOnly && (uri.PathAndQuery != "/" || uri.Fragment.Length > 0))
-            return false;
-        origin = uri.GetLeftPart(UriPartial.Authority).ToLowerInvariant();
+        origin = Serialize(uri);
         return true;
     }
+
+    private static string NormalizeEntry(string entry) =>
+        HasHttpPrefix(entry) && Uri.TryCreate(entry, UriKind.Absolute, out var uri) && uri.IdnHost != uri.Host
+            ? Serialize(uri)
+            : entry.ToLowerInvariant();
+
+    private static bool HasHttpPrefix(string value) =>
+        value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+    private static string Serialize(Uri uri) =>
+        $"{uri.Scheme}://{uri.IdnHost}{(uri.IsDefaultPort ? "" : ":" + uri.Port)}";
 }

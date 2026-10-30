@@ -126,4 +126,17 @@ public class OidcEndpointTests(ApiFactory factory)
 
         StateRedirectUri(f, resp).Should().Be("/");
     }
+
+    [Fact]
+    public async Task With_cors_the_correlation_and_nonce_cookies_stay_samesite_none_secure()
+    {
+        using var client = TwoProviderClient("https://admin.example.com");
+
+        var resp = await client.GetAsync("/api/auth/login/oidc/alpha?returnUrl=%2Fadmin");
+
+        var cookies = resp.Headers.GetValues("Set-Cookie").Select(c => c.ToLowerInvariant()).ToList();
+        var oidcCookies = cookies.Where(c => c.Contains("correlation") || c.Contains("nonce")).ToList();
+        oidcCookies.Should().HaveCountGreaterThanOrEqualTo(2);
+        oidcCookies.Should().OnlyContain(c => c.Contains("samesite=none") && c.Contains("secure"));
+    }
 }

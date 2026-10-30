@@ -11,8 +11,8 @@ function hasControlChar(value: string): boolean {
 }
 
 // Accepts only a same-origin path: it starts with "/" but not "//" (protocol-relative) or "/\"
-// (which browsers read as "//"), and holds no control characters. Mirrors the server's
-// LocalRedirect.Sanitize, which re-checks the OIDC returnUrl.
+// (which browsers read as "//"), and holds no control characters. Mirrors the site-relative rule
+// of the server's LocalRedirect, which re-checks the OIDC returnUrl.
 export function safeRedirect(value: unknown): string | null {
   if (typeof value !== 'string' || value === '') return null
   if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/' + BACKSLASH)) return null

@@ -13,12 +13,16 @@ namespace Struo.Tests.Api;
 
 /// <summary>A failed or refused external sign-in lands the browser on the SPA login page with a
 /// fixed machine-readable code; exception text never reaches the URL.</summary>
-public class OidcFailureRedirectTests
+public sealed class OidcFailureRedirectTests : IDisposable
 {
+    private readonly List<ServiceProvider> _providers = [];
+
+    public void Dispose() => _providers.ForEach(p => p.Dispose());
+
     private static readonly AuthenticationScheme Scheme =
         new(AuthSchemes.OidcFor("acme"), AuthSchemes.OidcFor("acme"), typeof(OpenIdConnectHandler));
 
-    private static DefaultHttpContext HttpWith(string[] origins, string returnUrlDefault = "/")
+    private DefaultHttpContext HttpWith(string[] origins, string returnUrlDefault = "/")
     {
         var settings = origins
             .Select((o, i) => new KeyValuePair<string, string?>($"Struo:Cors:AllowedOrigins:{i}", o))
@@ -28,10 +32,11 @@ public class OidcFailureRedirectTests
             .AddSingleton<IConfiguration>(config)
             .AddSingleton(Options.Create(new OidcOptions { ReturnUrlDefault = returnUrlDefault }))
             .BuildServiceProvider();
+        _providers.Add(services);
         return new DefaultHttpContext { RequestServices = services };
     }
 
-    private static async Task<(int Status, string? Location, bool Handled)> RemoteFailureAsync(
+    private async Task<(int Status, string? Location, bool Handled)> RemoteFailureAsync(
         Exception failure, HttpContext? http = null, string? returnUrl = null)
     {
         http ??= HttpWith([]);

@@ -57,6 +57,7 @@ public class LocalRedirectTests
     [InlineData("javascript://admin.example.com/%0aalert(1)")]
     [InlineData("data:text/html,x")]
     [InlineData("ftp://admin.example.com/")]
+    [InlineData("https://admin.example.com./")]
     [InlineData("https://admin.example.com/\t")]
     [InlineData("https://admin.exam\tple.com/")]
     [InlineData("https://admin.example.com /")]
@@ -92,10 +93,49 @@ public class LocalRedirectTests
     public void AllowedOrigin_is_null_for_everything_else(string? url) =>
         LocalRedirect.AllowedOrigin(url, Allowed).Should().BeNull();
 
-    [Fact]
-    public void Configured_origins_are_matched_after_normalization() =>
-        LocalRedirect.Sanitize("https://admin.example.com/x", "/f", ["https://Admin.Example.com:443/"])
-            .Should().Be("https://admin.example.com/x");
+    [Theory]
+    [InlineData("https://admin.example.com/")]
+    [InlineData("https://admin.example.com:443")]
+    [InlineData("https://admin.example.com:443/")]
+    [InlineData("https://admin.example.com/path")]
+    [InlineData("*")]
+    [InlineData("https://*.example.com")]
+    public void Configured_entries_that_are_not_exact_origins_match_nothing(string configured) =>
+        LocalRedirect.AllowedOrigin("https://admin.example.com/x", [configured]).Should().BeNull();
+
+    [Theory]
+    [InlineData("https://Admin.Example.com", "https://admin.example.com/x")]
+    [InlineData("https://admin.example.com:8443", "https://admin.example.com:8443/x")]
+    [InlineData("https://bücher.example", "https://xn--bcher-kva.example/x")]
+    [InlineData("https://xn--bcher-kva.example", "https://xn--bcher-kva.example/x")]
+    [InlineData("https://xn--bcher-kva.example", "https://BüCHER.example/x")]
+    public void Configured_entries_match_the_way_the_cors_policy_matches(string configured, string url) =>
+        LocalRedirect.AllowedOrigin(url, [configured]).Should().NotBeNull();
+
+    [Theory]
+    [InlineData("https://admin.example.com")]
+    [InlineData("https://Admin.Example.com")]
+    [InlineData("https://admin.example.com/")]
+    [InlineData("https://admin.example.com:443")]
+    [InlineData("https://admin.example.com:8443")]
+    [InlineData("https://bücher.example")]
+    [InlineData("https://xn--bcher-kva.example")]
+    [InlineData("http://localhost:5173")]
+    [InlineData("https://*.example.com")]
+    public void Matching_agrees_with_the_cors_policy_on_the_same_entries(string configured)
+    {
+        var policy = new Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder()
+            .WithOrigins(configured).Build();
+        string[] origins =
+        [
+            "https://admin.example.com", "https://admin.example.com:8443", "http://admin.example.com",
+            "https://xn--bcher-kva.example", "http://localhost:5173", "https://other.example.com"
+        ];
+
+        foreach (var origin in origins)
+            (LocalRedirect.AllowedOrigin(origin + "/page", [configured]) is not null)
+                .Should().Be(policy.IsOriginAllowed(origin), $"entry '{configured}' vs origin '{origin}'");
+    }
 
     [Theory]
     [InlineData("*")]
@@ -108,12 +148,12 @@ public class LocalRedirectTests
     [InlineData("/admin", true)]
     [InlineData("https://admin.example.com/", true)]
     [InlineData("https://evil.com/", false)]
-    public void ReturnUrlDefault_validity_follows_the_same_rule(string value, bool valid) =>
-        LocalRedirect.IsValidDefault(value, Allowed).Should().Be(valid);
+    public void Destination_validity_follows_the_same_rule(string value, bool valid) =>
+        LocalRedirect.IsAllowedDestination(value, Allowed).Should().Be(valid);
 
     [Fact]
     public void ReturnUrlDefault_absolute_is_invalid_without_origins() =>
-        LocalRedirect.IsValidDefault("https://admin.example.com/", []).Should().BeFalse();
+        LocalRedirect.IsAllowedDestination("https://admin.example.com/", []).Should().BeFalse();
 
     [Fact]
     public void LoginFailureUrl_prefers_the_return_url_origin_then_the_default_origin_then_relative()

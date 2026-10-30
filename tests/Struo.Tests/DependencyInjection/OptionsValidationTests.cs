@@ -146,7 +146,10 @@ public sealed class OptionsValidationTests
     [InlineData("https://admin.example.com.evil.com/", "https://admin.example.com")]
     [InlineData("http://admin.example.com/", "https://admin.example.com")]
     [InlineData("javascript:alert(1)", "https://admin.example.com")]
-    public async Task Oidc_return_url_default_absolute_outside_the_allowed_origins_fails_startup(string value, string? origin)
+    [InlineData("https:/evil.com", "https://admin.example.com")]
+    [InlineData("//evil.com", "https://admin.example.com")]
+    [InlineData("dashboard", null)]
+    public async Task Oidc_return_url_default_outside_the_allowed_origins_fails_startup(string value, string? origin)
     {
         var text = await OidcFailureTextAsync(s =>
         {
