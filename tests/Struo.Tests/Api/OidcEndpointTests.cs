@@ -36,10 +36,13 @@ public class OidcEndpointTests(ApiFactory factory)
 
     // The OpenIdConnect handler would fetch discovery metadata from the (fake) authority; a static
     // configuration per scheme keeps the challenge offline.
-    private HttpClient TwoProviderClient(params string[] corsOrigins) => TwoProviderFactory(corsOrigins)
-        .CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+    private static HttpClient NoRedirectClient(WebApplicationFactory<Program> f) =>
+        f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-    private WebApplicationFactory<Program> TwoProviderFactory(string[] corsOrigins)
+    // The derived factory is only disposed with the parent fixture unless the test disposes it, so
+    // every caller owns it with `using var`; a derived host keeps its configuration file watchers
+    // open until then.
+    private WebApplicationFactory<Program> TwoProviderFactory(params string[] corsOrigins)
     {
         return factory.WithWebHostBuilder(b =>
         {
@@ -72,7 +75,10 @@ public class OidcEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Login_oidc_returns_404_for_a_provider_configured_but_disabled()
     {
-        var resp = await TwoProviderClient().GetAsync("/api/auth/login/oidc/off");
+        using var f = TwoProviderFactory();
+        using var client = NoRedirectClient(f);
+
+        var resp = await client.GetAsync("/api/auth/login/oidc/off");
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -81,7 +87,10 @@ public class OidcEndpointTests(ApiFactory factory)
     [InlineData("beta", "https://accounts.example.test/authorize", "beta-client", "signin-oidc-beta")]
     public async Task Login_oidc_challenges_the_named_provider(string id, string authorize, string clientId, string callback)
     {
-        var resp = await TwoProviderClient().GetAsync($"/api/auth/login/oidc/{id}?returnUrl=/admin");
+        using var f = TwoProviderFactory();
+        using var client = NoRedirectClient(f);
+
+        var resp = await client.GetAsync($"/api/auth/login/oidc/{id}?returnUrl=/admin");
 
         resp.StatusCode.Should().Be(HttpStatusCode.Redirect, await resp.Content.ReadAsStringAsync());
         var location = resp.Headers.Location!.ToString();
@@ -107,8 +116,8 @@ public class OidcEndpointTests(ApiFactory factory)
     [InlineData("https://admin.example.com@evil.com/", "/")]
     public async Task With_cors_the_sign_in_destination_is_an_allowed_origin_or_a_relative_path(string returnUrl, string expected)
     {
-        var f = TwoProviderFactory(["https://admin.example.com"]);
-        using var client = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var f = TwoProviderFactory("https://admin.example.com");
+        using var client = NoRedirectClient(f);
 
         var resp = await client.GetAsync($"/api/auth/login/oidc/alpha?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
@@ -119,8 +128,8 @@ public class OidcEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Without_cors_an_absolute_return_url_falls_back_to_the_default()
     {
-        var f = TwoProviderFactory([]);
-        using var client = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var f = TwoProviderFactory();
+        using var client = NoRedirectClient(f);
 
         var resp = await client.GetAsync($"/api/auth/login/oidc/alpha?returnUrl={Uri.EscapeDataString("https://admin.example.com/a")}");
 
@@ -130,7 +139,8 @@ public class OidcEndpointTests(ApiFactory factory)
     [Fact]
     public async Task With_cors_the_correlation_and_nonce_cookies_stay_samesite_none_secure()
     {
-        using var client = TwoProviderClient("https://admin.example.com");
+        using var f = TwoProviderFactory("https://admin.example.com");
+        using var client = NoRedirectClient(f);
 
         var resp = await client.GetAsync("/api/auth/login/oidc/alpha?returnUrl=%2Fadmin");
 
