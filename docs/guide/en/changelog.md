@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.0
+
+### Added
+
+- Editing a user in the admin UI now has an "Access token" section showing when the token was issued
+  and last used. `GET /api/users/{id}/access-token` is new, readable by a super-admin only, and its
+  response never contains the token or its hash. The last-used time is written at most once a
+  minute. See [Chapter 16](16-authentication.md) and [Chapter 13](13-rest-endpoints.md).
+- [Chapter 16](16-authentication.md) recommends a dedicated account with a least-permission role for
+  an automation's token.
+
 ## 0.19.1 — 2026-10-30
 
 ### Added
