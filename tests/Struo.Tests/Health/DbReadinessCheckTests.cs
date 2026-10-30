@@ -65,6 +65,7 @@ public class DbReadinessCheckTests
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static bool WaitUntilFaultedThenDrop(ref Task<bool>? probeTask)
     {
+        probeTask.Should().NotBeNull("the check must hand over the probe task");
         var task = probeTask!;
         var faulted = SpinWait.SpinUntil(() => task.IsFaulted, TimeSpan.FromSeconds(10));
         task = null!;

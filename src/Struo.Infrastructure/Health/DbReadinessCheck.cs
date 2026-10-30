@@ -53,10 +53,10 @@ public sealed class DbReadinessCheck : IHealthCheck
         try
         {
             var probeTask = Task.Run(_probe ?? CreateDatabaseProbe(), CancellationToken.None);
-            _onProbeStarted?.Invoke(probeTask);
             // Reading Exception marks a late failure of an abandoned probe as observed.
             _ = probeTask.ContinueWith(
                 static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            _onProbeStarted?.Invoke(probeTask);
 
             using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var delayTask = Task.Delay(TimeSpan.FromSeconds(_timeoutSeconds), delayCts.Token);
