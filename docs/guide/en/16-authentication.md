@@ -189,16 +189,15 @@ token may have leaked, revoke it or issue a new one instead.
 
 A super-admin editing a user in the admin UI can issue, regenerate or revoke the token in the
 "Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke
-button. The raw token is shown only once, in the dialog that opens after it is
-issued, with a copy button; closing the dialog discards it for good. Regenerating and revoking ask
-for confirmation first, because the old token stops working immediately. The section also lists
-when the token was issued and last used, and the same data is available from
-`GET /api/users/{id}/access-token`, which returns
-`{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with no token both are `null`, and a
-token that has not been used since it was issued has only `lastUsedAt` as `null`. The last-used
-time is written at most once a minute, so it can trail the latest request: it is enough to spot a
-token nobody has used for a long time, not a real-time activity log. The response never contains
-the token or its hash.
+button. The raw token is shown only once, in the dialog that opens after it is issued, with a copy
+button; closing the dialog discards it for good. Regenerating and revoking ask for confirmation
+first, because the old token stops working immediately. The section also lists when the token was
+issued and last used, and the same data is available from `GET /api/users/{id}/access-token`, which
+returns `{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with no token both are `null`,
+and a token that has not been used since it was issued has only `lastUsedAt` as `null`. The
+last-used time is written at most once a minute, so it can trail the latest request: it is enough to
+spot a token nobody has used for a long time, not a real-time activity log. The response never
+contains the token or its hash.
 
 A token stays valid until it is revoked, so for an automation give it a dedicated account and
 assign that account a role with the least permissions it needs, rather than issuing the token for
