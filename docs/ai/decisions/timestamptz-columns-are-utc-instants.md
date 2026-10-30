@@ -36,10 +36,11 @@ produce, are returned as read.
 
 ## Why
 
-SqlSugar binds every `DateTime` parameter as `DbType.DateTime`, and its PostgreSQL provider forces
-Npgsql's legacy timestamp behavior. Npgsql 5 sends that as `timestamp` (no zone), ignoring `Kind`,
-and PostgreSQL casts it to `timestamptz` in the session `TimeZone`. On read, Npgsql 5 returns a
-`timestamptz` as `Kind=Local` in the host zone. So without the converter:
+SqlSugar binds every `DateTime` parameter as `DbType.DateTime`, and its `PostgreSQLProvider` sets
+Npgsql's legacy timestamp switch, which Npgsql honours. Under it, Npgsql sends a `DbType.DateTime`
+parameter as `timestamp` (no zone), ignoring `Kind`, and PostgreSQL casts it to `timestamptz` in the
+session `TimeZone`. On read, Npgsql returns a `timestamptz` as `Kind=Local` in the host zone. So
+without the converter:
 
 - the stored instant is off by the session zone's offset whenever the server zone is not UTC;
 - a value read back is the host-local wall clock, which code treating ticks as UTC (the repository's
@@ -61,8 +62,8 @@ Alternatives not taken:
   but `SetColumns(s => new T { … })` still binds `timestamp`, and reads stay `Kind=Local`.
 - `DateTimeOffset` properties would change `IAuditable.CreatedAt` on `AuditableEntity`, the
   `IUserSessionStore` contract, the JSON shape and the MySQL/SQLite mapping.
-- An Npgsql 6+ upgrade alone keeps the legacy behavior SqlSugar forces; turning that off changes
-  every plain `timestamp` column and throws on non-UTC `Kind`.
+- Turning off the legacy behavior SqlSugar forces changes every plain `timestamp` column and throws
+  on non-UTC `Kind`.
 
 ## Evidence
 
@@ -72,6 +73,9 @@ Probe on SqlSugarCore 5.1.4.221, Npgsql 5.0.18, PostgreSQL 17, host UTC+8, 2026-
 round trip moved the value +8 h per update on the UTC server. With the converter, `Insertable`,
 `Updateable(entity)`, `UpdateColumns`, `SetColumns(s => new T { … })`, `SetColumns(s => s.A == v)`
 and `Where(s => s.A < v)` all bound `TimestampTz` and read `Kind=Utc`.
+
+The live suite is green on PostgreSQL with Npgsql 10.0.3, the legacy switch set by SqlSugar and not
+by the product (2026-10-30).
 
 The 57 tests in `UtcInstantColumnTests`, `MediaFolderTests`, `SqlSugarUserSessionStoreTests`,
 `SiteSettingsStoreTests`, `UtcInstantJsonTests` and `ConditionalModelTranslatorTests` pin the 0.9.2

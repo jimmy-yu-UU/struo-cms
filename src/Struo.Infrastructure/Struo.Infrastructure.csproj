@@ -30,6 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="NetVips" />
     <PackageReference Include="NetVips.Native" />
+    <PackageReference Include="Npgsql" />
     <PackageReference Include="SqlSugarCore" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
