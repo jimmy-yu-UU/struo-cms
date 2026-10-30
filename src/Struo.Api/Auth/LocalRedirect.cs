@@ -11,8 +11,8 @@ public static class LocalRedirect
     /// <summary>The origin of <paramref name="url"/> when it is an absolute URL on an allowed origin;
     /// otherwise null. Entries match the way the CORS policy matches: the browser's serialized origin
     /// (lowercase scheme and host, punycode, no default port) compared exactly with the entry, which is
-    /// lowercased, or rebuilt in punycode when its host is non-ASCII. An entry with a trailing slash,
-    /// path or wildcard matches nothing.</summary>
+    /// lowercased, or rebuilt from scheme, host and port in punycode when its host is non-ASCII.
+    /// An ASCII-host entry with a trailing slash, path or wildcard matches nothing.</summary>
     public static string? AllowedOrigin(string? url, IReadOnlyCollection<string>? allowedOrigins)
     {
         if (allowedOrigins is not { Count: > 0 } || !TryGetOrigin(url, out var origin))
