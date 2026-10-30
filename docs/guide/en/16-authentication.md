@@ -199,10 +199,10 @@ last-used time is written at most once a minute, so it can trail the latest requ
 spot a token nobody has used for a long time, not a real-time activity log. The response never
 contains the token or its hash.
 
-A token stays valid until it is revoked, so for an automation give it a dedicated account and
-assign that account a role with the least permissions it needs, rather than issuing the token for
-a person's account or a super-admin. If the token leaks, what it can reach is limited to that
-role's grants, and revoking it affects nobody's sign-in.
+A token stays valid until it is revoked, so for an automation give it a dedicated account and assign
+that account a role with the least permissions it needs, rather than issuing the token for a
+person's account or a super-admin. If the token leaks, what it can reach is limited to that role's
+grants, and revoking it affects nobody's sign-in.
 
 Bearer counts on every endpoint, including the read endpoints that declare no scheme — it
 isn't only write actions that recognize it; a bearer caller's permissions are its own role's
