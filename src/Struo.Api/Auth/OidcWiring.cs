@@ -22,6 +22,7 @@ public static class OidcWiring
             .BindConfiguration(OidcOptions.SectionName)
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<OidcOptions>, OidcOptionsValidator>();
+        services.AddSingleton<IValidateOptions<OidcOptions>, OidcReturnUrlDefaultValidator>();
         services.PostConfigure<OidcOptions>(options => options.ApplyCollectionDefaults());
 
         // AddOptions above only normalizes the container-resolved copy. This second bind is a SEPARATE
@@ -104,20 +105,25 @@ public static class OidcWiring
     private static string RefusalCode(string failure) => $"external_login_{failure}";
 
     /// <summary>Ends a failed sign-in (provider error, or a refusal raised by OnTokenValidated) on the SPA
-    /// login page. Only a fixed code reaches the URL, never the exception text.</summary>
+    /// login page, on the admin origin when cross-origin hosting is configured. Only a fixed code reaches
+    /// the URL, never the exception text.</summary>
     public static Task OnRemoteFailure(RemoteFailureContext ctx)
     {
         var message = ctx.Failure?.Message;
         var code = message is not null && RefusalCodes.Contains(message) ? message : FailedCode;
-        return RedirectToLogin(ctx, code);
+        return RedirectToLogin(ctx, ctx.Properties, code);
     }
 
     /// <summary>Ends a sign-in the user declined at the provider on the SPA login page.</summary>
-    public static Task OnAccessDenied(AccessDeniedContext ctx) => RedirectToLogin(ctx, DeniedCode);
+    public static Task OnAccessDenied(AccessDeniedContext ctx) => RedirectToLogin(ctx, ctx.Properties, DeniedCode);
 
-    private static Task RedirectToLogin(HandleRequestContext<RemoteAuthenticationOptions> ctx, string code)
+    private static Task RedirectToLogin(
+        HandleRequestContext<RemoteAuthenticationOptions> ctx, AuthenticationProperties? properties, string code)
     {
-        ctx.Response.Redirect($"/login?error={Uri.EscapeDataString(code)}");
+        var services = ctx.HttpContext.RequestServices;
+        var origins = CorsWiring.ConfiguredOrigins(services.GetRequiredService<IConfiguration>());
+        var defaultUrl = services.GetRequiredService<IOptions<OidcOptions>>().Value.ReturnUrlDefault;
+        ctx.Response.Redirect(LocalRedirect.LoginFailureUrl(code, properties?.RedirectUri, defaultUrl, origins));
         ctx.HandleResponse();
         return Task.CompletedTask;
     }

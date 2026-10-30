@@ -72,9 +72,9 @@ public static class AuthWiring
                 AuthSchemes.Bearer, _ => { });
 
         // The Secure policy follows Auth:Cookie:RequireSecure, else the environment (Always outside
-        // Development, SameAsRequest in Development). Cross-origin mode (SPA on a different origin)
-        // requires SameSite=None, which browsers only honor alongside Secure — so cross-origin also
-        // forces the secure policy on.
+        // Development, SameAsRequest in Development). Cross-origin mode (SPA on a sibling subdomain)
+        // forces the secure policy on and keeps SameSite=Lax: the SPA and the API are same-site, so the
+        // cookie is sent on credentialed requests without SameSite=None.
         // Resolved lazily via IConfiguration from DI (not the `config` parameter captured above)
         // so that test hosts which append configuration after service registration (e.g.
         // WebApplicationFactory.ConfigureAppConfiguration) are still honored: CookieAuthenticationOptions
@@ -92,7 +92,6 @@ public static class AuthWiring
                     : CookieSecurePolicy.SameAsRequest;
                 if (!CorsWiring.HasConfiguredOrigins(resolvedConfig)) return;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-                options.Cookie.SameSite = SameSiteMode.None;
             });
 
         // The cookie's name and prefix rules are checked against these effective options (including a

@@ -67,7 +67,7 @@ public class CorsAndCookieTests
     }
 
     [Fact]
-    public async Task Cors_enabled_login_sets_samesite_none_secure_cookie()
+    public async Task Cors_enabled_login_sets_samesite_lax_secure_cookie()
     {
         using var factory = new CorsApiFactory();
         using (var scope = factory.Services.CreateScope())
@@ -83,7 +83,8 @@ public class CorsAndCookieTests
         var client = factory.CreateClient();
         var resp = await client.PostAsJsonAsync("/api/auth/login", new { email = "cors@b.com", password = "pw12345678" });
         var setCookie = string.Join(";", resp.Headers.GetValues("Set-Cookie"));
-        setCookie.ToLowerInvariant().Should().Contain("samesite=none");
+        setCookie.ToLowerInvariant().Should().Contain("samesite=lax");
+        setCookie.ToLowerInvariant().Should().NotContain("samesite=none");
         setCookie.ToLowerInvariant().Should().Contain("secure");
     }
 }

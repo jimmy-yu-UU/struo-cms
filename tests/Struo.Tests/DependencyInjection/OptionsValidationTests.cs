@@ -125,6 +125,38 @@ public sealed class OptionsValidationTests
         return string.Join(" ", ove!.Failures);
     }
 
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
+    [InlineData("/", null)]
+    [InlineData("/admin", null)]
+    [InlineData("https://admin.example.com/", "https://admin.example.com")]
+    [InlineData("https://ADMIN.example.com:443/x", "https://admin.example.com")]
+    public async Task Oidc_return_url_default_that_is_relative_or_an_allowed_origin_starts(string value, string? origin)
+    {
+        var error = await StartupErrorAsync(s =>
+        {
+            s["Oidc:ReturnUrlDefault"] = value;
+            if (origin is not null) s["Struo:Cors:AllowedOrigins:0"] = origin;
+        });
+        error.Should().BeNull();
+    }
+
+    [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]
+    [InlineData("https://admin.example.com/", null)]
+    [InlineData("https://evil.example.com/", "https://admin.example.com")]
+    [InlineData("https://admin.example.com.evil.com/", "https://admin.example.com")]
+    [InlineData("http://admin.example.com/", "https://admin.example.com")]
+    [InlineData("javascript:alert(1)", "https://admin.example.com")]
+    public async Task Oidc_return_url_default_absolute_outside_the_allowed_origins_fails_startup(string value, string? origin)
+    {
+        var text = await OidcFailureTextAsync(s =>
+        {
+            s["Oidc:ReturnUrlDefault"] = value;
+            if (origin is not null) s["Struo:Cors:AllowedOrigins:0"] = origin;
+        });
+
+        text.Should().Contain("Oidc:ReturnUrlDefault").And.Contain("Struo:Cors:AllowedOrigins");
+    }
+
     [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
     public async Task Oidc_valid_enabled_provider_starts()
     {

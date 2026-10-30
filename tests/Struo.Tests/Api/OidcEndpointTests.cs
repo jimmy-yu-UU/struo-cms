@@ -36,11 +36,15 @@ public class OidcEndpointTests(ApiFactory factory)
 
     // The OpenIdConnect handler would fetch discovery metadata from the (fake) authority; a static
     // configuration per scheme keeps the challenge offline.
-    private HttpClient TwoProviderClient()
+    private HttpClient TwoProviderClient(params string[] corsOrigins) => TwoProviderFactory(corsOrigins)
+        .CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+    private WebApplicationFactory<Program> TwoProviderFactory(string[] corsOrigins)
     {
-        var f = factory.WithWebHostBuilder(b =>
+        return factory.WithWebHostBuilder(b =>
         {
             foreach (var (key, value) in TwoProviders) b.UseSetting(key, value);
+            for (var i = 0; i < corsOrigins.Length; i++) b.UseSetting($"Struo:Cors:AllowedOrigins:{i}", corsOrigins[i]);
             b.ConfigureTestServices(services =>
             {
                 foreach (var (id, authority) in new[]
@@ -52,8 +56,6 @@ public class OidcEndpointTests(ApiFactory factory)
                 }
             });
         });
-
-        return f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     [Theory]
@@ -85,5 +87,43 @@ public class OidcEndpointTests(ApiFactory factory)
         var location = resp.Headers.Location!.ToString();
         location.Should().StartWith(authorize + "?");
         location.Should().Contain($"client_id={clientId}").And.Contain(callback);
+    }
+
+    // The sign-in destination travels in the protected OIDC state; reading it back shows what the
+    // callback will redirect to.
+    private static string? StateRedirectUri(WebApplicationFactory<Program> f, HttpResponseMessage challenge)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(challenge.Headers.Location!.Query);
+        var options = f.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<OpenIdConnectOptions>>()
+            .Get(AuthSchemes.OidcFor("alpha"));
+        return options.StateDataFormat.Unprotect(query["state"])!.RedirectUri;
+    }
+
+    [Theory]
+    [InlineData("https://admin.example.com/articles", "https://admin.example.com/articles")]
+    [InlineData("/admin", "/admin")]
+    [InlineData("https://evil.example.com/", "/")]
+    [InlineData("https://admin.example.com.evil.com/", "/")]
+    [InlineData("https://admin.example.com@evil.com/", "/")]
+    public async Task With_cors_the_sign_in_destination_is_an_allowed_origin_or_a_relative_path(string returnUrl, string expected)
+    {
+        var f = TwoProviderFactory(["https://admin.example.com"]);
+        using var client = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var resp = await client.GetAsync($"/api/auth/login/oidc/alpha?returnUrl={Uri.EscapeDataString(returnUrl)}");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        StateRedirectUri(f, resp).Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task Without_cors_an_absolute_return_url_falls_back_to_the_default()
+    {
+        var f = TwoProviderFactory([]);
+        using var client = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var resp = await client.GetAsync($"/api/auth/login/oidc/alpha?returnUrl={Uri.EscapeDataString("https://admin.example.com/a")}");
+
+        StateRedirectUri(f, resp).Should().Be("/");
     }
 }
