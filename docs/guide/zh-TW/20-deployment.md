@@ -360,8 +360,8 @@ network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*
 **支援的前提**：後台與 API 在同一個主網域底下，只差子網域，例如 `https://admin.example.com` 與
 `https://api.example.com`。這兩個來源屬於同一個 site，session cookie 的 `SameSite=Lax` 會隨 SPA 的請求送出。
 
-跨主網域不支援：例如後台在託管服務給的 `*.pages.dev` 網址，API 在 `example.com`。這時 API 的
-cookie 對後台頁面來說是第三方 cookie，瀏覽器會擋掉，登入會失敗，`<img>` 載入的媒體與縮圖也會失效。
+跨主網域不支援：例如後台在託管服務給的 `*.pages.dev` 網址，API 在 `example.com`。這時 SPA 對 API 的請求是
+跨站請求，瀏覽器不會送出 `SameSite=Lax` 的 session cookie，登入會失敗，`<img>` 載入的媒體與縮圖也會失效。
 請替後台綁一個與 API 同主網域的自訂網域。
 
 設定的步驟：
@@ -369,12 +369,12 @@ cookie 對後台頁面來說是第三方 cookie，瀏覽器會擋掉，登入會
 1. 建置後台時設 `VITE_API_BASE_URL=https://api.example.com/api`。API 的路由掛在 `/api` 底下，
    所以值要帶 `/api`。它是建置期的變數，見[第 19 章：後台客製化](19-admin-customization.md)。
 2. API 設 `Struo:Cors:AllowedOrigins`，列出後台的來源，例如 `["https://admin.example.com"]`。
-   每一筆要寫成精確的來源：scheme、主機，非預設埠才加埠號，不加結尾斜線、路徑或萬用字元。
-   這樣的項目不會與任何來源相符。設了之後 cookie 一律 `Secure`，兩邊都得走 HTTPS，見
+   每一筆要寫成精確的來源：scheme、主機，非預設埠才加埠號。結尾有斜線、帶路徑或萬用字元的項目不會
+   與任何來源相符。設了之後 cookie 一律 `Secure`，兩邊都得走 HTTPS，見
    [第 4 章：設定參考](04-configuration.md)。
-3. OIDC 的重新導向網址登記在 API 的網域：`https://api.example.com/signin-oidc-{id}`，
-   `{id}` 是提供者的 id（自訂了 `CallbackPath` 就用它）。後台的網域不需要登記。細節見
-   [第 16 章](16-authentication.md)。
+3. OIDC 的重新導向網址登記在 API 的網域：`https://api.example.com` 加上提供者的回呼路徑，也就是它的
+   `CallbackPath`，沒設時是 `/signin-oidc-{id}`（例如 `https://api.example.com/signin-oidc-google`）。
+   後台的網域不需要登記。細節見[第 16 章](16-authentication.md)。
 4. 單一登入的 `returnUrl` 可以是後台的完整網址，只要它的來源在 `Struo:Cors:AllowedOrigins` 裡。
    SPA 發現 API 與頁面不同來源時會自動這樣送；登入失敗也會回到後台的 `/login`。
 
@@ -392,13 +392,15 @@ cookie 對後台頁面來說是第三方 cookie，瀏覽器會擋掉，登入會
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
-/index.html
-  Cache-Control: no-cache
 ```
 
 這些值與映像的 nginx 範本一致，差別只在 CSP 的 `img-src` 與 `connect-src` 多了 API 的來源。
 把 `https://api.example.com` 換成你的 API 來源；圖片若還有別的來源（CDN、`Struo:Files:PresignedRedirect`
 的 presigned URL），也加到 `img-src`。HSTS 要等兩個網域都確定只走 HTTPS 才送。
+
+`/assets/` 以外的檔案（HTML、`theme-init.js` 與每一條 SPA 路由）不從這個檔案取得 `Cache-Control`。
+Cloudflare Pages 預設送 `public, max-age=0, must-revalidate`，每次請求都會重新驗證，效果與映像的
+`no-cache` 相同。換到其他服務時，要確認 HTML 不會被長期快取。
 
 SPA 用的是前端路由，直接開 `/collections/posts` 這類網址時，伺服器要回 `index.html`。在 Cloudflare
 Pages 上，建置輸出裡不放 `404.html` 就會有這個行為；其他服務要查它們的「單頁應用程式」設定。

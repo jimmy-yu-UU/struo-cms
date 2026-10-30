@@ -13,8 +13,8 @@ namespace Struo.Tests.Template.Documentation;
 /// Strict-Transport-Security (the template's value is a placeholder) and Content-Security-Policy, which
 /// is compared directive by directive: the same directives, the same sources, the template's
 /// <c>${...}</c> placeholders ignored, plus the documented API origin in <c>connect-src</c> and
-/// <c>img-src</c>. The <c>/assets/*</c> and <c>/index.html</c> rules carry the template's
-/// <c>Cache-Control</c> values for those paths.
+/// <c>img-src</c>. The <c>/assets/*</c> rule carries the template's <c>Cache-Control</c> value for that
+/// path. The example holds exactly the <c>/*</c> and <c>/assets/*</c> rules.
 /// </summary>
 public sealed partial class StaticHostHeadersGuideTests
 {
@@ -28,11 +28,8 @@ public sealed partial class StaticHostHeadersGuideTests
 
     private const string NginxTemplate = "frontend/nginx/default.conf.template";
 
-    [GeneratedRegex("""add_header\s+(?<name>[A-Za-z-]+)\s+"(?<value>[^"]*)"\s+always;""")]
+    [GeneratedRegex("""add_header\s+(?<name>[\w-]+)\s+"(?<value>[^"]*)"(?:\s+always)?\s*;""")]
     private static partial Regex AddHeader();
-
-    [GeneratedRegex(@"add_header\s+Cache-Control\s+""(?<value>[^""]*)""")]
-    private static partial Regex CacheHeader();
 
     [GeneratedRegex(@"```text\r?\n# _headers\r?\n(?<body>.*?)```", RegexOptions.Singleline)]
     private static partial Regex HeadersExample();
@@ -74,12 +71,10 @@ public sealed partial class StaticHostHeadersGuideTests
     public void Example_cache_rules_match_the_nginx_cache_rules(string chapter)
     {
         var rules = ReadExample(chapter);
-        var nginx = NginxText();
 
-        rules.Should().ContainKey("/assets/*").WhoseValue[CacheControl]
-            .Should().Be(NginxCacheValue(nginx, "location /assets/ {"));
-        rules.Should().ContainKey("/index.html").WhoseValue[CacheControl]
-            .Should().Be(NginxCacheValue(nginx, "location = /index.html {"));
+        rules.Keys.Should().BeEquivalentTo(["/*", "/assets/*"], "a rule the host never applies must not be documented");
+        rules["/assets/*"][CacheControl]
+            .Should().Be(NginxCacheValue(NginxText(), "location /assets/ {"));
     }
 
     [Fact]
@@ -117,11 +112,13 @@ public sealed partial class StaticHostHeadersGuideTests
         var start = nginx.IndexOf(opener, StringComparison.Ordinal);
         start.Should().BeGreaterThan(-1, $"the template declares '{opener}'");
         var end = nginx.IndexOf("\n    }", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, $"'{opener}' closes with a 4-space-indented brace");
         return nginx[start..end];
     }
 
     private static string NginxCacheValue(string nginx, string opener) =>
-        CacheHeader().Match(LocationBlock(nginx, opener)).Groups["value"].Value;
+        AddHeader().Matches(LocationBlock(nginx, opener))
+            .Single(m => m.Groups["name"].Value == CacheControl).Groups["value"].Value;
 
     private static Dictionary<string, string[]> ParseCsp(string policy) =>
         policy.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
@@ -153,6 +150,7 @@ public sealed partial class StaticHostHeadersGuideTests
 
             current.Should().NotBeNull("a header line follows a path line");
             var colon = line.IndexOf(':');
+            colon.Should().BeGreaterThan(0, $"'{line}' is a 'Name: value' line");
             current![line[..colon].Trim()] = line[(colon + 1)..].Trim();
         }
 

@@ -445,9 +445,10 @@ the subdomain, for example `https://admin.example.com` and `https://api.example.
 are in one site, so the session cookie's `SameSite=Lax` is sent on the SPA's requests.
 
 Different registrable domains are not supported: for example the admin on a `*.pages.dev` address the
-hosting service gave you, and the API on `example.com`. The API's cookie is then a third-party cookie
-for the admin page, and browsers block it. Login fails, and media loaded through `<img>`, thumbnails
-included, stops working. Bind a custom domain under the API's domain to the admin instead.
+hosting service gave you, and the API on `example.com`. The SPA's requests to the API are then
+cross-site, so the browser does not send the `SameSite=Lax` session cookie: login fails, and media
+loaded through `<img>`, thumbnails included, stops working. Give the admin a custom domain under the
+same registrable domain as the API instead.
 
 The steps:
 
@@ -456,12 +457,13 @@ The steps:
    [Chapter 19: Admin Customization](19-admin-customization.md).
 2. Set `Struo:Cors:AllowedOrigins` on the API to the admin's origin, for example
    `["https://admin.example.com"]`. Write each entry as an exact origin: scheme, host, and a port only
-   when it is not the default, with no trailing slash, path or wildcard. An entry like that matches
-   no origin. With the key set the cookie is always `Secure`, so both sides must run over HTTPS; see
+   when it is not the default. An entry with a trailing slash, a path or a wildcard matches no origin.
+   With the key set the cookie is always `Secure`, so both sides must run over HTTPS; see
    [Chapter 4: Configuration Reference](04-configuration.md).
-3. Register the OIDC redirect URI on the API's domain: `https://api.example.com/signin-oidc-{id}`,
-   where `{id}` is the provider's id (or its `CallbackPath` when you set one). The admin's domain
-   needs no registration. Details are in [Chapter 16](16-authentication.md).
+3. Register the OIDC redirect URI on the API's domain: `https://api.example.com` plus the provider's
+   callback path, which is its `CallbackPath`, or `/signin-oidc-{id}` when the entry has none (for
+   example `https://api.example.com/signin-oidc-google`). The admin's domain needs no registration.
+   Details are in [Chapter 16](16-authentication.md).
 4. The `returnUrl` of a single sign-in can be the admin's full URL, as long as its origin is in
    `Struo:Cors:AllowedOrigins`. The SPA sends it that way by itself when the API is on another origin
    than the page, and a failed sign-in returns to the admin's `/login`.
@@ -481,14 +483,17 @@ build output's root (with Vite, a file in `public/` is copied there):
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
-/index.html
-  Cache-Control: no-cache
 ```
 
 The values equal the image's nginx template, except that the CSP's `img-src` and `connect-src` add
 the API's origin. Replace `https://api.example.com` with your API's origin. If images also come from
 another origin (a CDN, the presigned URL of `Struo:Files:PresignedRedirect`), add it to `img-src`
 too. Send HSTS only once both domains are certain to use HTTPS only.
+
+Files outside `/assets/` (the HTML, `theme-init.js`, and every SPA route) get no `Cache-Control` from
+this file. Cloudflare Pages sends `public, max-age=0, must-revalidate` by default, which revalidates
+them on every request as the image's `no-cache` does. On another host, make sure the HTML is never
+cached long-term.
 
 The SPA uses client-side routing, so opening a URL such as `/collections/posts` directly must return
 `index.html`. On Cloudflare Pages that is what happens when the build output has no `404.html`; other
