@@ -29,6 +29,17 @@ export const usersApi = {
     return apiClient.get<AccessTokenInfo>(`/users/${userId}/access-token`)
   },
 
+  // POST /api/users/{id}/access-token (super-admin only): issues a token, replacing any previous one.
+  // The raw value is in this response only; the server keeps just its hash.
+  generateAccessToken(userId: string): Promise<{ token: string }> {
+    return apiClient.post<{ token: string }>(`/users/${userId}/access-token`)
+  },
+
+  // DELETE /api/users/{id}/access-token (super-admin only): returns 204, no body.
+  revokeAccessToken(userId: string): Promise<void> {
+    return apiClient.delete<void>(`/users/${userId}/access-token`)
+  },
+
   // Returns 204: no body. The API decides self-service vs admin-reset from whether {userId} is the
   // caller, so this client does not need (or get) a mode flag.
   changePassword(userId: string, body: ChangePasswordBody): Promise<void> {
