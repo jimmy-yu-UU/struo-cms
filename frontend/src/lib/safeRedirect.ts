@@ -29,10 +29,11 @@ export function loginRedirectQuery(fullPath: string | undefined): { redirect: st
   return { redirect }
 }
 
-// The SSO returnUrl for a validated path: the path itself when the API shares the page's origin,
-// origin + path when the API base URL is absolute so the API can send the browser back to this host.
+// The SSO returnUrl for a validated path: the path itself when the API base URL resolves to the
+// page's own origin, origin + path otherwise so the API can send the browser back to this host.
+// Resolved the way the browser does, so protocol-relative and same-origin absolute bases both count.
 export function ssoReturnUrl(apiBase: string, path: string, origin: string): string {
-  return /^https?:\/\//i.test(apiBase) ? origin + path : path
+  return new URL(apiBase, origin).origin === origin ? path : origin + path
 }
 
 // Query-string encoding for the SSO returnUrl. Slashes stay readable, as they are legal in a query.

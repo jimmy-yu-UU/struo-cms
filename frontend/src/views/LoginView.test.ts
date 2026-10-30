@@ -177,7 +177,7 @@ describe('LoginView', () => {
   it('shows the SSO button and navigates on click when oidc is enabled', async () => {
     setProviders(MS)
     const original = window.location
-    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
     try {
       const wrapper = mountLogin()
       const sso = wrapper.find('[data-test="sso"]')
@@ -226,7 +226,7 @@ describe('LoginView', () => {
     setProviders(MS, GOOGLE)
     route.query = { redirect: '/collections/article?page=2' }
     const original = window.location
-    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
     try {
       const btns = mountLogin().findAll('[data-test="sso"]')
       await btns[1].trigger('click')
@@ -344,7 +344,7 @@ describe('LoginView', () => {
     setProviders(MS)
     route.query = { redirect: '/collections/article?page=2&q=a' }
     const original = window.location
-    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
     try {
       const wrapper = mountLogin()
       await wrapper.find('[data-test="sso"]').trigger('click')
@@ -358,7 +358,7 @@ describe('LoginView', () => {
     setProviders(MS)
     route.query = { redirect: '//evil.example' }
     const original = window.location
-    Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
     try {
       const wrapper = mountLogin()
       await wrapper.find('[data-test="sso"]').trigger('click')

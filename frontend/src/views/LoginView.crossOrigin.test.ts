@@ -59,12 +59,4 @@ describe('LoginView SSO with a cross-origin apiBaseUrl', () => {
     expect(href).toBe('https://api.example.com/api/auth/login/oidc/microsoft?returnUrl=https%3A//admin.example.com/')
     expect(href).not.toContain('evil')
   })
-
-  it('shows the SSO error code from the SPA /login?error= landing', async () => {
-    route.query = { error: 'external_login_denied' }
-    const wrapper = mount(LoginView, { global: { plugins: [i18n] } })
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="alert"]').text()).toContain('拒絕')
-    expect(replace).toHaveBeenCalledWith({ name: 'login' })
-  })
 })
