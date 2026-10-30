@@ -100,6 +100,7 @@ height, status, folderId }`；multipart 形狀本身不對會被直接擋下—�
 | `POST api/users` | 超級管理員 | 建立使用者，回 201 |
 | `PUT api/users/{id}/password` | 超級管理員或本人 | 改密碼，本人需驗證目前密碼 |
 | `POST api/users/{id}/access-token` | 超級管理員 | 核發存取權杖，只顯示一次 |
+| `GET api/users/{id}/access-token` | 超級管理員 | 讀取權杖的核發與最後使用時間 |
 | `DELETE api/users/{id}/access-token` | 超級管理員 | 撤銷存取權杖 |
 | `GET api/users/{id}/effective-permissions` | 超級管理員 | 預覽有效權限，支援 `?roles=` |
 

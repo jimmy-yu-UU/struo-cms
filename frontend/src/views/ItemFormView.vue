@@ -12,6 +12,7 @@ import RevisionHistoryDrawer from '../components/revisions/RevisionHistoryDrawer
 import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
+import AccessTokenPanel from '@/components/account/AccessTokenPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -71,9 +72,9 @@ const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
 const showMatrix = computed(
   () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
-// Shared by showEffective and showResetPassword below — both gate on the exact same condition
-// (super-admin, existing user row), so it is named once here rather than duplicated verbatim in two
-// places, which would only need to drift once to disagree.
+// Shared by showEffective, showResetPassword and showAccessToken below — all three gate on the exact
+// same condition (super-admin, existing user row), so it is named once here rather than duplicated
+// verbatim in three places, which would only need to drift once to disagree.
 const isSuperAdminOnExistingUser = computed(
   () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
 )
@@ -88,6 +89,8 @@ const selectedRoleIds = computed(() => (model.relations.roles as string[] | unde
 // reach this form. This guard is therefore load-bearing, not a redundant belt-and-braces check.
 const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
 const resetPasswordOpen = ref(false)
+// The access-token panel reads and mutates a credential, so it has the same audience.
+const showAccessToken = computed(() => isSuperAdminOnExistingUser.value)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -419,6 +422,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :create-mode="isCreate"
       />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
+      <AccessTokenPanel v-if="showAccessToken" :user-id="idStr" />
 
       <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
            ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
