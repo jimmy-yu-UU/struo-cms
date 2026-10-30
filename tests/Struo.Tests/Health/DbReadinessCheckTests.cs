@@ -60,6 +60,18 @@ public class DbReadinessCheckTests
 
     private sealed class LateProbeFailure() : Exception("late failure");
 
+    // Polls IsFaulted, which does not observe the exception, then drops the only test-side reference so the
+    // faulted task is collectable. Kept out of line so no local keeps the task alive in the caller.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static bool WaitUntilFaultedThenDrop(ref Task<bool>? probeTask)
+    {
+        var task = probeTask!;
+        var faulted = SpinWait.SpinUntil(() => task.IsFaulted, TimeSpan.FromSeconds(10));
+        task = null!;
+        probeTask = null;
+        return faulted;
+    }
+
     [Fact]
     public async Task A_probe_that_fails_after_the_timeout_raises_no_unobserved_exception()
     {
@@ -76,19 +88,19 @@ public class DbReadinessCheckTests
         try
         {
             using var release = new ManualResetEventSlim();
-            using var thrown = new ManualResetEventSlim();
+            Task<bool>? probeTask = null;
             var check = new DbReadinessCheck(
                 null!, Options.Create(new DatabaseOptions { ReadinessTimeoutSeconds = 1 }),
                 () =>
                 {
                     release.Wait();
-                    thrown.Set();
                     throw new LateProbeFailure();
-                });
+                },
+                task => probeTask = task);
 
             var result = await check.CheckHealthAsync(new HealthCheckContext());
             release.Set();
-            thrown.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+            WaitUntilFaultedThenDrop(ref probeTask).Should().BeTrue("the probe task must be Faulted before the GC");
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();

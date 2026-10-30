@@ -16,14 +16,19 @@ public sealed class DbReadinessCheck : IHealthCheck
     private readonly ISqlSugarClient _db;
     private readonly Func<bool>? _probe;
     private readonly int _timeoutSeconds;
+    private readonly Action<Task<bool>>? _onProbeStarted;
 
     public DbReadinessCheck(ISqlSugarClient db, IOptions<DatabaseOptions> options)
         : this(db, options, null)
     {
     }
 
-    internal DbReadinessCheck(ISqlSugarClient db, IOptions<DatabaseOptions> options, Func<bool>? probe)
+    // onProbeStarted receives the probe task as soon as it is scheduled, so a test can watch its state.
+    internal DbReadinessCheck(
+        ISqlSugarClient db, IOptions<DatabaseOptions> options, Func<bool>? probe,
+        Action<Task<bool>>? onProbeStarted = null)
     {
+        _onProbeStarted = onProbeStarted;
         _timeoutSeconds = options.Value.ReadinessTimeoutSeconds;
         _db = db;
         _probe = probe;
@@ -48,6 +53,7 @@ public sealed class DbReadinessCheck : IHealthCheck
         try
         {
             var probeTask = Task.Run(_probe ?? CreateDatabaseProbe(), CancellationToken.None);
+            _onProbeStarted?.Invoke(probeTask);
             // Reading Exception marks a late failure of an abandoned probe as observed.
             _ = probeTask.ContinueWith(
                 static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
