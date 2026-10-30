@@ -48,11 +48,13 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密連線，並驗證伺服器的憑證與主機名稱。
 伺服器的憑證來自私有 CA 或託管服務自己的 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
 
-`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人；設了 `Root Certificate` 也一樣不驗證。
+`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人。加了 `Root Certificate` 也不會改變這一點。
 `SSL Mode=Disable` 是明文，只在私有網路裡、而且伺服器接受非 TLS 連線時才用。
 
-沒有使用 Kerberos 的話，建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式每開一條新的實體連線，
-都會先試 GSS 加密，多花一段延遲。migration 鎖用的是不經連線池的連線，每次 `migrate` 都會再付一次這段延遲。
+沒設 `SSL Mode` 時，預設是 `Prefer`：伺服器提供 TLS 就加密連線，但不驗證憑證；伺服器不提供，就退回明文。
+
+沒用 Kerberos 的話，建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式每開一條新的實體連線，
+都會先試一次 GSS 加密，連線因此變慢。migration 鎖的連線不走連線池，所以每次 `migrate` 都會再慢一次。
 
 其他後端就用該驅動程式自己的 TLS 選項寫在連線字串裡。
 
@@ -68,10 +70,14 @@ PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密�
 值，都不會影響已經存在的帳號。`migrate` 作為獨立的 job 執行時，`Auth__BootstrapAdmin__*` 要設在
 那個 job 的環境裡，API 自己的環境跟植入無關。
 
-範本不附 bootstrap 密碼，也不會產生：建立帳號一定要有密碼，而且必須符合 `Auth:Password`、不能是 `admin`。
-seed 要執行的時候，密碼是空的或弱值，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
-啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`；已經植入過的資料庫不會被拒絕，
-帳號建立之後就可以把這個值移除。預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
+範本不附 bootstrap 密碼，也不會自動產生。建立帳號一定要有密碼，這個密碼要符合 `Auth:Password`，
+也不能是 `admin`。
+
+seed 要執行時，密碼若是空的或太弱，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
+啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。已經植入過的資料庫不會被拒絕，
+帳號建立之後可以把這個值移除。
+
+預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
 ### 登入速率限制：帳號層開、IP 層看拓樸
 
@@ -96,11 +102,14 @@ API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出�
 再列出那個 network 的範圍。不要信任整段共用的 Docker network 範圍：它包含 bridge 閘道，而打到 API 已發布
 連接埠的請求會經由這個閘道進來，等於能偽造 `X-Forwarded-*`。API 躲在 nginx 後面時，根本不要發布它的連接埠。
 
-`ForwardedHeaders:ForwardLimit` 是用戶端與 API 之間的代理數量，預設 `1`。負載平衡器前面接 nginx、
-nginx 再接 API，就是兩個，要設 `ForwardedHeaders__ForwardLimit=2`。設 `1` 時 API 會把負載平衡器的位址當成
-用戶端，每 IP 登入限流就把所有用戶端放進同一個桶。鏈上每個代理都要受信任：`KnownProxies` 或
-`KnownNetworks` 要涵蓋負載平衡器的位址，也要涵蓋 nginx 容器的位址，否則 API 讀到第一個不受信任的位址就
-停止往鏈的上游讀。
+`ForwardedHeaders:ForwardLimit` 是用戶端與 API 之間的代理數量，預設 `1`。
+
+請求先經過負載平衡器，再經過 nginx，最後才到 API，中間就有兩個代理，要設
+`ForwardedHeaders__ForwardLimit=2`。設成 `1` 的話，API 會把負載平衡器的位址當成用戶端，
+每 IP 登入限流就把所有用戶端放進同一個桶。
+
+鏈上的每個代理都要受信任：`KnownProxies` 或 `KnownNetworks` 要同時涵蓋負載平衡器與 nginx 容器的位址。
+否則 API 讀到第一個不受信任的位址，就停止往前讀。
 
 映像的 nginx 只送一個 `X-Forwarded-Proto`。收到代理送來的值就原樣帶過去，沒收到才用自己連線的 scheme。
 前面有終結 TLS 的代理時這樣正好，該代理應該覆寫收到的值而不是附加。這個 nginx 本身是用戶端直連的邊緣

@@ -63,6 +63,10 @@ from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`.
 man-in-the-middle. Setting `Root Certificate` does not change that. `SSL Mode=Disable` is
 plaintext; use it only on a private network, and only when the server accepts non-TLS connections.
 
+When `SSL Mode` is not set, it defaults to `Prefer`: if the server offers TLS, the connection is
+encrypted but the certificate is not validated; if the server does not offer TLS, the connection
+falls back to plaintext.
+
 Without Kerberos, `GSS Encryption Mode=Disable` is recommended. Otherwise the driver tries GSS
 encryption first on every new physical connection, which adds latency. The migration lock's
 connection is unpooled, so each `migrate` run pays it again.
@@ -84,12 +88,16 @@ changing this value afterward has no effect on the account that already exists. 
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-The template ships no bootstrap password and never generates one: the password is required to create the
-account. It must satisfy `Auth:Password` and may not be `admin`. When the seed runs and the password
-is empty or weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an
-error naming `Auth__BootstrapAdmin__Password`. A database that is already seeded is never refused,
-and the value can be removed once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
-`STRUO_ADMIN_PASSWORD` and refuses to start without it.
+The template ships no bootstrap password and never generates one. Creating the account requires a
+password; it must satisfy `Auth:Password` and may not be `admin`.
+
+When the seed runs and the password is empty or weak, `migrate`, `migrate:preview` and a
+`Database:MigrateOnStartup` start refuse with an error naming `Auth__BootstrapAdmin__Password`. A
+database that is already seeded is never refused, and the value can be removed once the account
+exists.
+
+Change the default email `admin@admin.com` as well. The Compose file reads `STRUO_ADMIN_PASSWORD` and
+refuses to start without it.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 

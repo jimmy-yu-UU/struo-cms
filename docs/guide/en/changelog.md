@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.1
+
+### Added
+
+- [Chapter 20](20-deployment.md) explains that `SSL Mode` defaults to `Prefer` when unset: the connection
+  is encrypted without certificate validation if the server offers TLS, and falls back to plaintext if not.
+- [Chapter 22](22-testing.md) recommends `GSS Encryption Mode=Disable` on the PostgreSQL test connection,
+  so time-sensitive tests do not time out when many connections are opened.
+
 ## 0.19.0 — 2026-10-30
 
 ::: danger Breaking

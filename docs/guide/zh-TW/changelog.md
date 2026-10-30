@@ -1,5 +1,13 @@
 # 版本紀錄
 
+## 0.19.1
+
+### 新增
+
+- [第 20 章](20-deployment.md)說明沒設 `SSL Mode` 時預設是 `Prefer`：伺服器提供 TLS 就加密但不驗證憑證，不提供就退回明文。
+- [第 22 章](22-testing.md)建議 PostgreSQL 測試連線加上 `GSS Encryption Mode=Disable`，避免連線一多時，
+  和時間有關的測試逾時。
+
 ## 0.19.0 — 2026-10-30
 
 ::: danger 破壞性變更
