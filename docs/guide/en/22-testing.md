@@ -77,6 +77,10 @@ use. The configured database must exist beforehand, and the login needs rights t
 databases: suites such as `LiveRepositoryTests` create their own databases on the same server and
 drop them at the end.
 
+Add `GSS Encryption Mode=Disable` to the PostgreSQL test connection. Otherwise every new connection
+tries GSS first, and with many connections, tests that wait under a timeout, such as the migration
+lock tests, can time out.
+
 `PgTestConnectionString.DisablePooling` separately turns off Npgsql's connection pooling,
 isolating a socket interruption observed under the test host — a phenomenon measured there, not
 evidence that production carries the same risk.

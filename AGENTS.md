@@ -316,7 +316,9 @@ tests write into it directly, and the other live suites use its server and login
 databases and its name as the name base. The test resolves it from the `STRUO_TEST_PG_CONNECTION`
 environment variable first, falling back to the `Testing:PostgresConnection` key in
 `src/Struo.Api/appsettings.json`/`appsettings.Development.json` if the env var is unset — or verify
-directly against a real PostgreSQL instance. The migration
+directly against a real PostgreSQL instance. Add `GSS Encryption Mode=Disable` to the PostgreSQL test
+connection string: otherwise every new connection tries GSS first, and time-sensitive tests such as
+`MigrationLockLiveTests` can time out. The migration
 subsystem's live tests (`CoreMigrationsLiveTests` applies the core migrations, runs `SchemaChecker` over
 the result and compares it with what CodeFirst builds) also run on SQL Server, MySQL and MariaDB
 (MariaDB on the `MySql` dialect). They

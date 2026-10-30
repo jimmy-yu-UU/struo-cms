@@ -63,6 +63,10 @@ from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`.
 man-in-the-middle. Setting `Root Certificate` does not change that. `SSL Mode=Disable` is
 plaintext; use it only on a private network, and only when the server accepts non-TLS connections.
 
+When `SSL Mode` is not set, it defaults to `Prefer`: if the server offers TLS, the connection is
+encrypted but the certificate is not validated; if the server does not offer TLS, the connection
+falls back to plaintext.
+
 Without Kerberos, `GSS Encryption Mode=Disable` is recommended. Otherwise the driver tries GSS
 encryption first on every new physical connection, which adds latency. The migration lock's
 connection is unpooled, so each `migrate` run pays it again.
@@ -84,12 +88,17 @@ changing this value afterward has no effect on the account that already exists. 
 as a separate job, `Auth__BootstrapAdmin__*` belongs in that job's environment; the API's own
 environment plays no part in seeding.
 
-The template ships no bootstrap password and never generates one: the password is required to create the
-account. It must satisfy `Auth:Password` and may not be `admin`. When the seed runs and the password
-is empty or weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an
-error naming `Auth__BootstrapAdmin__Password`. A database that is already seeded is never refused,
-and the value can be removed once the account exists. Change the default email `admin@admin.com` as well. The Compose file reads
-`STRUO_ADMIN_PASSWORD` and refuses to start without it.
+The template ships no bootstrap password and never generates one. Creating the account requires a
+password; it must satisfy `Auth:Password` and may not be `admin`.
+
+When the seed runs, `Auth:BootstrapAdmin:Email` is set, and the password is empty or weak,
+`migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error naming
+`Auth__BootstrapAdmin__Password`. Clearing the email seeds no admin account, so the password is not
+checked. A database that is already seeded is never refused, and the value can be removed once the
+account exists.
+
+Change the default email `admin@admin.com` as well. The Compose file reads `STRUO_ADMIN_PASSWORD` and
+refuses to start without it.
 
 ### Login rate limiting: account layer on, IP layer depends on topology
 
@@ -124,11 +133,15 @@ published port arrives through that gateway, so it could forge `X-Forwarded-*`. 
 behind nginx, do not publish its port at all.
 
 `ForwardedHeaders:ForwardLimit` is the number of proxies between the client and the API, and it
-defaults to `1`. With a load balancer in front of nginx in front of the API there are two, so set
+defaults to `1`.
+
+With a load balancer in front of nginx in front of the API there are two, so set
 `ForwardedHeaders__ForwardLimit=2`. At `1` the API takes the load balancer's address for the client,
-and the per-IP login limiter puts every client in one bucket. Every proxy in the chain has to be
-trusted: `KnownProxies` or `KnownNetworks` must cover the load balancer's address as well as the
-nginx container's, or the API stops reading the chain at the first address it does not trust.
+and the per-IP login limiter puts every client in one bucket.
+
+Every proxy in the chain has to be trusted: `KnownProxies` or `KnownNetworks` must cover the load
+balancer's address as well as the nginx container's, or the API stops at the first address it does
+not trust and takes that address for the client.
 
 The image's nginx sends a single `X-Forwarded-Proto`. It passes on the value a proxy in front of it
 sent and falls back to its own scheme only when none arrives. That suits a TLS-terminating proxy in
