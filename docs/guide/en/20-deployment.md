@@ -55,10 +55,19 @@ warning does not stop startup, and no other backend runs the check.
 
 ### The database connection: TLS, pool size, secrets
 
-On PostgreSQL, set `SSL Mode=Require` in production and leave `Trust Server Certificate` unset: the
-driver then encrypts the connection and validates the server's certificate. When the server uses a
-private CA, add `Root Certificate=/path/to/ca.crt`. `Trust Server Certificate=true` turns the
-certificate validation off, so never use it in production. For the other backends, use the driver's own TLS options in the connection string.
+On PostgreSQL, set `SSL Mode=VerifyFull` in production: the driver encrypts the connection and
+validates the server's certificate. When the certificate comes from a private CA or from the hosting
+provider's own CA, add `Root Certificate=/path/to/ca.crt`.
+
+`SSL Mode=Require` only encrypts. It does not validate the certificate, so it does not stop a
+man-in-the-middle. `SSL Mode=Disable` is plaintext; use it only on a private network, and only when
+the server accepts non-TLS connections.
+
+Without Kerberos, set `GSS Encryption Mode=Disable`. Otherwise the driver tries GSS encryption first
+on every new physical connection, which adds latency, and the migration lock opens unpooled
+connections that pay it every time.
+
+For the other backends, use the driver's own TLS options in the connection string.
 
 Each API process opens up to `Maximum Pool Size` connections (Npgsql defaults to 100). Multiply it by
 the number of replicas, and keep the result under the server's `max_connections` with room left for
