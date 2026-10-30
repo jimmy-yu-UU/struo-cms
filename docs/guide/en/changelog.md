@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.18.0
+## 0.18.0 — 2026-10-30
 
 ::: danger Breaking
 - The PostgreSQL driver is upgraded: Npgsql is now referenced directly at 10.0.3, where it used to
