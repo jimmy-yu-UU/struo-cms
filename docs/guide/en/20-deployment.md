@@ -426,13 +426,73 @@ nothing listens there in a pod. nginx's `resolver` does not apply the pod's sear
 For deploying the SPA on a different origin from the API, how to set `VITE_API_BASE_URL` and
 when the setting takes effect are in [Chapter 19: Admin Customization](19-admin-customization.md);
 building this image means putting the value in a `frontend/.env.production` you add and commit
-yourself — a developer's own `frontend/.env` never makes it into the image.
+yourself — a developer's own `frontend/.env` never makes it into the image. Serving the SPA from a
+static host instead of this image is covered in "Hosting the admin SPA on a static host" below.
 
 ### What's left to do outside the image
 
 The image is only responsible for getting the application running. Terminating TLS, configuring
 `ForwardedHeaders` for a proxy in front of the API, restart policy, horizontal scaling, secret injection, and wiring
 `/health/live` and `/health/ready` into the orchestrator's own probes are all yours to set up.
+
+### Hosting the admin SPA on a static host
+
+The admin SPA is a set of static files. You can serve it from a static hosting service instead of
+the image above, and deploy the API somewhere else.
+
+**What is supported**: the admin and the API sit under the same registrable domain and differ only in
+the subdomain, for example `https://admin.example.com` and `https://api.example.com`. Both origins
+are in one site, so the session cookie's `SameSite=Lax` is sent on the SPA's requests.
+
+Different registrable domains are not supported: for example the admin on a `*.pages.dev` address the
+hosting service gave you, and the API on `example.com`. The API's cookie is then a third-party cookie
+for the admin page, and browsers block it. Login fails, and media loaded through `<img>`, thumbnails
+included, stops working. Bind a custom domain under the API's domain to the admin instead.
+
+The steps:
+
+1. Build the admin with `VITE_API_BASE_URL=https://api.example.com/api`. The API's routes sit under
+   `/api`, so the value includes it. It is a build-time variable; see
+   [Chapter 19: Admin Customization](19-admin-customization.md).
+2. Set `Struo:Cors:AllowedOrigins` on the API to the admin's origin, for example
+   `["https://admin.example.com"]`. Write each entry as an exact origin: scheme, host, and a port only
+   when it is not the default, with no trailing slash, path or wildcard. An entry like that matches
+   no origin. With the key set the cookie is always `Secure`, so both sides must run over HTTPS; see
+   [Chapter 4: Configuration Reference](04-configuration.md).
+3. Register the OIDC redirect URI on the API's domain: `https://api.example.com/signin-oidc-{id}`,
+   where `{id}` is the provider's id (or its `CallbackPath` when you set one). The admin's domain
+   needs no registration. Details are in [Chapter 16](16-authentication.md).
+4. The `returnUrl` of a single sign-in can be the admin's full URL, as long as its origin is in
+   `Struo:Cors:AllowedOrigins`. The SPA sends it that way by itself when the API is on another origin
+   than the page, and a failed sign-in returns to the admin's `/login`.
+
+A static host does not send the headers the nginx image sends, so you have to add them. The example
+below is a `_headers` file for Cloudflare Pages (other services have their own way). Put it in the
+build output's root (with Vite, a file in `public/` is copied there):
+
+```text
+# _headers
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.example.com; connect-src 'self' https://api.example.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/index.html
+  Cache-Control: no-cache
+```
+
+The values equal the image's nginx template, except that the CSP's `img-src` and `connect-src` add
+the API's origin. Replace `https://api.example.com` with your API's origin. If images also come from
+another origin (a CDN, the presigned URL of `Struo:Files:PresignedRedirect`), add it to `img-src`
+too. Send HSTS only once both domains are certain to use HTTPS only.
+
+The SPA uses client-side routing, so opening a URL such as `/collections/posts` directly must return
+`index.html`. On Cloudflare Pages that is what happens when the build output has no `404.html`; other
+services have their own single-page-app setting.
 
 ### Verifying both images together
 

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.19.0
+
+::: danger Breaking
+- With `Struo:Cors:AllowedOrigins` set, the session cookie is `SameSite=Lax` (it used to be
+  `SameSite=None`); `Secure` stays forced to `Always`. Only a deployment where the admin and the API
+  are sibling subdomains of one registrable domain (`admin.example.com` and `api.example.com`) keeps
+  working. A deployment on different registrable domains, which relied on `SameSite=None`, can no
+  longer sign in; that setup is not supported. See [Chapter 4](04-configuration.md) and
+  [Chapter 20](20-deployment.md).
+- `Oidc:ReturnUrlDefault` must be a site-relative path starting with `/`, or an absolute URL whose
+  origin is listed in `Struo:Cors:AllowedOrigins`. Any other value stops startup with an error naming
+  the key, whether or not CORS is configured.
+:::
+
+### Added
+
+- OIDC `returnUrl` and `Oidc:ReturnUrlDefault` accept an absolute URL when its origin is listed in
+  `Struo:Cors:AllowedOrigins`. An entry is matched the way the CORS policy matches it, so write exact
+  origins such as `https://admin.example.com`.
+- A failed or denied external sign-in returns to `/login?error=<code>` on the admin's origin: the
+  approved `returnUrl`'s origin, else an absolute `Oidc:ReturnUrlDefault`'s, else a relative
+  `/login`. Without CORS origins the redirect stays relative.
+- When the API base URL points at another origin than the page, the SPA sends its own full URL as the
+  SSO `returnUrl`.
+- [Chapter 20](20-deployment.md) has a section on hosting the admin SPA on a static host, with a
+  `_headers` example that mirrors the headers of the nginx image.
+
 ## 0.18.0 — 2026-10-30
 
 ::: danger Breaking

@@ -65,8 +65,10 @@ IP：超級管理員連續幫多個使用者重設密碼，扣的是自己的額
 
 沒有帶 `Authorization: Bearer …` 標頭的請求一律走 cookie：名稱 `struo.session`（`Auth:Cookie:Name` 可改），
 `HttpOnly`，`SameSite` 預設 `Lax`；安全政策跟隨 `Auth:Cookie:RequireSecure`，留空時除了 Development
-之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策與 `SameSite` 都會改成 `Always`／`None`，因為瀏覽器只在 `Secure` 的前提下
-接受 `SameSite=None`，代表跨來源部署雙邊都得跑 HTTPS。
+之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策就強制為 `Always`，後台與 API 雙邊都得跑 HTTPS。`SameSite`
+維持 `Lax`，所以只有後台與 API 是同一個主網域底下的兄弟子網域（`admin.example.com` 與 `api.example.com`）
+時才行得通；不同主網域不支援，瀏覽器會把 cookie 當第三方 cookie 擋掉。OIDC 的 correlation 與 nonce cookie 是另外
+的，它們維持 `SameSite=None; Secure`，因為提供者的 `form_post` 回呼是跨站請求。
 
 cookie 本身只是一把不透明的鑰匙——背後真正的工作階段狀態存在一個分散式快取裡：設定了
 `Redis:ConnectionString` 就用 Redis，沒設就退回行程內的快取，實際差別是重開一次行程就會遺失所有
@@ -328,7 +330,8 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 單一 tenant 的 authority，或提供者停用時，都不受影響。
 
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
-這個參數從網址列移除。代碼是固定的一組，絕不帶例外訊息：
+這個參數從網址列移除。設了 CORS 來源時，這個頁面在已核准的 `returnUrl` 的來源上；沒有的話，在絕對的
+`Oidc:ReturnUrlDefault` 的來源上；再沒有就是相對的 `/login`。代碼是固定的一組，絕不帶例外訊息：
 
 | 代碼 | 原因 |
 |---|---|
@@ -340,8 +343,10 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 | `external_login_TenantNotAllowed` | tenant 不是該提供者的 `AllowedTenantId` |
 | `external_login_Inactive` | 對應到的本機帳號已停用 |
 
-其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`，會先淨化成站內
-路徑才拿去挑戰，留空則退回 `Oidc:ReturnUrlDefault`。
+其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
+路徑，或是來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時，才會拿去挑戰；其他任何值或留空，都退回
+`Oidc:ReturnUrlDefault`。API 的 base URL 指向與頁面不同的來源時，SPA 會把自己的完整網址當 `returnUrl` 送出。
+登出只回 JSON，不做轉址。
 
 ## 接下來
 

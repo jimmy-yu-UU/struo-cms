@@ -335,8 +335,10 @@ falling back to the relative path `/api` when it isn't set. It's a Vite build-ti
 changing it needs a dev-server restart or a rebuild, and a plain page refresh doesn't pick it up.
 
 This pattern also needs the backend's cooperation: `Struo:Cors:AllowedOrigins` has to list the SPA's
-origin. Setting it changes the session-cookie and HTTPS requirements — both sides then have to run
-over HTTPS — see [Chapter 4](04-configuration.md).
+origin. Setting it forces a `Secure` session cookie, so both sides have to run over HTTPS, and only
+an SPA and an API that are sibling subdomains of one registrable domain are supported; see
+[Chapter 4](04-configuration.md). The full setup for a static host, with the response headers it
+needs, is in "Hosting the admin SPA on a static host" in [Chapter 20](20-deployment.md).
 
 ## What's next
 
