@@ -36,7 +36,7 @@ public static class UniqueViolation
         SqlException sql => sql.Number is SqlServerUniqueConstraint or SqlServerUniqueIndex,
         MySqlException mysql => mysql.Number == MySqlDuplicateEntry,
         OracleException oracle => oracle.Number == OracleUniqueConstraint,
-        // Npgsql's PostgresException overrides SqlState; no direct Npgsql reference is needed.
+        // Npgsql's PostgresException overrides SqlState, so the base DbException matches it.
         DbException db => db.SqlState == PostgresUniqueViolation,
         _ => false,
     };

@@ -4,8 +4,9 @@
 
 ::: danger 破壞性變更
 - PostgreSQL 驅動程式升級：Npgsql 現在直接引用 10.0.3，以前是經由 SqlSugarCore 帶進來的 5.0.18。
-  `SSL Mode=Require` 只加密，不再驗證伺服器憑證，`Trust Server Certificate` 也沒有作用。靠 `Require`
-  來驗證憑證的部署，要改成 `SSL Mode=VerifyFull`；伺服器的憑證來自私有 CA 時，再加上
+  `SSL Mode=Require` 只加密，不再驗證伺服器憑證。`Trust Server Certificate` 也沒有作用。
+  在 `Require` 底下加 `Root Certificate`，也不會恢復驗證。靠 `Require` 來驗證憑證的部署，要改成
+  `SSL Mode=VerifyFull`；伺服器的憑證來自私有 CA 或託管服務自己的 CA 時，再加上
   `Root Certificate=/path/to/ca.crt`。見[第 20 章](20-deployment.md)。
 :::
 

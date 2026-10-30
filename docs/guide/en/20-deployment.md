@@ -56,16 +56,16 @@ warning does not stop startup, and no other backend runs the check.
 ### The database connection: TLS, pool size, secrets
 
 On PostgreSQL, set `SSL Mode=VerifyFull` in production: the driver encrypts the connection and
-validates the server's certificate. When the certificate comes from a private CA or from the hosting
-provider's own CA, add `Root Certificate=/path/to/ca.crt`.
+validates the server's certificate and host name. When the certificate comes from a private CA or
+from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`.
 
 `SSL Mode=Require` only encrypts. It does not validate the certificate, so it does not stop a
-man-in-the-middle. `SSL Mode=Disable` is plaintext; use it only on a private network, and only when
-the server accepts non-TLS connections.
+man-in-the-middle. Setting `Root Certificate` does not change that. `SSL Mode=Disable` is
+plaintext; use it only on a private network, and only when the server accepts non-TLS connections.
 
-Without Kerberos, set `GSS Encryption Mode=Disable`. Otherwise the driver tries GSS encryption first
-on every new physical connection, which adds latency, and the migration lock opens unpooled
-connections that pay it every time.
+Without Kerberos, `GSS Encryption Mode=Disable` is recommended. Otherwise the driver tries GSS
+encryption first on every new physical connection, which adds latency. The migration lock's
+connection is unpooled, so each `migrate` run pays it again.
 
 For the other backends, use the driver's own TLS options in the connection string.
 

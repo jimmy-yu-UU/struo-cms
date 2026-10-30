@@ -45,14 +45,14 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 
 ### 資料庫連線：TLS、連線池大小、密碼
 
-PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密連線，並驗證伺服器的憑證。伺服器的憑證
-來自私有 CA 或託管服務自己的 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
+PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密連線，並驗證伺服器的憑證與主機名稱。
+伺服器的憑證來自私有 CA 或託管服務自己的 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
 
-`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人。`SSL Mode=Disable` 是明文，只在私有網路裡、
-而且伺服器接受非 TLS 連線時才用。
+`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人；設了 `Root Certificate` 也一樣不驗證。
+`SSL Mode=Disable` 是明文，只在私有網路裡、而且伺服器接受非 TLS 連線時才用。
 
 沒有使用 Kerberos 的話，建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式每開一條新的實體連線，
-都會先試 GSS 加密，多花一段延遲；migration 鎖會開不經連線池的連線，每次都吃到這段延遲。
+都會先試 GSS 加密，多花一段延遲。migration 鎖用的是不經連線池的連線，每次 `migrate` 都會再付一次這段延遲。
 
 其他後端就用該驅動程式自己的 TLS 選項寫在連線字串裡。
 
