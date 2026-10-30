@@ -116,6 +116,24 @@ public sealed class ItemServiceMaxLengthTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_reports_the_missing_required_translation_before_an_overlong_translatable_field()
+    {
+        var body = JsonBody(new
+        {
+            translations = new Dictionary<string, object>
+            {
+                // title (required) is absent while internalSlug (translatable) exceeds its limit.
+                ["en"] = new { internalSlug = new string('x', 256) }
+            }
+        });
+        var act = () => _svc.CreateAsync("fxArticle", body);
+        var thrown = await act.Should().ThrowAsync<QueryException>();
+        thrown.Which.Message.Should().Be("Required translation field 'title' is missing for locale 'en'.");
+        thrown.Which.Details.Should().ContainSingle()
+            .Which.Message.Should().Be("Required translation field 'title' is missing for locale 'en'.");
+    }
+
+    [Fact]
     public async Task Create_accepts_translatable_string_exactly_at_MaxLength()
     {
         var body = JsonBody(new
