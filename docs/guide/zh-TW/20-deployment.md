@@ -48,7 +48,7 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密連線，並驗證伺服器的憑證與主機名稱。
 伺服器的憑證來自私有 CA 或託管服務自己的 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
 
-`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人。加了 `Root Certificate` 也不會改變這一點。
+`SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人。就算加上 `Root Certificate`，也還是不驗證。
 `SSL Mode=Disable` 是明文，只在私有網路裡、而且伺服器接受非 TLS 連線時才用。
 
 沒設 `SSL Mode` 時，預設是 `Prefer`：伺服器提供 TLS 就加密連線，但不驗證憑證；伺服器不提供，就退回明文。
@@ -73,9 +73,10 @@ PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密�
 範本不附 bootstrap 密碼，也不會自動產生。建立帳號一定要有密碼，這個密碼要符合 `Auth:Password`，
 也不能是 `admin`。
 
-seed 要執行時，密碼若是空的或太弱，`migrate`、`migrate:preview` 與 `Database:MigrateOnStartup`
-啟動都會拒絕，錯誤訊息點名 `Auth__BootstrapAdmin__Password`。已經植入過的資料庫不會被拒絕，
-帳號建立之後可以把這個值移除。
+seed 要執行、而且 `Auth:BootstrapAdmin:Email` 有設時，密碼若是空的或太弱，`migrate`、
+`migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
+`Auth__BootstrapAdmin__Password`。把 email 清空就不植入管理員帳號，也就不檢查密碼。已經植入過的資料庫
+不會被拒絕，帳號建立之後可以把這個值移除。
 
 預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
@@ -109,7 +110,7 @@ API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出�
 每 IP 登入限流就把所有用戶端放進同一個桶。
 
 鏈上的每個代理都要受信任：`KnownProxies` 或 `KnownNetworks` 要同時涵蓋負載平衡器與 nginx 容器的位址。
-否則 API 讀到第一個不受信任的位址，就停止往前讀。
+否則 API 讀到第一個不受信任的位址就停下，把那個位址當成用戶端。
 
 映像的 nginx 只送一個 `X-Forwarded-Proto`。收到代理送來的值就原樣帶過去，沒收到才用自己連線的 scheme。
 前面有終結 TLS 的代理時這樣正好，該代理應該覆寫收到的值而不是附加。這個 nginx 本身是用戶端直連的邊緣

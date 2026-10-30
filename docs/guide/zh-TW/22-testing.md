@@ -64,7 +64,7 @@
 `LiveRepositoryTests` 這類測試會在同一台伺服器上自己建資料庫，結束時刪掉。
 
 PostgreSQL 的測試連線建議加上 `GSS Encryption Mode=Disable`。不加的話，每條新連線都會先試一次 GSS，
-連線一多，和時間有關的測試（例如 migration 鎖）就可能逾時。
+連線一多，等待時間有上限的測試（例如 migration 鎖的測試）就可能逾時。
 
 `PgTestConnectionString.DisablePooling` 另外把 Npgsql 的連線池關掉，隔開測試主機底下看過的
 socket 中斷；那是測試主機上量到的現象，不是正式環境也有這個風險的證據。

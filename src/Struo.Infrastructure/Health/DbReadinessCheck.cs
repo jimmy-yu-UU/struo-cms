@@ -23,7 +23,7 @@ public sealed class DbReadinessCheck : IHealthCheck
     {
     }
 
-    // onProbeStarted receives the probe task as soon as it is scheduled, so a test can watch its state.
+    // onProbeStarted receives the probe task after its fault observer is attached, so a test can watch it.
     internal DbReadinessCheck(
         ISqlSugarClient db, IOptions<DatabaseOptions> options, Func<bool>? probe,
         Action<Task<bool>>? onProbeStarted = null)
