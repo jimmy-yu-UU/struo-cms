@@ -18,6 +18,12 @@ export function snapshotModel(model: FormModel): string {
   })
 }
 
+// The translations as of the baseline snapshot: what the form held at load or at the last save.
+export function baselineTranslations(baseline: string): Record<string, Record<string, unknown>> {
+  const parsed = JSON.parse(baseline) as { translations?: Record<string, Record<string, unknown>> }
+  return parsed.translations ?? {}
+}
+
 export function isDirty(baseline: string, model: FormModel): boolean {
   return snapshotModel(model) !== baseline
 }

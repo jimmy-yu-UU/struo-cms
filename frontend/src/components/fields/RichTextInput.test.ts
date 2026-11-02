@@ -2273,3 +2273,29 @@ describe('RichTextInput resize handle positioning contract', () => {
     }
   })
 })
+
+describe('RichTextInput empty value', () => {
+  it('emits null when the editor is cleared', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    const vm = w.vm as unknown as { editor: { commands: { clearContent: (emit?: boolean) => void } } }
+    vm.editor.commands.clearContent(true)
+    await flushPromises()
+    expect(w.emitted('update:modelValue')!.at(-1)![0]).toBeNull()
+  })
+
+  it.each(['', '<p></p>'])('emits nothing when mounted with %j', async (value) => {
+    const w = mount(RichTextInput, { props: { modelValue: value }, global: globalOpts })
+    await flushPromises()
+    await waitForEditorCreate()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('emits nothing when the model value is reset to empty from outside', async () => {
+    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
+    await flushPromises()
+    await w.setProps({ modelValue: '' })
+    await flushPromises()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+})

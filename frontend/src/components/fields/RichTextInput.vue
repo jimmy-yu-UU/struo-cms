@@ -43,7 +43,7 @@ import { toFileRows } from '../../lib/toFileRow'
 defineOptions({ name: 'RichTextInput' })
 
 const props = defineProps<{ modelValue: string; disabled?: boolean }>()
-const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
+const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
 
 const { t, locale } = useI18n()
 const langStore = useLanguageStore()
@@ -186,8 +186,9 @@ let suppressEmit = false
 
 function emitNormalized(): void {
   if (suppressEmit) return
-  const html = editor.value?.getHTML() ?? ''
-  emit('update:modelValue', normalizeForStorage(html))
+  const ed = editor.value
+  // An empty editor holds `<p></p>`; the model gets null so emptiness is one value everywhere.
+  emit('update:modelValue', !ed || ed.isEmpty ? null : normalizeForStorage(ed.getHTML()))
 }
 
 function insertImage(id: string, alt = ''): void {
@@ -292,9 +293,10 @@ watch(locale, () => {
 
 // Keep the editor in sync with external model changes without clobbering the cursor.
 watch(() => props.modelValue, (val) => {
-  const current = normalizeForStorage(editor.value?.getHTML() ?? '')
-  if (editor.value && (val || '') !== current) {
-    editor.value.commands.setContent(absolutizeImageSrc(val || ''), { emitUpdate: false })
+  const ed = editor.value
+  const current = !ed || ed.isEmpty ? '' : normalizeForStorage(ed.getHTML())
+  if (ed && (val || '') !== current) {
+    ed.commands.setContent(absolutizeImageSrc(val || ''), { emitUpdate: false })
   }
 })
 // Same suppression as onCreate above, and required for the same reason: setEditable() emits

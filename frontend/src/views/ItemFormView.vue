@@ -25,7 +25,7 @@ import { validateItem } from '../lib/validateItem'
 import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
-import { snapshotModel, isDirty, unsavedConfirm } from '../lib/formDirty'
+import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
@@ -165,7 +165,8 @@ async function onSubmit(): Promise<void> {
   serverError.value = ''
   try {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update',
-      { resolveCollection, canWriteJunction: canWriteJunctionFor })
+      { resolveCollection, canWriteJunction: canWriteJunctionFor,
+        baselineTranslations: baselineTranslations(baseline.value) })
     // Capture the created item so a role-create can PUT its buffered grants against the
     // freshly-minted id (created.id) below.
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined

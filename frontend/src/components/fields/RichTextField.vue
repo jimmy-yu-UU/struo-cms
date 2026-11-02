@@ -6,5 +6,5 @@ defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 </script>
 <template>
   <RichTextInput :model-value="((modelValue as string) ?? '')" :disabled="disabled"
-    @update:model-value="(v: string) => $emit('update:modelValue', v)" />
+    @update:model-value="(v: string | null) => $emit('update:modelValue', v)" />
 </template>

@@ -5,6 +5,7 @@ import { relationInputKind } from './relationInputKind'
 import { getFieldType } from './fieldTypes/registry'
 import { isEmpty } from './fieldTypes/types'
 import { localeIsSent } from './translationErrors'
+import { anyHasContent } from './hasContent'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
 
 function camel(s: string): string {
@@ -14,6 +15,9 @@ function camel(s: string): string {
 export type BuildItemPayloadOptions = {
   resolveCollection?: ResolveCollection
   canWriteJunction?: (rel: RelationMeta) => boolean
+  // Translations as of the form's baseline (see formDirty.baselineTranslations). On update, a
+  // non-default locale with content there and none now is sent as null so the server deletes it.
+  baselineTranslations?: Record<string, Record<string, unknown>>
 }
 
 // Mixed-array write shape (chapter 12, `docs/guide/en/12-rest-conventions.md`): an object element
@@ -52,15 +56,19 @@ export function buildItemPayload(
   }
 
   const defaultCode = locales.find((l) => l.isDefault)?.code
-  const translations: Record<string, Record<string, unknown>> = {}
+  const translations: Record<string, Record<string, unknown> | null> = {}
   for (const loc of locales) {
     const values = model.translations[loc.code] ?? {}
     const hasContent = localeIsSent(translatable, values)
     const isDefault = loc.code === defaultCode
     // create: always send default locale; else only when it has content.
-    // update: send only locales the user actually filled.
+    // update: send locales the user filled, and null for a non-default locale the user emptied.
     if (mode === 'create' && !isDefault && !hasContent) continue
-    if (mode === 'update' && !hasContent) continue
+    if (mode === 'update' && !hasContent) {
+      const hadContent = anyHasContent(translatable, options.baselineTranslations?.[loc.code] ?? {})
+      if (hadContent && !isDefault) translations[loc.code] = null
+      continue
+    }
     const entry: Record<string, unknown> = {}
     for (const f of translatable) entry[f.name] = getFieldType(f.interface).serialize(values[f.name], f)
     translations[loc.code] = entry
