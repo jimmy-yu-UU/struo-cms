@@ -5,6 +5,10 @@ namespace Struo.Application.Security;
 /// behind <see cref="IUserCredentialStore"/>.</summary>
 public sealed record UserProfile(Guid Id, string Email, string? Name);
 
+/// <summary>Issuance and last-use times of a user's access token, both UTC and both null when the user
+/// has no token. The token hash itself is never part of this record.</summary>
+public sealed record AccessTokenInfo(bool HasToken, DateTime? CreatedAt, DateTime? LastUsedAt);
+
 /// <summary>
 /// User-account administration: creating a user and mutating credential columns. Distinct from
 /// <see cref="IUserCredentialStore"/>, which is the read path the AUTHENTICATION pipeline uses
@@ -31,6 +35,11 @@ public interface IUserAccountStore
 
     /// <summary>Email/name for the signed-in-user projection. Null when the id is unknown.</summary>
     Task<UserProfile?> FindProfileAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Whether the user holds a token and when it was issued and last used. The last-used time
+    /// is written at most once a minute, so it can trail the latest request. Null when the id is
+    /// unknown.</summary>
+    Task<AccessTokenInfo?> FindAccessTokenInfoAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Replaces the password hash. Returns false when the id matched no row (→ 404).</summary>
     Task<bool> SetPasswordAsync(

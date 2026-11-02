@@ -28,6 +28,26 @@ public sealed class SqlSugarUserAccountStore(ISqlSugarClient db) : IUserAccountS
         return u is null ? null : new UserProfile(u.Id, u.Email, u.Name);
     }
 
+    public async Task<AccessTokenInfo?> FindAccessTokenInfoAsync(Guid id, CancellationToken ct = default)
+    {
+        // Projected to a has-token flag plus the two timestamps, so neither the password hash nor the
+        // token hash enters this path.
+        var u = await db.Queryable<User>().Where(x => x.Id == id)
+            .Select(x => new
+            {
+                HasToken = !SqlFunc.IsNullOrEmpty(x.AccessToken),
+                x.AccessTokenCreatedAt,
+                x.AccessTokenLastUsedAt,
+            })
+            .FirstAsync(ct);
+        if (u is null) return null;
+        if (!u.HasToken) return new AccessTokenInfo(false, null, null);
+        return new AccessTokenInfo(true, AsUtc(u.AccessTokenCreatedAt), AsUtc(u.AccessTokenLastUsedAt));
+    }
+
+    private static DateTime? AsUtc(DateTime? value) =>
+        value is { } v ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : null;
+
     public Task<bool> SetPasswordAsync(
         Guid id, string passwordHash, Guid? actor, DateTime nowUtc, CancellationToken ct = default) =>
         ApplyAsync(id, actor, nowUtc, u => new User { Password = passwordHash }, ct);

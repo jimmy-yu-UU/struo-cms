@@ -119,6 +119,21 @@ public sealed class UsersController(
         return Ok(new { token }); // shown once
     }
 
+    /// <summary>
+    /// When the user's token was issued and last used. The last-used time is written at most once a
+    /// minute by the bearer handler, so it can trail the latest request. The token hash is never
+    /// returned.
+    /// </summary>
+    [HttpGet("{id:guid}/access-token")]
+    public async Task<IActionResult> GetTokenInfo(Guid id, CancellationToken ct)
+    {
+        if (RequireAdmin() is { } denied) return denied;
+        var info = await accounts.FindAccessTokenInfoAsync(id, ct);
+        if (info is null)
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
+        return Ok(new { hasToken = info.HasToken, createdAt = info.CreatedAt, lastUsedAt = info.LastUsedAt });
+    }
+
     [HttpDelete("{id:guid}/access-token")]
     public async Task<IActionResult> RevokeToken(Guid id, CancellationToken ct)
     {

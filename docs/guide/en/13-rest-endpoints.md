@@ -118,6 +118,7 @@ Delete and restore both need a `file` delete grant, and both return `204` or `40
 | `POST api/users` | Super-admin | Create a user, returns `201` |
 | `PUT api/users/{id}/password` | Super-admin or the user themself | Change password; self-service proves the current one |
 | `POST api/users/{id}/access-token` | Super-admin | Issue an access token, shown only once |
+| `GET api/users/{id}/access-token` | Super-admin | Read the token's issue and last-use times |
 | `DELETE api/users/{id}/access-token` | Super-admin | Revoke the access token |
 | `GET api/users/{id}/effective-permissions` | Super-admin | Preview effective permissions, supports `?roles=` |
 
