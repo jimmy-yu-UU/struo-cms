@@ -299,6 +299,7 @@ export default {
     revertConfirmMessage: '將把此項目還原至版本 {n},並覆蓋目前尚未儲存的編輯。此動作會新增一筆還原紀錄。',
     reverted: '已還原至版本 {n}',
     revertFailed: '還原失敗',
+    revertConflict: '還原失敗：此項目已被他人變更。請重新載入最新版本後，再決定是否還原。',
     detailError: '無法載入此版快照',
     selectHint: '選擇左側的版本以檢視快照',
   },

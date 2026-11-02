@@ -102,6 +102,8 @@ const submitting = ref(false)
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
 const notFound = ref(false)
 const conflict = ref(false)
+// A revert hit 409: the form and model.version stay as loaded; the only offered action is a reload.
+const revertConflict = ref(false)
 const showHistory = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
@@ -135,6 +137,7 @@ async function init(): Promise<void> {
   // Clear stale 409-recovery state so a re-entrant init (route param change) never carries item A's
   // cached server copy or conflict banner into item B.
   conflict.value = false
+  revertConflict.value = false
   latestFromServer = null
   await Promise.all([schema.load(), langStore.load()])
   if (!meta.value) { loading.value = false; return }
@@ -299,12 +302,17 @@ async function onReverted(): Promise<void> {
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
     // The reverted copy is the committed state: a pending conflict banner and its cached server copy are void.
     conflict.value = false
+    revertConflict.value = false
     latestFromServer = null
     errors.value = {}
     serverError.value = ''
   } catch (e) {
     serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
   }
+}
+
+function onRevertConflict(): void {
+  revertConflict.value = true
 }
 
 async function onDelete(): Promise<void> {
@@ -368,7 +376,7 @@ onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 onMounted(init)
-defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, showHistory, model, errors, serverError, notFound, loading, conflict, guardLeave })
+defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onRevertConflict, revertConflict, showHistory, model, errors, serverError, notFound, loading, conflict, guardLeave })
 </script>
 
 <template>
@@ -402,6 +410,15 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
       >
         <span class="conflict-text flex-1">{{ t('itemForm.conflictText') }}</span>
         <Button type="button" variant="outline" size="sm" @click="reloadLatest">{{ t('itemForm.reloadLatest') }}</Button>
+      </div>
+
+      <div
+        v-if="revertConflict"
+        class="revert-conflict-banner mb-4 flex items-center gap-4 rounded-md border border-warning bg-warning/10 px-4 py-3 text-foreground"
+        role="alert"
+      >
+        <span class="flex-1">{{ t('revisions.revertConflict') }}</span>
+        <Button type="button" variant="outline" size="sm" @click="onReverted">{{ t('itemForm.reloadLatest') }}</Button>
       </div>
 
       <ItemForm
@@ -446,7 +463,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, sho
         :can-revert="canWrite"
         :version="model.version"
         @reverted="onReverted"
-        @conflict="recoverFromConflict"
+        @conflict="onRevertConflict"
       />
     </template>
   </section>

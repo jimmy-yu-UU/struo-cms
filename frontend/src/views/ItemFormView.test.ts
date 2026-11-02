@@ -80,7 +80,8 @@ const i18n = createI18n({
     translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
   },
-    revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}' },
+    revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}',
+      revertConflict: 'Revert failed: this item was changed by someone else.' },
     confirm: {
       unsavedHeader: 'Unsaved changes',
       unsavedMessage: 'You have unsaved changes. Leave this page and discard them?',
@@ -877,21 +878,64 @@ describe('ItemFormView', () => {
 
   // ---- revert carries the loaded version ------------------------------------
 
-  it('passes the loaded version to the history drawer and recovers from a revert conflict', async () => {
+  it('passes the loaded version to the history drawer', async () => {
     routeParams = { name: 'article', id: '5' }
     setupTwoLocales()
-    const get = vi.spyOn(itemsApi, 'get')
+    vi.spyOn(itemsApi, 'get')
       .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 3 })
     const w = mountView()
     await w.vm.init()
     await flushPromises()
-    const drawer = w.findComponent({ name: 'RevisionHistoryDrawer' })
-    expect(drawer.attributes('version')).toBe('3')
-    get.mockResolvedValueOnce({ id: '5', status: 'x', translations: twoLocales, version: 8 })
-    await drawer.vm.$emit('conflict')
-    await flushPromises()
-    expect((w.vm as any).conflict).toBe(true)
-    expect((w.vm as any).model.version).toBe(8)
+    expect(w.findComponent({ name: 'RevisionHistoryDrawer' }).attributes('version')).toBe('3')
+  })
+
+  describe('revert 409', () => {
+    async function mountWithRevertConflict() {
+      routeParams = { name: 'article', id: '5' }
+      setupTwoLocales()
+      const get = vi.spyOn(itemsApi, 'get')
+        .mockResolvedValue({ id: '5', status: 'x', translations: twoLocales, version: 3 })
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      ;(w.vm as any).model.shared.status = 'my-edit'
+      const getCalls = get.mock.calls.length
+      await w.findComponent({ name: 'RevisionHistoryDrawer' }).vm.$emit('conflict')
+      await flushPromises()
+      return { w, get, getCalls }
+    }
+
+    it('leaves version and form untouched and shows only the dedicated notice', async () => {
+      const { w, get, getCalls } = await mountWithRevertConflict()
+      expect((w.vm as any).model.version).toBe(3)
+      expect((w.vm as any).model.shared.status).toBe('my-edit')
+      expect((w.vm as any).conflict).toBe(false)
+      expect(get.mock.calls).toHaveLength(getCalls)
+      expect(w.get('.revert-conflict-banner').text()).toContain('Revert failed')
+      expect(w.find('.conflict-banner').exists()).toBe(false)
+      expect(w.text()).not.toContain('overwrite')
+    })
+
+    it('Reload loads the server copy and clears the notice', async () => {
+      const { w, get } = await mountWithRevertConflict()
+      get.mockResolvedValueOnce({ id: '5', status: 'server-copy', translations: twoLocales, version: 9 })
+      await w.get('.revert-conflict-banner').findComponent({ name: 'Button' }).vm.$emit('click')
+      await flushPromises()
+      expect((w.vm as any).model.shared.status).toBe('server-copy')
+      expect((w.vm as any).model.version).toBe(9)
+      expect(w.find('.revert-conflict-banner').exists()).toBe(false)
+    })
+
+    it('saving afterwards still sends the stale version and hits the normal save-conflict flow', async () => {
+      const { w, get } = await mountWithRevertConflict()
+      const upd = vi.spyOn(itemsApi, 'update')
+        .mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+      get.mockResolvedValueOnce({ id: '5', status: 'x', translations: twoLocales, version: 8 })
+      await (w.vm as any).onSubmit()
+      expect(upd).toHaveBeenCalledWith('article', '5', expect.objectContaining({ version: 3 }))
+      expect((w.vm as any).conflict).toBe(true)
+      expect((w.vm as any).model.version).toBe(8)
+    })
   })
 
   it('a successful revert after a conflict clears the banner and the cached server copy', async () => {
