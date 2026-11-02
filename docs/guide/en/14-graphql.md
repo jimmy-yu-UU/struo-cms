@@ -350,6 +350,9 @@ out keeps its value, and an explicit `null` clears it. A required translation th
 back with `extensions.code` `BAD_USER_INPUT` and `extensions.details`, a list of
 `{ field, message, locale }`.
 
+The input has no way to send `null` for a whole locale, so deleting a locale's translation is a REST
+operation ([Chapter 7](07-i18n.md)); `revert{X}` removes the locales its snapshot lacks, as REST does.
+
 A translatable own field never appears on the create or update input directly — it's only
 reachable through this typed `translations` input; create still requires one translation for the
 default locale.

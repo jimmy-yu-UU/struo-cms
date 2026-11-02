@@ -174,6 +174,11 @@ A revert restores only what the snapshot captured at the time — its own fields
 and every locale's full translation. System-managed fields and the item's soft-delete state are
 not part of the snapshot, so a revert never touches them. A revert never changes any other item.
 
+A locale the item has now but the snapshot lacks did not exist at that version, so the revert
+deletes it. This covers the enabled non-default locales; the default locale and a disabled
+locale's translation are left as they are. The delete goes through the `null` locale value that
+[Chapter 7](07-i18n.md) describes.
+
 Because a revert goes through exactly the same path as an ordinary update, reverting an item that
 is currently in the trash gets a plain 404 — the update path's read of the current row already
 excludes trashed data. The right order is restore first, then revert; the reverse does not work.

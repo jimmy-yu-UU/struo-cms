@@ -6,6 +6,13 @@
 
 - CI 新增 `e2e` job，起 Compose stack 並對它跑 Playwright `core` 專案；`sample` 專案不在 CI 裡跑。
   規格可用 `E2E_BASE_URL` 指向已部署的 stack。見[第 22 章](22-testing.md)。
+- 項目更新時，`translations` 裡某個 locale 的值是 `null`，就會刪掉該 locale 的整份翻譯。預設語言
+  不能刪，會得到 `400`；沒有已存列的 locale 會略過。見[第 7 章](07-i18n.md)。
+
+### 變更
+
+- 還原會刪掉項目現在有、但快照裡沒有的已啟用非預設 locale，翻譯因此跟快照一致。見
+  [第 9 章](09-revisions-and-trash.md)。
 
 ## 0.20.1 — 2026-11-02
 

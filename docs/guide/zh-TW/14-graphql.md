@@ -285,6 +285,9 @@ resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物
 翻譯時，錯誤的 `extensions.code` 是 `BAD_USER_INPUT`，並帶 `extensions.details`，是
 `{ field, message, locale }` 的清單。
 
+這個輸入沒有辦法對整個 locale 送 `null`，所以刪除某個 locale 的翻譯是 REST 才有的操作
+（[第 7 章](07-i18n.md)）；`revert{X}` 會移除快照裡沒有的 locale，跟 REST 一樣。
+
 改一篇文章 `en` 翻譯的標題、其餘欄位不動，`updateArticle` 回傳的 `translations` 陣列裡只有 `title`
 換了新值，`zh-TW` 那筆完全沒被動到。
 

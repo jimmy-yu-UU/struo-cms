@@ -7,6 +7,14 @@
 - CI has a new `e2e` job that starts the Compose stack and runs the Playwright `core` project against
   it; the `sample` project is not run by CI. The specs take `E2E_BASE_URL` to target an already
   deployed stack. See [Chapter 22](22-testing.md).
+- An item update deletes a whole locale's translation when the locale's value in `translations` is
+  `null`. The default locale cannot be deleted and fails with a `400`; a locale with no stored row
+  is skipped. See [Chapter 7](07-i18n.md).
+
+### Changed
+
+- A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
+  translations match the snapshot. See [Chapter 9](09-revisions-and-trash.md).
 
 ## 0.20.1 — 2026-11-02
 
