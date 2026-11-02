@@ -195,12 +195,17 @@ setup with no content collections opted in; `sample` (`pnpm e2e:sample`) runs `e
 which needs the sample collections opted in first. The config adds the `sample` project only while
 `e2e/sample/` exists. `pnpm e2e:all` runs both.
 
-The `webServer` block only starts the admin SPA's dev server (`pnpm dev`,
+With `E2E_BASE_URL` unset, the `webServer` block starts the admin SPA's dev server (`pnpm dev`,
 `reuseExistingServer: true`) — it doesn't start the API or the database for you. Both projects
 assume an API and its backing database are already running, reachable at the configured proxy
 target.
 
-The config sets `workers: 1`, and `use.baseURL` is `http://localhost:5173`; `core`'s `testDir` is
+Setting `E2E_BASE_URL` targets an already-deployed stack instead: no dev server is started, and
+`E2E_API` must be on the same host so the auth cookie is shared. `frontend/e2e/README.md` has the
+details.
+
+The config sets `workers: 1`, and `use.baseURL` defaults to `http://localhost:5173` (it is
+`E2E_BASE_URL` when that is set); `core`'s `testDir` is
 `./e2e`, whose scope already covers `e2e/sample/`, so it relies on
 `testIgnore: '**/e2e/sample/**'` to keep the sample specs out; `sample`'s `testDir` points
 straight at `./e2e/sample` and has nothing left to exclude. With `e2e/sample/` deleted, only
@@ -265,8 +270,8 @@ fails.
 
 ## What CI runs
 
-`.github/workflows/ci.yml` defines seven jobs. `backend`, `frontend`, `docs`, `docker`, and `e2e` all run
-on a push to `main`, on every pull request, and on manual dispatch; `sonar-backend` and
+`.github/workflows/ci.yml` defines seven jobs. `backend`, `frontend`, `docs`, `docker`, and `e2e`
+all run on a push to `main`, on every pull request, and on manual dispatch; `sonar-backend` and
 `sonar-frontend` trigger on the same events but add one more condition. `backend` and `docker`
 run at the repository root; `frontend` and `docs` each run inside their own subdirectory.
 
@@ -319,9 +324,9 @@ to completion just the same.
 `e2e`: installs the frontend dependencies and Playwright's Chromium, then starts the Compose
 stack with `docker compose up --wait` under a random `STRUO_ADMIN_PASSWORD` and runs `pnpm e2e`,
 the `core` project, against it with the list and HTML reporters and a trace kept for every failed
-test. `E2E_BASE_URL` and `E2E_API` are both `http://localhost:8080`, the
-admin container, which proxies `/api` to the API, so the browser and the specs' API calls share
-one origin and one cookie jar; `E2E_PASSWORD` is that same random password.
+test. `E2E_BASE_URL` and `E2E_API` are both `http://localhost:8080`, the admin container, which
+proxies `/api` to the API, so the browser and the specs' API calls share one origin and one cookie
+jar; `E2E_PASSWORD` is that same random password.
 
 The stack always ends with `docker compose down --volumes`, and `docker compose ps` and
 `docker compose logs` are printed first if the run failed. On a failure, `playwright-report/`

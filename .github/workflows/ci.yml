@@ -254,8 +254,8 @@ jobs:
   #
   # The job is independent of `docker`; it builds its own images through Compose. It needs
   # no secret: the admin password is random per run and only the specs and the stack see it.
-  # The CI step passes `--reporter=list,html` and `--trace=retain-on-failure`, so a failed run leaves
-  # an HTML report and a trace per failed test; they are uploaded only when the run fails.
+  # The run step passes `--reporter=list,html` and `--trace=retain-on-failure`, so a failed run
+  # leaves an HTML report and a trace per failed test; they are uploaded only when the run fails.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25

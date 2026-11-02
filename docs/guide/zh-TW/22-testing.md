@@ -159,11 +159,14 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 下跑；`sample`（`pnpm e2e:sample`）跑 `e2e/sample/**`，需要先把範例集合啟用。設定檔只在
 `e2e/sample/` 存在時才加入 `sample` 專案。`pnpm e2e:all` 兩個都跑。
 
-`webServer` 這個區塊只會啟動前端的 dev server（`pnpm dev`，`reuseExistingServer: true`），
-不會替你啟動 API 或資料庫：兩個專案都假設有一份正在跑的 API 跟它背後的資料庫，接在設定好的
-proxy 目標上。
+沒設 `E2E_BASE_URL` 時，`webServer` 這個區塊只會啟動前端的 dev server（`pnpm dev`，
+`reuseExistingServer: true`），不會替你啟動 API 或資料庫：兩個專案都假設有一份正在跑的 API
+跟它背後的資料庫，接在設定好的 proxy 目標上。
 
-設定裡 `workers: 1`，`use.baseURL` 是 `http://localhost:5173`；`core` 的 `testDir` 是
+設了 `E2E_BASE_URL` 就改成指向已部署的 stack：不啟動 dev server，`E2E_API` 必須在同一個主機，
+auth cookie 才會共用。細節見 `frontend/e2e/README.md`。
+
+設定裡 `workers: 1`，`use.baseURL` 預設是 `http://localhost:5173`（設了 `E2E_BASE_URL` 就是它）；`core` 的 `testDir` 是
 `./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠 `testIgnore: '**/e2e/sample/**'` 把範例規
 格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後
 只剩 `core`。資料庫要先跑過
@@ -265,14 +268,14 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 跑完。
 
 `e2e`：安裝前端相依套件與 Playwright 的 Chromium，接著用隨機的 `STRUO_ADMIN_PASSWORD` 以
-`docker compose up --wait` 起整套 Compose stack，再對它跑 `pnpm e2e`，也就是 `core` 專案，使用 list 與
-HTML reporter，並保留每個失敗測試的 trace。
-`E2E_BASE_URL` 與 `E2E_API` 都是 `http://localhost:8080`，也就是 admin 容器，它把 `/api` 代理給
-API，所以瀏覽器與規格打的 API 共用同一個來源、同一份 cookie；`E2E_PASSWORD` 就是那組隨機密碼。
+`docker compose up --wait` 起整套 Compose stack，再對它跑 `pnpm e2e`，也就是 `core` 專案，
+使用 list 與 HTML reporter，並保留每個失敗測試的 trace。`E2E_BASE_URL` 與 `E2E_API` 都是
+`http://localhost:8080`，也就是 admin 容器，它把 `/api` 代理給 API，所以瀏覽器與規格打的 API
+共用同一個來源、同一份 cookie；`E2E_PASSWORD` 就是那組隨機密碼。
 
 stack 最後一定跑 `docker compose down --volumes`，執行失敗時先印出 `docker compose ps` 與
-`docker compose logs`。失敗時，`playwright-report/`（HTML 報告）與 `test-results/`（每個失敗測試的 trace）會當成建置
-產物上傳；通過的那次什麼都不上傳。這個 job 不依賴 `docker`，也不需要任何 secret。
+`docker compose logs`。失敗時，`playwright-report/`（HTML 報告）與 `test-results/`（每個失敗測試
+的 trace）會當成建置產物上傳；通過的那次什麼都不上傳。這個 job 不依賴 `docker`，也不需要任何 secret。
 
 `sonar-backend`、`sonar-frontend` 把分析結果送到 SonarQube Cloud，兩個 job 都要
 `SONAR_TOKEN` secret，組織與專案 key 則讀自儲存庫變數 `SONAR_ORGANIZATION`、

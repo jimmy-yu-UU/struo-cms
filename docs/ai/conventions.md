@@ -687,7 +687,7 @@ destructive actions, the user is left with a blocked action and no working way t
   unknown `FieldInterface` falls back to a read-only renderer instead of erroring, a field whose
   interface has no list-column formatter just disappears from the list view, and an unmapped
   `RelationInterface` falls back to `'readonly'`. See `AGENTS.md`, "Verification", for why the enum half
-  is checked unconditionally and for the regeneration command. Unlike the `sample` E2E project, this layer **is** run by CI:
+  is checked unconditionally and for the regeneration command. This layer **is** run by CI:
   nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
   in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
   database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands.

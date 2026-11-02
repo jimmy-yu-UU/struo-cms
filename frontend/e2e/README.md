@@ -31,9 +31,9 @@ Both suites need, at minimum:
   *failed* attempts, so the suites' repeated *successful* logins across specs never trip either one. A
   fork that has turned `RateLimiting:Login:Enabled` back on for its own deployment needs
   `RateLimiting__Login__Enabled=false` for the test run instead, for the reason above.
-- The Vite dev server — Playwright starts this for you (`playwright.config.ts`'s `webServer` block,
-  `reuseExistingServer: true`), so `pnpm dev` does not need to be running separately, though it's fine
-  if it already is.
+- The Vite dev server — unless `E2E_BASE_URL` is set, Playwright starts this for you
+  (`playwright.config.ts`'s `webServer` block, `reuseExistingServer: true`), so `pnpm dev` does not
+  need to be running separately, though it's fine if it already is.
 - `pnpm e2e:sample` additionally needs the Blog sample opted in (chapter 23) and whatever seed data
   each sample spec documents inline. **`relations.spec.ts` needs one pre-existing `category` row and
   one `tag` row** — the sample ships no seed data for either, and a freshly opted-in / freshly

@@ -44,7 +44,7 @@ function fileTile(page: Page, fileName: string) {
 }
 // The Trash view renders through the same MediaGrid as the active view (grid is the default), so a
 // trashed file is a tile wrapper holding the tile button plus its restore/purge action buttons.
-function trashRow(page: Page, fileName: string) {
+function trashTile(page: Page, fileName: string) {
   return page.locator('.media-tile-wrap', { has: page.locator('.media-tile__name', { hasText: fileName }) })
 }
 
@@ -137,11 +137,11 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
 
   // Trash view lists it.
   await switchMode(page, 'Trash')
-  await expect(trashRow(page, fileName)).toBeVisible()
+  await expect(trashTile(page, fileName)).toBeVisible()
 
   // Restore -> leaves Trash, reappears in Active, content is served again.
-  await trashRow(page, fileName).getByRole('button', { name: 'Restore', exact: true }).click()
-  await expect(trashRow(page, fileName)).toHaveCount(0)
+  await trashTile(page, fileName).getByRole('button', { name: 'Restore', exact: true }).click()
+  await expect(trashTile(page, fileName)).toHaveCount(0)
   await switchMode(page, 'Active')
   await expect(fileTile(page, fileName)).toBeVisible()
   expect(await contentStatus(page, uploadedFileId)).toBe(200)
@@ -152,11 +152,11 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
   await expect(fileTile(page, fileName)).toHaveCount(0)
 
   await switchMode(page, 'Trash')
-  await expect(trashRow(page, fileName)).toBeVisible()
-  await trashRow(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
+  await expect(trashTile(page, fileName)).toBeVisible()
+  await trashTile(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
   await expect(page.getByRole('alertdialog', { name: 'Delete permanently' })).toHaveCount(1)
   await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
-  await expect(trashRow(page, fileName)).toHaveCount(0)
+  await expect(trashTile(page, fileName)).toHaveCount(0)
 
   // Purged: gone from Trash and content stays 404 (not merely "excluded from reads" but truly gone).
   expect(await contentStatus(page, uploadedFileId)).toBe(404)
