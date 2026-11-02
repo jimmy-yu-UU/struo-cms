@@ -1434,3 +1434,41 @@ describe('ItemFormView', () => {
     expect(update2.mock.calls[0][2].tags).toEqual(['t1'])
   })
 })
+
+function sentTranslations(spy: { mock: { calls: unknown[][] } }, call: number): Record<string, unknown> {
+  return (spy.mock.calls[call][2] as { translations: Record<string, unknown> }).translations
+}
+
+describe('ItemFormView cleared locale', () => {
+  const trMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    { name: 'status', label: 'Status', interface: 'text', required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false },
+    { name: 'title', label: 'Title', interface: 'text', required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false },
+  ] }
+
+  async function loadWithZhContent() {
+    setActivePinia(createPinia())
+    routeParams = { name: 'article', id: '5' }
+    const { schema, lang } = setupStores()
+    schema.get = vi.fn().mockReturnValue(trMeta) as never
+    lang.languages = [{ code: 'en', name: 'English', isDefault: true }, { code: 'zh-TW', name: 'zh', isDefault: false }]
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({
+      id: '5', status: 'published', version: 1,
+      translations: { en: { title: 'Hi' }, 'zh-TW': { title: 'zh' } },
+    })
+    const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 2 })
+    const w = mountView()
+    await w.vm.init()
+    return { w, upd }
+  }
+
+  it('sends null once for a non-default locale cleared since load, not again after the save', async () => {
+    const { w, upd } = await loadWithZhContent()
+    ;(w.vm as any).model.translations['zh-TW'].title = ''
+    await (w.vm as any).onSubmit()
+    expect(sentTranslations(upd, 0)['zh-TW']).toBeNull()
+    await (w.vm as any).onSubmit()
+    expect(sentTranslations(upd, 1)).not.toHaveProperty('zh-TW')
+  })
+})

@@ -187,7 +187,7 @@ let suppressEmit = false
 function emitNormalized(): void {
   if (suppressEmit) return
   const ed = editor.value
-  // An empty editor holds `<p></p>`; the model gets null so emptiness is one value everywhere.
+  // An empty editor holds `<p></p>`; the model gets null instead of that markup.
   emit('update:modelValue', !ed || ed.isEmpty ? null : normalizeForStorage(ed.getHTML()))
 }
 
