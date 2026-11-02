@@ -8,6 +8,8 @@
   規格可用 `E2E_BASE_URL` 指向已部署的 stack。見[第 22 章](22-testing.md)。
 - 項目更新時，`translations` 裡某個 locale 的值是 `null`，就會刪掉該 locale 的整份翻譯。預設語言
   不能刪，會得到 `400`；沒有已存列的 locale 會略過。見[第 7 章](07-i18n.md)。
+- GraphQL 翻譯輸入那筆的 `fields: null` 會在更新時刪掉該 locale，規則相同；該輸入的 `fields` 可為
+  null。見[第 14 章](14-graphql.md)。
 
 ### 變更
 

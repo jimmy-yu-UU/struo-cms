@@ -163,6 +163,53 @@ public class TranslationLocaleDeleteTests(ApiFactory factory)
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z");
     }
 
+
+    private static async Task<JsonElement> GraphqlAsync(HttpClient c, string query) =>
+        Root(await (await c.PostAsJsonAsync("/graphql", new { query })).Content.ReadAsStringAsync());
+
+    [Fact]
+    public async Task Graphql_null_fields_deletes_the_stored_locale_and_keeps_the_rest()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateAsync(c, Locales(("en", new { title = "A" }), ("zh-TW", new { title = "Z" })));
+
+        var root = await GraphqlAsync(c,
+            $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ translations: [ {{ locale: \"zh-TW\", fields: null }} ] }}) {{ id }} }}");
+
+        root.TryGetProperty("errors", out var errors).Should().BeFalse($"unexpected errors: {errors}");
+        var tr = await TranslationsAsync(c, id);
+        tr.TryGetProperty("zh-TW", out _).Should().BeFalse();
+        tr.GetProperty("en").GetProperty("title").GetString().Should().Be("A");
+    }
+
+    [Fact]
+    public async Task Graphql_null_fields_for_the_default_locale_is_an_error_and_writes_nothing()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateAsync(c, Locales(("en", new { title = "A" }), ("zh-TW", new { title = "Z" })));
+
+        var root = await GraphqlAsync(c,
+            $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ translations: [ {{ locale: \"zh-TW\", fields: {{ title: \"Z2\" }} }}, {{ locale: \"en\", fields: null }} ] }}) {{ id }} }}");
+
+        root.GetProperty("errors")[0].GetProperty("message").GetString().Should().Contain("default locale");
+        var tr = await TranslationsAsync(c, id);
+        tr.GetProperty("en").GetProperty("title").GetString().Should().Be("A");
+        tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z");
+    }
+
+    [Fact]
+    public async Task Graphql_entry_without_fields_is_an_error_and_deletes_nothing()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateAsync(c, Locales(("en", new { title = "A" }), ("zh-TW", new { title = "Z" })));
+
+        var root = await GraphqlAsync(c,
+            $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ translations: [ {{ locale: \"zh-TW\" }} ] }}) {{ id }} }}");
+
+        root.TryGetProperty("errors", out _).Should().BeTrue();
+        (await TranslationsAsync(c, id)).GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z");
+    }
+
     [Fact]
     public async Task Revert_removes_a_locale_the_snapshot_does_not_have()
     {

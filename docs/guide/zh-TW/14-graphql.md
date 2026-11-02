@@ -276,7 +276,7 @@ HTTP_STATUS:200
 ## 翻譯
 
 有翻譯 sidecar 的集合，建立跟更新輸入都多一個 `translations: [<X>TranslationInput!]`，每筆是
-`{ locale: String!, fields: <X>TranslationFieldsInput! }`——讀取端那份陣列形狀，原樣鏡射回寫入端。
+`{ locale: String!, fields: <X>TranslationFieldsInput }`——讀取端那份陣列形狀，原樣鏡射回寫入端。
 resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物件，轉換之前已經套用過「只留真的有送的
 欄位」這層修剪；同一個 locale 出現兩次，後面那筆贏。可翻譯的自有欄位不在建立與更新輸入裡出現，只能
 透過這個型別化的 `translations` 輸入去改；建立時一樣要求有一筆預設 locale 的翻譯。
@@ -285,8 +285,9 @@ resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物
 翻譯時，錯誤的 `extensions.code` 是 `BAD_USER_INPUT`，並帶 `extensions.details`，是
 `{ field, message, locale }` 的清單。
 
-這個輸入沒有辦法對整個 locale 送 `null`，所以刪除某個 locale 的翻譯是 REST 才有的操作
-（[第 7 章](07-i18n.md)）；`revert{X}` 會移除快照裡沒有的 locale，跟 REST 一樣。
+更新時，`fields: null` 的那筆會刪掉該 locale 的翻譯，規則跟 REST 的 `null` 相同
+（[第 7 章](07-i18n.md)）：預設語言不能刪，沒有已存列的 locale 會略過。漏掉 `fields` 的那筆會被
+拒絕。`revert{X}` 會移除快照裡沒有的 locale，跟 REST 一樣。
 
 改一篇文章 `en` 翻譯的標題、其餘欄位不動，`updateArticle` 回傳的 `translations` 陣列裡只有 `title`
 換了新值，`zh-TW` 那筆完全沒被動到。

@@ -364,7 +364,7 @@ internal sealed class CollectionSchemaBuilder(
         return NewInput(config);
     }
 
-    // XTranslationInput: one entry = { locale: String!, fields: XTranslationFieldsInput! }.
+    // XTranslationInput: one entry = { locale: String!, fields: XTranslationFieldsInput }; an explicit null deletes the locale.
     private InputObjectType BuildTranslationInputType(CollectionMetadata meta)
     {
         var config = new InputObjectTypeConfiguration(
@@ -372,7 +372,7 @@ internal sealed class CollectionSchemaBuilder(
             typeof(IReadOnlyDictionary<string, object?>));
         config.Fields.Add(new InputFieldConfiguration("locale", null, TypeReference.Parse("String!")));
         config.Fields.Add(new InputFieldConfiguration(
-            "fields", null, TypeReference.Parse(SchemaTypeMapper.TranslationFieldsInputName(meta.Name) + "!")));
+            "fields", null, TypeReference.Parse(SchemaTypeMapper.TranslationFieldsInputName(meta.Name))));
         return NewInput(config);
     }
 

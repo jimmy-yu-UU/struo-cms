@@ -10,6 +10,8 @@
 - An item update deletes a whole locale's translation when the locale's value in `translations` is
   `null`. The default locale cannot be deleted and fails with a `400`; a locale with no stored row
   is skipped. See [Chapter 7](07-i18n.md).
+- In GraphQL, `fields: null` on a translation input entry deletes the locale on update, with the
+  same rules; `fields` is nullable on that input. See [Chapter 14](14-graphql.md).
 
 ### Changed
 
