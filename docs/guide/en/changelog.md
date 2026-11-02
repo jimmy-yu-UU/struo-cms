@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.1
+
+### Added
+
+- [Chapter 20](20-deployment.md) and [Chapter 15](15-files-and-media.md) cover multi-replica
+  deployments: more than one replica must use the `s3` files backend, and the image-transform cache
+  is kept once per replica on its local disk, so total disk use is `CacheMaxBytes` times the number
+  of replicas.
+
 ## 0.20.0 — 2026-11-02
 
 ### Added

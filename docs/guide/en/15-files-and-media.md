@@ -397,6 +397,14 @@ recently used; when a write leaves the cache over the cap, the variants that wer
 recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A variant evicted while another request is reading it is read
 as a miss and transformed again.
 
+The cache lives on the local disk of each API process (replica), and replicas do not share it.
+`CachePath` points at local disk whether `Backend` is `local` or `s3`, so with `s3` the transform
+cache is still local. Its contents can be rebuilt at any time; losing them only means transforming
+again, so temporary storage is fine for it.
+
+Each replica has its own `CacheMaxBytes` cap, so the total disk use is `CacheMaxBytes` times the
+number of replicas. In an environment short on disk, lower `CacheMaxBytes`.
+
 ## NetVips and LGPL
 
 The transform pipeline is built on NetVips, an MIT-licensed managed wrapper. StruoCMS loads libvips
