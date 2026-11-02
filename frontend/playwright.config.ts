@@ -11,11 +11,10 @@ const hasSampleSpecs = existsSync(sampleSpecsDir)
 const externalBaseURL = process.env.E2E_BASE_URL
 
 export default defineConfig({
-  // Single worker: the specs share one Vite dev server and one seeded admin account. The dev
-  // server transforms each Vue SFC/module on demand on first request; several Playwright workers
-  // navigating at once all trigger that cold compile simultaneously and can starve the single
-  // dev-server process past a normal navigation timeout. Serializing is a small cost for a suite
-  // this size and removes the flakiness entirely.
+  // Single worker: the specs share one seeded admin account and one database, so they run one at
+  // a time. Against the dev server there is a second reason: it transforms each Vue SFC/module on
+  // demand on first request, and several workers navigating at once all trigger that cold compile
+  // simultaneously and can starve the single dev-server process past a normal navigation timeout.
   workers: 1,
   // baseURL defaults to localhost (not 127.0.0.1): the specs need cookie-host parity with E2E_API,
   // which also targets localhost — E2E_BASE_URL and E2E_API must use the same host, or auth

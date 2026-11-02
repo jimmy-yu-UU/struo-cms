@@ -84,7 +84,8 @@ and should not be committed.
 ## Further reading
 
 [Chapter 22](../../docs/guide/en/22-testing.md) covers all four test layers (backend, admin SPA
-unit, E2E, and the schema contract) and what CI runs instead.
+unit, E2E, and the schema contract) and which of them CI runs. CI's `e2e` job runs the `core` project
+against the Compose stack; the `sample` project is not run by CI.
 [Chapter 23](../../docs/guide/en/23-sample-walkthrough.md) covers opting the Blog sample in and
 out, including the corresponding cleanup of this directory's `sample/` specs if the sample is
 removed from a fork.

@@ -265,7 +265,7 @@ fails.
 
 ## What CI runs
 
-`.github/workflows/ci.yml` defines six jobs. `backend`, `frontend`, `docs`, and `docker` all run
+`.github/workflows/ci.yml` defines seven jobs. `backend`, `frontend`, `docs`, `docker`, and `e2e` all run
 on a push to `main`, on every pull request, and on manual dispatch; `sonar-backend` and
 `sonar-frontend` trigger on the same events but add one more condition. `backend` and `docker`
 run at the repository root; `frontend` and `docs` each run inside their own subdirectory.
@@ -316,6 +316,17 @@ check failed.
 This job needs no secret, so a pull request from a fork or a Dependabot update can run it through
 to completion just the same.
 
+`e2e`: installs the frontend dependencies and Playwright's Chromium, then starts the Compose
+stack with `docker compose up --wait` under a random `STRUO_ADMIN_PASSWORD` and runs `pnpm e2e`,
+the `core` project, against it. `E2E_BASE_URL` and `E2E_API` are both `http://localhost:8080`, the
+admin container, which proxies `/api` to the API, so the browser and the specs' API calls share
+one origin and one cookie jar; `E2E_PASSWORD` is that same random password.
+
+The stack always ends with `docker compose down --volumes`, and `docker compose ps` and
+`docker compose logs` are printed first if the run failed. On a failure, Playwright's
+`test-results/` and `playwright-report/` are uploaded as a build artifact; a passing run uploads
+nothing. The job does not depend on `docker` and needs no secret.
+
 `sonar-backend` and `sonar-frontend` send analysis results to SonarQube Cloud; both jobs need
 the `SONAR_TOKEN` secret and read the organization and project keys from the repository variables
 `SONAR_ORGANIZATION`, `SONAR_BACKEND_PROJECT_KEY` and `SONAR_FRONTEND_PROJECT_KEY`. A repository
@@ -344,15 +355,14 @@ This project's five standing gates are:
 
 Run whichever side a change touches; when a change touches more than one of the three — the
 backend, the admin SPA, or the manual — run all five before pushing. `docs/`'s `pnpm test`,
-`docker`, `sonar-backend`, and `sonar-frontend` also run in CI, but none of them count as a
+`docker`, `e2e`, `sonar-backend`, and `sonar-frontend` also run in CI, but none of them count as a
 standing gate.
 
 ## What CI deliberately does not run
 
-CI never runs `pnpm e2e`, `pnpm e2e:sample`, or `pnpm e2e:all`: no job starts a database, starts
-the API, or calls `playwright test`. End-to-end tests need a running API and database alongside
-the admin SPA's dev server — a heavier environment than any job here provisions — so they're a
-local, pre-merge discipline, not an automated gate.
+CI runs `pnpm e2e`, the `core` project, in the `e2e` job, but never `pnpm e2e:sample` or
+`pnpm e2e:all`: the `sample` project needs the Blog sample opted in, which the shipped template
+is not. Run it locally before merging a change that touches the sample's flows.
 
 CI also never sets a `STRUO_TEST_*` connection, so the live suites always take their pass-outright
 path here, unlike locally with a real database connection wired up.
