@@ -166,10 +166,10 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 設了 `E2E_BASE_URL` 就改成指向已部署的 stack：不啟動 dev server，`E2E_API` 必須在同一個主機，
 auth cookie 才會共用。細節見 `frontend/e2e/README.md`。
 
-設定裡 `workers: 1`，`use.baseURL` 預設是 `http://localhost:5173`（設了 `E2E_BASE_URL` 就是它）；`core` 的 `testDir` 是
-`./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠 `testIgnore: '**/e2e/sample/**'` 把範例規
-格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後
-只剩 `core`。資料庫要先跑過
+設定裡 `workers: 1`，`use.baseURL` 預設是 `http://localhost:5173`（設了 `E2E_BASE_URL`
+就是它）；`core` 的 `testDir` 是 `./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠
+`testIgnore: '**/e2e/sample/**'` 把範例規格擋在外面；`sample` 的 `testDir` 直接指到
+`./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後只剩 `core`。資料庫要先跑過
 `migrate`（或設 `Database:MigrateOnStartup=true`），登入用的 bootstrap 管理員才會種好；其餘前置
 條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 

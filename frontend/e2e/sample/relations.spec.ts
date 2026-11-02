@@ -8,8 +8,9 @@
 //
 // See frontend/e2e/README.md for the full live-gate prerequisites (API on :5221, seeded admin, etc).
 // CI runs neither `pnpm e2e:sample` nor this spec: the `sample` project needs the Blog sample opted
-// in, which the shipped template is not. Run it by hand after any change to RelationPicker.vue, MultiSelectField.vue,
-// JunctionLinksEditor.vue, SortableList.vue, or the combobox/select vendored atoms.
+// in, which the shipped template is not. Run it by hand after any change to RelationPicker.vue,
+// MultiSelectField.vue, JunctionLinksEditor.vue, SortableList.vue, or the combobox/select vendored
+// atoms.
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'

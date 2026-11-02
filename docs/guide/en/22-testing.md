@@ -205,11 +205,10 @@ Setting `E2E_BASE_URL` targets an already-deployed stack instead: no dev server 
 details.
 
 The config sets `workers: 1`, and `use.baseURL` defaults to `http://localhost:5173` (it is
-`E2E_BASE_URL` when that is set); `core`'s `testDir` is
-`./e2e`, whose scope already covers `e2e/sample/`, so it relies on
-`testIgnore: '**/e2e/sample/**'` to keep the sample specs out; `sample`'s `testDir` points
-straight at `./e2e/sample` and has nothing left to exclude. With `e2e/sample/` deleted, only
-`core` remains.
+`E2E_BASE_URL` when that is set); `core`'s `testDir` is `./e2e`, whose scope already covers
+`e2e/sample/`, so it relies on `testIgnore: '**/e2e/sample/**'` to keep the sample specs out;
+`sample`'s `testDir` points straight at `./e2e/sample` and has nothing left to exclude. With
+`e2e/sample/` deleted, only `core` remains.
 
 The database has to be migrated first (`migrate`, or `Database:MigrateOnStartup=true`), which seeds
 the bootstrap administrator account used for login; the rest of the prerequisites and how to
