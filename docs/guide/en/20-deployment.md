@@ -176,8 +176,9 @@ files: a file exists only on the replica that received the upload, and a request
 another replica cannot read it.
 
 With a single replica on `local`, mount a persistent volume on `/app/App_Data`. The image declares it
-as a `VOLUME`, but without a mount you get an anonymous volume that stays with the container, so
-replacing the container does not carry it over and the files stay behind on the old container's volume.
+as a `VOLUME`, but without a mount you get an anonymous volume that stays with the container: replace
+the container with a new `docker run` and the new one gets a different, empty anonymous volume, while
+the files stay behind on the old container's volume.
 
 `s3` needs all four of `Endpoint`, `Bucket`, `AccessKey` and `SecretKey`; with any one missing, the
 API fails to start. The API cannot tell how many replicas it runs in, so it does not check this for

@@ -135,7 +135,8 @@ Redis 原子計數器，Redis 連不上時登入會回 5xx。沒設 Redis 時，
 檔案：檔案在哪個副本上傳，就只存在那個副本，打到別的副本會讀不到。
 
 單一副本用 `local`，要把 `/app/App_Data` 掛上持久的 volume。映像把它宣告成 `VOLUME`，但沒掛載時拿到的
-是匿名 volume，它跟著容器走，換掉容器不會自動帶到新容器裡，檔案就留在舊容器的 volume 上。
+是匿名 volume，它跟著容器走：用 `docker run` 起一個新容器取代舊的，新容器拿到的是另一個空的匿名
+volume，檔案留在舊容器的 volume 上。
 
 用 `s3` 要設齊 `Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 四個鍵，缺一個，API 就啟動失敗。
 API 沒辦法知道自己跑了幾個副本，所以不會替你檢查這件事。圖片轉檔快取不跟著檔案後端走，見
