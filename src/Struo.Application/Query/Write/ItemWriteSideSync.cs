@@ -38,7 +38,9 @@ public sealed class ItemWriteSideSync(
     /// </para>
     /// <para>
     /// On update the store merges each sent locale per field: a field the request omits keeps its stored
-    /// value and an explicit null clears it, so required fields are judged on the merged value.
+    /// value and an explicit null clears it, so required fields are judged on the merged value. A locale
+    /// whose value is null is deleted instead (see <see cref="CollectLocaleDeleteAsync"/>) and takes no part
+    /// in the required and max-length checks.
     /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
@@ -71,6 +73,7 @@ public sealed class ItemWriteSideSync(
             .ToDictionary(f => f.Name, f => f.MaxLength!.Value, StringComparer.OrdinalIgnoreCase);
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+        var deleteLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<QueryErrorDetail>();
 
         // On update a required field is judged on the merged value (stored + sent), because the store keeps
@@ -83,6 +86,11 @@ public sealed class ItemWriteSideSync(
         {
             var locale = await languages.CanonicalizeAsync(localeProp.Name)
                 ?? throw new QueryException($"Unknown or disabled locale '{localeProp.Name}'.");
+            if (localeProp.Value.ValueKind == JsonValueKind.Null)
+            {
+                await CollectLocaleDeleteAsync(locale, isCreate, deleteLocales);
+                continue;
+            }
             if (localeProp.Value.ValueKind != JsonValueKind.Object)
                 throw new QueryException($"Translation for locale '{locale}' must be an object.");
 
@@ -133,7 +141,7 @@ public sealed class ItemWriteSideSync(
                 throw new QueryException($"A translation for the default locale '{def}' is required.");
         }
 
-        if (perLocale.Count == 0) return;
+        if (perLocale.Count == 0 && deleteLocales.Count == 0) return;
 
         if (isCreate)
             await repository.InsertTranslationsAsync(
@@ -142,7 +150,19 @@ public sealed class ItemWriteSideSync(
         else
             await repository.SyncTranslationsAsync(
                 tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields,
-                parentId, perLocale, ct);
+                parentId, perLocale, deleteLocales, ct);
+    }
+
+    // `"<locale>": null` on an update deletes that locale's translation; the default locale cannot be
+    // deleted. A create has nothing to delete, so a null there is "not sent" (the default locale's
+    // absence is then rejected by the create check).
+    private async Task CollectLocaleDeleteAsync(string locale, bool isCreate, HashSet<string> deleteLocales)
+    {
+        if (isCreate) return;
+        var def = await languages.DefaultCodeAsync();
+        if (string.Equals(locale, def, StringComparison.OrdinalIgnoreCase))
+            throw new QueryException($"The translation for the default locale '{def}' cannot be deleted.");
+        deleteLocales.Add(locale);
     }
 
     // The stored translation rows of one parent as { locale: { translatableFieldName: value } }, keyed by the

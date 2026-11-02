@@ -83,7 +83,7 @@ public class DeleteRestrictWithGuidPkTests
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task InsertTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, CancellationToken ct) =>
             Task.CompletedTask;
-        public Task SyncTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, CancellationToken ct) =>
+        public Task SyncTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, IReadOnlyCollection<string>? dl = null, CancellationToken ct = default) =>
             Task.CompletedTask;
     }
 

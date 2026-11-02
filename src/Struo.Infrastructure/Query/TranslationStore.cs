@@ -10,10 +10,11 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, IReadOnlyCollection<string>, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
             [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
-             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
+             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>),
+             typeof(IReadOnlyCollection<string>), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<TranslationStore, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> InsertDispatcher =
         new(typeof(TranslationStore), nameof(InsertTranslationsGenericAsync),
@@ -80,10 +81,12 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        IReadOnlyCollection<string> deleteLocales,
         CancellationToken ct = default)
     {
         var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+        await SyncDispatcher.For(translationType)(
+            this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, deleteLocales, ct);
     }
 
     // A create inserts under a parent id that is new in this transaction, so there is nothing to look up.
@@ -108,9 +111,10 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        IReadOnlyCollection<string> deleteLocales,
         CancellationToken ct) where T : class, new()
     {
-        if (perLocale.Count == 0) return;
+        if (perLocale.Count == 0 && deleteLocales.Count == 0) return;
 
         var type = typeof(T);
         var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
@@ -120,8 +124,9 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         {
             // An update merges the sent fields onto the stored row of each supplied locale in place (by
             // primary key): a field the request omits keeps its stored value, an explicit null clears it.
-            // A locale with no stored row is inserted. It issues no DELETE: a delete that matches
-            // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
+            // A locale with no stored row is inserted. A locale to delete is removed only when the read
+            // below found its row, and by primary key. No DELETE is keyed on (fk, locale): one that
+            // matches nothing takes gap locks on that unique index, and those deadlock concurrent
             // updates of different items on InnoDB. The existing rows come from a plain consistent read.
             // Two concurrent updates of the same item are kept apart by the parent's version check
             // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
@@ -130,19 +135,26 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             var insertLocales = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
             foreach (var (locale, values) in perLocale)
             {
-                var stored = existing.Find(e => string.Equals(
-                    (string?)localeProp.GetValue(e), locale, StringComparison.OrdinalIgnoreCase));
+                var stored = FindStored(existing, localeProp, locale);
                 if (stored is null) { insertLocales[locale] = values; continue; }
                 ApplyValues(stored, fieldProps, values);
                 updates.Add(stored);
             }
+            var deletes = deleteLocales
+                .Select(locale => FindStored(existing, localeProp, locale))
+                .OfType<T>()
+                .ToList();
 
             if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
             if (insertLocales.Count > 0)
                 await db.Insertable(BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, insertLocales))
                     .ExecuteCommandAsync(ct);
+            if (deletes.Count > 0) await db.Deleteable(deletes).ExecuteCommandAsync(ct);
         }, ct);
     }
+
+    private static T? FindStored<T>(List<T> existing, PropertyInfo localeProp, string locale) where T : class =>
+        existing.Find(e => string.Equals((string?)localeProp.GetValue(e), locale, StringComparison.OrdinalIgnoreCase));
 
     // One row per supplied locale, built by reflection.
     private static List<T> BuildRows<T>(

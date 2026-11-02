@@ -277,8 +277,10 @@ public sealed class SqlSugarItemRepository(
         IReadOnlyList<string> fieldProperties,
         object parentId,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
+        IReadOnlyCollection<string>? deleteLocales = null,
         CancellationToken ct = default) =>
-        translations.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+        translations.SyncTranslationsAsync(
+            translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, deleteLocales ?? [], ct);
 
     public Task<IReadOnlyList<FacetBucket>> FacetAsync(FacetRequest request, CancellationToken ct = default) =>
         facets.FacetAsync(request, ct);

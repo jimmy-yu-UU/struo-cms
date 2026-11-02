@@ -146,4 +146,51 @@ public sealed class TranslationSyncDeleteTests : IDisposable
         var row = (await RowsAsync(id)).Should().ContainSingle().Which;
         row.Title.Should().Be("Changed");
     }
+
+    private Task SyncDeletingAsync(Guid articleId, params string[] deleteLocales) =>
+        _repo.SyncTranslationsAsync(
+            typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
+            [nameof(FxArticleTranslation.Title), nameof(FxArticleTranslation.Body)], articleId,
+            new Dictionary<string, IReadOnlyDictionary<string, object?>>(), deleteLocales);
+
+    [Fact]
+    public async Task Deleting_a_stored_locale_removes_only_its_row_by_primary_key()
+    {
+        var id = Guid.CreateVersion7();
+        await SyncAsync(id, "en", "First", null, isCreate: true);
+        await SyncAsync(id, "zh-TW", "Zwei", null, isCreate: false);
+        _sql.Clear();
+
+        await SyncDeletingAsync(id, "zh-TW");
+
+        (await RowsAsync(id)).Should().ContainSingle().Which.Locale.Should().Be("en");
+        var deletes = _sql.Where(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)).ToList();
+        deletes.Should().ContainSingle().Which.ToLowerInvariant()
+            .Should().NotContain("locale", "the row is deleted by its primary key");
+    }
+
+    [Fact]
+    public async Task Deleting_a_locale_that_has_no_stored_row_issues_no_DELETE()
+    {
+        var id = Guid.CreateVersion7();
+        await SyncAsync(id, "en", "First", null, isCreate: true);
+        _sql.Clear();
+
+        await SyncDeletingAsync(id, "zh-TW");
+
+        Deleted().Should().BeFalse();
+        (await RowsAsync(id)).Should().ContainSingle().Which.Locale.Should().Be("en");
+    }
+
+    [Fact]
+    public async Task Deleting_matches_the_stored_locale_regardless_of_case()
+    {
+        var id = Guid.CreateVersion7();
+        await _db.Insertable(new FxArticleTranslation { FxArticleId = id, Locale = "ZH-tw", Title = "Stored" })
+            .ExecuteCommandAsync();
+
+        await SyncDeletingAsync(id, "zh-TW");
+
+        (await RowsAsync(id)).Should().BeEmpty();
+    }
 }
