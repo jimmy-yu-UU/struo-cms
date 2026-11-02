@@ -265,12 +265,13 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 跑完。
 
 `e2e`：安裝前端相依套件與 Playwright 的 Chromium，接著用隨機的 `STRUO_ADMIN_PASSWORD` 以
-`docker compose up --wait` 起整套 Compose stack，再對它跑 `pnpm e2e`，也就是 `core` 專案。
+`docker compose up --wait` 起整套 Compose stack，再對它跑 `pnpm e2e`，也就是 `core` 專案，使用 list 與
+HTML reporter，並保留每個失敗測試的 trace。
 `E2E_BASE_URL` 與 `E2E_API` 都是 `http://localhost:8080`，也就是 admin 容器，它把 `/api` 代理給
 API，所以瀏覽器與規格打的 API 共用同一個來源、同一份 cookie；`E2E_PASSWORD` 就是那組隨機密碼。
 
 stack 最後一定跑 `docker compose down --volumes`，執行失敗時先印出 `docker compose ps` 與
-`docker compose logs`。失敗時，Playwright 的 `test-results/` 與 `playwright-report/` 會當成建置
+`docker compose logs`。失敗時，`playwright-report/`（HTML 報告）與 `test-results/`（每個失敗測試的 trace）會當成建置
 產物上傳；通過的那次什麼都不上傳。這個 job 不依賴 `docker`，也不需要任何 secret。
 
 `sonar-backend`、`sonar-frontend` 把分析結果送到 SonarQube Cloud，兩個 job 都要

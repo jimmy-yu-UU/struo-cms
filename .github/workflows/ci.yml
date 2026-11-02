@@ -254,7 +254,8 @@ jobs:
   #
   # The job is independent of `docker`; it builds its own images through Compose. It needs
   # no secret: the admin password is random per run and only the specs and the stack see it.
-  # Playwright's report and traces are uploaded only when the run fails.
+  # The CI step passes `--reporter=list,html` and `--trace=retain-on-failure`, so a failed run leaves
+  # an HTML report and a trace per failed test; they are uploaded only when the run fails.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -284,9 +285,11 @@ jobs:
           export STRUO_ADMIN_PASSWORD
           trap 'rc=$?; if [ $rc -ne 0 ]; then docker compose ps --all; docker compose logs; fi; docker compose down --volumes' EXIT
           docker compose up --detach --build --wait --wait-timeout 300
-          (cd frontend && E2E_BASE_URL=http://localhost:8080 E2E_API=http://localhost:8080 \
-            E2E_PASSWORD="$STRUO_ADMIN_PASSWORD" pnpm e2e)
-      - name: Upload the Playwright report and traces
+          (cd frontend && PLAYWRIGHT_HTML_OPEN=never \
+            E2E_BASE_URL=http://localhost:8080 E2E_API=http://localhost:8080 \
+            E2E_PASSWORD="$STRUO_ADMIN_PASSWORD" \
+            pnpm e2e --reporter=list,html --trace=retain-on-failure)
+      - name: Upload the Playwright report and failure traces
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

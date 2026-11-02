@@ -318,14 +318,15 @@ to completion just the same.
 
 `e2e`: installs the frontend dependencies and Playwright's Chromium, then starts the Compose
 stack with `docker compose up --wait` under a random `STRUO_ADMIN_PASSWORD` and runs `pnpm e2e`,
-the `core` project, against it. `E2E_BASE_URL` and `E2E_API` are both `http://localhost:8080`, the
+the `core` project, against it with the list and HTML reporters and a trace kept for every failed
+test. `E2E_BASE_URL` and `E2E_API` are both `http://localhost:8080`, the
 admin container, which proxies `/api` to the API, so the browser and the specs' API calls share
 one origin and one cookie jar; `E2E_PASSWORD` is that same random password.
 
 The stack always ends with `docker compose down --volumes`, and `docker compose ps` and
-`docker compose logs` are printed first if the run failed. On a failure, Playwright's
-`test-results/` and `playwright-report/` are uploaded as a build artifact; a passing run uploads
-nothing. The job does not depend on `docker` and needs no secret.
+`docker compose logs` are printed first if the run failed. On a failure, `playwright-report/`
+(the HTML report) and `test-results/` (the trace of each failed test) are uploaded as a build
+artifact; a passing run uploads nothing. The job does not depend on `docker` and needs no secret.
 
 `sonar-backend` and `sonar-frontend` send analysis results to SonarQube Cloud; both jobs need
 the `SONAR_TOKEN` secret and read the organization and project keys from the repository variables
