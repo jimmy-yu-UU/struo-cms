@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## 0.21.0
+
+### 新增
+
+- CI 新增 `e2e` job，起 Compose stack 並對它跑 Playwright `core` 專案；`sample` 專案不在 CI 裡跑。
+  規格可用 `E2E_BASE_URL` 指向已部署的 stack。見[第 22 章](22-testing.md)。
+
 ## 0.20.1 — 2026-11-02
 
 ### 新增

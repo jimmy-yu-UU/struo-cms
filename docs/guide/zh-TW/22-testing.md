@@ -159,14 +159,17 @@ STRUO_TEST_BACKEND=<後端> STRUO_TEST_DROP_LEFTOVERS=1 dotnet test --filter "Fu
 下跑；`sample`（`pnpm e2e:sample`）跑 `e2e/sample/**`，需要先把範例集合啟用。設定檔只在
 `e2e/sample/` 存在時才加入 `sample` 專案。`pnpm e2e:all` 兩個都跑。
 
-`webServer` 這個區塊只會啟動前端的 dev server（`pnpm dev`，`reuseExistingServer: true`），
-不會替你啟動 API 或資料庫：兩個專案都假設有一份正在跑的 API 跟它背後的資料庫，接在設定好的
-proxy 目標上。
+沒設 `E2E_BASE_URL` 時，`webServer` 這個區塊只會啟動前端的 dev server（`pnpm dev`，
+`reuseExistingServer: true`），不會替你啟動 API 或資料庫：兩個專案都假設有一份正在跑的 API
+跟它背後的資料庫，接在設定好的 proxy 目標上。
 
-設定裡 `workers: 1`，`use.baseURL` 是 `http://localhost:5173`；`core` 的 `testDir` 是
-`./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠 `testIgnore: '**/e2e/sample/**'` 把範例規
-格擋在外面；`sample` 的 `testDir` 直接指到 `./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後
-只剩 `core`。資料庫要先跑過
+設了 `E2E_BASE_URL` 就改成指向已部署的 stack：不啟動 dev server，`E2E_API` 必須在同一個主機，
+auth cookie 才會共用。細節見 `frontend/e2e/README.md`。
+
+設定裡 `workers: 1`，`use.baseURL` 預設是 `http://localhost:5173`（設了 `E2E_BASE_URL`
+就是它）；`core` 的 `testDir` 是 `./e2e`，範圍本來就涵蓋 `e2e/sample/`，所以它靠
+`testIgnore: '**/e2e/sample/**'` 把範例規格擋在外面；`sample` 的 `testDir` 直接指到
+`./e2e/sample`，不必再排除什麼。`e2e/sample/` 刪掉之後只剩 `core`。資料庫要先跑過
 `migrate`（或設 `Database:MigrateOnStartup=true`），登入用的 bootstrap 管理員才會種好；其餘前置
 條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 
@@ -219,7 +222,7 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 
 ## CI 跑什麼
 
-`.github/workflows/ci.yml` 定義六個 job。`backend`、`frontend`、`docs`、`docker` 這四個都
+`.github/workflows/ci.yml` 定義七個 job。`backend`、`frontend`、`docs`、`docker`、`e2e` 這五個都
 在推上 `main`、每一個 pull request，以及手動觸發時跑；`sonar-backend`、`sonar-frontend` 也
 在同樣的時機被觸發，但多一個條件。`backend` 跟 `docker` 在儲存庫根目錄跑，`frontend` 跟
 `docs` 各自進自己的子目錄。
@@ -264,6 +267,16 @@ nginx 打一次匿名的 `/api/config`。最後一定跑 `docker compose down --
 這個 job 不需要任何 secret，一個 fork 送來的 pull request 或 Dependabot 的更新一樣能完整
 跑完。
 
+`e2e`：安裝前端相依套件與 Playwright 的 Chromium，接著用隨機的 `STRUO_ADMIN_PASSWORD` 以
+`docker compose up --wait` 起整套 Compose stack，再對它跑 `pnpm e2e`，也就是 `core` 專案，
+使用 list 與 HTML reporter，並保留每個失敗測試的 trace。`E2E_BASE_URL` 與 `E2E_API` 都是
+`http://localhost:8080`，也就是 admin 容器，它把 `/api` 代理給 API，所以瀏覽器與規格打的 API
+共用同一個來源、同一份 cookie；`E2E_PASSWORD` 就是那組隨機密碼。
+
+stack 最後一定跑 `docker compose down --volumes`，執行失敗時先印出 `docker compose ps` 與
+`docker compose logs`。失敗時，`playwright-report/`（HTML 報告）與 `test-results/`（每個失敗測試
+的 trace）會當成建置產物上傳；通過的那次什麼都不上傳。這個 job 不依賴 `docker`，也不需要任何 secret。
+
 `sonar-backend`、`sonar-frontend` 把分析結果送到 SonarQube Cloud，兩個 job 都要
 `SONAR_TOKEN` secret，組織與專案 key 則讀自儲存庫變數 `SONAR_ORGANIZATION`、
 `SONAR_BACKEND_PROJECT_KEY`、`SONAR_FRONTEND_PROJECT_KEY`；沒有 `SONAR_ORGANIZATION` 的儲存庫
@@ -291,14 +304,14 @@ SonarSource 的 `sonarqube-scan-action` 送出，這個 action 以 commit SHA �
 - `docs/` 底下的 `pnpm build`
 
 改到哪一邊就跑那一邊；一次改動同時碰到後端、前端、手冊裡不只一邊時，五個就全跑一次再推。
-`docs/` 的 `pnpm test`、`docker`、`sonar-backend`、`sonar-frontend` 也在 CI 裡跑，但都不算
+`docs/` 的 `pnpm test`、`docker`、`e2e`、`sonar-backend`、`sonar-frontend` 也在 CI 裡跑，但都不算
 standing gate。
 
 ## CI 刻意不跑什麼
 
-CI 不會跑 `pnpm e2e`、`pnpm e2e:sample` 或 `pnpm e2e:all`：沒有任何一個 job 起資料庫、起
-API，或呼叫 `playwright test`。端到端測試需要一份跑著的 API 跟資料庫陪著前端的 dev
-server，比這裡任何一個 job 準備的環境都重，是本機、合併前的自律動作，不是自動化關卡。
+CI 在 `e2e` job 裡跑 `pnpm e2e`，也就是 `core` 專案，但不會跑 `pnpm e2e:sample` 或
+`pnpm e2e:all`：`sample` 專案需要先啟用 Blog 範例，而出廠的模板沒有。改到範例相關流程的變更，
+合併前請在本機跑一次。
 
 CI 也不會設定任何 `STRUO_TEST_*` 連線，實機測試因此在這裡永遠是直接判定通過，跟本機接了真正的
 資料庫連線時不一樣。

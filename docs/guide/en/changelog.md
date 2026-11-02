@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.0
+
+### Added
+
+- CI has a new `e2e` job that starts the Compose stack and runs the Playwright `core` project against
+  it; the `sample` project is not run by CI. The specs take `E2E_BASE_URL` to target an already
+  deployed stack. See [Chapter 22](22-testing.md).
+
 ## 0.20.1 — 2026-11-02
 
 ### Added

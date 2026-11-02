@@ -323,8 +323,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    this playbook also edits a manual chapter (e.g. `docs/guide/en/19-admin-customization.md` itself),
    add `pnpm build` from `docs/` too. Run `pnpm e2e` (the `core` Playwright project) as a further check
    for any change touching a critical flow; `pnpm e2e:sample` runs the sample specs and needs the Blog
-   sample opted in first. E2E needs a live API and database reachable at the dev proxy target and is
-   not part of the standing gates or of CI.
+   sample opted in first. Locally, E2E needs a live API and database reachable at the dev proxy
+   target; it is not one of the standing gates. CI's `e2e` job runs the `core` project against the
+   Compose stack, and the `sample` project is not run by CI.
 
 ## Next steps
 

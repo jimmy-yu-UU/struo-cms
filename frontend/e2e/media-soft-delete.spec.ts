@@ -42,12 +42,10 @@ function detailDialog(page: Page) {
 function fileTile(page: Page, fileName: string) {
   return page.locator('.media-tile', { has: page.locator('.media-tile__name', { hasText: fileName }) })
 }
-// The Trash view renders a plain `<table class="media-trash-list">` (MediaLibraryView.vue) with the
-// filename as its own <td> text — scope a row by that text. `.locator(sel, { has })` (not
-// `getByRole('row', { has })` — that option isn't part of getByRole's filter set and silently
-// matches every row, including the header) mirrors fileTile()/folderCard()'s proven convention.
-function trashRow(page: Page, fileName: string) {
-  return page.locator('.media-trash-list tbody tr', { has: page.getByText(fileName, { exact: true }) })
+// The Trash view renders through the same MediaGrid as the active view (grid is the default), so a
+// trashed file is a tile wrapper holding the tile button plus its restore/purge action buttons.
+function trashTile(page: Page, fileName: string) {
+  return page.locator('.media-tile-wrap', { has: page.locator('.media-tile__name', { hasText: fileName }) })
 }
 
 // Uploads one in-memory PNG via the Upload dialog's hidden file input (see media.spec.ts for the
@@ -139,11 +137,11 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
 
   // Trash view lists it.
   await switchMode(page, 'Trash')
-  await expect(trashRow(page, fileName)).toBeVisible()
+  await expect(trashTile(page, fileName)).toBeVisible()
 
   // Restore -> leaves Trash, reappears in Active, content is served again.
-  await trashRow(page, fileName).getByRole('button', { name: 'Restore', exact: true }).click()
-  await expect(trashRow(page, fileName)).toHaveCount(0)
+  await trashTile(page, fileName).getByRole('button', { name: 'Restore', exact: true }).click()
+  await expect(trashTile(page, fileName)).toHaveCount(0)
   await switchMode(page, 'Active')
   await expect(fileTile(page, fileName)).toBeVisible()
   expect(await contentStatus(page, uploadedFileId)).toBe(200)
@@ -154,11 +152,11 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
   await expect(fileTile(page, fileName)).toHaveCount(0)
 
   await switchMode(page, 'Trash')
-  await expect(trashRow(page, fileName)).toBeVisible()
-  await trashRow(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
+  await expect(trashTile(page, fileName)).toBeVisible()
+  await trashTile(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
   await expect(page.getByRole('alertdialog', { name: 'Delete permanently' })).toHaveCount(1)
   await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
-  await expect(trashRow(page, fileName)).toHaveCount(0)
+  await expect(trashTile(page, fileName)).toHaveCount(0)
 
   // Purged: gone from Trash and content stays 404 (not merely "excluded from reads" but truly gone).
   expect(await contentStatus(page, uploadedFileId)).toBe(404)

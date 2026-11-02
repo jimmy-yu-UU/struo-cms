@@ -687,7 +687,7 @@ destructive actions, the user is left with a blocked action and no working way t
   unknown `FieldInterface` falls back to a read-only renderer instead of erroring, a field whose
   interface has no list-column formatter just disappears from the list view, and an unmapped
   `RelationInterface` falls back to `'readonly'`. See `AGENTS.md`, "Verification", for why the enum half
-  is checked unconditionally and for the regeneration command. Unlike E2E, this layer **is** run by CI:
+  is checked unconditionally and for the regeneration command. This layer **is** run by CI:
   nothing about it is live or external — the backend half exercises `GET /api/schema` through the same
   in-process `WebApplicationFactory`/SQLite fixture other API tests use, not a running server or a real
   database — so both halves ride inside the existing `dotnet test`/`pnpm test` commands.
@@ -699,11 +699,12 @@ destructive actions, the user is left with a blocked action and no working way t
   framework-only specs under `frontend/e2e/` (excluding `e2e/sample/**`) against the shipped
   template with zero content collections; `sample` (`pnpm e2e:sample`) runs `e2e/sample/**` and
   needs the Blog sample opted in first and is added to the config only while `e2e/sample/` exists.
-  Neither is run by CI — see `AGENTS.md`, "Verification", for the five standing gates CI does run —
-  and both need a live API and database, not just a build. `ci.yml` also runs a `docker` job
-  (builds and smoke-tests the two container images and the Compose stack —
+  Both need a live API and database, not just a build. CI's `e2e` job runs `core` against the
+  Compose stack (`E2E_BASE_URL` and `E2E_API` both `http://localhost:8080`); `sample` is not run by
+  CI. See `AGENTS.md`, "Verification", for the five standing gates CI also runs. `ci.yml` also runs
+  a `docker` job (builds and smoke-tests the two container images and the Compose stack —
   `docs/guide/en/20-deployment.md`'s "The two container images" and "The local Compose stack"
-  sections) and two `sonar-*` jobs; none of the three is a standing gate.
+  sections) and two `sonar-*` jobs; none of these is a standing gate.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"

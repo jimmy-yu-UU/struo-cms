@@ -31,9 +31,9 @@ Both suites need, at minimum:
   *failed* attempts, so the suites' repeated *successful* logins across specs never trip either one. A
   fork that has turned `RateLimiting:Login:Enabled` back on for its own deployment needs
   `RateLimiting__Login__Enabled=false` for the test run instead, for the reason above.
-- The Vite dev server — Playwright starts this for you (`playwright.config.ts`'s `webServer` block,
-  `reuseExistingServer: true`), so `pnpm dev` does not need to be running separately, though it's fine
-  if it already is.
+- The Vite dev server — unless `E2E_BASE_URL` is set, Playwright starts this for you
+  (`playwright.config.ts`'s `webServer` block, `reuseExistingServer: true`), so `pnpm dev` does not
+  need to be running separately, though it's fine if it already is.
 - `pnpm e2e:sample` additionally needs the Blog sample opted in (chapter 23) and whatever seed data
   each sample spec documents inline. **`relations.spec.ts` needs one pre-existing `category` row and
   one `tag` row** — the sample ships no seed data for either, and a freshly opted-in / freshly
@@ -62,6 +62,20 @@ Pass the credentials:
 E2E_EMAIL=someone@example.com E2E_PASSWORD=your-admin-password pnpm e2e
 ```
 
+### Against an already-deployed stack
+
+Set `E2E_BASE_URL` to the admin SPA's URL to run the specs against a stack that is already up, such
+as the Docker Compose one (nginx on `http://localhost:8080` proxies `/api` on the same origin).
+Playwright then starts no dev server. Point `E2E_API` at the same host, because the auth cookie is
+shared only between identical hosts:
+
+```bash
+E2E_BASE_URL=http://localhost:8080 E2E_API=http://localhost:8080 E2E_PASSWORD=your-admin-password pnpm e2e
+```
+
+`E2E_PASSWORD` is the compose stack's `STRUO_ADMIN_PASSWORD`. With `E2E_BASE_URL` unset, the specs
+run against `pnpm dev` on `http://localhost:5173`.
+
 ## Artifacts
 
 Playwright writes `test-results/` and `playwright-report/` on failures/traces; these are gitignored
@@ -70,7 +84,8 @@ and should not be committed.
 ## Further reading
 
 [Chapter 22](../../docs/guide/en/22-testing.md) covers all four test layers (backend, admin SPA
-unit, E2E, and the schema contract) and what CI runs instead.
+unit, E2E, and the schema contract) and which of them CI runs. CI's `e2e` job runs the `core` project
+against the Compose stack; the `sample` project is not run by CI.
 [Chapter 23](../../docs/guide/en/23-sample-walkthrough.md) covers opting the Blog sample in and
 out, including the corresponding cleanup of this directory's `sample/` specs if the sample is
 removed from a fork.
