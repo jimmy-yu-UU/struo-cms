@@ -167,6 +167,23 @@ replica never undercounts, but replicas do not see each other's attempts.
 
 With Redis set, it also holds the DataProtection key ring; see "DataProtection keys" below.
 
+### `Struo:Files:Backend`: more than one replica needs `s3`
+
+The default `local` writes uploaded files to this replica's own disk, under
+`Struo:Files:Local:RootPath`, which defaults to `App_Data/uploads`. It only suits a single replica.
+With more than one replica you must use `s3`; otherwise each replica holds its own set of uploaded
+files: a file exists only on the replica that received the upload, and a request that lands on
+another replica cannot read it.
+
+With a single replica on `local`, mount a persistent volume on `/app/App_Data`. The image declares it
+as a `VOLUME`, but without a mount you get an anonymous volume that stays with the container, so
+replacing the container does not carry it over and the files stay behind on the old container's volume.
+
+`s3` needs all four of `Endpoint`, `Bucket`, `AccessKey` and `SecretKey`; with any one missing, the
+API fails to start. The API cannot tell how many replicas it runs in, so it does not check this for
+you. The image-transform cache does not follow the files backend; see "Variant caching" in
+[Chapter 15](15-files-and-media.md).
+
 ### S3-compatible storage: `ChecksumMode`
 
 `Struo:Files:S3:ChecksumMode` defaults to `WhenRequired`: the S3 client adds a checksum to a request,
@@ -327,7 +344,8 @@ it has; the full meaning of every other setting key is in [Chapter 4](04-configu
 - `Redis__ConnectionString` — leaving it empty means a single replica with an in-process cache
   and a key ring in the container, neither of which is shared between replicas.
 - `Struo__Files__Backend` — defaults to `local`, writing into `/app/App_Data` (inside the
-  declared volume); using `s3` also needs the matching four `Struo__Files__S3__*` keys.
+  declared volume), which only suits a single replica; more than one replica must use `s3`, which
+  also needs the matching four `Struo__Files__S3__*` keys.
 
 This image doesn't set `ASPNETCORE_ENVIRONMENT`; left unset, it falls back to the ASP.NET Core
 framework default of `Production`. That decides the authentication cookie's security policy — see

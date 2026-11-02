@@ -128,6 +128,19 @@ Redis 原子計數器，Redis 連不上時登入會回 5xx。沒設 Redis 時，
 
 設了 Redis，它也存放 DataProtection 金鑰圈，見下面的「DataProtection 金鑰」。
 
+### `Struo:Files:Backend`：多副本必須用 `s3`
+
+預設的 `local` 把上傳的檔案寫在這個副本自己的磁碟上，根目錄是 `Struo:Files:Local:RootPath`，
+預設 `App_Data/uploads`。它只適合單一副本。一個以上的副本就必須用 `s3`，否則每個副本各有一份上傳
+檔案：檔案在哪個副本上傳，就只存在那個副本，打到別的副本會讀不到。
+
+單一副本用 `local`，要把 `/app/App_Data` 掛上持久的 volume。映像把它宣告成 `VOLUME`，但沒掛載時拿到的
+是匿名 volume，它跟著容器走，換掉容器不會自動帶到新容器裡，檔案就留在舊容器的 volume 上。
+
+用 `s3` 要設齊 `Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 四個鍵，缺一個，API 就啟動失敗。
+API 沒辦法知道自己跑了幾個副本，所以不會替你檢查這件事。圖片轉檔快取不跟著檔案後端走，見
+[第 15 章](15-files-and-media.md)的「變體快取」。
+
 ### S3 相容儲存：`ChecksumMode`
 
 `Struo:Files:S3:ChecksumMode` 預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上 checksum、
@@ -266,8 +279,8 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 - `Database__MigrateOnStartup`（選填）——留空就是 `false`，部署時要另外跑 `migrate`；設成
   `true`，API 啟動時自己套用 migration。
 - `Redis__ConnectionString`——留空就是單副本，行程內快取與容器內的金鑰圈都不在副本之間共用。
-- `Struo__Files__Backend`——預設 `local`，寫進 `/app/App_Data`（落在宣告的 volume 裡）；要
-  用 `s3`，還得配上對應的四個 `Struo__Files__S3__*` 鍵。
+- `Struo__Files__Backend`——預設 `local`，寫進 `/app/App_Data`（落在宣告的 volume 裡），只適合
+  單一副本；一個以上的副本必須用 `s3`，還得配上對應的四個 `Struo__Files__S3__*` 鍵。
 
 這個映像沒有設定 `ASPNETCORE_ENVIRONMENT`，不設就是 ASP.NET Core 的框架預設值
 `Production`。這決定了認證 cookie 的安全政策，見上面的正式環境檢查清單。
