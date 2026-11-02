@@ -88,7 +88,7 @@ async function openByTitle(page: Page, title: string): Promise<void> {
   // Edit action instead. Wait for the filtered search to settle to the single matching row first
   // (trash.spec.ts idiom) — otherwise the row locator can transiently match the still-unfiltered page.
   await expect(page.locator('tbody tr')).toHaveCount(1)
-  await page.getByRole('row', { has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
+  await page.getByRole('row').filter({ has: page.getByText(title, { exact: true }) }).getByRole('button', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[0-9a-fA-F-]+$/)
   await expect(titleInput(page)).toHaveValue(title)
 }
@@ -128,7 +128,7 @@ test.afterEach(async ({ page }) => {
   createdId = undefined
 })
 
-test('a revert rejected with 409 shows the dedicated notice and leaves the other editor's change on the server', async ({ page }) => {
+test('a revert rejected with 409 shows the dedicated notice and leaves the other change on the server', async ({ page }) => {
   await login(page)
   const original = `E2E Revert Conflict ${STAMP}`
   const id = await createAndOpen(page, original) // revision #1: Title = original

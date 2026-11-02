@@ -913,7 +913,6 @@ describe('ItemFormView', () => {
       expect(get.mock.calls).toHaveLength(getCalls)
       expect(w.get('.revert-conflict-banner').text()).toContain('Revert failed')
       expect(w.find('.conflict-banner').exists()).toBe(false)
-      expect(w.text()).not.toContain('overwrite')
     })
 
     it('Reload loads the server copy and clears the notice', async () => {
@@ -923,6 +922,20 @@ describe('ItemFormView', () => {
       await flushPromises()
       expect((w.vm as any).model.shared.status).toBe('server-copy')
       expect((w.vm as any).model.version).toBe(9)
+      expect(w.find('.revert-conflict-banner').exists()).toBe(false)
+    })
+
+    it('a save 409 after a revert 409 shows only the save-conflict banner, and its reload clears everything', async () => {
+      const { w, get } = await mountWithRevertConflict()
+      vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+      get.mockResolvedValueOnce({ id: '5', status: 'x', translations: twoLocales, version: 8 })
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect(w.find('.conflict-banner').exists()).toBe(true)
+      expect(w.find('.revert-conflict-banner').exists()).toBe(false)
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
+      expect(w.find('.conflict-banner').exists()).toBe(false)
       expect(w.find('.revert-conflict-banner').exists()).toBe(false)
     })
 

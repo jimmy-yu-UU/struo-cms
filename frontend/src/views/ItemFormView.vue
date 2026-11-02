@@ -268,6 +268,7 @@ async function recoverFromConflict(): Promise<void> {
     // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
     model.version = latestFromServer.version
     conflict.value = true
+    revertConflict.value = false // the save-conflict banner covers this state
   } catch (e) {
     // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
     conflict.value = false
@@ -283,6 +284,7 @@ function reloadLatest(): void {
   // would otherwise silently mutate this "server copy" if it were reused.
   latestFromServer = null
   conflict.value = false
+  revertConflict.value = false
   errors.value = {}
   serverError.value = ''
   // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
@@ -300,7 +302,8 @@ async function onReverted(): Promise<void> {
       deep: editableRelations.value,
     })
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
-    // The reverted copy is the committed state: a pending conflict banner and its cached server copy are void.
+    // The fetched copy is the server's committed state (after a revert, or the revert-conflict reload):
+    // any pending conflict banner and its cached server copy are void.
     conflict.value = false
     revertConflict.value = false
     latestFromServer = null
