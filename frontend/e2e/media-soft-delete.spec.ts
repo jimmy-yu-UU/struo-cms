@@ -42,12 +42,10 @@ function detailDialog(page: Page) {
 function fileTile(page: Page, fileName: string) {
   return page.locator('.media-tile', { has: page.locator('.media-tile__name', { hasText: fileName }) })
 }
-// The Trash view renders a plain `<table class="media-trash-list">` (MediaLibraryView.vue) with the
-// filename as its own <td> text — scope a row by that text. `.locator(sel, { has })` (not
-// `getByRole('row', { has })` — that option isn't part of getByRole's filter set and silently
-// matches every row, including the header) mirrors fileTile()/folderCard()'s proven convention.
+// The Trash view renders through the same MediaGrid as the active view (grid is the default), so a
+// trashed file is a tile wrapper holding the tile button plus its restore/purge action buttons.
 function trashRow(page: Page, fileName: string) {
-  return page.locator('.media-trash-list tbody tr', { has: page.getByText(fileName, { exact: true }) })
+  return page.locator('.media-tile-wrap', { has: page.locator('.media-tile__name', { hasText: fileName }) })
 }
 
 // Uploads one in-memory PNG via the Upload dialog's hidden file input (see media.spec.ts for the

@@ -62,6 +62,20 @@ Pass the credentials:
 E2E_EMAIL=someone@example.com E2E_PASSWORD=your-admin-password pnpm e2e
 ```
 
+### Against an already-deployed stack
+
+Set `E2E_BASE_URL` to the admin SPA's URL to run the specs against a stack that is already up, such
+as the Docker Compose one (nginx on `http://localhost:8080` proxies `/api` on the same origin).
+Playwright then starts no dev server. Point `E2E_API` at the same host, because the auth cookie is
+shared only between identical hosts:
+
+```bash
+E2E_BASE_URL=http://localhost:8080 E2E_API=http://localhost:8080 E2E_PASSWORD=your-admin-password pnpm e2e
+```
+
+`E2E_PASSWORD` is the compose stack's `STRUO_ADMIN_PASSWORD`. With `E2E_BASE_URL` unset, the specs
+run against `pnpm dev` on `http://localhost:5173`.
+
 ## Artifacts
 
 Playwright writes `test-results/` and `playwright-report/` on failures/traces; these are gitignored
