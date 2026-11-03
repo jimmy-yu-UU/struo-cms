@@ -7,6 +7,8 @@
   locale 的呼叫端，會失去它的翻譯列。見[第 9 章](09-revisions-and-trash.md)。
 - 被清空的富文字欄位會以 `null` 儲存。富文字欄位是 `NOT NULL` 的 fork，這次儲存會失敗。見
   [第 6 章](06-field-types.md)。
+- `IItemRepository.SyncTranslationsAsync` 改成接收一個 `TranslationSyncRequest`（同時帶著要刪除的
+  locale），取代原本分開的參數。實作 `IItemRepository` 的 fork 要更新它的覆寫。
 :::
 
 ### 新增

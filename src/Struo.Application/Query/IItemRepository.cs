@@ -137,23 +137,15 @@ public interface IItemRepository
         CancellationToken ct = default);
 
     /// <summary>
-    /// Merges translation rows for an existing parent. For each entry in <paramref name="perLocale"/>
-    /// (locale → camelField → value), the fields sent (CLR property names in
-    /// <paramref name="fieldProperties"/>) are set on the stored row for that <c>(parentId, locale)</c>
-    /// in place — a field not sent keeps its stored value, an explicit null clears it — or a row is
-    /// inserted when the locale has none. Each locale in <paramref name="deleteLocales"/> has its stored
-    /// row deleted by primary key; a locale with no stored row is skipped. Locales in neither argument
-    /// are left untouched (partial updates supported). The whole operation is transaction-wrapped.
+    /// Merges translation rows for an existing parent. For each locale in
+    /// <see cref="TranslationSyncRequest.PerLocale"/>, the fields sent are set on the stored row for that
+    /// <c>(parentId, locale)</c> in place — a field not sent keeps its stored value, an explicit null
+    /// clears it — or a row is inserted when the locale has none. Each locale in
+    /// <see cref="TranslationSyncRequest.DeleteLocales"/> has its stored row deleted by primary key; a
+    /// locale with no stored row is skipped. Locales in neither collection are left untouched (partial
+    /// updates supported). The whole operation is transaction-wrapped.
     /// </summary>
-    Task SyncTranslationsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        IReadOnlyCollection<string>? deleteLocales = null,
-        CancellationToken ct = default);
+    Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default);
 
     // ── Purge referential-integrity primitives ─────────────
     // Default implementations THROW rather than silently no-op: a second implementation that forgot

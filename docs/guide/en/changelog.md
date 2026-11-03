@@ -8,6 +8,9 @@
   loses its translation row. See [Chapter 9](09-revisions-and-trash.md).
 - A cleared rich text field is saved as `null`. A fork whose rich text column is `NOT NULL` fails
   that save. See [Chapter 6](06-field-types.md).
+- `IItemRepository.SyncTranslationsAsync` takes a `TranslationSyncRequest`, which also carries the
+  locales to delete, in place of the separate arguments. A fork that implements `IItemRepository`
+  updates its override.
 :::
 
 ### Added

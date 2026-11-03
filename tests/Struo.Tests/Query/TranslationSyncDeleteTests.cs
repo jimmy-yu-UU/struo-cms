@@ -2,6 +2,7 @@
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Application.Query;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Struo.Infrastructure.Query;
@@ -53,18 +54,18 @@ public sealed class TranslationSyncDeleteTests : IDisposable
             ? _repo.InsertTranslationsAsync(
                 typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
                 fields, articleId, perLocale)
-            : _repo.SyncTranslationsAsync(
+            : _repo.SyncTranslationsAsync(new TranslationSyncRequest(
                 typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
-                fields, articleId, perLocale);
+                fields, articleId, perLocale));
     }
 
     private Task SyncManyAsync(Guid articleId, params (string Locale, string Title)[] locales) =>
-        _repo.SyncTranslationsAsync(
+        _repo.SyncTranslationsAsync(new TranslationSyncRequest(
             typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
             [nameof(FxArticleTranslation.Title), nameof(FxArticleTranslation.Body)], articleId,
             locales.ToDictionary(
                 l => l.Locale,
-                l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title }));
+                l => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?> { ["title"] = l.Title })));
 
     private bool Deleted() =>
         _sql.Exists(s => s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
@@ -148,10 +149,11 @@ public sealed class TranslationSyncDeleteTests : IDisposable
     }
 
     private Task SyncDeletingAsync(Guid articleId, params string[] deleteLocales) =>
-        _repo.SyncTranslationsAsync(
+        _repo.SyncTranslationsAsync(new TranslationSyncRequest(
             typeof(FxArticleTranslation), nameof(FxArticleTranslation.FxArticleId), nameof(FxArticleTranslation.Locale),
             [nameof(FxArticleTranslation.Title), nameof(FxArticleTranslation.Body)], articleId,
-            new Dictionary<string, IReadOnlyDictionary<string, object?>>(), deleteLocales);
+            new Dictionary<string, IReadOnlyDictionary<string, object?>>())
+        { DeleteLocales = deleteLocales });
 
     [Fact]
     public async Task Deleting_a_stored_locale_removes_only_its_row_by_primary_key()

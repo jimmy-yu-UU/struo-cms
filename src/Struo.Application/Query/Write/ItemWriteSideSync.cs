@@ -149,8 +149,10 @@ public sealed class ItemWriteSideSync(
                 parentId, perLocale, ct);
         else
             await repository.SyncTranslationsAsync(
-                tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields,
-                parentId, perLocale, deleteLocales, ct);
+                new TranslationSyncRequest(
+                    tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields, parentId, perLocale)
+                { DeleteLocales = deleteLocales },
+                ct);
     }
 
     // `"<locale>": null` on an update deletes that locale's translation; the default locale cannot be

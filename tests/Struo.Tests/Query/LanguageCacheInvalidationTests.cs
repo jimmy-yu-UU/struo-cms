@@ -135,7 +135,7 @@ public class LanguageCacheInvalidationTests
             Task.FromResult<IReadOnlyList<object>>([]);
         public Task InsertTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, CancellationToken ct) =>
             Task.CompletedTask;
-        public Task SyncTranslationsAsync(Type tt, string fk, string lp, IReadOnlyList<string> fp, object pid, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> pl, IReadOnlyCollection<string>? dl = null, CancellationToken ct = default) =>
+        public Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default) =>
             Task.CompletedTask;
     }
 
