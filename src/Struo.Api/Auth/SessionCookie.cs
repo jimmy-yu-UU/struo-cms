@@ -36,14 +36,14 @@ public sealed class SessionCookieName(Func<string> resolve)
 /// <c>Path=/</c> and no <c>Domain</c>. Browsers silently drop a cookie that breaks its prefix rule, which
 /// would sign nobody in.
 /// </summary>
-internal sealed partial class SessionCookieOptionsValidator : IValidateOptions<CookieAuthenticationOptions>
+internal sealed class SessionCookieOptionsValidator : IValidateOptions<CookieAuthenticationOptions>
 {
     private const string HostPrefix = "__Host-";
     private const string SecurePrefix = "__Secure-";
 
     // RFC 6265 cookie-name is an RFC 2616 token.
-    [GeneratedRegex("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex TokenPattern();
+    private static readonly Regex TokenPattern =
+        new("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+\\z", RegexOptions.CultureInvariant | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
     public ValidateOptionsResult Validate(string? name, CookieAuthenticationOptions options)
     {
@@ -51,7 +51,7 @@ internal sealed partial class SessionCookieOptionsValidator : IValidateOptions<C
 
         var cookie = options.Cookie;
         var cookieName = cookie.Name ?? "";
-        if (!TokenPattern().IsMatch(cookieName))
+        if (!TokenPattern.IsMatch(cookieName))
             return ValidateOptionsResult.Fail(
                 $"{SessionCookieName.ConfigKey} ('{cookieName}') is not a valid cookie name: use letters, digits and these characters only: ! # $ % & ' * + - . ^ _ ` | ~");
 
