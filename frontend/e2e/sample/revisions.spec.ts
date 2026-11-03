@@ -119,7 +119,7 @@ function revisionRow(page: Page, n: number) {
 function revertButton(page: Page) {
   return page.getByRole('button', { name: 'Revert to this revision' })
 }
-// The revert confirmation now routes through the app-wide ConfirmHost (store-backed
+// The revert confirmation routes through the app-wide ConfirmHost (store-backed
 // AlertDialog), the same single host every other confirmation on this page uses.
 function revertConfirmDialog(page: Page) {
   return page.getByRole('alertdialog').filter({ hasText: 'Confirm revert' })

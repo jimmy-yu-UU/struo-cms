@@ -163,7 +163,6 @@ public class TranslationLocaleDeleteTests(ApiFactory factory)
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z");
     }
 
-
     private static async Task<JsonElement> GraphqlAsync(HttpClient c, string query) =>
         Root(await (await c.PostAsJsonAsync("/graphql", new { query })).Content.ReadAsStringAsync());
 
@@ -209,7 +208,6 @@ public class TranslationLocaleDeleteTests(ApiFactory factory)
         root.GetProperty("errors")[0].GetProperty("message").GetString().Should().Contain("needs `fields`");
         (await TranslationsAsync(c, id)).GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("Z");
     }
-
 
     private static async Task<JsonElement> GraphqlVarsAsync(HttpClient c, string query, object variables) =>
         Root(await (await c.PostAsJsonAsync("/graphql", new { query, variables })).Content.ReadAsStringAsync());
