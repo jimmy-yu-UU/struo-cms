@@ -17,7 +17,7 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public class RedisMissingWarningTests(ApiFactory factory)
 {
-    private const string WarningFragment = "Redis:ConnectionString";
+    private const string WarningFragment = "Redis:ConnectionString is empty";
 
     private List<(LogLevel Level, string Message)> StartHost(string environment, string redis)
     {
@@ -60,6 +60,17 @@ public class RedisMissingWarningTests(ApiFactory factory)
         var entries = StartHost("Production", "127.0.0.1:1,abortConnect=false");
 
         entries.Should().NotContain(e => e.Message.Contains(WarningFragment));
+    }
+
+    [Fact]
+    public void Production_with_a_password_less_Redis_and_no_certificate_logs_the_key_ring_warnings()
+    {
+        var entries = StartHost("Production", "127.0.0.1:1,abortConnect=false");
+
+        entries.Where(e => e.Level == LogLevel.Warning && e.Message.Contains("DataProtection:Certificate:Path"))
+            .Should().ContainSingle();
+        entries.Where(e => e.Level == LogLevel.Warning && e.Message.Contains("has no password"))
+            .Should().ContainSingle();
     }
 
     // The host logs through Serilog, which reads sinks registered in DI.

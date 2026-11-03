@@ -1,4 +1,6 @@
 # StruoCMS on Docker Compose.
+# This file is for seeing the result quickly and trying features out; it is not a deployment
+# template. How to deploy, and what to change for your environment, is your decision.
 #   docker compose up -d --build            # PostgreSQL + Redis + API + admin SPA, ready to log in
 #   docker compose up -d postgres redis     # only the dependencies, for development
 #   docker compose --profile s3 up -d postgres redis minio createbuckets
