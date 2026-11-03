@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.21.0
+## 0.21.0 — 2026-11-03
 
 ::: danger Breaking
 - A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
