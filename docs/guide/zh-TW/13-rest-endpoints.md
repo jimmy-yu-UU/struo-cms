@@ -200,6 +200,7 @@ HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
+這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，並多一個 `secure`。
 `me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，

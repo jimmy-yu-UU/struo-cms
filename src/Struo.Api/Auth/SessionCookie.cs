@@ -11,8 +11,11 @@ public sealed class SessionCookieName(Func<string> resolve)
     /// <summary>Config key that renames the session cookie.</summary>
     public const string ConfigKey = "Auth:Cookie:Name";
 
-    /// <summary>The name used when <see cref="ConfigKey"/> is unset or blank.</summary>
+    /// <summary>The name used when <see cref="ConfigKey"/> is unset or blank and the cookie is not always Secure.</summary>
     public const string Default = "struo.session";
+
+    /// <summary>The name used when <see cref="ConfigKey"/> is unset or blank and the cookie is always Secure.</summary>
+    public const string HostDefault = "__Host-struo.session";
 
     /// <summary>The current cookie name.</summary>
     public string Value => resolve();
@@ -20,8 +23,8 @@ public sealed class SessionCookieName(Func<string> resolve)
     /// <summary>A fixed name, for tests that build a middleware directly.</summary>
     public static SessionCookieName Fixed(string name = Default) => new(() => name);
 
-    internal static string FromConfiguration(IConfiguration config) =>
-        config[ConfigKey] is { } name && !string.IsNullOrWhiteSpace(name) ? name : Default;
+    internal static string FromConfiguration(IConfiguration config, bool alwaysSecure) =>
+        config[ConfigKey] is { } name && !string.IsNullOrWhiteSpace(name) ? name : alwaysSecure ? HostDefault : Default;
 }
 
 /// <summary>

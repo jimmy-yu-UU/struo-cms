@@ -6,6 +6,9 @@
 - 改密碼（不論本人或超級管理員代改）會撤銷該使用者的 API 存取權杖。靠權杖驗證的整合需要重新核發
   一支。實作 `IUserAccountStore` 的 fork，要讓 `SetPasswordAsync` 在同一次寫入裡一併清掉權杖。見
   [第 16 章](16-authentication.md)。
+- Production 等一律帶 `Secure` 的環境，預設 session cookie 名稱是 `__Host-struo.session`（原為
+  `struo.session`）。升級後使用者要重新登入一次；設了 `Auth:Cookie:Name` 的部署不受影響。見
+  [第 25 章](25-after-forking.md)。
 :::
 
 ## 0.21.0 — 2026-11-03

@@ -347,7 +347,12 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 | `Auth:Cookie:RequireSecure` | bool (may be empty) | none (environment-dependent) |
-| `Auth:Cookie:Name` | string | `"struo.session"` |
+| `Auth:Cookie:Name` | string (may be empty) | none (`Secure`-dependent) |
+
+When `Auth:Cookie:Name` is empty, an environment where the cookie is always `Secure` (the default outside
+Development, a configured CORS origin, `RequireSecure=true`) uses `__Host-struo.session`, and every other
+one uses `struo.session`. An explicit name is used as written. A name with a `__Host-` or `__Secure-` prefix
+needs the cookie to be always `Secure`, or startup fails.
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed

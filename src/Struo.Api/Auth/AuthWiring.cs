@@ -82,16 +82,15 @@ public static class AuthWiring
         services.AddOptions<CookieAuthenticationOptions>(AuthSchemes.Cookie)
             .Configure<IConfiguration>((options, resolvedConfig) =>
             {
-                options.Cookie.Name = SessionCookieName.FromConfiguration(resolvedConfig);
+                var alwaysSecure = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
+                    || CorsWiring.HasConfiguredOrigins(resolvedConfig);
+                options.Cookie.SecurePolicy = alwaysSecure ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+                // An unnamed cookie is __Host- prefixed exactly when it is always Secure.
+                options.Cookie.Name = SessionCookieName.FromConfiguration(resolvedConfig, alwaysSecure);
                 // A __Host- cookie needs Path=/. Left null, the cookie handler writes the request's PathBase,
                 // which a fork that mounts the app under a path base would see the browser reject.
                 if (options.Cookie.Name.StartsWith("__Host-", StringComparison.OrdinalIgnoreCase))
                     options.Cookie.Path = "/";
-                options.Cookie.SecurePolicy = EnvironmentGates.ResolveCookieRequireSecure(resolvedConfig, env)
-                    ? CookieSecurePolicy.Always
-                    : CookieSecurePolicy.SameAsRequest;
-                if (!CorsWiring.HasConfiguredOrigins(resolvedConfig)) return;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             });
 
         // The cookie's name and prefix rules are checked against these effective options (including a
@@ -102,7 +101,13 @@ public static class AuthWiring
         services.AddSingleton(sp =>
         {
             var monitor = sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
-            return new SessionCookieName(() => monitor.Get(AuthSchemes.Cookie).Cookie.Name ?? SessionCookieName.Default);
+            return new SessionCookieName(() =>
+            {
+                var cookie = monitor.Get(AuthSchemes.Cookie).Cookie;
+                return cookie.Name ?? (cookie.SecurePolicy == CookieSecurePolicy.Always
+                    ? SessionCookieName.HostDefault
+                    : SessionCookieName.Default);
+            });
         });
 
         services.AddAuthorization();

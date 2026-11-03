@@ -7,6 +7,10 @@
   integration that authenticates with the token needs a newly issued one. A fork that implements
   `IUserAccountStore` makes `SetPasswordAsync` clear the token in the same write. See
   [Chapter 16](16-authentication.md).
+- In Production and every other environment where the cookie is always `Secure`, the default session
+  cookie name is `__Host-struo.session` (it was `struo.session`). Users sign in once more after the
+  upgrade; a deployment that sets `Auth:Cookie:Name` is unaffected. See
+  [Chapter 25](25-after-forking.md).
 :::
 
 ## 0.21.0 — 2026-11-03

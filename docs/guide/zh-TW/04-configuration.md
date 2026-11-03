@@ -295,7 +295,11 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 | `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
-| `Auth:Cookie:Name` | 字串 | `"struo.session"` |
+| `Auth:Cookie:Name` | 字串（可留空） | 無（依 `Secure` 判斷） |
+
+`Auth:Cookie:Name` 留空時，cookie 一律帶 `Secure` 的環境（Development 之外的預設、設了 CORS 來源、
+`RequireSecure=true`）用 `__Host-struo.session`，其餘用 `struo.session`。明確設了名稱就照設定。
+帶 `__Host-` 或 `__Secure-` 前綴的名稱要求 cookie 一律帶 `Secure`，否則啟動失敗。
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。

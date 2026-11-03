@@ -228,7 +228,8 @@ HTTP_STATUS:200
 ```
 
 `Set-Cookie`'s value is long and elided here; what matters is that the header itself appears,
-carrying `path=/`, `samesite=lax`, `httponly`. `me` returns an empty `permissions` for a
+carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a Development host; where the cookie is
+always `Secure`, the name is `__Host-struo.session` and `secure` is added. `me` returns an empty `permissions` for a
 super-admin, because every grant is already implied by that identity.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
