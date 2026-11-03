@@ -276,7 +276,7 @@ same fail-fast mechanism. Here is the API image starting against an empty SQLite
 
 ```
 [10:35:35 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -602,8 +602,9 @@ docker run --detach --name api --network struo-verify --volume struo-verify-data
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-The third command ends by printing `Applied 202610080000  CreateCoreSchema` and
-`Applied 202610080001  SeedCoreData`. Without it, the `api` container exits with the message shown
+The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
+`Applied 202610080001  SeedCoreData` and `Applied 202611030000  AddLanguageCodeUniqueIndex`.
+Without it, the `api` container exits with the message shown
 in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit

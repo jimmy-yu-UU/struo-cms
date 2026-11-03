@@ -218,7 +218,7 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 
 ```
 [10:35:35 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -487,7 +487,8 @@ docker run --detach --name api --network struo-verify --volume struo-verify-data
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-第三道指令最後印出 `Applied 202610080000  CreateCoreSchema` 與 `Applied 202610080001  SeedCoreData`。
+第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData` 與
+`Applied 202611030000  AddLanguageCodeUniqueIndex`。
 少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用

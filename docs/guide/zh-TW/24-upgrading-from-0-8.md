@@ -45,7 +45,8 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
    Recorded 202610120942  CreateNotes
-   4 migration(s) recorded as applied.
+   Recorded 202611030000  AddLanguageCodeUniqueIndex
+   5 migration(s) recorded as applied.
    ```
 
    植入資料只被記錄、沒有執行，既有的使用者、角色與語言不受影響。它只新增版本表，v0.8.x 的

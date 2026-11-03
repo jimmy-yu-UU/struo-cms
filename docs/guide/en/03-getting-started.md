@@ -134,6 +134,7 @@ $ dotnet run --project src/Struo.Api -- migrate
 [16:47:28 INF] => 0.0019894s
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
+Applied 202611030000  AddLanguageCodeUniqueIndex
 ```
 
 This step is required: the copied settings file sets `Database:MigrateOnStartup` to `false`, and
@@ -171,7 +172,7 @@ the previous step looks like this (stack trace omitted):
 
 ```text
 [18:30:49 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 

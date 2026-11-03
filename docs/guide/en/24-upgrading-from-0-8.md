@@ -51,7 +51,8 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
    Recorded 202610120942  CreateNotes
-   4 migration(s) recorded as applied.
+   Recorded 202611030000  AddLanguageCodeUniqueIndex
+   5 migration(s) recorded as applied.
    ```
 
    The seed is recorded, not run, so existing users, roles and languages are untouched. Baseline only

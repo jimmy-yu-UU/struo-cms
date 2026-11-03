@@ -29,6 +29,12 @@
   stream. Set `false` for an S3-compatible service that rejects chunked uploads; the upload is then
   signed with the SHA-256 of the whole payload. `ChecksumMode` governs checksums only. See
   [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
+- The core migration `AddLanguageCodeUniqueIndex` adds a unique index on `code` in `struo_languages`;
+  the database rejects a second language row with the same `code`. Case-insensitive uniqueness
+  stays an application rule. The migration is applied by `migrate` or `Database:MigrateOnStartup`. If the
+  table already holds two rows with an identical `code`, the migration fails and the run stops there:
+  delete or rename the duplicate language row, then run `migrate` again. See
+  [Chapter 7](07-i18n.md) and [Chapter 21](21-schema-and-upgrades.md).
 
 ### Fixed
 

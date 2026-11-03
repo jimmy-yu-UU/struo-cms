@@ -14,7 +14,7 @@ Migration 放在三個地方：
 
 - **核心**：`src/Struo.Infrastructure/Migrations/Core/`。`CreateCoreSchema` 建框架資料表，
   `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
-  `Rbac:PublicReadCollections` 列出的公開讀取權限。
+  `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code` 加上唯一索引。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
@@ -57,7 +57,8 @@ $ dotnet run --project src/Struo.Api -- migrate:status
 202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
 202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
 202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
-3 applied, 0 pending, 0 orphaned
+202611030000   Applied   2026-10-12 09:57:49Z  AddLanguageCodeUniqueIndex
+4 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` 是還沒套用，`Orphaned` 是版本表裡有紀錄、但掃描到的組件裡已經找不到那支
@@ -83,7 +84,7 @@ API 開始服務之前，`StartupMigrationGate` 先看資料庫。`Database:Migr
 
 ```
 [17:57:36 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 

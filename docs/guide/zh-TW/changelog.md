@@ -23,6 +23,11 @@
 - `Struo:Files:S3:UseChunkEncoding`（預設 `true`）：S3 上傳是否簽成 `aws-chunked` 串流。S3 相容服務拒絕
   分塊上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。`ChecksumMode` 只管檢查碼。見
   [第 4 章](04-configuration.md)與[第 15 章](15-files-and-media.md)。
+- 核心 migration `AddLanguageCodeUniqueIndex` 為 `struo_languages` 的 `code` 加上唯一索引；資料庫會拒絕
+  第二列相同 `code` 的語言。大小寫不同的唯一性仍由應用層把關。這支 migration 由 `migrate` 或
+  `Database:MigrateOnStartup` 套用。資料表裡若已有兩列完全相同的 `code`，migration 會失敗並在那裡停下：
+  先刪除或改名重複的語言列，再重新執行 `migrate`。見[第 7 章](07-i18n.md)與
+  [第 21 章](21-schema-and-upgrades.md)。
 
 ### 修正
 

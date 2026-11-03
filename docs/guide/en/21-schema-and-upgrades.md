@@ -14,7 +14,8 @@ Migrations live in three places:
 
 - **Core**: `src/Struo.Infrastructure/Migrations/Core/`. `CreateCoreSchema` creates the framework
   tables; `SeedCoreData` seeds the languages, the `admin` and `public` roles, the bootstrap admin,
-  and the public read grants listed in `Rbac:PublicReadCollections`.
+  and the public read grants listed in `Rbac:PublicReadCollections`. `AddLanguageCodeUniqueIndex` adds
+  the unique index on the language `code`.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in the API host project itself, or in a content project that is listed in
@@ -61,7 +62,8 @@ $ dotnet run --project src/Struo.Api -- migrate:status
 202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
 202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
 202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
-3 applied, 0 pending, 0 orphaned
+202611030000   Applied   2026-10-12 09:57:49Z  AddLanguageCodeUniqueIndex
+4 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` means not applied yet. `Orphaned` means the version table has a record but no scanned
@@ -90,7 +92,7 @@ pending, exiting with code `1`:
 
 ```
 [17:57:36 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
