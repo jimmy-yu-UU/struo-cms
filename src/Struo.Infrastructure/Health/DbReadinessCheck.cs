@@ -2,14 +2,16 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Localization;
 
 namespace Struo.Infrastructure.Health;
 
 /// <summary>
-/// Reports the database as ready when a connection can be opened within
-/// <see cref="DatabaseOptions.ReadinessTimeoutSeconds"/>. The probe is synchronous, so it runs on a pool
-/// thread and is raced against the timeout; a probe that outlives the timeout finishes in the background
-/// and its result is discarded.
+/// Reports the database as ready when one typed read of the <c>languages</c> table answers within
+/// <see cref="DatabaseOptions.ReadinessTimeoutSeconds"/>. The read is a real round trip, so a pooled
+/// connection whose server is gone fails it. The probe is synchronous, so it runs on a pool thread and is
+/// raced against the timeout; the command timeout is the same value. A probe that outlives the timeout
+/// finishes in the background and its result is discarded.
 /// </summary>
 public sealed class DbReadinessCheck : IHealthCheck
 {
@@ -40,10 +42,15 @@ public sealed class DbReadinessCheck : IHealthCheck
     private Func<bool> CreateDatabaseProbe()
     {
         var copy = _db.CopyNew();
+        var commandTimeoutSeconds = _timeoutSeconds;
         return () =>
         {
             using (copy)
-                return copy.Ado.IsValidConnection();
+            {
+                copy.Ado.CommandTimeOut = commandTimeoutSeconds;
+                _ = copy.Queryable<Language>().Take(1).ToList();
+                return true;
+            }
         };
     }
 

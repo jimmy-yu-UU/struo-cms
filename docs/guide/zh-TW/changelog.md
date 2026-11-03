@@ -18,6 +18,12 @@
   `Query:MaxOffset`。見[第 4 章](04-configuration.md)與[第 10 章](10-query-basics.md)。
 :::
 
+### 修正
+
+- `/health/ready` 讀 `languages` 資料表的一筆資料，指令逾時等於 `Database:ReadinessTimeoutSeconds`，
+  而非只看連線狀態。資料庫停了或缺 `languages` 資料表時，第一次呼叫就回 503，而不是等連線池裡的連線都失效。
+  見[第 20 章](20-deployment.md)。
+
 ## 0.22.0 — 2026-11-03
 
 ::: danger 破壞性變更
