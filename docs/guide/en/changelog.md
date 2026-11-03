@@ -6,6 +6,8 @@
 - A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
   translations match the snapshot. A client that relied on a revert leaving such a locale in place
   loses its translation row. See [Chapter 9](09-revisions-and-trash.md).
+- A cleared rich text field is saved as `null`. A fork whose rich text column is `NOT NULL` fails
+  that save. See [Chapter 6](06-field-types.md).
 :::
 
 ### Added
@@ -24,8 +26,7 @@
 - A locale whose only values are empty lists, empty objects or empty rich text is not counted as
   filled. One content rule decides locale completeness and which locales a save sends. See
   [Chapter 7](07-i18n.md).
-- A cleared rich text field is saved as `null`. A fork whose rich text column is `NOT NULL` fails
-  that save.
+- A cleared rich text field is saved as `null`; see Breaking above.
 - Clearing a non-default locale that had content deletes it on save in the admin SPA. The default
   locale is never sent as `null`. See [Chapter 7](07-i18n.md).
 - A revert that fails with a `409` shows a dedicated notice with a reload action only, and leaves the
