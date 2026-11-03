@@ -345,7 +345,7 @@ back onto the write side exactly.
 
 The resolver converts this array back into the locale-keyed object the write path already consumes,
 applying the same "only the keys actually sent" pruning before that conversion; when the same locale
-appears twice, the later entry wins.
+appears twice, the mutation fails with `BAD_USER_INPUT`, as REST does.
 
 On update the stored row is merged field by field: a field the input sends is updated, one it leaves
 out keeps its value, and an explicit `null` clears it. A required translation that's missing comes

@@ -581,22 +581,22 @@ public class GraphQlMutationExecutionTests
     }
 
     [Fact]
-    public async Task Duplicate_locale_last_writer_wins()
+    public async Task Duplicate_locale_is_rejected_as_BAD_USER_INPUT()
     {
-        JsonElement? body = null;
+        var created = false;
         var ds = new FakeGraphQlDataSource
         {
-            OnCreate = (_, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
-            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
+            OnCreate = (_, _) => { created = true; return new Dictionary<string, object?> { ["id"] = "1" }; },
         };
 
-        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
+        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
             "mutation { createArticle(input: { translations: [ " +
             "{ locale: \"en\", fields: { title: \"first\" } }, " +
-            "{ locale: \"en\", fields: { title: \"second\" } } ] }) { id } }");
-        ParseData(result);
+            "{ locale: \"en\", fields: { title: \"second\" } } ] }) { id } }")).ToJson();
 
-        body!.Value.GetProperty("translations").GetProperty("en").GetProperty("title").GetString().Should().Be("second");
+        json.Should().Contain("BAD_USER_INPUT");
+        json.Should().Contain("Locale 'en' appears more than once in translations.");
+        created.Should().BeFalse();
     }
 
     [Fact]

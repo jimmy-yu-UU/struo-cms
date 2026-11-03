@@ -75,6 +75,7 @@ public sealed class ItemWriteSideSync(
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
         var deleteLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<QueryErrorDetail>();
+        var seenLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // On update a required field is judged on the merged value (stored + sent), because the store keeps
         // the stored value of a field the request omits.
@@ -86,6 +87,7 @@ public sealed class ItemWriteSideSync(
         {
             var locale = await languages.CanonicalizeAsync(localeProp.Name)
                 ?? throw new QueryException($"Unknown or disabled locale '{localeProp.Name}'.");
+            if (!seenLocales.Add(locale)) throw DuplicateLocale(locale);
             if (localeProp.Value.ValueKind == JsonValueKind.Null)
             {
                 await CollectLocaleDeleteAsync(locale, isCreate, deleteLocales);
@@ -100,7 +102,7 @@ public sealed class ItemWriteSideSync(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = JsonBodyUtil.JsonValue(field.Value);
+                var value = BindTranslationValue(tm, field, locale);
                 if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
                     value = richText.Sanitize(s);
                 fieldValues[field.Name] = value;
@@ -153,6 +155,31 @@ public sealed class ItemWriteSideSync(
                     tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields, parentId, perLocale)
                 { DeleteLocales = deleteLocales },
                 ct);
+    }
+
+    /// <summary>The error for a locale named more than once in one <c>translations</c> payload.</summary>
+    public static QueryException DuplicateLocale(string locale)
+    {
+        var message = $"Locale '{locale}' appears more than once in translations.";
+        return new QueryException(message, [new QueryErrorDetail("translations", locale, message)]);
+    }
+
+    // A value binds to its sidecar property type with the options root fields use; JSON null clears the
+    // field. A value of the wrong shape is a 400 naming the field and the locale.
+    private static object? BindTranslationValue(TranslationMetadata tm, JsonProperty field, string locale)
+    {
+        if (field.Value.ValueKind == JsonValueKind.Null) return null;
+        var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, field.Name);
+        if (prop is null) return JsonBodyUtil.JsonValue(field.Value);
+        try
+        {
+            return field.Value.Deserialize(prop.PropertyType, ItemDeserializer.JsonOpts);
+        }
+        catch (JsonException)
+        {
+            var message = $"Field '{field.Name}' has an invalid value for locale '{locale}'.";
+            throw new QueryException(message, [new QueryErrorDetail(field.Name, locale, message)]);
+        }
     }
 
     // `"<locale>": null` on an update deletes that locale's translation; the default locale cannot be

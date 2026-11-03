@@ -280,7 +280,7 @@ HTTP_STATUS:200
 有翻譯 sidecar 的集合，建立跟更新輸入都多一個 `translations: [<X>TranslationInput!]`，每筆是
 `{ locale: String!, fields: <X>TranslationFieldsInput }`——讀取端那份陣列形狀，原樣鏡射回寫入端。
 resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物件，轉換之前已經套用過「只留真的有送的
-欄位」這層修剪；同一個 locale 出現兩次，後面那筆贏。可翻譯的自有欄位不在建立與更新輸入裡出現，只能
+欄位」這層修剪；同一個 locale 出現兩次，mutation 以 `BAD_USER_INPUT` 失敗，與 REST 一致。可翻譯的自有欄位不在建立與更新輸入裡出現，只能
 透過這個型別化的 `translations` 輸入去改；建立時一樣要求有一筆預設 locale 的翻譯。
 
 更新時，已存的那一列是逐欄位合併：輸入有送的欄位會更新，沒送的保留原值，明確送 `null` 則清空。缺必填

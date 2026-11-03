@@ -8,6 +8,14 @@
   rejects such a value at the type layer. A client that sends one drops it or sends the integer it
   read. An integer string such as `"3"`, `null` and an absent `version` are accepted. See
   [Chapter 12](12-rest-conventions.md) and [Chapter 13](13-rest-endpoints.md).
+- A translation field value of the wrong shape for its sidecar property (a number, object or array
+  sent to a string field, a non-GUID string to a `Guid?` field) returns `400` `BAD_USER_INPUT` naming
+  the field and the locale, by the same rules as a root field; it used to be stored loosely. `null`
+  still clears the field. See [Chapter 7](07-i18n.md).
+- A locale named twice in one `translations` payload returns `400` and writes nothing, whether the
+  keys are identical, differ only in case, or one is `null`; GraphQL rejects an identical repeat the
+  same way. Previously the later key won. A client that repeats a locale sends it once. See
+  [Chapter 7](07-i18n.md) and [Chapter 14](14-graphql.md).
 :::
 
 ## 0.22.0 — 2026-11-03
