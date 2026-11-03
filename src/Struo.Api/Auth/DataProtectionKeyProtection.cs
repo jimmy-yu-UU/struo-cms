@@ -7,7 +7,8 @@ namespace Struo.Api.Auth;
 
 /// <summary>
 /// Encrypts the key ring with <c>DataProtection:Certificate:Path</c> and decrypts it with that certificate
-/// or any of <c>Certificate:Previous</c>. The framework's certificate decryption list cannot be filled
+/// or any of <c>Certificate:Previous</c> (the framework also looks a certificate up by thumbprint in the
+/// operating system's certificate stores). The framework's certificate decryption list cannot be filled
 /// from late-bound configuration, so the decryptor type recorded in each stored key is
 /// <see cref="CertificateKeyDecryptor"/>, which delegates to the framework's own decryption.
 /// </summary>
@@ -44,17 +45,5 @@ internal sealed class DataProtectionKeyProtection : IDisposable
     {
         public EncryptedXmlInfo Encrypt(System.Xml.Linq.XElement plaintextElement) =>
             new(inner.Encrypt(plaintextElement).EncryptedElement, typeof(CertificateKeyDecryptor));
-    }
-}
-
-/// <summary>Decryptor recorded in keys stored under <see cref="DataProtectionKeyProtection"/>.</summary>
-public sealed class CertificateKeyDecryptor(IServiceProvider services) : IXmlDecryptor
-{
-    public System.Xml.Linq.XElement Decrypt(System.Xml.Linq.XElement encryptedElement)
-    {
-        var decryptor = services.GetRequiredService<DataProtectionKeyProtection>().Decryptor
-            ?? throw new InvalidOperationException(
-                "A stored key is encrypted with a certificate but DataProtection:Certificate:Path is not set.");
-        return decryptor.Decrypt(encryptedElement);
     }
 }

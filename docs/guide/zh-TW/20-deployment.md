@@ -324,8 +324,8 @@ Production 下，設了 `Redis:ConnectionString` 而 `DataProtection:Certificate
 沒有設憑證的啟動在任何環境都失敗。密碼不要放進提交的檔案：用 `DataProtection__Certificate__Password`
 或你的密鑰管理，PFX 檔案以唯讀方式掛進容器。
 
-這個加密防的是能讀到金鑰圈的人，例如外流的 Redis 備份或快照。它防不了能寫入 Redis 的人：憑證的公開部分就
-足以加密他們自己的金鑰，他們也能直接寫入工作階段 ticket。Redis 的存取控制，也就是密碼與私有網路，仍然必要。
+這個加密防的是能讀到金鑰圈的人，例如外流的 Redis 備份或快照。它防不了能寫入 Redis 的人：他們能加一把自己的金鑰，
+未加密的金鑰不需要任何憑證就會被接受，他們也能直接寫入工作階段 ticket。Redis 的存取控制，也就是密碼與私有網路，仍然必要。
 
 更換憑證的步驟：
 
@@ -333,8 +333,9 @@ Production 下，設了 `Redis:ConnectionString` 而 `DataProtection:Certificate
    `DataProtection:Certificate:Previous:0:Path` 與 `:Password`。
 2. 以這份設定部署每個副本。新金鑰用新憑證加密；金鑰圈裡既有的金鑰仍由舊憑證加密，`Previous` 讓每個副本
    還讀得了它們。
-3. 等到用舊憑證寫入的金鑰都用不到了，才把舊的那一筆從 `Previous` 移除。太早移除不會讓主機停下來，但那些金鑰
-   保護的工作階段會被拒絕，使用者要重新登入。
+3. 切換之後，舊的那一筆在 `Previous` 至少再留 90 天，加上最長的工作階段存活時間（8 小時）。金鑰預設存活
+   90 天，切換當下的現行金鑰在到期之前仍由舊憑證加密。太早移除不會讓主機停下來，但那些金鑰保護的工作階段會被
+   拒絕，使用者要重新登入。
 
 用其他方式保護金鑰的 fork，照[第 18 章](18-extension-points.md)做。
 

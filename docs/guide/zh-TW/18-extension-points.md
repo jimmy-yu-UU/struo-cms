@@ -540,6 +540,8 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 `IXmlDecryptor`。啟動警告與 `RequireKeyProtection` 只看 `DataProtection:Certificate:Path`，所以用自己加密器的
 fork 會看到警告，也不要開 `RequireKeyProtection`。
 
+## 自己的錯誤：`StruoDomainException`
+
 fork 自己、給客戶端看的錯誤，繼承 `StruoDomainException`，它帶著代碼、400 到 499 的狀態與訊息。REST 與
 GraphQL 都原樣回傳。怎麼定義，以及訊息與代碼的規則，見[第 12 章](12-rest-conventions.md#自己的錯誤代碼)。
 

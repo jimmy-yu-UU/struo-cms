@@ -306,8 +306,8 @@ effect too.
 
 Two Dockerfiles each produce an independent image: the root `Dockerfile` builds the API,
 `frontend/Dockerfile` builds the admin SPA. The root `docker-compose.yml` uses both Dockerfiles to
-start a full stack for seeing the result quickly and trying features out, not a deployment template — see "The local
-Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
+start a full stack for seeing the result quickly and trying features out, not a deployment
+template — see "The local Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
 commands, except a local build conventionally tags `:local` while CI tags `:ci`:
 
 ```
@@ -402,9 +402,9 @@ environment when no certificate is configured. Keep the password out of committe
 the container.
 
 The encryption protects against someone who can read the key ring, such as a leaked Redis backup or
-snapshot. It does not protect against someone who can write to Redis: the certificate's public part is
-enough to encrypt a key of their own, and they can write session tickets directly. Redis access
-control, a password and a private network, is still required.
+snapshot. It does not protect against someone who can write to Redis: they can add a key of their own,
+and an unencrypted key is accepted without any certificate, and they can write session tickets
+directly. Redis access control, a password and a private network, is still required.
 
 To replace the certificate:
 
@@ -413,9 +413,10 @@ To replace the certificate:
 2. Deploy every replica with that configuration. New keys are encrypted with the new certificate; keys
    already in the key ring stay encrypted with the old one, and `Previous` is what lets every replica
    still read them.
-3. Remove the old entry from `Previous` only when no key written under it is still needed. Removing it
-   earlier does not stop the host, but the sessions those keys protected are rejected and the users
-   sign in again.
+3. Keep the old entry in `Previous` for at least 90 days after the switch, plus the longest session
+   lifetime (8 hours). Keys live 90 days by default, and the key that is current when you switch
+   stays encrypted under the old certificate until it expires. Removing the entry earlier does not
+   stop the host, but the sessions those keys protected are rejected and the users sign in again.
 
 A fork that protects the keys some other way follows [Chapter 18](18-extension-points.md).
 

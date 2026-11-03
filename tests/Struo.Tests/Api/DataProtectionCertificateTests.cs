@@ -133,6 +133,40 @@ public sealed class DataProtectionCertificateTests : IDisposable
         Unprotect(onlyCurrent, payload).Should().Equal(1, 2, 3, 4);
     }
 
+    [Fact]
+    public void A_ring_encrypted_with_a_certificate_cannot_be_read_when_restarted_without_one()
+    {
+        var pfx = NewPfx("current");
+        byte[] payload;
+        using (var sp = Build(Certificate(pfx))) payload = Protect(sp);
+
+        using var withoutCertificate = Build([]);
+
+        var act = () => Unprotect(withoutCertificate, payload);
+        act.Should().Throw<CryptographicException>();
+    }
+
+    [Fact]
+    public void The_persisted_decryptor_type_is_stable_across_builds()
+    {
+        using (var sp = Build(Certificate(NewPfx("current")))) Protect(sp);
+
+        var xml = KeyRingXml();
+
+        xml.Should().Contain("decryptorType=\"Struo.Api.Auth.CertificateKeyDecryptor, Struo.Api,");
+        xml.Should().Contain("Version=1.0.0.0");
+    }
+
+    [Fact]
+    public void A_blank_previous_certificate_path_fails_validation()
+    {
+        var settings = Certificate(NewPfx("current"));
+        settings["DataProtection:Certificate:Previous:0:Path"] = "";
+        settings["DataProtection:Certificate:Previous:0:Password"] = Password;
+
+        Validate(settings).Failures.Should().ContainSingle(f => f.Contains("DataProtection:Certificate:Previous:0:Path"));
+    }
+
     private static OptionsValidationException Validate(Dictionary<string, string?> settings)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
