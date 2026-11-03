@@ -8,10 +8,9 @@
   整數。像 `"3"` 這樣的整數字串、`null` 與沒帶 `version` 都會被接受。見
   [第 12 章](12-rest-conventions.md)與[第 13 章](13-rest-endpoints.md)。
 - 翻譯欄位的值形狀與 sidecar 屬性不符（對字串欄位送數字、物件或陣列，對 `Guid?` 欄位送非 GUID 字串），
-  回 `400` `BAD_USER_INPUT` 並點名欄位與 locale，規則與 root 欄位相同；過去這類值會被寬鬆地存下。`null`
-  仍然清空該欄位。見[第 7 章](07-i18n.md)。
+  回 `400` `BAD_USER_INPUT` 並點名欄位與 locale，規則與 root 欄位相同。`null` 會清空該欄位。見[第 7 章](07-i18n.md)。
 - 同一個 `translations` 裡同一個 locale 出現兩次，回 `400` 且什麼都不寫入，兩個鍵完全相同、只差大小寫，
-  或其中一個是 `null` 都一樣；GraphQL 對完全相同的重複同樣拒絕。過去是後面的鍵贏。重複送同一個
+  或其中一個是 `null` 都一樣；GraphQL 對完全相同的重複同樣拒絕。重複送同一個
   locale 的用戶端改成只送一次。見[第 7 章](07-i18n.md)與[第 14 章](14-graphql.md)。
 :::
 

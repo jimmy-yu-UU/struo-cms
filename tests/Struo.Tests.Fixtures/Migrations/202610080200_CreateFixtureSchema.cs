@@ -56,6 +56,7 @@ public sealed class CreateFixtureSchema : StruoMigration
             .WithColumn("title").AsString(255).NotNullable()
             .WithColumn("body").AsLongText(Db).Nullable()
             .WithColumn("internalslug").AsString(255).Nullable()
+            .WithColumn("facts").AsLongText(Db).Nullable()
             .WithColumn("seotitle").AsString(255).Nullable()
             .WithColumn("seometadescription").AsLongText(Db).Nullable()
             .WithColumn("seoogimageid").AsGuid().Nullable();

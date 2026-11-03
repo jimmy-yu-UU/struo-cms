@@ -24,6 +24,9 @@ public sealed class FxArticleTranslation : Struo.Domain.Seo.SeoTranslation
     [SugarColumn(IsNullable = true)]
     [CmsField(Label = "Internal Slug", Interface = FieldInterface.Text, Hidden = true, Sort = 3, Group = "Content")]
     public string? InternalSlug { get; set; }
+    [SugarColumn(IsNullable = true)]
+    [CmsField(Label = "Facts", Interface = FieldInterface.Json, Sort = 4, Group = "Content")]
+    public string? Facts { get; set; }
     // SeoTitle / SeoMetaDescription / SeoOgImageId inherited from SeoTranslation.
     // SqlSugar EntityService hook maps Nullable<T> → IsNullable=true for all backends,
     // so no [SugarColumn(IsNullable=true)] override is needed here.

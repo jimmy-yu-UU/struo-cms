@@ -86,6 +86,22 @@ public class TranslationValueValidationTests(ApiFactory factory)
             .GetProperty("seoOgImageId").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
+    [Theory]
+    [InlineData("{\"a\":1}")]
+    [InlineData("[1,2]")]
+    [InlineData("5")]
+    public async Task Translatable_json_field_stores_the_raw_text(string rawJson)
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var resp = await c.PostAsync("/api/items/fxArticle", Json(
+            $"{{\"status\":\"draft\",\"translations\":{{\"en\":{{\"title\":\"A\",\"facts\":{rawJson}}}}}}}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
+            .GetProperty("facts").GetString().Should().Be(rawJson);
+    }
+
     public static TheoryData<string> DuplicateBodies => new()
     {
         "{\"en\":{\"title\":\"B\"},\"EN\":{\"title\":\"C\"}}",
@@ -108,6 +124,19 @@ public class TranslationValueValidationTests(ApiFactory factory)
         error.GetProperty("details").EnumerateArray().Single().GetProperty("locale").GetString().Should().Be("en");
         (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
             .GetProperty("title").GetString().Should().Be("A");
+    }
+
+    [Fact]
+    public async Task Duplicate_locale_with_root_change_rolls_the_whole_write_back()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = await CreateAsync(c);
+
+        var resp = await c.PutAsync($"/api/items/fxArticle/{id}", Json(
+            "{\"status\":\"published\",\"translations\":{\"en\":{\"title\":\"B\"},\"EN\":{\"title\":\"C\"}}}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await GetAsync(c, id)).GetProperty("status").GetString().Should().Be("draft");
     }
 
     [Fact]

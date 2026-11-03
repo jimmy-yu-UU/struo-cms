@@ -4,6 +4,7 @@ using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query.Write;
 using Struo.Application.Security;
+using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 
@@ -102,7 +103,7 @@ public sealed class ItemWriteSideSync(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = BindTranslationValue(tm, field, locale);
+                var value = BindTranslationValue(meta, tm, field, locale);
                 if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
                     value = richText.Sanitize(s);
                 fieldValues[field.Name] = value;
@@ -165,12 +166,17 @@ public sealed class ItemWriteSideSync(
     }
 
     // A value binds to its sidecar property type with the options root fields use; JSON null clears the
-    // field. A value of the wrong shape is a 400 naming the field and the locale.
-    private static object? BindTranslationValue(TranslationMetadata tm, JsonProperty field, string locale)
+    // field. A Json field keeps its raw JSON text, as a root Json field does. A value of the wrong shape
+    // is a 400 naming the field and the locale.
+    private static object? BindTranslationValue(
+        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale)
     {
         if (field.Value.ValueKind == JsonValueKind.Null) return null;
         var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, field.Name);
         if (prop is null) return JsonBodyUtil.JsonValue(field.Value);
+        var isJson = meta.Fields.Any(f => f.Translatable && f.Interface == FieldInterface.Json
+                                          && string.Equals(f.Name, field.Name, StringComparison.OrdinalIgnoreCase));
+        if (isJson && prop.PropertyType == typeof(string)) return field.Value.GetRawText();
         try
         {
             return field.Value.Deserialize(prop.PropertyType, ItemDeserializer.JsonOpts);
