@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Struo.Infrastructure.Files;
 
-public static partial class StorageKey
+public static class StorageKey
 {
     /// <summary>Builds a collision- and traversal-safe key: <c>{yyyy}/{MM}/{guid:N}{ext}</c>.</summary>
     public static string Create(string originalFileName)
@@ -13,8 +13,10 @@ public static partial class StorageKey
     }
 
     /// <summary>True when <paramref name="key"/> has the shape <see cref="Create"/> produces.</summary>
-    public static bool IsStorageKey(string key) => KeyShape().IsMatch(key);
+    public static bool IsStorageKey(string key) => KeyShape.IsMatch(key);
 
-    [GeneratedRegex(@"^\d{4}/\d{2}/[0-9a-f]{32}(\.[^/]*)?$", RegexOptions.CultureInvariant)]
-    private static partial Regex KeyShape();
+    private static readonly Regex KeyShape = new(
+        @"^\d{4}/\d{2}/[0-9a-f]{32}(\.[^/]*)?$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
 }
