@@ -109,7 +109,7 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 下。
 
 改密碼是除了登入之外唯一有流量限制的端點，依呼叫端自己的 user id 分流；成功後會撤銷該使用者其他
-的工作階段，撤銷失敗回報 `SESSION_REVOCATION_FAILED`，而不是悄悄吞掉，因為密碼本身已經改成功。核
+的工作階段與權杖，撤銷失敗回報 `SESSION_REVOCATION_FAILED`，而不是悄悄吞掉，因為密碼本身已經改成功。核
 發的權杖只顯示這一次，之後只存雜湊；撤銷回 204 或 404。
 
 `effective-permissions` 的 `?roles=` 可以帶一串角色 id，預覽一個還沒儲存的角色組合；帶了但是空字

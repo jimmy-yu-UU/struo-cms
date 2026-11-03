@@ -127,9 +127,9 @@ actual read route for the user row; the body is `{ id, email, name }`. A blank e
 the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected.
 
 Changing password is the only rate-limited endpoint besides login, partitioned by the caller's own
-user id; success revokes that user's other sessions, and a revocation failure comes back as
-`SESSION_REVOCATION_FAILED` rather than being swallowed silently, because the password change
-itself already succeeded. An issued token is shown only this once; only its hash is stored
+user id; success revokes that user's other sessions and their access token, and a revocation
+failure comes back as `SESSION_REVOCATION_FAILED` rather than being swallowed silently, because the
+password change itself already succeeded. An issued token is shown only this once; only its hash is stored
 afterward. Revoking returns `204` or `404`.
 
 The `?roles=` parameter on `effective-permissions` can carry a list of role ids, to preview a role

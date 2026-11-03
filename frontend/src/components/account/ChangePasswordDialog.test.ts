@@ -61,11 +61,12 @@ describe('ChangePasswordDialog', () => {
   })
 
   it('tells the user that a password change revokes the API token, in both modes', async () => {
-    for (const target of ['self-id', 'someone-else']) {
-      const w = mountDialog(target)
-      await flushPromises()
-      expect(w.text()).toContain(en.password.tokenRevokeNote)
-    }
+    const self = mountDialog('self-id')
+    await flushPromises()
+    expect(self.text()).toContain(en.password.tokenRevokeNoteSelf)
+    const other = mountDialog('someone-else')
+    await flushPromises()
+    expect(other.text()).toContain(en.password.tokenRevokeNote)
   })
 
   it('asks for the current password when the target is the signed-in user', async () => {
