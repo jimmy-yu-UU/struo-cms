@@ -23,6 +23,13 @@
   [Chapter 10](10-query-basics.md).
 :::
 
+### Added
+
+- `Struo:Files:S3:UseChunkEncoding` (default `true`): whether an S3 upload is signed as an `aws-chunked`
+  stream. Set `false` for an S3-compatible service that rejects chunked uploads; the upload is then
+  signed with the SHA-256 of the whole payload. `ChecksumMode` governs checksums only. See
+  [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
+
 ### Fixed
 
 - `/health/ready` reads one row of the `struo_languages` table, with a command timeout equal to

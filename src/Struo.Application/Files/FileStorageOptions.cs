@@ -41,6 +41,12 @@ public sealed class FileStorageOptions
         /// for every operation that supports it, which some S3-compatible services reject.</summary>
         public string ChecksumMode { get; set; } = ChecksumWhenRequired;
 
+        /// <summary>True signs an upload as an <c>aws-chunked</c> stream (a signature per chunk). False
+        /// signs it with the SHA-256 of the whole payload and sends no chunk framing, for an
+        /// S3-compatible service that rejects chunked uploads. Independent of
+        /// <see cref="ChecksumMode"/>, which only governs checksums.</summary>
+        public bool UseChunkEncoding { get; set; } = true;
+
         public const string ChecksumWhenRequired = "WhenRequired";
         public const string ChecksumWhenSupported = "WhenSupported";
     }

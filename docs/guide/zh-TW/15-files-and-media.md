@@ -163,11 +163,15 @@ allowed.`。
 
 自訂儲存若回傳預簽章網址，網址的有效時間由 `Struo:Files:S3:PresignTtlSeconds` 決定，跟 S3 後端用的是同一個鍵。
 
-### S3 相容服務與檢查碼
+### S3 相容服務：檢查碼與分塊上傳
 
-S3 用戶端可以在每個請求加上檢查碼，也可以檢查每個回應的檢查碼。有些 S3 相容服務會拒絕這樣的請求，
-上傳就會失敗。`Struo:Files:S3:ChecksumMode` 預設是 `WhenRequired`，只在操作要求時才送檢查碼。服務
-要求每個操作都帶檢查碼時，改設 `WhenSupported`。見[第 4 章](04-configuration.md)。
+兩個鍵各管一件事。`Struo:Files:S3:ChecksumMode` 管檢查碼：S3 用戶端可以在每個請求加上檢查碼，也可以
+檢查每個回應的檢查碼。預設 `WhenRequired` 只在操作要求時才送；服務要求每個操作都帶檢查碼時，設
+`WhenSupported`。
+
+`Struo:Files:S3:UseChunkEncoding` 管串流簽章：預設 `true`，上傳簽成 `aws-chunked` 串流。有些 S3 相容
+服務拒絕這種上傳，上傳就會失敗。這時設 `false`，改用整個內容的 SHA-256 簽章。見
+[第 4 章](04-configuration.md)。
 
 ## 提供檔案：誰看得到
 

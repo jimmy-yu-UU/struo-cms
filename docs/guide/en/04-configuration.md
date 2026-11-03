@@ -196,15 +196,20 @@ the Local nor the S3 keys are validated.
 | `Struo:Files:S3:ForcePathStyle` | bool | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | integer (seconds) | `300` |
 | `Struo:Files:S3:ChecksumMode` | `WhenRequired` or `WhenSupported` | `"WhenRequired"` |
+| `Struo:Files:S3:UseChunkEncoding` | bool | `true` |
 
 When `Backend="s3"`, `Endpoint`, `Bucket`, `AccessKey`, and `SecretKey` must all have a value at
 startup; the default value is the `REPLACE_ME` placeholder, waiting to be replaced. Getting
 `Region`, `ForcePathStyle`, or `PresignTtlSeconds` wrong won't block startup. `PresignTtlSeconds` also sets the lifetime of presigned URLs from a `custom` storage.
 
 `ChecksumMode` decides when the S3 client adds a checksum to a request and checks one on a response.
-`WhenRequired` does so only where the operation demands it, which works with the widest range of
-S3-compatible services. `WhenSupported` does so for every operation that supports it. Any other
-value stops startup when `Backend="s3"`.
+`WhenRequired` does so only where the operation demands it. `WhenSupported` does so for every
+operation that supports it. Any other value stops startup when `Backend="s3"`.
+
+`UseChunkEncoding` decides how an upload is signed, independently of `ChecksumMode`. `true` signs the
+upload as an `aws-chunked` stream, with one signature per chunk. `false` signs it with the SHA-256 of
+the whole payload and sends no chunk framing. Set `false` for a service that does not accept chunked
+uploads.
 
 ### ImageTransform
 

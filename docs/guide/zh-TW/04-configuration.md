@@ -166,14 +166,19 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:S3:ForcePathStyle` | 布林 | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
 | `Struo:Files:S3:ChecksumMode` | `WhenRequired` 或 `WhenSupported` | `"WhenRequired"` |
+| `Struo:Files:S3:UseChunkEncoding` | 布林 | `true` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
 會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
 
 `ChecksumMode` 決定 S3 用戶端何時在請求加上檢查碼、何時檢查回應的檢查碼。`WhenRequired` 只在操作
-要求時才這麼做，能搭配的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
-`Backend="s3"` 時，其他值會讓啟動失敗。
+要求時才這麼做。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。`Backend="s3"` 時，其他值會讓啟動
+失敗。
+
+`UseChunkEncoding` 決定上傳的簽章方式，跟 `ChecksumMode` 無關。`true` 把上傳簽成 `aws-chunked` 串流，
+每個分塊各帶一個簽章。`false` 用整個內容的 SHA-256 簽章，不送分塊格式。服務不接受分塊上傳時設
+`false`。
 
 ### ImageTransform
 

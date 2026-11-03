@@ -16,18 +16,20 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
     private const string UnknownService = "unknown";
+    private readonly bool _useChunkEncoding;
     private readonly string _service;
 
     public S3FileStorage(FileStorageOptions options)
-        : this(CreateClient(options.S3), options.S3.Bucket!) =>
+        : this(CreateClient(options.S3), options.S3.Bucket!, options.S3.UseChunkEncoding) =>
         _service = DescribeService(options.S3);
 
     // Test seam: inject a fake IAmazonS3 to assert request assembly (ContentType / download
     // disposition) without a live S3/MinIO endpoint. Production always goes through the public ctor.
-    internal S3FileStorage(IAmazonS3 client, string bucket)
+    internal S3FileStorage(IAmazonS3 client, string bucket, bool useChunkEncoding = true)
     {
         _client = client;
         _bucket = bucket;
+        _useChunkEncoding = useChunkEncoding;
         _service = UnknownService;
     }
 
@@ -74,7 +76,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         await _client.PutObjectAsync(new PutObjectRequest
         {
             BucketName = _bucket, Key = key, InputStream = content, AutoCloseStream = false,
-            ContentType = contentType
+            ContentType = contentType, UseChunkEncoding = _useChunkEncoding
         }, ct);
 
     public async Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)

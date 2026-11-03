@@ -199,12 +199,16 @@ it. A minimal Azure Blob sketch is in [Chapter 18: Extension Points](18-extensio
 A custom storage that returns presigned URLs gets their lifetime from `Struo:Files:S3:PresignTtlSeconds`, the
 same key the S3 backend uses.
 
-### S3-compatible services and checksums
+### S3-compatible services: checksums and chunked uploads
 
-The S3 client can add a checksum to every request and check one on every response. Some S3-compatible
-services reject such requests, and uploads then fail. `Struo:Files:S3:ChecksumMode` defaults to
-`WhenRequired`, which sends a checksum only where the operation demands one. Set `WhenSupported` for a
-service that expects them on every operation. See [Chapter 4](04-configuration.md).
+Two keys each govern one thing. `Struo:Files:S3:ChecksumMode` governs checksums: the S3 client can add
+a checksum to every request and check one on every response. The default `WhenRequired` sends one only
+where the operation demands it; set `WhenSupported` for a service that expects them on every operation.
+
+`Struo:Files:S3:UseChunkEncoding` governs the streaming signature: by default, `true`, an upload is
+signed as an `aws-chunked` stream. Some S3-compatible services reject such an upload, and uploads then
+fail. Set `false` there, and the upload is signed with the SHA-256 of the whole payload. See
+[Chapter 4](04-configuration.md).
 
 ## Serving files: who can see what
 

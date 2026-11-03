@@ -191,14 +191,18 @@ API fails to start. The API cannot tell how many replicas it runs in, so it does
 you. The image-transform cache does not follow the files backend; see "Variant caching" in
 [Chapter 15](15-files-and-media.md).
 
-### S3-compatible storage: `ChecksumMode`
+### S3-compatible storage: `ChecksumMode` and `UseChunkEncoding`
 
-`Struo:Files:S3:ChecksumMode` defaults to `WhenRequired`: the S3 client adds a checksum to a request,
-and checks one on a response, only where the operation demands it. That works with the widest range
-of S3-compatible services. Some of them reject the checksums a client sends by default, and uploads
-then fail. If your service documents support for them, `WhenSupported` turns them on for every
-operation that can carry one. Any other value stops startup when `Struo:Files:Backend` is `s3`.
-Chapter 15 covers the symptoms.
+`Struo:Files:S3:ChecksumMode` governs checksums and defaults to `WhenRequired`: the S3 client adds a
+checksum to a request, and checks one on a response, only where the operation demands it. Some services
+reject the checksums a client sends by default, and uploads then fail. If your service documents
+support for them, `WhenSupported` turns them on for every operation that can carry one. Any other value
+stops startup when `Struo:Files:Backend` is `s3`.
+
+`Struo:Files:S3:UseChunkEncoding` governs the streaming signature and defaults to `true`: an upload is
+signed as an `aws-chunked` stream. Set `false` for a service that does not accept chunked uploads, and
+the upload is signed with the SHA-256 of the whole payload. The two keys are independent. Chapter 15
+covers the symptoms.
 
 ### Set `AllowedHosts`
 

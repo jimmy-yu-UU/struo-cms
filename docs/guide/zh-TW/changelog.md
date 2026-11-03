@@ -18,6 +18,12 @@
   `Query:MaxOffset`。見[第 4 章](04-configuration.md)與[第 10 章](10-query-basics.md)。
 :::
 
+### 新增
+
+- `Struo:Files:S3:UseChunkEncoding`（預設 `true`）：S3 上傳是否簽成 `aws-chunked` 串流。S3 相容服務拒絕
+  分塊上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。`ChecksumMode` 只管檢查碼。見
+  [第 4 章](04-configuration.md)與[第 15 章](15-files-and-media.md)。
+
 ### 修正
 
 - `/health/ready` 讀 `struo_languages` 資料表的一筆資料，指令逾時等於

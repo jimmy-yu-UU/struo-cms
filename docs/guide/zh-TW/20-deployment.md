@@ -146,12 +146,15 @@ volume，檔案留在舊容器的 volume 上。
 API 沒辦法知道自己跑了幾個副本，所以不會替你檢查這件事。圖片轉檔快取不跟著檔案後端走，見
 [第 15 章](15-files-and-media.md)的「變體快取」。
 
-### S3 相容儲存：`ChecksumMode`
+### S3 相容儲存：`ChecksumMode` 與 `UseChunkEncoding`
 
-`Struo:Files:S3:ChecksumMode` 預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上 checksum、
-才檢查回應的 checksum。這能配合最多種 S3 相容服務。有些服務會拒絕用戶端預設送出的 checksum，上傳就會失敗。
-服務的文件說有支援時，`WhenSupported` 會對每個能帶 checksum 的操作都開啟。其他任何值，在
-`Struo:Files:Backend` 為 `s3` 時都會讓啟動失敗。症狀見第 15 章。
+`Struo:Files:S3:ChecksumMode` 管 checksum，預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上
+checksum、才檢查回應的 checksum。有些服務會拒絕用戶端預設送出的 checksum，上傳就會失敗。服務的文件說有
+支援時，`WhenSupported` 會對每個能帶 checksum 的操作都開啟。其他任何值，在 `Struo:Files:Backend` 為
+`s3` 時都會讓啟動失敗。
+
+`Struo:Files:S3:UseChunkEncoding` 管串流簽章，預設 `true`：上傳簽成 `aws-chunked` 串流。服務不接受分塊
+上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。兩個鍵互相獨立。症狀見第 15 章。
 
 ### 設定 `AllowedHosts`
 
