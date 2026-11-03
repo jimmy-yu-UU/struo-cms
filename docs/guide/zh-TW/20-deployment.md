@@ -327,6 +327,16 @@ Production 下，設了 `Redis:ConnectionString` 而 `DataProtection:Certificate
 這個加密防的是能讀到金鑰圈的人，例如外流的 Redis 備份或快照。它防不了能寫入 Redis 的人：他們能加一把自己的金鑰，
 未加密的金鑰不需要任何憑證就會被接受，他們也能直接寫入工作階段 ticket。Redis 的存取控制，也就是密碼與私有網路，仍然必要。
 
+開啟憑證之後，金鑰圈裡既有的明文金鑰會留在那裡直到到期，預設 90 天。懷疑外流時，也要刪掉 Redis 的
+`DataProtection-Keys` 鍵（或金鑰圈檔案）；所有人會重新登入一次。
+
+在金鑰已加密之後移除 `DataProtection:Certificate:Path`，那些金鑰就讀不了，所有人會被登出。
+
+設了憑證時，每把加密的金鑰都記錄解密器型別 `Struo.Api.Auth.CertificateKeyDecryptor`，它來自
+`Struo.Api` 組件，其 `AssemblyVersion` 固定為 `1.0.0.0`。fork 要保持組件名稱、該類別的名稱與命名空間，以及
+`src/Struo.Api/Struo.Api.csproj` 裡的 `AssemblyVersion` 那一行不變；否則已存的金鑰再也讀不了，所有人會被登出。
+產品版本（`Directory.Build.props` 的 `Version`，檔案版本也由它決定）照常變動。
+
 更換憑證的步驟：
 
 1. 把 `DataProtection:Certificate:Path` 與 `Password` 設成新憑證，並把舊的那一組移到
@@ -610,6 +620,8 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 這個環境設了 `Redis__ConnectionString`，所以 DataProtection 金鑰圈存在它的 `redis` 服務裡，沒有加密，
 為檔案位置掛上的 volume `struo-dpkeys` 用不到。`redis` 服務沒有 volume：重建它會丟掉金鑰圈，連同所有
 工作階段。開發與測試這樣就夠了；正式環境要替 Redis 設密碼，並照上面「DataProtection 金鑰」一節保護金鑰。
+
+`api` 服務每次啟動都會記下兩則 Redis 警告（金鑰沒有保護、Redis 沒有密碼）；快速上手的這個環境這是預期的。
 
 ### S3 相容儲存
 

@@ -403,7 +403,22 @@ the container.
 
 The encryption protects against someone who can read the key ring, such as a leaked Redis backup or
 snapshot. It does not protect against someone who can write to Redis: they can add a key of their own
-(an unencrypted key is accepted without any certificate) and write session tickets directly. Redis access control, a password and a private network, is still required.
+(an unencrypted key is accepted without any certificate) and write session tickets directly. Redis
+access control, a password and a private network, is still required.
+
+Turning on a certificate leaves the plaintext keys already in the key ring there until they expire,
+90 days by default. After a suspected leak, also delete the `DataProtection-Keys` Redis key (or the
+key-ring files); everyone signs in again once.
+
+Removing `DataProtection:Certificate:Path` after keys were encrypted makes those keys unreadable, and
+everyone is signed out.
+
+With a certificate set, every encrypted key records the decryptor type
+`Struo.Api.Auth.CertificateKeyDecryptor` from the `Struo.Api` assembly, whose `AssemblyVersion` is
+fixed at `1.0.0.0`. A fork keeps the assembly name, that class's name and namespace, and the
+`AssemblyVersion` line in `src/Struo.Api/Struo.Api.csproj` unchanged; otherwise the stored keys can no
+longer be read and everyone is signed out. The product version (`Version` in `Directory.Build.props`,
+which also drives the file version) changes as usual.
 
 To replace the certificate:
 
@@ -727,6 +742,9 @@ The PostgreSQL password is a fixed dev value and Redis has no password. Every po
 `STRUO_BIND_ADDRESS` sets the address they bind to; `0.0.0.0` publishes the ports on all network
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
+
+The `api` service logs both Redis warnings (no key protection, no Redis password) on every start; this
+is expected for the quick-start stack.
 
 The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
 move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as

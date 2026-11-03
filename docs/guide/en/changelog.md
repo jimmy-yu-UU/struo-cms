@@ -24,6 +24,13 @@
   `DataProtection:Certificate:Path` is empty and one when the connection string has no password.
   See [Chapter 20](20-deployment.md).
 
+### Changed
+
+- `Struo.Api`'s `AssemblyVersion` is fixed at `1.0.0.0` because certificate-encrypted keys record it;
+  the product and file versions follow `Version` as before. A fork keeps the assembly name,
+  `Struo.Api.Auth.CertificateKeyDecryptor` and that line unchanged. See
+  [Chapter 20](20-deployment.md).
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger Breaking

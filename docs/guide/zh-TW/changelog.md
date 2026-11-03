@@ -19,6 +19,12 @@
 - Production 下設了 `Redis:ConnectionString` 時，`DataProtection:Certificate:Path` 是空的會記一則啟動警告，
   連線字串沒帶密碼也會記一則。見[第 20 章](20-deployment.md)。
 
+### 變更
+
+- `Struo.Api` 的 `AssemblyVersion` 固定為 `1.0.0.0`，因為憑證加密的金鑰會記錄它；產品版本與檔案版本照常
+  跟著 `Version`。fork 要保持組件名稱、`Struo.Api.Auth.CertificateKeyDecryptor` 與那一行不變。見
+  [第 20 章](20-deployment.md)。
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger 破壞性變更

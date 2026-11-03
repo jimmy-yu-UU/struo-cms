@@ -10,8 +10,9 @@ A key encrypted under `DataProtection:Certificate` is stored with `decryptorType
 current and the `Previous` certificates.
 
 The type name and the assembly name are persisted in every encrypted key. Renaming or moving the class,
-or changing the assembly name, makes existing keys unreadable. The assembly version is persisted too, and
-a build that does not carry the same version cannot load a key written by another, so `Struo.Api.csproj`
+or changing the assembly name, makes existing keys unreadable. The assembly version is persisted too. An
+older build cannot load a key written by a newer one (a rollback, or mixed versions during a rolling
+deploy), while a newer assembly still satisfies a lower requested version. `Struo.Api.csproj` therefore
 pins `AssemblyVersion` to `1.0.0.0` (`Directory.Build.props` `Version` still drives the file and
 informational versions).
 
