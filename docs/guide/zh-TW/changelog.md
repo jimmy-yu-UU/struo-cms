@@ -2,10 +2,33 @@
 
 ## 0.21.0
 
+::: danger 破壞性變更
+- 還原會刪掉項目有、但快照裡沒有的已啟用非預設 locale，翻譯因此跟快照一致。依賴還原會保留這類
+  locale 的呼叫端，會失去它的翻譯列。見[第 9 章](09-revisions-and-trash.md)。
+- 被清空的富文字欄位會以 `null` 儲存。富文字欄位是 `NOT NULL` 的 fork，這次儲存會失敗。見
+  [第 6 章](06-field-types.md)。
+- `IItemRepository.SyncTranslationsAsync` 改成接收一個 `TranslationSyncRequest`（同時帶著要刪除的
+  locale），取代原本分開的參數。實作 `IItemRepository` 的 fork 要更新它的實作。
+:::
+
 ### 新增
 
 - CI 新增 `e2e` job，起 Compose stack 並對它跑 Playwright `core` 專案；`sample` 專案不在 CI 裡跑。
   規格可用 `E2E_BASE_URL` 指向已部署的 stack。見[第 22 章](22-testing.md)。
+- 項目更新時，`translations` 裡某個 locale 的值是 `null`，就會刪掉該 locale 的整份翻譯。預設語言
+  不能刪，會得到 `400`；沒有已存列的 locale 會略過。見[第 7 章](07-i18n.md)。
+- GraphQL 翻譯輸入那筆的 `fields: null` 會在更新時刪掉該 locale，規則相同；該輸入的 `fields` 可為
+  null。見[第 14 章](14-graphql.md)。
+
+### 修正
+
+- 只有空清單、空物件或空富文字的 locale，不算作已填。locale 完成度與儲存時要送哪些 locale，由同
+  一條內容規則決定。見[第 7 章](07-i18n.md)。
+- 被清空的富文字欄位會以 `null` 儲存；見上方破壞性變更。
+- 在後台清空一個原本有內容的非預設 locale，儲存時會刪掉它；預設語言永遠不會送 `null`。見[第 7
+  章](07-i18n.md)。
+- 還原遇到 `409` 時，顯示專用提示並且只提供重新載入，表單內容與版本維持原樣。見[第 9
+  章](09-revisions-and-trash.md)。
 
 ## 0.20.1 — 2026-11-02
 

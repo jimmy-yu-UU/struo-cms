@@ -137,21 +137,15 @@ public interface IItemRepository
         CancellationToken ct = default);
 
     /// <summary>
-    /// Upserts translation rows for an existing parent. For each entry in <paramref name="perLocale"/>
-    /// (locale → camelField → value), the stored row for that <c>(parentId, locale)</c> is replaced in
-    /// place — every field in <paramref name="fieldProperties"/> (CLR property names) is set from the
-    /// provided values, so a field not sent is cleared — or a row is inserted when the locale has none.
-    /// Locales not present in <paramref name="perLocale"/> are left untouched (partial updates
-    /// supported), and nothing is deleted. The whole operation is transaction-wrapped.
+    /// Merges translation rows for an existing parent. For each locale in
+    /// <see cref="TranslationSyncRequest.PerLocale"/>, the fields sent are set on the stored row for that
+    /// <c>(parentId, locale)</c> in place — a field not sent keeps its stored value, an explicit null
+    /// clears it — or a row is inserted when the locale has none. Each locale in
+    /// <see cref="TranslationSyncRequest.DeleteLocales"/> has its stored row deleted by primary key; a
+    /// locale with no stored row is skipped. Locales in neither collection are left untouched (partial
+    /// updates supported). The whole operation is transaction-wrapped.
     /// </summary>
-    Task SyncTranslationsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct = default);
+    Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default);
 
     // ── Purge referential-integrity primitives ─────────────
     // Default implementations THROW rather than silently no-op: a second implementation that forgot

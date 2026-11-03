@@ -299,6 +299,7 @@ export default {
     revertConfirmMessage: 'This reverts the item to revision {n} and overwrites your current unsaved edits. A new revision will be recorded.',
     reverted: 'Reverted to revision {n}',
     revertFailed: 'Revert failed',
+    revertConflict: 'Revert failed: this item was changed by someone else. Reload the latest version, then decide whether to revert.',
     detailError: 'Failed to load this revision',
     selectHint: 'Select a revision to view its snapshot',
   },

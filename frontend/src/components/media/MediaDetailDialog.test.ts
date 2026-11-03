@@ -33,6 +33,10 @@ const i18n = createI18n({
   } } },
 })
 
+function sentTranslations(spy: { mock: { calls: unknown[][] } }, call: number): Record<string, unknown> {
+  return (spy.mock.calls[call][2] as { translations: Record<string, unknown> }).translations
+}
+
 const fileMeta = {
   name: 'file', label: 'File',
   fields: [
@@ -629,6 +633,38 @@ describe('MediaDetailDialog', () => {
       await flushPromises()
       expect(w.emitted('saved')).toBeTruthy()
       expect(w.emitted('close')).toBeFalsy()
+    })
+  })
+
+  describe('cleared locale', () => {
+    const withZh = { ...item, translations: { en: { title: 'Hello', alt: 'An image' }, 'zh-TW': { title: 'zh', alt: '' } } }
+    async function open() {
+      vi.spyOn(itemsApi, 'get').mockResolvedValue(withZh as never)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({} as never)
+      const w = mountDialog()
+      await flushPromises()
+      const vm = w.vm as unknown as { setField: (n: string, v: string) => void; activeLocale: string; onSave: () => Promise<void> }
+      return { update, vm, w }
+    }
+
+    it('sends null for a non-default locale cleared since load', async () => {
+      const { update, vm, w } = await open()
+      vm.activeLocale = 'zh-TW'
+      await w.vm.$nextTick()
+      vm.setField('title', '')
+      await vm.onSave()
+      expect(sentTranslations(update, 0)['zh-TW']).toBeNull()
+    })
+
+    it('never sends null for the default locale', async () => {
+      const { update, vm, w } = await open()
+      vm.activeLocale = 'en'
+      await w.vm.$nextTick()
+      vm.setField('title', '')
+      vm.setField('alt', '')
+      await vm.onSave()
+      expect(sentTranslations(update, 0)).not.toHaveProperty('en')
+      expect(sentTranslations(update, 0)['zh-TW']).not.toBeNull()
     })
   })
 })

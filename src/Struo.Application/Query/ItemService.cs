@@ -582,7 +582,13 @@ public sealed class ItemService(
         // sent none. Keep the JsonDocument alive across the awaited update (the body's JsonElement must
         // stay valid).
         using var src = JsonDocument.Parse(rec.Snapshot);
-        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(src.RootElement, expectedVersion));
+        // A locale stored now but absent from the snapshot did not exist at that revision, so the revert
+        // deletes it (`"<locale>": null`).
+        List<string> nonDefault = meta.Translation is null
+            ? []
+            : (await languages.GetEnabledAsync()).Where(l => !l.IsDefault).Select(l => l.Code).ToList();
+        using var withLocales = JsonDocument.Parse(JsonBodyUtil.WithNullLocales(src.RootElement, nonDefault));
+        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(withLocales.RootElement, expectedVersion));
         return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, ct: ct);
     }
 

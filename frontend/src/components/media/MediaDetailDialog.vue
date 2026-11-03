@@ -17,6 +17,7 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { parseItemToForm } from '../../lib/parseItemToForm'
 import { buildItemPayload } from '../../lib/buildItemPayload'
+import { snapshotModel, baselineTranslations } from '../../lib/formDirty'
 import { deleteConfirm } from '../../lib/deleteAction'
 import { formatFileSize } from '../../lib/formatFileSize'
 import { formatDateTime } from '../../lib/formatDateTime'
@@ -35,6 +36,8 @@ const langStore = useLanguageStore()
 const visible = computed(() => props.file !== null)
 const raw = ref<Record<string, unknown> | null>(null)
 const model = ref<FormModel>({ shared: {}, translations: {}, relations: {} })
+// Snapshot of the model as loaded; a non-default locale emptied since then is sent as null.
+const baseline = ref(snapshotModel(model.value))
 const activeLocale = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -104,6 +107,7 @@ async function load(): Promise<void> {
   // Drop the previous file's data first so it can never be shown or saved under the new file.
   raw.value = null
   model.value = { shared: {}, translations: {}, relations: {} }
+  baseline.value = snapshotModel(model.value)
   loading.value = true
   conflict.value = false
   error.value = ''
@@ -128,6 +132,7 @@ async function load(): Promise<void> {
     // Forcing `relations: {}` keeps that key out entirely, so the "untouched" branch actually
     // fires. Do not "simplify" this back to spreading parseItemToForm's own `relations` output.
     if (fileMeta.value) model.value = { ...parseItemToForm(fileMeta.value, item, locales.value), relations: {} }
+    baseline.value = snapshotModel(model.value)
   } catch (e) {
     if (!loadGuard.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
@@ -144,8 +149,10 @@ async function onSave(): Promise<void> {
   conflict.value = false
   error.value = ''
   try {
-    const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update')
+    const payload = buildItemPayload(fileMeta.value, model.value, locales.value, 'update',
+      { baselineTranslations: baselineTranslations(baseline.value) })
     await itemsApi.update('file', savedId, payload)
+    baseline.value = snapshotModel(model.value)
     emit('saved')
     // Only close the dialog this save belongs to; the user may have moved on to another file.
     if (props.file?.id === savedId) emit('close')

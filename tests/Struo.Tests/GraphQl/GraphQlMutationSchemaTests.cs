@@ -117,7 +117,7 @@ public class GraphQlMutationSchemaTests
         var sdl = await BuildSdlAsync();
         var wrapper = InputBlock(sdl, "ArticleTranslationInput");
         wrapper.Should().Contain("locale: String!");
-        wrapper.Should().Contain("fields: ArticleTranslationFieldsInput!");
+        wrapper.Should().Contain("fields: ArticleTranslationFieldsInput").And.NotContain("ArticleTranslationFieldsInput!");
     }
 
     [Fact]

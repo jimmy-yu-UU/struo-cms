@@ -46,6 +46,42 @@ internal static class JsonBodyUtil
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Serialises <paramref name="source"/> with <c>"&lt;locale&gt;": null</c> appended to its top-level
+    /// <c>translations</c> object for each of <paramref name="locales"/> that object does not carry
+    /// (case-insensitive). A body without a <c>translations</c> object is copied unchanged.
+    /// </summary>
+    internal static byte[] WithNullLocales(JsonElement source, IEnumerable<string> locales)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in source.EnumerateObject())
+            {
+                if (!string.Equals(prop.Name, "translations", StringComparison.Ordinal)
+                    || prop.Value.ValueKind != JsonValueKind.Object)
+                {
+                    prop.WriteTo(writer);
+                    continue;
+                }
+                writer.WritePropertyName(prop.Name);
+                writer.WriteStartObject();
+                var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var locale in prop.Value.EnumerateObject())
+                {
+                    present.Add(locale.Name);
+                    locale.WriteTo(writer);
+                }
+                foreach (var missing in locales.Where(l => !present.Contains(l)))
+                    writer.WriteNull(missing);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+        return ms.ToArray();
+    }
+
     /// <summary>Converts a JSON value to a CLR primitive for translation field storage.</summary>
     internal static object? JsonValue(JsonElement e) => e.ValueKind switch
     {

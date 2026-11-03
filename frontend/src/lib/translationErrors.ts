@@ -1,5 +1,5 @@
 import type { FieldMeta } from '../types/schema'
-import { isEmpty } from './fieldTypes/types'
+import { anyHasContent } from './hasContent'
 
 /**
  * Error-map key for a translatable field. The default locale keeps the bare field name (the shape
@@ -21,8 +21,8 @@ export function localeHasErrors(
 
 /**
  * The predicate `buildItemPayload` uses to decide whether a locale's translation is sent: at least one
- * translatable field is non-empty. Validation judges exactly the locales that would be sent.
+ * translatable field has content. Validation judges exactly the locales that would be sent.
  */
 export function localeIsSent(translatable: FieldMeta[], values: Record<string, unknown>): boolean {
-  return translatable.some((f) => !isEmpty(values[f.name]))
+  return anyHasContent(translatable, values)
 }

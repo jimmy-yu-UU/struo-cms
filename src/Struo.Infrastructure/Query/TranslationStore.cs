@@ -1,6 +1,7 @@
 // src/Struo.Infrastructure/Query/TranslationStore.cs
 using System.Reflection;
 using SqlSugar;
+using Struo.Application.Query;
 
 namespace Struo.Infrastructure.Query;
 
@@ -10,10 +11,9 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
             [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, string, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> SyncDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, TranslationSyncRequest, string, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
-            [typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(object),
-             typeof(IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>), typeof(CancellationToken)]);
+            [typeof(TranslationSyncRequest), typeof(string), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<TranslationStore, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> InsertDispatcher =
         new(typeof(TranslationStore), nameof(InsertTranslationsGenericAsync),
@@ -73,17 +73,10 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         CancellationToken ct = default) =>
         await InsertDispatcher.For(translationType)(this, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
 
-    public async Task SyncTranslationsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct = default)
+    public async Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default)
     {
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
-        await SyncDispatcher.For(translationType)(this, fkColumn, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+        var fkColumn = db.EntityMaintenance.GetDbColumnName(request.FkProperty, request.TranslationType);
+        await SyncDispatcher.For(request.TranslationType)(this, request, fkColumn, ct);
     }
 
     // A create inserts under a parent id that is new in this transaction, so there is nothing to look up.
@@ -102,47 +95,52 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
-        string fkColumn,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct) where T : class, new()
+        TranslationSyncRequest request, string fkColumn, CancellationToken ct) where T : class, new()
     {
-        if (perLocale.Count == 0) return;
+        var perLocale = request.PerLocale;
+        var deleteLocales = request.DeleteLocales;
+        if (perLocale.Count == 0 && deleteLocales.Count == 0) return;
 
         var type = typeof(T);
-        var localeProp = type.GetProperty(localeProperty, BindingFlags.Public | BindingFlags.Instance)!;
-        var fieldProps = ResolveFieldProperties(type, fieldProperties);
+        var localeProp = type.GetProperty(request.LocaleProperty, BindingFlags.Public | BindingFlags.Instance)!;
+        var fieldProps = ResolveFieldProperties(type, request.FieldProperties);
 
         await transactions.InTransactionAsync(async () =>
         {
             // An update merges the sent fields onto the stored row of each supplied locale in place (by
             // primary key): a field the request omits keeps its stored value, an explicit null clears it.
-            // A locale with no stored row is inserted. It issues no DELETE: a delete that matches
-            // nothing takes gap locks on the (fk, locale) unique index, and those deadlock concurrent
+            // A locale with no stored row is inserted. A locale to delete is removed only when the read
+            // below found its row, and by primary key. No DELETE is keyed on (fk, locale): one that
+            // matches nothing takes gap locks on that unique index, and those deadlock concurrent
             // updates of different items on InnoDB. The existing rows come from a plain consistent read.
             // Two concurrent updates of the same item are kept apart by the parent's version check
             // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
-            var existing = await LoadExistingAsync<T>(fkColumn, parentId, ct);
+            var existing = await LoadExistingAsync<T>(fkColumn, request.ParentId, ct);
             var updates = new List<T>();
             var insertLocales = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
             foreach (var (locale, values) in perLocale)
             {
-                var stored = existing.Find(e => string.Equals(
-                    (string?)localeProp.GetValue(e), locale, StringComparison.OrdinalIgnoreCase));
+                var stored = FindStored(existing, localeProp, locale);
                 if (stored is null) { insertLocales[locale] = values; continue; }
                 ApplyValues(stored, fieldProps, values);
                 updates.Add(stored);
             }
+            var deletes = deleteLocales
+                .Select(locale => FindStored(existing, localeProp, locale))
+                .OfType<T>()
+                .ToList();
 
             if (updates.Count > 0) await db.Updateable(updates).ExecuteCommandAsync(ct);
             if (insertLocales.Count > 0)
-                await db.Insertable(BuildRows<T>(fkProperty, localeProperty, fieldProperties, parentId, insertLocales))
+                await db.Insertable(BuildRows<T>(
+                    request.FkProperty, request.LocaleProperty, request.FieldProperties, request.ParentId, insertLocales))
                     .ExecuteCommandAsync(ct);
+            if (deletes.Count > 0) await db.Deleteable(deletes).ExecuteCommandAsync(ct);
         }, ct);
     }
+
+    private static T? FindStored<T>(List<T> existing, PropertyInfo localeProp, string locale) where T : class =>
+        existing.Find(e => string.Equals((string?)localeProp.GetValue(e), locale, StringComparison.OrdinalIgnoreCase));
 
     // One row per supplied locale, built by reflection.
     private static List<T> BuildRows<T>(

@@ -179,6 +179,8 @@ internal static class MutationResolvers
     // recursive prune (so each entry's `fields` carries only client-sent sub-fields) and BEFORE
     // ToJsonElement. Absent/unexpected `translations` -> pass through unchanged (ItemService then
     // enforces create-requires-default-locale / rejects a non-object). Duplicate locale -> last wins.
+    // An explicit `fields: null` folds to `"<locale>": null` (delete that locale); an entry that omits
+    // `fields` is rejected rather than read as a delete.
     private static IReadOnlyDictionary<string, object?>? FoldTranslations(
         IReadOnlyDictionary<string, object?>? input)
     {
@@ -191,7 +193,9 @@ internal static class MutationResolvers
         {
             if (entry is not IReadOnlyDictionary<string, object?> e) continue;
             if (e.GetValueOrDefault(LocaleArgument) is not string locale) continue;
-            byLocale[locale] = e.GetValueOrDefault("fields");
+            byLocale[locale] = e.TryGetValue("fields", out var fields)
+                ? fields
+                : throw new QueryException($"Translation entry for locale '{locale}' needs `fields`; send `fields: null` to delete the locale.");
         }
 
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);

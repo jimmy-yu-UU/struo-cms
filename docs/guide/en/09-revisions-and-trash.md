@@ -136,8 +136,9 @@ caller has write access to the collection. The panel's operation labels cover on
 and revert; a revision left by trash or restore falls back to a generic label.
 
 The panel sends the item version the form loaded with its revert. If the item has changed since, the
-revert comes back as `409 VERSION_CONFLICT`; the panel closes and the form shows its usual conflict
-banner.
+revert comes back as `409 VERSION_CONFLICT`. The panel closes and the form shows a dedicated notice
+that the item was changed by someone else, with a reload action only. The form's contents and
+version are left as they were, and the usual save-conflict banner is not shown.
 
 For an item that was created and then updated once, listing its revisions returns only metadata,
 no snapshot content, newest first:
@@ -173,6 +174,11 @@ rejecting it as every other write path does.
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
 not part of the snapshot, so a revert never touches them. A revert never changes any other item.
+
+A locale the item has now but the snapshot lacks did not exist at that version, so the revert
+deletes it. This covers the enabled non-default locales; the default locale and a disabled
+locale's translation are left as they are. The delete goes through the `null` locale value that
+[Chapter 7](07-i18n.md) describes.
 
 Because a revert goes through exactly the same path as an ordinary update, reverting an item that
 is currently in the trash gets a plain 404 — the update path's read of the current row already

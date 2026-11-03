@@ -103,12 +103,8 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         CancellationToken ct = default) =>
         inner.InsertTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
 
-    public Task SyncTranslationsAsync(
-        Type translationType, string fkProperty, string localeProperty,
-        IReadOnlyList<string> fieldProperties, object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct = default) =>
-        inner.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+    public Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default) =>
+        inner.SyncTranslationsAsync(request, ct);
 
     public Task SetForeignKeyNullAsync(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>

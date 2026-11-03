@@ -2,11 +2,38 @@
 
 ## 0.21.0
 
+::: danger Breaking
+- A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
+  translations match the snapshot. A client that relied on a revert leaving such a locale in place
+  loses its translation row. See [Chapter 9](09-revisions-and-trash.md).
+- A cleared rich text field is saved as `null`. A fork whose rich text column is `NOT NULL` fails
+  that save. See [Chapter 6](06-field-types.md).
+- `IItemRepository.SyncTranslationsAsync` takes a `TranslationSyncRequest`, which also carries the
+  locales to delete, in place of the separate arguments. A fork that implements `IItemRepository`
+  updates its implementation.
+:::
+
 ### Added
 
 - CI has a new `e2e` job that starts the Compose stack and runs the Playwright `core` project against
   it; the `sample` project is not run by CI. The specs take `E2E_BASE_URL` to target an already
   deployed stack. See [Chapter 22](22-testing.md).
+- An item update deletes a whole locale's translation when the locale's value in `translations` is
+  `null`. The default locale cannot be deleted and fails with a `400`; a locale with no stored row
+  is skipped. See [Chapter 7](07-i18n.md).
+- In GraphQL, `fields: null` on a translation input entry deletes the locale on update, with the
+  same rules; `fields` is nullable on that input. See [Chapter 14](14-graphql.md).
+
+### Fixed
+
+- A locale whose only values are empty lists, empty objects or empty rich text is not counted as
+  filled. One content rule decides locale completeness and which locales a save sends. See
+  [Chapter 7](07-i18n.md).
+- A cleared rich text field is saved as `null`; see Breaking above.
+- Clearing a non-default locale that had content deletes it on save in the admin SPA. The default
+  locale is never sent as `null`. See [Chapter 7](07-i18n.md).
+- A revert that fails with a `409` shows a dedicated notice with a reload action only, and leaves the
+  form's contents and version untouched. See [Chapter 9](09-revisions-and-trash.md).
 
 ## 0.20.1 — 2026-11-02
 

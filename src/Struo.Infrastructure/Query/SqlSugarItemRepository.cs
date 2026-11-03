@@ -270,15 +270,8 @@ public sealed class SqlSugarItemRepository(
         CancellationToken ct = default) =>
         translations.InsertTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
 
-    public Task SyncTranslationsAsync(
-        Type translationType,
-        string fkProperty,
-        string localeProperty,
-        IReadOnlyList<string> fieldProperties,
-        object parentId,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> perLocale,
-        CancellationToken ct = default) =>
-        translations.SyncTranslationsAsync(translationType, fkProperty, localeProperty, fieldProperties, parentId, perLocale, ct);
+    public Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default) =>
+        translations.SyncTranslationsAsync(request, ct);
 
     public Task<IReadOnlyList<FacetBucket>> FacetAsync(FacetRequest request, CancellationToken ct = default) =>
         facets.FacetAsync(request, ct);
