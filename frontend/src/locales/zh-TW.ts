@@ -80,6 +80,8 @@ export default {
     changeDescription: '輸入目前的密碼,然後設定新密碼。',
     resetTitle: '重設密碼',
     resetDescription: '為這位使用者設定新密碼,之後他可以自行變更。',
+    tokenRevokeNote: '變更密碼會撤銷此使用者的 API token。',
+    tokenRevokeNoteSelf: '變更密碼會撤銷你的 API token。',
     current: '目前密碼',
     currentRequired: '請輸入目前密碼。',
     new: '新密碼',

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.22.0
+
+::: danger Breaking
+- A password change, by the user or by a super-admin, revokes that user's API access token. An
+  integration that authenticates with the token needs a newly issued one. A fork that implements
+  `IUserAccountStore` makes `SetPasswordAsync` clear the token in the same write. See
+  [Chapter 16](16-authentication.md).
+- In Production and every other environment where the cookie is always `Secure`, the default session
+  cookie name is `__Host-struo.session` (it was `struo.session`). Users sign in once more after the
+  upgrade; a deployment that sets `Auth:Cookie:Name` is unaffected. See
+  [Chapter 25](25-after-forking.md).
+:::
+
+### Added
+
+- `DataProtection:Certificate:Path` and `Password` encrypt the DataProtection key ring with a PFX
+  certificate, in Redis and in the key-ring directory alike. `Certificate:Previous` lists earlier
+  certificates that only decrypt, and `DataProtection:RequireKeyProtection` stops startup in every
+  environment when no certificate is configured. See [Chapter 4](04-configuration.md) and
+  [Chapter 20](20-deployment.md).
+- In Production with `Redis:ConnectionString` set, startup logs one warning when
+  `DataProtection:Certificate:Path` is empty and one when the connection string has no password.
+  See [Chapter 20](20-deployment.md).
+
+### Changed
+
+- `Struo.Api`'s `AssemblyVersion` is fixed at `1.0.0.0` because certificate-encrypted keys record it;
+  the product and file versions follow `Version` as before. A fork keeps the assembly name,
+  `Struo.Api.Auth.CertificateKeyDecryptor` and that line unchanged. See
+  [Chapter 20](20-deployment.md).
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger Breaking

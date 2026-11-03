@@ -533,6 +533,13 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 
 內建後端的行為與 `files:sweep`，見[第 15 章](15-files-and-media.md)。
 
+## 金鑰保護：`IXmlEncryptor`
+
+不想用 `DataProtection:Certificate`、要用別的方式保護 DataProtection 金鑰圈的 fork，在 `AddStruoCms()` 之後設定
+`KeyManagementOptions.XmlEncryptor`，註冊自己的 `IXmlEncryptor`；它回傳的 `EncryptedXmlInfo` 指定對應的
+`IXmlDecryptor`。啟動警告與 `RequireKeyProtection` 只看 `DataProtection:Certificate:Path`，所以用自己加密器的
+fork 會看到警告，也不要開 `RequireKeyProtection`。
+
 ## 自己的錯誤：`StruoDomainException`
 
 fork 自己、給客戶端看的錯誤，繼承 `StruoDomainException`，它帶著代碼、400 到 499 的狀態與訊息。REST 與

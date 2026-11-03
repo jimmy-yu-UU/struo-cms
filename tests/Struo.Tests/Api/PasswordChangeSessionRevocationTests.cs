@@ -90,11 +90,10 @@ public class PasswordChangeSessionRevocationTests(ApiFactory factory)
         (await browserB.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>Regression: bearer tokens are out of scope for this feature (they have their own
-    /// separate revocation path, DELETE /api/users/{id}/access-token) — revoking a user's cookie
-    /// sessions on password change must not disturb that same user's bearer access token.</summary>
+    /// <summary>A password change revokes the user's bearer access token along with their cookie
+    /// sessions; <c>PasswordChangeRevokesAccessTokenTests</c> covers both change paths in detail.</summary>
     [Fact]
-    public async Task Password_change_does_not_disturb_the_users_bearer_access_token()
+    public async Task Password_change_revokes_the_users_bearer_access_token()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (email, password, userId) = await SeedUserAsync();
@@ -113,6 +112,6 @@ public class PasswordChangeSessionRevocationTests(ApiFactory factory)
             new { newPassword = "new-session-pw-456" });
         change.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        (await bearerClient.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await bearerClient.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

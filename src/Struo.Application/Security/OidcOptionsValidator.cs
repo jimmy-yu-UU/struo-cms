@@ -5,17 +5,17 @@ namespace Struo.Application.Security;
 
 /// <summary>Startup validation of <see cref="OidcOptions"/>. A disabled provider is never checked, so a
 /// placeholder entry can stay in the file. Messages name the offending <c>Oidc:Providers:{id}</c> key.</summary>
-public sealed partial class OidcOptionsValidator : IValidateOptions<OidcOptions>
+public sealed class OidcOptionsValidator : IValidateOptions<OidcOptions>
 {
-    [GeneratedRegex(OidcOptions.ProviderIdPattern)]
-    private static partial Regex ProviderIdRegex();
+    private static readonly Regex ProviderIdRegex =
+        new(OidcOptions.ProviderIdPattern, RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
         var failures = new List<string>();
         foreach (var (id, provider) in options.Providers)
         {
-            if (!ProviderIdRegex().IsMatch(id))
+            if (!ProviderIdRegex.IsMatch(id))
                 failures.Add($"Oidc:Providers:'{id}' is not a valid provider id; use lowercase letters, digits and hyphens");
             if (provider.Enabled) ValidateEnabled(id, provider, failures);
         }

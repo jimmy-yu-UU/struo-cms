@@ -91,6 +91,9 @@ const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
 const resetPasswordOpen = ref(false)
 // The access-token panel reads and mutates a credential, so it has the same audience.
 const showAccessToken = computed(() => isSuperAdminOnExistingUser.value)
+// A password change revokes the token server-side; the panel re-reads its state through its exposed
+// `reload` rather than being re-keyed, which would also discard an open issued-token dialog.
+const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
@@ -443,7 +446,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :create-mode="isCreate"
       />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
-      <AccessTokenPanel v-if="showAccessToken" :user-id="idStr" />
+      <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr" />
 
       <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
            ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
@@ -456,6 +459,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         v-if="showResetPassword"
         v-model:open="resetPasswordOpen"
         :target-user-id="idStr"
+        @changed="tokenPanel?.reload()"
       />
 
       <RevisionHistoryDrawer

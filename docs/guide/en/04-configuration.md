@@ -347,7 +347,12 @@ exception (500) instead.
 | `Auth:Password:MinLength` | integer | `8` |
 | `Auth:Password:MaxLength` | integer | `128` |
 | `Auth:Cookie:RequireSecure` | bool (may be empty) | none (environment-dependent) |
-| `Auth:Cookie:Name` | string | `"struo.session"` |
+| `Auth:Cookie:Name` | string (may be empty) | none (`Secure`-dependent) |
+
+When `Auth:Cookie:Name` is empty, an environment where the cookie is always `Secure` (the default outside
+Development, a configured CORS origin, `RequireSecure=true`) uses `__Host-struo.session`, and every other
+one uses `struo.session`. An explicit name is used as written. A name with a `__Host-` or `__Secure-` prefix
+needs the cookie to be always `Secure`, or startup fails.
 
 The core seed migration (`SeedCoreData`) applies the pair once, on an empty database, and it is
 never backfilled onto an existing database. These two keys have no options class; the seed
@@ -555,6 +560,10 @@ login throttle counts in Redis directly.
 | Key | Type | Default |
 |---|---|---|
 | `DataProtection:ApplicationName` | string (not blank) | `"StruoCMS"` |
+| `DataProtection:RequireKeyProtection` | bool | `false` |
+| `DataProtection:Certificate:Path` | string (PFX file) | empty |
+| `DataProtection:Certificate:Password` | string | empty |
+| `DataProtection:Certificate:Previous` | list of `Path` and `Password` | empty |
 
 DataProtection keys sign and encrypt the authentication cookie, the antiforgery tokens and the OpenID
 Connect correlation cookies. With `Redis:ConnectionString` set, the key ring is stored in Redis under
@@ -563,6 +572,21 @@ them. Without Redis, the key ring stays in the default file location.
 
 `ApplicationName` is applied in both cases. Replicas that share a key ring must use the same value,
 and a blank value stops the host at startup. Changing it signs every user out once.
+
+`Certificate:Path` names a PFX file. When it is set, every key the key ring stores is encrypted with
+that certificate, whether the key ring lives in Redis or in the file location. `Certificate:Password`
+is the file's password; leave it empty for a file without one, and supply it through an environment
+variable (`DataProtection__Certificate__Password`) or a secret store rather than a committed file. A
+file that is missing or cannot be opened stops the host at startup, and the message names the file,
+never the password.
+
+`Certificate:Previous` lists earlier certificates, each with a `Path` and a `Password`. They only
+decrypt keys written under them; new keys are always encrypted with `Certificate:Path`, and setting
+`Previous` without `Certificate:Path` stops the host at startup. [Chapter 20](20-deployment.md) covers
+rotating the certificate.
+
+`RequireKeyProtection` set to `true` stops the host at startup, in every environment, when
+`Certificate:Path` is empty.
 
 ## Oidc
 

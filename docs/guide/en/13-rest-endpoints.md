@@ -127,9 +127,9 @@ actual read route for the user row; the body is `{ id, email, name }`. A blank e
 the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected.
 
 Changing password is the only rate-limited endpoint besides login, partitioned by the caller's own
-user id; success revokes that user's other sessions, and a revocation failure comes back as
-`SESSION_REVOCATION_FAILED` rather than being swallowed silently, because the password change
-itself already succeeded. An issued token is shown only this once; only its hash is stored
+user id; success revokes that user's other sessions and their access token, and a revocation
+failure comes back as `SESSION_REVOCATION_FAILED` rather than being swallowed silently, because the
+password change itself already succeeded. An issued token is shown only this once; only its hash is stored
 afterward. Revoking returns `204` or `404`.
 
 The `?roles=` parameter on `effective-permissions` can carry a list of role ids, to preview a role
@@ -228,8 +228,9 @@ HTTP_STATUS:200
 ```
 
 `Set-Cookie`'s value is long and elided here; what matters is that the header itself appears,
-carrying `path=/`, `samesite=lax`, `httponly`. `me` returns an empty `permissions` for a
-super-admin, because every grant is already implied by that identity.
+carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a Development host; where the
+cookie is always `Secure`, the name is `__Host-struo.session` and `secure` is added. `me` returns an
+empty `permissions` for a super-admin, because every grant is already implied by that identity.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
 disabled provider, and a `302` redirect to that provider when it is enabled, with

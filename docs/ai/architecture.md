@@ -428,7 +428,7 @@ identity god-interface, split by *consumer* rather than by table:
   by-id lookup lives here rather than on `IUserAccountStore`.
 - **`IUserAccountStore`** → `SqlSugarUserAccountStore`. User-account administration: create, exists,
   profile and access-token-info projections, and the three credential mutations (set password,
-  issue/revoke access token).
+  issue/revoke access token). Setting a password also clears the access token.
   Those three stamp `UpdatedAt`/`UpdatedBy` and increment `Version` themselves, because they are
   column-scoped `SetColumns` updates and therefore outside both `AuditAop` (which hooks only
   `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump; `CreateAsync` is an

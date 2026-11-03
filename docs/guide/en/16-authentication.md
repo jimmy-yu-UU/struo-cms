@@ -84,9 +84,10 @@ configuration keys are in the `RateLimiting` section of
 ## Login and the session cookie
 
 A request that carries no `Authorization: Bearer …` header always goes through the cookie: named
-`struo.session` unless `Auth:Cookie:Name` says otherwise, `HttpOnly`, `SameSite` defaulting to `Lax`.
-The `Secure` policy follows `Auth:Cookie:RequireSecure`; left unset, it is `Always` in every
-environment except Development, which follows the request itself.
+`__Host-struo.session` when it is always `Secure` and `struo.session` otherwise (`Auth:Cookie:Name` can
+rename it), `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
+`Auth:Cookie:RequireSecure`; left unset, it is `Always` in every environment except Development,
+which follows the request itself.
 
 As soon as any CORS origin is configured at all, the `Secure` policy is forced to `Always`, so the
 admin and the API both have to run HTTPS. `SameSite` stays `Lax`, which means the setup works only
@@ -145,8 +146,8 @@ cache, and clearing the browser-side cookie.
 
 It revokes only the cookie side: a bearer token the same account also holds is completely
 unaffected — a request authenticated only by bearer still gets `204` from this same endpoint, and
-its token stays alive. A token can only be revoked through the next section's revocation endpoint,
-or by issuing a new one that overwrites the old hash.
+its token stays alive. A token is revoked through the next section's revocation endpoint, by a
+password change, or by issuing a new one that overwrites the old hash.
 
 `struo_user_sessions` is a key-to-user index table, and the reason it exists is simple: the distributed
 cache itself has no scan or enumerate operation, so without this index there's no way to answer
@@ -175,7 +176,8 @@ data, base64url-encoded with padding stripped; what's stored is its uppercase he
 digest.
 
 A token never expires on its own — it stays valid until it's revoked
-(`DELETE /api/users/{id}/access-token`), or until a new one is issued and overwrites it.
+(`DELETE /api/users/{id}/access-token`), the user's password is changed, or a new one is issued
+and overwrites it.
 Overwriting means replacing that same hash column, and the old token stops working immediately.
 
 Every request that authenticates with bearer updates its last-used timestamp, throttled to at most
@@ -183,9 +185,9 @@ one write per token per minute, so a busy integration doesn't turn every call in
 the account itself is deactivated, authentication fails regardless of whether the token is
 otherwise still valid, and this flag is re-checked on every request.
 
-Each user has at most one token. Changing a password revokes that user's sessions but never the
-token, so a password change does not cut off an integration that authenticates with a token; if a
-token may have leaked, revoke it or issue a new one instead.
+Each user has at most one token. Changing a password revokes that user's sessions and the token,
+whether the owner or a super-admin changes it, so an integration that authenticates with the token
+needs a newly issued one afterwards.
 
 A super-admin editing a user in the admin UI can issue, regenerate or revoke the token in the
 "Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke

@@ -295,7 +295,11 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 | `Auth:Password:MinLength` | 整數 | `8` |
 | `Auth:Password:MaxLength` | 整數 | `128` |
 | `Auth:Cookie:RequireSecure` | 布林（可留空） | 無（依環境判斷） |
-| `Auth:Cookie:Name` | 字串 | `"struo.session"` |
+| `Auth:Cookie:Name` | 字串（可留空） | 無（依 `Secure` 判斷） |
+
+`Auth:Cookie:Name` 留空時，cookie 一律帶 `Secure` 的環境（Development 之外的預設、設了 CORS 來源、
+`RequireSecure=true`）用 `__Host-struo.session`，其餘用 `struo.session`。明確設了名稱就照設定。
+帶 `__Host-` 或 `__Secure-` 前綴的名稱要求 cookie 一律帶 `Secure`，否則啟動失敗。
 
 這組帳密由核心的 seed migration（`SeedCoreData`）在空資料庫上套用一次，不會補到已經存在的資料
 庫上。這兩個鍵沒有選項類別，seed migration 直接從設定讀成字串，所以跑 `migrate` 的環境裡就要有它們。
@@ -475,6 +479,10 @@ super-admin 幫別人大量重設密碼扣的是自己的額度，不會鎖到�
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
 | `DataProtection:ApplicationName` | 字串（不可空白） | `"StruoCMS"` |
+| `DataProtection:RequireKeyProtection` | 布林 | `false` |
+| `DataProtection:Certificate:Path` | 字串（PFX 檔案） | 空 |
+| `DataProtection:Certificate:Password` | 字串 | 空 |
+| `DataProtection:Certificate:Previous` | `Path` 與 `Password` 的清單 | 空 |
 
 DataProtection 金鑰用來簽章、加密認證 cookie、antiforgery token 與 OpenID Connect 的 correlation
 cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataProtection-Keys` 這個鍵底下，
@@ -482,6 +490,17 @@ cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataPr
 
 `ApplicationName` 兩種情況都會套用。共用同一個金鑰圈的副本必須用相同的值，空白的值會讓主機啟動失敗。
 改它會讓所有使用者登出一次。
+
+`Certificate:Path` 指向一個 PFX 檔案。設了它，金鑰圈存的每一把金鑰都用該憑證加密，不論金鑰圈在 Redis
+還是在檔案位置。`Certificate:Password` 是檔案的密碼；檔案沒有密碼就留空，並且用環境變數
+（`DataProtection__Certificate__Password`）或密鑰管理來提供，不要放進提交的檔案。檔案不存在或打不開，
+主機啟動就會失敗，訊息會指名檔案，不會出現密碼。
+
+`Certificate:Previous` 列出較早的憑證，每筆有 `Path` 與 `Password`。它們只用來解密當初用它們寫入的金鑰；
+新金鑰一律用 `Certificate:Path` 加密，只設 `Previous` 而沒設 `Certificate:Path`，主機啟動會失敗。
+換憑證的流程見[第 20 章](20-deployment.md)。
+
+`RequireKeyProtection` 設成 `true` 時，只要 `Certificate:Path` 是空的，主機在任何環境都會啟動失敗。
 
 ## Oidc
 

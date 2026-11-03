@@ -167,6 +167,12 @@ replica never undercounts, but replicas do not see each other's attempts.
 
 With Redis set, it also holds the DataProtection key ring; see "DataProtection keys" below.
 
+Redis then holds every session ticket and the key ring, so it needs a password in the connection
+string and must not be reachable from outside the network the API runs in. Anyone who can connect to
+a Redis without a password can take over every session. In Production, startup logs one warning when
+`Redis:ConnectionString` carries no password; the warning names the key and never prints the
+connection string.
+
 ### `Struo:Files:Backend`: more than one replica needs `s3`
 
 The default `local` writes uploaded files to this replica's own disk, under
@@ -273,6 +279,10 @@ System.InvalidOperationException: 2 migration(s) pending, the lowest is 20261008
 The process then exits with code `1`; the stack trace that follows is omitted here. The message
 itself names the command to run and the setting key.
 
+`DataProtection` fails the same way when `DataProtection:RequireKeyProtection` is `true` without a
+`DataProtection:Certificate:Path`, when a configured certificate file is missing or cannot be
+opened, or when `Certificate:Previous` is set without `Certificate:Path`.
+
 One more thing that has nothing to do with configuration, but is decided just as early at the top
 of startup: the process pins its whole default culture to invariant from the start, so the
 operator doesn't need to separately pin `LANG` or `DOTNET_SYSTEM_GLOBALIZATION_*`. SqlSugar
@@ -296,9 +306,9 @@ effect too.
 
 Two Dockerfiles each produce an independent image: the root `Dockerfile` builds the API,
 `frontend/Dockerfile` builds the admin SPA. The root `docker-compose.yml` uses both Dockerfiles to
-start a full development and testing stack, not a production deployment recipe — see "The local
-Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
-commands, except a local build conventionally tags `:local` while CI tags `:ci`:
+start a full stack for seeing the result quickly and trying features out, not a deployment
+template — see "The local Compose stack" at the end of this chapter. A local build and CI's `docker`
+job run the same two commands, except a local build conventionally tags `:local` while CI tags `:ci`:
 
 ```
 docker build --tag struo-api:local .
@@ -377,10 +387,52 @@ replica from the one that issued it fails cookie validation or antiforgery outri
 replica, mounting this path as a volume is enough for the keys to survive rebuilding the container;
 with several replicas, set `Redis:ConnectionString`.
 
-Wherever they are stored, the keys are not encrypted at rest: this project configures no XML
-encryptor, so the Redis key or the key-ring directory holds directly readable key material that needs
-the same protection as any other secret. Restrict who can read that Redis database, and require
-authentication on it.
+Without a certificate the keys are not encrypted at rest: the Redis key or the key-ring directory holds
+directly readable key material that needs the same protection as any other secret. In Production, when
+`Redis:ConnectionString` is set and `DataProtection:Certificate:Path` is empty, startup logs one
+warning saying so; the warning names the keys and never prints the connection string.
+
+#### Encrypting the key ring with a certificate
+
+`DataProtection:Certificate:Path` and `DataProtection:Certificate:Password` name a PFX file and its
+password. With the path set, every key is encrypted with that certificate before it is written, in
+Redis and in the key-ring directory alike, and `RequireKeyProtection=true` stops startup in every
+environment when no certificate is configured. Keep the password out of committed files: use
+`DataProtection__Certificate__Password` or your secret store, and mount the PFX file read-only into
+the container.
+
+The encryption protects against someone who can read the key ring, such as a leaked Redis backup or
+snapshot. It does not protect against someone who can write to Redis: they can add a key of their own
+(an unencrypted key is accepted without any certificate) and write session tickets directly. Redis
+access control, a password and a private network, is still required.
+
+Turning on a certificate leaves the plaintext keys already in the key ring there until they expire,
+90 days by default. After a suspected leak, also delete the `DataProtection-Keys` Redis key (or the
+key-ring files); everyone signs in again once.
+
+Removing `DataProtection:Certificate:Path` after keys were encrypted makes those keys unreadable, and
+everyone is signed out.
+
+With a certificate set, every encrypted key records the decryptor type
+`Struo.Api.Auth.CertificateKeyDecryptor` from the `Struo.Api` assembly, whose `AssemblyVersion` is
+fixed at `1.0.0.0`. A fork keeps the assembly name, that class's name and namespace, and the
+`AssemblyVersion` line in `src/Struo.Api/Struo.Api.csproj` unchanged; otherwise the stored keys can no
+longer be read and everyone is signed out. The product version (`Version` in `Directory.Build.props`,
+which also drives the file version) changes as usual.
+
+To replace the certificate:
+
+1. Set `DataProtection:Certificate:Path` and `Password` to the new certificate, and move the old pair
+   into `DataProtection:Certificate:Previous:0:Path` and `:Password`.
+2. Deploy every replica with that configuration. New keys are encrypted with the new certificate; keys
+   already in the key ring stay encrypted with the old one, and `Previous` is what lets every replica
+   still read them.
+3. Keep the old entry in `Previous` for at least 90 days after the switch, plus the longest session
+   lifetime (8 hours). Keys live 90 days by default, and the key that is current when you switch
+   stays encrypted under the old certificate until it expires. Removing the entry earlier does not
+   stop the host, but the sessions those keys protected are rejected and the users sign in again.
+
+A fork that protects the keys some other way follows [Chapter 18](18-extension-points.md).
 
 ### The admin SPA image
 
@@ -680,15 +732,19 @@ the 50% safeguard.
 
 `docker compose up -d --build` uses the two Dockerfiles above to start four services: `postgres`,
 `redis`, `api` and `admin`; [Chapter 3: Getting Started](03-getting-started.md) covers starting it
-and logging in. It's a development and testing stack: `api` runs as Production and applies
-migrations itself on every start (`Database__MigrateOnStartup`). For production, assemble your own
-deployment along the checklist earlier in this chapter.
+and logging in. It exists to see the result quickly and to try features out; it is not a deployment
+template. `api` runs as Production and applies migrations itself on every start
+(`Database__MigrateOnStartup`). How to deploy, and what to change for your environment, is your
+decision; assemble your own deployment along the checklist earlier in this chapter.
 
 The PostgreSQL password is a fixed dev value and Redis has no password. Every port is published on
 `127.0.0.1` by default, so only this machine reaches the database, Redis, the API and the admin.
 `STRUO_BIND_ADDRESS` sets the address they bind to; `0.0.0.0` publishes the ports on all network
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
+
+The `api` service logs both Redis warnings (no key protection, no Redis password) on every start; this
+is expected for the quick-start stack.
 
 The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
 move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as
@@ -705,8 +761,8 @@ health check every 5 seconds, so `docker compose up --wait` doesn't wait out the
 This stack sets `Redis__ConnectionString`, so the DataProtection key ring is stored in its `redis`
 service, unencrypted, and the `struo-dpkeys` volume mounted for the file location goes unused. The
 `redis` service has no volume: recreating it drops the key ring, and with it every session. That's
-fine for development and testing; in production, protect the keys yourself as the "DataProtection
-keys" section above describes.
+fine for development and testing; in production, give Redis a password and protect the keys as the
+"DataProtection keys" section above describes.
 
 ### An S3-compatible store
 

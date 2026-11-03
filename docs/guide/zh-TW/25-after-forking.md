@@ -55,31 +55,31 @@ vulnerability」私下回報。fork 不是同一個儲存庫，這份文件對�
 語言，永遠優先。怎麼註冊新語言與這個變數的細節，見
 [第 19 章：後台客製化](19-admin-customization.md)的〈UI 語言〉。
 
-## 7. 正式網域在共用的上層網域下：考慮 `__Host-` cookie 前綴
+## 7. 正式網域在共用的上層網域下：`__Host-` cookie 前綴
 
-登入 cookie 預設叫 `struo.session`。如果你的正式網站是某個共用上層網域底下的子網域（例如
-`app.example.com`，而同一個上層網域下還有別人控制的子網域），那些兄弟子網域可以替整個上層網域
-寫入同名的 cookie，蓋掉或塞入你的 session cookie。
+登入 cookie 在一律帶 `Secure` 的環境預設叫 `__Host-struo.session`，否則叫 `struo.session`。Development
+之外的環境預設一律帶 `Secure`，設了任何 CORS 來源也是。
 
-`__Host-` 前綴讓瀏覽器拒收這類 cookie：帶這個前綴的 cookie 必須有 `Secure`、`Path=/`，而且不能
-帶 `Domain`，所以兄弟子網域寫不進來。這個專案的 cookie 已經是 `Path=/`、沒有 `Domain`，缺的只
-有名稱。
+如果你的正式網站是某個共用上層網域底下的子網域（例如 `app.example.com`，而同一個上層網域下還有
+別人控制的子網域），那些兄弟子網域可以替整個上層網域寫入同名的 cookie，蓋掉或塞入你的 session
+cookie。`__Host-` 前綴讓瀏覽器拒收這類 cookie：帶這個前綴的 cookie 必須有 `Secure`、`Path=/`，而且
+不能帶 `Domain`，所以兄弟子網域寫不進來。
 
-把 `Auth:Cookie:Name` 設成 `__Host-struo.session`（例如 `Auth__Cookie__Name=__Host-struo.session`）即可；
-CSRF 與 session 輪替的 middleware 跟著它走。啟動時會檢查這個名稱，cookie 不是一律 `Secure`、或帶了
-`Domain` 或別的 `Path` 時，啟動失敗，訊息會點出這個鍵。
-[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)裡寫的字面 `struo.session`
-也會跟著變。先知道三件事：
+先知道三件事：
 
 - 前綴要求 `Secure`，但只有面對瀏覽器的來源必須是 HTTPS。Development 之外，不論 API 自己看到的是
   什麼協定，cookie 都帶 `Secure`，所以 nginx 到 API 之間仍可以走純 http。
-  `RequireSecure=false` 等於 `SameAsRequest`，名稱帶前綴時，啟動會失敗，訊息會點出
-  `Auth:Cookie:Name`。
-- 這個名稱在 Development 也生效，而 Development 的 `Auth:Cookie:RequireSecure` 解析成
-  `SameAsRequest`，所以在本機執行與 e2e 的主機設 `Auth__Cookie__RequireSecure=true` 之前，啟動都會失敗。
-  設了之後 cookie 就帶 `Secure`，Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie；不接受的
+  `RequireSecure=false` 等於 `SameAsRequest`，沒設名稱時預設名稱是 `struo.session`；明確設成帶前綴的
+  名稱，啟動會失敗，訊息會點出 `Auth:Cookie:Name`。
+- Development 的 `Auth:Cookie:RequireSecure` 解析成 `SameAsRequest`，預設名稱是 `struo.session`。
+  在本機執行與 e2e 的主機設 `Auth__Cookie__RequireSecure=true`，名稱就變成 `__Host-struo.session`，
+  cookie 帶 `Secure`；Chrome 與 Firefox 接受 `http://localhost` 上的 `Secure` cookie，不接受的
   瀏覽器（Safari）本機就得走 HTTPS。
-- cookie 改名之後，所有已登入的人都會被登出一次。
+- 明確設了 `Auth:Cookie:Name` 就照設定，不受預設影響。
+
+如果 fork 必須跨子網域共用 session cookie（在程式裡替 cookie 設 `Domain`），就不能用 `__Host-`
+名稱，因為前綴不允許 `Domain`。這時要自己設 `Auth:Cookie:Name`（例如 `struo.session`）。代價是兄弟
+子網域可以注入同名 cookie，讓使用者被登出。
 
 ## 8. 圖片或 API 在另一個來源：`CSP_IMG_EXTRA` 與 `CSP_CONNECT_EXTRA`
 

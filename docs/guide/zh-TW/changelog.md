@@ -1,5 +1,30 @@
 # 版本紀錄
 
+## 0.22.0
+
+::: danger 破壞性變更
+- 改密碼（不論本人或超級管理員代改）會撤銷該使用者的 API 存取權杖。靠權杖驗證的整合需要重新核發
+  一支。實作 `IUserAccountStore` 的 fork，要讓 `SetPasswordAsync` 在同一次寫入裡一併清掉權杖。見
+  [第 16 章](16-authentication.md)。
+- Production 等一律帶 `Secure` 的環境，預設 session cookie 名稱是 `__Host-struo.session`（原為
+  `struo.session`）。升級後使用者要重新登入一次；設了 `Auth:Cookie:Name` 的部署不受影響。見
+  [第 25 章](25-after-forking.md)。
+:::
+
+### 新增
+
+- `DataProtection:Certificate:Path` 與 `Password` 用 PFX 憑證加密 DataProtection 金鑰圈，Redis 與金鑰圈目錄
+  都一樣。`Certificate:Previous` 列出只用來解密的較早憑證，`DataProtection:RequireKeyProtection` 讓沒有設憑證的
+  啟動在任何環境都失敗。見[第 4 章](04-configuration.md)與[第 20 章](20-deployment.md)。
+- Production 下設了 `Redis:ConnectionString` 時，`DataProtection:Certificate:Path` 是空的會記一則啟動警告，
+  連線字串沒帶密碼也會記一則。見[第 20 章](20-deployment.md)。
+
+### 變更
+
+- `Struo.Api` 的 `AssemblyVersion` 固定為 `1.0.0.0`，因為憑證加密的金鑰會記錄它；產品版本與檔案版本照常
+  跟著 `Version`。fork 要保持組件名稱、`Struo.Api.Auth.CertificateKeyDecryptor` 與那一行不變。見
+  [第 20 章](20-deployment.md)。
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger 破壞性變更

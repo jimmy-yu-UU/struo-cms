@@ -109,7 +109,7 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 下。
 
 改密碼是除了登入之外唯一有流量限制的端點，依呼叫端自己的 user id 分流；成功後會撤銷該使用者其他
-的工作階段，撤銷失敗回報 `SESSION_REVOCATION_FAILED`，而不是悄悄吞掉，因為密碼本身已經改成功。核
+的工作階段與權杖，撤銷失敗回報 `SESSION_REVOCATION_FAILED`，而不是悄悄吞掉，因為密碼本身已經改成功。核
 發的權杖只顯示這一次，之後只存雜湊；撤銷回 204 或 404。
 
 `effective-permissions` 的 `?roles=` 可以帶一串角色 id，預覽一個還沒儲存的角色組合；帶了但是空字
@@ -200,6 +200,8 @@ HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
+這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，
+並多一個 `secure`。
 `me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，

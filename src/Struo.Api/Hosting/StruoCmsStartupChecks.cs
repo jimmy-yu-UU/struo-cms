@@ -29,6 +29,8 @@ internal static class StruoCmsStartupChecks
             app.Configuration, startupLogger);
         Struo.Api.Auth.AuthWiring.WarnIfSessionsAreInMemory(
             app.Configuration, app.Environment, startupLogger);
+        Struo.Api.Auth.DataProtectionWarnings.Log(
+            app.Configuration, app.Environment, startupLogger);
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());

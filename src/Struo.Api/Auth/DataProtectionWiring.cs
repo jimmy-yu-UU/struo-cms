@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
+using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using Struo.Application.Configuration;
@@ -12,7 +14,8 @@ namespace Struo.Api.Auth;
 /// DataProtection for every replica: the application name always comes from
 /// <see cref="StruoDataProtectionOptions"/>, and the key ring goes to Redis when
 /// <c>Redis:ConnectionString</c> is set, so a cookie signed by one replica is accepted by the others.
-/// Without Redis the key ring stays in the default file location.
+/// Without Redis the key ring stays in the default file location. When <c>DataProtection:Certificate:Path</c>
+/// is set, the keys are encrypted with that certificate wherever the key ring lives.
 /// </summary>
 public static class DataProtectionWiring
 {
@@ -27,6 +30,7 @@ public static class DataProtectionWiring
                 o => !string.IsNullOrWhiteSpace(o.ApplicationName),
                 "DataProtection:ApplicationName must not be blank.")
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<StruoDataProtectionOptions>, KeyProtectionValidator>();
 
         services.AddDataProtection();
         services.AddSingleton<RedisKeyRingConnection>();
@@ -36,6 +40,12 @@ public static class DataProtectionWiring
         services.AddOptions<DataProtectionOptions>()
             .Configure<IOptions<StruoDataProtectionOptions>>((options, own) =>
                 options.ApplicationDiscriminator = own.Value.ApplicationName);
+        services.AddSingleton<DataProtectionKeyProtection>();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DataProtectionKeyProtection>((options, protection) =>
+            {
+                if (protection.Encryptor is not null) options.XmlEncryptor = protection.Encryptor;
+            });
         services.AddOptions<KeyManagementOptions>()
             .Configure<IConfiguration, RedisKeyRingConnection>((options, config, connection) =>
             {
@@ -46,6 +56,37 @@ public static class DataProtectionWiring
             });
 
         return services;
+    }
+
+    /// <summary>Fails startup when <c>RequireKeyProtection</c> has no certificate or a configured file cannot be loaded.</summary>
+    private sealed class KeyProtectionValidator : IValidateOptions<StruoDataProtectionOptions>
+    {
+        public ValidateOptionsResult Validate(string? name, StruoDataProtectionOptions options)
+        {
+            if (string.IsNullOrWhiteSpace(options.Certificate.Path))
+            {
+                if (options.RequireKeyProtection)
+                {
+                    return ValidateOptionsResult.Fail(
+                        "DataProtection:RequireKeyProtection is true but DataProtection:Certificate:Path is not set.");
+                }
+
+                return options.Certificate.Previous.Count > 0
+                    ? ValidateOptionsResult.Fail(
+                        "DataProtection:Certificate:Previous is set but DataProtection:Certificate:Path is not.")
+                    : ValidateOptionsResult.Success;
+            }
+
+            try
+            {
+                DataProtectionCertificates.Load(options)?.Dispose();
+                return ValidateOptionsResult.Success;
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ValidateOptionsResult.Fail(ex.Message);
+            }
+        }
     }
 
     /// <summary>

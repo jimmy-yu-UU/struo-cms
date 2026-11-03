@@ -62,32 +62,34 @@ yourself. A language a user picked in the switcher always wins. How to register 
 the details of this variable, are in "UI language" in
 [Chapter 19: Admin Customization](19-admin-customization.md).
 
-## 7. A production domain under a shared parent domain: consider the `__Host-` cookie prefix
+## 7. A production domain under a shared parent domain: the `__Host-` cookie prefix
 
-By default, the login cookie is named `struo.session`. If your production site is a subdomain of a shared parent
-domain (say `app.example.com`, with other subdomains under the same parent controlled by someone
-else), those sibling subdomains can set a cookie of the same name for the whole parent domain,
-overwriting or planting your session cookie.
+The login cookie is named `__Host-struo.session` by default where it is always `Secure`, and
+`struo.session` otherwise. Every environment except Development is always `Secure` by default, and so is
+any deployment with a CORS origin configured.
 
-The `__Host-` prefix makes the browser refuse such cookies: a cookie with this prefix must be
-`Secure`, have `Path=/` and carry no `Domain`, so a sibling subdomain can't write it. This project's
-cookie is already `Path=/` with no `Domain`; only the name is missing.
+If your production site is a subdomain of a shared parent domain (say `app.example.com`, with other
+subdomains under the same parent controlled by someone else), those sibling subdomains can set a cookie
+of the same name for the whole parent domain, overwriting or planting your session cookie. The
+`__Host-` prefix makes the browser refuse such cookies: a cookie with this prefix must be `Secure`, have
+`Path=/` and carry no `Domain`, so a sibling subdomain can't write it.
 
-Set `Auth:Cookie:Name` to `__Host-struo.session` (for example `Auth__Cookie__Name=__Host-struo.session`);
-the CSRF and session-rotation middleware follow it. Startup checks the name and fails, naming the key,
-when the cookie is not always `Secure` or carries a `Domain` or another `Path`. The literal `struo.session`
-shown in [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md) changes with it. Three
-things to know first:
+Three things to know first:
 
 - The prefix requires `Secure`, and only the browser-facing origin has to be HTTPS. Outside
   Development the cookie is `Secure` whatever scheme the API itself sees, so nginx can still talk to
-  the API over plain http. `RequireSecure=false` means `SameAsRequest`, and with a prefixed name startup
-  fails with a message naming `Auth:Cookie:Name`.
-- The name applies in Development too, and there `Auth:Cookie:RequireSecure` resolves to
-  `SameAsRequest`, so startup fails there until you set `Auth__Cookie__RequireSecure=true` for local runs
-  and the e2e host. The cookie then carries `Secure`, and Chrome and Firefox accept a `Secure` cookie from
-  `http://localhost`. A browser that doesn't (Safari) needs HTTPS locally.
-- Renaming the cookie signs everyone out once.
+  the API over plain http. `RequireSecure=false` means `SameAsRequest`, and an unnamed cookie is then
+  `struo.session`; an explicit prefixed name makes startup fail with a message naming `Auth:Cookie:Name`.
+- In Development `Auth:Cookie:RequireSecure` resolves to `SameAsRequest` and the default name is
+  `struo.session`. Set `Auth__Cookie__RequireSecure=true` for local runs and the e2e host and the name
+  becomes `__Host-struo.session`, with a `Secure` cookie; Chrome and Firefox accept a `Secure` cookie from
+  `http://localhost`, and a browser that doesn't (Safari) needs HTTPS locally.
+- An explicit `Auth:Cookie:Name` is used as written, whatever the default would be.
+
+A fork that must share the session cookie across subdomains (by setting the cookie's `Domain` in code)
+cannot use a `__Host-` name, because the prefix forbids `Domain`. It sets `Auth:Cookie:Name` itself (for
+example `struo.session`). The cost is that a sibling subdomain can inject a cookie of the same name and
+sign users out.
 
 ## 8. Images or the API on another origin: `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA`
 
