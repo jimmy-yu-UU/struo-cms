@@ -13,6 +13,17 @@
   [Chapter 25](25-after-forking.md).
 :::
 
+### Added
+
+- `DataProtection:Certificate:Path` and `Password` encrypt the DataProtection key ring with a PFX
+  certificate, in Redis and in the key-ring directory alike. `Certificate:Previous` lists earlier
+  certificates that only decrypt, and `DataProtection:RequireKeyProtection` stops startup in every
+  environment when no certificate is configured. See [Chapter 4](04-configuration.md) and
+  [Chapter 20](20-deployment.md).
+- In Production with `Redis:ConnectionString` set, startup logs one warning when
+  `DataProtection:Certificate:Path` is empty and one when the connection string has no password.
+  See [Chapter 20](20-deployment.md).
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger Breaking

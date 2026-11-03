@@ -607,6 +607,14 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 
 See [Chapter 15](15-files-and-media.md) for the behaviour of the built-in backends and `files:sweep`.
 
+## Key protection: `IXmlEncryptor`
+
+A fork that protects the DataProtection key ring some other way than `DataProtection:Certificate`
+registers its own `IXmlEncryptor` by setting `KeyManagementOptions.XmlEncryptor` after `AddStruoCms()`;
+the `EncryptedXmlInfo` it returns names the matching `IXmlDecryptor`. The startup warning and
+`RequireKeyProtection` look only at `DataProtection:Certificate:Path`, so a fork that uses its own
+encryptor sees the warning and leaves `RequireKeyProtection` off.
+
 ## Your own errors: `StruoDomainException`
 
 A fork's own client-facing error derives from `StruoDomainException`, which carries a code, a 400 to 499 status

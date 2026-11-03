@@ -11,6 +11,14 @@
   [第 25 章](25-after-forking.md)。
 :::
 
+### 新增
+
+- `DataProtection:Certificate:Path` 與 `Password` 用 PFX 憑證加密 DataProtection 金鑰圈，Redis 與金鑰圈目錄
+  都一樣。`Certificate:Previous` 列出只用來解密的較早憑證，`DataProtection:RequireKeyProtection` 讓沒有設憑證的
+  啟動在任何環境都失敗。見[第 4 章](04-configuration.md)與[第 20 章](20-deployment.md)。
+- Production 下設了 `Redis:ConnectionString` 時，`DataProtection:Certificate:Path` 是空的會記一則啟動警告，
+  連線字串沒帶密碼也會記一則。見[第 20 章](20-deployment.md)。
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger 破壞性變更

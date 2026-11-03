@@ -128,6 +128,10 @@ Redis 原子計數器，Redis 連不上時登入會回 5xx。沒設 Redis 時，
 
 設了 Redis，它也存放 DataProtection 金鑰圈，見下面的「DataProtection 金鑰」。
 
+這時 Redis 存著每一張工作階段 ticket 與金鑰圈，所以連線字串要帶密碼，而且 API 所在網路之外的人不能連到它。
+連得到沒有密碼的 Redis 的人，就能接管所有工作階段。Production 下，`Redis:ConnectionString` 沒帶密碼時，
+啟動會記一則警告；警告只寫鍵名，不會印出連線字串。
+
 ### `Struo:Files:Backend`：多副本必須用 `s3`
 
 預設的 `local` 把上傳的檔案寫在這個副本自己的磁碟上，根目錄是 `Struo:Files:Local:RootPath`，
@@ -217,6 +221,10 @@ System.InvalidOperationException: 2 migration(s) pending, the lowest is 20261008
 
 行程隨後以代碼 `1` 結束，後面的堆疊追蹤此處省略；訊息本身點名了要跑的命令與設定鍵。
 
+`DataProtection` 在這些情形會用同樣的方式失敗：`DataProtection:RequireKeyProtection` 是 `true` 卻沒設
+`DataProtection:Certificate:Path`、設定的憑證檔案不存在或打不開，或只設了 `Certificate:Previous` 而沒設
+`Certificate:Path`。
+
 另一件跟設定無關、但同樣在啟動最上層就決定好的事：程序一開始就把整個行程的預設文化特性釘死成
 invariant，操作者不需要另外釘 `LANG` 或 `DOTNET_SYSTEM_GLOBALIZATION_*`。SqlSugar 重新解析
 查詢篩選器渲染出來的字面值時，用的是同一個文化特性，兩者本來就得一致。
@@ -235,8 +243,8 @@ sink，按日期滾動、允許同時被多個行程共享讀寫，檔名長成 
 ### 建置
 
 兩份 Dockerfile 各自產生一個獨立映像：根目錄的 `Dockerfile` 建 API，`frontend/Dockerfile` 建
-後台 SPA。根目錄的 `docker-compose.yml` 用這兩份 Dockerfile 起一整套開發與測試環境，不是正式
-環境的部署範本，見本章最後的「本機的 Compose 環境」。本機建置跟 CI 的 `docker` job 跑的是同樣
+後台 SPA。根目錄的 `docker-compose.yml` 用這兩份 Dockerfile 起一整套用來快速看到效果、試用功能的環境，
+不是部署範本，見本章最後的「本機的 Compose 環境」。本機建置跟 CI 的 `docker` job 跑的是同樣
 兩道指令，只是本機習慣打 `:local` 標籤，CI 打的是 `:ci`：
 
 ```
@@ -305,8 +313,30 @@ token 都失效；跑一個以上的副本，每個副本各自有一份金鑰�
 antiforgery 會直接失敗。單一副本，把這個路徑掛成 volume 就夠了，金鑰能撐過容器重建；一個以上的副本就要設
 `Redis:ConnectionString`。
 
-不論存在哪裡，金鑰都沒有靜態加密：這個專案沒有配置 XML 加密器，Redis 的那個鍵或金鑰圈目錄裡都是可以直接讀的
-金鑰材料，要比照其他密鑰保護。限制誰能讀那個 Redis 資料庫，並要求認證。
+沒有設憑證時，金鑰沒有靜態加密：Redis 的那個鍵或金鑰圈目錄裡都是可以直接讀的金鑰材料，要比照其他密鑰保護。
+Production 下，設了 `Redis:ConnectionString` 而 `DataProtection:Certificate:Path` 是空的，啟動會記一則警告
+說明這件事；警告只寫鍵名，不會印出連線字串。
+
+#### 用憑證加密金鑰圈
+
+`DataProtection:Certificate:Path` 與 `DataProtection:Certificate:Password` 指定一個 PFX 檔案與它的密碼。
+設了路徑，每把金鑰寫出之前都先用該憑證加密，Redis 與金鑰圈目錄都一樣；`RequireKeyProtection=true` 則讓
+沒有設憑證的啟動在任何環境都失敗。密碼不要放進提交的檔案：用 `DataProtection__Certificate__Password`
+或你的密鑰管理，PFX 檔案以唯讀方式掛進容器。
+
+這個加密防的是能讀到金鑰圈的人，例如外流的 Redis 備份或快照。它防不了能寫入 Redis 的人：憑證的公開部分就
+足以加密他們自己的金鑰，他們也能直接寫入工作階段 ticket。Redis 的存取控制，也就是密碼與私有網路，仍然必要。
+
+更換憑證的步驟：
+
+1. 把 `DataProtection:Certificate:Path` 與 `Password` 設成新憑證，並把舊的那一組移到
+   `DataProtection:Certificate:Previous:0:Path` 與 `:Password`。
+2. 以這份設定部署每個副本。新金鑰用新憑證加密；金鑰圈裡既有的金鑰仍由舊憑證加密，`Previous` 讓每個副本
+   還讀得了它們。
+3. 等到用舊憑證寫入的金鑰都用不到了，才把舊的那一筆從 `Previous` 移除。太早移除不會讓主機停下來，但那些金鑰
+   保護的工作階段會被拒絕，使用者要重新登入。
+
+用其他方式保護金鑰的 fork，照[第 18 章](18-extension-points.md)做。
 
 ### 後台 SPA 映像
 
@@ -557,9 +587,9 @@ orphan 2026/10/00000000000000000000000000000001.png
 ## 本機的 Compose 環境
 
 `docker compose up -d --build` 用上面兩份 Dockerfile 起 `postgres`、`redis`、`api`、`admin` 四個
-服務，怎麼啟動、怎麼登入見[第 3 章：快速開始](03-getting-started.md)。它是開發與測試用的環境：
-`api` 以 Production 執行，每次啟動先自己跑 migration（`Database__MigrateOnStartup`）。上正式
-環境，照本章前面的檢查清單自己組部署。
+服務，怎麼啟動、怎麼登入見[第 3 章：快速開始](03-getting-started.md)。它的用途是快速看到效果、試用功能，
+不是部署範本。`api` 以 Production 執行，每次啟動先自己跑 migration（`Database__MigrateOnStartup`）。
+怎麼部署、依你的環境要改什麼，由你決定；照本章前面的檢查清單自己組部署。
 
 PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設只綁在 `127.0.0.1`，只有本機連得到
 資料庫、Redis、API 跟後台。`STRUO_BIND_ADDRESS` 決定綁定的位址；設成 `0.0.0.0` 會把埠開在所有
@@ -578,7 +608,7 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 
 這個環境設了 `Redis__ConnectionString`，所以 DataProtection 金鑰圈存在它的 `redis` 服務裡，沒有加密，
 為檔案位置掛上的 volume `struo-dpkeys` 用不到。`redis` 服務沒有 volume：重建它會丟掉金鑰圈，連同所有
-工作階段。開發與測試這樣就夠了；正式環境要照上面「DataProtection 金鑰」一節，自己保護金鑰。
+工作階段。開發與測試這樣就夠了；正式環境要替 Redis 設密碼，並照上面「DataProtection 金鑰」一節保護金鑰。
 
 ### S3 相容儲存
 
