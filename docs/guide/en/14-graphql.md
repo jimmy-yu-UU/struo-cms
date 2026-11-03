@@ -250,7 +250,9 @@ REST write. Queries stay open to anonymous callers within their read grants.
 The `locale` argument only appears on the single-item query, the list query, `create`, and
 `update` — `delete`/`restore`/`revert` all have none. A create input carries writable own fields,
 many-to-one foreign keys, many-to-many id arrays, and a typed translation list; an update input is
-the same, plus a `version: Long`.
+the same, plus a `version: Long`. A `null` or omitted `version` skips the comparison. GraphQL's
+`Long` type rejects a value that is not an integer, such as `1.5` or `"abc"`, before the resolver
+runs, so that rejection is a GraphQL type error rather than `INVALID_VERSION`; nothing is written.
 
 `create` and `update` convert the typed input back into the JSON body the item service already
 consumes, then re-read that row after writing, so the returned node's shape matches what a query

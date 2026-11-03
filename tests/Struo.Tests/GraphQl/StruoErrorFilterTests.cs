@@ -71,6 +71,10 @@ public class StruoErrorFilterTests
 
     // Optimistic-lock CAS miss splits to VERSION_CONFLICT over GraphQL too (shared DomainErrorMap).
     [Fact]
+    public void InvalidVersion_maps_to_INVALID_VERSION()
+        => _filter.OnError(Wrap(new InvalidVersionException("v"))).Code.Should().Be("INVALID_VERSION");
+
+    [Fact]
     public void ConcurrencyConflict_maps_to_VERSION_CONFLICT()
         => _filter.OnError(Wrap(new ConcurrencyConflictException("c"))).Code.Should().Be("VERSION_CONFLICT");
 

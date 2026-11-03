@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.23.0
+
+::: danger Breaking
+- An update whose `version` is present, not `null` and not an integer returns `400` `INVALID_VERSION`
+  and writes nothing; it applies to a collection that carries a `version`. A client that sends such a
+  value drops it or sends the integer it read. A numeric string such as `"3"`, `null` and an absent
+  `version` behave as before. See [Chapter 12](12-rest-conventions.md) and
+  [Chapter 13](13-rest-endpoints.md).
+:::
+
 ## 0.22.0 — 2026-11-03
 
 ::: danger Breaking

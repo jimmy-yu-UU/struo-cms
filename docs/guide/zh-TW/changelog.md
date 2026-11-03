@@ -1,5 +1,14 @@
 # 版本紀錄
 
+## 0.23.0
+
+::: danger 破壞性變更
+- 更新的 `version` 有帶、不是 `null` 而且不是整數時，回 `400` `INVALID_VERSION` 且什麼都不寫入；
+  只適用於帶 `version` 的集合。送這種值的用戶端要拿掉它，或改送讀到的整數。像 `"3"` 這樣的數字字串、
+  `null` 與沒帶 `version` 的行為不變。見[第 12 章](12-rest-conventions.md)與
+  [第 13 章](13-rest-endpoints.md)。
+:::
+
 ## 0.22.0 — 2026-11-03
 
 ::: danger 破壞性變更

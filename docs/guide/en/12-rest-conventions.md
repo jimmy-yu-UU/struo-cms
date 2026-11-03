@@ -97,6 +97,7 @@ means the same thing on both protocols:
 | `CONFLICT` | 409 | A conflict other than a version mismatch (see below) |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
+| `INVALID_VERSION` | 400 | An update body's `version` is not an integer |
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
 | `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
@@ -320,7 +321,13 @@ The caller's `version` has already fallen behind the row's real current value, s
 rejected; this message is exactly what a client's "reload and try again" path is built on. Leaving
 `version` out of the body entirely is also allowed — doing so skips the comparison altogether,
 giving up this layer of protection while staying compatible with an older caller that doesn't
-send it.
+send it. A JSON `null` counts as leaving it out.
+
+When `version` is present and not `null`, it must be a JSON integer within the range of a 64-bit
+integer, or a string holding one, such as `"3"`. Anything else fails the whole update with `400`
+`INVALID_VERSION`, and nothing is written: `1.5`, `"abc"`, `true`, an object, an array, or a number
+too large for 64 bits. A collection without a `version` column ignores the key, and a create body
+never reads it.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting
 in that snapshot never causes a needless conflict (see

@@ -198,7 +198,9 @@ HTTP_STATUS:200
 
 `locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都
 沒有。建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份
-再加一個 `version: Long`。
+再加一個 `version: Long`。`version` 為 `null` 或沒帶時不做比對。GraphQL 的 `Long` 型別會在 resolver
+執行前拒絕不是整數的值，例如 `1.5` 或 `"abc"`，所以這種拒絕是 GraphQL 型別錯誤而不是
+`INVALID_VERSION`，什麼都不會寫入。
 
 create 跟 update 把型別化的輸入轉回項目服務原本就吃的那份 JSON body，寫完之後重新讀一次那一列，讓
 回傳的節點形狀跟一個查詢會產生的一模一樣；重讀被 RBAC 擋下時，退回原始的寫入結果，不會讓一次成功的

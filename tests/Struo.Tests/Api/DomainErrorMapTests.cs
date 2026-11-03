@@ -77,6 +77,23 @@ public class DomainErrorMapTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void InvalidVersion_is_INVALID_VERSION_with_status_400_regardless_of_auth(bool authenticated)
+    {
+        var exception = new InvalidVersionException("bad version");
+        var (code, message) = DomainErrorMap.Map(exception, authenticated);
+        code.Should().Be("INVALID_VERSION");
+        message.Should().Be("bad version");
+        DomainErrorMap.StatusFor(exception, code).Should().Be(400);
+    }
+
+    // INVALID_VERSION is exception-driven only; the status→code reverse map keeps 400 → BAD_USER_INPUT.
+    [Fact]
+    public void ForStatus_400_stays_BAD_USER_INPUT()
+        => ErrorCodes.ForStatus(400).Should().Be("BAD_USER_INPUT");
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void QueryException_is_BAD_USER_INPUT_regardless_of_auth(bool authenticated)
     {
         var (code, message) = DomainErrorMap.Map(new QueryException("bad"), authenticated);
@@ -131,6 +148,7 @@ public class DomainErrorMapTests
     [InlineData("CONFLICT", 409)]
     [InlineData("VERSION_CONFLICT", 409)]
     [InlineData("BAD_USER_INPUT", 400)]
+    [InlineData("INVALID_VERSION", 400)]
     [InlineData("VALIDATION", 400)]
     [InlineData("PAYLOAD_TOO_LARGE", 413)]
     [InlineData("INTERNAL_SERVER_ERROR", 500)]
