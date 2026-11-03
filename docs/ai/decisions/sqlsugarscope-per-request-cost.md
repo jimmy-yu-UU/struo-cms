@@ -13,7 +13,7 @@ Database work therefore follows two rules, also stated in `AGENTS.md`:
   callback or a sync job gets a client that stays on the pool thread and is reused by unrelated work.
 - `CopyNew()` is only for work that needs no configure action. The copy has no audit stamping, no SQL
   Server cancellation translation, and shares the parent's soft-delete filter provider.
-  `DbReadinessCheck` uses it for its one-row read of the languages table.
+  `DbReadinessCheck` uses it for its one-row read of the `struo_languages` table.
 
 Further constraints:
 

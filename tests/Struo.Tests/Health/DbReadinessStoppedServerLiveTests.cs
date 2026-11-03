@@ -90,9 +90,11 @@ public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         })!;
-        var stdout = process.StandardOutput.ReadToEnd();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         process.WaitForExit(TimeSpan.FromSeconds(60)).Should().BeTrue();
-        process.ExitCode.Should().Be(0, $"docker {verb} {container}");
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        process.ExitCode.Should().Be(0, $"docker {verb} {container}: {stderrTask.GetAwaiter().GetResult()}");
         return stdout;
     }
 
