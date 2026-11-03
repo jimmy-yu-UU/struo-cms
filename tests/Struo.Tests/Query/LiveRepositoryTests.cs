@@ -695,6 +695,15 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
         afterRevoke.UpdatedBy.Should().BeNull("a system actor writes a typed NULL uuid, not PG error 42804");
         afterRevoke.Version.Should().Be(afterIssue.Version + 1);
 
+        // A password change revokes the token in the same UPDATE: Password and a typed NULL AccessToken.
+        (await store.SetAccessTokenAsync(id, "token-hash-2", actor, DateTime.UtcNow)).Should().BeTrue();
+        var beforeRotate = Load();
+        (await store.SetPasswordAsync(id, "enc:rotated-again", actor, DateTime.UtcNow)).Should().BeTrue();
+        var afterRotate = Load();
+        afterRotate.Password.Should().Be("enc:rotated-again");
+        afterRotate.AccessToken.Should().BeNull("SetPasswordAsync revokes the access token");
+        afterRotate.Version.Should().Be(beforeRotate.Version + 1, "one UPDATE, one version bump");
+
         // Unknown id reports false rather than throwing, so the controllers' 404 stays correct.
         (await store.SetPasswordAsync(Guid.CreateVersion7(), "enc:x", actor, DateTime.UtcNow))
             .Should().BeFalse();

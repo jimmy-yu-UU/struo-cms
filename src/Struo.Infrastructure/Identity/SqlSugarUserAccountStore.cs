@@ -50,7 +50,7 @@ public sealed class SqlSugarUserAccountStore(ISqlSugarClient db) : IUserAccountS
 
     public Task<bool> SetPasswordAsync(
         Guid id, string passwordHash, Guid? actor, DateTime nowUtc, CancellationToken ct = default) =>
-        ApplyAsync(id, actor, nowUtc, u => new User { Password = passwordHash }, ct);
+        ApplyAsync(id, actor, nowUtc, u => new User { Password = passwordHash, AccessToken = null }, ct);
 
     public Task<bool> SetAccessTokenAsync(
         Guid id, string tokenHash, Guid? actor, DateTime nowUtc, CancellationToken ct = default) =>

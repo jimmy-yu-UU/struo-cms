@@ -41,7 +41,8 @@ public interface IUserAccountStore
     /// unknown.</summary>
     Task<AccessTokenInfo?> FindAccessTokenInfoAsync(Guid id, CancellationToken ct = default);
 
-    /// <summary>Replaces the password hash. Returns false when the id matched no row (→ 404).</summary>
+    /// <summary>Replaces the password hash and, in the same write, revokes the access token. Returns
+    /// false when the id matched no row (→ 404).</summary>
     Task<bool> SetPasswordAsync(
         Guid id, string passwordHash, Guid? actor, DateTime nowUtc, CancellationToken ct = default);
 
