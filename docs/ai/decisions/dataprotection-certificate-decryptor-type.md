@@ -33,8 +33,9 @@ can fill that list late. Rejected:
 
 ## Evidence
 
-`The_persisted_decryptor_type_is_stable_across_builds` in
-`tests/Struo.Tests/Api/DataProtectionCertificateTests.cs` asserts the persisted attribute. A key ring
+Measured 2026-11-03: `The_persisted_decryptor_type_is_stable_across_builds` in
+`tests/Struo.Tests/Api/DataProtectionCertificateTests.cs` asserts the persisted attribute and that the
+file version still follows `Version`. A key ring
 written with the type, restarted against the same Redis and certificate, was read back without writing a
 new key.
 

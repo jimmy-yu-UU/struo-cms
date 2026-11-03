@@ -307,8 +307,8 @@ effect too.
 Two Dockerfiles each produce an independent image: the root `Dockerfile` builds the API,
 `frontend/Dockerfile` builds the admin SPA. The root `docker-compose.yml` uses both Dockerfiles to
 start a full stack for seeing the result quickly and trying features out, not a deployment
-template — see "The local Compose stack" at the end of this chapter. A local build and CI's `docker` job run the same two
-commands, except a local build conventionally tags `:local` while CI tags `:ci`:
+template — see "The local Compose stack" at the end of this chapter. A local build and CI's `docker`
+job run the same two commands, except a local build conventionally tags `:local` while CI tags `:ci`:
 
 ```
 docker build --tag struo-api:local .
@@ -402,9 +402,8 @@ environment when no certificate is configured. Keep the password out of committe
 the container.
 
 The encryption protects against someone who can read the key ring, such as a leaked Redis backup or
-snapshot. It does not protect against someone who can write to Redis: they can add a key of their own,
-and an unencrypted key is accepted without any certificate, and they can write session tickets
-directly. Redis access control, a password and a private network, is still required.
+snapshot. It does not protect against someone who can write to Redis: they can add a key of their own
+(an unencrypted key is accepted without any certificate) and write session tickets directly. Redis access control, a password and a private network, is still required.
 
 To replace the certificate:
 

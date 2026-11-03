@@ -155,6 +155,10 @@ public sealed class DataProtectionCertificateTests : IDisposable
 
         xml.Should().Contain("decryptorType=\"Struo.Api.Auth.CertificateKeyDecryptor, Struo.Api,");
         xml.Should().Contain("Version=1.0.0.0");
+
+        // Only AssemblyVersion is pinned: the file version keeps following the product version.
+        var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(typeof(CertificateKeyDecryptor).Assembly.Location);
+        info.FileVersion.Should().StartWith(info.ProductVersion!.Split('+')[0]);
     }
 
     [Fact]

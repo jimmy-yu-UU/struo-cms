@@ -7,8 +7,8 @@ namespace Struo.Api.Auth;
 
 /// <summary>
 /// Encrypts the key ring with <c>DataProtection:Certificate:Path</c> and decrypts it with that certificate
-/// or any of <c>Certificate:Previous</c> (the framework also looks a certificate up by thumbprint in the
-/// operating system's certificate stores). The framework's certificate decryption list cannot be filled
+/// or any of <c>Certificate:Previous</c> (the framework may also look a certificate up by thumbprint in
+/// the operating system's certificate stores). The framework's certificate decryption list cannot be filled
 /// from late-bound configuration, so the decryptor type recorded in each stored key is
 /// <see cref="CertificateKeyDecryptor"/>, which delegates to the framework's own decryption.
 /// </summary>
