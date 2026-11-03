@@ -615,14 +615,14 @@ still accepting requests. A liveness probe should restart the container or pod w
 responding.
 
 `/health/ready` runs two checks tagged `ready`: `DbReadinessCheck` makes an actual round trip to
-the database by reading one row of the `languages` table, and `CacheReadinessCheck` writes to and reads back from the configured
-`IDistributedCache` (Redis or the in-process cache); a readiness probe should wait until both are
-reachable before routing traffic in.
+the database by reading one row of the `struo_languages` table, and `CacheReadinessCheck` writes to
+and reads back from the configured `IDistributedCache` (Redis or the in-process cache); a readiness
+probe should wait until both are reachable before routing traffic in.
 
 The database check does not wait for the driver's connect timeout. When the database has not
 answered within `Database:ReadinessTimeoutSeconds` (default `3`, range 1 to 60), `/health/ready`
 answers 503. The query's command timeout is the same value, and a database that is down or has no
-`languages` table answers 503 on the first call.
+`struo_languages` table answers 503 on the first call.
 
 How to hit both routes is already covered in [Chapter 3: Getting Started](03-getting-started.md);
 below is the full response to an anonymous request:

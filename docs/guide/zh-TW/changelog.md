@@ -20,9 +20,9 @@
 
 ### 修正
 
-- `/health/ready` 讀 `languages` 資料表的一筆資料，指令逾時等於 `Database:ReadinessTimeoutSeconds`，
-  而非只看連線狀態。資料庫停了或缺 `languages` 資料表時，第一次呼叫就回 503，而不是等連線池裡的連線都失效。
-  見[第 20 章](20-deployment.md)。
+- `/health/ready` 讀 `struo_languages` 資料表的一筆資料，指令逾時等於
+  `Database:ReadinessTimeoutSeconds`，而非只看連線狀態。資料庫停了或缺 `struo_languages` 資料表時，
+  第一次呼叫就回 503，而不是等連線池裡的連線都失效。見[第 20 章](20-deployment.md)。
 
 ## 0.22.0 — 2026-11-03
 

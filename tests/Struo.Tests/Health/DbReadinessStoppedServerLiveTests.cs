@@ -33,6 +33,8 @@ public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
         if (string.IsNullOrWhiteSpace(container) || LiveDatabases.Postgres is null) return;
         container.Should().StartWith(ContainerPrefix, "only a throwaway container may be stopped");
 
+        AssertConnectionTargets(container, LiveDatabases.Postgres);
+
         using var database = TestBackend.CreateLiveDatabase(TestBackendKind.PostgreSQL, "readiness");
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = StruoDbType.PostgreSQL, ConnectionString = database.ConnectionString },
@@ -56,29 +58,53 @@ public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
         }
         finally
         {
-            Docker("start", container);
-            await WaitUntilHealthyAsync(check);
+            try
+            {
+                Docker("start", container);
+                if (!await WaitUntilHealthyAsync(check))
+                    output.WriteLine($"{container} did not answer readiness within the wait after restart");
+            }
+            catch (Exception ex)
+            {
+                output.WriteLine($"could not restart {container}: {ex.Message}");
+            }
         }
     }
 
-    private static void Docker(string verb, string container)
+    // The connection's port must be one the named container publishes, so a mismatch cannot stop a
+    // container the connection does not point at.
+    private static void AssertConnectionTargets(string container, string connectionString)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            connectionString, @"(^|;)\s*Port\s*=\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var port = match.Success ? match.Groups[2].Value : "5432";
+        var published = Docker("port", container);
+        published.Should().MatchRegex($@":{port}(\s|$)",
+            $"STRUO_TEST_PG_CONNECTION must target {container} (port {port}); it publishes: {published}");
+    }
+
+    private static string Docker(string verb, string container)
     {
         using var process = Process.Start(new ProcessStartInfo("docker", [verb, container])
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         })!;
+        var stdout = process.StandardOutput.ReadToEnd();
         process.WaitForExit(TimeSpan.FromSeconds(60)).Should().BeTrue();
         process.ExitCode.Should().Be(0, $"docker {verb} {container}");
+        return stdout;
     }
 
-    private static async Task WaitUntilHealthyAsync(DbReadinessCheck check)
+    private static async Task<bool> WaitUntilHealthyAsync(DbReadinessCheck check)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (DateTime.UtcNow < deadline)
         {
-            if ((await check.CheckHealthAsync(new HealthCheckContext())).Status == HealthStatus.Healthy) return;
+            if ((await check.CheckHealthAsync(new HealthCheckContext())).Status == HealthStatus.Healthy) return true;
             await Task.Delay(500);
         }
+
+        return false;
     }
 }

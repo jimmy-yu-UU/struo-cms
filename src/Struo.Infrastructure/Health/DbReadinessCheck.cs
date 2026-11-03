@@ -7,7 +7,7 @@ using Struo.Infrastructure.Localization;
 namespace Struo.Infrastructure.Health;
 
 /// <summary>
-/// Reports the database as ready when one typed read of the <c>languages</c> table answers within
+/// Reports the database as ready when one typed read of the <c>struo_languages</c> table answers within
 /// <see cref="DatabaseOptions.ReadinessTimeoutSeconds"/>. The read is a real round trip, so a pooled
 /// connection whose server is gone fails it. The probe is synchronous, so it runs on a pool thread and is
 /// raced against the timeout; the command timeout is the same value. A probe that outlives the timeout

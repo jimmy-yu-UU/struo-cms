@@ -123,7 +123,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no
   audit stamping, no SQL Server cancellation translation, a shared soft-delete filter provider), so use it
-  only for AOP-free work such as a connection ping. A fork's `ICurrentUserAccessor` must not be scoped
+  only for AOP-free work such as `DbReadinessCheck`'s one-row read. A fork's `ICurrentUserAccessor` must not be scoped
   and must read the user on each call; startup fails otherwise.
   See `docs/ai/decisions/sqlsugarscope-per-request-cost.md`.
 - **Schema changes are FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).

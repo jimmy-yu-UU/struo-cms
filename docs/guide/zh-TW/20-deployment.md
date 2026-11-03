@@ -498,12 +498,12 @@ admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是
 探針該在這裡沒回應時重啟容器或 pod。
 
 `/health/ready` 執行兩項標了 `ready` 的檢查：`DbReadinessCheck` 對資料庫做一次真正的連線往
-返（讀 `languages` 資料表的一筆資料），`CacheReadinessCheck` 對設定好的 `IDistributedCache`（Redis 或行程內快取）做一次寫入再
-讀回；readiness 探針該等兩項都連得上，才把流量導進來。
+返（讀 `struo_languages` 資料表的一筆資料），`CacheReadinessCheck` 對設定好的
+`IDistributedCache`（Redis 或行程內快取）做一次寫入再讀回；readiness 探針該等兩項都連得上，才把流量導進來。
 
 資料庫檢查不會等驅動程式的連線逾時。資料庫在 `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1 到 60）
-內沒有回應時，`/health/ready` 回 503。查詢的指令逾時用同一個值；資料庫停了或沒有 `languages` 資料表時，第一次呼叫就回
-503。
+內沒有回應時，`/health/ready` 回 503。查詢的指令逾時用同一個值；資料庫停了或沒有
+`struo_languages` 資料表時，第一次呼叫就回 503。
 
 兩個路由怎麼打，[第 3 章：快速開始](03-getting-started.md)已經介紹過；下面是對一個匿名請求的
 完整回應：

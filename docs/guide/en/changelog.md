@@ -25,9 +25,9 @@
 
 ### Fixed
 
-- `/health/ready` reads one row of the `languages` table, with a command timeout equal to
+- `/health/ready` reads one row of the `struo_languages` table, with a command timeout equal to
   `Database:ReadinessTimeoutSeconds`, instead of checking the connection state. A stopped database
-  or a missing `languages` table answers 503 on the first call, not after the pooled connections are
+  or a missing `struo_languages` table answers 503 on the first call, not after the pooled connections are
   gone. See [Chapter 20](20-deployment.md).
 
 ## 0.22.0 — 2026-11-03
