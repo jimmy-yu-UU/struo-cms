@@ -47,8 +47,8 @@ The complete semantics of filtering, sorting, projection and pagination are left
 | `GET api/items/{collection}/{id}/revisions/{n}` | Read | Read one revision snapshot |
 | `POST api/items/{collection}/{id}/revisions/{n}/revert` | Write | Revert to a given version |
 
-An update body's `version` must be an integer, a numeric string, `null`, or absent; any other value is
-a `400` `INVALID_VERSION` ([Chapter 12](12-rest-conventions.md)).
+On a collection that carries a `version`, an update body's `version` must be an integer, an integer
+string, `null`, or absent; any other value is a `400` `INVALID_VERSION` ([Chapter 12](12-rest-conventions.md)).
 
 Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
 grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing

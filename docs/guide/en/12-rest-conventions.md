@@ -323,10 +323,11 @@ rejected; this message is exactly what a client's "reload and try again" path is
 giving up this layer of protection while staying compatible with an older caller that doesn't
 send it. A JSON `null` counts as leaving it out.
 
-When `version` is present and not `null`, it must be a JSON integer within the range of a 64-bit
-integer, or a string holding one, such as `"3"`. Anything else fails the whole update with `400`
-`INVALID_VERSION`, and nothing is written: `1.5`, `"abc"`, `true`, an object, an array, or a number
-too large for 64 bits. A collection without a `version` column ignores the key, and a create body
+When `version` is present and not `null`, it must be a JSON number written as an integer literal,
+with no fraction or exponent, within the range of a 64-bit integer, or an integer string such as
+`"3"` (digits with an optional sign, no surrounding whitespace). Anything else fails the whole
+update with `400` `INVALID_VERSION`, and nothing is written: `1.5`, `3.0`, `1e3`, `"abc"`, `" 3"`,
+`true`, an object, an array, or a number too large for 64 bits. A collection without a `version` column ignores the key, and a create body
 never reads it.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting

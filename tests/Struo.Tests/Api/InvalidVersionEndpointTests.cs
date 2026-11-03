@@ -80,6 +80,39 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
             Json($"{{\"status\":\"published\",\"version\":\"{version}\"}}"));
 
         resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        (await GetAsync(client, id)).GetProperty("status").GetString().Should().Be("published");
+    }
+
+    // A version string is an optional sign and digits only: surrounding whitespace is 400, a sign is
+    // parsed (and then compared, so a value other than the current one is a 409).
+    [Theory]
+    [InlineData(" 3")]
+    [InlineData("3 ")]
+    public async Task Rest_update_with_a_whitespace_padded_version_string_is_400_INVALID_VERSION(string value)
+    {
+        var (client, id, _) = await CreateArticleAsync();
+
+        var resp = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json($"{{\"status\":\"published\",\"version\":\"{value}\"}}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, await resp.Content.ReadAsStringAsync());
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("INVALID_VERSION");
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("+3")]
+    public async Task Rest_update_with_a_signed_version_string_is_parsed_and_compared(string value)
+    {
+        var (client, id, _) = await CreateArticleAsync();
+
+        var resp = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json($"{{\"status\":\"published\",\"version\":\"{value}\"}}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Conflict, await resp.Content.ReadAsStringAsync());
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("VERSION_CONFLICT");
     }
 
     [Fact]
@@ -119,6 +152,8 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
         var resp = await client.PutAsync($"/api/items/language/{id}", Json("{\"sort\":2,\"version\":\"abc\"}"));
 
         resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        Root(await client.GetStringAsync($"/api/items/language/{id}"))
+            .GetProperty("data").GetProperty("sort").GetInt32().Should().Be(2);
     }
 
     // GraphQL types `version` as Long, so a non-Long literal is rejected by the type layer before the

@@ -106,7 +106,7 @@ internal static class JsonBodyUtil
         {
             JsonValueKind.Null => null,
             JsonValueKind.Number when v.TryGetInt64(out var n) => n,
-            JsonValueKind.String when long.TryParse(v.GetString(), NumberStyles.Integer,
+            JsonValueKind.String when long.TryParse(v.GetString(), NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture, out var n) => n,
             _ => throw new InvalidVersionException("version must be an integer.")
         };
