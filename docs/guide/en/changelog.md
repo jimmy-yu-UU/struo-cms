@@ -16,6 +16,10 @@
   keys are identical, differ only in case, or one is `null`; GraphQL rejects an identical repeat the
   same way. A client that repeats a locale sends it once. See
   [Chapter 7](07-i18n.md) and [Chapter 14](14-graphql.md).
+- A list request whose `offset` is above `Query:MaxOffset` (default `100000`) returns `400` naming the
+  cap, in REST, `POST .../query` and GraphQL alike. A client that pages deeper narrows the result set
+  with `filter`, or the operator raises `Query:MaxOffset`. See [Chapter 4](04-configuration.md) and
+  [Chapter 10](10-query-basics.md).
 :::
 
 ## 0.22.0 — 2026-11-03

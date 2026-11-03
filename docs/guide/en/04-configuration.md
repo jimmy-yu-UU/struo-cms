@@ -301,6 +301,7 @@ it). The same list decides which absolute `returnUrl` values OIDC sign-in accept
 | Key | Type | Default |
 |---|---|---|
 | `Query:MaxLimit` | integer | `100` |
+| `Query:MaxOffset` | integer | `100000` |
 | `Query:DefaultLimit` | integer | `25` |
 | `Query:MaxFilterConditions` | integer | `50` |
 | `Query:MaxRelationDepth` | integer | `6` |
@@ -312,7 +313,7 @@ it). The same list decides which absolute `returnUrl` values OIDC sign-in accept
 | `Query:MaxAggregates` | integer | `10` |
 | `Query:MaxSearchCandidates` | integer | `1000` |
 
-All eleven keys carry `[Range(1, int.MaxValue)]` validation and are bound with `ValidateOnStart`;
+All twelve keys carry `[Range(1, int.MaxValue)]` validation and are bound with `ValidateOnStart`;
 setting one to zero or a negative number fails startup immediately. A key name outside this list (a
 typo, say) is silently ignored, with no error.
 
@@ -330,8 +331,11 @@ tree. `MaxFilterConditions` is one budget for the whole request: the root `filte
 `MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
 finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never
 truncated. The one exception is a single parent expanded through a one-to-many relation with a
-nested `limit`: the database applies the window, so the cap does not apply. There is no cap on
-`offset`.
+nested `limit`: the database applies the window, so the cap does not apply.
+
+`MaxOffset` caps the `offset` of a top-level list request, in REST, `POST .../query` and GraphQL alike.
+An `offset` equal to `MaxOffset` is served; a larger one fails with a 400 that names the cap and
+suggests narrowing the result set with filters. Raise the key to page deeper.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
 `_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate

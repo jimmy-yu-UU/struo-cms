@@ -12,6 +12,9 @@
 - 同一個 `translations` 裡同一個 locale 出現兩次，回 `400` 且什麼都不寫入，兩個鍵完全相同、只差大小寫，
   或其中一個是 `null` 都一樣；GraphQL 對完全相同的重複同樣拒絕。重複送同一個
   locale 的用戶端改成只送一次。見[第 7 章](07-i18n.md)與[第 14 章](14-graphql.md)。
+- 清單請求的 `offset` 大於 `Query:MaxOffset`（預設 `100000`）時回 `400` 並點名這個上限，REST、
+  `POST .../query` 與 GraphQL 都一樣。要翻更深的用戶端改用 `filter` 縮小範圍，或由維運調高
+  `Query:MaxOffset`。見[第 4 章](04-configuration.md)與[第 10 章](10-query-basics.md)。
 :::
 
 ## 0.22.0 — 2026-11-03

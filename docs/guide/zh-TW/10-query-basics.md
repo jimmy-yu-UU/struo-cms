@@ -219,8 +219,7 @@ OR 接起來。
 ## 排序
 
 `sort=` 是逗號清單，每個欄位可以加上 `-` 前綴代表遞減，套用順序就是列出的順序。一份排序最多
-`Query:MaxSortFields` 個欄位（預設 5），超過會被拒絕：`Too many sort fields (max 5).`。`offset` 沒有
-上限。
+`Query:MaxSortFields` 個欄位（預設 5），超過會被拒絕：`Too many sort fields (max 5).`。
 
 排序鍵可以是一條點號路徑，但每一段都必須是多對一，只要碰到一段是多對多或一對多就被拒絕：
 
@@ -250,14 +249,16 @@ MySQL／MariaDB 遞增排序時 `NULL` 排最前，PostgreSQL 排最後。
 ## 分頁與 `meta`
 
 分頁只有 `limit`／`offset` 兩個參數，沒有 `page`。`limit` 沒給或不是正數會被夾到
-`Query:DefaultLimit`（預設 25），超過上限的會夾到 `Query:MaxLimit`（預設 100）；`offset` 最低是 0。
+`Query:DefaultLimit`（預設 25），超過上限的會夾到 `Query:MaxLimit`（預設 100）；`offset` 最低是 0，上限是 `Query:MaxOffset`
+（預設 100000）：更大的值回 400 並點名這個上限，REST、`POST .../query` 與 GraphQL 都一樣。
+要縮小範圍請改用 `filter`，不要翻更深。
 `limit=abc` 這種非數字值不會報錯，直接當成沒給處理，一樣被夾到預設值，比方說
 `GET /api/items/article?limit=abc` 回應的 `meta` 是 `{"total":3,"limit":25,"offset":0}`——`limit`
 落回預設的 25，不是拒絕請求。
 
 每個清單回應都帶一個 `meta` 物件，裝著夾完之後真正生效的 `limit`／`offset`，以及 `total`——套用同
 一個 `deleted=` 模式篩完之後、分頁之前的列數，不是整張表的列數。分頁沒有游標或 keyset 形式，也沒有
-`Link` 標頭，深分頁就是純粹的 `offset`。
+`Link` 標頭，翻頁就是純粹的 `offset`，最多到 `Query:MaxOffset`。
 
 ## `deleted=`
 
