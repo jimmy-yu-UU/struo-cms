@@ -30,6 +30,7 @@ public class S3UseChunkEncodingTests
     public void Default_is_true() =>
         new FileStorageOptions.S3Options().UseChunkEncoding.Should().BeTrue();
 
+    // The SDK default is true, so only the false row fails if SaveAsync stops setting the property.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -41,6 +42,25 @@ public class S3UseChunkEncodingTests
         await storage.SaveAsync("k/x.png", new MemoryStream([1, 2, 3]), "image/png");
 
         client.LastPut!.UseChunkEncoding.Should().Be(useChunkEncoding);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Public_ctor_takes_the_setting_from_the_options(bool useChunkEncoding)
+    {
+        var options = new FileStorageOptions
+        {
+            Backend = "s3",
+            S3 = new()
+            {
+                Endpoint = "http://localhost:9000", Bucket = "b", AccessKey = "a", SecretKey = "s",
+                UseChunkEncoding = useChunkEncoding,
+            },
+        };
+        using var storage = new S3FileStorage(options);
+
+        storage.UseChunkEncoding.Should().Be(useChunkEncoding);
     }
 
     [Fact]

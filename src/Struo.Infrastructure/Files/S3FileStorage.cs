@@ -15,8 +15,8 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
 {
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
-    private const string UnknownService = "unknown";
     private readonly bool _useChunkEncoding;
+    private const string UnknownService = "unknown";
     private readonly string _service;
 
     public S3FileStorage(FileStorageOptions options)
@@ -24,7 +24,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         _service = DescribeService(options.S3);
 
     // Test seam: inject a fake IAmazonS3 to assert request assembly (ContentType / download
-    // disposition) without a live S3/MinIO endpoint. Production always goes through the public ctor.
+    // disposition / chunk encoding) without a live S3/MinIO endpoint. Production always goes through the public ctor.
     internal S3FileStorage(IAmazonS3 client, string bucket, bool useChunkEncoding = true)
     {
         _client = client;
@@ -32,6 +32,8 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         _useChunkEncoding = useChunkEncoding;
         _service = UnknownService;
     }
+
+    internal bool UseChunkEncoding => _useChunkEncoding;
 
     public string Describe() => $"s3, bucket {_bucket}, service {_service}";
 
