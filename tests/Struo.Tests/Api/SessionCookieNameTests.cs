@@ -22,6 +22,7 @@ public class SessionCookieNameTests(ApiFactory factory) : IDisposable
     public void Dispose()
     {
         foreach (var host in _hosts) host.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private const string CustomName = "acme.session";

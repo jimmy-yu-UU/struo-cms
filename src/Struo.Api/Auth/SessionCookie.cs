@@ -23,8 +23,11 @@ public sealed class SessionCookieName(Func<string> resolve)
     /// <summary>A fixed name, for tests that build a middleware directly.</summary>
     public static SessionCookieName Fixed(string name = Default) => new(() => name);
 
-    internal static string FromConfiguration(IConfiguration config, bool alwaysSecure) =>
-        config[ConfigKey] is { } name && !string.IsNullOrWhiteSpace(name) ? name : alwaysSecure ? HostDefault : Default;
+    internal static string FromConfiguration(IConfiguration config, bool alwaysSecure)
+    {
+        if (config[ConfigKey] is { } name && !string.IsNullOrWhiteSpace(name)) return name;
+        return alwaysSecure ? HostDefault : Default;
+    }
 }
 
 /// <summary>
