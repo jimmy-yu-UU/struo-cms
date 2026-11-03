@@ -10,7 +10,7 @@
   that save. See [Chapter 6](06-field-types.md).
 - `IItemRepository.SyncTranslationsAsync` takes a `TranslationSyncRequest`, which also carries the
   locales to delete, in place of the separate arguments. A fork that implements `IItemRepository`
-  updates its override.
+  updates its implementation.
 :::
 
 ### Added

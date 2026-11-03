@@ -10,7 +10,7 @@ namespace Struo.Application.Query;
 /// <param name="LocaleProperty">CLR property name of the locale column.</param>
 /// <param name="FieldProperties">CLR property names of the translatable fields.</param>
 /// <param name="ParentId">The parent row's primary key.</param>
-/// <param name="PerLocale">Locale, then camelCase field, then value; only the fields sent are set.</param>
+/// <param name="PerLocale">Locale → camelCase field → value; only the fields sent are set.</param>
 public sealed record TranslationSyncRequest(
     Type TranslationType,
     string FkProperty,
