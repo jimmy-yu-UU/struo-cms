@@ -85,9 +85,9 @@ configuration keys are in the `RateLimiting` section of
 
 A request that carries no `Authorization: Bearer …` header always goes through the cookie: named
 `__Host-struo.session` when it is always `Secure` and `struo.session` otherwise (`Auth:Cookie:Name` can
-rename it), `HttpOnly`, `SameSite` defaulting to `Lax`.
-The `Secure` policy follows `Auth:Cookie:RequireSecure`; left unset, it is `Always` in every
-environment except Development, which follows the request itself.
+rename it), `HttpOnly`, `SameSite` defaulting to `Lax`. The `Secure` policy follows
+`Auth:Cookie:RequireSecure`; left unset, it is `Always` in every environment except Development,
+which follows the request itself.
 
 As soon as any CORS origin is configured at all, the `Secure` policy is forced to `Always`, so the
 admin and the API both have to run HTTPS. `SameSite` stays `Lax`, which means the setup works only

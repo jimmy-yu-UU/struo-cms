@@ -15,8 +15,15 @@ namespace Struo.Tests.Api;
 /// handler that writes it and the CSRF guard that keys off its presence.
 /// </summary>
 [Collection("ApiIntegration")]
-public class SessionCookieNameTests(ApiFactory factory)
+public class SessionCookieNameTests(ApiFactory factory) : IDisposable
 {
+    private readonly List<IDisposable> _hosts = [];
+
+    public void Dispose()
+    {
+        foreach (var host in _hosts) host.Dispose();
+    }
+
     private const string CustomName = "acme.session";
 
     private static readonly object ArticleBody =
@@ -26,6 +33,7 @@ public class SessionCookieNameTests(ApiFactory factory)
     {
         var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
             c.AddInMemoryCollection(new Dictionary<string, string?> { ["Auth:Cookie:Name"] = CustomName })));
+        _hosts.Add(host);
         return host.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
             HandleCookies = handleCookies,
@@ -103,6 +111,7 @@ public class SessionCookieNameTests(ApiFactory factory)
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(
                 settings.ToDictionary(s => s.Key, s => (string?)s.Value)));
         });
+        _hosts.Add(host);
         var client = host.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
             HandleCookies = false,
@@ -168,6 +177,39 @@ public class SessionCookieNameTests(ApiFactory factory)
         using var client = HostClient("Production", ("Auth:Cookie:Name", CustomName));
 
         await LoginSessionCookieAsync(client, CustomName);
+    }
+
+    [Fact]
+    public async Task Session_rotation_follows_the_default_host_name()
+    {
+        const string hostName = "__Host-struo.session";
+        var (emailA, passwordA, _) = await factory.SeedEditorAsync(["fxArticle"], []);
+        var (emailB, passwordB, _) = await factory.SeedEditorAsync(["fxArticle"], []);
+        using var client = HostClient("Production");
+
+        var loginA = await client.PostAsJsonAsync("/api/auth/login", new { email = emailA, password = passwordA });
+        var cookieA = HostCookieValue(loginA);
+
+        // B signs in while A's cookie is presented under the default name: A's session must die.
+        using var second = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new { email = emailB, password = passwordB }),
+        };
+        second.Headers.Add("Cookie", $"{hostName}={cookieA}");
+        var loginB = await client.SendAsync(second);
+        loginB.EnsureSuccessStatusCode();
+        HostCookieValue(loginB).Should().NotBe(cookieA);
+
+        using var me = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        me.Headers.Add("Cookie", $"{hostName}={cookieA}");
+        (await client.SendAsync(me)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private static string HostCookieValue(HttpResponseMessage response)
+    {
+        const string prefix = "__Host-struo.session=";
+        var line = response.Headers.GetValues("Set-Cookie").Last(c => c.StartsWith(prefix, StringComparison.Ordinal));
+        return line[prefix.Length..].Split(';')[0];
     }
 
     [Fact]

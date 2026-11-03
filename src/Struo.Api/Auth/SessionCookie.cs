@@ -56,7 +56,7 @@ internal sealed partial class SessionCookieOptionsValidator : IValidateOptions<C
         var securePrefixed = hostPrefixed || cookieName.StartsWith(SecurePrefix, StringComparison.OrdinalIgnoreCase);
         if (securePrefixed && cookie.SecurePolicy != CookieSecurePolicy.Always)
             return ValidateOptionsResult.Fail(
-                $"{SessionCookieName.ConfigKey} ('{cookieName}') needs a Secure cookie, but the cookie is not always Secure: set Auth:Cookie:RequireSecure to true.");
+                $"{SessionCookieName.ConfigKey} ('{cookieName}') needs a Secure cookie, but the cookie is not always Secure: set Auth:Cookie:RequireSecure to true, or set Auth:Cookie:Name to a name without the prefix.");
         if (hostPrefixed && (!string.IsNullOrEmpty(cookie.Domain) || !(cookie.Path is null or "/")))
             return ValidateOptionsResult.Fail(
                 $"{SessionCookieName.ConfigKey} ('{cookieName}') starts with {HostPrefix}, which needs Path=/ and no Domain on the cookie.");

@@ -64,8 +64,9 @@ IP：超級管理員連續幫多個使用者重設密碼，扣的是自己的額
 ## 登入與工作階段 cookie
 
 沒有帶 `Authorization: Bearer …` 標頭的請求一律走 cookie：名稱預設在 cookie 一律帶 `Secure` 時是
-`__Host-struo.session`，否則是 `struo.session`（`Auth:Cookie:Name` 可改），`HttpOnly`，`SameSite` 預設 `Lax`；安全政策跟隨 `Auth:Cookie:RequireSecure`，留空時除了 Development
-之外的環境都是 `Always`，Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策就強制為
+`__Host-struo.session`，否則是 `struo.session`（`Auth:Cookie:Name` 可改），`HttpOnly`，`SameSite` 預設 `Lax`；
+安全政策跟隨 `Auth:Cookie:RequireSecure`，留空時除了 Development 之外的環境都是 `Always`，
+Development 跟隨請求本身；只要設定了任何一個 CORS 來源，安全政策就強制為
 `Always`，後台與 API 雙邊都得跑 HTTPS。`SameSite` 維持 `Lax`，所以只有後台與 API 是同一個主網域底下的
 兄弟子網域（`admin.example.com` 與 `api.example.com`）時才行得通；不同主網域不支援：這時 SPA 對 API 的
 請求是跨站請求，`SameSite=Lax` 的 cookie 不會隨之送出。OIDC 的 correlation 與 nonce cookie 是另外的，
