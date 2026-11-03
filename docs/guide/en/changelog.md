@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.22.0
+## 0.22.0 — 2026-11-03
 
 ::: danger Breaking
 - A password change, by the user or by a super-admin, revokes that user's API access token. An
