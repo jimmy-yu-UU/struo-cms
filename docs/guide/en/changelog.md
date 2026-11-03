@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.0
+
+::: danger Breaking
+- A password change, by the user or by a super-admin, revokes that user's API access token. An
+  integration that authenticates with the token needs a newly issued one. A fork that implements
+  `IUserAccountStore` makes `SetPasswordAsync` clear the token in the same write. See
+  [Chapter 16](16-authentication.md).
+:::
+
 ## 0.21.0 — 2026-11-03
 
 ::: danger Breaking
