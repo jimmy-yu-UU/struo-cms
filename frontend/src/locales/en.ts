@@ -80,6 +80,7 @@ export default {
     changeDescription: 'Enter your current password, then choose a new one.',
     resetTitle: 'Reset password',
     resetDescription: 'Set a new password for this user. They can change it themselves afterwards.',
+    tokenRevokeNote: 'Changing the password revokes the API token of this user.',
     current: 'Current password',
     currentRequired: 'Enter your current password.',
     new: 'New password',

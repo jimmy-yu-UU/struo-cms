@@ -157,6 +157,7 @@ function handleFailure(e: unknown): void {
         <DialogDescription v-if="!isSelf">{{ t('password.resetDescription') }}</DialogDescription>
         <DialogDescription v-else>{{ t('password.changeDescription') }}</DialogDescription>
       </DialogHeader>
+      <p class="cpd-note">{{ t('password.tokenRevokeNote') }}</p>
 
       <form class="cpd-form" @submit.prevent="onSubmit">
         <label v-if="isSelf" class="cpd-field" for="cpd-current">
@@ -229,5 +230,6 @@ function handleFailure(e: unknown): void {
 .cpd-form { display: grid; gap: 14px; }
 .cpd-field { display: grid; gap: 4px; }
 .cpd-field > span { font-size: .8rem; font-weight: 500; }
+.cpd-note { margin: 0; font-size: .85rem; color: var(--muted-foreground); }
 .cpd-error { margin: 0; color: var(--danger); font-size: .85rem; }
 </style>

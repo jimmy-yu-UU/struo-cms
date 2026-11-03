@@ -10,6 +10,7 @@ import ChangePasswordDialog from '../components/account/ChangePasswordDialog.vue
 import AccessTokenPanel from '../components/account/AccessTokenPanel.vue'
 import JunctionLinksEditor from '../components/fields/JunctionLinksEditor.vue'
 import { itemsApi } from '../api/itemsApi'
+import { usersApi } from '../api/usersApi'
 import { ApiError } from '../api/apiClient'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
@@ -1123,6 +1124,25 @@ describe('ItemFormView', () => {
     const tokenPanel = w.findComponent(AccessTokenPanel)
     expect(tokenPanel.exists()).toBe(true)
     expect(tokenPanel.props('userId')).toBe('u9')
+  })
+
+  it('reloads the access-token panel after the password dialog reports a change', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+    vi.mocked(usersApi.getAccessTokenInfo).mockClear()
+
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(userMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    expect(usersApi.getAccessTokenInfo).toHaveBeenCalledTimes(1)
+
+    w.findComponent(ChangePasswordDialog).vm.$emit('changed')
+    await flushPromises()
+
+    expect(usersApi.getAccessTokenInfo).toHaveBeenCalledTimes(2)
   })
 
   it('hides the reset-password action for a non-super-admin', async () => {
