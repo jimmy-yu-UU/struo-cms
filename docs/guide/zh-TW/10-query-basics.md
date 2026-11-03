@@ -249,9 +249,13 @@ MySQL／MariaDB 遞增排序時 `NULL` 排最前，PostgreSQL 排最後。
 ## 分頁與 `meta`
 
 分頁只有 `limit`／`offset` 兩個參數，沒有 `page`。`limit` 沒給或不是正數會被夾到
-`Query:DefaultLimit`（預設 25），超過上限的會夾到 `Query:MaxLimit`（預設 100）；`offset` 最低是 0，上限是 `Query:MaxOffset`
-（預設 100000）：更大的值回 400 並點名這個上限，REST、`POST .../query` 與 GraphQL 都一樣。
-要縮小範圍請改用 `filter`，不要翻更深。
+`Query:DefaultLimit`（預設 25），超過上限的會夾到 `Query:MaxLimit`（預設 100）；`offset` 最低是 0，上限是
+`Query:MaxOffset`（預設 100000）。
+
+更大的 `offset` 回 400，REST、`POST .../query` 與 GraphQL 都一樣：`Offset 100001 exceeds the maximum
+of 100000; narrow the result set with filters instead of paging deeper.`。`deep` 裡巢狀清單的
+`offset` 受同一個上限限制。
+
 `limit=abc` 這種非數字值不會報錯，直接當成沒給處理，一樣被夾到預設值，比方說
 `GET /api/items/article?limit=abc` 回應的 `meta` 是 `{"total":3,"limit":25,"offset":0}`——`limit`
 落回預設的 25，不是拒絕請求。

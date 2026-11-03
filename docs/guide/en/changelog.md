@@ -17,7 +17,8 @@
   same way. A client that repeats a locale sends it once. See
   [Chapter 7](07-i18n.md) and [Chapter 14](14-graphql.md).
 - A list request whose `offset` is above `Query:MaxOffset` (default `100000`) returns `400` naming the
-  cap, in REST, `POST .../query` and GraphQL alike. A client that pages deeper narrows the result set
+  cap, in REST, `POST .../query` and GraphQL alike; a nested list's `offset` inside `deep` has the
+  same cap and the `400` names the relation. A client that pages deeper narrows the result set
   with `filter`, or the operator raises `Query:MaxOffset`. See [Chapter 4](04-configuration.md) and
   [Chapter 10](10-query-basics.md).
 :::

@@ -81,6 +81,8 @@ HTTP_STATUS:400
 expand; narrow the nested filter or expand fewer parent rows.`，不會截斷結果。要縮小範圍，用巢狀
 `filter`，或減少父頁的 `limit`。
 
+巢狀清單的 `offset` 受 `Query:MaxOffset`（預設 100000）限制；更大的值回 400，訊息點名該關聯與這個上限。
+
 有一種情況不受這個上限限制：一頁只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`。這時巢狀
 `filter`、`sort`、`offset` 與 `limit` 都由資料庫執行，只會讀取那個視窗，所以子列超過
 `Query:MaxExpandRows` 的父列也能正常回應。排序與一般列表查詢相同，最後用 id 作為決勝，在排序值相同的

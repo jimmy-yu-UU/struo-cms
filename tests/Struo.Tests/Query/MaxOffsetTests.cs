@@ -22,6 +22,14 @@ public class MaxOffsetTests(ApiFactory factory)
 {
     private const int Cap = 100000;
 
+    private static void AssertCapRejection(string body)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        error.GetProperty("message").GetString().Should().Contain("100000").And.Contain("filter");
+    }
+
     [Fact]
     public void Default_cap_is_100000() => new StruoQueryOptions().MaxOffset.Should().Be(Cap);
 
@@ -39,8 +47,7 @@ public class MaxOffsetTests(ApiFactory factory)
         var c = await factory.CreateAuthenticatedClientAsync();
         var resp = await c.GetAsync($"/api/items/fxCategory?offset={Cap + 1}");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await resp.Content.ReadAsStringAsync();
-        body.Should().Contain("100000").And.Contain("filter");
+        AssertCapRejection(await resp.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -52,7 +59,7 @@ public class MaxOffsetTests(ApiFactory factory)
 
         var over = await c.PostAsJsonAsync("/api/items/fxCategory/query", new { offset = Cap + 1 });
         over.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        (await over.Content.ReadAsStringAsync()).Should().Contain("100000").And.Contain("filter");
+        AssertCapRejection(await over.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -67,6 +74,37 @@ public class MaxOffsetTests(ApiFactory factory)
         using var overDoc = JsonDocument.Parse(await over.Content.ReadAsStringAsync());
         var err = overDoc.RootElement.GetProperty("errors")[0];
         err.GetProperty("message").GetString().Should().Contain("100000").And.Contain("filter");
+        err.GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+    }
+
+    [Fact]
+    public async Task Query_endpoint_nested_deep_offset_serves_the_cap_and_rejects_above_it()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        var ok = await c.PostAsJsonAsync("/api/items/fxCategory/query",
+            new { deep = new { children = new { limit = 1, offset = Cap } } });
+        ok.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var over = await c.PostAsJsonAsync("/api/items/fxCategory/query",
+            new { deep = new { children = new { limit = 1, offset = Cap + 1 } } });
+        over.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await over.Content.ReadAsStringAsync();
+        AssertCapRejection(body);
+        body.Should().Contain("children");
+    }
+
+    [Fact]
+    public async Task GraphQl_nested_list_offset_serves_the_cap_and_rejects_above_it()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        var ok = await c.PostAsJsonAsync("/graphql", new { query = $"{{ fxArticles {{ items {{ tags(offset: {Cap}) {{ id }} }} }} }}" });
+        using var okDoc = JsonDocument.Parse(await ok.Content.ReadAsStringAsync());
+        okDoc.RootElement.TryGetProperty("errors", out _).Should().BeFalse(okDoc.RootElement.GetRawText());
+
+        var over = await c.PostAsJsonAsync("/graphql", new { query = $"{{ fxArticles {{ items {{ tags(offset: {Cap + 1}) {{ id }} }} }} }}" });
+        using var overDoc = JsonDocument.Parse(await over.Content.ReadAsStringAsync());
+        var err = overDoc.RootElement.GetProperty("errors")[0];
+        err.GetProperty("message").GetString().Should().Contain("100000").And.Contain("tags");
         err.GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
     }
 

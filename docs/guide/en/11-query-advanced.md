@@ -98,6 +98,9 @@ with a 400 naming the relation, such as `Relation 'children' has more than 1000 
 the nested filter or expand fewer parent rows.`, and the rows are never truncated. Narrow with a
 nested `filter` or a smaller `limit` on the parent page.
 
+A nested list's `offset` is capped by `Query:MaxOffset` (default 100000); a larger one fails with a
+400 naming the relation and the cap.
+
 One case skips the cap. When a page expands exactly one parent through a one-to-many relation and
 the nested list has a `limit`, the database applies the nested `filter`, `sort`, `offset` and
 `limit`, and only that window is read, so a parent with more than `Query:MaxExpandRows` children

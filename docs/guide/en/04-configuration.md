@@ -333,9 +333,10 @@ finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the r
 truncated. The one exception is a single parent expanded through a one-to-many relation with a
 nested `limit`: the database applies the window, so the cap does not apply.
 
-`MaxOffset` caps the `offset` of a top-level list request, in REST, `POST .../query` and GraphQL alike.
-An `offset` equal to `MaxOffset` is served; a larger one fails with a 400 that names the cap and
-suggests narrowing the result set with filters. Raise the key to page deeper.
+`MaxOffset` caps the `offset` of a list request, top-level or nested in `deep`, in REST,
+`POST .../query` and GraphQL alike. An `offset` equal to `MaxOffset` is served; a larger one fails
+with a 400 that names the cap and suggests narrowing the result set with filters. Raise the key to
+page deeper.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
 `_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate

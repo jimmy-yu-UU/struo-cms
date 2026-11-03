@@ -283,8 +283,9 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 400 並點名該關聯，不會截斷結果。唯一的例外是只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`：
 視窗由資料庫套用，所以不受這個上限限制。
 
-`MaxOffset` 限制頂層清單請求的 `offset`，REST、`POST .../query` 與 GraphQL 都一樣。`offset` 等於
-`MaxOffset` 時照常回傳；更大的值回 400，訊息點名這個上限，並建議用篩選條件縮小範圍。要翻更深就調高這個鍵。
+`MaxOffset` 限制清單請求的 `offset`，頂層或巢狀在 `deep` 裡的都算，REST、`POST .../query` 與
+GraphQL 都一樣。`offset` 等於 `MaxOffset` 時照常回傳；更大的值回 400，訊息點名這個上限，並建議
+用篩選條件縮小範圍。要翻更深就調高這個鍵。
 
 `MaxRelationDepth` 算的是路徑裡的關聯跳轉次數，最後一個欄位本身跟 `_junction` 虛擬區段都不算
 在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 回傳了不該回傳的

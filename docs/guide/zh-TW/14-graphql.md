@@ -174,7 +174,8 @@ HTTP_STATUS:200
 
 巢狀的 to-many 關聯欄位帶自己的四個引數：`filter`、`sort: [String!]`、`limit: Int`、
 `offset: Int`，跟 root 清單欄位是分開算的一套，靠走訪客戶端自己的 selection 樹解析成跟 REST
-`deep=` 一樣的巢狀展開規格。多對一關聯則相反：一律是不帶任何引數的物件欄位，因為最多只解析到一列，
+`deep=` 一樣的巢狀展開規格。巢狀 `offset` 超過 `Query:MaxOffset`（預設 100000）會是點名該關聯與上限的
+`BAD_USER_INPUT` 錯誤。多對一關聯則相反：一律是不帶任何引數的物件欄位，因為最多只解析到一列，
 上一節看到的 `tags(sort: ["name"], limit: 1)` 就是這組引數的實際用法。
 
 同一層選兩次同一個關聯（`tags` 與 `tagsLinks`，或一個別名重複），巢狀展開會合併，但只有第一次出現

@@ -221,6 +221,8 @@ itself) and `junction` (the link's own payload).
 A nested to-many relation field carries its own four arguments — `filter`, `sort: [String!]`,
 `limit: Int`, `offset: Int` — computed separately from the root list field's own set, resolved by
 walking the client's own selection tree into the same nested-expansion spec REST's `deep=` uses.
+A nested `offset` above `Query:MaxOffset` (default 100000) is a `BAD_USER_INPUT` error naming the
+relation and the cap.
 
 A many-to-one relation goes the other way: it's always an argument-free object field, since at most
 one row is ever resolved; the `tags(sort: ["name"], limit: 1)` seen earlier is this argument set in
