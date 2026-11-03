@@ -114,7 +114,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         var baseline = await Run(sp, "migrate:baseline");
 
         baseline.Code.Should().Be(MigrationCli.Success, baseline.Err);
-        baseline.Out.Should().Contain("202610080000").And.Contain("202610080001").And.Contain("2 migration(s) recorded");
+        baseline.Out.Should().Contain("202610080000").And.Contain("202610080001").And.Contain("202611030000").And.Contain("3 migration(s) recorded");
         Counts(db).Should().Equal(before);
         var user = db.Queryable<User>().First();
         user.Password.Should().Be(passwordBefore);
@@ -204,7 +204,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         var result = await Run(sp, "migrate:baseline");
 
         result.Code.Should().Be(MigrationCli.Success, result.Err);
-        result.Out.Should().Contain("202610090000").And.Contain("3 migration(s) recorded");
+        result.Out.Should().Contain("202610090000").And.Contain("4 migration(s) recorded");
         (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
     }
 
@@ -220,7 +220,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         await act.Should().ThrowAsync<MigrationFailedException>().WithMessage("*injected*");
         var healthy = new MigrationHost(HostOptions(prefix), NullLoggerFactory.Instance);
         healthy.GetStatus().Should().OnlyContain(m => m.State == MigrationState.Pending);
-        (await healthy.BaselineAsync(default)).Should().HaveCount(2);
+        (await healthy.BaselineAsync(default)).Should().HaveCount(3);
     }
 
     private MigrationHostOptions HostOptions(string prefix, bool failOnSecondRecord = false) =>

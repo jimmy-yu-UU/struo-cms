@@ -6,6 +6,7 @@ using Struo.Domain.Metadata.Enums;
 namespace Struo.Infrastructure.Localization;
 
 [SugarTable("languages")]
+[SugarIndex("ux_{table}_code", nameof(Code), OrderByType.Asc, true)]
 [CmsCollection("Language", Group = "System", DefaultDisplayField = nameof(Name))]
 public sealed class Language : IAuditable
 {
