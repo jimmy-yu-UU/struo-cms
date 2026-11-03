@@ -3,8 +3,8 @@
 ## 0.23.0
 
 ::: danger Breaking
-- A REST update whose `version` is present, not `null` and not an integer returns `400`
-  `INVALID_VERSION` and writes nothing; it applies to a collection that carries a `version`. GraphQL
+- A REST update whose `version` is present, not `null`, and not an integer or an integer string
+  returns `400` `INVALID_VERSION` and writes nothing; it applies to a collection that carries a `version`. GraphQL
   rejects such a value at the type layer. A client that sends one drops it or sends the integer it
   read. An integer string such as `"3"`, `null` and an absent `version` are accepted. See
   [Chapter 12](12-rest-conventions.md) and [Chapter 13](13-rest-endpoints.md).

@@ -3,7 +3,7 @@
 ## 0.23.0
 
 ::: danger 破壞性變更
-- REST 更新的 `version` 有帶、不是 `null` 而且不是整數時，回 `400` `INVALID_VERSION` 且什麼都不寫入；
+- REST 更新的 `version` 有帶、不是 `null`，而且不是整數或整數字串時，回 `400` `INVALID_VERSION` 且什麼都不寫入；
   只適用於帶 `version` 的集合。GraphQL 在型別層就拒絕這種值。送這種值的用戶端要拿掉它，或改送讀到的
   整數。像 `"3"` 這樣的整數字串、`null` 與沒帶 `version` 都會被接受。見
   [第 12 章](12-rest-conventions.md)與[第 13 章](13-rest-endpoints.md)。

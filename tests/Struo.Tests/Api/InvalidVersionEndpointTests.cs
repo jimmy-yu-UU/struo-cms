@@ -37,6 +37,8 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
 
     [Theory]
     [InlineData("1.5")]
+    [InlineData("3.0")]
+    [InlineData("1e3")]
     [InlineData("\"abc\"")]
     [InlineData("true")]
     [InlineData("false")]

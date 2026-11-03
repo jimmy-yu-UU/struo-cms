@@ -327,8 +327,8 @@ When `version` is present and not `null`, it must be a JSON number written as an
 with no fraction or exponent, within the range of a 64-bit integer, or an integer string such as
 `"3"` (digits with an optional sign, no surrounding whitespace). Anything else fails the whole
 update with `400` `INVALID_VERSION`, and nothing is written: `1.5`, `3.0`, `1e3`, `"abc"`, `" 3"`,
-`true`, an object, an array, or a number too large for 64 bits. A collection without a `version` column ignores the key, and a create body
-never reads it.
+`true`, an object, an array, or a number too large for 64 bits. A collection without a `version`
+column ignores the key, and a create body never reads it.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting
 in that snapshot never causes a needless conflict (see
