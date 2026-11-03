@@ -2,6 +2,12 @@
 
 ## 0.21.0
 
+::: danger Breaking
+- A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
+  translations match the snapshot. A client that relied on a revert leaving such a locale in place
+  loses its translation row. See [Chapter 9](09-revisions-and-trash.md).
+:::
+
 ### Added
 
 - CI has a new `e2e` job that starts the Compose stack and runs the Playwright `core` project against
@@ -13,10 +19,17 @@
 - In GraphQL, `fields: null` on a translation input entry deletes the locale on update, with the
   same rules; `fields` is nullable on that input. See [Chapter 14](14-graphql.md).
 
-### Changed
+### Fixed
 
-- A revert deletes the enabled non-default locales the item has but the snapshot lacks, so the
-  translations match the snapshot. See [Chapter 9](09-revisions-and-trash.md).
+- A locale whose only values are empty lists, empty objects or empty rich text is not counted as
+  filled. One content rule decides locale completeness and which locales a save sends. See
+  [Chapter 7](07-i18n.md).
+- A cleared rich text field is saved as `null`. A fork whose rich text column is `NOT NULL` fails
+  that save.
+- Clearing a non-default locale that had content deletes it on save in the admin SPA. The default
+  locale is never sent as `null`. See [Chapter 7](07-i18n.md).
+- A revert that fails with a `409` shows a dedicated notice with a reload action only, and leaves the
+  form's contents and version untouched. See [Chapter 9](09-revisions-and-trash.md).
 
 ## 0.20.1 — 2026-11-02
 

@@ -136,8 +136,9 @@ caller has write access to the collection. The panel's operation labels cover on
 and revert; a revision left by trash or restore falls back to a generic label.
 
 The panel sends the item version the form loaded with its revert. If the item has changed since, the
-revert comes back as `409 VERSION_CONFLICT`; the panel closes and the form shows its usual conflict
-banner.
+revert comes back as `409 VERSION_CONFLICT`. The panel closes and the form shows a dedicated notice
+that the item was changed by someone else, with a reload action only. The form's contents and
+version are left as they were, and the usual save-conflict banner is not shown.
 
 For an item that was created and then updated once, listing its revisions returns only metadata,
 no snapshot content, newest first:
