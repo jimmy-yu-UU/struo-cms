@@ -35,7 +35,7 @@ Each command is the first argument to `Struo.Api`:
 | `migrate:status` | Lists the state of every migration |
 | `migrate:preview` | Prints the SQL of pending migrations, runs nothing |
 | `migrate:check` | Compares the database with the entities, read-only |
-| `migrate:baseline` | Records the migrations that match the v0.8 schema as applied, runs nothing |
+| `migrate:baseline` | Records the v0.8 schema's migrations as applied |
 | `make:migration` | Writes a new migration file |
 
 A seventh command, `files:sweep`, is not about the schema: it removes orphaned blobs from file
