@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.23.0
+## 0.23.0 — 2026-11-04
 
 ::: danger Breaking
 - A REST update whose `version` is present, not `null`, and not an integer or an integer string
