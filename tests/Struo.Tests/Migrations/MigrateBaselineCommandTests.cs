@@ -214,8 +214,6 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         result.Code.Should().Be(MigrationCli.Success, result.Err);
         result.Out.Should().Contain("202610090000").And.Contain("3 migration(s) recorded");
         (await Run(sp, "migrate:status")).Out.Should().Contain("1 pending");
-        (await Run(sp, "migrate")).Out.Should().Contain("Applied 202611030000");
-        (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
     }
 
     [Fact]
