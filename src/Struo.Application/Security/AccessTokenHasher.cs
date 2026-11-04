@@ -4,7 +4,15 @@ using System.Text;
 namespace Struo.Application.Security;
 
 /// <summary>Generates high-entropy permanent access tokens and hashes them for storage.
-/// Only the hash is persisted; the plaintext token is shown once at generation.</summary>
+/// Only the hash is persisted; the plaintext token is shown once at generation.
+///
+/// Measured: on SQL Server, a unique index on a nullable column rejects the second <c>NULL</c> row.
+/// Ruled out: a unique index on <c>User.AccessToken</c>, since most users hold no token and would fail to
+/// write. Unknown: how the other backends treat several <c>NULL</c> values under a unique index.
+/// If undone: creating a second user without a token fails on SQL Server.
+///
+/// Full write-up: docs/ai/decisions/accesstoken-column-has-no-unique-index.md
+/// </summary>
 public static class AccessTokenHasher
 {
     public static (string token, string hash) Generate()

@@ -6,7 +6,15 @@ using Microsoft.Extensions.Options;
 
 namespace Struo.Api.Hosting;
 
-/// <summary>The rate limiters behind <c>AddStruoCms</c>: the "login" and "password" policies and the global login-concurrency cap.</summary>
+/// <summary>The rate limiters behind <c>AddStruoCms</c>: the "login" and "password" policies and the global login-concurrency cap.
+///
+/// Measured: the second-round review's flood of 80 logins drew 44 <c>429</c>s and the victim's logins
+/// 6 of 6 <c>429</c>s. Ruled out: partitioning the cap by email (a new email per request evades it) or by IP.
+/// Unknown: how a partitioned cap would behave under the same flood; it was reasoned, not run.
+/// If undone: the single partition gives way to keys an attacker or a shared proxy address controls.
+///
+/// Full write-up: docs/ai/decisions/login-concurrency-is-one-global-partition.md
+/// </summary>
 internal static class StruoCmsRateLimiting
 {
     private const string UnknownClient = "unknown";

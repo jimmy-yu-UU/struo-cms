@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.0
+
+### Added
+
+- [Chapter 15](15-files-and-media.md) and [Chapter 20](20-deployment.md) cover the
+  `Struo:Files:DefaultStatus` trade-off: with `published`, anyone who holds a file's id can read it;
+  a deployment that stores sensitive files should set `draft`. Chapter 15 also says the `nosniff`
+  header belongs to the API's own responses, not to the storage service's response behind a
+  presigned redirect.
+
 ## 0.23.0 — 2026-11-04
 
 ::: danger Breaking

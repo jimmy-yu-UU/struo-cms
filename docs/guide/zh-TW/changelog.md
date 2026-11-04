@@ -1,5 +1,13 @@
 # 版本紀錄
 
+## 0.24.0
+
+### 新增
+
+- [第 15 章](15-files-and-media.md)與[第 20 章](20-deployment.md)說明 `Struo:Files:DefaultStatus` 的
+  取捨：`published` 時，任何持有檔案 id 的人都能讀；存放敏感檔案的部署建議設成 `draft`。第 15 章也
+  寫明 `nosniff` 標頭只屬於 API 自己的回應，不涵蓋 presigned 轉址之後儲存服務的回應。
+
 ## 0.23.0 — 2026-11-04
 
 ::: danger 破壞性變更

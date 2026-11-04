@@ -14,6 +14,8 @@
 # pre-copy would have to enumerate paths, and it cannot preserve an arbitrary fork's project
 # layout the way copying everything does.
 
+# Both stages follow the floating 10.0 tag. The trade-off:
+# docs/ai/decisions/dockerfile-base-image-choices.md
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
@@ -23,6 +25,7 @@ RUN dotnet publish src/Struo.Api/Struo.Api.csproj --configuration Release --no-r
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # The base image has neither curl nor wget (verified by probing it directly), so install curl
 # here for the HEALTHCHECK below; --no-install-recommends and clearing apt lists keep the layer small.
+# See docs/ai/decisions/dockerfile-base-image-choices.md for what that costs.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish ./
@@ -34,6 +37,7 @@ RUN mkdir -p /app/App_Data /app/logs /home/app/.aspnet/DataProtection-Keys \
     && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet
 USER app
 EXPOSE 8080
+# A derived image cannot undo this VOLUME: docs/ai/decisions/dockerfile-base-image-choices.md.
 VOLUME ["/app/App_Data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD p=${ASPNETCORE_HTTP_PORTS:-8080}; curl --fail --silent "http://localhost:${p%%;*}/health/live" || exit 1

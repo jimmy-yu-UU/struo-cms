@@ -146,6 +146,8 @@ volume，檔案留在舊容器的 volume 上。
 API 沒辦法知道自己跑了幾個副本，所以不會替你檢查這件事。圖片轉檔快取不跟著檔案後端走，見
 [第 15 章](15-files-and-media.md)的「變體快取」。
 
+存放敏感檔案的部署，還要決定 `Struo:Files:DefaultStatus`；取捨見[第 15 章](15-files-and-media.md)。
+
 ### S3 相容儲存：`ChecksumMode` 與 `UseChunkEncoding`
 
 `Struo:Files:S3:ChecksumMode` 管 checksum，預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上
