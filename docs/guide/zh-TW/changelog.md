@@ -16,6 +16,10 @@
   `POST .../query` 與 GraphQL 都一樣；`deep` 裡巢狀清單的 `offset` 受同一個上限限制，`400` 會點名
   該關聯。要翻更深的用戶端改用 `filter` 縮小範圍，或由維運調高
   `Query:MaxOffset`。見[第 4 章](04-configuration.md)與[第 10 章](10-query-basics.md)。
+- `migrate:baseline` 只記錄核心 migration 到 `SeedCoreData`（`202610080001`）為止，那是最後一支對得上
+  v0.8.x 所建結構的 migration；範例與 fork 的 migration 仍然全部記錄。比 `SeedCoreData` 新的核心
+  migration，例如 `AddLanguageCodeUniqueIndex`，baseline 之後仍是待套用，下一次 `migrate` 會套用。更早
+  的版本做過 baseline 的資料庫不受影響。見[第 24 章](24-upgrading-from-0-8.md)。
 :::
 
 ### 新增
@@ -23,11 +27,14 @@
 - `Struo:Files:S3:UseChunkEncoding`（預設 `true`）：S3 上傳是否簽成 `aws-chunked` 串流。S3 相容服務拒絕
   分塊上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。`ChecksumMode` 只管檢查碼。見
   [第 4 章](04-configuration.md)與[第 15 章](15-files-and-media.md)。
-- 核心 migration `AddLanguageCodeUniqueIndex` 為 `struo_languages` 的 `code` 加上唯一索引；資料庫會拒絕
-  第二列相同 `code` 的語言。大小寫不同的唯一性仍由應用層把關。這支 migration 由 `migrate` 或
-  `Database:MigrateOnStartup` 套用。資料表裡若已有兩列完全相同的 `code`，migration 會失敗並在那裡停下：
-  先刪除或改名重複的語言列，再重新執行 `migrate`。見[第 7 章](07-i18n.md)與
-  [第 21 章](21-schema-and-upgrades.md)。
+- 核心 migration `AddLanguageCodeUniqueIndex` 為 `struo_languages` 的 `code` 加上唯一索引。大小寫不同的
+  兩個代碼，資料庫算不算相同跟著欄位的定序走：PostgreSQL 與 SQLite 視為不同，SQL Server、MySQL 與
+  MariaDB 的預設定序視為相同。不分大小寫的重複，在每個後端都由應用層擋下。`migrate` 或
+  `Database:MigrateOnStartup` 會套用這支 migration。資料表裡若有兩列的 `code` 被資料庫視為相同，
+  執行會停在 `202611030000`，前面的 migration 維持已套用。升級前先在管理介面或 REST API 列出
+  `language` 集合，找有沒有這樣的成對資料；在 SQL Server、MySQL 與 MariaDB 上，只差大小寫的代碼也算。
+  請刪除多出來的那一列，不要改名，因為翻譯列是依代碼指到語言的，改名後還是指著舊代碼。留下已啟用或
+  預設的那一列，再重新執行 `migrate`。見[第 7 章](07-i18n.md)與[第 21 章](21-schema-and-upgrades.md)。
 
 ### 修正
 

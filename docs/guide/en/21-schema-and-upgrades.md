@@ -35,7 +35,7 @@ Each command is the first argument to `Struo.Api`:
 | `migrate:status` | Lists the state of every migration |
 | `migrate:preview` | Prints the SQL of pending migrations, runs nothing |
 | `migrate:check` | Compares the database with the entities, read-only |
-| `migrate:baseline` | Records every migration as applied, runs nothing |
+| `migrate:baseline` | Records the migrations that match the v0.8 schema as applied, runs nothing |
 | `make:migration` | Writes a new migration file |
 
 A seventh command, `files:sweep`, is not about the schema: it removes orphaned blobs from file
@@ -59,10 +59,10 @@ line per migration it applied; with nothing pending it prints only `Nothing to m
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
-202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
-202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
-202611030000   Applied   2026-10-12 09:57:49Z  AddLanguageCodeUniqueIndex
+202610080000   Applied   2026-11-04 00:39:43Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:43Z  SeedCoreData
+202610080100   Applied   2026-11-04 00:39:43Z  CreateBlogSchema
+202611030000   Applied   2026-11-04 00:39:43Z  AddLanguageCodeUniqueIndex
 4 applied, 0 pending, 0 orphaned
 ```
 
@@ -91,7 +91,7 @@ defaults to `false` in every environment, and then the API refuses to start whil
 pending, exiting with code `1`:
 
 ```
-[17:57:36 FTL] StruoCMS host terminated unexpectedly
+[08:39:42 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -224,12 +224,14 @@ so: `migrate` and a startup that applies migrations log a warning naming the ver
 one, `migrate:status` marks the row `(out of order)`, and a startup with `MigrateOnStartup` off logs the same
 warning before it refuses to start on the pending migration. Nothing is refused for being out of order.
 
+For example, a database migrated with the sample off and then opened with the sample on:
+
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
-202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
-202611010000   Pending   -                     AddInvoiceTable  (out of order)
-202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+202610080000   Applied   2026-11-04 00:39:53Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:53Z  SeedCoreData
+202610080100   Pending   -                     CreateBlogSchema  (out of order)
+202611030000   Applied   2026-11-04 00:39:53Z  AddLanguageCodeUniqueIndex
 3 applied, 1 pending, 0 orphaned
 ```
 

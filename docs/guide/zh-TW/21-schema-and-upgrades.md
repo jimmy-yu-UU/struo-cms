@@ -14,7 +14,8 @@ Migration 放在三個地方：
 
 - **核心**：`src/Struo.Infrastructure/Migrations/Core/`。`CreateCoreSchema` 建框架資料表，
   `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
-  `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code` 加上唯一索引。
+  `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code`
+  加上唯一索引。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
@@ -34,7 +35,7 @@ Migration 放在三個地方：
 | `migrate:status` | 列出每支 migration 的狀態 |
 | `migrate:preview` | 印出待套用 migration 的 SQL，不執行 |
 | `migrate:check` | 比對資料庫與 entity，唯讀 |
-| `migrate:baseline` | 把每支 migration 記成已套用，不執行 |
+| `migrate:baseline` | 把對應 v0.8 結構的 migration 記成已套用，不執行 |
 | `make:migration` | 產生一個新的 migration 檔 |
 
 第七個命令 `files:sweep` 跟結構無關：它清除檔案儲存裡的孤兒 blob。不加 `--apply` 只是試跑，
@@ -54,10 +55,10 @@ API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>`
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
-202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
-202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
-202611030000   Applied   2026-10-12 09:57:49Z  AddLanguageCodeUniqueIndex
+202610080000   Applied   2026-11-04 00:39:43Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:43Z  SeedCoreData
+202610080100   Applied   2026-11-04 00:39:43Z  CreateBlogSchema
+202611030000   Applied   2026-11-04 00:39:43Z  AddLanguageCodeUniqueIndex
 4 applied, 0 pending, 0 orphaned
 ```
 
@@ -83,7 +84,7 @@ API 開始服務之前，`StartupMigrationGate` 先看資料庫。`Database:Migr
 預設都是 `false`：這時只要還有待套用的 migration，API 就拒絕啟動，以代碼 `1` 結束：
 
 ```
-[17:57:36 FTL] StruoCMS host terminated unexpectedly
+[08:39:42 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -199,12 +200,14 @@ fork；[版本紀錄](changelog.md)會點名每一支新的核心 migration。�
 版本；`migrate:status` 在那一列標上 `(out of order)`；`MigrateOnStartup` 關閉時，啟動在因為待套用的
 migration 而拒絕之前，會記下同一則警告。不會因為順序錯亂而拒絕任何東西。
 
+例如，先在沒開範例的情況下跑完 migration，之後才開啟範例的資料庫：
+
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
-202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
-202611010000   Pending   -                     AddInvoiceTable  (out of order)
-202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+202610080000   Applied   2026-11-04 00:39:53Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:53Z  SeedCoreData
+202610080100   Pending   -                     CreateBlogSchema  (out of order)
+202611030000   Applied   2026-11-04 00:39:53Z  AddLanguageCodeUniqueIndex
 3 applied, 1 pending, 0 orphaned
 ```
 

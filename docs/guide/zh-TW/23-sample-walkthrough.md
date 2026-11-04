@@ -247,9 +247,9 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-12 10:34:10Z  CreateCoreSchema
-202610080001   Applied   2026-10-12 10:34:10Z  SeedCoreData
-202611030000   Applied   2026-10-12 10:34:10Z  AddLanguageCodeUniqueIndex
+202610080000   Applied   2026-11-04 00:39:04Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:04Z  SeedCoreData
+202611030000   Applied   2026-11-04 00:39:04Z  AddLanguageCodeUniqueIndex
 3 applied, 0 pending, 0 orphaned
 ```
 

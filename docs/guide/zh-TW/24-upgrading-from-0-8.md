@@ -3,7 +3,7 @@
 這一章帶一份 v0.8.x 在開機時用 CodeFirst 建出來的資料庫接上 migration，之後就能照
 [第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)用 `migrate` 管理它。
 
-這種資料庫裡有框架資料表，卻沒有版本表。`migrate:baseline` 就是為它準備的：把每一支已知的
+這種資料庫裡有框架資料表，卻沒有版本表。`migrate:baseline` 就是為它準備的：把對應 v0.8 結構的
 migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL Server、MySQL 與 MariaDB 上都
 實際走過。
 
@@ -35,8 +35,8 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    會把它記成已套用，那張表就永遠不會被建出來，等第 5 步之後再加。`--output` 的相對路徑從
    `src/Struo.Api` 算起，目錄要先建好，見[第 21 章〈撰寫 migration〉](21-schema-and-upgrades.md#撰寫-migration)。
 5. **跑一次 `migrate:baseline`。** 在這之前，`migrate` 與 API 啟動都會拒絕，訊息要你跑
-   `migrate:baseline`。baseline 拿 migration 鎖，在一個交易裡寫入核心、範例（有開啟的話）與 fork
-   的每一個版本，並列出 FluentMigrator 執行的 SQL：
+   `migrate:baseline`。baseline 拿 migration 鎖，在一個交易裡寫入核心（到 `SeedCoreData` 為止）、範例
+   （有開啟的話）與 fork 的版本，並列出 FluentMigrator 執行的 SQL：
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:baseline
@@ -44,15 +44,14 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    Recorded 202610080000  CreateCoreSchema
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
-   Recorded 202610120942  CreateNotes
-   Recorded 202611030000  AddLanguageCodeUniqueIndex
-   5 migration(s) recorded as applied.
+   3 migration(s) recorded as applied.
    ```
 
    植入資料只被記錄、沒有執行，既有的使用者、角色與語言不受影響。它只新增版本表，v0.8.x 的
    執行個體還在服務時也能跑。資料庫裡已經有紀錄，或框架資料表不存在時，它拒絕並以代碼 `1`
    結束。
-6. **跑 `migrate`。** baseline 之後新增的 migration 會在這裡套用；沒有的話印 `Nothing to migrate.`。
+6. **跑 `migrate`。** 比 `SeedCoreData` 新的核心 migration，例如 `AddLanguageCodeUniqueIndex`，以及 baseline
+   之後新增的 migration 都在這裡套用；沒有待套用的就印 `Nothing to migrate.`。
 7. **跑 `migrate:check`。** PostgreSQL、MySQL 與 MariaDB 應該是 `0 error(s), 0 warning(s)`。
    SQL Server 對每個 `varchar` 字串欄位發一筆警告：
 

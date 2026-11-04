@@ -21,6 +21,11 @@
   same cap and the `400` names the relation. A client that pages deeper narrows the result set
   with `filter`, or the operator raises `Query:MaxOffset`. See [Chapter 4](04-configuration.md) and
   [Chapter 10](10-query-basics.md).
+- `migrate:baseline` records the core migrations only up to and including `SeedCoreData`
+  (`202610080001`), the last one that matches the schema v0.8.x built; the sample's and a fork's
+  migrations are all recorded as before. A core migration newer than `SeedCoreData`, such as
+  `AddLanguageCodeUniqueIndex`, stays pending after the baseline and the next `migrate` applies it. A
+  database baselined by an earlier release is unaffected. See [Chapter 24](24-upgrading-from-0-8.md).
 :::
 
 ### Added
@@ -29,12 +34,17 @@
   stream. Set `false` for an S3-compatible service that rejects chunked uploads; the upload is then
   signed with the SHA-256 of the whole payload. `ChecksumMode` governs checksums only. See
   [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
-- The core migration `AddLanguageCodeUniqueIndex` adds a unique index on `code` in `struo_languages`;
-  the database rejects a second language row with the same `code`. Case-insensitive uniqueness
-  stays an application rule. The migration is applied by `migrate` or `Database:MigrateOnStartup`. If the
-  table already holds two rows with an identical `code`, the migration fails and the run stops there:
-  delete or rename the duplicate language row, then run `migrate` again. See
-  [Chapter 7](07-i18n.md) and [Chapter 21](21-schema-and-upgrades.md).
+- The core migration `AddLanguageCodeUniqueIndex` adds a unique index on `code` in `struo_languages`.
+  Whether the database treats codes that differ only in case as equal follows the column's collation:
+  PostgreSQL and SQLite compare them as different, while the default collations of SQL Server, MySQL
+  and MariaDB compare them as equal. The application rejects a case-insensitive duplicate on every
+  backend. `migrate` or `Database:MigrateOnStartup` applies the migration. If the table holds two rows
+  whose `code` the database treats as equal, the run stops at `202611030000` and the earlier
+  migrations stay applied. Before upgrading, list the `language` collection in the admin UI or the
+  REST API and look for such pairs; on SQL Server, MySQL and MariaDB that includes codes that differ
+  only in case. Delete the extra row instead of renaming it, because translation rows refer to the
+  code and keep pointing at the old one. Keep the row that is enabled or default, then run `migrate`
+  again. See [Chapter 7](07-i18n.md) and [Chapter 21](21-schema-and-upgrades.md).
 
 ### Fixed
 
