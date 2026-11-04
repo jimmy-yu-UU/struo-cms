@@ -103,7 +103,13 @@ seed 要執行、而且 `Auth:BootstrapAdmin:Email` 有設時，密碼若是空�
 帳號層的節流（`RateLimiting:LoginAccount`）預設開著，能單獨擋下針對單一帳號的暴力嘗試；IP 層
 的節流（`RateLimiting:Login`）預設關閉，因為它依 `Connection.RemoteIpAddress` 分桶：反向代理
 後面（沒有透過 `ForwardedHeaders` 信任的代理）每個人看起來都是代理自己的位址，而共用一條對外 NAT
-的辦公室即使代理設定正確，也一樣擠在同一個桶裡。兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
+的辦公室即使代理設定正確，也一樣擠在同一個桶裡。
+
+行程層級的上限（`RateLimiting:LoginConcurrency`）是卸載負載的 CPU 防護：大量密碼登入湧入期間，
+它也會把正常的登入以 `429` 擋回，SSO 不受影響。讓洪流到不了它的，是前面反向代理或 WAF 的速率限
+制；`PermitLimit` 與 `QueueLimit` 則依機器調整。
+
+兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
 
 ### 反向代理後面要啟用 `ForwardedHeaders`
 

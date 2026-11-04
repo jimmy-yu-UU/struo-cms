@@ -272,6 +272,15 @@ A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
 protects CPU and memory from a flood of parallel attempts whatever their source.
 
+That cap is one partition for the whole process, not split by account or by IP: it sheds load, and
+it cannot tell an attacker from a legitimate user. While a flood of password logins is in progress,
+legitimate password logins can get `429` too, until the flood stops; SSO sign-in is unaffected.
+Shed the flood before it reaches the API: put a rate limit at the reverse proxy or WAF in front;
+turn on `RateLimiting:Login` where client IPs are reliable, with `ForwardedHeaders` configured; and
+set `PermitLimit` and `QueueLimit` to what the machine can verify at once. Where each key is set is
+in [Chapter 4](04-configuration.md), and the proxy side is in
+[Chapter 20](20-deployment.md).
+
 Per-caller-IP throttling (`RateLimiting:Login`) is the opposite: off by default, and it protects
 only the login endpoint — logout, `me`, and the OIDC challenge are all unaffected by it.
 Why it's off by default, and when it's appropriate to turn on, is in the `RateLimiting` section of

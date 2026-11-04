@@ -205,6 +205,12 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 碼：4 個同時跑、32 個排隊，其餘回同一種 `429` 並帶 `Retry-After`，不論來源為何，都能保護 CPU 與記
 憶體不被大量並行的嘗試拖垮。
 
+這個上限是整個行程共用的一個分桶，不依帳號或 IP 切分：它負責卸載負載，分不出攻擊者與正常使用
+者。大量密碼登入湧入期間，正常的密碼登入也可能被回 `429`，直到洪流停止；SSO 登入不受影響。
+要在洪流到達 API 之前就擋下：在前面的反向代理或 WAF 設速率限制；用戶端 IP 可信時，搭配設好的
+`ForwardedHeaders` 開啟 `RateLimiting:Login`；並依機器一次能驗證的量調整 `PermitLimit` 與
+`QueueLimit`。各鍵怎麼設見[第 4 章](04-configuration.md)，代理端見[第 20 章](20-deployment.md)。
+
 依呼叫端 IP 的限流（`RateLimiting:Login`）則相反，預設是關的，只保護登入這一個端點，登出、
 `me`、OIDC 挑戰都不受它限制；預設關閉的原因、什麼時候適合打開，見
 [第 4 章：設定參考](04-configuration.md)的 `RateLimiting` 一節。

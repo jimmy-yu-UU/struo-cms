@@ -133,6 +133,11 @@ trusted through `ForwardedHeaders`, every client appears to come from the proxy'
 an office sharing one outbound NAT ends up in the same bucket even when the proxy is configured
 correctly.
 
+The process-wide cap (`RateLimiting:LoginConcurrency`) is a CPU guard that sheds load: during a
+flood of password logins it also turns legitimate ones away with `429`, and SSO is unaffected. A
+rate limit at the reverse proxy or WAF in front is what keeps the flood from reaching it; tune
+`PermitLimit` and `QueueLimit` to the machine.
+
 How each layer behaves is covered in the "Login rate limiting" section of
 [Chapter 16: Authentication and SSO](16-authentication.md).
 
