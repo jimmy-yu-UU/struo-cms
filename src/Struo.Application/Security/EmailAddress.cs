@@ -9,17 +9,9 @@ public static class EmailAddress
 
     public static string Normalize(string email) => email.Trim().ToLowerInvariant();
 
-    /// <summary>Whether <paramref name="email"/> has the minimal shape of an address: one <c>@</c> with text
-    /// on both sides, no whitespace inside, at most 320 characters. It exists to reject obvious garbage, not
-    /// to validate deliverability.</summary>
-    public static bool IsWellFormed(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        var trimmed = email.Trim();
-        var at = trimmed.IndexOf('@');
-        return trimmed.Length <= MaxLength
-            && at > 0 && at < trimmed.Length - 1
-            && trimmed.IndexOf('@', at + 1) < 0
-            && !trimmed.Any(char.IsWhiteSpace);
-    }
+    /// <summary>Whether <paramref name="email"/> can address a login lock: not blank and at most 320
+    /// characters once trimmed. A lock is keyed on the string alone, and an account can hold any non-blank
+    /// email, so this checks nothing about the address's shape.</summary>
+    public static bool IsUsable(string? email) =>
+        !string.IsNullOrWhiteSpace(email) && email.Trim().Length <= MaxLength;
 }

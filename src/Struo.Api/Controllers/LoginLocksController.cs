@@ -36,12 +36,13 @@ public sealed class LoginLocksController(
     {
         if (Reject(email) is { } rejected) return rejected;
 
+        // Looked up before the lock is cleared, so a failing lookup leaves the lock and the record in step.
+        var target = await users.FindByEmailAsync(email!, ct);
         await throttle.ResetAsync(email!, ct);
 
         // The project has no audit table; this line is the record. It names the actor and the account by
         // id and never carries the email.
         var actor = currentUser.GetCurrentUserId();
-        var target = await users.FindByEmailAsync(EmailAddress.Normalize(email!), ct);
         if (target is null)
             logger.LogInformation(
                 "Login lock cleared by {ActorId} for an account that does not exist", actor);
@@ -55,8 +56,8 @@ public sealed class LoginLocksController(
         if (!permissions.Current.HasCapability(SystemCapabilities.LoginUnlock))
             return ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
                 "The login.unlock permission is required.");
-        return EmailAddress.IsWellFormed(email)
+        return EmailAddress.IsUsable(email)
             ? null
-            : ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "A valid email is required.");
+            : ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "An email is required.");
     }
 }

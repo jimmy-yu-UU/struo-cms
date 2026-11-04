@@ -2,6 +2,11 @@
 
 ## 0.24.0
 
+::: danger 破壞性變更
+- `ILoginAttemptThrottle` 新增成員 `Task<LoginThrottleState> GetStateAsync(string, CancellationToken)`，
+  讀取鎖定狀態而不計一次嘗試；fork 自己實作這個介面的話，要補上它才能編譯。
+:::
+
 ### 新增
 
 - [第 15 章](15-files-and-media.md)與[第 20 章](20-deployment.md)說明 `Struo:Files:DefaultStatus` 的
@@ -17,8 +22,7 @@
   [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
 - `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
   `login.unlock` 的呼叫端可用。不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明
-  呼叫端與目標，不寫 email。`ILoginAttemptThrottle` 新增 `GetStateAsync`，讀取鎖定狀態而不計一次嘗試；
-  自己實作這個介面的 fork 要補上。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
+  呼叫端與目標，不寫 email。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
 
 ## 0.23.0 — 2026-11-04
 

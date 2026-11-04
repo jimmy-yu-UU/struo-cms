@@ -131,7 +131,7 @@ i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
 `roleCapability` 的列，那條路兩項都不檢查；寫進去的未知代碼不會授予任何東西，`public` 名下的列則會被忽略。
 
 刪除角色時，它在 `role_capabilities` 的列跟在 `permissions` 的列一樣會留在原處。解析只讀還存在的角
-色，所以這些列不再對任何人生效。
+色，所以這些列對任何人都不生效。
 
 ## 公開讀取
 

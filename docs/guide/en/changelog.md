@@ -2,6 +2,12 @@
 
 ## 0.24.0
 
+::: danger Breaking
+- `ILoginAttemptThrottle` has a new member, `Task<LoginThrottleState> GetStateAsync(string,
+  CancellationToken)`, which reads the lock without counting an attempt; a fork's own implementation
+  must add it to compile.
+:::
+
 ### Added
 
 - [Chapter 15](15-files-and-media.md) and [Chapter 20](20-deployment.md) cover the
@@ -21,8 +27,7 @@
 - `GET`/`DELETE api/login-locks?email=…` read and clear an account's login lock, for a super-admin or
   a caller whose role holds `login.unlock`. The answer is the same whether or not the email has an
   account, and each clear writes a log line naming the caller and target by id, never the email.
-  `ILoginAttemptThrottle` gains `GetStateAsync`, which reads the lock without counting an attempt; a
-  fork that implements the interface must add it. See [Chapter 13](13-rest-endpoints.md) and
+  See [Chapter 13](13-rest-endpoints.md) and
   [Chapter 16](16-authentication.md).
 
 ## 0.23.0 — 2026-11-04

@@ -63,6 +63,13 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string email, string password) =>
         client.PostAsJsonAsync("/api/auth/login", new { email, password });
 
+    private static async Task<HttpResponseMessage> LoginOnceAsync(
+        WebApplicationFactory<Program> host, string email, string password)
+    {
+        using var client = NewClient(host);
+        return await LoginAsync(client, email, password);
+    }
+
     private static async Task<HttpClient> LoggedInAsync(WebApplicationFactory<Program> host, string email, string password)
     {
         var client = NewClient(host);
@@ -88,7 +95,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
 
     private static async Task LockAsync(WebApplicationFactory<Program> host, string email, int failures = 3)
     {
-        var client = NewClient(host);
+        using var client = NewClient(host);
         for (var i = 0; i < failures; i++)
             (await LoginAsync(client, email, WrongPassword)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -101,16 +108,16 @@ public class LoginLocksEndpointTests(ApiFactory factory)
             var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
             roleId = (await db.Queryable<UserRole>().Where(ur => ur.UserId == userId).FirstAsync()).RoleId;
         }
-        var admin = await factory.CreateAuthenticatedClientAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
         (await admin.PutAsJsonAsync($"/api/roles/{roleId}/capabilities", new[] { Unlock })).EnsureSuccessStatusCode();
     }
 
     [Fact]
     public async Task A_locked_account_reports_locked_until_deleted_then_logs_in_with_the_right_password()
     {
-        var host = Host();
+        using var host = Host();
         var (email, password, _) = await factory.SeedEditorAsync([], []);
-        var admin = await AdminAsync(host);
+        using var admin = await AdminAsync(host);
         (await StateAsync(admin, email)).locked.Should().BeFalse();
 
         await LockAsync(host, email);
@@ -118,33 +125,33 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         var locked = await StateAsync(admin, email);
         locked.locked.Should().BeTrue();
         locked.retryAfter.Should().BeInRange(1, 300);
-        (await LoginAsync(NewClient(host), email, password)).StatusCode.Should().Be((HttpStatusCode)429);
+        (await LoginOnceAsync(host, email, password)).StatusCode.Should().Be((HttpStatusCode)429);
 
         (await admin.DeleteAsync(Q(email))).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         (await StateAsync(admin, email)).Should().Be((false, 0));
-        (await LoginAsync(NewClient(host), email, password)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await LoginOnceAsync(host, email, password)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task Querying_does_not_spend_an_attempt()
     {
-        var host = Host(permitLimit: 3);
+        using var host = Host(permitLimit: 3);
         var (email, password, _) = await factory.SeedEditorAsync([], []);
-        var admin = await AdminAsync(host);
+        using var admin = await AdminAsync(host);
         await LockAsync(host, email, failures: 2);
 
         for (var i = 0; i < 5; i++) (await StateAsync(admin, email)).locked.Should().BeFalse();
 
-        (await LoginAsync(NewClient(host), email, password)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await LoginOnceAsync(host, email, password)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task The_email_is_matched_case_and_whitespace_insensitively()
     {
-        var host = Host();
+        using var host = Host();
         var (email, _, _) = await factory.SeedEditorAsync([], []);
-        var admin = await AdminAsync(host);
+        using var admin = await AdminAsync(host);
         await LockAsync(host, email);
 
         (await StateAsync(admin, $"  {email.ToUpperInvariant()} ")).locked.Should().BeTrue();
@@ -155,11 +162,11 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     [Fact]
     public async Task A_holder_of_login_unlock_can_query_and_clear()
     {
-        var host = Host();
+        using var host = Host();
         var (victim, _, _) = await factory.SeedEditorAsync([], []);
         var (helperEmail, helperPassword, helperId) = await factory.SeedEditorAsync([], []);
         await GrantUnlockAsync(helperId);
-        var helper = await LoggedInAsync(host, helperEmail, helperPassword);
+        using var helper = await LoggedInAsync(host, helperEmail, helperPassword);
         await LockAsync(host, victim);
 
         (await StateAsync(helper, victim)).locked.Should().BeTrue();
@@ -170,11 +177,11 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     [Fact]
     public async Task A_caller_without_login_unlock_is_403_on_both_verbs_and_the_lock_stays()
     {
-        var host = Host();
+        using var host = Host();
         var (victim, _, _) = await factory.SeedEditorAsync([], []);
         var (otherEmail, otherPassword, _) = await factory.SeedEditorAsync([], []);
-        var other = await LoggedInAsync(host, otherEmail, otherPassword);
-        var admin = await AdminAsync(host);
+        using var other = await LoggedInAsync(host, otherEmail, otherPassword);
+        using var admin = await AdminAsync(host);
         await LockAsync(host, victim);
 
         (await other.GetAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -185,7 +192,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Anonymous_is_401()
     {
-        var host = Host();
+        using var host = Host();
         using var anonymous = NewClient(host);
 
         (await anonymous.GetAsync(Q("a@struo.test"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -195,25 +202,28 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     [Fact]
     public async Task A_cookie_delete_without_the_csrf_header_is_403_and_keeps_the_lock()
     {
-        var host = Host();
+        using var host = Host();
         var (email, _, _) = await factory.SeedEditorAsync([], []);
         await factory.CreateAuthenticatedClientAsync();
-        var bare = NewClient(host, csrf: false);
+        using var bare = NewClient(host, csrf: false);
         (await LoginAsync(bare, ApiFactory.AdminEmail, ApiFactory.AdminPassword)).EnsureSuccessStatusCode();
         await LockAsync(host, email);
 
-        (await bare.DeleteAsync(Q(email))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var refused = await bare.DeleteAsync(Q(email));
+        refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await refused.Content.ReadAsStringAsync()).Should().Contain(CsrfProtectionMiddleware.HeaderName);
 
-        (await StateAsync(await AdminAsync(host), email)).locked.Should().BeTrue();
+        using var admin = await AdminAsync(host);
+        (await StateAsync(admin, email)).locked.Should().BeTrue();
     }
 
     [Fact]
     public async Task An_unknown_email_gets_the_same_shape_and_status_as_a_known_one()
     {
-        var host = Host();
+        using var host = Host();
         var (known, _, _) = await factory.SeedEditorAsync([], []);
         var unknown = $"nobody-{Guid.NewGuid():N}@struo.test";
-        var admin = await AdminAsync(host);
+        using var admin = await AdminAsync(host);
 
         var knownResp = await admin.GetAsync(Q(known));
         var unknownResp = await admin.GetAsync(Q(unknown));
@@ -232,10 +242,10 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData("not-an-email")]
-    public async Task A_missing_or_malformed_email_is_400(string email)
+    public async Task A_missing_or_blank_email_is_400(string email)
     {
-        var admin = await AdminAsync(Host());
+        using var host = Host();
+        using var admin = await AdminAsync(host);
 
         (await admin.GetAsync($"{Url}?email={Uri.EscapeDataString(email)}")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await admin.DeleteAsync($"{Url}?email={Uri.EscapeDataString(email)}")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -244,13 +254,39 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task An_over_long_email_is_400()
+    {
+        using var host = Host();
+        using var admin = await AdminAsync(host);
+        var tooLong = new string('a', 320) + "@struo.test";
+
+        (await admin.GetAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await admin.DeleteAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // An account can hold any non-blank email and the lock is keyed on the string alone, so an address
+    // without the usual shape must stay readable and clearable.
+    [Fact]
+    public async Task An_email_of_any_shape_can_be_read_and_cleared()
+    {
+        using var host = Host();
+        using var admin = await AdminAsync(host);
+        const string odd = "no-at-sign";
+        await LockAsync(host, odd);
+
+        (await StateAsync(admin, odd)).locked.Should().BeTrue();
+        (await admin.DeleteAsync(Q(odd))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StateAsync(admin, odd)).locked.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Clearing_logs_the_actor_and_target_ids_and_never_the_email()
     {
         var logs = new CapturingProvider();
-        var host = Host(logs);
+        using var host = Host(logs);
         var (email, _, targetId) = await factory.SeedEditorAsync([], []);
         var unknown = $"ghost-{Guid.NewGuid():N}@struo.test";
-        var admin = await AdminAsync(host);
+        using var admin = await AdminAsync(host);
 
         (await admin.DeleteAsync(Q(email))).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await admin.DeleteAsync(Q(unknown))).StatusCode.Should().Be(HttpStatusCode.NoContent);
