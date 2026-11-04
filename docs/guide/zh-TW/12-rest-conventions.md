@@ -17,8 +17,8 @@
 { "success": false, "error": { "code": "…", "message": "…", "details": … } }
 ```
 
-`details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯所產生的 `BAD_USER_INPUT` 上才會出現，
-其餘代碼一律不帶這個鍵。`meta` 也一樣，只在清單這種分頁結果上才會出現，單筆讀取、建立與更新都
+`details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯、翻譯值無效、翻譯 locale 重複所產生的
+`BAD_USER_INPUT` 上才會出現，其餘代碼一律不帶這個鍵。`meta` 也一樣，只在清單這種分頁結果上才會出現，單筆讀取、建立與更新都
 完全省略這個鍵，而不是送一個 `null`。有 `meta` 時，除了分頁資訊，還可能多兩個鍵：`facets` 與 `aggregate`，一樣是請求要求了才出現，兩者互不影響。
 
 三種來源都會走到同一種信封：一般的控制器回應、框架自己攔下來的例外，以及少數在驗證或授權階段就提早
@@ -158,7 +158,7 @@ HTTP_STATUS:400
 少了 `email` 這個必填欄位，在動作執行之前就被擋下，`details` 裡剛好一筆，指名 `Email`。
 
 應用層自己判斷出來的錯誤是另一回事，是 `BAD_USER_INPUT`，沒有 `details` 這個鍵，訊息本身就是
-全部資訊。唯一的例外是缺必填翻譯，見後面：
+全部資訊。例外是三種翻譯錯誤（缺必填翻譯、翻譯值無效、locale 重複），見後面：
 
 ```text
 $ POST /api/users
@@ -178,7 +178,7 @@ HTTP_STATUS:400
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Required translation field 'title' is missing for locale 'zh-TW'.","details":[{"field":"title","message":"Required translation field 'title' is missing for locale 'zh-TW'.","locale":"zh-TW"}]}}
 ```
 
-GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這類項目上。規則本身見
+GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這三種翻譯錯誤的項目上。規則本身見
 [第 7 章](07-i18n.md#預設語言與寫入規則)。
 
 一筆更新可以不重送某個必填欄位，維持原值；但一旦明確送了 `null` 或空白，一樣會擋下：合併之後的整

@@ -18,8 +18,9 @@ On failure:
 { "success": false, "error": { "code": "…", "message": "…", "details": … } }
 ```
 
-`details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` a missing
-required translation produces; every other code omits the key entirely. `meta` is omitted the same
+`details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` that a missing
+required translation, an invalid translation value or a duplicate translation locale produces; every
+other code omits the key entirely. `meta` is omitted the same
 way: it appears only on a paginated list result. A single-item read, a create, and an update all
 omit the key outright rather than sending `null`. When `meta` is present, it can also carry two more
 keys, `facets` and `aggregate`, each showing up only when the request actually asked for it; the two
@@ -185,8 +186,9 @@ The required `email` field is missing, and that is caught before the action ever
 carries exactly one entry, naming `Email`.
 
 An error the application layer works out for itself is a different matter — it's `BAD_USER_INPUT`,
-with no `details` key, and the message itself carries the whole story. The one exception is a
-missing required translation, described below:
+with no `details` key, and the message itself carries the whole story. The exceptions are the three
+translation errors (a missing required translation, an invalid translation value and a duplicate
+locale), described below:
 
 ```text
 $ POST /api/users
@@ -206,8 +208,8 @@ A missing required translatable field is that exception. It is a `400 BAD_USER_I
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Required translation field 'title' is missing for locale 'zh-TW'.","details":[{"field":"title","message":"Required translation field 'title' is missing for locale 'zh-TW'.","locale":"zh-TW"}]}}
 ```
 
-Over GraphQL the same list is `extensions.details`. The `locale` key is present only on these
-entries. See [Chapter 7](07-i18n.md#default-locale-and-write-rules) for the rule itself.
+Over GraphQL the same list is `extensions.details`. The `locale` key is present only on the entries
+of these three translation errors. See [Chapter 7](07-i18n.md#default-locale-and-write-rules) for the rule itself.
 
 An update can leave a required field out entirely and keep its existing value; but explicitly
 sending `null` or blank still gets rejected — the merged item as a whole still has to pass the

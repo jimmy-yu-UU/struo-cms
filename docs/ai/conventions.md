@@ -484,8 +484,9 @@ Every REST response — success or error — is wrapped in one of two shapes by 
 - Success: `{ "success": true, "data": ..., "meta"?: { "total", "limit", "offset" } }` — `meta` is
   omitted entirely (never emitted as `null`) unless the action returned a paginated `PagedResult`.
 - Error: `{ "success": false, "error": { "code", "message", "details"?: [{ "field", "message", "locale"? }] } }` —
-  `details` is present only for the `VALIDATION` code and for the `BAD_USER_INPUT` a missing required
-  translation raises; `locale` appears only on the latter's entries.
+  `details` is present only for the `VALIDATION` code and for the `BAD_USER_INPUT` that a missing
+  required translation, an invalid translation value or a duplicate translation locale raises;
+  `locale` appears only on the entries of those three.
 
 `Envelope.Success`/`Envelope.Error` (`src/Struo.Api/Http/Envelope.cs`) are the only helpers that
 should construct these shapes; a controller action that needs a bare error response uses
