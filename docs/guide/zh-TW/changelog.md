@@ -23,6 +23,9 @@
 - `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
   `login.unlock` 的呼叫端可用。不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明
   呼叫端與目標，不寫 email。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
+- 管理介面在角色表單設定角色的系統權限（「系統權限」區塊；`public` 角色與超級管理員角色不提供），並新增「登入鎖定」
+  頁，超級管理員或持有 `login.unlock` 的人會在側欄看到它，可查詢某個 email 的鎖定並解除。使用者編輯頁對超級
+  管理員也有同樣的鎖定面板。見[第 16 章](16-authentication.md)。
 
 ## 0.23.0 — 2026-11-04
 

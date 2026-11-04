@@ -10,6 +10,8 @@ export type CurrentUser = {
   name?: string | null
   isSuperAdmin: boolean
   permissions: Record<string, CollectionPermission>
+  // System capability codes the caller holds (GET /auth/me); a super-admin holds every one.
+  capabilities?: string[]
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -29,6 +31,8 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     skipsLeaveGuards: (state) => state.sessionExpired || state.loggingOut,
     isAuthenticated: (state) => state.user !== null,
+    hasCapability: (state) => (code: string): boolean =>
+      !!state.user && (state.user.isSuperAdmin || state.user.capabilities?.includes(code) === true),
     canRead: (state) => (collection: string): boolean =>
       !!state.user && (state.user.isSuperAdmin || state.user.permissions?.[collection]?.read === true),
     canWrite: (state) => (collection: string): boolean =>

@@ -8,6 +8,9 @@ import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '../components/account/ChangePasswordDialog.vue'
 import AccessTokenPanel from '../components/account/AccessTokenPanel.vue'
+import LoginLockPanel from '../components/account/LoginLockPanel.vue'
+import RoleCapabilitiesPanel from '../components/rbac/RoleCapabilitiesPanel.vue'
+import { loginLocksApi } from '../api/loginLocksApi'
 import JunctionLinksEditor from '../components/fields/JunctionLinksEditor.vue'
 import { itemsApi } from '../api/itemsApi'
 import { usersApi } from '../api/usersApi'
@@ -24,11 +27,17 @@ import type { ConfirmRequest } from '@/composables/useConfirm'
 vi.mock('../api/usersApi', () => ({
   usersApi: { getAccessTokenInfo: vi.fn().mockResolvedValue({ hasToken: false, createdAt: null, lastUsedAt: null }) },
 }))
+vi.mock('../api/loginLocksApi', () => ({
+  loginLocksApi: { get: vi.fn().mockResolvedValue({ locked: false, retryAfterSeconds: 0 }), clear: vi.fn() },
+}))
 vi.mock('../api/rbacApi', () => ({
   rbacApi: {
     getRolePermissions: vi.fn(),
     putRolePermissions: vi.fn(),
     getEffectivePermissions: vi.fn(),
+    listCapabilities: vi.fn().mockResolvedValue([]),
+    getRoleCapabilities: vi.fn().mockResolvedValue([]),
+    putRoleCapabilities: vi.fn(),
   },
 }))
 
@@ -102,6 +111,9 @@ const i18n = createI18n({
       loadFailed: 'Failed to load permissions',
       saveFailed: 'Failed to save permissions',
       superAdminAll: 'This role is a super admin and has full access to everything.',
+      capabilitiesTitle: 'System capabilities',
+      capabilitiesEmpty: 'No system capabilities are defined.',
+      capabilitiesSave: 'Save capabilities',
       adminOnlyWriteHint: 'Writes to this collection always require a super admin',
       effectiveTitle: 'Effective permissions',
       effectiveSuperAdmin: 'This user is a super admin and has full access to everything.',
@@ -141,6 +153,10 @@ describe('ItemFormView', () => {
     vi.mocked(rbacApi.putRolePermissions).mockClear()
     vi.mocked(rbacApi.getEffectivePermissions).mockClear()
     vi.restoreAllMocks()
+    vi.mocked(rbacApi.listCapabilities).mockReset().mockResolvedValue([])
+    vi.mocked(rbacApi.getRoleCapabilities).mockReset().mockResolvedValue([])
+    vi.mocked(rbacApi.putRoleCapabilities).mockReset()
+    vi.mocked(loginLocksApi.get).mockReset().mockResolvedValue({ locked: false, retryAfterSeconds: 0 })
     routeParams = {}
     routeName = 'collection-item'
     leaveGuard = null
@@ -1179,6 +1195,123 @@ describe('ItemFormView', () => {
     expect(w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')).toBeUndefined()
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(false)
     expect(w.findComponent(AccessTokenPanel).exists()).toBe(false)
+  })
+
+  // ---- system capabilities on the role form, login lock on the user form ----
+
+  async function mountRoleEdit(item: Record<string, unknown>, opts: { superAdmin?: boolean } = {}) {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+    const { schema } = setupStores({ superAdmin: opts.superAdmin })
+    ;(schema.get as any).mockReturnValue({
+      ...roleMeta,
+      fields: [...roleMeta.fields, { ...roleMeta.fields[0], name: 'isSuperAdmin', label: 'Super admin', interface: 'checkbox', required: false }],
+    })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', ...item })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    return w
+  }
+
+  it('mounts RoleCapabilitiesPanel for an existing ordinary role as super-admin', async () => {
+    const w = await mountRoleEdit({ name: 'editor', isSuperAdmin: false })
+    const panel = w.findComponent(RoleCapabilitiesPanel)
+    expect(panel.exists()).toBe(true)
+    expect(panel.props('roleId')).toBe('r1')
+  })
+
+  it.each([
+    ['the public role', { name: 'public', isSuperAdmin: false }],
+    ['a super-admin role', { name: 'root', isSuperAdmin: true }],
+  ])('offers no capabilities for %s', async (_label, item) => {
+    const w = await mountRoleEdit(item)
+    expect(w.findComponent(PermissionMatrix).exists()).toBe(true) // anchor: the form rendered
+    expect(w.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
+  })
+
+  it('offers no capabilities in create mode or to a non-super-admin', async () => {
+    routeParams = { name: 'role' }; routeName = 'collection-create'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(roleMeta)
+    const creating = mountView()
+    await creating.vm.init()
+    await flushPromises()
+    expect(creating.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
+
+    const w = await mountRoleEdit({ name: 'editor', isSuperAdmin: false }, { superAdmin: false })
+    expect(w.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
+  })
+
+  it('folds a dirty capabilities panel into the leave guard and the form Save', async () => {
+    vi.mocked(rbacApi.listCapabilities).mockResolvedValue([
+      { code: 'login.unlock', labelKey: 'capabilities.login.unlock.label', descriptionKey: 'capabilities.login.unlock.description' },
+    ])
+    vi.mocked(rbacApi.getRoleCapabilities).mockResolvedValue([])
+    vi.mocked(rbacApi.putRoleCapabilities).mockResolvedValue(['login.unlock'])
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1' })
+    const w = await mountRoleEdit({ name: 'editor', isSuperAdmin: false })
+    const panel = w.findComponent(RoleCapabilitiesPanel)
+    expect((panel.vm as any).dirty).toBe(false)
+
+    await panel.get('[data-slot="checkbox"]').trigger('click')
+    expect((panel.vm as any).dirty).toBe(true)
+
+    // One confirm covers the dirty panel although the generic form itself is clean.
+    confirmRequire.mockResolvedValueOnce(true)
+    await (w.vm as any).guardLeave()
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+
+    // The form Save flushes it too.
+    await (w.vm as any).onSubmit()
+    expect(rbacApi.putRoleCapabilities).toHaveBeenCalledWith('r1', ['login.unlock'])
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
+  })
+
+  it('stays on the page when the capabilities save fails during the form Save', async () => {
+    vi.mocked(rbacApi.listCapabilities).mockResolvedValue([
+      { code: 'login.unlock', labelKey: 'capabilities.login.unlock.label', descriptionKey: 'capabilities.login.unlock.description' },
+    ])
+    vi.mocked(rbacApi.getRoleCapabilities).mockResolvedValue([])
+    vi.mocked(rbacApi.putRoleCapabilities).mockRejectedValue(new Error('boom'))
+    vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1' })
+    const w = await mountRoleEdit({ name: 'editor', isSuperAdmin: false })
+    await w.findComponent(RoleCapabilitiesPanel).get('[data-slot="checkbox"]').trigger('click')
+
+    await (w.vm as any).onSubmit()
+    expect(push).not.toHaveBeenCalled()
+    expect((w.findComponent(RoleCapabilitiesPanel).vm as any).dirty).toBe(true)
+  })
+
+  it('mounts LoginLockPanel with the saved email when editing a user as super-admin', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(userMeta)
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: ' X@struo.test ', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+
+    const panel = w.findComponent(LoginLockPanel)
+    expect(panel.exists()).toBe(true)
+    expect(panel.props('email')).toBe('X@struo.test')
+    expect(loginLocksApi.get).toHaveBeenCalledWith('X@struo.test')
+  })
+
+  it('hides LoginLockPanel from a non-super-admin and on other collections', async () => {
+    routeParams = { name: 'user', id: 'u9' }; routeName = 'collection-item'
+    const { schema } = setupStores({ superAdmin: false })
+    ;(schema.get as any).mockReturnValue(userMeta)
+    useAuthStore().user = {
+      id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true, delete: false } },
+    }
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'u9', email: 'x@struo.test', translations: {} })
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    expect(w.get('.page-head h1').text()).toBe('Edit User')
+    expect(w.findComponent(LoginLockPanel).exists()).toBe(false)
   })
 
   // ---- unified leave guard + form Save flushes a dirty permission matrix ----

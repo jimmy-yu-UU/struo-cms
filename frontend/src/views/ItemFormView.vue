@@ -13,6 +13,8 @@ import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
 import AccessTokenPanel from '@/components/account/AccessTokenPanel.vue'
+import LoginLockPanel from '@/components/account/LoginLockPanel.vue'
+import RoleCapabilitiesPanel from '../components/rbac/RoleCapabilitiesPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -64,6 +66,14 @@ function canWriteJunctionFor(rel: RelationMeta): boolean {
 // RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
 // grant on role/user could open the form, but the matrix/preview endpoints would 403.
 const savedRoleIsSuperAdmin = ref(false)
+// The saved role's name decides whether system capabilities are offered: the `public` role (every
+// caller holds it, anonymous ones too) cannot hold any, and the API answers 400 for it.
+const PUBLIC_ROLE_NAME = 'public'
+const savedRoleName = ref('')
+function captureSavedRole(): void {
+  savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+  savedRoleName.value = String(model.shared.name ?? '')
+}
 // The view owns the ONE leave guard for both the generic form and the matrix — see
 // guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
 const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
@@ -72,6 +82,17 @@ const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
 const showMatrix = computed(
   () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
 )
+// The capabilities panel needs an existing role, so it is not offered in create mode; a super-admin role
+// holds every capability already.
+const capabilitiesPanel = ref<InstanceType<typeof RoleCapabilitiesPanel> | null>(null)
+const showCapabilities = computed(
+  () =>
+    !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true &&
+    !savedRoleIsSuperAdmin.value && savedRoleName.value !== PUBLIC_ROLE_NAME,
+)
+function rolePanelsDirty(): boolean {
+  return (matrix.value?.dirty ?? false) || (capabilitiesPanel.value?.dirty ?? false)
+}
 // Shared by showEffective, showResetPassword and showAccessToken below — all three gate on the exact
 // same condition (super-admin, existing user row), so it is named once here rather than duplicated
 // verbatim in three places, which would only need to drift once to disagree.
@@ -91,6 +112,10 @@ const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
 const resetPasswordOpen = ref(false)
 // The access-token panel reads and mutates a credential, so it has the same audience.
 const showAccessToken = computed(() => isSuperAdminOnExistingUser.value)
+const savedUserEmail = ref('')
+// The login-lock panel reads the lock of the user's SAVED email, captured on load: an email still being
+// typed would query a different, half-written address on every keystroke.
+const showLoginLock = computed(() => isSuperAdminOnExistingUser.value && savedUserEmail.value !== '')
 // A password change revokes the token server-side; the panel re-reads its state through its exposed
 // `reload` rather than being re-keyed, which would also discard an open issued-token dialog.
 const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
@@ -120,6 +145,7 @@ function captureBaseline(): void {
 
 function setModel(next: FormModel): void {
   model.shared = next.shared
+  savedUserEmail.value = name.value === USER_COLLECTION ? String(next.shared.email ?? '').trim() : ''
   model.translations = next.translations
   model.relations = next.relations
   // Carry the optimistic-concurrency token so update payloads echo it. Without this
@@ -154,7 +180,7 @@ async function init(): Promise<void> {
       setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
       // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
       if (name.value === ROLE_COLLECTION)
-        savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+        captureSavedRole()
     } catch (e) {
       if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
       else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
@@ -188,7 +214,7 @@ async function onSubmit(): Promise<void> {
     }
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
-    if (name.value === ROLE_COLLECTION) savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+    if (name.value === ROLE_COLLECTION) captureSavedRole()
     captureBaseline() // form saved successfully: clear its own dirty flag before the matrix flush
     // One form Save also flushes a dirty permission matrix, so the user only has to click
     // Save once. The matrix flush runs AFTER the form is already baselined above: if the matrix's
@@ -196,6 +222,11 @@ async function onSubmit(): Promise<void> {
     // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
       const ok = await matrix.value.save()
+      if (!ok) return
+    }
+    // Same for the system capabilities: a failed PUT keeps the user here with the panel still dirty.
+    if (!isCreate.value && name.value === ROLE_COLLECTION && capabilitiesPanel.value?.dirty) {
+      const ok = await capabilitiesPanel.value.save()
       if (!ok) return
     }
     // Role create — the matrix has no role id to PUT against until now, so it only buffers
@@ -292,7 +323,7 @@ function reloadLatest(): void {
   serverError.value = ''
   // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
   if (name.value === ROLE_COLLECTION)
-    savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+    captureSavedRole()
 }
 
 async function onReverted(): Promise<void> {
@@ -351,7 +382,7 @@ function guardLeave(): Promise<boolean> {
   // Unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
   // grants, so a single confirm covers both instead of two independently-registered guards firing
   // sequentially on the same navigation.
-  if (!(isDirty(baseline.value, model) || (matrix.value?.dirty ?? false))) return Promise.resolve(true)
+  if (!(isDirty(baseline.value, model) || rolePanelsDirty())) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
   // Cancel and dismiss (Escape — an AlertDialog is not backdrop-dismissible, and ConfirmHost
   // renders no close button) are the same outcome here by design: confirmStore guarantees every
@@ -373,7 +404,7 @@ onBeforeRouteUpdate(async (to, from) => {
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {
-  if (isDirty(baseline.value, model) || (matrix.value?.dirty ?? false)) {
+  if (isDirty(baseline.value, model) || rolePanelsDirty()) {
     e.preventDefault()
     e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
@@ -445,8 +476,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :is-super-admin-role="savedRoleIsSuperAdmin"
         :create-mode="isCreate"
       />
+      <RoleCapabilitiesPanel v-if="showCapabilities" ref="capabilitiesPanel" :role-id="idStr" />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
       <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr" />
+      <LoginLockPanel v-if="showLoginLock" :email="savedUserEmail" heading class="mt-6" />
 
       <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
            ItemForm, entirely outside its <form> element, so it has no form to submit today. It is

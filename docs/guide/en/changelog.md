@@ -29,6 +29,10 @@
   account, and each clear writes a log line naming the caller and target by id, never the email.
   See [Chapter 13](13-rest-endpoints.md) and
   [Chapter 16](16-authentication.md).
+- The admin UI sets a role's system capabilities in a System capabilities section on the role form (not
+  offered for the `public` role or a super-admin role), and has a Login locks page, in the sidebar for a
+  super-admin or a holder of `login.unlock`, that looks up an email's lock and clears it. A user's edit
+  page has the same lock panel for a super-admin. See [Chapter 16](16-authentication.md).
 
 ## 0.23.0 — 2026-11-04
 

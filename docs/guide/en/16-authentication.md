@@ -262,7 +262,9 @@ SSO sign-in is unaffected.
 
 A lock ends by itself when the window ends. A super-admin, or a caller whose role holds the
 `login.unlock` capability, can end it sooner through `DELETE api/login-locks?email=…`, and read it with
-`GET`; see [Chapter 13](13-rest-endpoints.md). Clearing a lock does not change the password.
+`GET`; see [Chapter 13](13-rest-endpoints.md). The admin UI does the same on its Login locks page, for a
+super-admin or a holder of `login.unlock`, and on a user's edit page, for a super-admin. Clearing a lock
+does not change the password.
 
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It

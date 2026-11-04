@@ -197,8 +197,9 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 用密碼登入。這是刻意接受的取捨；SSO 登入不受影響。
 
 鎖定在視窗結束時會自動解開。超級管理員，或角色持有 `login.unlock` 系統權限的呼叫端，可以用
-`DELETE api/login-locks?email=…` 提早解除，用 `GET` 查詢，見[第 13 章](13-rest-endpoints.md)。解除鎖定
-不會改動密碼。
+`DELETE api/login-locks?email=…` 提早解除，用 `GET` 查詢，見[第 13 章](13-rest-endpoints.md)。管理介面在
+「登入鎖定」頁也能做同樣的事，超級管理員或持有 `login.unlock` 的人可用；使用者編輯頁也有，限超級管理員。
+解除鎖定不會改動密碼。
 
 另有一個行程層級的並行上限（`RateLimiting:LoginConcurrency`），限制同一時間有多少個登入在驗證密
 碼：4 個同時跑、32 個排隊，其餘回同一種 `429` 並帶 `Retry-After`，不論來源為何，都能保護 CPU 與記

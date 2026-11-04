@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
 import { useAppConfigStore } from '@/stores/appConfigStore'
 import { buildNav } from '@/lib/buildNav'
+import { LOGIN_UNLOCK } from '@/lib/capabilities'
 import SidebarNavItem from './SidebarNavItem.vue'
 import BrandMark from './BrandMark.vue'
 
@@ -61,6 +62,7 @@ const canReadMedia = computed(
   () => auth.user?.isSuperAdmin === true || auth.user?.permissions?.file?.read === true,
 )
 const isSuperAdmin = computed(() => auth.user?.isSuperAdmin === true)
+const canUnlockLogins = computed(() => auth.hasCapability(LOGIN_UNLOCK))
 
 const groups = computed(() =>
   buildNav(schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {}),
@@ -131,6 +133,10 @@ watch(() => route.path, () => {
               <SidebarMenuItem v-if="isSuperAdmin">
                 <SidebarNavItem :label="t('nav.settings')" icon="pi pi-cog"
                                 :active="route.name === 'settings'" @activate="go({ name: 'settings' })" />
+              </SidebarMenuItem>
+              <SidebarMenuItem v-if="canUnlockLogins">
+                <SidebarNavItem :label="t('nav.loginLocks')" icon="pi pi-lock"
+                                :active="route.name === 'login-locks'" @activate="go({ name: 'login-locks' })" />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
