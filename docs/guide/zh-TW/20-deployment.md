@@ -217,7 +217,7 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 子。下面是 API 映像對一個空的 SQLite 資料庫啟動：
 
 ```
-[08:38:56 FTL] StruoCMS host terminated unexpectedly
+[01:45:34 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

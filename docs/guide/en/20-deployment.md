@@ -275,7 +275,7 @@ A database with pending migrations while `MigrateOnStartup` is `false` is anothe
 same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[08:38:56 FTL] StruoCMS host terminated unexpectedly
+[01:45:34 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
