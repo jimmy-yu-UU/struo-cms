@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Application.Security;
@@ -25,7 +26,17 @@ public sealed record CoreSeedData(
     /// migration acts on it, so a database that is already seeded is never refused.</summary>
     public string? AdminRefusal { get; init; }
 
+    /// <summary>The bootstrap admin email the shipped configuration and the compose file default to.</summary>
+    public const string DefaultAdminEmail = "admin@admin.com";
+
     private const string RefusedBootstrapValue = "admin";
+
+    /// <summary>Whether the host runs in Production, where creating the admin with <see cref="DefaultAdminEmail"/> is warned about.</summary>
+    public bool IsProduction { get; init; }
+
+    /// <summary>Whether the seed creates an admin whose email is the default one, in Production.</summary>
+    public bool CreatesDefaultAdminInProduction =>
+        IsProduction && HasAdmin && string.Equals(AdminEmail, DefaultAdminEmail, StringComparison.Ordinal);
 
     public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
 
@@ -77,6 +88,7 @@ public sealed record CoreSeedData(
             configuration["Auth:BootstrapAdmin:Email"],
             configuration["Auth:BootstrapAdmin:Password"],
             configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? [],
-            services.GetService<IOptions<PasswordPolicyOptions>>()?.Value);
+            services.GetService<IOptions<PasswordPolicyOptions>>()?.Value)
+            with { IsProduction = services.GetService<IHostEnvironment>()?.IsProduction() == true };
     }
 }

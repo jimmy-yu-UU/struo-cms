@@ -1,4 +1,5 @@
 using FluentMigrator;
+using Microsoft.Extensions.Logging;
 
 namespace Struo.Infrastructure.Migrations.Core;
 
@@ -21,6 +22,7 @@ public sealed class SeedCoreData : StruoMigration
         InsertRole(adminRoleId, "admin", isSuperAdmin: true, "Full access", now);
         InsertRole(publicRoleId, "public", isSuperAdmin: false, "Anonymous callers", now);
         if (seed.HasAdmin) InsertAdmin(seed, adminRoleId, now);
+        if (seed.CreatesDefaultAdminInProduction) WarnAboutDefaultAdminEmail();
         foreach (var collection in seed.PublicReadCollections) InsertPublicRead(publicRoleId, collection, now);
     }
 
@@ -54,6 +56,12 @@ public sealed class SeedCoreData : StruoMigration
             createdat = now, updatedat = now, version = 0L,
         });
     }
+
+    private void WarnAboutDefaultAdminEmail() =>
+        Log.LogWarning(
+            "The bootstrap admin was created with the default email {Email}, which anyone can look up. Change " +
+            "its email in the admin UI, or create another administrator and deactivate this account.",
+            CoreSeedData.DefaultAdminEmail);
 
     private void InsertPublicRead(Guid publicRoleId, string collection, DateTime now) =>
         Insert.IntoTable(FrameworkTable("permissions")).Row(new

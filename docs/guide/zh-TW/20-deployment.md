@@ -80,6 +80,10 @@ seed 要執行、而且 `Auth:BootstrapAdmin:Email` 有設時，密碼若是空�
 
 預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
+在 Production，有兩則警告指向預設 email。seed 用 `admin@admin.com` 建立 bootstrap 管理員時記一則。
+每次啟動時只要有啟用中的使用者用這個 email 就記一則，先前建立的帳號也包含在內。兩則都點名這個地址，
+不會印出任何密碼。請到後台改掉這個帳號的 email，或另外建立一位管理員後停用這個帳號。
+
 ### 登入速率限制：帳號層開、IP 層看拓樸
 
 帳號層的節流（`RateLimiting:LoginAccount`）預設開著，能單獨擋下針對單一帳號的暴力嘗試；IP 層

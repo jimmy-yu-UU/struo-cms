@@ -33,6 +33,9 @@
   重新啟動即可清除並以 `1` 結束。`--email` 缺少或過長（超過 255 字元）以 `2` 結束。
   [第 16 章](16-authentication.md)列出帳號被鎖住時的三種恢復方式，
   [第 21 章](21-schema-and-upgrades.md)列出這個命令。
+- 在 Production，只要有啟用中的使用者用預設 bootstrap email `admin@admin.com`，啟動就會記一則警告；seed 用這個 email
+  建立 bootstrap 管理員時也會記一則。兩則都點名這個地址，不會印出密碼。見
+  [第 16 章](16-authentication.md)與[第 20 章](20-deployment.md)。
 
 ## 0.23.0 — 2026-11-04
 

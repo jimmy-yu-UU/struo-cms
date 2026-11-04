@@ -41,6 +41,10 @@
   over-long (more than 255 characters) `--email` exits `2`. [Chapter 16](16-authentication.md) lists
   the three ways to recover a locked account, and [Chapter 21](21-schema-and-upgrades.md) lists the
   command.
+- In Production, startup logs a warning while an active user has the default bootstrap email
+  `admin@admin.com`, and the seed logs one when it creates the bootstrap admin with that email. Both
+  name the address and never a password. See [Chapter 16](16-authentication.md) and
+  [Chapter 20](20-deployment.md).
 
 ## 0.23.0 — 2026-11-04
 

@@ -100,6 +100,11 @@ account exists.
 Change the default email `admin@admin.com` as well. The Compose file reads `STRUO_ADMIN_PASSWORD` and
 refuses to start without it.
 
+In Production, two warnings point at the default email. The seed logs one when it creates the
+bootstrap admin with `admin@admin.com`. Every start logs one when an active user has that email,
+which covers an account created earlier. Both name the address and never print a password. Change
+the account's email in the admin UI, or create another administrator and deactivate this account.
+
 ### Login rate limiting: account layer on, IP layer depends on topology
 
 Account-layer throttling (`RateLimiting:LoginAccount`) is on by default and blocks brute-force

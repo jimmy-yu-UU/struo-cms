@@ -22,7 +22,9 @@ covers, and `admin` is refused in any letter case; when the seed runs and the pa
 weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
 names `Auth__BootstrapAdmin__Password`. Once the seed has been applied nothing needs the value
 any more, so it can be removed. The transcripts log in with a placeholder for that password. The default email
-`admin@admin.com` is accepted; change it too.
+`admin@admin.com` is accepted; change it too. In Production, the seed logs a warning when it creates the
+account with that email, and every start logs one while an active user still has it; see
+[Chapter 20](20-deployment.md).
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator
 to `admin` — the detail is left to

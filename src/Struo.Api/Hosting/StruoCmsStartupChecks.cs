@@ -49,6 +49,8 @@ internal static class StruoCmsStartupChecks
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
             startupLogger);
 
+        await Struo.Api.Auth.DefaultAdminAccountWarnings.LogAsync(
+            sp.GetRequiredService<ISqlSugarClient>(), app.Environment, startupLogger);
     }
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
