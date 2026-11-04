@@ -8,13 +8,15 @@ public sealed class AddLanguageCodeUniqueIndex : StruoMigration
 {
     public const long Version = 202611030000;
 
-    private string IndexName => $"ux_{FrameworkTable("languages")}_code";
+    private const string Languages = "languages";
+
+    private string IndexName => $"ux_{FrameworkTable(Languages)}_code";
 
     public override void Up() =>
-        Create.Index(IndexName).OnTable(FrameworkTable("languages"))
+        Create.Index(IndexName).OnTable(FrameworkTable(Languages))
             .OnColumn("code").Ascending()
             .WithOptions().Unique();
 
     public override void Down() =>
-        Delete.Index(IndexName).OnTable(FrameworkTable("languages"));
+        Delete.Index(IndexName).OnTable(FrameworkTable(Languages));
 }

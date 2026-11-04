@@ -47,8 +47,10 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return GetStatus().Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
     }
 
-    /// <summary>Records every known migration as applied without executing it, so a database built by an
-    /// earlier schema source joins the migration history. Refuses a database that already has recorded
+    /// <summary>Records the migrations that describe the schema of a database built by an earlier schema
+    /// source as applied, without executing them, so that database joins the migration history. Core
+    /// migrations above <see cref="Core.SeedCoreData.Version"/> stay pending; every other migration is
+    /// recorded. Refuses a database that already has recorded
     /// migrations or lacks the core tables; in both cases nothing is written.</summary>
     public async Task<IReadOnlyList<MigrationInfo>> BaselineAsync(CancellationToken ct)
     {
@@ -79,7 +81,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         processor.BeginTransaction();
         try
         {
-            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
+            foreach (var (version, migration) in known.OrderBy(kv => kv.Key).Where(kv => !IsAfterBaselineSchema(kv)))
                 loader.UpdateVersionInfo(version, migration.Description ?? "");
             processor.CommitTransaction();
         }
@@ -89,6 +91,10 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             throw;
         }
     }
+
+    // The pre-migration schema matches the core migrations up to SeedCoreData; later core migrations change it.
+    private static bool IsAfterBaselineSchema(KeyValuePair<long, IMigrationInfo> known) =>
+        known.Key > Core.SeedCoreData.Version && known.Value.Migration.GetType().Namespace == typeof(Core.SeedCoreData).Namespace;
 
     // A failed rollback must not mask the failure that caused it.
     private static void TryRollback(IMigrationProcessor processor, ILogger logger)
