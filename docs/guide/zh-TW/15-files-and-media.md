@@ -61,6 +61,9 @@ locale 的標題。
 是 `published`，也可以設成 `draft`。這個欄位自己宣告的預設值 `"draft"` 不會套用到上傳。預設為
 `published` 時，剛上傳的檔案立刻能被任何持有其 id 的人讀取，不需要另外發布。
 
+id 是隨機的 GUID，但連結分享或寫進 log 之後，id 就會流出部署之外。存放敏感檔案的部署，建議把
+`Struo:Files:DefaultStatus` 設成 `draft`；代價是要公開的檔案得逐一發布。預設值維持 `published`。
+
 ## 上傳
 
 上傳是 `POST /api/files`，`Content-Type: multipart/form-data`，一個必要的分段叫 `file`，外
@@ -211,7 +214,9 @@ HTTP_STATUS:200
 `Struo:Files:PresignedRedirect` 開著、又沒有要求轉檔時，下載改成 `302` 轉址到儲存端的
 presigned 網址；它預設關閉，好讓後台的縮圖不需要任何額外設定就能顯示，也讓儲存端點本身可以
 保持私有。`local` 後端上這個設定完全沒有作用，presigned 查詢一律回 null，下載照樣落回串
-流。每個回應都帶 `X-Content-Type-Options: nosniff`，是下載端點附件處置之外再加的一層防線。
+流。API 的每個回應都帶 `X-Content-Type-Options: nosniff`，是下載端點附件處置之外再加的一層防線。
+`PresignedRedirect` 開著時，瀏覽器跟隨 `302` 之後收到的是儲存服務的回應，標頭由該服務決定；
+presigned 網址只能強制 `Content-Disposition: attachment`。
 
 ### 把檔案設為私有
 

@@ -74,6 +74,10 @@ A new upload takes the status in `Struo:Files:DefaultStatus` (key in
 default of `"draft"` is never what an upload gets. With the default `published`, a freshly uploaded
 file is readable at once by anyone who has its id, with no separate publish step.
 
+The id is a random GUID, but a shared link or a log line carries it out of the deployment. A
+deployment that stores sensitive files should set `Struo:Files:DefaultStatus` to `draft`; the cost is
+that a file meant to be public has to be published one by one. The default stays `published`.
+
 ## Uploading
 
 Uploading is `POST /api/files`, `Content-Type: multipart/form-data`, with one required part named
@@ -259,8 +263,10 @@ thumbnails display with no extra setup, and so the storage endpoint itself can s
 `local` backend this setting has no effect at all — a presigned-URL query always returns null, and
 the download falls back to streaming as usual.
 
-Every response carries `X-Content-Type-Options: nosniff`, one more layer of defense on top of the
-download endpoint's own attachment disposition.
+Every API response carries `X-Content-Type-Options: nosniff`, one more layer of defense on top of the
+download endpoint's own attachment disposition. With `PresignedRedirect` on, the browser follows the
+`302` and receives the storage service's response, whose headers that service decides. The presigned
+URL can only force `Content-Disposition: attachment`.
 
 ### Making a file private
 
