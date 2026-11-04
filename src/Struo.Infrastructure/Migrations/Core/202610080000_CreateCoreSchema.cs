@@ -1,4 +1,5 @@
 using FluentMigrator;
+using Struo.Application.Security;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Migrations.Core;
@@ -86,7 +87,7 @@ public sealed class CreateCoreSchema : StruoMigration
 
         Create.Table(FrameworkTable(Users))
             .WithColumn("id").AsGuid().PrimaryKey()
-            .WithColumn("email").AsString(255).NotNullable()
+            .WithColumn("email").AsString(EmailAddress.MaxLength).NotNullable()
             .WithColumn("password").AsString(255).NotNullable()
             .WithColumn("name").AsString(255).Nullable()
             .WithColumn("isactive").AsBoolean().NotNullable()

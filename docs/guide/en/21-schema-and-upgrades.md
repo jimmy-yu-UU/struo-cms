@@ -44,6 +44,11 @@ blobs are orphans, and `--min-age-hours N` sets the grace period (default 24). I
 ones below plus `3`, a refusal by that 50% safeguard. See
 [Removing orphaned blobs](20-deployment.md#removing-orphaned-blobs).
 
+An eighth, `auth:unlock --email <email>`, clears one account's login lock when no administrator can
+sign in. It needs `Redis:ConnectionString`: without Redis the count lives in the API process, the
+command says so and exits `1`, and restarting the API clears it. A missing or unusable `--email` exits
+`2`. See [Recovering a locked account](16-authentication.md#recovering-a-locked-account).
+
 In the repository, use `dotnet run --project src/Struo.Api -- <command>`. That applies the `http`
 launch profile, so the environment is Development and your `appsettings.Development.json` is read.
 A published build uses `dotnet Struo.Api.dll <command>`; that is the API image's entrypoint, so

@@ -300,6 +300,40 @@ The `$TW` in the transcript is an email that's never been used. Only this one ac
 within the same run, a correct login for another account still goes through immediately. The
 partition key is the account, not the caller's IP.
 
+## Recovering a locked account
+
+When the locked account is the only administrator, a lock that ends by itself in a few minutes is
+still a locked door. There are three ways to open it sooner:
+
+- Another super-admin, or a user whose role holds `login.unlock`, clears the lock from the admin UI's
+  Login locks page, or from the user's edit page (a super-admin only). The API call is the one above.
+- Sign in with SSO. The per-account count applies to password sign-in only.
+- Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.
+
+```text
+$ dotnet run --project src/Struo.Api -- auth:unlock --email Admin@Example.com
+auth:unlock: cleared the login lock for the given account, if it had one.
+```
+
+The command reads the same configuration as the API, so it needs `Redis:ConnectionString`, the same
+value the API runs with. The email is trimmed and lowercased the way login does it; a missing, blank or
+over-long (more than 255 characters) `--email` prints `Usage: auth:unlock --email <email>` and exits
+`2`. The command never prints the email back, and it says "if it had one" because it cannot tell
+whether the account exists or was locked, the same as the endpoint. When `RateLimiting:LoginAccount`
+is disabled it says so and exits `0`, since there is no lock. If Redis cannot be reached it prints the
+error type, never the connection string, and exits `1`.
+
+Without Redis, each API process counts attempts in its own memory, which a separate command cannot
+reach. The command says so and exits `1`, so a script does not take it for success:
+
+```text
+$ dotnet run --project src/Struo.Api -- auth:unlock --email Admin@Example.com
+auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.
+```
+
+Restarting the API clears the count of every account, locked or not. See
+[Chapter 21](21-schema-and-upgrades.md) for how the command line finds its configuration.
+
 ## OIDC external login
 
 Each external identity provider is one entry under `Oidc:Providers:{id}`. A disabled provider

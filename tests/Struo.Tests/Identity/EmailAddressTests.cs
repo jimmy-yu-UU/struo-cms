@@ -21,11 +21,12 @@ public class EmailAddressTests
         EmailAddress.IsUsable(email).Should().BeTrue();
 
     [Fact]
-    public void IsUsable_caps_the_trimmed_length_at_320()
+    public void IsUsable_caps_the_trimmed_length_at_the_email_column_length()
     {
-        EmailAddress.IsUsable(new string('a', 320)).Should().BeTrue();
-        EmailAddress.IsUsable($" {new string('a', 320)} ").Should().BeTrue();
-        EmailAddress.IsUsable(new string('a', 321)).Should().BeFalse();
+        EmailAddress.MaxLength.Should().Be(255);
+        EmailAddress.IsUsable(new string('a', 255)).Should().BeTrue();
+        EmailAddress.IsUsable($" {new string('a', 255)} ").Should().BeTrue();
+        EmailAddress.IsUsable(new string('a', 256)).Should().BeFalse();
     }
 
     [Fact]

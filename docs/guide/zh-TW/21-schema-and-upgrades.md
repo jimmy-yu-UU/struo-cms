@@ -43,6 +43,11 @@ Migration 放在三個地方：
 它的結束代碼是下面那幾個再加上 `3`，代表被 50% 保險機制拒絕。見
 [清除孤兒 blob](20-deployment.md#清除孤兒-blob)。
 
+第八個 `auth:unlock --email <email>`，在沒有任何管理員能登入時解除單一帳號的登入鎖定。它需要
+`Redis:ConnectionString`：沒有 Redis 時計數存在 API 行程裡，命令會這樣說並以 `1` 結束，重新啟動 API 才能清除。
+`--email` 缺少或不能用時以 `2` 結束。見
+[帳號被鎖住時怎麼恢復](16-authentication.md#帳號被鎖住時怎麼恢復)。
+
 在儲存庫裡用 `dotnet run --project src/Struo.Api -- <命令>`。這會套用 `http` 啟動設定檔，環境是
 Development，讀你的 `appsettings.Development.json`。發佈出去的成品用 `dotnet Struo.Api.dll <命令>`；
 API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>` 也行。

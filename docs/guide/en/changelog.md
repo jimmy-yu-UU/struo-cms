@@ -35,6 +35,14 @@
   that looks up an email's lock and clears it. A user's edit page has the same lock panel for a
   super-admin. See [Chapter 16](16-authentication.md) and
   [Chapter 17](17-roles-and-permissions.md).
+- `auth:unlock --email <email>` clears an account's login lock from the server when no administrator can
+  sign in. With `Redis:ConnectionString` set it resets the count and exits `0`; without Redis the count
+  lives in the API process, so the command says a restart clears it and exits `1`. A missing or
+  over-long `--email` exits `2`. [Chapter 16](16-authentication.md) lists the three ways to recover a
+  locked account, and [Chapter 21](21-schema-and-upgrades.md) lists the command.
+- The email length cap of the `login-locks` endpoints and `auth:unlock` is 255 characters, the length of
+  the users table's `email` column; it is one constant, `EmailAddress.MaxLength`, which the core schema
+  migration also uses.
 
 ## 0.23.0 — 2026-11-04
 

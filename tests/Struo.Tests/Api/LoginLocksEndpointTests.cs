@@ -258,7 +258,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     {
         using var host = Host();
         using var admin = await AdminAsync(host);
-        var tooLong = new string('a', 320) + "@struo.test";
+        var tooLong = new string('a', 256) + "@struo.test";
 
         (await admin.GetAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await admin.DeleteAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);

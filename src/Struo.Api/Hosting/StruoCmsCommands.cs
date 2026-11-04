@@ -3,7 +3,7 @@ using Struo.Infrastructure.Migrations.Commands;
 
 namespace Struo.Api.Hosting;
 
-/// <summary>The command-line commands (<c>migrate*</c>, <c>make:migration</c>, <c>files:sweep</c>) behind <c>TryRunStruoCommandAsync</c>.</summary>
+/// <summary>The command-line commands (<c>migrate*</c>, <c>make:migration</c>, <c>files:sweep</c>, <c>auth:unlock</c>) behind <c>TryRunStruoCommandAsync</c>.</summary>
 public static class StruoCmsCommands
 {
     /// <summary>

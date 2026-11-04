@@ -187,7 +187,7 @@ a fork registered. The two keys are i18n keys; the admin UI supplies the text.
 The `GET` returns `{ locked, retryAfterSeconds }`: `locked` is `true` when the account has used up its
 per-account login attempts for the current window, and `retryAfterSeconds` is the time left in that
 window, `0` when not locked. Reading never counts as an attempt. The email is trimmed and lowercased
-the way login does it. A missing, blank or over-long (more than 320 characters) `email` returns `400`, and a caller without the
+the way login does it. A missing, blank or over-long (more than 255 characters) `email` returns `400`, and a caller without the
 permission gets `403`, whatever the email.
 
 The answer does not depend on whether an account with that email exists: an address with no account
