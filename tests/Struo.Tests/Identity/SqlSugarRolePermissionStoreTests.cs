@@ -39,6 +39,29 @@ public class SqlSugarRolePermissionStoreTests
         data.Permissions.Should().ContainSingle(p => p.Collection == "article" && p.CanRead);
     }
 
+    // A capability row on the public role (written around the API) must never resolve: an anonymous
+    // caller would otherwise hold it.
+    [Fact]
+    public async Task Capability_rows_on_the_public_role_are_ignored_for_every_caller()
+    {
+        using var file = TestBackend.CreateUnitDatabase();
+        var db = NewDb(file);
+        var userId = Guid.CreateVersion7();
+        var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
+        var editor = new Role { Id = Guid.CreateVersion7(), Name = "editor" };
+        await db.Insertable(new[] { pub, editor }).ExecuteCommandAsync();
+        await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = userId, RoleId = editor.Id }).ExecuteCommandAsync();
+        await db.Insertable(new RoleCapability { Id = Guid.CreateVersion7(), RoleId = pub.Id, Capability = "login.unlock" }).ExecuteCommandAsync();
+        await db.Insertable(new RoleCapability { Id = Guid.CreateVersion7(), RoleId = editor.Id, Capability = "reports.export" }).ExecuteCommandAsync();
+        var store = new SqlSugarRolePermissionStore(db);
+
+        PermissionResolver.Resolve(await store.LoadForUserAsync(null)).HasCapability("login.unlock").Should().BeFalse();
+        var signedIn = PermissionResolver.Resolve(await store.LoadForUserAsync(userId));
+        signedIn.HasCapability("login.unlock").Should().BeFalse();
+        signedIn.HasCapability("reports.export").Should().BeTrue();
+        PermissionResolver.Resolve(await store.LoadForRolesAsync([editor.Id])).HasCapability("login.unlock").Should().BeFalse();
+    }
+
     [Fact]
     public async Task User_with_roles_unions_the_public_floor_with_their_own_roles()
     {

@@ -138,8 +138,8 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 
 `GET .../capabilities` 依代碼排序回傳該角色的系統權限代碼字串陣列，角色不存在就是 404。
 `PUT .../capabilities` 收 JSON 代碼陣列並整組覆寫：空陣列就是全部移除，重複的代碼只算一次，回應是
-實際存下的陣列。body 不是字串的 JSON 陣列，或有任何代碼不在 `GET api/capabilities` 回傳的清單內
-（`Unknown capabilities: …`），都回 `400`，而且什麼都不會寫入。系統權限是什麼，見
+實際存下的陣列。body 不是字串的 JSON 陣列、角色是 `public`（它不能持有系統權限，不論送什麼），或有任何代碼不在
+`GET api/capabilities` 回傳的清單內（`Unknown capabilities: …`），都回 `400`，而且什麼都不會寫入。系統權限是什麼，見
 [第 17 章](17-roles-and-permissions.md)。
 
 ## Capabilities `api/capabilities`

@@ -15,7 +15,8 @@
   `Database:MigrateOnStartup` must run before the API starts, and `migrate:baseline` leaves it pending
   like `AddLanguageCodeUniqueIndex`. A super-admin sets a role's capabilities with
   `GET`/`PUT api/roles/{id}/capabilities` and lists the available ones with `GET api/capabilities`;
-  `GET api/auth/me` carries the caller's `capabilities`. A super-admin holds every capability. See
+  `GET api/auth/me` carries the caller's `capabilities`. A super-admin holds every capability; the
+  `public` role cannot hold any. See
   [Chapter 13](13-rest-endpoints.md) and [Chapter 17](17-roles-and-permissions.md).
 
 ## 0.23.0 — 2026-11-04

@@ -615,6 +615,18 @@ the `EncryptedXmlInfo` it returns names the matching `IXmlDecryptor`. The startu
 `RequireKeyProtection` look only at `DataProtection:Certificate:Path`, so a fork that uses its own
 encryptor sees the warning and leaves `RequireKeyProtection` off.
 
+## System capabilities: `ISystemCapabilitySource`
+
+A fork adds its own system capabilities, the action permissions a role holds, by implementing
+`ISystemCapabilitySource`, whose `Capabilities` property returns `SystemCapability(Code, LabelKey,
+DescriptionKey)` records, and registering it with `services.AddSingleton<ISystemCapabilitySource,
+MySource>()` after `AddStruoCms()`. Any number of sources may be registered. A code that repeats a core
+code or another source's code, or that is blank or longer than 255 characters, stops startup with
+`InvalidOperationException`. Code that guards an action asks
+`ICurrentPermissions.Current.HasCapability("my.code")`, which is true for a super-admin and for a caller
+whose roles hold the code. What a capability is and how a role is given one are in
+[Chapter 17](17-roles-and-permissions.md).
+
 ## Your own errors: `StruoDomainException`
 
 A fork's own client-facing error derives from `StruoDomainException`, which carries a code, a 400 to 499 status

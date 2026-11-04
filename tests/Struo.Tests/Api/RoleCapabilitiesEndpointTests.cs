@@ -114,6 +114,28 @@ public class RoleCapabilitiesEndpointTests(ApiFactory factory)
         (await CodesAsync(admin, $"/api/roles/{roleId}/capabilities")).Should().Equal(Unlock);
     }
 
+    // The public role reaches every caller, anonymous ones included, so it cannot hold capabilities.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Put_to_the_public_role_is_400_for_any_set_and_stores_nothing(bool nonEmpty)
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        Guid publicId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            publicId = (await db.Queryable<Role>().Where(r => r.Name == "public").FirstAsync()).Id;
+        }
+
+        var resp = await admin.PutAsJsonAsync($"/api/roles/{publicId}/capabilities", nonEmpty ? new[] { Unlock } : Array.Empty<string>());
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await CodesAsync(admin, $"/api/roles/{publicId}/capabilities")).Should().BeEmpty();
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task Put_with_a_body_that_is_not_an_array_of_strings_is_400()
     {

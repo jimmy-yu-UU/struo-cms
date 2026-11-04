@@ -89,7 +89,8 @@ public sealed class RolesController(
         return Ok(Sorted(await capabilities.ListAsync(id, ct)));
     }
 
-    /// <summary>Full-replace of the role's system capability codes. A code outside
+    /// <summary>Full-replace of the role's system capability codes. The <c>public</c> role (every caller holds it,
+    /// anonymous ones too) is a <c>400</c> for any set, empty included. A code outside
     /// <see cref="SystemCapabilityCatalog"/> is a <c>400</c> and nothing is written; a repeated code
     /// counts once.</summary>
     [HttpPut("{id:guid}/capabilities")]
@@ -102,6 +103,10 @@ public sealed class RolesController(
                 "Body must be a JSON array of capability codes.");
         if (!await grants.RoleExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+
+        if (await capabilities.IsPublicRoleAsync(id, ct))
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                "The public role cannot hold capabilities.");
 
         var unknown = body.Where(c => c is null || !catalog.IsKnown(c)).Select(c => c ?? "").Distinct().ToList();
         if (unknown.Count > 0)

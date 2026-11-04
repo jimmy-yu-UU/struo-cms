@@ -53,9 +53,8 @@ string, `null`, or absent; any other value is a `400` `INVALID_VERSION` ([Chapte
 Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
 grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing
 to or deleting from the five built-in collections `permission`, `role`, `roleCapability`, `user` and
-`userRole`, or
-any junction a fork has marked `AdminOnly`, additionally requires the caller to be a super-admin — a
-delegated collection grant doesn't count.
+`userRole`, or any junction a fork has marked `AdminOnly`, additionally requires the caller to be a
+super-admin — a delegated collection grant doesn't count.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
@@ -163,9 +162,9 @@ or names a collection that doesn't exist, and collection-name casing is normaliz
 `GET .../capabilities` returns the role's capability codes as a sorted array of strings, and a
 nonexistent role is a `404`. `PUT .../capabilities` takes a JSON array of codes and overwrites the whole
 set; an empty array removes them all, a repeated code counts once, and the response is the stored array.
-The request is rejected with `400` when the body isn't a JSON array of strings or when any code is
-outside the list `GET api/capabilities` returns (`Unknown capabilities: …`), and then nothing is
-written. [Chapter 17](17-roles-and-permissions.md) covers what a capability is.
+The request is rejected with `400` when the body isn't a JSON array of strings, when the role is
+`public` (it cannot hold capabilities, whatever the set), or when any code is outside the list
+`GET api/capabilities` returns (`Unknown capabilities: …`), and then nothing is written. [Chapter 17](17-roles-and-permissions.md) covers what a capability is.
 
 A role is itself an ordinary collection, so `POST api/items/role` creates a new one.
 

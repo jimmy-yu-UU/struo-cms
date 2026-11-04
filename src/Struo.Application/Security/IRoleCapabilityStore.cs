@@ -4,6 +4,9 @@ namespace Struo.Application.Security;
 /// capabilities on every request is <see cref="IRolePermissionStore"/>.</summary>
 public interface IRoleCapabilityStore
 {
+    /// <summary>Is this the <c>public</c> role, which every caller holds and which therefore cannot hold a capability?</summary>
+    Task<bool> IsPublicRoleAsync(Guid roleId, CancellationToken ct = default);
+
     /// <summary>The role's capability codes, in no particular order.</summary>
     Task<IReadOnlyList<string>> ListAsync(Guid roleId, CancellationToken ct = default);
 

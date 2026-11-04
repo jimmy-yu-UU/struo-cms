@@ -219,7 +219,8 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 子。下面是 API 映像對一個空的 SQLite 資料庫啟動：
 
 ```
-[13:38:25 FTL] StruoCMS host terminated unexpectedly
+…
+[06:21:22 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -484,13 +485,14 @@ Compose 環境會把兩個映像連同 PostgreSQL、Redis 一起起來：
 ```
 docker network create struo-verify
 docker volume create struo-verify-data
-docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' --env 'Auth__BootstrapAdmin__Password=<your-admin-password>' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData`、
-`Applied 202611030000  AddLanguageCodeUniqueIndex` 與 `Applied 202611040000  CreateRoleCapabilities`。
+`Applied 202611030000  AddLanguageCodeUniqueIndex` 與 `Applied 202611040000  CreateRoleCapabilities`。沒有 bootstrap 密碼的話，植入 migration 會以
+`Auth__BootstrapAdmin__Password is required` 失敗。
 少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用

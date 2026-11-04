@@ -12,7 +12,8 @@
   建立 `struo_role_capabilities`，所以 API 啟動前要先跑 `migrate` 或 `Database:MigrateOnStartup`，
   而且 `migrate:baseline` 跟 `AddLanguageCodeUniqueIndex` 一樣不會記錄它，它會維持待套用。超級管理員用
   `GET`／`PUT api/roles/{id}/capabilities` 設定角色的系統權限，用 `GET api/capabilities` 列出可用的；
-  `GET api/auth/me` 帶有呼叫端的 `capabilities`。超級管理員持有所有系統權限。見
+  `GET api/auth/me` 帶有呼叫端的 `capabilities`。超級管理員持有所有系統權限，`public` 角色則不能持有
+  任何系統權限。見
   [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
 
 ## 0.23.0 — 2026-11-04

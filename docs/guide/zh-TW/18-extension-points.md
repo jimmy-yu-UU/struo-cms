@@ -540,6 +540,15 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 `IXmlDecryptor`。啟動警告與 `RequireKeyProtection` 只看 `DataProtection:Certificate:Path`，所以用自己加密器的
 fork 會看到警告，也不要開 `RequireKeyProtection`。
 
+## 系統權限：`ISystemCapabilitySource`
+
+fork 要加自己的系統權限（角色持有的動作權限），就實作 `ISystemCapabilitySource`，它的 `Capabilities`
+屬性回傳 `SystemCapability(Code, LabelKey, DescriptionKey)` 記錄，再在 `AddStruoCms()` 之後用
+`services.AddSingleton<ISystemCapabilitySource, MySource>()` 註冊；來源可以註冊任意多個。代碼若與核心代碼
+或另一個來源的代碼重複、是空白、或超過 255 字元，啟動就會以 `InvalidOperationException` 停下。要保護某個動作的
+程式碼，問 `ICurrentPermissions.Current.HasCapability("my.code")`：超級管理員一律為真，其他呼叫端要有角色
+持有這個代碼才為真。系統權限是什麼、怎麼授予角色，見[第 17 章](17-roles-and-permissions.md)。
+
 ## 自己的錯誤：`StruoDomainException`
 
 fork 自己、給客戶端看的錯誤，繼承 `StruoDomainException`，它帶著代碼、400 到 499 的狀態與訊息。REST 與

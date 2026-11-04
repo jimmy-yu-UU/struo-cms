@@ -20,7 +20,8 @@ and token hashes never appear in an ordinary query result and can't be written d
 
 A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, that means
 ticking role names. The junction between user and role is a fourth table, `userRole` (table
-`struo_user_roles`), which no caller ever sees.
+`struo_user_roles`), which no caller ever sees. The system capabilities a role holds are stored in a fifth table,
+`roleCapability`; see "System capabilities" below.
 
 A `permission` row names a role and a collection, and carries exactly three grant flags:
 `canRead`, `canWrite`, `canDelete`. There's no fourth flag, and no separately stored "can read
@@ -115,17 +116,18 @@ The list of valid codes is defined in code, once. `SystemCapabilities.Core` hold
 own capabilities by implementing that interface and registering it with
 `services.AddSingleton<ISystemCapabilitySource, MySource>()`; any number of sources may be registered.
 A code that repeats a core code or another source's code, or that is blank or longer than 255
-characters, throws `InvalidOperationException` the first time the catalog is used. Codes are compared
-exactly, with no case folding.
+characters stops startup with `InvalidOperationException`. Codes are compared exactly, with no case
+folding.
 
 A role's capabilities are stored in `role_capabilities` (table `struo_role_capabilities`, collection
 `roleCapability`): one row per role and code, unique on (`roleId`, `capability`). Like `permission`
 and `userRole`, it is both `Hidden` and `AdminOnly`, so the admin UI never edits it directly.
 
 Resolution reads the capability rows of the caller's roles in the same request that reads the
-grants, and unions them. The `public` role's rows count too, so a capability given to `public` goes to
-every caller, anonymous ones included. A super-admin holds every code without any row. The result is
-not cached any more than the grants are, so a change applies to the holder's next request.
+grants, and unions them. The `public` role cannot hold a capability, because every caller holds that
+role, anonymous ones included: `PUT` refuses it, and resolution ignores any row that exists for it. A
+super-admin holds every code without any row. The result is not cached any more than the grants are, so
+a change applies to the holder's next request.
 
 Three endpoints manage them, all super-admin only; any other signed-in caller gets `403`, even one
 whose own role holds the capability:
@@ -140,12 +142,18 @@ The rejections of the `PUT`:
 
 - the body isn't a JSON array of strings: `400`;
 - the role id doesn't exist: `404`;
+- the role is `public`, for any set, an empty one included: `400`, `The public role cannot hold
+  capabilities.`, and nothing is written;
 - a code is outside the list, including a blank one or one that differs only in case: `400`,
   `Unknown capabilities: …`, and nothing is written.
 
 A caller reads its own capabilities from `GET /api/auth/me`, whose response carries a `capabilities`
 array of the codes it holds; a super-admin gets the whole list. Endpoint details are in
 [Chapter 13: REST API Endpoint Reference](13-rest-endpoints.md).
+
+The `PUT` is the only write path that checks the codes against the list and refuses `public`. A
+super-admin can still write `roleCapability` rows through the generic item API, which checks neither;
+an unknown code there grants nothing, and a row on `public` is ignored.
 
 Deleting a role leaves its `role_capabilities` rows in place, as it does its `permissions` rows.
 Resolution reads only roles that still exist, so those rows no longer apply to anyone.
@@ -293,9 +301,9 @@ because this is a hypothesis, not a real swap.
 
 ## Managing roles in the admin UI
 
-The admin UI never lets an administrator edit the `permission` or `userRole` collections directly.
-`Hidden` and `AdminOnly` are independent flags, and a collection can carry just one of them, but
-these two carry both, because they're purely internal RBAC data — letting the ordinary write grant
+The admin UI never lets an administrator edit the `permission`, `userRole` or `roleCapability`
+collections directly. `Hidden` and `AdminOnly` are independent flags, and a collection can carry just
+one of them, but these three carry both, because they're purely internal RBAC data — letting the ordinary write grant
 reach them would be exactly the self-escalation `AdminOnly` exists to block.
 
 To change a role's grants, use the role permission matrix instead: tick `canRead`, `canWrite`,

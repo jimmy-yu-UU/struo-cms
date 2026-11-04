@@ -20,6 +20,7 @@ internal static class StruoCmsStartupChecks
         sp.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
             .Get(Struo.Api.Auth.AuthSchemes.Cookie);
         VerifyCustomFileStorage(sp);
+        VerifyCapabilityCatalog(sp);
         await StruoCmsGraphQlCheck.RunAsync(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
@@ -52,6 +53,11 @@ internal static class StruoCmsStartupChecks
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
     // startup with the message naming the key, not the first file request.
+    // The catalog validates its sources when first built: resolving it here fails startup on a duplicate or
+    // blank code instead of the first request that needs it.
+    private static void VerifyCapabilityCatalog(IServiceProvider sp) =>
+        _ = sp.GetRequiredService<Struo.Application.Security.SystemCapabilityCatalog>();
+
     private static void VerifyCustomFileStorage(IServiceProvider sp)
     {
         var files = sp.GetRequiredService<Struo.Application.Files.FileStorageOptions>();

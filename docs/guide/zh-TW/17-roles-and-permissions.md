@@ -17,7 +17,7 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 因此既不會出現在一般的查詢結果，也不能被呼叫端直接寫入。
 
 使用者的角色是一個對 `role` 的 `TagSelect` 多對多，後台表單上就是勾選角色名稱；使用者與角色之間
-的 junction 是第四張表 `userRole`（資料表 `struo_user_roles`），呼叫端看不到它。
+的 junction 是第四張表 `userRole`（資料表 `struo_user_roles`），呼叫端看不到它。角色持有的系統權限存在第五張表 `roleCapability`，見下面的〈系統權限〉。
 
 `permission` 這一列除了指向哪個角色、哪個集合之外，只有三個授權旗標：`canRead`、`canWrite`、
 `canDelete`，沒有第四個，也沒有另外存一個「可以讀取未發布內容」的旗標。角色本身另外帶一個
@@ -94,16 +94,16 @@ i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
 有效的代碼清單只在程式裡定義一次。`SystemCapabilities.Core` 放核心的，`SystemCapabilityCatalog` 把它
 們與所有已註冊的 `ISystemCapabilitySource` 合併。fork 要加自己的系統權限，就實作這個介面，再用
 `services.AddSingleton<ISystemCapabilitySource, MySource>()` 註冊；來源可以註冊任意多個。代碼若與
-核心代碼或另一個來源的代碼重複、是空白、或超過 255 字元，清單第一次被用到時就會丟出
-`InvalidOperationException`。代碼逐字比對，不做大小寫轉換。
+核心代碼或另一個來源的代碼重複、是空白、或超過 255 字元，啟動就會以
+`InvalidOperationException` 停下。代碼逐字比對，不做大小寫轉換。
 
 角色持有的系統權限存在 `role_capabilities`（資料表 `struo_role_capabilities`，集合 `roleCapability`）：
 一列代表一個角色一個代碼，（`roleId`、`capability`）唯一。它跟 `permission`、`userRole` 一樣同時是
 `Hidden` 與 `AdminOnly`，後台不會直接編輯它。
 
-解析時，讀授權的同一個請求也會讀呼叫端各角色的系統權限列，再做聯集。`public` 角色的列也算進去，所以
-授予 `public` 的系統權限會給到每一個呼叫端，匿名的也不例外。超級管理員不需要任何一列，每個代碼都
-持有。結果跟授權一樣不快取，改完，持有者的下一次請求就生效。
+解析時，讀授權的同一個請求也會讀呼叫端各角色的系統權限列，再做聯集。`public` 角色不能持有系統權限，
+因為每個呼叫端都持有這個角色，匿名的也不例外：`PUT` 會拒絕它，解析時也會忽略它名下已存在的列。
+超級管理員不需要任何一列，每個代碼都持有。結果跟授權一樣不快取，改完，持有者的下一次請求就生效。
 
 管理它們有三個端點，都只有超級管理員能用；其他已登入的呼叫端一律 `403`，就算他自己的角色持有這個
 系統權限也一樣：
@@ -117,10 +117,14 @@ i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
 
 - body 不是字串的 JSON 陣列：`400`；
 - 角色 id 不存在：`404`；
+- 角色是 `public`，不論送什麼、空集合也一樣：`400`，`The public role cannot hold capabilities.`，什麼都不會寫入；
 - 有代碼不在清單內，包含空白的、只有大小寫不同的：`400`，`Unknown capabilities: …`，什麼都不會寫入。
 
 呼叫端要知道自己持有哪些，讀 `GET /api/auth/me`：回應有一個 `capabilities` 陣列，列出它持有的代碼；
 超級管理員拿到完整清單。端點細節見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。
+
+只有 `PUT` 會檢查代碼是否在清單內、並拒絕 `public`。超級管理員仍可經由通用項目 API 寫入
+`roleCapability` 的列，那條路兩項都不檢查；寫進去的未知代碼不會授予任何東西，`public` 名下的列則會被忽略。
 
 刪除角色時，它在 `role_capabilities` 的列跟在 `permissions` 的列一樣會留在原處。解析只讀還存在的角
 色，所以這些列不再對任何人生效。
@@ -248,8 +252,8 @@ pretty:
 
 ## 在後台管理角色
 
-後台不會讓管理者直接編輯 `permission`／`userRole` 這兩個集合本身：`Hidden` 與 `AdminOnly` 是各自獨立
-的旗標，一個集合可以只設其中一個，這兩個集合卻兩個都設，因為它們純粹是 RBAC 機制內部的資料，讓一般的
+後台不會讓管理者直接編輯 `permission`、`userRole`、`roleCapability` 這三個集合本身：`Hidden` 與 `AdminOnly` 是各自獨立
+的旗標，一個集合可以只設其中一個，這三個集合卻兩個都設，因為它們純粹是 RBAC 機制內部的資料，讓一般的
 寫入授權就能碰到它們，正好是 `AdminOnly` 要擋住的那種自我升權。要改一個角色的授權，走的是角色權限矩
 陣，逐集合勾選 `canRead`／`canWrite`／`canDelete`，一次送出就是整組覆蓋。使用者表單上的有效權限預覽
 面板，則即時顯示目前選的角色組合換算出來的結果。

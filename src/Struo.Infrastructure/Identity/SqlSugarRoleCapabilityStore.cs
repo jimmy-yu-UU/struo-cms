@@ -6,6 +6,9 @@ namespace Struo.Infrastructure.Identity;
 
 public sealed class SqlSugarRoleCapabilityStore(ISqlSugarClient db) : IRoleCapabilityStore
 {
+    public Task<bool> IsPublicRoleAsync(Guid roleId, CancellationToken ct = default) =>
+        db.Queryable<Role>().Where(r => r.Id == roleId && r.Name == SqlSugarRolePermissionStore.PublicRoleName).AnyAsync(ct);
+
     public async Task<IReadOnlyList<string>> ListAsync(Guid roleId, CancellationToken ct = default)
     {
         var rows = await db.Queryable<RoleCapability>().Where(c => c.RoleId == roleId).ToListAsync(ct);

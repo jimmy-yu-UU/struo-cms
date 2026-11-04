@@ -56,8 +56,11 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
         var perms = await db.Queryable<Permission>()
             .Where(p => roleIds.Contains(p.RoleId))
             .ToListAsync(ct);
+        // The public role reaches every caller, anonymous ones included, so it never contributes a capability,
+        // whichever path wrote a row for it.
+        var capabilityRoleIds = roles.Where(r => r.Name != PublicRoleName).Select(r => r.Id).ToList();
         var capabilities = await db.Queryable<RoleCapability>()
-            .Where(c => roleIds.Contains(c.RoleId))
+            .Where(c => capabilityRoleIds.Contains(c.RoleId))
             .ToListAsync(ct);
 
         return new RolePermissionData(

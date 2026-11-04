@@ -278,7 +278,8 @@ A database with pending migrations while `MigrateOnStartup` is `false` is anothe
 same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[13:38:25 FTL] StruoCMS host terminated unexpectedly
+…
+[06:21:22 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -600,14 +601,15 @@ this chapter starts both images together with PostgreSQL and Redis:
 ```
 docker network create struo-verify
 docker volume create struo-verify-data
-docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' --env 'Auth__BootstrapAdmin__Password=<your-admin-password>' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
 `Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
-`Applied 202611040000  CreateRoleCapabilities`.
+`Applied 202611040000  CreateRoleCapabilities`. Without the bootstrap password the seed migration
+fails with `Auth__BootstrapAdmin__Password is required`.
 Without it, the `api` container exits with the message shown in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit

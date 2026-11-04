@@ -414,10 +414,10 @@ these three query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelati
 the non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly
 implement.
 
-### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
+### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`, `IRoleCapabilityStore`)
 
-All five live in `src/Struo.Application/Security/`, all five are implemented by a `SqlSugar*` class in
-`src/Struo.Infrastructure/Identity/`, and all five are registered scoped in
+All six live in `src/Struo.Application/Security/`, all six are implemented by a `SqlSugar*` class in
+`src/Struo.Infrastructure/Identity/`, and all six are registered scoped in
 `ServiceCollectionExtensions.AddStruoInfrastructure`. They are deliberately narrow rather than one
 identity god-interface, split by *consumer* rather than by table:
 
@@ -450,11 +450,12 @@ identity god-interface, split by *consumer* rather than by table:
 The valid codes are defined once, in `SystemCapabilityCatalog` (`src/Struo.Application/Security/`),
 a singleton built from `SystemCapabilities.Core` plus every registered `ISystemCapabilitySource`. A fork
 adds its own with `services.AddSingleton<ISystemCapabilitySource, MySource>()`; a duplicate or blank
-code throws on first use of the catalog. `RolesController` validates `PUT api/roles/{id}/capabilities`
-against the catalog and `AuthController.Me` lists the caller's codes. Deleting a role does not delete its
+code stops startup (`StruoCmsStartupChecks` resolves the catalog). `RolesController` validates `PUT api/roles/{id}/capabilities`
+against the catalog and `AuthController.Me` lists the caller's codes. The `public` role cannot hold capabilities: `PUT` refuses it (`IRoleCapabilityStore.IsPublicRoleAsync`) and
+`SqlSugarRolePermissionStore` ignores any row on it. Deleting a role does not delete its
 `permissions` or `role_capabilities` rows; resolution reads only existing roles, so they stop applying.
 
-Session revocation is a separate pair of seams, registered alongside the five above in the same
+Session revocation is a separate pair of seams, registered alongside the six above in the same
 `AddStruoInfrastructure`
 (`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`): `IUserSessionStore`
 → `SqlSugarUserSessionStore` and `IUserSessionRevocationService` → `UserSessionRevocationService`
