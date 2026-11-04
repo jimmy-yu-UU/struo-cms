@@ -191,8 +191,8 @@ API fails to start. The API cannot tell how many replicas it runs in, so it does
 you. The image-transform cache does not follow the files backend; see "Variant caching" in
 [Chapter 15](15-files-and-media.md).
 
-A deployment that stores sensitive files should also decide `Struo:Files:DefaultStatus`; the trade-off
-is in [Chapter 15](15-files-and-media.md).
+A deployment that stores sensitive files should also decide `Struo:Files:DefaultStatus`; the
+trade-off is in [Chapter 15](15-files-and-media.md).
 
 ### S3-compatible storage: `ChecksumMode` and `UseChunkEncoding`
 

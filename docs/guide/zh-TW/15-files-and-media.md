@@ -216,7 +216,7 @@ presigned 網址；它預設關閉，好讓後台的縮圖不需要任何額外�
 保持私有。`local` 後端上這個設定完全沒有作用，presigned 查詢一律回 null，下載照樣落回串
 流。API 的每個回應都帶 `X-Content-Type-Options: nosniff`，是下載端點附件處置之外再加的一層防線。
 `PresignedRedirect` 開著時，瀏覽器跟隨 `302` 之後收到的是儲存服務的回應，標頭由該服務決定；
-presigned 網址只能強制 `Content-Disposition: attachment`。
+presigned 網址只帶一個標頭 `Content-Disposition: attachment`，無法加上 `nosniff`。
 
 ### 把檔案設為私有
 

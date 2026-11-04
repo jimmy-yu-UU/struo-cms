@@ -12,9 +12,9 @@ namespace Struo.Infrastructure.DependencyInjection;
 /// <summary>
 /// Registers the file-storage backend chosen by <c>Struo:Files:Backend</c>.
 ///
-/// Measured: the startup log of a Compose run carries no message about <c>local</c> storage; only
-/// <c>custom</c> is checked at startup. Ruled out: a Production warning for <c>local</c>, since one
-/// replica on <c>local</c> is a supported setup and the warning would fire on every start.
+/// Measured (second-round review's Compose run): nothing is logged about <c>local</c>; startup
+/// validation rejects a bad <c>local</c>/<c>s3</c> setup but warns about neither. Ruled out: a Production
+/// warning, since one replica on <c>local</c> is a supported setup and it would fire on every start.
 /// Unknown: whether operators read the deployment chapter before running several replicas.
 /// If undone: a warning on every correct single-replica start, which operators learn to ignore.
 ///

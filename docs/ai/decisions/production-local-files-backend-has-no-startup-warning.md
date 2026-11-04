@@ -5,7 +5,7 @@
 The host does not log a warning when it starts in Production with `Struo:Files:Backend` set to `local`.
 `StruoCmsStartupChecks.VerifyCustomFileStorage` checks the `custom` backend only. `AddStruoFiles`
 (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) builds
-`LocalFileStorage` whenever the backend is not `s3` or `custom`, the default `local` included.
+`LocalFileStorage` for `local`, the default (unknown values fail options validation at startup).
 
 The requirement that more than one replica uses `s3` is written in
 `docs/guide/en/20-deployment.md`, section "`Struo:Files:Backend`: more than one replica needs `s3`", and
@@ -22,12 +22,12 @@ in the matching section of `docs/guide/zh-TW/20-deployment.md`.
 
 ## Evidence
 
-The review's second-round report (2026-11-02, section 2.4, item OPS-R3) proposed a Production-only
-warning and a unit test for it. The maintainer ruled against it on 2026-11-02 and asked for this
-file instead; the ruling is in the local, uncommitted archive
-`docs/_archive-local/2026-11-02-grok-recheck-rulings.md`, row 1.
+The Grok second-round recheck (2026-11-02, item OPS-R3) proposed a Production-only warning for `local`
+and a unit test for it. The maintainer ruled on 2026-11-02 to keep startup silent for `local` and to
+record the trade-off in this file. The ruling's reasons are the three under Why: a single replica is a
+supported deployment, a warning on every start is noise, and several replicas on `local` fail visibly.
 
-The same report records, from its own `docker compose` run, that the startup log carries no message
+The same recheck records, from its own `docker compose` run, that the startup log carries no message
 about local storage. `VerifyCustomFileStorage` in `src/Struo.Api/Hosting/StruoCmsStartupChecks.cs` has no
 branch for `local`; `Struo:Files:Backend` defaults to `"local"` in `src/Struo.Api/appsettings.json`.
 

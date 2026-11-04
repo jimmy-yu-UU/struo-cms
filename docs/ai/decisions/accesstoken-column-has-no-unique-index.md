@@ -1,8 +1,8 @@
-# `users.accesstoken` has a plain index, not a unique one
+# `User.AccessToken` has a plain index, not a unique one
 
 ## Decision
 
-The `accesstoken` column of the `users` table carries `ix_{table}_accesstoken`, an index that is not
+The `accesstoken` column of the `users` table (`struo_users` with the default prefix) carries `ix_{table}_accesstoken`, an index that is not
 unique (`[SugarIndex(..., false)]` on `User`, and `Create.Index` in
 `src/Struo.Infrastructure/Migrations/Core/202610080000_CreateCoreSchema.cs`). No migration adds a unique
 constraint on it, and the column is nullable.

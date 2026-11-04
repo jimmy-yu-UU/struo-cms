@@ -266,7 +266,7 @@ the download falls back to streaming as usual.
 Every API response carries `X-Content-Type-Options: nosniff`, one more layer of defense on top of the
 download endpoint's own attachment disposition. With `PresignedRedirect` on, the browser follows the
 `302` and receives the storage service's response, whose headers that service decides. The presigned
-URL can only force `Content-Disposition: attachment`.
+URL sets one header, `Content-Disposition: attachment`; it cannot add `nosniff`.
 
 ### Making a file private
 

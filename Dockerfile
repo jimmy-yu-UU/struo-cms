@@ -14,7 +14,8 @@
 # pre-copy would have to enumerate paths, and it cannot preserve an arbitrary fork's project
 # layout the way copying everything does.
 
-# Both stages follow the floating 10.0 tag; docs/ai/decisions/dockerfile-base-image-choices.md has the trade-off.
+# Both stages follow the floating 10.0 tag. The trade-off:
+# docs/ai/decisions/dockerfile-base-image-choices.md
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .

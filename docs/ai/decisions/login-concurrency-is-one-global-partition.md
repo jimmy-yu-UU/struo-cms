@@ -31,7 +31,7 @@ Second-round review (the Grok recheck, 2026-11-02, report item R2-04): with 80 s
 requests from one attacker, 44 returned `429`; during the same period a victim's logins returned `429`
 in 6 of 6 attempts. The review measured this on its own run. In this repository
 `Global_concurrency_cap` (`tests/Struo.Tests/Api/LoginConcurrencyLimitTests.cs`) shows that a second
-login gets `429` while the one permit is taken, to the credentials it sends; no test reproduces the flood.
+login gets `429` while the one permit is taken, even with a different password; no test reproduces the flood.
 
 The configuration comment and defaults are in `src/Struo.Api/appsettings.json` under
 `RateLimiting:LoginConcurrency`. The per-account throttle `RateLimiting:LoginAccount` and the per-IP
