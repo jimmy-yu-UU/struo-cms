@@ -17,7 +17,7 @@ public sealed class CoreSchemaMigrationTests : IDisposable
     {
         var applied = await _h.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        applied.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version);
+        applied.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version, AddLanguageCodeUniqueIndex.Version);
     }
 
     [Fact]
@@ -51,6 +51,6 @@ public sealed class CoreSchemaMigrationTests : IDisposable
 
         var applied = await second.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        applied.Should().HaveCount(2);
+        applied.Should().HaveCount(3);
     }
 }

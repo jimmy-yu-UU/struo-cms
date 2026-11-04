@@ -1,5 +1,49 @@
 # 版本紀錄
 
+## 0.23.0
+
+::: danger 破壞性變更
+- REST 更新的 `version` 有帶、不是 `null`，而且不是整數或整數字串時，回 `400` `INVALID_VERSION` 且什麼都不寫入；
+  只適用於帶 `version` 的集合。GraphQL 在型別層就拒絕這種值。送這種值的用戶端要拿掉它，或改送讀到的
+  整數。像 `"3"` 這樣的整數字串、`null` 與沒帶 `version` 都會被接受。見
+  [第 12 章](12-rest-conventions.md)、[第 13 章](13-rest-endpoints.md)與[第 14 章](14-graphql.md)。
+- 翻譯欄位的值形狀與 sidecar 屬性不符（對字串欄位送數字、物件或陣列，對 `Guid?` 欄位送非 GUID 字串），
+  回 `400` `BAD_USER_INPUT` 並點名欄位與 locale，規則與 root 欄位相同。`null` 會清空該欄位。見[第 7 章](07-i18n.md)。
+- 同一個 `translations` 裡同一個 locale 出現兩次，回 `400` 且什麼都不寫入，兩個鍵完全相同、只差大小寫，
+  或其中一個是 `null` 都一樣；GraphQL 對完全相同的重複同樣拒絕。重複送同一個
+  locale 的用戶端改成只送一次。見[第 7 章](07-i18n.md)與[第 14 章](14-graphql.md)。
+- 清單請求的 `offset` 大於 `Query:MaxOffset`（預設 `100000`）時回 `400` 並點名這個上限，REST、
+  `POST .../query` 與 GraphQL 都一樣；`deep` 裡巢狀清單的 `offset` 受同一個上限限制，`400` 會點名
+  該關聯。要翻更深的用戶端改用 `filter` 縮小範圍，或由維運調高
+  `Query:MaxOffset`。見[第 4 章](04-configuration.md)與[第 10 章](10-query-basics.md)。
+- `migrate:baseline` 只記錄核心 migration 到 `SeedCoreData`（`202610080001`）為止，那是最後一支對得上
+  v0.8.x 所建結構的 migration；範例與 fork 的 migration 仍然全部記錄。比 `SeedCoreData` 新的核心
+  migration，例如 `AddLanguageCodeUniqueIndex`，baseline 之後仍是待套用，下一次 `migrate` 會套用。更早
+  的版本做過 baseline 的資料庫不受影響。見[第 24 章](24-upgrading-from-0-8.md)。
+:::
+
+### 新增
+
+- `Struo:Files:S3:UseChunkEncoding`（預設 `true`）：S3 上傳是否簽成 `aws-chunked` 串流。S3 相容服務拒絕
+  分塊上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。`ChecksumMode` 只管檢查碼。見
+  [第 4 章](04-configuration.md)與[第 15 章](15-files-and-media.md)。
+- 核心 migration `AddLanguageCodeUniqueIndex` 為 `struo_languages` 的 `code` 加上唯一索引。大小寫不同的
+  兩個代碼，資料庫算不算相同跟著欄位的定序走：PostgreSQL 與 SQLite 視為不同，SQL Server、MySQL 與
+  MariaDB 的預設定序視為相同。不分大小寫的重複，在每個後端都由應用層擋下。`migrate` 或
+  `Database:MigrateOnStartup` 會套用這支 migration。資料表裡若有兩列的 `code` 被資料庫視為相同，
+  執行會停在 `202611030000`，前面的 migration 維持已套用。升級前先在管理介面或 REST API 列出
+  `language` 集合，找有沒有這樣的成對資料；在 SQL Server、MySQL 與 MariaDB 上，只差大小寫的代碼也算。
+  請刪除多出來的那一列，不要改名，因為翻譯列是依代碼指到語言的，改名後還是指著舊代碼。留下已啟用或
+  預設的那一列，再重新執行 `migrate`。見[第 7 章](07-i18n.md)與[第 21 章](21-schema-and-upgrades.md)。
+
+### 修正
+
+- `/health/ready` 讀 `struo_languages` 資料表的一筆資料，指令逾時等於
+  `Database:ReadinessTimeoutSeconds`，而非只看連線狀態。資料庫停了或缺 `struo_languages` 資料表時，
+  第一次呼叫就回 503，而不是等連線池裡的連線都失效。見[第 20 章](20-deployment.md)。
+- 檔案的 presigned 網址使用設定的 `Struo:Files:S3:Endpoint` 的 scheme：`http://` 端點產生
+  `http://` 網址，其他端點產生 `https://`。見[第 15 章](15-files-and-media.md)。
+
 ## 0.22.0 — 2026-11-03
 
 ::: danger 破壞性變更

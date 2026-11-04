@@ -4,6 +4,7 @@ using HotChocolate.Resolvers;
 using HotChocolate.Types.Descriptors;
 using HotChocolate.Types.Descriptors.Configurations;
 using Struo.Application.Metadata;
+using Struo.Application.Query;
 using Struo.Domain.Query;
 
 namespace Struo.Api.GraphQl;
@@ -178,7 +179,9 @@ internal static class MutationResolvers
     // object, returning a NEW dict so the input is not mutated (CLAUDE immutability). Runs AFTER the
     // recursive prune (so each entry's `fields` carries only client-sent sub-fields) and BEFORE
     // ToJsonElement. Absent/unexpected `translations` -> pass through unchanged (ItemService then
-    // enforces create-requires-default-locale / rejects a non-object). Duplicate locale -> last wins.
+    // enforces create-requires-default-locale / rejects a non-object). An exactly repeated locale is
+    // rejected with BAD_USER_INPUT; locales differing only in case reach ItemService, which rejects them
+    // the same way.
     // An explicit `fields: null` folds to `"<locale>": null` (delete that locale); an entry that omits
     // `fields` is rejected rather than read as a delete.
     private static IReadOnlyDictionary<string, object?>? FoldTranslations(
@@ -193,6 +196,7 @@ internal static class MutationResolvers
         {
             if (entry is not IReadOnlyDictionary<string, object?> e) continue;
             if (e.GetValueOrDefault(LocaleArgument) is not string locale) continue;
+            if (byLocale.ContainsKey(locale)) throw ItemWriteSideSync.DuplicateLocale(locale);
             byLocale[locale] = e.TryGetValue("fields", out var fields)
                 ? fields
                 : throw new QueryException($"Translation entry for locale '{locale}' needs `fields`; send `fields: null` to delete the locale.");

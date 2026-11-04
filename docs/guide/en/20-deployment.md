@@ -191,14 +191,18 @@ API fails to start. The API cannot tell how many replicas it runs in, so it does
 you. The image-transform cache does not follow the files backend; see "Variant caching" in
 [Chapter 15](15-files-and-media.md).
 
-### S3-compatible storage: `ChecksumMode`
+### S3-compatible storage: `ChecksumMode` and `UseChunkEncoding`
 
-`Struo:Files:S3:ChecksumMode` defaults to `WhenRequired`: the S3 client adds a checksum to a request,
-and checks one on a response, only where the operation demands it. That works with the widest range
-of S3-compatible services. Some of them reject the checksums a client sends by default, and uploads
-then fail. If your service documents support for them, `WhenSupported` turns them on for every
-operation that can carry one. Any other value stops startup when `Struo:Files:Backend` is `s3`.
-Chapter 15 covers the symptoms.
+`Struo:Files:S3:ChecksumMode` governs checksums and defaults to `WhenRequired`: the S3 client adds a
+checksum to a request, and checks one on a response, only where the operation demands it. Some services
+reject the checksums a client sends by default, and uploads then fail. If your service documents
+support for them, `WhenSupported` turns them on for every operation that can carry one. Any other value
+stops startup when `Struo:Files:Backend` is `s3`.
+
+`Struo:Files:S3:UseChunkEncoding` governs the streaming signature and defaults to `true`: an upload is
+signed as an `aws-chunked` stream. Set `false` for a service that does not accept chunked uploads, and
+the upload is signed with the SHA-256 of the whole payload. The two keys are independent. Chapter 15
+covers the symptoms.
 
 ### Set `AllowedHosts`
 
@@ -271,8 +275,8 @@ A database with pending migrations while `MigrateOnStartup` is `false` is anothe
 same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[10:35:35 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[01:45:34 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -598,9 +602,9 @@ docker run --detach --name api --network struo-verify --volume struo-verify-data
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-The third command ends by printing `Applied 202610080000  CreateCoreSchema` and
-`Applied 202610080001  SeedCoreData`. Without it, the `api` container exits with the message shown
-in "What fails fast at startup" above.
+The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
+`Applied 202610080001  SeedCoreData` and `Applied 202611030000  AddLanguageCodeUniqueIndex`.
+Without it, the `api` container exits with the message shown in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit
 on this same user-defined network, and the API container is named `api`. If the API container
@@ -615,13 +619,14 @@ still accepting requests. A liveness probe should restart the container or pod w
 responding.
 
 `/health/ready` runs two checks tagged `ready`: `DbReadinessCheck` makes an actual round trip to
-the database, and `CacheReadinessCheck` writes to and reads back from the configured
-`IDistributedCache` (Redis or the in-process cache); a readiness probe should wait until both are
-reachable before routing traffic in.
+the database by reading one row of the `struo_languages` table, and `CacheReadinessCheck` writes to
+and reads back from the configured `IDistributedCache` (Redis or the in-process cache); a readiness
+probe should wait until both are reachable before routing traffic in.
 
 The database check does not wait for the driver's connect timeout. When the database has not
 answered within `Database:ReadinessTimeoutSeconds` (default `3`, range 1 to 60), `/health/ready`
-answers 503.
+answers 503. The query's command timeout is the same value, and a database that is down or has no
+`struo_languages` table answers 503 on the first call.
 
 How to hit both routes is already covered in [Chapter 3: Getting Started](03-getting-started.md);
 below is the full response to an anonymous request:

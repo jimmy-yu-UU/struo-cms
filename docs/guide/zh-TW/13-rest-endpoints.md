@@ -40,6 +40,9 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 | `GET api/items/{collection}/{id}/revisions/{n}` | 讀 | 讀一筆版本快照 |
 | `POST api/items/{collection}/{id}/revisions/{n}/revert` | 寫 | 還原到指定版本 |
 
+帶 `version` 的集合，更新 body 的 `version` 必須是整數、整數字串、`null`，或不帶；其他任何值都是
+`400` `INVALID_VERSION`（[第 12 章](12-rest-conventions.md)）。
+
 要求 `deleted=` 非預設模式時，單筆讀取跟清單一樣需要刪除授權，不只是讀取授權；未知集合一律 404。
 寫入或刪除 `permission`、`role`、`user`、`userRole` 這四個內建集合，以及任何被 fork 標成
 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。

@@ -106,6 +106,15 @@ public sealed class OptionsValidationTests
         string.Join(" ", ove!.Failures).Should().Contain("MaxLimit");
     }
 
+    [SqliteOnlyFact("options validation; the SQLite temp file only satisfies the required connection string")]
+    public async Task Query_max_offset_zero_fails_startup()
+    {
+        var error = await StartupErrorAsync(s => s["Query:MaxOffset"] = "0");
+        var ove = ExceptionChainSearch.FindInner<OptionsValidationException>(error);
+        ove.Should().NotBeNull("Query:MaxOffset below the [Range] floor must fail fast at startup");
+        string.Join(" ", ove!.Failures).Should().Contain("MaxOffset");
+    }
+
     // A valid enabled provider; `mutate` breaks one key. Providers are keyed by id under Oidc:Providers.
     private static void ValidProvider(Dictionary<string, string?> s, string id = "acme")
     {

@@ -267,7 +267,7 @@ might reach one that does.
 
 `sort=` is a comma list; each field can take a `-` prefix for descending order, and fields apply
 in the order you list them. A sort holds at most `Query:MaxSortFields` fields (default 5); a longer
-list is rejected with `Too many sort fields (max 5).`. `offset` has no cap.
+list is rejected with `Too many sort fields (max 5).`.
 
 A sort key can be a dotted path, but every segment must be many-to-one; hitting a to-many segment
 anywhere in the path is rejected:
@@ -305,7 +305,12 @@ the same one filtering uses — see the last section of this chapter for the det
 
 Pagination has only two parameters, `limit`/`offset` — there is no `page`. A missing or
 non-positive `limit` is clamped to `Query:DefaultLimit` (default 25); anything over the cap is
-clamped to `Query:MaxLimit` (default 100). `offset` floors at 0.
+clamped to `Query:MaxLimit` (default 100). `offset` floors at 0 and is capped at `Query:MaxOffset`
+(default 100000).
+
+A larger `offset` is rejected with a 400, in REST, `POST .../query` and GraphQL alike: `Offset 100001
+exceeds the maximum of 100000; narrow the result set with filters instead of paging deeper.`. A
+nested list's `offset` inside `deep` has the same cap.
 
 A non-numeric value such as `limit=abc` isn't an error — it's treated exactly as if `limit` were
 missing, and clamped to the default the same way: `GET /api/items/article?limit=abc` responds
@@ -315,7 +320,7 @@ rather than the request being rejected.
 Every list response carries a `meta` object holding the effective, clamped `limit`/`offset`, and
 `total` — the row count after the same `deleted=` mode is applied and before pagination, not the
 whole table's row count. There is no cursor or keyset form of pagination, and no `Link` header —
-deep pagination is plain `offset`.
+paging is plain `offset`, up to `Query:MaxOffset`.
 
 ## `deleted=`
 

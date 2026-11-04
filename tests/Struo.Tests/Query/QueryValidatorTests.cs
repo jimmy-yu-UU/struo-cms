@@ -156,6 +156,18 @@ public class QueryValidatorTests
     }
 
     [Fact]
+    public void Configured_MaxOffset_is_the_inclusive_offset_cap()
+    {
+        var opts = new StruoQueryOptions { MaxOffset = 10 };
+
+        var atCap = QueryValidator.Validate(new QueryModel(null, null, [], 0, 10, null), Meta(), opts, Graph, Md, Perms);
+        atCap.Offset.Should().Be(10);
+
+        var over = () => QueryValidator.Validate(new QueryModel(null, null, [], 0, 11, null), Meta(), opts, Graph, Md, Perms);
+        over.Should().Throw<QueryException>().WithMessage("*10*filters*");
+    }
+
+    [Fact]
     public void Too_many_conditions_throws()
     {
         var many = Enumerable.Range(0, Opts.MaxFilterConditions + 1)

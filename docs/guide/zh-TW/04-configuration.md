@@ -166,14 +166,19 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:S3:ForcePathStyle` | 布林 | `true` |
 | `Struo:Files:S3:PresignTtlSeconds` | 整數（秒） | `300` |
 | `Struo:Files:S3:ChecksumMode` | `WhenRequired` 或 `WhenSupported` | `"WhenRequired"` |
+| `Struo:Files:S3:UseChunkEncoding` | 布林 | `true` |
 
 `Backend="s3"` 時，`Endpoint`、`Bucket`、`AccessKey`、`SecretKey` 這四個鍵在啟動時一定要有
 值，預設值是待替換的 `REPLACE_ME`；`Region`、`ForcePathStyle`、`PresignTtlSeconds` 設錯也不
 會擋下啟動。`PresignTtlSeconds` 也決定 `custom` 儲存所回傳的預簽章網址的有效時間。
 
 `ChecksumMode` 決定 S3 用戶端何時在請求加上檢查碼、何時檢查回應的檢查碼。`WhenRequired` 只在操作
-要求時才這麼做，能搭配的 S3 相容服務最多。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。
-`Backend="s3"` 時，其他值會讓啟動失敗。
+要求時才這麼做。`WhenSupported` 則對每個支援檢查碼的操作都這麼做。`Backend="s3"` 時，其他值會讓啟動
+失敗。
+
+`UseChunkEncoding` 決定上傳的簽章方式，跟 `ChecksumMode` 無關。`true` 把上傳簽成 `aws-chunked` 串流，
+每個分塊各帶一個簽章。`false` 用整個內容的 SHA-256 簽章，不送分塊格式。服務不接受分塊上傳時設
+`false`。
 
 ### ImageTransform
 
@@ -256,6 +261,7 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 | 鍵 | 型別 | 預設值 |
 |---|---|---|
 | `Query:MaxLimit` | 整數 | `100` |
+| `Query:MaxOffset` | 整數 | `100000` |
 | `Query:DefaultLimit` | 整數 | `25` |
 | `Query:MaxFilterConditions` | 整數 | `50` |
 | `Query:MaxRelationDepth` | 整數 | `6` |
@@ -267,7 +273,7 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 | `Query:MaxAggregates` | 整數 | `10` |
 | `Query:MaxSearchCandidates` | 整數 | `1000` |
 
-十一個鍵全部都有 `[Range(1, int.MaxValue)]` 驗證，並用 `ValidateOnStart` 綁定，改成 0 或負數
+十二個鍵全部都有 `[Range(1, int.MaxValue)]` 驗證，並用 `ValidateOnStart` 綁定，改成 0 或負數
 會直接讓啟動失敗；宣告以外的鍵名（例如打錯字）則會被靜靜忽略，不會報錯。
 
 `DefaultLimit` 不可大於 `MaxLimit`。`DefaultLimit` 較大時啟動會失敗，錯誤訊息同時點名這兩個鍵。
@@ -280,7 +286,11 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 
 `MaxExpandRows` 限制 `deep` 展開一頁資料時，單次關聯讀取最多讀幾列。讀到超過 `MaxExpandRows` 列就回
 400 並點名該關聯，不會截斷結果。唯一的例外是只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`：
-視窗由資料庫套用，所以不受這個上限限制。`offset` 沒有上限。
+視窗由資料庫套用，所以不受這個上限限制。
+
+`MaxOffset` 限制清單請求的 `offset`，頂層或巢狀在 `deep` 裡的都算，REST、`POST .../query` 與
+GraphQL 都一樣。`offset` 等於 `MaxOffset` 時照常回傳；更大的值回 400，訊息點名這個上限，並建議
+用篩選條件縮小範圍。要翻更深就調高這個鍵。
 
 `MaxRelationDepth` 算的是路徑裡的關聯跳轉次數，最後一個欄位本身跟 `_junction` 虛擬區段都不算
 在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 回傳了不該回傳的

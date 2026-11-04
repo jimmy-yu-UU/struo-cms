@@ -10,6 +10,9 @@ public static class ErrorCodes
     // "changed by someone else" recovery keys on this alone. Exception-driven only — the status→code
     // reverse map (ForStatus) deliberately keeps 409 → Conflict for inline ApiResults.Fail callers.
     public const string VersionConflict = "VERSION_CONFLICT";
+    // A `version` on an update body that is present, not null and not an integer. Exception-driven
+    // only (InvalidVersionException) — ForStatus keeps 400 → BadUserInput.
+    public const string InvalidVersion = "INVALID_VERSION";
     public const string BadUserInput = "BAD_USER_INPUT";
     public const string Validation = "VALIDATION";
     public const string Internal = "INTERNAL_SERVER_ERROR";

@@ -33,6 +33,9 @@ public static class QueryValidator
 
         var limit = q.Limit <= 0 ? opts.DefaultLimit : Math.Min(q.Limit, opts.MaxLimit);
         var offset = Math.Max(0, q.Offset);
+        if (offset > opts.MaxOffset)
+            throw new QueryException(
+                $"Offset {offset} exceeds the maximum of {opts.MaxOffset}; narrow the result set with filters instead of paging deeper.");
 
         // Defence in depth: no parser sets QueryModel.SearchCandidates today, but a future
         // JSON-bound request surface must not be able to smuggle one in — SearchCandidateResolver

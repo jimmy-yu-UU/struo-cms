@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.23.0
+
+::: danger Breaking
+- A REST update whose `version` is present, not `null`, and not an integer or an integer string
+  returns `400` `INVALID_VERSION` and writes nothing; it applies to a collection that carries a `version`. GraphQL
+  rejects such a value at the type layer. A client that sends one drops it or sends the integer it
+  read. An integer string such as `"3"`, `null` and an absent `version` are accepted. See
+  [Chapter 12](12-rest-conventions.md), [Chapter 13](13-rest-endpoints.md) and
+  [Chapter 14](14-graphql.md).
+- A translation field value of the wrong shape for its sidecar property (a number, object or array
+  sent to a string field, a non-GUID string to a `Guid?` field) returns `400` `BAD_USER_INPUT` naming
+  the field and the locale, by the same rules as a root field. `null` clears the field. See
+  [Chapter 7](07-i18n.md).
+- A locale named twice in one `translations` payload returns `400` and writes nothing, whether the
+  keys are identical, differ only in case, or one is `null`; GraphQL rejects an identical repeat the
+  same way. A client that repeats a locale sends it once. See
+  [Chapter 7](07-i18n.md) and [Chapter 14](14-graphql.md).
+- A list request whose `offset` is above `Query:MaxOffset` (default `100000`) returns `400` naming the
+  cap, in REST, `POST .../query` and GraphQL alike; a nested list's `offset` inside `deep` has the
+  same cap and the `400` names the relation. A client that pages deeper narrows the result set
+  with `filter`, or the operator raises `Query:MaxOffset`. See [Chapter 4](04-configuration.md) and
+  [Chapter 10](10-query-basics.md).
+- `migrate:baseline` records the core migrations only up to and including `SeedCoreData`
+  (`202610080001`), the last one that matches the schema v0.8.x built; the sample's and a fork's
+  migrations are all recorded as before. A core migration newer than `SeedCoreData`, such as
+  `AddLanguageCodeUniqueIndex`, stays pending after the baseline and the next `migrate` applies it. A
+  database baselined by an earlier release is unaffected. See [Chapter 24](24-upgrading-from-0-8.md).
+:::
+
+### Added
+
+- `Struo:Files:S3:UseChunkEncoding` (default `true`): whether an S3 upload is signed as an `aws-chunked`
+  stream. Set `false` for an S3-compatible service that rejects chunked uploads; the upload is then
+  signed with the SHA-256 of the whole payload. `ChecksumMode` governs checksums only. See
+  [Chapter 4](04-configuration.md) and [Chapter 15](15-files-and-media.md).
+- The core migration `AddLanguageCodeUniqueIndex` adds a unique index on `code` in `struo_languages`.
+  Whether the database treats codes that differ only in case as equal follows the column's collation:
+  PostgreSQL and SQLite compare them as different, while the default collations of SQL Server, MySQL
+  and MariaDB compare them as equal. The application rejects a case-insensitive duplicate on every
+  backend. `migrate` or `Database:MigrateOnStartup` applies the migration. If the table holds two rows
+  whose `code` the database treats as equal, the run stops at `202611030000` and the earlier
+  migrations stay applied. Before upgrading, list the `language` collection in the admin UI or the
+  REST API and look for such pairs; on SQL Server, MySQL and MariaDB that includes codes that differ
+  only in case. Delete the extra row instead of renaming it, because translation rows refer to the
+  code and keep pointing at the old one. Keep the row that is enabled or default, then run `migrate`
+  again. See [Chapter 7](07-i18n.md) and [Chapter 21](21-schema-and-upgrades.md).
+
+### Fixed
+
+- `/health/ready` reads one row of the `struo_languages` table, with a command timeout equal to
+  `Database:ReadinessTimeoutSeconds`, instead of checking the connection state. A stopped database
+  or a missing `struo_languages` table answers 503 on the first call, not after the pooled
+  connections are gone. See [Chapter 20](20-deployment.md).
+- A presigned file URL uses the scheme of the configured `Struo:Files:S3:Endpoint`: an `http://`
+  endpoint yields `http://` URLs, any other endpoint `https://`. See [Chapter 15](15-files-and-media.md).
+
 ## 0.22.0 — 2026-11-03
 
 ::: danger Breaking

@@ -174,7 +174,8 @@ HTTP_STATUS:200
 
 巢狀的 to-many 關聯欄位帶自己的四個引數：`filter`、`sort: [String!]`、`limit: Int`、
 `offset: Int`，跟 root 清單欄位是分開算的一套，靠走訪客戶端自己的 selection 樹解析成跟 REST
-`deep=` 一樣的巢狀展開規格。多對一關聯則相反：一律是不帶任何引數的物件欄位，因為最多只解析到一列，
+`deep=` 一樣的巢狀展開規格。巢狀 `offset` 超過 `Query:MaxOffset`（預設 100000）會是點名該關聯與上限的
+`BAD_USER_INPUT` 錯誤。多對一關聯則相反：一律是不帶任何引數的物件欄位，因為最多只解析到一列，
 上一節看到的 `tags(sort: ["name"], limit: 1)` 就是這組引數的實際用法。
 
 同一層選兩次同一個關聯（`tags` 與 `tagsLinks`，或一個別名重複），巢狀展開會合併，但只有第一次出現
@@ -198,7 +199,9 @@ HTTP_STATUS:200
 
 `locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都
 沒有。建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份
-再加一個 `version: Long`。
+再加一個 `version: Long`。`version` 為 `null` 或沒帶時不做比對。GraphQL 的 `Long` 型別會在 resolver
+執行前拒絕不是整數的值，例如 `1.5` 或 `"abc"`，所以這種拒絕是 GraphQL 型別錯誤而不是
+`INVALID_VERSION`，什麼都不會寫入。
 
 create 跟 update 把型別化的輸入轉回項目服務原本就吃的那份 JSON body，寫完之後重新讀一次那一列，讓
 回傳的節點形狀跟一個查詢會產生的一模一樣；重讀被 RBAC 擋下時，退回原始的寫入結果，不會讓一次成功的
@@ -278,8 +281,9 @@ HTTP_STATUS:200
 有翻譯 sidecar 的集合，建立跟更新輸入都多一個 `translations: [<X>TranslationInput!]`，每筆是
 `{ locale: String!, fields: <X>TranslationFieldsInput }`——讀取端那份陣列形狀，原樣鏡射回寫入端。
 resolver 把這份陣列轉回寫入路徑原本吃的、以 locale 當鍵的物件，轉換之前已經套用過「只留真的有送的
-欄位」這層修剪；同一個 locale 出現兩次，後面那筆贏。可翻譯的自有欄位不在建立與更新輸入裡出現，只能
-透過這個型別化的 `translations` 輸入去改；建立時一樣要求有一筆預設 locale 的翻譯。
+欄位」這層修剪；同一個 locale 出現兩次，mutation 以 `BAD_USER_INPUT` 失敗，與 REST 一致。可翻譯的自有
+欄位不在建立與更新輸入裡出現，只能透過這個型別化的 `translations` 輸入去改；建立時一樣要求有一筆預設
+locale 的翻譯。
 
 更新時，已存的那一列是逐欄位合併：輸入有送的欄位會更新，沒送的保留原值，明確送 `null` 則清空。缺必填
 翻譯時，錯誤的 `extensions.code` 是 `BAD_USER_INPUT`，並帶 `extensions.details`，是

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Health;
+using Struo.Infrastructure.Localization;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Fixtures;
 using Struo.Tests.Support;
@@ -21,12 +22,28 @@ public class DbReadinessCheckTests
         var client = SqlSugarClientFactory.Create(
             db.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        client.CodeFirst.InitTables<FxArticle>();
+        client.CodeFirst.InitTables<Language>();
 
         var check = new DbReadinessCheck(client, Options.Create(new DatabaseOptions()));
         var result = await check.CheckHealthAsync(new HealthCheckContext());
 
         result.Status.Should().Be(HealthStatus.Healthy);
+    }
+
+    [Fact]
+    public async Task Reports_unhealthy_when_the_languages_table_cannot_be_read()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(
+            db.Options(),
+            new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<FxArticle>();
+
+        var check = new DbReadinessCheck(client, Options.Create(new DatabaseOptions()));
+        var result = await check.CheckHealthAsync(new HealthCheckContext());
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Exception.Should().NotBeNull("the probe reads a table, so a missing table surfaces as a query failure");
     }
 
     [Fact]

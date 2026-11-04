@@ -221,6 +221,8 @@ itself) and `junction` (the link's own payload).
 A nested to-many relation field carries its own four arguments — `filter`, `sort: [String!]`,
 `limit: Int`, `offset: Int` — computed separately from the root list field's own set, resolved by
 walking the client's own selection tree into the same nested-expansion spec REST's `deep=` uses.
+A nested `offset` above `Query:MaxOffset` (default 100000) is a `BAD_USER_INPUT` error naming the
+relation and the cap.
 
 A many-to-one relation goes the other way: it's always an argument-free object field, since at most
 one row is ever resolved; the `tags(sort: ["name"], limit: 1)` seen earlier is this argument set in
@@ -250,7 +252,9 @@ REST write. Queries stay open to anonymous callers within their read grants.
 The `locale` argument only appears on the single-item query, the list query, `create`, and
 `update` — `delete`/`restore`/`revert` all have none. A create input carries writable own fields,
 many-to-one foreign keys, many-to-many id arrays, and a typed translation list; an update input is
-the same, plus a `version: Long`.
+the same, plus a `version: Long`. A `null` or omitted `version` skips the comparison. GraphQL's
+`Long` type rejects a value that is not an integer, such as `1.5` or `"abc"`, before the resolver
+runs, so that rejection is a GraphQL type error rather than `INVALID_VERSION`; nothing is written.
 
 `create` and `update` convert the typed input back into the JSON body the item service already
 consumes, then re-read that row after writing, so the returned node's shape matches what a query
@@ -343,7 +347,7 @@ back onto the write side exactly.
 
 The resolver converts this array back into the locale-keyed object the write path already consumes,
 applying the same "only the keys actually sent" pruning before that conversion; when the same locale
-appears twice, the later entry wins.
+appears twice, the mutation fails with `BAD_USER_INPUT`, as REST does.
 
 On update the stored row is merged field by field: a field the input sends is updated, one it leaves
 out keeps its value, and an explicit `null` clears it. A required translation that's missing comes

@@ -17,9 +17,10 @@
 { "success": false, "error": { "code": "…", "message": "…", "details": … } }
 ```
 
-`details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯所產生的 `BAD_USER_INPUT` 上才會出現，
-其餘代碼一律不帶這個鍵。`meta` 也一樣，只在清單這種分頁結果上才會出現，單筆讀取、建立與更新都
-完全省略這個鍵，而不是送一個 `null`。有 `meta` 時，除了分頁資訊，還可能多兩個鍵：`facets` 與 `aggregate`，一樣是請求要求了才出現，兩者互不影響。
+`details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯、翻譯值無效、翻譯 locale 重複所產生的
+`BAD_USER_INPUT` 上才會出現，其餘代碼一律不帶這個鍵。`meta` 也一樣，只在清單這種分頁結果上才會出現，
+單筆讀取、建立與更新都完全省略這個鍵，而不是送一個 `null`。有 `meta` 時，除了分頁資訊，還可能多兩個鍵：
+`facets` 與 `aggregate`，一樣是請求要求了才出現，兩者互不影響。
 
 三種來源都會走到同一種信封：一般的控制器回應、框架自己攔下來的例外，以及少數在驗證或授權階段就提早
 結束的請求（例如少了 CSRF 標頭）。不管哪一種送出回應，形狀都完全一致，呼叫端不需要分辨來源。
@@ -82,6 +83,7 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `CONFLICT` | 409 | 版本不符以外的衝突（見下方說明） |
 | `VERSION_CONFLICT` | 409 | 樂觀並行的 `version` 對不上 |
 | `BAD_USER_INPUT` | 400 | 查詢參數或寫入內容有誤 |
+| `INVALID_VERSION` | 400 | 更新 body 的 `version` 不是整數 |
 | `VALIDATION` | 400 | 模型繫結或資料註記驗證失敗 |
 | `INTERNAL_SERVER_ERROR` | 500 | 未歸類的例外，訊息一律遮罩 |
 | `TOO_MANY_REQUESTS` | 429 | 登入或改密碼觸發流量限制 |
@@ -157,7 +159,7 @@ HTTP_STATUS:400
 少了 `email` 這個必填欄位，在動作執行之前就被擋下，`details` 裡剛好一筆，指名 `Email`。
 
 應用層自己判斷出來的錯誤是另一回事，是 `BAD_USER_INPUT`，沒有 `details` 這個鍵，訊息本身就是
-全部資訊。唯一的例外是缺必填翻譯，見後面：
+全部資訊。例外是三種翻譯錯誤（缺必填翻譯、翻譯值無效、locale 重複），其中第一種見後面：
 
 ```text
 $ POST /api/users
@@ -170,14 +172,14 @@ HTTP_STATUS:400
 同一個端點，這次 `email` 有給，密碼太短是應用層的規則，所以換成 `BAD_USER_INPUT`，而不是
 `VALIDATION`。
 
-缺必填的可翻譯欄位就是那個例外。它是 `400 BAD_USER_INPUT`，`details` 每個 locale 的每個缺漏欄位
+缺必填的可翻譯欄位是其中一種。它是 `400 BAD_USER_INPUT`，`details` 每個 locale 的每個缺漏欄位
 各一筆，每筆多一個 `locale` 鍵：
 
 ```json
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Required translation field 'title' is missing for locale 'zh-TW'.","details":[{"field":"title","message":"Required translation field 'title' is missing for locale 'zh-TW'.","locale":"zh-TW"}]}}
 ```
 
-GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這類項目上。規則本身見
+GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這三種翻譯錯誤的項目上。規則本身與另外兩種見
 [第 7 章](07-i18n.md#預設語言與寫入規則)。
 
 一筆更新可以不重送某個必填欄位，維持原值；但一旦明確送了 `null` 或空白，一樣會擋下：合併之後的整
@@ -275,7 +277,15 @@ HTTP_STATUS:409
 
 呼叫端手上的 `version` 已經落後於目前這一列真正的值，寫入被拒；這句訊息就是用戶端規劃「重新讀一次
 再試」這條路的依據。body 完全不帶 `version` 也可以，這時就退回原本讀到的值，等於放棄這層保護，但
-仍然相容舊的呼叫端。還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白
+仍然相容舊的呼叫端。JSON 的 `null` 視同沒帶。
+
+`version` 有帶而且不是 `null` 時，必須是 64 位元整數範圍內、以整數字面值寫成（不含小數或指數）的
+JSON 數字，或是整數字串，例如 `"3"`（數字加上可選的正負號，前後不能有空白）。其他的值都會讓整個
+更新以 `400` `INVALID_VERSION` 失敗，什麼都不會寫入：`1.5`、`3.0`、`1e3`、`"abc"`、`" 3"`、
+`true`、物件、陣列，或超出 64 位元的數字。沒有 `version` 欄的集合會忽略這個鍵，建立的
+body 也從不讀它。
+
+還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白
 衝突（見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)）。`version` 本身也不能透過建立或更新
 的 body 直接指定——它只會被當成並行控制的比對值，從不被寫進那一欄。
 

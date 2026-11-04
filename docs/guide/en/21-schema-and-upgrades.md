@@ -14,7 +14,8 @@ Migrations live in three places:
 
 - **Core**: `src/Struo.Infrastructure/Migrations/Core/`. `CreateCoreSchema` creates the framework
   tables; `SeedCoreData` seeds the languages, the `admin` and `public` roles, the bootstrap admin,
-  and the public read grants listed in `Rbac:PublicReadCollections`.
+  and the public read grants listed in `Rbac:PublicReadCollections`. `AddLanguageCodeUniqueIndex` adds
+  the unique index on the language `code`.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in the API host project itself, or in a content project that is listed in
@@ -34,7 +35,7 @@ Each command is the first argument to `Struo.Api`:
 | `migrate:status` | Lists the state of every migration |
 | `migrate:preview` | Prints the SQL of pending migrations, runs nothing |
 | `migrate:check` | Compares the database with the entities, read-only |
-| `migrate:baseline` | Records every migration as applied, runs nothing |
+| `migrate:baseline` | Records the v0.8 schema's migrations as applied |
 | `make:migration` | Writes a new migration file |
 
 A seventh command, `files:sweep`, is not about the schema: it removes orphaned blobs from file
@@ -58,10 +59,11 @@ line per migration it applied; with nothing pending it prints only `Nothing to m
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-12 09:57:49Z  CreateCoreSchema
-202610080001   Applied   2026-10-12 09:57:49Z  SeedCoreData
-202610080100   Applied   2026-10-12 09:57:49Z  CreateBlogSchema
-3 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-04 00:39:43Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:43Z  SeedCoreData
+202610080100   Applied   2026-11-04 00:39:43Z  CreateBlogSchema
+202611030000   Applied   2026-11-04 00:39:43Z  AddLanguageCodeUniqueIndex
+4 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` means not applied yet. `Orphaned` means the version table has a record but no scanned
@@ -89,8 +91,8 @@ defaults to `false` in every environment, and then the API refuses to start whil
 pending, exiting with code `1`:
 
 ```
-[17:57:36 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[08:39:42 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -222,12 +224,14 @@ so: `migrate` and a startup that applies migrations log a warning naming the ver
 one, `migrate:status` marks the row `(out of order)`, and a startup with `MigrateOnStartup` off logs the same
 warning before it refuses to start on the pending migration. Nothing is refused for being out of order.
 
+For example, a database migrated with the sample off and then opened with the sample on:
+
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-10-27 05:09:03Z  CreateCoreSchema
-202610080001   Applied   2026-10-27 05:09:03Z  SeedCoreData
-202611010000   Pending   -                     AddInvoiceTable  (out of order)
-202611020000   Applied   2026-10-27 05:09:03Z  AddOrderTable
+202610080000   Applied   2026-11-04 00:39:53Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 00:39:53Z  SeedCoreData
+202610080100   Pending   -                     CreateBlogSchema  (out of order)
+202611030000   Applied   2026-11-04 00:39:53Z  AddLanguageCodeUniqueIndex
 3 applied, 1 pending, 0 orphaned
 ```
 

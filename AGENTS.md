@@ -123,8 +123,8 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no
   audit stamping, no SQL Server cancellation translation, a shared soft-delete filter provider), so use it
-  only for AOP-free work such as a connection ping. A fork's `ICurrentUserAccessor` must not be scoped
-  and must read the user on each call; startup fails otherwise.
+  only for AOP-free work such as `DbReadinessCheck`'s one-row read. A fork's `ICurrentUserAccessor`
+  must not be scoped and must read the user on each call; startup fails otherwise.
   See `docs/ai/decisions/sqlsugarscope-per-request-cost.md`.
 - **Schema changes are FluentMigrator migrations** (`src/Struo.Infrastructure/Migrations/`).
   `MigrationHost` runs them and records them in `{TablePrefix}schema_versions`. The commands are
@@ -177,8 +177,9 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   `false` in every environment, so a deployment runs `migrate` as a step of its own. In Development the
   gate also runs `SchemaChecker` and fails startup when the schema differs from the entity model.
   The seed runs only as part of `migrate` or `MigrateOnStartup`.
-  `migrate:baseline` joins a database built by v0.8.x CodeFirst: it records every migration as applied
-  without running it, and refuses when migration history already exists or the core tables are missing.
+  `migrate:baseline` joins a database built by v0.8.x CodeFirst: it records the migrations that
+  match the v0.8 schema (core up to `SeedCoreData`, plus every non-core one) as applied without
+  running them, and refuses when migration history already exists or the core tables are missing.
   Tests: app-level hosts (`ApiFactory`) run the migrations with `MigrateOnStartup=true`; unit harnesses
   build tables with `db.CodeFirst.InitTables(...)`. That is safe only because `CoreSchemaParityTests`
   (SQLite) and `CoreMigrationsLiveTests` (PostgreSQL, SQL Server, MySQL, MariaDB) prove CodeFirst and

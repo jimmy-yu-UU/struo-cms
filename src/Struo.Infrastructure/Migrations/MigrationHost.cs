@@ -47,9 +47,11 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         return GetStatus().Where(m => m.State == MigrationState.Applied && pendingBefore.Contains(m.Version)).ToList();
     }
 
-    /// <summary>Records every known migration as applied without executing it, so a database built by an
-    /// earlier schema source joins the migration history. Refuses a database that already has recorded
-    /// migrations or lacks the core tables; in both cases nothing is written.</summary>
+    /// <summary>Records the migrations that describe the schema of a database built by an earlier schema
+    /// source as applied, without executing them, so that database joins the migration history. Core
+    /// migrations above <see cref="Core.SeedCoreData.Version"/> stay pending; every other migration is
+    /// recorded. Refuses a database that already has recorded migrations or lacks the core tables; in
+    /// both cases nothing is written.</summary>
     public async Task<IReadOnlyList<MigrationInfo>> BaselineAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -79,7 +81,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         processor.BeginTransaction();
         try
         {
-            foreach (var (version, migration) in known.OrderBy(kv => kv.Key))
+            foreach (var (version, migration) in known.Where(kv => !IsAfterBaselineSchema(kv)).OrderBy(kv => kv.Key))
                 loader.UpdateVersionInfo(version, migration.Description ?? "");
             processor.CommitTransaction();
         }
@@ -88,6 +90,20 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             TryRollback(processor, logger);
             throw;
         }
+    }
+
+    // The pre-migration schema matches the core migrations up to SeedCoreData; later core migrations change it.
+    private static bool IsAfterBaselineSchema(KeyValuePair<long, IMigrationInfo> known) =>
+        known.Key > Core.SeedCoreData.Version && IsCoreMigration(known.Value.Migration.GetType());
+
+    // A core migration lives in the core assembly, in the core namespace or one nested in it.
+    internal static bool IsCoreMigration(Type type) =>
+        type.Assembly == typeof(Core.SeedCoreData).Assembly && IsCoreNamespace(type.Namespace);
+
+    internal static bool IsCoreNamespace(string? ns)
+    {
+        var core = typeof(Core.SeedCoreData).Namespace!;
+        return ns is not null && (ns == core || ns.StartsWith(core + ".", StringComparison.Ordinal));
     }
 
     // A failed rollback must not mask the failure that caused it.

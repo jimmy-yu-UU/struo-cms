@@ -1,5 +1,7 @@
 // src/Struo.Application/Query/Write/JsonBodyUtil.cs
+using System.Globalization;
 using System.Text.Json;
+using Struo.Domain.Query;
 
 namespace Struo.Application.Query;
 
@@ -93,17 +95,20 @@ internal static class JsonBodyUtil
         _ => e.GetRawText()
     };
 
-    // Reads the optimistic-concurrency token the client echoed back, if any. Accepts a JSON number or
-    // a numeric string; returns null when absent or unparseable (treated as "no version supplied").
-    internal static long? TryReadVersion(JsonElement body)
+    // Reads the optimistic-concurrency token the client echoed back. Accepts a JSON integer or a
+    // numeric string; returns null when the property is absent or JSON null ("no version supplied")
+    // and throws InvalidVersionException for any other value.
+    internal static long? ReadVersion(JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) return null;
         if (!body.TryGetProperty("version", out var v)) return null;
         return v.ValueKind switch
         {
+            JsonValueKind.Null => null,
             JsonValueKind.Number when v.TryGetInt64(out var n) => n,
-            JsonValueKind.String when long.TryParse(v.GetString(), out var n) => n,
-            _ => null
+            JsonValueKind.String when long.TryParse(v.GetString(), NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture, out var n) => n,
+            _ => throw new InvalidVersionException("version must be an integer.")
         };
     }
 }

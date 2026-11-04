@@ -77,6 +77,9 @@ and `Where(s => s.A < v)` all bound `TimestampTz` and read `Kind=Utc`.
 The live suite is green on PostgreSQL with Npgsql 10.0.3, the legacy switch set by SqlSugar and not
 by the product (2026-10-30).
 
+`NpgsqlLegacyTimestampSwitchTests` pins that SqlSugar's PostgreSQL provider sets the switch as soon
+as a client's `Ado` is used, with no connection opened.
+
 The 57 tests in `UtcInstantColumnTests`, `MediaFolderTests`, `SqlSugarUserSessionStoreTests`,
 `SiteSettingsStoreTests`, `UtcInstantJsonTests` and `ConditionalModelTranslatorTests` pin the 0.9.2
 behavior on the backend `STRUO_TEST_BACKEND` selects (host UTC+8, 2026-10-13). Without the converter and

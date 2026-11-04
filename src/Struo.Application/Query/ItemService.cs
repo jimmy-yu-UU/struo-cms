@@ -333,9 +333,10 @@ public sealed class ItemService(
         // Optimistic concurrency: guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
         // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
-        // value (no protection, but backward compatible for callers that don't track versions).
+        // value (no protection, but backward compatible for callers that don't track versions). A
+        // present, non-null `version` that is not an integer throws InvalidVersionException (400).
         if (existing is Struo.Domain.Auditing.AuditableEntity ex)
-            ex.Version = JsonBodyUtil.TryReadVersion(body) ?? ex.Version;
+            ex.Version = JsonBodyUtil.ReadVersion(body) ?? ex.Version;
     }
 
     private readonly record struct UpdateTarget(string Collection, string Id, string Operation, long? SourceRevisionNumber);

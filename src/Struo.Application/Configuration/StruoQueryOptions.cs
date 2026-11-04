@@ -9,6 +9,13 @@ public sealed class StruoQueryOptions
     [Range(1, int.MaxValue)]
     public int MaxLimit { get; set; } = 100;
 
+    /// <summary>
+    /// Upper bound on the offset of one list request, top-level or nested in <c>deep</c>; more is a 400
+    /// that suggests narrowing with filters.
+    /// </summary>
+    [Range(1, int.MaxValue)]
+    public int MaxOffset { get; set; } = 100000;
+
     [Range(1, int.MaxValue)]
     public int DefaultLimit { get; set; } = 25;
 

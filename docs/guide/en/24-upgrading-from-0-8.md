@@ -5,8 +5,8 @@ can manage it with `migrate` as [Chapter 21: Schema Management and Upgrades](21-
 describes.
 
 Such a database has the framework tables but no version table. `migrate:baseline` exists for exactly
-this case: it records every known migration as applied without running it. The steps below were
-walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
+this case: it records the migrations that match the v0.8 schema as applied without running them.
+The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
 
 ## The steps, in order
 
@@ -40,9 +40,9 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    `src/Struo.Api`, and the directory must already exist; see
    [Writing a migration](21-schema-and-upgrades.md#writing-a-migration) in Chapter 21.
 5. **Run `migrate:baseline`, once.** Until then, both `migrate` and API startup refuse, with a
-   message telling you to run `migrate:baseline`. Baseline takes the migration lock, writes every
-   version — core, the sample if enabled, and your fork — in one transaction, and logs the SQL
-   FluentMigrator runs:
+   message telling you to run `migrate:baseline`. Baseline takes the migration lock, writes the
+   versions in one transaction — core up to and including `SeedCoreData`, the sample if enabled, and
+   your fork — and logs the SQL FluentMigrator runs:
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:baseline
@@ -57,8 +57,11 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    The seed is recorded, not run, so existing users, roles and languages are untouched. Baseline only
    adds the version table, so it can run while v0.8.x instances are still serving. It refuses, exiting
    `1`, when the database already has records or the framework tables don't exist.
-6. **Run `migrate`.** Migrations added after the baseline are applied here; otherwise it prints
-   `Nothing to migrate.`.
+6. **Run `migrate`.** The core migrations newer than `SeedCoreData` are applied here, such as
+   `AddLanguageCodeUniqueIndex`, and so are any migrations added after the baseline; with none
+   pending it prints `Nothing to migrate.`. If two language codes are ones the database treats as
+   equal, `AddLanguageCodeUniqueIndex` stops the run; the [changelog](changelog.md) says how to find
+   and remove them.
 7. **Run `migrate:check`.** PostgreSQL, MySQL and MariaDB should show `0 error(s), 0 warning(s)`.
    SQL Server warns once per `varchar` string column:
 

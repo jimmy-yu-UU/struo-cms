@@ -16,7 +16,7 @@ namespace Struo.Application.Query;
 /// </summary>
 public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSource m2mSource, RichTextCleaner richText)
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
+    internal static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
         Converters = { new UtcDateTimeJsonConverter() },
     };

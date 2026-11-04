@@ -146,12 +146,15 @@ volume，檔案留在舊容器的 volume 上。
 API 沒辦法知道自己跑了幾個副本，所以不會替你檢查這件事。圖片轉檔快取不跟著檔案後端走，見
 [第 15 章](15-files-and-media.md)的「變體快取」。
 
-### S3 相容儲存：`ChecksumMode`
+### S3 相容儲存：`ChecksumMode` 與 `UseChunkEncoding`
 
-`Struo:Files:S3:ChecksumMode` 預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上 checksum、
-才檢查回應的 checksum。這能配合最多種 S3 相容服務。有些服務會拒絕用戶端預設送出的 checksum，上傳就會失敗。
-服務的文件說有支援時，`WhenSupported` 會對每個能帶 checksum 的操作都開啟。其他任何值，在
-`Struo:Files:Backend` 為 `s3` 時都會讓啟動失敗。症狀見第 15 章。
+`Struo:Files:S3:ChecksumMode` 管 checksum，預設 `WhenRequired`：S3 用戶端只在操作要求時，才替請求加上
+checksum、才檢查回應的 checksum。有些服務會拒絕用戶端預設送出的 checksum，上傳就會失敗。服務的文件說有
+支援時，`WhenSupported` 會對每個能帶 checksum 的操作都開啟。其他任何值，在 `Struo:Files:Backend` 為
+`s3` 時都會讓啟動失敗。
+
+`Struo:Files:S3:UseChunkEncoding` 管串流簽章，預設 `true`：上傳簽成 `aws-chunked` 串流。服務不接受分塊
+上傳時設 `false`，上傳改用整個內容的 SHA-256 簽章。兩個鍵互相獨立。症狀見第 15 章。
 
 ### 設定 `AllowedHosts`
 
@@ -214,8 +217,8 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 子。下面是 API 映像對一個空的 SQLite 資料庫啟動：
 
 ```
-[10:35:35 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[01:45:34 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -484,7 +487,8 @@ docker run --detach --name api --network struo-verify --volume struo-verify-data
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-第三道指令最後印出 `Applied 202610080000  CreateCoreSchema` 與 `Applied 202610080001  SeedCoreData`。
+第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData` 與
+`Applied 202611030000  AddLanguageCodeUniqueIndex`。
 少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用
@@ -498,11 +502,13 @@ admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是
 探針該在這裡沒回應時重啟容器或 pod。
 
 `/health/ready` 執行兩項標了 `ready` 的檢查：`DbReadinessCheck` 對資料庫做一次真正的連線往
-返，`CacheReadinessCheck` 對設定好的 `IDistributedCache`（Redis 或行程內快取）做一次寫入再
-讀回；readiness 探針該等兩項都連得上，才把流量導進來。
+返（讀 `struo_languages` 資料表的一筆資料），`CacheReadinessCheck` 對設定好的
+`IDistributedCache`（Redis 或行程內快取）做一次寫入再讀回；readiness 探針該等兩項都連得上，
+才把流量導進來。
 
 資料庫檢查不會等驅動程式的連線逾時。資料庫在 `Database:ReadinessTimeoutSeconds`（預設 `3`，範圍 1 到 60）
-內沒有回應時，`/health/ready` 回 503。
+內沒有回應時，`/health/ready` 回 503。查詢的指令逾時用同一個值；資料庫停了或沒有
+`struo_languages` 資料表時，第一次呼叫就回 503。
 
 兩個路由怎麼打，[第 3 章：快速開始](03-getting-started.md)已經介紹過；下面是對一個匿名請求的
 完整回應：

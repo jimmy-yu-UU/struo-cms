@@ -18,10 +18,11 @@ On failure:
 { "success": false, "error": { "code": "…", "message": "…", "details": … } }
 ```
 
-`details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` a missing
-required translation produces; every other code omits the key entirely. `meta` is omitted the same
-way: it appears only on a paginated list result. A single-item read, a create, and an update all
-omit the key outright rather than sending `null`. When `meta` is present, it can also carry two more
+`details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` that a missing
+required translation, an invalid translation value or a duplicate translation locale produces; every
+other code omits the key entirely. `meta` is omitted the same way: it appears only on a paginated
+list result. A single-item read, a create, and an update all omit the key outright rather than
+sending `null`. When `meta` is present, it can also carry two more
 keys, `facets` and `aggregate`, each showing up only when the request actually asked for it; the two
 are independent of each other.
 
@@ -97,6 +98,7 @@ means the same thing on both protocols:
 | `CONFLICT` | 409 | A conflict other than a version mismatch (see below) |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
+| `INVALID_VERSION` | 400 | An update body's `version` is not an integer |
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
 | `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
@@ -184,8 +186,9 @@ The required `email` field is missing, and that is caught before the action ever
 carries exactly one entry, naming `Email`.
 
 An error the application layer works out for itself is a different matter — it's `BAD_USER_INPUT`,
-with no `details` key, and the message itself carries the whole story. The one exception is a
-missing required translation, described below:
+with no `details` key, and the message itself carries the whole story. The exceptions are the three
+translation errors (a missing required translation, an invalid translation value and a duplicate
+locale), of which the first is shown below:
 
 ```text
 $ POST /api/users
@@ -198,15 +201,16 @@ HTTP_STATUS:400
 Same endpoint — this time `email` is present, and a too-short password is an application-layer
 rule, so it comes back as `BAD_USER_INPUT` instead of `VALIDATION`.
 
-A missing required translatable field is that exception. It is a `400 BAD_USER_INPUT` whose
+A missing required translatable field is one of them. It is a `400 BAD_USER_INPUT` whose
 `details` holds one entry per missing field per locale, and each entry adds a `locale` key:
 
 ```json
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Required translation field 'title' is missing for locale 'zh-TW'.","details":[{"field":"title","message":"Required translation field 'title' is missing for locale 'zh-TW'.","locale":"zh-TW"}]}}
 ```
 
-Over GraphQL the same list is `extensions.details`. The `locale` key is present only on these
-entries. See [Chapter 7](07-i18n.md#default-locale-and-write-rules) for the rule itself.
+Over GraphQL the same list is `extensions.details`. The `locale` key is present only on the entries
+of these three translation errors. See [Chapter 7](07-i18n.md#default-locale-and-write-rules) for
+the rule itself and for the other two errors.
 
 An update can leave a required field out entirely and keep its existing value; but explicitly
 sending `null` or blank still gets rejected — the merged item as a whole still has to pass the
@@ -320,7 +324,14 @@ The caller's `version` has already fallen behind the row's real current value, s
 rejected; this message is exactly what a client's "reload and try again" path is built on. Leaving
 `version` out of the body entirely is also allowed — doing so skips the comparison altogether,
 giving up this layer of protection while staying compatible with an older caller that doesn't
-send it.
+send it. A JSON `null` counts as leaving it out.
+
+When `version` is present and not `null`, it must be a JSON number written as an integer literal,
+with no fraction or exponent, within the range of a 64-bit integer, or an integer string such as
+`"3"` (digits with an optional sign, no surrounding whitespace). Anything else fails the whole
+update with `400` `INVALID_VERSION`, and nothing is written: `1.5`, `3.0`, `1e3`, `"abc"`, `" 3"`,
+`true`, an object, an array, or a number too large for 64 bits. A collection without a `version`
+column ignores the key, and a create body never reads it.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting
 in that snapshot never causes a needless conflict (see

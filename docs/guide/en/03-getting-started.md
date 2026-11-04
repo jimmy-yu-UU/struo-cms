@@ -125,15 +125,16 @@ FluentMigrator's log of each step and ends with one `Applied` line per migration
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[16:47:28 INF] Beginning Transaction
-[16:47:28 INF] Rolling back transaction
-[16:47:28 INF] VersionMigration migrating
-[16:47:28 INF] Beginning Transaction
+[08:39:04 INF] Beginning Transaction
+[08:39:04 INF] Rolling back transaction
+[08:39:04 INF] VersionMigration migrating
+[08:39:04 INF] Beginning Transaction
 …
-[16:47:28 INF] 202610080001: SeedCoreData migrated
-[16:47:28 INF] => 0.0019894s
+[08:39:04 INF] 202611030000: AddLanguageCodeUniqueIndex migrated
+[08:39:04 INF] => 0.0034243s
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
+Applied 202611030000  AddLanguageCodeUniqueIndex
 ```
 
 This step is required: the copied settings file sets `Database:MigrateOnStartup` to `false`, and
@@ -170,8 +171,8 @@ If startup fails, the log prints a single Fatal entry and the process exits with
 the previous step looks like this (stack trace omitted):
 
 ```text
-[18:30:49 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 2 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[08:38:56 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 

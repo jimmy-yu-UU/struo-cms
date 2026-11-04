@@ -60,9 +60,10 @@ The core also has two folders outside `src/Struo.*` that a fork keeps:
   backend's.
 
 The framework tables come from the core migrations in `Struo.Infrastructure`: `CreateCoreSchema`
-creates the tables and `SeedCoreData` seeds the initial data, both applied by `migrate` or by
-`Database:MigrateOnStartup`. The API never builds a table from the entity classes. The migrations a
-fork writes for its own collections belong to that fork.
+creates the tables, `SeedCoreData` seeds the initial data and `AddLanguageCodeUniqueIndex` adds the
+unique index on the language `code`, all applied by `migrate` or by `Database:MigrateOnStartup`. The
+API never builds a table from the entity classes. The migrations a fork writes for its own
+collections belong to that fork.
 
 Framework code never references anything under `samples/`; a test enforces that boundary.
 
