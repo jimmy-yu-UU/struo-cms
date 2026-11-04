@@ -37,8 +37,9 @@
   建立 bootstrap 管理員時也會記一則。兩則都點名這個地址，不會印出密碼。見
   [第 16 章](16-authentication.md)與[第 20 章](20-deployment.md)。
 - 在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（PostgreSQL 與
-  MySQL／MariaDB 是 `SSL Mode` 低於 `VerifyCA`；SQL Server 是 `Encrypt` 低於 `Mandatory` 或
-  `TrustServerCertificate=True`），而且伺服器不是本機時，啟動會記一則警告。警告點出設定名稱，不會印出連線字串或
+  MySQL／MariaDB 是 `SSL Mode` 低於 `VerifyCA`；SQL Server 是 `Encrypt` 低於 `Mandatory`，或
+  `TrustServerCertificate=True` 而 `Encrypt` 不是 `Strict`，`Strict` 會忽略它），而且伺服器不是本機時，
+  啟動會記一則警告。警告點出設定名稱，不會印出連線字串或
   任何帳密。根目錄的 `docker-compose.yml` 會出現這則警告。見[第 20 章](20-deployment.md)。
 
 ## 0.23.0 — 2026-11-04

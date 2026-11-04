@@ -36,8 +36,10 @@ public static class DatabaseTlsWarnings
                 _ => null,
             };
         }
-        catch (Exception ex) when (ex is ArgumentException or FormatException or KeyNotFoundException)
+        catch (Exception)
         {
+            // Advice only: whatever a driver builder throws for a string it cannot read, startup goes on,
+            // and the connection itself reports the string later.
             return null;
         }
     }
@@ -67,12 +69,17 @@ public static class DatabaseTlsWarnings
         var builder = new MySqlConnectionStringBuilder(connectionString);
         if (builder.SslMode is MySqlSslMode.VerifyCA or MySqlSslMode.VerifyFull) return null;
         if (builder.ConnectionProtocol is MySqlConnectionProtocol.Unix or MySqlConnectionProtocol.UnixSocket
-            or MySqlConnectionProtocol.NamedPipe or MySqlConnectionProtocol.Pipe
             or MySqlConnectionProtocol.SharedMemory or MySqlConnectionProtocol.Memory) return null;
-        if (AllLocal(SplitHosts(builder.Server), IsLoopback)) return null;
+        var servers = SplitHosts(builder.Server);
+        // A named pipe is opened on the Server host, so it is local only when that host is.
+        var isPipe = builder.ConnectionProtocol is MySqlConnectionProtocol.NamedPipe or MySqlConnectionProtocol.Pipe;
+        if (AllLocal(servers, server => IsLocalMySqlServer(server, isPipe))) return null;
 
         return Message("MySQL or MariaDB", "SSL Mode is not VerifyCA or VerifyFull", "SSL Mode=VerifyFull");
     }
+
+    private static bool IsLocalMySqlServer(string server, bool isPipe) =>
+        server.StartsWith('/') || IsLoopback(server) || (isPipe && server == ".");
 
     private static string Message(string backend, string condition, string recommended) =>
         $"Database:ConnectionString connects to a non-local {backend} server without verifying its " +
@@ -87,18 +94,37 @@ public static class DatabaseTlsWarnings
 
     private static bool IsLoopback(string host)
     {
-        var name = host.Trim('[', ']');
+        var name = StripPort(host.Trim());
         return name.Equals("localhost", StringComparison.OrdinalIgnoreCase) || name == "127.0.0.1" || name == "::1";
     }
 
+    // "[::1]:5432" and "localhost:5432" lose the port; a bare IPv6 address such as "::1" has several
+    // colons and is left alone.
+    private static string StripPort(string host)
+    {
+        if (host.StartsWith('['))
+        {
+            var close = host.IndexOf(']');
+            return close > 0 ? host[1..close] : host;
+        }
+
+        var colon = host.IndexOf(':');
+        return colon >= 0 && colon == host.LastIndexOf(':') ? host[..colon] : host;
+    }
+
+    // The server named by a Data Source. A pipe or lpc source is local only when its host is: a pipe to
+    // another machine travels over the network.
     private static bool IsLocalSqlServer(string dataSource)
     {
         var source = dataSource.Trim();
-        if (source.StartsWith("np:", StringComparison.OrdinalIgnoreCase)
-            || source.StartsWith("lpc:", StringComparison.OrdinalIgnoreCase)
-            || source.StartsWith(@"\\", StringComparison.Ordinal)) return true;
+        foreach (var prefix in new[] { "tcp:", "np:", "lpc:" })
+        {
+            if (source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) source = source[prefix.Length..];
+        }
 
-        if (source.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase)) source = source[4..];
+        // A pipe source starts with two backslashes; its host is the segment before the next one.
+        if (source.StartsWith(@"\\", StringComparison.Ordinal)) source = source[2..];
+
         var comma = source.LastIndexOf(',');
         if (comma >= 0) source = source[..comma];
         var instance = source.IndexOf('\\');

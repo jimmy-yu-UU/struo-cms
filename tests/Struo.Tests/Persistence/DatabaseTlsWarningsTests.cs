@@ -62,6 +62,8 @@ public sealed class DatabaseTlsWarningsTests
     [InlineData("::1")]
     [InlineData("/var/run/postgresql")]
     [InlineData("localhost,127.0.0.1")]
+    [InlineData("localhost:5432,127.0.0.1:5433")]
+    [InlineData("[::1]:5432")]
     public void PostgreSql_local_hosts_do_not_warn(string host) =>
         Run(StruoDbType.PostgreSQL, Pg(host)).Should().BeEmpty();
 
@@ -96,8 +98,24 @@ public sealed class DatabaseTlsWarningsTests
     [InlineData("tcp:127.0.0.1", "Encrypt=False")]
     [InlineData("np:\\\\.\\pipe\\sql\\query", "Encrypt=False")]
     [InlineData("[::1],1433", "Encrypt=False")]
+    [InlineData("(localdb)\\MSSQLLocalDB", "Encrypt=False")]
+    [InlineData(".\\SQLEXPRESS", "Encrypt=False")]
+    [InlineData("lpc:localhost", "Encrypt=False")]
+    [InlineData("\\\\.\\pipe\\sql\\query", "Encrypt=False")]
+    [InlineData("np:\\\\localhost\\pipe\\sql\\query", "Encrypt=False")]
+    [InlineData("np:.", "Encrypt=False")]
     public void SqlServer_local_sources_do_not_warn(string source, string tls) =>
         Run(StruoDbType.SqlServer, Mssql(source, tls)).Should().BeEmpty();
+
+    [Theory]
+    [InlineData("db.internal\\SQLEXPRESS")]
+    [InlineData("tcp:db.internal\\inst,1433")]
+    [InlineData("np:\\\\db.internal\\pipe\\sql\\query")]
+    [InlineData("\\\\db.internal\\pipe\\sql\\query")]
+    [InlineData("np:db.internal")]
+    [InlineData("lpc:db.internal")]
+    public void SqlServer_remote_sources_with_an_instance_or_pipe_still_warn(string source) =>
+        Run(StruoDbType.SqlServer, Mssql(source, "Encrypt=False")).Should().ContainSingle();
 
     [Theory]
     [InlineData("")]
@@ -122,6 +140,18 @@ public sealed class DatabaseTlsWarningsTests
         Run(StruoDbType.MySql, My(server)).Should().BeEmpty();
 
     [Fact]
+    public void MySql_socket_path_without_a_protocol_does_not_warn() =>
+        Run(StruoDbType.MySql, My("/var/run/mysqld/mysqld.sock")).Should().BeEmpty();
+
+    [Fact]
+    public void MySql_named_pipe_to_a_remote_server_warns() =>
+        Run(StruoDbType.MySql, My("db.internal", "Protocol=pipe")).Should().ContainSingle();
+
+    [Fact]
+    public void MySql_named_pipe_on_the_local_machine_does_not_warn() =>
+        Run(StruoDbType.MySql, My(".", "Protocol=pipe")).Should().BeEmpty();
+
+    [Fact]
     public void MySql_over_a_unix_socket_does_not_warn() =>
         Run(StruoDbType.MySql, My("/var/run/mysqld/mysqld.sock", "Protocol=Unix")).Should().BeEmpty();
 
@@ -139,6 +169,15 @@ public sealed class DatabaseTlsWarningsTests
     public void An_unparseable_connection_string_neither_warns_nor_throws(StruoDbType type)
     {
         var act = () => Run(type, "this is ;;; not=a=valid;string=");
+
+        act.Should().NotThrow();
+        act().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_connection_string_value_that_overflows_neither_warns_nor_throws()
+    {
+        var act = () => Run(StruoDbType.SqlServer, "Data Source=db.internal;Connect Timeout=99999999999");
 
         act.Should().NotThrow();
         act().Should().BeEmpty();

@@ -64,9 +64,10 @@ MySQL 與 MariaDB 要設 `SSL Mode=VerifyFull`；只驗證憑證、不比對主�
 `Preferred` 不驗證，`None` 是明文。沒設 `SSL Mode` 時，預設是 `Preferred`。
 
 在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，啟動會記一則警告。
-警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：`localhost`、
-`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.`、具名管道與共用記憶體。解析失敗的連線字串也
-不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
+警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：
+`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與共用記憶體。
+具名管道只有主機是 `.` 或 `localhost` 才算本機；連到其他機器的管道走網路，仍會警告。
+解析失敗的連線字串也不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
 
 根目錄的 `docker-compose.yml` 會出現這則警告：資料庫是同一個 Docker 網路裡的另一個容器，連線字串沒設
 TLS，取捨與沒設密碼的 Redis 相同。本機堆疊可以放著不管，正式部署要改成會驗證的模式。
@@ -648,7 +649,8 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 為檔案位置掛上的 volume `struo-dpkeys` 用不到。`redis` 服務沒有 volume：重建它會丟掉金鑰圈，連同所有
 工作階段。開發與測試這樣就夠了；正式環境要替 Redis 設密碼，並照上面「DataProtection 金鑰」一節保護金鑰。
 
-`api` 服務每次啟動都會記下兩則 Redis 警告（金鑰沒有保護、Redis 沒有密碼）；快速上手的這個環境這是預期的。
+`api` 服務每次啟動都會記下兩則 Redis 警告（金鑰沒有保護、Redis 沒有密碼）與資料庫 TLS 警告；
+快速上手的這個環境這是預期的。
 
 ### S3 相容儲存
 

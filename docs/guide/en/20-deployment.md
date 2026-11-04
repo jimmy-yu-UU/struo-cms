@@ -84,8 +84,9 @@ In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/M
 string does not validate the server's certificate, as defined above. The warning names the setting and
 the value to use, and never prints the connection string, a host or a credential. It is skipped when
 every host is local: `localhost`, `127.0.0.1`, `::1`, a Unix socket, or on SQL Server also `(local)`,
-`.`, a named pipe or shared memory. A connection string that does not parse is skipped, because the
-connection itself reports it. SQLite and Oracle are not checked.
+`.` and shared memory. A named pipe counts as local only when its host is `.` or `localhost`; a pipe
+to another machine travels over the network and still warns. A connection string that does not parse
+is skipped, because the connection itself reports it. SQLite and Oracle are not checked.
 
 The root `docker-compose.yml` triggers this warning: the database is another container on the same
 Docker network and the connection string sets no TLS, which is the same trade-off as the Redis
@@ -777,8 +778,8 @@ The PostgreSQL password is a fixed dev value and Redis has no password. Every po
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
 
-The `api` service logs both Redis warnings (no key protection, no Redis password) on every start; this
-is expected for the quick-start stack.
+The `api` service logs both Redis warnings (no key protection, no Redis password) and the database TLS
+warning on every start; this is expected for the quick-start stack.
 
 The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
 move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as
