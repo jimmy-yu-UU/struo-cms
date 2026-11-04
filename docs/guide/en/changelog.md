@@ -25,24 +25,22 @@
   `public` role cannot hold any. See
   [Chapter 13](13-rest-endpoints.md) and [Chapter 17](17-roles-and-permissions.md).
 - `GET`/`DELETE api/login-locks?email=…` read and clear an account's login lock, for a super-admin or
-  a caller whose role holds `login.unlock`. The answer is the same whether or not the email has an
-  account, and each clear writes a log line naming the caller and target by id, never the email.
-  See [Chapter 13](13-rest-endpoints.md) and
-  [Chapter 16](16-authentication.md).
+  a caller whose role holds `login.unlock`; the `email` is at most 255 characters, the length of the
+  users table's `email` column. The answer is the same whether or not the email has an account, and
+  each clear writes a log line naming the caller and target by id, never the email. See
+  [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md).
 - The admin UI sets a role's system capabilities in a System capabilities section on the role form (a
   new role asks to be saved first, the `public` role cannot hold any, and a super-admin role has no
   section), and has a Login locks page, in the sidebar for a super-admin or a holder of `login.unlock`,
   that looks up an email's lock and clears it. A user's edit page has the same lock panel for a
   super-admin. See [Chapter 16](16-authentication.md) and
   [Chapter 17](17-roles-and-permissions.md).
-- `auth:unlock --email <email>` clears an account's login lock from the server when no administrator can
-  sign in. With `Redis:ConnectionString` set it resets the count and exits `0`; without Redis the count
-  lives in the API process, so the command says a restart clears it and exits `1`. A missing or
-  over-long `--email` exits `2`. [Chapter 16](16-authentication.md) lists the three ways to recover a
-  locked account, and [Chapter 21](21-schema-and-upgrades.md) lists the command.
-- The email length cap of the `login-locks` endpoints and `auth:unlock` is 255 characters, the length of
-  the users table's `email` column; it is one constant, `EmailAddress.MaxLength`, which the core schema
-  migration also uses.
+- `auth:unlock --email <email>` clears an account's login lock from the server when no administrator
+  can sign in. With `Redis:ConnectionString` set it resets the count and exits `0`; without Redis the
+  count lives in the API process, so the command says a restart clears it and exits `1`. A missing or
+  over-long (more than 255 characters) `--email` exits `2`. [Chapter 16](16-authentication.md) lists
+  the three ways to recover a locked account, and [Chapter 21](21-schema-and-upgrades.md) lists the
+  command.
 
 ## 0.23.0 — 2026-11-04
 

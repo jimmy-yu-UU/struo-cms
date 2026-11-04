@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import PageHeader from '../components/common/PageHeader.vue'
 import LoginLockPanel from '../components/account/LoginLockPanel.vue'
 import { useAuthStore } from '../stores/authStore'
-import { LOGIN_UNLOCK } from '../lib/capabilities'
+import { LOGIN_UNLOCK, EMAIL_MAX_LENGTH } from '../lib/capabilities'
 
 // Look up one email's login lock and clear it. Reserved for a super-admin or a holder of login.unlock;
 // the sidebar hides the entry otherwise and the API answers 403 regardless.
@@ -40,7 +40,7 @@ function onSubmit(): void {
       <form class="lookup-form" novalidate @submit.prevent="onSubmit">
         <label class="lookup-field" for="login-lock-email">
           <span>{{ t('loginLocks.emailLabel') }}</span>
-          <Input id="login-lock-email" v-model="emailInput" type="email" maxlength="320" autocomplete="off" />
+          <Input id="login-lock-email" v-model="emailInput" type="email" :maxlength="EMAIL_MAX_LENGTH" autocomplete="off" />
         </label>
         <Button type="submit" :disabled="!canSubmit">{{ t('loginLocks.lookup') }}</Button>
       </form>

@@ -27,6 +27,13 @@ internal static class AuthUnlockCommand
             return MigrationCli.Usage;
         }
 
+        // Checked first: a disabled throttle keeps no count, with or without Redis.
+        if (!services.GetRequiredService<IOptions<LoginAccountRateLimitOptions>>().Value.Enabled)
+        {
+            await stdout.WriteLineAsync($"{Name}: the per-account login lock is disabled, so there is no lock to clear.");
+            return MigrationCli.Success;
+        }
+
         if (string.IsNullOrWhiteSpace(services.GetRequiredService<IConfiguration>().GetValue<string>("Redis:ConnectionString")))
         {
             await stderr.WriteLineAsync(
@@ -35,21 +42,17 @@ internal static class AuthUnlockCommand
             return MigrationCli.Failure;
         }
 
-        if (!services.GetRequiredService<IOptions<LoginAccountRateLimitOptions>>().Value.Enabled)
-        {
-            await stdout.WriteLineAsync($"{Name}: the per-account login lock is disabled, so there is no lock to clear.");
-            return MigrationCli.Success;
-        }
-
+        var throttle = services.GetRequiredService<ILoginAttemptThrottle>();
         try
         {
-            await services.GetRequiredService<ILoginAttemptThrottle>().ResetAsync(email, ct);
+            await throttle.ResetAsync(email, ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // The exception text can carry the connection string, so only its type is printed.
             await stderr.WriteLineAsync(
-                $"{Name}: could not reach Redis ({ex.GetType().Name}). Check Redis:ConnectionString and that the server is running.");
+                $"{Name}: could not clear the login lock ({ex.GetType().Name}). If Redis is the cause, " +
+                "check Redis:ConnectionString and that the server is running.");
             return MigrationCli.Failure;
         }
 

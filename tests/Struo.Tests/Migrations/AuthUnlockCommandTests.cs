@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Application.Configuration;
 using Struo.Application.Security;
+using Struo.Tests.Security;
 using Struo.Infrastructure.Migrations.Commands;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace Struo.Tests.Migrations;
 public sealed class AuthUnlockCommandTests
 {
     private static readonly string? RedisConnection =
-        Environment.GetEnvironmentVariable("STRUO_TEST_REDIS_CONNECTION");
+        Environment.GetEnvironmentVariable(RedisLoginAttemptThrottleTests.EnvVar);
 
     private sealed class RecordingThrottle : ILoginAttemptThrottle
     {
@@ -119,13 +120,15 @@ public sealed class AuthUnlockCommandTests
         throttle.Resets.Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task With_redis_it_resets_the_account_and_does_not_echo_the_email()
+    [Theory]
+    [InlineData("--email", "  Admin@Struo.Test ")]
+    [InlineData("--email=  Admin@Struo.Test ")]
+    public async Task With_redis_it_resets_the_account_and_does_not_echo_the_email(params string[] args)
     {
         var throttle = new RecordingThrottle();
         using var sp = Services("localhost:6379", throttle);
 
-        var (code, stdout, stderr) = await RunAsync(sp, "--email", "  Admin@Struo.Test ");
+        var (code, stdout, stderr) = await RunAsync(sp, args);
 
         code.Should().Be(MigrationCli.Success);
         stderr.Should().BeEmpty();
@@ -134,11 +137,13 @@ public sealed class AuthUnlockCommandTests
         throttle.Resets.Should().Equal(["  Admin@Struo.Test "]);
     }
 
-    [Fact]
-    public async Task With_the_throttle_disabled_there_is_no_lock_to_clear()
+    [Theory]
+    [InlineData("localhost:6379")]
+    [InlineData(null)]
+    public async Task With_the_throttle_disabled_there_is_no_lock_to_clear(string? redis)
     {
         var throttle = new RecordingThrottle();
-        using var sp = Services("localhost:6379", throttle, throttleEnabled: false);
+        using var sp = Services(redis, throttle, throttleEnabled: false);
 
         var (code, stdout, _) = await RunAsync(sp, "--email", "a@b.c");
 
@@ -157,7 +162,18 @@ public sealed class AuthUnlockCommandTests
 
         code.Should().Be(MigrationCli.Failure);
         stdout.Should().BeEmpty();
-        stderr.Should().Contain("Redis").And.NotContain("hunter2");
+        stderr.Should().Contain("InvalidOperationException").And.Contain("Redis").And.NotContain("hunter2");
+    }
+
+    [Fact]
+    public async Task A_cancellation_is_not_reported_as_a_failed_reset()
+    {
+        var throttle = new RecordingThrottle { FailWith = new OperationCanceledException() };
+        using var sp = Services("localhost:6379", throttle);
+
+        var act = () => RunAsync(sp, "--email", "a@b.c");
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]

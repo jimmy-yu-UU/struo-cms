@@ -21,18 +21,18 @@
   任何系統權限。見
   [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
 - `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
-  `login.unlock` 的呼叫端可用。不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明
-  呼叫端與目標，不寫 email。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
+  `login.unlock` 的呼叫端可用；`email` 最長 255 字元，即 users 資料表 `email` 欄位的長度。
+  不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明呼叫端與目標，不寫
+  email。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
 - 管理介面在角色表單的「系統權限」區塊設定角色的系統權限（新角色會提示先儲存，`public` 角色不能持有，
   超級管理員角色不提供此區塊），並新增「登入鎖定」頁，超級管理員或持有 `login.unlock` 的人會在側欄看到
   它，可查詢某個 email 的鎖定並解除。使用者編輯頁對超級管理員也有同樣的鎖定面板。見
   [第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
 - `auth:unlock --email <email>` 在沒有任何管理員能登入時，從伺服器解除某個帳號的登入鎖定。有設
-  `Redis:ConnectionString` 時重設計數並以 `0` 結束；沒有 Redis 時計數存在 API 行程裡，命令會說明重新啟動
-  即可清除並以 `1` 結束。`--email` 缺少或過長以 `2` 結束。[第 16 章](16-authentication.md)列出帳號被鎖住時的
-  三種恢復方式，[第 21 章](21-schema-and-upgrades.md)列出這個命令。
-- `login-locks` 端點與 `auth:unlock` 的 email 長度上限是 255 字元，也就是 users 資料表 `email` 欄位的長度；它
-  是同一個常數 `EmailAddress.MaxLength`，核心結構 migration 也用它。
+  `Redis:ConnectionString` 時重設計數並以 `0` 結束；沒有 Redis 時計數存在 API 行程裡，命令會說明
+  重新啟動即可清除並以 `1` 結束。`--email` 缺少或過長（超過 255 字元）以 `2` 結束。
+  [第 16 章](16-authentication.md)列出帳號被鎖住時的三種恢復方式，
+  [第 21 章](21-schema-and-upgrades.md)列出這個命令。
 
 ## 0.23.0 — 2026-11-04
 

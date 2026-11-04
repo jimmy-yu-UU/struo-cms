@@ -236,26 +236,27 @@ HTTP_STATUS:429
 
 被鎖住的帳號如果就是唯一的管理員，幾分鐘後自動解開的鎖仍然是一扇關著的門。提早打開它有三種方式：
 
-- 另一位超級管理員，或角色持有 `login.unlock` 的使用者，在管理介面的「登入鎖定」頁解除，或在使用者
-  編輯頁解除（限超級管理員）。API 呼叫就是上面那個。
-- 用 SSO 登入。依帳號的計數只適用於密碼登入。
+- 另一位超級管理員，或持有 `login.unlock` 的人，照上面說的解除。
+- 啟用了 OIDC 提供者時，用 SSO 登入。依帳號的計數只適用於密碼登入。
 - 在伺服器上執行 `auth:unlock`。完全沒有人能登入時，走的就是這條路。
 
 ```text
-$ dotnet run --project src/Struo.Api -- auth:unlock --email Admin@Example.com
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: cleared the login lock for the given account, if it had one.
 ```
 
-這個命令讀的設定跟 API 一樣，所以需要 `Redis:ConnectionString`，且要跟 API 實際使用的值相同。email 依登入
-的做法去頭尾空白並轉小寫；`--email` 缺少、空白或過長（超過 255 字元）時，印出
-`Usage: auth:unlock --email <email>` 並以 `2` 結束。命令不會把 email 印回來，訊息裡說「if it had one」，是因為它
-跟端點一樣無從得知帳號存在與否、是否被鎖。`RateLimiting:LoginAccount` 停用時，它會這麼說並以 `0` 結束，因為
-本來就沒有鎖。連不上 Redis 時，它只印出錯誤型別，不印連線字串，並以 `1` 結束。
+這個命令讀的設定跟 API 一樣，所以需要 `Redis:ConnectionString`，且要跟 API 實際使用的值相同。
+email 依登入的做法去頭尾空白並轉小寫。`--email` 缺少、空白或過長（超過 255 字元）時，印出
+`Usage: auth:unlock --email <email>` 並以 `2` 結束。命令不會把 email 印回來，訊息裡說
+「if it had one」，是因為它跟端點一樣無從得知帳號存在與否、是否被鎖。`RateLimiting:LoginAccount`
+停用時，它會這麼說並以 `0` 結束，因為本來就沒有鎖。重設失敗時，例如連不上 Redis，它只印出錯誤
+型別，不印連線字串，並以 `1` 結束。
 
-沒有 Redis 時，每個 API 行程各自在記憶體裡計數，另一個命令碰不到。命令會這樣說並以 `1` 結束，腳本才不會把它當成成功：
+沒有 Redis 時，每個 API 行程各自在記憶體裡計數，另一個命令碰不到。命令會這樣說並以 `1` 結束，
+腳本才不會把它當成成功：
 
 ```text
-$ dotnet run --project src/Struo.Api -- auth:unlock --email Admin@Example.com
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.
 ```
 

@@ -41,6 +41,11 @@ describe('LoginLocksView', () => {
     expect(w.find('form').exists()).toBe(false)
   })
 
+  it('caps the email field at the users.email column length', () => {
+    signIn({ isSuperAdmin: true })
+    expect(mountView().get('input[type="email"]').attributes('maxlength')).toBe('255')
+  })
+
   it.each([
     ['a super-admin', { isSuperAdmin: true }],
     ['a holder of login.unlock', { isSuperAdmin: false, capabilities: ['login.unlock'] }],
