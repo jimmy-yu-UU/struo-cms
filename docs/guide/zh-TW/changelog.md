@@ -41,6 +41,8 @@
 - `/health/ready` 讀 `struo_languages` 資料表的一筆資料，指令逾時等於
   `Database:ReadinessTimeoutSeconds`，而非只看連線狀態。資料庫停了或缺 `struo_languages` 資料表時，
   第一次呼叫就回 503，而不是等連線池裡的連線都失效。見[第 20 章](20-deployment.md)。
+- 檔案的 presigned 網址使用設定的 `Struo:Files:S3:Endpoint` 的 scheme：`http://` 端點產生
+  `http://` 網址，其他端點產生 `https://`。見[第 15 章](15-files-and-media.md)。
 
 ## 0.22.0 — 2026-11-03
 

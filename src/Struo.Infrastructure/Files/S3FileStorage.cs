@@ -16,17 +16,22 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
     private readonly bool _useChunkEncoding;
+    private readonly Protocol _protocol;
     private const string UnknownService = "unknown";
     private readonly string _service;
 
     public S3FileStorage(FileStorageOptions options)
-        : this(CreateClient(options.S3), options.S3.Bucket!, options.S3.UseChunkEncoding) =>
+        : this(CreateClient(options.S3), options.S3.Bucket!, options.S3.UseChunkEncoding,
+            IsHttpEndpoint(options.S3.Endpoint) ? Protocol.HTTP : Protocol.HTTPS) =>
         _service = DescribeService(options.S3);
 
     // Test seam: inject a fake IAmazonS3 to assert request assembly (ContentType / download
-    // disposition / chunk encoding) without a live S3/MinIO endpoint. Production always goes through the public ctor.
-    internal S3FileStorage(IAmazonS3 client, string bucket, bool useChunkEncoding = true)
+    // disposition / chunk encoding / presign scheme) without a live S3/MinIO endpoint. Production always goes
+    // through the public ctor.
+    internal S3FileStorage(IAmazonS3 client, string bucket, bool useChunkEncoding = true,
+        Protocol protocol = Protocol.HTTPS)
     {
+        _protocol = protocol;
         _client = client;
         _bucket = bucket;
         _useChunkEncoding = useChunkEncoding;
@@ -45,6 +50,10 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
     }
 
+    // The one place that decides the endpoint's scheme; the client's UseHttp and the presign Protocol share it.
+    private static bool IsHttpEndpoint(string? endpoint) =>
+        endpoint?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true;
+
     internal static IAmazonS3 CreateClient(FileStorageOptions.S3Options s3) =>
         new AmazonS3Client(s3.AccessKey, s3.SecretKey, BuildConfig(s3));
 
@@ -59,9 +68,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
                 ? RequestChecksumCalculation.WHEN_SUPPORTED : RequestChecksumCalculation.WHEN_REQUIRED,
             ResponseChecksumValidation = whenSupported
                 ? ResponseChecksumValidation.WHEN_SUPPORTED : ResponseChecksumValidation.WHEN_REQUIRED,
-            // Presigned URLs must carry the endpoint's real scheme: the SDK defaults to https,
-            // which an http-only MinIO refuses after the redirect.
-            UseHttp = s3.Endpoint?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true,
+            UseHttp = IsHttpEndpoint(s3.Endpoint),
         };
         // AmazonS3Config requires exactly one of ServiceURL/RegionEndpoint. Production always supplies
         // Endpoint (FileStorageOptions.Validate() enforces it when Backend=s3); the RegionEndpoint
@@ -128,7 +135,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
         Task.FromResult<string?>(_client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
-            BucketName = _bucket, Key = key, Verb = HttpVerb.GET, Expires = DateTime.UtcNow.Add(ttl),
+            BucketName = _bucket, Key = key, Verb = HttpVerb.GET, Protocol = _protocol, Expires = DateTime.UtcNow.Add(ttl),
             // Force a download disposition on the direct-from-storage GET so a browser follows
             // the 302 into a download rather than rendering the bytes inline (defence in depth for
             // types the API path can't wrap in Content-Disposition: attachment, e.g. SVG).

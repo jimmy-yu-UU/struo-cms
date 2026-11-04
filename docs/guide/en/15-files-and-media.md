@@ -175,9 +175,8 @@ and it does support presigned URLs.
 otherwise reach (SVG, for example), so after following the redirect the browser still downloads it
 rather than rendering it directly.
 
-`UseHttp` is decided by whether the configured endpoint starts with `http://`, because the SDK
-generates presigned URLs using `https` by default, and an http-only MinIO would reject them after
-the redirect.
+The scheme of a presigned URL follows the configured endpoint: `http://` for an endpoint that starts
+with `http://`, `https://` otherwise.
 
 Both backends throw the same kind of exception when a row exists but its bytes don't: `local` is a
 missing file or missing year/month directory, and `s3` recognizes only the `NoSuchKey` error

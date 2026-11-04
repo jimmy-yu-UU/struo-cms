@@ -52,6 +52,8 @@
   `Database:ReadinessTimeoutSeconds`, instead of checking the connection state. A stopped database
   or a missing `struo_languages` table answers 503 on the first call, not after the pooled
   connections are gone. See [Chapter 20](20-deployment.md).
+- A presigned file URL uses the scheme of the configured `Struo:Files:S3:Endpoint`: an `http://`
+  endpoint yields `http://` URLs, any other endpoint `https://`. See [Chapter 15](15-files-and-media.md).
 
 ## 0.22.0 — 2026-11-03
 

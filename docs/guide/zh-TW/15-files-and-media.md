@@ -143,8 +143,7 @@ allowed.`。
 
 `s3` 的 presigned `GET` 還會透過回應標頭覆寫，強制帶上 `Content-Disposition: attachment`，即
 使是 API 自己的下載處置邏輯覆蓋不到的類型（例如 SVG），瀏覽器跟著重新導向之後還是會下載而不
-是直接呈現。`UseHttp` 由設定的端點是不是以 `http://` 開頭決定，因為 SDK 產生 presigned 網址
-預設用 `https`，一個只支援 http 的 MinIO 在重新導向之後會拒絕。
+是直接呈現。presigned 網址的 scheme 跟隨設定的端點：端點以 `http://` 開頭就用 `http://`，否則用 `https://`。
 
 兩種後端遇到「這一列還在、位元組卻不見了」都丟同一種例外：`local` 是缺檔案或缺年月目錄，
 `s3` 只認 `NoSuchKey` 這個錯誤碼，缺一整個 bucket 是設定錯誤，仍然是 `500`。不管哪一種，對不
