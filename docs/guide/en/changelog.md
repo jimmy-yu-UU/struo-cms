@@ -45,6 +45,11 @@
   `admin@admin.com`, and the seed logs one when it creates the bootstrap admin with that email. Both
   name the address and never a password. See [Chapter 16](16-authentication.md) and
   [Chapter 20](20-deployment.md).
+- In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/MariaDB connection
+  string does not validate the server's certificate (`SSL Mode` below `VerifyCA` on PostgreSQL and
+  MySQL/MariaDB; `Encrypt` below `Mandatory` or `TrustServerCertificate=True` on SQL Server) and the
+  server is not local. The warning names the setting and never prints the connection string or a
+  credential. The root `docker-compose.yml` triggers it. See [Chapter 20](20-deployment.md).
 
 ## 0.23.0 — 2026-11-04
 

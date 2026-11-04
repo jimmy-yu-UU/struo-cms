@@ -56,7 +56,20 @@ PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密�
 沒用 Kerberos 的話，建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式每開一條新的實體連線，
 都會先試一次 GSS 加密，連線因此變慢。migration 鎖的連線不走連線池，所以每次 `migrate` 都會再慢一次。
 
-其他後端就用該驅動程式自己的 TLS 選項寫在連線字串裡。
+SQL Server 用 `Encrypt=Mandatory`（驅動程式的預設）加 `TrustServerCertificate=False`，會加密連線並驗證憑證。
+`Encrypt=Strict` 走 TDS 8.0，效果相同，並忽略 `TrustServerCertificate`。`Encrypt=Optional`、`Encrypt=False`
+與 `TrustServerCertificate=True` 都不驗證。
+
+MySQL 與 MariaDB 要設 `SSL Mode=VerifyFull`；只驗證憑證、不比對主機名稱的話用 `VerifyCA`。`Required` 與
+`Preferred` 不驗證，`None` 是明文。沒設 `SSL Mode` 時，預設是 `Preferred`。
+
+在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，啟動會記一則警告。
+警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：`localhost`、
+`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.`、具名管道與共用記憶體。解析失敗的連線字串也
+不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
+
+根目錄的 `docker-compose.yml` 會出現這則警告：資料庫是同一個 Docker 網路裡的另一個容器，連線字串沒設
+TLS，取捨與沒設密碼的 Redis 相同。本機堆疊可以放著不管，正式部署要改成會驗證的模式。
 
 每個 API 行程最多開 `Maximum Pool Size` 條連線（Npgsql 預設 100）。把它乘上副本數，結果要低於伺服器的
 `max_connections`，還要留空間給 `migrate` job 與你自己的工具。

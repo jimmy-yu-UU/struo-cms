@@ -32,6 +32,8 @@ internal static class StruoCmsStartupChecks
             app.Configuration, app.Environment, startupLogger);
         Struo.Api.Auth.DataProtectionWarnings.Log(
             app.Configuration, app.Environment, startupLogger);
+        Struo.Infrastructure.Persistence.DatabaseTlsWarnings.Log(
+            dbOptions.DbType, dbOptions.ConnectionString, app.Environment, startupLogger);
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());

@@ -71,7 +71,25 @@ Without Kerberos, `GSS Encryption Mode=Disable` is recommended. Otherwise the dr
 encryption first on every new physical connection, which adds latency. The migration lock's
 connection is unpooled, so each `migrate` run pays it again.
 
-For the other backends, use the driver's own TLS options in the connection string.
+On SQL Server, `Encrypt=Mandatory` (the driver's default) with `TrustServerCertificate=False` encrypts
+the connection and validates the certificate. `Encrypt=Strict` does the same over TDS 8.0 and ignores
+`TrustServerCertificate`. `Encrypt=Optional`, `Encrypt=False` and `TrustServerCertificate=True` do not
+validate it.
+
+On MySQL and MariaDB, set `SSL Mode=VerifyFull`, or `VerifyCA` to validate the certificate without
+checking the host name; `Required` and `Preferred` do not validate it, and `None` is plaintext. When
+`SSL Mode` is not set, it defaults to `Preferred`.
+
+In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/MariaDB connection
+string does not validate the server's certificate, as defined above. The warning names the setting and
+the value to use, and never prints the connection string, a host or a credential. It is skipped when
+every host is local: `localhost`, `127.0.0.1`, `::1`, a Unix socket, or on SQL Server also `(local)`,
+`.`, a named pipe or shared memory. A connection string that does not parse is skipped, because the
+connection itself reports it. SQLite and Oracle are not checked.
+
+The root `docker-compose.yml` triggers this warning: the database is another container on the same
+Docker network and the connection string sets no TLS, which is the same trade-off as the Redis
+without a password. Leave it for the local stack and set a validating mode for a real deployment.
 
 Each API process opens up to `Maximum Pool Size` connections (Npgsql defaults to 100). Multiply it by
 the number of replicas, and keep the result under the server's `max_connections` with room left for
