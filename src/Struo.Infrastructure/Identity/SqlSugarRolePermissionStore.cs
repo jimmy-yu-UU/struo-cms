@@ -56,9 +56,13 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
         var perms = await db.Queryable<Permission>()
             .Where(p => roleIds.Contains(p.RoleId))
             .ToListAsync(ct);
+        var capabilities = await db.Queryable<RoleCapability>()
+            .Where(c => roleIds.Contains(c.RoleId))
+            .ToListAsync(ct);
 
         return new RolePermissionData(
             roles.Select(r => new RoleRow(r.Id, r.Name, r.IsSuperAdmin)).ToList(),
-            perms.Select(p => new PermissionRow(p.RoleId, p.Collection, p.CanRead, p.CanWrite, p.CanDelete)).ToList());
+            perms.Select(p => new PermissionRow(p.RoleId, p.Collection, p.CanRead, p.CanWrite, p.CanDelete)).ToList(),
+            capabilities.Select(c => new RoleCapabilityRow(c.RoleId, c.Capability)).ToList());
     }
 }

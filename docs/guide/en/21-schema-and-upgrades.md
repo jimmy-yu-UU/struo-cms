@@ -15,7 +15,7 @@ Migrations live in three places:
 - **Core**: `src/Struo.Infrastructure/Migrations/Core/`. `CreateCoreSchema` creates the framework
   tables; `SeedCoreData` seeds the languages, the `admin` and `public` roles, the bootstrap admin,
   and the public read grants listed in `Rbac:PublicReadCollections`. `AddLanguageCodeUniqueIndex` adds
-  the unique index on the language `code`.
+  the unique index on the language `code`. `CreateRoleCapabilities` creates the role capabilities table.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in the API host project itself, or in a content project that is listed in
@@ -59,11 +59,12 @@ line per migration it applied; with nothing pending it prints only `Nothing to m
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-04 00:39:43Z  CreateCoreSchema
-202610080001   Applied   2026-11-04 00:39:43Z  SeedCoreData
-202610080100   Applied   2026-11-04 00:39:43Z  CreateBlogSchema
-202611030000   Applied   2026-11-04 00:39:43Z  AddLanguageCodeUniqueIndex
-4 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-04 05:39:43Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 05:39:43Z  SeedCoreData
+202610080100   Applied   2026-11-04 05:39:43Z  CreateBlogSchema
+202611030000   Applied   2026-11-04 05:39:43Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-04 05:39:43Z  CreateRoleCapabilities
+5 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` means not applied yet. `Orphaned` means the version table has a record but no scanned
@@ -91,8 +92,8 @@ defaults to `false` in every environment, and then the API refuses to start whil
 pending, exiting with code `1`:
 
 ```
-[08:39:42 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[13:39:44 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 5 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -228,11 +229,12 @@ For example, a database migrated with the sample off and then opened with the sa
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-04 00:39:53Z  CreateCoreSchema
-202610080001   Applied   2026-11-04 00:39:53Z  SeedCoreData
+202610080000   Applied   2026-11-04 05:39:46Z  CreateCoreSchema
+202610080001   Applied   2026-11-04 05:39:46Z  SeedCoreData
 202610080100   Pending   -                     CreateBlogSchema  (out of order)
-202611030000   Applied   2026-11-04 00:39:53Z  AddLanguageCodeUniqueIndex
-3 applied, 1 pending, 0 orphaned
+202611030000   Applied   2026-11-04 05:39:46Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-04 05:39:46Z  CreateRoleCapabilities
+4 applied, 1 pending, 0 orphaned
 ```
 
 What to do: read the migration's SQL with `migrate:preview` and check that it does not depend on anything

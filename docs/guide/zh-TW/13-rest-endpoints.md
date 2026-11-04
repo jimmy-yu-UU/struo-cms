@@ -44,7 +44,7 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 `400` `INVALID_VERSION`（[第 12 章](12-rest-conventions.md)）。
 
 要求 `deleted=` 非預設模式時，單筆讀取跟清單一樣需要刪除授權，不只是讀取授權；未知集合一律 404。
-寫入或刪除 `permission`、`role`、`user`、`userRole` 這四個內建集合，以及任何被 fork 標成
+寫入或刪除 `permission`、`role`、`roleCapability`、`user`、`userRole` 這五個內建集合，以及任何被 fork 標成
 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
@@ -128,11 +128,28 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 |---|---|---|
 | `GET api/roles/{id}/permissions` | 超級管理員 | 讀該角色目前的授權列 |
 | `PUT api/roles/{id}/permissions` | 超級管理員 | 整組覆寫該角色的授權 |
+| `GET api/roles/{id}/capabilities` | 超級管理員 | 讀該角色的系統權限代碼 |
+| `PUT api/roles/{id}/capabilities` | 超級管理員 | 整組覆寫該角色的系統權限代碼 |
 
 `GET` 依集合名稱排序回傳 `{ collection, canRead, canWrite, canDelete }` 陣列，角色不存在就是
 404。`PUT` 是整組覆寫，不是逐筆合併——三個旗標都是 false 的那一列根本不會被存，回應也只會看到真
 的還留著的列；body 如果不是 JSON 陣列、有重複集合、或點名不存在的集合，都會被擋下，集合名稱的大
 小寫會被統一。角色本身是一般集合，`POST api/items/role` 就能建立一筆新角色。
+
+`GET .../capabilities` 依代碼排序回傳該角色的系統權限代碼字串陣列，角色不存在就是 404。
+`PUT .../capabilities` 收 JSON 代碼陣列並整組覆寫：空陣列就是全部移除，重複的代碼只算一次，回應是
+實際存下的陣列。body 不是字串的 JSON 陣列，或有任何代碼不在 `GET api/capabilities` 回傳的清單內
+（`Unknown capabilities: …`），都回 `400`，而且什麼都不會寫入。系統權限是什麼，見
+[第 17 章](17-roles-and-permissions.md)。
+
+## Capabilities `api/capabilities`
+
+| 方法與路徑 | 權限 | 用途 |
+|---|---|---|
+| `GET api/capabilities` | 超級管理員 | 列出角色可被授予的系統權限 |
+
+回傳 `{ code, labelKey, descriptionKey }` 的陣列，先是核心的系統權限，接著是 fork 註冊的。兩個鍵都是
+i18n 鍵，顯示的文字由後台提供。
 
 ## Languages `api/languages`
 
@@ -169,7 +186,7 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 |---|---|---|
 | `POST api/auth/login` | 匿名 | 登入，設定工作階段 cookie |
 | `POST api/auth/logout` | 登入 | 登出，回 204 |
-| `GET api/auth/me` | 登入 | 讀目前登入者的身分與權限 |
+| `GET api/auth/me` | 登入 | 讀目前登入者的身分、權限與系統權限 |
 | `GET api/auth/login/oidc/{provider}` | 匿名 | 導向指定的 OIDC 提供者 |
 
 登入 body 是 `{ email, password }`，成功回 `200` 附 `{ id }` 並設定工作階段 cookie，失敗回
@@ -185,7 +202,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:49 GMT
+Date: Wed, 04 Nov 2026 05:40:08 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -194,18 +211,19 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{},"capabilities":["login.unlock"]}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
 這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，
 並多一個 `secure`。
-`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
+`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡；`capabilities` 則列出
+清單裡定義的所有系統權限，其他人列的是自己的角色持有的代碼。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，
 `?returnUrl=` 只有在是站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時才沿用，否則改用 `Oidc:ReturnUrlDefault`；

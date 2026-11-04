@@ -16,7 +16,8 @@ public sealed record RolePermissionEntry(string Collection, bool CanRead, bool C
 [Route("api/roles")]
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class RolesController(
-    IPermissionGrantStore grants, IMetadataProvider metadata, ICurrentPermissions permissions) : ControllerBase
+    IPermissionGrantStore grants, IRoleCapabilityStore capabilities, SystemCapabilityCatalog catalog,
+    IMetadataProvider metadata, ICurrentPermissions permissions) : ControllerBase
 {
     private ObjectResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
@@ -77,6 +78,42 @@ public sealed class RolesController(
 
         return Ok(rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList());
     }
+
+    [HttpGet("{id:guid}/capabilities")]
+    public async Task<IActionResult> GetCapabilities(Guid id, CancellationToken ct)
+    {
+        if (RequireAdmin() is { } denied) return denied;
+        if (!await grants.RoleExistsAsync(id, ct))
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+
+        return Ok(Sorted(await capabilities.ListAsync(id, ct)));
+    }
+
+    /// <summary>Full-replace of the role's system capability codes. A code outside
+    /// <see cref="SystemCapabilityCatalog"/> is a <c>400</c> and nothing is written; a repeated code
+    /// counts once.</summary>
+    [HttpPut("{id:guid}/capabilities")]
+    public async Task<IActionResult> PutCapabilities(
+        Guid id, [FromBody] List<string?>? body, CancellationToken ct)
+    {
+        if (RequireAdmin() is { } denied) return denied;
+        if (body is null)
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                "Body must be a JSON array of capability codes.");
+        if (!await grants.RoleExistsAsync(id, ct))
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+
+        var unknown = body.Where(c => c is null || !catalog.IsKnown(c)).Select(c => c ?? "").Distinct().ToList();
+        if (unknown.Count > 0)
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                $"Unknown capabilities: {string.Join(", ", unknown)}.");
+
+        var codes = Sorted(body.Select(c => c!).Distinct(StringComparer.Ordinal).ToList());
+        await capabilities.ReplaceAsync(id, codes, ct);
+        return Ok(codes);
+    }
+
+    private static List<string> Sorted(IEnumerable<string> codes) => codes.Order(StringComparer.Ordinal).ToList();
 
     private static RolePermissionEntry ToEntry(PermissionGrant g) =>
         new(g.Collection, g.CanRead, g.CanWrite, g.CanDelete);

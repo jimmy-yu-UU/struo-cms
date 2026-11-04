@@ -16,7 +16,7 @@ public class SqlSugarRolePermissionStoreTests
         var db = SqlSugarClientFactory.Create(
             file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables(typeof(User), typeof(Role), typeof(Permission), typeof(UserRole));
+        db.CodeFirst.InitTables(typeof(User), typeof(Role), typeof(Permission), typeof(UserRole), typeof(RoleCapability));
         return db;
     }
 

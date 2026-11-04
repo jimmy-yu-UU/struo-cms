@@ -58,7 +58,7 @@ The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB
    adds the version table, so it can run while v0.8.x instances are still serving. It refuses, exiting
    `1`, when the database already has records or the framework tables don't exist.
 6. **Run `migrate`.** The core migrations newer than `SeedCoreData` are applied here, such as
-   `AddLanguageCodeUniqueIndex`, and so are any migrations added after the baseline; with none
+   `AddLanguageCodeUniqueIndex` and `CreateRoleCapabilities`, and so are any migrations added after the baseline; with none
    pending it prints `Nothing to migrate.`. If two language codes are ones the database treats as
    equal, `AddLanguageCodeUniqueIndex` stops the run; the [changelog](changelog.md) says how to find
    and remove them.

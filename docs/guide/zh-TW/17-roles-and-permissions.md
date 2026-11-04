@@ -66,7 +66,7 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 ## `AdminOnly` 集合
 
-框架自帶的集合裡，標成 `AdminOnly` 的就是 `user`、`role`、`permission`、`userRole` 這四個；屬性
+框架自帶的集合裡，標成 `AdminOnly` 的就是 `user`、`role`、`permission`、`userRole`、`roleCapability` 這五個；屬性
 本身的定義與怎麼在自己的集合上設，見[第 5 章：定義集合](05-collections.md)。
 
 `AdminOnly` 只管寫入：通用 CRUD 路徑上的建立、更新、刪除、復原與版本還原，一律要求呼叫端是超級管
@@ -80,6 +80,50 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 呼叫端在這個集合上完全沒有授權，看到的就是這兩句一般訊息；只有本來就持有相關授權、卻不是超級管
 理員的呼叫端，才會看到專屬訊息 `Writes to '{collection}' require a super-admin.`，這句話因此只
 對已經有資格寫、但少了超級管理員身分的人出現。
+
+## 系統權限
+
+集合授權管的是角色能對某個集合的項目做什麼；有些動作不屬於任何集合，例如解除被鎖定的登入帳號。
+這類動作用系統權限處理：一個有名字的權限，由角色持有，由超級管理員授予或收回。核心定義了一個，
+`login.unlock`，也就是解除被鎖定登入帳號的權限。
+
+一個系統權限有三個部分：代碼、標籤鍵、說明鍵。代碼是存進資料庫、也在 API 上傳遞的字串；兩個鍵是
+i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
+`capabilities.login.unlock.description`，顯示的文字由後台的語系檔提供。
+
+有效的代碼清單只在程式裡定義一次。`SystemCapabilities.Core` 放核心的，`SystemCapabilityCatalog` 把它
+們與所有已註冊的 `ISystemCapabilitySource` 合併。fork 要加自己的系統權限，就實作這個介面，再用
+`services.AddSingleton<ISystemCapabilitySource, MySource>()` 註冊；來源可以註冊任意多個。代碼若與
+核心代碼或另一個來源的代碼重複、是空白、或超過 255 字元，清單第一次被用到時就會丟出
+`InvalidOperationException`。代碼逐字比對，不做大小寫轉換。
+
+角色持有的系統權限存在 `role_capabilities`（資料表 `struo_role_capabilities`，集合 `roleCapability`）：
+一列代表一個角色一個代碼，（`roleId`、`capability`）唯一。它跟 `permission`、`userRole` 一樣同時是
+`Hidden` 與 `AdminOnly`，後台不會直接編輯它。
+
+解析時，讀授權的同一個請求也會讀呼叫端各角色的系統權限列，再做聯集。`public` 角色的列也算進去，所以
+授予 `public` 的系統權限會給到每一個呼叫端，匿名的也不例外。超級管理員不需要任何一列，每個代碼都
+持有。結果跟授權一樣不快取，改完，持有者的下一次請求就生效。
+
+管理它們有三個端點，都只有超級管理員能用；其他已登入的呼叫端一律 `403`，就算他自己的角色持有這個
+系統權限也一樣：
+
+- `GET /api/capabilities` 列出角色能被授予的所有系統權限，每筆是 `{ code, labelKey, descriptionKey }`；
+- `GET /api/roles/{id}/capabilities` 依代碼排序回傳該角色的代碼陣列；
+- `PUT /api/roles/{id}/capabilities` 用 JSON 代碼陣列整組覆寫；空陣列就是全部移除，重複的代碼只算
+  一次。
+
+`PUT` 被擋下時：
+
+- body 不是字串的 JSON 陣列：`400`；
+- 角色 id 不存在：`404`；
+- 有代碼不在清單內，包含空白的、只有大小寫不同的：`400`，`Unknown capabilities: …`，什麼都不會寫入。
+
+呼叫端要知道自己持有哪些，讀 `GET /api/auth/me`：回應有一個 `capabilities` 陣列，列出它持有的代碼；
+超級管理員拿到完整清單。端點細節見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。
+
+刪除角色時，它在 `role_capabilities` 的列跟在 `permissions` 的列一樣會留在原處。解析只讀還存在的角
+色，所以這些列不再對任何人生效。
 
 ## 公開讀取
 

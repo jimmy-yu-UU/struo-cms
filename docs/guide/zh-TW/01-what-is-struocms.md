@@ -53,10 +53,10 @@ build 失敗；完整的移除步驟見[第 23 章：範例專案導覽](23-samp
 
 剛裝好、還沒加入任何集合的 StruoCMS，長這樣：
 
-- 跑過 `migrate` 之後，資料庫裡剛好十二張表：十一張框架資料表，加上記錄已套用 migration 的版
+- 跑過 `migrate` 之後，資料庫裡剛好十三張表：十二張框架資料表，加上記錄已套用 migration 的版
   本表 `struo_schema_versions`。
 - 後台側欄沒有內容群組，只有 System：對 super-admin 來說，裡面是 Language、Role、User。System
-  只列出這三項，是因為 File、MediaFolder、Permission、UserRole 這四個框架集合宣告了
+  只列出這三項，是因為 File、MediaFolder、Permission、UserRole、RoleCapability 這五個框架集合宣告了
   `Hidden = true`——這是顯示層的旗標，不是權限。
 - Dashboard 固定顯示；Media Library 要有 `file.read` 權限（或 super-admin），Settings 只有
   super-admin 看得到。

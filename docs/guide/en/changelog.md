@@ -9,6 +9,14 @@
   a deployment that stores sensitive files should set `draft`. Chapter 15 also says the `nosniff`
   header belongs to the API's own responses, not to the storage service's response behind a
   presigned redirect.
+- System capabilities: action permissions a role holds that are not per-collection grants. The core
+  defines `login.unlock`; a fork adds its own by registering an `ISystemCapabilitySource`. The core
+  migration `CreateRoleCapabilities` (`202611040000`) creates `struo_role_capabilities`, so `migrate` or
+  `Database:MigrateOnStartup` must run before the API starts, and `migrate:baseline` leaves it pending
+  like `AddLanguageCodeUniqueIndex`. A super-admin sets a role's capabilities with
+  `GET`/`PUT api/roles/{id}/capabilities` and lists the available ones with `GET api/capabilities`;
+  `GET api/auth/me` carries the caller's `capabilities`. A super-admin holds every capability. See
+  [Chapter 13](13-rest-endpoints.md) and [Chapter 17](17-roles-and-permissions.md).
 
 ## 0.23.0 — 2026-11-04
 

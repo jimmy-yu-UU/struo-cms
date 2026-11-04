@@ -5,7 +5,7 @@ hand-edited** — see [Regenerating](#regenerating).
 
 | File | Pins | Scope |
 |---|---|---|
-| `core-collections.json` | The core collection metadata the SPA receives from `GET /api/schema` | The seven core collections |
+| `core-collections.json` | The core collection metadata the SPA receives from `GET /api/schema` | The eight core collections |
 | `interfaces.json` | Every declared `FieldInterface` / `RelationInterface` member | All of them, used or not |
 
 ## Why they are committed
@@ -33,13 +33,13 @@ workflow configuration — both halves ride inside the existing `dotnet test` an
 ## `core-collections.json`
 
 The **core** collection metadata, captured verbatim in wire shape (camelCase keys, camelCase enum
-strings, `Hidden` fields already stripped by `SchemaService`). It covers only the seven
+strings, `Hidden` fields already stripped by `SchemaService`). It covers only the eight
 `FrameworkEntityTypes` that carry `[CmsCollection]` (`file`, `language`, `mediaFolder`, `permission`,
-`role`, `user`, `userRole`) — never the `samples/Blog` collections, which a fork deletes.
+`role`, `roleCapability`, `user`, `userRole`) — never the `samples/Blog` collections, which a fork deletes.
 
 The assertions driven by this file are **collection-scoped**: that every collection yields at least one
 admin list column, that each `defaultDisplayField` survives into those columns, and that every DTO key
-the frontend types require is present. Those checks see only these seven collections, so a fork's own
+the frontend types require is present. Those checks see only these eight collections, so a fork's own
 collections are outside their reach by definition.
 
 ### Ordering
@@ -55,7 +55,7 @@ names are produced with `JsonNamingPolicy.CamelCase` — the same policy `StruoC
 `JsonStringEnumConverter` — rather than a local re-implementation, so this file cannot drift from how
 the API actually serializes an enum. Members appear in declaration order.
 
-This file exists because `core-collections.json` can only ever reveal an interface that one of the seven
+This file exists because `core-collections.json` can only ever reveal an interface that one of the eight
 core collections *happens to use*, and new field types are normally introduced for content collections,
 not for the framework's identity/file/language tables. Checking the enums directly makes the
 interface-level half of this gate **unconditional**: a new member is caught the moment it is declared,
@@ -131,6 +131,6 @@ checklist.
 
 Interface-level coverage is unconditional: no `FieldInterface` or `RelationInterface` member can be
 added without the frontend mirrors being updated. Collection-level coverage is not: the list-column,
-`defaultDisplayField`, and DTO-key assertions apply to the seven core collections only. A fork that adds
+`defaultDisplayField`, and DTO-key assertions apply to the eight core collections only. A fork that adds
 its own collections gets the interface guarantees for free and should extend `core-collections.json`'s
 generator if it wants the collection-level ones too.

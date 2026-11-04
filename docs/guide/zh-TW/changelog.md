@@ -7,6 +7,13 @@
 - [第 15 章](15-files-and-media.md)與[第 20 章](20-deployment.md)說明 `Struo:Files:DefaultStatus` 的
   取捨：`published` 時，任何持有檔案 id 的人都能讀；存放敏感檔案的部署建議設成 `draft`。第 15 章也
   寫明 `nosniff` 標頭只屬於 API 自己的回應，不涵蓋 presigned 轉址之後儲存服務的回應。
+- 系統權限：角色持有、但不是逐集合授權的動作權限。核心定義了 `login.unlock`；fork 註冊
+  `ISystemCapabilitySource` 就能加自己的。核心 migration `CreateRoleCapabilities`（`202611040000`）
+  建立 `struo_role_capabilities`，所以 API 啟動前要先跑 `migrate` 或 `Database:MigrateOnStartup`，
+  而且 `migrate:baseline` 跟 `AddLanguageCodeUniqueIndex` 一樣不會記錄它，它會維持待套用。超級管理員用
+  `GET`／`PUT api/roles/{id}/capabilities` 設定角色的系統權限，用 `GET api/capabilities` 列出可用的；
+  `GET api/auth/me` 帶有呼叫端的 `capabilities`。超級管理員持有所有系統權限。見
+  [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
 
 ## 0.23.0 — 2026-11-04
 

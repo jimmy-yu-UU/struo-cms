@@ -289,7 +289,7 @@ own.
 A write made through any channel outside this API — a fork's own ETL, or a direct database
 connection — likewise never passes through here.
 
-The identity collections `user`, `role`, `permission`, and `userRole`, when written through the
+The identity collections `user`, `role`, `permission`, `userRole`, and `roleCapability`, when written through the
 generic item API instead (which suits a super-admin), go through the same path as any other
 collection and are notified the same way — what differs is which API did the writing, not the
 collections themselves.

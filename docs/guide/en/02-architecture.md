@@ -30,7 +30,7 @@ three `InternalsVisibleTo` declarations need to change together.
 ## The core/sample boundary
 
 The core is every file under `src/Struo.*`, plus the entities the framework itself persists. Those
-entities are collected in `FrameworkEntityTypes.All`, eleven in total. A table's physical name
+entities are collected in `FrameworkEntityTypes.All`, twelve in total. A table's physical name
 is `Database:TablePrefix` plus the base name; the default prefix is `struo_`, so `User`'s table is
 `struo_users`, and an empty prefix leaves only the base name. Sample and fork collections are never
 prefixed.
@@ -45,12 +45,13 @@ prefixed.
 | `Role` | `roles` |
 | `Permission` | `permissions` |
 | `UserRole` | `user_roles` |
+| `RoleCapability` | `role_capabilities` |
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
 | `UserSession` | `user_sessions` |
 
-Seven of the eleven are themselves collections — they declare `[CmsCollection]`: `Language`, `File`,
-`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`. The other four — `FileTranslation`,
+Eight of the twelve are themselves collections — they declare `[CmsCollection]`: `Language`, `File`,
+`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `RoleCapability`. The other four — `FileTranslation`,
 `Revision`, `SiteSettings`, `UserSession` — are framework tables, but not collections.
 
 The core also has two folders outside `src/Struo.*` that a fork keeps:
@@ -60,8 +61,9 @@ The core also has two folders outside `src/Struo.*` that a fork keeps:
   backend's.
 
 The framework tables come from the core migrations in `Struo.Infrastructure`: `CreateCoreSchema`
-creates the tables, `SeedCoreData` seeds the initial data and `AddLanguageCodeUniqueIndex` adds the
-unique index on the language `code`, all applied by `migrate` or by `Database:MigrateOnStartup`. The
+creates the tables, `SeedCoreData` seeds the initial data, `AddLanguageCodeUniqueIndex` adds the
+unique index on the language `code` and `CreateRoleCapabilities` creates the role capabilities table,
+all applied by `migrate` or by `Database:MigrateOnStartup`. The
 API never builds a table from the entity classes. The migrations a fork writes for its own
 collections belong to that fork.
 

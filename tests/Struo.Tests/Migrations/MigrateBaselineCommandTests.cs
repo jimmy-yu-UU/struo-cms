@@ -82,12 +82,13 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         return (code, o.ToString(), e.ToString());
     }
 
-    /// <summary>A database as a v0.8.x deployment left it: CodeFirst tables without the language code index, plus the three seeders.</summary>
+    /// <summary>A database as a v0.8.x deployment left it: CodeFirst tables without the language code index and the role capabilities table, plus the three seeders.</summary>
     private static async Task SimulateV08(ISqlSugarClient db)
     {
         db.CodeFirst.InitTables(FrameworkEntityTypes.All.ToArray());
         var languages = db.EntityMaintenance.GetTableName<Language>();
         db.DbMaintenance.DropIndex($"ux_{languages}_code", languages);
+        db.DbMaintenance.DropTable(db.EntityMaintenance.GetTableName<RoleCapability>());
         var localization = new LocalizationOptions
         {
             DefaultLanguage = "en",
@@ -118,15 +119,15 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         var baseline = await Run(sp, "migrate:baseline");
 
         baseline.Code.Should().Be(MigrationCli.Success, baseline.Err);
-        baseline.Out.Should().Contain("202610080000").And.Contain("202610080001").And.NotContain("202611030000").And.Contain("2 migration(s) recorded");
+        baseline.Out.Should().Contain("202610080000").And.Contain("202610080001").And.NotContain("202611030000").And.NotContain("202611040000").And.Contain("2 migration(s) recorded");
         Counts(db).Should().Equal(before);
         var user = db.Queryable<User>().First();
         user.Password.Should().Be(passwordBefore);
         new Argon2idPasswordHasher().Verify(user.Password, AdminPassword).Should().BeTrue();
 
-        (await Run(sp, "migrate:status")).Out.Should().Contain("1 pending");
+        (await Run(sp, "migrate:status")).Out.Should().Contain("2 pending");
         var migrate = await Run(sp, "migrate");
-        migrate.Out.Should().Contain("Applied 202611030000").And.NotContain("202610080001");
+        migrate.Out.Should().Contain("Applied 202611030000").And.Contain("Applied 202611040000").And.NotContain("202610080001");
         (await Run(sp, "migrate")).Out.Should().Contain("Nothing to migrate.");
         (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
         (await Run(sp, "migrate:baseline")).Code.Should().Be(MigrationCli.Failure);
@@ -215,7 +216,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
 
         result.Code.Should().Be(MigrationCli.Success, result.Err);
         result.Out.Should().Contain("202610090000").And.Contain("3 migration(s) recorded");
-        (await Run(sp, "migrate:status")).Out.Should().Contain("1 pending");
+        (await Run(sp, "migrate:status")).Out.Should().Contain("2 pending");
     }
 
     [Fact]

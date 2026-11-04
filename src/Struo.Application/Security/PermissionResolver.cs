@@ -1,6 +1,6 @@
 namespace Struo.Application.Security;
 
-/// <summary>Folds raw role/permission rows into an <see cref="EffectivePermissions"/> snapshot.</summary>
+/// <summary>Folds raw role/permission/capability rows into an <see cref="EffectivePermissions"/> snapshot.</summary>
 public static class PermissionResolver
 {
     public static EffectivePermissions Resolve(RolePermissionData data)
@@ -17,6 +17,7 @@ public static class PermissionResolver
             byCollection[p.Collection] =
                 (cur.Read || p.CanRead, cur.Write || p.CanWrite, cur.Delete || p.CanDelete);
         }
-        return new EffectivePermissions(isSuperAdmin: false, byCollection);
+        var capabilities = data.Capabilities.Select(c => c.Capability).ToHashSet(StringComparer.Ordinal);
+        return new EffectivePermissions(isSuperAdmin: false, byCollection, capabilities);
     }
 }

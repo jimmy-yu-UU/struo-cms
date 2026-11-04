@@ -90,7 +90,7 @@ is `true` — see [Chapter 21: Schema Management and Upgrades](21-schema-and-upg
 `ReadinessTimeoutSeconds` is how long `/health/ready` waits for the database before it answers 503.
 Range 1-60. Keep it below the timeout your load balancer's probe uses.
 
-`TablePrefix` is prepended to the base name of the framework's 12 tables (the 11 entities in
+`TablePrefix` is prepended to the base name of the framework's 13 tables (the 12 entities in
 `FrameworkEntityTypes.All` plus the version table, `schema_versions`). Lower-case letters, digits and
 underscores only, first character a letter, at most 16 characters; the empty string means no
 prefix. Sample and fork collections are unaffected.

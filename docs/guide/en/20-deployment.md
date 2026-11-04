@@ -278,8 +278,8 @@ A database with pending migrations while `MigrateOnStartup` is `false` is anothe
 same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[01:45:34 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[13:38:25 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -606,7 +606,8 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
-`Applied 202610080001  SeedCoreData` and `Applied 202611030000  AddLanguageCodeUniqueIndex`.
+`Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
+`Applied 202611040000  CreateRoleCapabilities`.
 Without it, the `api` container exits with the message shown in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit

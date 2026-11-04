@@ -79,7 +79,7 @@ Database:ConnectionString = Host=localhost;Port=5432;Database=struo;Username=REP
 `ReadinessTimeoutSeconds` 是 `/health/ready` 等資料庫回應的秒數，逾時就回 503。範圍 1-60。
 請設得比負載平衡器的探測逾時短。
 
-`TablePrefix` 接在框架自帶 12 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 11 個 entity 加上
+`TablePrefix` 接在框架自帶 13 張資料表的基底名前面（`FrameworkEntityTypes.All` 的 12 個 entity 加上
 版本表 `schema_versions`），只能是小寫字母、數字與底線，首字必須是字母，最長 16 字元；空字串就是
 不加前綴。範例專案與你自己的集合不受影響。
 
