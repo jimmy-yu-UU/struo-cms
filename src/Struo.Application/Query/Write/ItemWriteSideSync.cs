@@ -166,8 +166,9 @@ public sealed class ItemWriteSideSync(
     }
 
     // A value binds to its sidecar property type with the options root fields use; JSON null clears the
-    // field. A Json field keeps its raw JSON text, as a root Json field does. A value of the wrong shape
-    // is a 400 naming the field and the locale.
+    // field. A Json field stores a string value as its content and any other value as its raw JSON text,
+    // so a value read back and sent again is stored unchanged. A value of the wrong shape is a 400 naming
+    // the field and the locale.
     private static object? BindTranslationValue(
         CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale)
     {
@@ -176,7 +177,8 @@ public sealed class ItemWriteSideSync(
         if (prop is null) return JsonBodyUtil.JsonValue(field.Value);
         var isJson = meta.Fields.Any(f => f.Translatable && f.Interface == FieldInterface.Json
                                           && string.Equals(f.Name, field.Name, StringComparison.OrdinalIgnoreCase));
-        if (isJson && prop.PropertyType == typeof(string)) return field.Value.GetRawText();
+        if (isJson && prop.PropertyType == typeof(string))
+            return field.Value.ValueKind == JsonValueKind.String ? field.Value.GetString() : field.Value.GetRawText();
         try
         {
             return field.Value.Deserialize(prop.PropertyType, ItemDeserializer.JsonOpts);

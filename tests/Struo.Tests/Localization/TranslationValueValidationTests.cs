@@ -102,6 +102,56 @@ public class TranslationValueValidationTests(ApiFactory factory)
             .GetProperty("facts").GetString().Should().Be(rawJson);
     }
 
+    [Fact]
+    public async Task Translatable_json_string_value_stores_its_content()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var resp = await c.PostAsync("/api/items/fxArticle", Json(
+            "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"A\",\"facts\":\"{\\\"a\\\":1}\"}}}"));
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
+            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
+    }
+
+    [Fact]
+    public async Task Translatable_json_field_read_back_unchanged_is_stored_unchanged()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var created = await c.PostAsync("/api/items/fxArticle", Json(
+            "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"A\",\"facts\":{\"a\":1}}}}"));
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await created.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+        var facts = (await GetAsync(c, id)).GetProperty("translations").GetProperty("en").GetProperty("facts");
+
+        var put = await c.PutAsJsonAsync($"/api/items/fxArticle/{id}",
+            JsonSerializer.SerializeToElement(new { translations = new { en = new { facts } } }));
+
+        put.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
+            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
+    }
+
+    [Fact]
+    public async Task Translatable_json_field_survives_a_revert_unchanged()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var created = await c.PostAsync("/api/items/fxArticle", Json(
+            "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"A\",\"facts\":{\"a\":1}}}}"));
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        var id = Root(await created.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+        var edit = await c.PutAsync($"/api/items/fxArticle/{id}", Json(
+            "{\"translations\":{\"en\":{\"facts\":{\"b\":2}}}}"));
+        edit.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var revert = await c.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
+
+        revert.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
+            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
+    }
+
     public static TheoryData<string> DuplicateBodies => new()
     {
         "{\"en\":{\"title\":\"B\"},\"EN\":{\"title\":\"C\"}}",
