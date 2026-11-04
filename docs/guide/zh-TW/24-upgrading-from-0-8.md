@@ -52,8 +52,9 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    執行個體還在服務時也能跑。資料庫裡已經有紀錄，或框架資料表不存在時，它拒絕並以代碼 `1`
    結束。
 6. **跑 `migrate`。** 比 `SeedCoreData` 新的核心 migration，例如 `AddLanguageCodeUniqueIndex`，
-   以及 baseline 之後新增的 migration 都在這裡套用；沒有待套用的就印 `Nothing to migrate.`。若有兩個語言代碼對資料庫來說相等，
-   `AddLanguageCodeUniqueIndex` 會讓執行停下；怎麼找出並移除它們見[版本紀錄](changelog.md)。
+   以及 baseline 之後新增的 migration 都在這裡套用；沒有待套用的就印
+   `Nothing to migrate.`。若有兩個語言代碼對資料庫來說相等，`AddLanguageCodeUniqueIndex`
+   會讓執行停下；怎麼找出並移除它們見[版本紀錄](changelog.md)。
 7. **跑 `migrate:check`。** PostgreSQL、MySQL 與 MariaDB 應該是 `0 error(s), 0 warning(s)`。
    SQL Server 對每個 `varchar` 字串欄位發一筆警告：
 
