@@ -50,8 +50,8 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     /// <summary>Records the migrations that describe the schema of a database built by an earlier schema
     /// source as applied, without executing them, so that database joins the migration history. Core
     /// migrations above <see cref="Core.SeedCoreData.Version"/> stay pending; every other migration is
-    /// recorded. Refuses a database that already has recorded
-    /// migrations or lacks the core tables; in both cases nothing is written.</summary>
+    /// recorded. Refuses a database that already has recorded migrations or lacks the core tables; in
+    /// both cases nothing is written.</summary>
     public async Task<IReadOnlyList<MigrationInfo>> BaselineAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

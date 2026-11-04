@@ -5,8 +5,8 @@ can manage it with `migrate` as [Chapter 21: Schema Management and Upgrades](21-
 describes.
 
 Such a database has the framework tables but no version table. `migrate:baseline` exists for exactly
-this case: it records the migrations that match the v0.8 schema as applied without running them. The steps below were
-walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
+this case: it records the migrations that match the v0.8 schema as applied without running them.
+The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
 
 ## The steps, in order
 
@@ -50,7 +50,8 @@ walked through on PostgreSQL, SQL Server, MySQL and MariaDB.
    Recorded 202610080000  CreateCoreSchema
    Recorded 202610080001  SeedCoreData
    Recorded 202610080100  CreateBlogSchema
-   3 migration(s) recorded as applied.
+   Recorded 202610120942  CreateNotes
+   4 migration(s) recorded as applied.
    ```
 
    The seed is recorded, not run, so existing users, roles and languages are untouched. Baseline only
