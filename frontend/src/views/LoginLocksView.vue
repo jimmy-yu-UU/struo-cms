@@ -38,9 +38,9 @@ function onSubmit(): void {
       <!-- novalidate: an account may hold any non-blank email, so the browser's address check must not
            stop a lookup. -->
       <form class="lookup-form" novalidate @submit.prevent="onSubmit">
-        <label class="lookup-field">
+        <label class="lookup-field" for="login-lock-email">
           <span>{{ t('loginLocks.emailLabel') }}</span>
-          <Input v-model="emailInput" type="email" maxlength="320" autocomplete="off" />
+          <Input id="login-lock-email" v-model="emailInput" type="email" maxlength="320" autocomplete="off" />
         </label>
         <Button type="submit" :disabled="!canSubmit">{{ t('loginLocks.lookup') }}</Button>
       </form>

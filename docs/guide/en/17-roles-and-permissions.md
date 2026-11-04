@@ -109,7 +109,8 @@ permission that a role holds and a super-admin gives or takes away. The core def
 A capability has three parts: a code, a label key and a description key. The code is the string stored
 in the database and sent over the API. The two keys are i18n keys, for `login.unlock`
 `capabilities.login.unlock.label` and `capabilities.login.unlock.description`; the admin UI's locale
-files supply the text.
+files (`frontend/src/locales/*.ts`) supply the text. A capability whose keys have no entry in any
+locale is shown by its code, with no description.
 
 The list of valid codes is defined in code, once. `SystemCapabilities.Core` holds the core ones, and
 `SystemCapabilityCatalog` merges them with every registered `ISystemCapabilitySource`. A fork adds its
@@ -314,6 +315,10 @@ To change a role's grants, use the role permission matrix instead: tick `canRead
 and `canDelete` per collection, and submit the whole set in one go. The effective-permissions
 preview panel on the user form updates live to show what the currently selected role set computes
 to.
+
+Below the matrix, the role form has a System capabilities section: one checkbox per capability, with
+its own Save button, which the form's Save also flushes. It lists the capabilities of a saved role
+that is neither `public` nor a super-admin role; on a new role it asks you to save the role first.
 
 A role's whole grant set is written through `PUT /api/roles/{id}/permissions`, a full overwrite
 completed in one transaction; the endpoint's own semantics are in

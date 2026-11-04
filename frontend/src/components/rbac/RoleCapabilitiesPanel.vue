@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
@@ -8,11 +8,13 @@ import { rbacApi, type CapabilityEntry } from '../../api/rbacApi'
 
 // The Role form's system capabilities: the catalog from GET /capabilities, one checkbox each, saved
 // as a full-replace PUT of the ticked codes. Independent of the permission matrix's own save. The
-// parent mounts it for an existing role that is neither `public` nor a super-admin role.
-const props = defineProps<{ roleId: string }>()
+// parent mounts it for an existing role that is neither `public` nor a super-admin role; for a role
+// that does not exist yet, or for `public`, `unavailable` swaps the list for a muted explanation.
+const props = defineProps<{ roleId: string; unavailable?: 'create' | 'public' }>()
 
-const { t, te } = useI18n()
+const { t, te, fallbackLocale } = useI18n()
 const toast = useToast()
+const uid = useId()
 
 const catalog = ref<CapabilityEntry[]>([])
 const selected = ref<string[]>([])
@@ -24,10 +26,20 @@ const saving = ref(false)
 const snapshot = (codes: string[]): string => JSON.stringify([...codes].sort())
 const dirty = computed(() => snapshot(selected.value) !== baseline.value)
 const saveLabel = computed(() => (saving.value ? t('rbac.capabilitiesSaving') : t('rbac.capabilitiesSave')))
+const unavailableKey = computed(() =>
+  props.unavailable === 'create' ? 'rbac.capabilitiesCreateHint' : 'rbac.capabilitiesPublicNotice',
+)
 
-// A fork's capability may ship without a locale entry; the code then stands in for the missing text.
+// A fork's capability may ship without a locale entry in every language: the fallback locales are
+// consulted first, and only a key found nowhere lets the code stand in for the text.
+function hasText(key: string): boolean {
+  if (te(key)) return true
+  const fb = fallbackLocale.value
+  const list = typeof fb === 'string' ? [fb] : Array.isArray(fb) ? fb : []
+  return list.some((locale) => te(key, locale))
+}
 function textFor(key: string, fallback: string): string {
-  return te(key) ? t(key) : fallback
+  return hasText(key) ? t(key) : fallback
 }
 
 function setHeld(code: string, held: boolean): void {
@@ -71,7 +83,10 @@ async function save(): Promise<boolean> {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  if (props.unavailable) loading.value = false
+  else void load()
+})
 defineExpose({ save, dirty, load, saveLabel })
 </script>
 
@@ -79,16 +94,21 @@ defineExpose({ save, dirty, load, saveLabel })
   <section class="role-capabilities">
     <h2 class="panel-title">{{ t('rbac.capabilitiesTitle') }}</h2>
 
-    <p v-if="loadFailed" class="text-muted-foreground">{{ t('rbac.capabilitiesLoadFailed') }}</p>
+    <p v-if="unavailable" class="text-muted-foreground">{{ t(unavailableKey) }}</p>
+    <p v-else-if="loadFailed" class="text-muted-foreground">{{ t('rbac.capabilitiesLoadFailed') }}</p>
     <template v-else-if="!loading">
       <p v-if="catalog.length === 0" class="text-muted-foreground">{{ t('rbac.capabilitiesEmpty') }}</p>
       <ul v-else class="capability-list">
-        <li v-for="c in catalog" :key="c.code" class="capability-item">
-          <Checkbox :id="`capability-${c.code}`" :model-value="selected.includes(c.code)"
+        <li v-for="(c, i) in catalog" :key="c.code" class="capability-item">
+          <Checkbox :id="`${uid}-cap-${i}`" :model-value="selected.includes(c.code)"
+                    :aria-describedby="textFor(c.descriptionKey, '') ? `${uid}-desc-${i}` : undefined"
                     @update:model-value="(v) => setHeld(c.code, !!v)" />
           <div class="capability-text">
-            <label :for="`capability-${c.code}`" class="capability-label">{{ textFor(c.labelKey, c.code) }}</label>
-            <p class="capability-description text-muted-foreground">{{ textFor(c.descriptionKey, '') }}</p>
+            <label :for="`${uid}-cap-${i}`" class="capability-label">{{ textFor(c.labelKey, c.code) }}</label>
+            <p v-if="textFor(c.descriptionKey, '')" :id="`${uid}-desc-${i}`"
+               class="capability-description text-muted-foreground">
+              {{ textFor(c.descriptionKey, '') }}
+            </p>
           </div>
         </li>
       </ul>

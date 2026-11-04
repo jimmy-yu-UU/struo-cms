@@ -326,6 +326,8 @@ export default {
     effectivePreviewHint: '預覽依目前選擇的角色計算，包含尚未儲存的變更。',
     grantsSaveFailedAfterCreate: '角色已建立，但權限儲存失敗——請在該角色的編輯頁重試。',
     capabilitiesTitle: '系統權限',
+    capabilitiesCreateHint: '請先儲存角色，再於此設定系統權限。',
+    capabilitiesPublicNotice: 'public 角色不能持有系統權限。',
     capabilitiesEmpty: '尚未定義任何系統權限。',
     capabilitiesSave: '儲存系統權限',
     capabilitiesSaving: '儲存系統權限中…',

@@ -93,6 +93,46 @@ describe('RoleCapabilitiesPanel', () => {
     expect(boxes(w)).toHaveLength(0)
   })
 
+  it.each([
+    ['create', 'capabilitiesCreateHint'],
+    ['public', 'capabilitiesPublicNotice'],
+  ] as const)('shows only the %s explanation and calls no API when unavailable', async (unavailable, key) => {
+    const w = mount(RoleCapabilitiesPanel, { props: { roleId: 'r1', unavailable }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(w.text()).toContain(en.rbac.capabilitiesTitle)
+    expect(w.text()).toContain((en.rbac as Record<string, string>)[key])
+    expect(boxes(w)).toHaveLength(0)
+    expect(rbacApi.listCapabilities).not.toHaveBeenCalled()
+    expect(rbacApi.getRoleCapabilities).not.toHaveBeenCalled()
+  })
+
+  it('uses the fallback locale text before falling back to the code', async () => {
+    const fallbackI18n = createI18n({
+      legacy: false, locale: 'zh-TW', fallbackLocale: 'en',
+      messages: { 'zh-TW': { rbac: en.rbac }, en: { capabilities: en.capabilities } },
+    })
+    const w = mount(RoleCapabilitiesPanel, { props: { roleId: 'r1' }, global: { plugins: [fallbackI18n] } })
+    await flushPromises()
+    expect(w.text()).toContain(en.capabilities.login.unlock.label)
+  })
+
+  it('ties each checkbox to its label and description by generated ids, and omits an empty description', async () => {
+    vi.mocked(rbacApi.listCapabilities).mockResolvedValue([
+      { code: 'has space', labelKey: 'capabilities.login.unlock.label', descriptionKey: 'capabilities.login.unlock.description' },
+      { code: 'bare', labelKey: 'capabilities.none.label', descriptionKey: 'capabilities.none.description' },
+    ])
+    const w = mountPanel()
+    await flushPromises()
+    const [first, second] = boxes(w)
+    const id = first.attributes('id')!
+    expect(id).toMatch(/^\S+$/)
+    expect(w.get('label[for="' + id + '"]').text()).toBe(en.capabilities.login.unlock.label)
+    const describedBy = first.attributes('aria-describedby')!
+    expect(w.get('[id="' + describedBy + '"]').text()).toBe(en.capabilities.login.unlock.description)
+    expect(second.attributes('aria-describedby')).toBeUndefined()
+    expect(w.findAll('.capability-description')).toHaveLength(1)
+  })
+
   it('says so when the catalog is empty', async () => {
     vi.mocked(rbacApi.listCapabilities).mockResolvedValue([])
     const w = mountPanel()

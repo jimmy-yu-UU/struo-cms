@@ -89,7 +89,8 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 一個系統權限有三個部分：代碼、標籤鍵、說明鍵。代碼是存進資料庫、也在 API 上傳遞的字串；兩個鍵是
 i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
-`capabilities.login.unlock.description`，顯示的文字由後台的語系檔提供。
+`capabilities.login.unlock.description`，顯示的文字由後台的語系檔（`frontend/src/locales/*.ts`）提供。
+鍵在任何語系都沒有條目的系統權限，會以代碼顯示，沒有說明。
 
 有效的代碼清單只在程式裡定義一次。`SystemCapabilities.Core` 放核心的，`SystemCapabilityCatalog` 把它
 們與所有已註冊的 `ISystemCapabilitySource` 合併。fork 要加自己的系統權限，就實作這個介面，再用
@@ -261,6 +262,9 @@ pretty:
 寫入授權就能碰到它們，正好是 `AdminOnly` 要擋住的那種自我升權。要改一個角色的授權，走的是角色權限矩
 陣，逐集合勾選 `canRead`／`canWrite`／`canDelete`，一次送出就是整組覆蓋。使用者表單上的有效權限預覽
 面板，則即時顯示目前選的角色組合換算出來的結果。
+
+矩陣下方，角色表單有一個「系統權限」區塊：每個系統權限一個勾選框，並有自己的儲存按鈕，表單的儲存也會一併
+送出它。它列出的是已儲存、且既不是 `public` 也不是超級管理員角色的系統權限；新角色則會提示先儲存角色。
 
 角色的授權整組寫在 `PUT /api/roles/{id}/permissions`，整組覆蓋、在同一個交易裡完成，端點本身的
 語意見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。被擋下時的訊息是：

@@ -15,7 +15,7 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 function mountPanel(email = 'a@x.test', heading = false) {
-  return mount(LoginLockPanel, { props: { email, heading }, global: { plugins: [i18n] } })
+  return mount(LoginLockPanel, { props: { email, heading }, attachTo: document.body, global: { plugins: [i18n] } })
 }
 const unlockButton = (w: ReturnType<typeof mountPanel>) =>
   w.findAll('button').find((b) => b.text() === en.loginLocks.unlock)
@@ -66,6 +66,36 @@ describe('LoginLockPanel', () => {
     expect(loginLocksApi.clear).toHaveBeenCalledWith('a@x.test')
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: en.loginLocks.unlocked }))
     expect(w.text()).toContain(en.loginLocks.notLocked)
+  })
+
+  it('announces results in a polite live region and moves focus to it after an unlock', async () => {
+    vi.mocked(loginLocksApi.get)
+      .mockResolvedValueOnce({ locked: true, retryAfterSeconds: 120 })
+      .mockResolvedValueOnce({ locked: false, retryAfterSeconds: 0 })
+    const w = mountPanel()
+    const status = w.get('[role="status"]')
+    expect(status.attributes('aria-live')).toBe('polite')
+    await flushPromises()
+    expect(status.text()).toContain('2 min')
+
+    const button = unlockButton(w)!
+    ;(button.element as HTMLElement).focus()
+    await button.trigger('click')
+    await flushPromises()
+    expect(unlockButton(w)).toBeUndefined()
+    expect(status.text()).toContain(en.loginLocks.notLocked)
+    expect(document.activeElement).toBe(status.element)
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
+  it('maps a 403 on unlock to the not-permitted message', async () => {
+    vi.mocked(loginLocksApi.get).mockResolvedValue({ locked: true, retryAfterSeconds: 120 })
+    vi.mocked(loginLocksApi.clear).mockRejectedValue(new ApiError(403, 'x'))
+    const w = mountPanel()
+    await flushPromises()
+    await unlockButton(w)!.trigger('click')
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.loginLocks.notPermitted }))
   })
 
   it('reports a failed unlock and keeps the button', async () => {

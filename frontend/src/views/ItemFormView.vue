@@ -86,10 +86,14 @@ const showMatrix = computed(
 // holds every capability already.
 const capabilitiesPanel = ref<InstanceType<typeof RoleCapabilitiesPanel> | null>(null)
 const showCapabilities = computed(
-  () =>
-    !isCreate.value && name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true &&
-    !savedRoleIsSuperAdmin.value && savedRoleName.value !== PUBLIC_ROLE_NAME,
+  () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true && !savedRoleIsSuperAdmin.value,
 )
+// A new role has nothing to PUT against yet and `public` cannot hold capabilities: the panel then says
+// so instead of vanishing.
+const capabilitiesUnavailable = computed<'create' | 'public' | undefined>(() => {
+  if (isCreate.value) return 'create'
+  return savedRoleName.value === PUBLIC_ROLE_NAME ? 'public' : undefined
+})
 function rolePanelsDirty(): boolean {
   return (matrix.value?.dirty ?? false) || (capabilitiesPanel.value?.dirty ?? false)
 }
@@ -476,7 +480,8 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :is-super-admin-role="savedRoleIsSuperAdmin"
         :create-mode="isCreate"
       />
-      <RoleCapabilitiesPanel v-if="showCapabilities" ref="capabilitiesPanel" :role-id="idStr" />
+      <RoleCapabilitiesPanel v-if="showCapabilities" ref="capabilitiesPanel" :role-id="idStr"
+                             :unavailable="capabilitiesUnavailable" />
       <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
       <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr" />
       <LoginLockPanel v-if="showLoginLock" :email="savedUserEmail" heading class="mt-6" />

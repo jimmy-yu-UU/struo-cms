@@ -49,6 +49,14 @@ describe('LoginLocksView', () => {
     expect(mountView().find('form').exists()).toBe(true)
   })
 
+  it('pairs the email label with its input by id', () => {
+    signIn({ isSuperAdmin: true })
+    const w = mountView()
+    const id = w.get('input[type="email"]').attributes('id')
+    expect(id).toBeTruthy()
+    expect(w.find('label[for="' + id + '"]').exists()).toBe(true)
+  })
+
   it('does not query until an email is submitted, and disables Look up while blank', async () => {
     signIn({ isSuperAdmin: true })
     const w = mountView()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/composables/useToast'
@@ -18,13 +18,15 @@ const toast = useToast()
 const state = ref<LoginLockState | null>(null)
 const errorKey = ref<string | null>(null)
 const busy = ref(false)
+const statusEl = ref<HTMLElement | null>(null)
 
 const guard = createLatestWins()
 
-function errorKeyFor(e: unknown): string {
+// A 403 or 400 reads the same whichever call raised it; other failures use the caller's own message.
+function errorKeyFor(e: unknown, otherwise: string): string {
   if (e instanceof ApiError && e.status === 403) return 'loginLocks.notPermitted'
   if (e instanceof ApiError && e.status === 400) return 'loginLocks.badEmail'
-  return 'loginLocks.loadFailed'
+  return otherwise
 }
 
 async function reload(): Promise<void> {
@@ -41,7 +43,7 @@ async function reload(): Promise<void> {
   } catch (e) {
     if (!guard.isCurrent(token)) return
     state.value = null
-    errorKey.value = errorKeyFor(e)
+    errorKey.value = errorKeyFor(e, 'loginLocks.loadFailed')
   }
 }
 
@@ -52,8 +54,12 @@ async function onUnlock(): Promise<void> {
     await loginLocksApi.clear(props.email)
     toast.add({ severity: 'success', summary: t('loginLocks.unlocked'), life: 3000 })
     await reload()
-  } catch {
-    toast.add({ severity: 'error', summary: t('loginLocks.unlockFailed'), life: 3500 })
+    // The Unlock button the user just pressed is gone now; keep focus on the status text instead of
+    // letting it fall back to the page body.
+    await nextTick()
+    statusEl.value?.focus()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t(errorKeyFor(e, 'loginLocks.unlockFailed')), life: 3500 })
   } finally {
     busy.value = false
   }
@@ -75,20 +81,24 @@ defineExpose({ reload })
   <section class="login-lock">
     <h2 v-if="heading" class="panel-title">{{ t('loginLocks.title') }}</h2>
     <p v-if="errorKey" class="text-muted-foreground" role="alert">{{ t(errorKey) }}</p>
-    <template v-else-if="state">
-      <p v-if="state.locked">{{ t('loginLocks.locked', { time: remaining }) }}</p>
-      <p v-else class="text-muted-foreground">{{ t('loginLocks.notLocked') }}</p>
-      <div v-if="state.locked" class="actions">
-        <Button type="button" variant="outline" :disabled="busy" @click="onUnlock">
-          {{ busy ? t('loginLocks.unlocking') : t('loginLocks.unlock') }}
-        </Button>
-      </div>
-    </template>
+    <!-- Always rendered, so a screen reader registers the live region before its text changes. -->
+    <div ref="statusEl" role="status" aria-live="polite" tabindex="-1" class="status">
+      <template v-if="state && !errorKey">
+        <p v-if="state.locked">{{ t('loginLocks.locked', { time: remaining }) }}</p>
+        <p v-else class="text-muted-foreground">{{ t('loginLocks.notLocked') }}</p>
+      </template>
+    </div>
+    <div v-if="state?.locked && !errorKey" class="actions">
+      <Button type="button" variant="outline" :disabled="busy" @click="onUnlock">
+        {{ busy ? t('loginLocks.unlocking') : t('loginLocks.unlock') }}
+      </Button>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .login-lock { display: grid; gap: 8px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.status { outline: none; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>

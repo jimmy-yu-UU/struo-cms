@@ -326,6 +326,8 @@ export default {
     effectivePreviewHint: 'Preview follows the currently selected roles, including unsaved changes.',
     grantsSaveFailedAfterCreate: 'The role was created, but saving its permissions failed — retry from the role\'s edit page.',
     capabilitiesTitle: 'System capabilities',
+    capabilitiesCreateHint: 'Save the role first, then set its system capabilities here.',
+    capabilitiesPublicNotice: 'The public role cannot hold system capabilities.',
     capabilitiesEmpty: 'No system capabilities are defined.',
     capabilitiesSave: 'Save capabilities',
     capabilitiesSaving: 'Saving capabilities…',

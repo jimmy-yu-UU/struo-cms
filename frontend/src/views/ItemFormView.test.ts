@@ -1221,23 +1221,31 @@ describe('ItemFormView', () => {
     expect(panel.props('roleId')).toBe('r1')
   })
 
-  it.each([
-    ['the public role', { name: 'public', isSuperAdmin: false }],
-    ['a super-admin role', { name: 'root', isSuperAdmin: true }],
-  ])('offers no capabilities for %s', async (_label, item) => {
-    const w = await mountRoleEdit(item)
+  it('mounts the capabilities panel as unavailable for the public role, with no capability calls', async () => {
+    const w = await mountRoleEdit({ name: 'public', isSuperAdmin: false })
+    const panel = w.findComponent(RoleCapabilitiesPanel)
+    expect(panel.exists()).toBe(true)
+    expect(panel.props('unavailable')).toBe('public')
+    expect(rbacApi.listCapabilities).not.toHaveBeenCalled()
+  })
+
+  it('offers no capabilities for a super-admin role', async () => {
+    const w = await mountRoleEdit({ name: 'root', isSuperAdmin: true })
     expect(w.findComponent(PermissionMatrix).exists()).toBe(true) // anchor: the form rendered
     expect(w.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
   })
 
-  it('offers no capabilities in create mode or to a non-super-admin', async () => {
+  it('mounts the capabilities panel as unavailable in create mode, and not at all for a non-super-admin', async () => {
     routeParams = { name: 'role' }; routeName = 'collection-create'
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue(roleMeta)
     const creating = mountView()
     await creating.vm.init()
     await flushPromises()
-    expect(creating.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
+    const panel = creating.findComponent(RoleCapabilitiesPanel)
+    expect(panel.exists()).toBe(true)
+    expect(panel.props('unavailable')).toBe('create')
+    expect(rbacApi.listCapabilities).not.toHaveBeenCalled()
 
     const w = await mountRoleEdit({ name: 'editor', isSuperAdmin: false }, { superAdmin: false })
     expect(w.findComponent(RoleCapabilitiesPanel).exists()).toBe(false)
