@@ -179,8 +179,9 @@ internal static class MutationResolvers
     // object, returning a NEW dict so the input is not mutated (CLAUDE immutability). Runs AFTER the
     // recursive prune (so each entry's `fields` carries only client-sent sub-fields) and BEFORE
     // ToJsonElement. Absent/unexpected `translations` -> pass through unchanged (ItemService then
-    // enforces create-requires-default-locale / rejects a non-object). An exactly repeated locale is a 400;
-    // locales differing only in case reach ItemService, which rejects them the same way.
+    // enforces create-requires-default-locale / rejects a non-object). An exactly repeated locale is
+    // rejected with BAD_USER_INPUT; locales differing only in case reach ItemService, which rejects them
+    // the same way.
     // An explicit `fields: null` folds to `"<locale>": null` (delete that locale); an entry that omits
     // `fields` is rejected rather than read as a delete.
     private static IReadOnlyDictionary<string, object?>? FoldTranslations(

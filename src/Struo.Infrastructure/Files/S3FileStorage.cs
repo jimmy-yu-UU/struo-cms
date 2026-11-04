@@ -135,7 +135,8 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     public Task<string?> GetPresignedUrlAsync(string key, TimeSpan ttl, CancellationToken ct = default) =>
         Task.FromResult<string?>(_client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
-            BucketName = _bucket, Key = key, Verb = HttpVerb.GET, Protocol = _protocol, Expires = DateTime.UtcNow.Add(ttl),
+            BucketName = _bucket, Key = key, Verb = HttpVerb.GET,
+            Protocol = _protocol, Expires = DateTime.UtcNow.Add(ttl),
             // Force a download disposition on the direct-from-storage GET so a browser follows
             // the 302 into a download rather than rendering the bytes inline (defence in depth for
             // types the API path can't wrap in Content-Disposition: attachment, e.g. SVG).

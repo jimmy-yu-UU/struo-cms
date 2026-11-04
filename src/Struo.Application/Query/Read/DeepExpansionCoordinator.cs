@@ -108,7 +108,8 @@ public sealed class DeepExpansionCoordinator(
     /// <see cref="StruoQueryOptions.MaxRelationDepth"/> or a relation name is unknown at its level.
     /// Also validates per-level nested-list args (filter/sort/limit/offset): to-many-only,
     /// filter fields whitelisted against the target collection, sort restricted to the target's
-    /// own fields (no cross-relation sort for nested lists), non-negative limit/offset, and an offset within <see cref="StruoQueryOptions.MaxOffset"/>.
+    /// own fields (no cross-relation sort for nested lists), non-negative limit/offset, and an offset
+    /// within <see cref="StruoQueryOptions.MaxOffset"/>.
     /// </summary>
     private void ValidateDeepTree(string coll, DeepSpec spec, int depth, FilterBudget budget, ref int nodes)
     {

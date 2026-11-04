@@ -94,7 +94,17 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
 
     // The pre-migration schema matches the core migrations up to SeedCoreData; later core migrations change it.
     private static bool IsAfterBaselineSchema(KeyValuePair<long, IMigrationInfo> known) =>
-        known.Key > Core.SeedCoreData.Version && known.Value.Migration.GetType().Namespace == typeof(Core.SeedCoreData).Namespace;
+        known.Key > Core.SeedCoreData.Version && IsCoreMigration(known.Value.Migration.GetType());
+
+    // A core migration lives in the core assembly, in the core namespace or one nested in it.
+    internal static bool IsCoreMigration(Type type) =>
+        type.Assembly == typeof(Core.SeedCoreData).Assembly && IsCoreNamespace(type.Namespace);
+
+    internal static bool IsCoreNamespace(string? ns)
+    {
+        var core = typeof(Core.SeedCoreData).Namespace!;
+        return ns is not null && (ns == core || ns.StartsWith(core + ".", StringComparison.Ordinal));
+    }
 
     // A failed rollback must not mask the failure that caused it.
     private static void TryRollback(IMigrationProcessor processor, ILogger logger)

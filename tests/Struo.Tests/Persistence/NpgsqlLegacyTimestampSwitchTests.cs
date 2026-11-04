@@ -20,7 +20,7 @@ public class NpgsqlLegacyTimestampSwitchTests
             DbType = StruoDbType.PostgreSQL,
             ConnectionString = "Host=127.0.0.1;Port=1;Database=switch_probe;Username=probe;Password=probe"
         };
-        var client = SqlSugarClientFactory.Create(options, new TestCurrentUserAccessor(null));
+        using var client = SqlSugarClientFactory.Create(options, new TestCurrentUserAccessor(null));
 
         _ = client.Ado;
 

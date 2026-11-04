@@ -7,7 +7,8 @@
   returns `400` `INVALID_VERSION` and writes nothing; it applies to a collection that carries a `version`. GraphQL
   rejects such a value at the type layer. A client that sends one drops it or sends the integer it
   read. An integer string such as `"3"`, `null` and an absent `version` are accepted. See
-  [Chapter 12](12-rest-conventions.md) and [Chapter 13](13-rest-endpoints.md).
+  [Chapter 12](12-rest-conventions.md), [Chapter 13](13-rest-endpoints.md) and
+  [Chapter 14](14-graphql.md).
 - A translation field value of the wrong shape for its sidecar property (a number, object or array
   sent to a string field, a non-GUID string to a `Guid?` field) returns `400` `BAD_USER_INPUT` naming
   the field and the locale, by the same rules as a root field. `null` clears the field. See

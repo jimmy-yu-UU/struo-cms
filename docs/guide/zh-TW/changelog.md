@@ -6,7 +6,7 @@
 - REST 更新的 `version` 有帶、不是 `null`，而且不是整數或整數字串時，回 `400` `INVALID_VERSION` 且什麼都不寫入；
   只適用於帶 `version` 的集合。GraphQL 在型別層就拒絕這種值。送這種值的用戶端要拿掉它，或改送讀到的
   整數。像 `"3"` 這樣的整數字串、`null` 與沒帶 `version` 都會被接受。見
-  [第 12 章](12-rest-conventions.md)與[第 13 章](13-rest-endpoints.md)。
+  [第 12 章](12-rest-conventions.md)、[第 13 章](13-rest-endpoints.md)與[第 14 章](14-graphql.md)。
 - 翻譯欄位的值形狀與 sidecar 屬性不符（對字串欄位送數字、物件或陣列，對 `Guid?` 欄位送非 GUID 字串），
   回 `400` `BAD_USER_INPUT` 並點名欄位與 locale，規則與 root 欄位相同。`null` 會清空該欄位。見[第 7 章](07-i18n.md)。
 - 同一個 `translations` 裡同一個 locale 出現兩次，回 `400` 且什麼都不寫入，兩個鍵完全相同、只差大小寫，

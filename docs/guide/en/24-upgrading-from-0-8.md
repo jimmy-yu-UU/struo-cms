@@ -59,7 +59,9 @@ The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB
    `1`, when the database already has records or the framework tables don't exist.
 6. **Run `migrate`.** The core migrations newer than `SeedCoreData` are applied here, such as
    `AddLanguageCodeUniqueIndex`, and so are any migrations added after the baseline; with none
-   pending it prints `Nothing to migrate.`.
+   pending it prints `Nothing to migrate.`. If two language codes are equal to the database,
+   `AddLanguageCodeUniqueIndex` stops the run; the [changelog](changelog.md) says how to find and
+   remove them.
 7. **Run `migrate:check`.** PostgreSQL, MySQL and MariaDB should show `0 error(s), 0 warning(s)`.
    SQL Server warns once per `varchar` string column:
 

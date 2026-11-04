@@ -77,7 +77,7 @@ public static class SqlSugarClientFactory
         //   outlives the request.
         // - CopyNew() builds a bare client without this configure action: no audit stamping, no
         //   cancellation translation, and the soft-delete filter provider is shared. Use it only for
-        //   work that needs none of those, such as a connection ping.
+        //   work that needs none of those, such as the one-row readiness read.
         //
         // The soft-delete query filter and the AuditAop stamping must be attached via the ctor's configure
         // action, NOT via `client.QueryFilter.AddTableFilter(...)` / `AuditAop.Register(client, ...)`

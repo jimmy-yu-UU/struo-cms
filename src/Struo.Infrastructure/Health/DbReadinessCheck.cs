@@ -71,6 +71,7 @@ public sealed class DbReadinessCheck : IHealthCheck
             if (first == probeTask)
             {
                 await delayCts.CancelAsync();
+                // The database probe returns true or throws; a false result comes only from a test probe.
                 return await probeTask
                     ? HealthCheckResult.Healthy()
                     : HealthCheckResult.Unhealthy("Database connection is not valid.");
