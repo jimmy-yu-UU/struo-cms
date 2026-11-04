@@ -167,4 +167,62 @@ public class DistributedCacheLoginAttemptThrottleTests
 
         second.RetryAfterSeconds.Should().BeLessThan(first.RetryAfterSeconds);
     }
+
+    [Fact]
+    public async Task GetStateAsync_does_not_count_and_is_not_blocked_for_a_fresh_account()
+    {
+        var throttle = Throttle(MemoryCache(), permitLimit: 1);
+        const string email = "peek@struo.test";
+
+        for (var i = 0; i < 5; i++)
+            (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
+
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse("peeking must not spend an attempt");
+    }
+
+    [Fact]
+    public async Task GetStateAsync_agrees_with_TryReserveAsync_at_the_limit()
+    {
+        var throttle = Throttle(MemoryCache(), permitLimit: 3);
+        const string email = "boundary@struo.test";
+
+        await ReserveAsync(throttle, email, 2);
+        (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
+
+        await ReserveAsync(throttle, email, 1);
+        var state = await throttle.GetStateAsync(email);
+        state.IsBlocked.Should().BeTrue("the next attempt would be refused");
+        state.RetryAfterSeconds.Should().BeGreaterThanOrEqualTo(1);
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetStateAsync_is_not_blocked_after_ResetAsync_or_window_expiry()
+    {
+        var clock = new FakeTimeProvider();
+        var throttle = Throttle(MemoryCache(), permitLimit: 1, windowSeconds: 3, clock: clock);
+        const string reset = "peek-reset@struo.test";
+        const string expiring = "peek-expiring@struo.test";
+        await ReserveAsync(throttle, reset, 1);
+        await ReserveAsync(throttle, expiring, 1);
+        (await throttle.GetStateAsync(reset)).IsBlocked.Should().BeTrue();
+
+        await throttle.ResetAsync(reset);
+        clock.Advance(TimeSpan.FromSeconds(3.2));
+
+        (await throttle.GetStateAsync(reset)).IsBlocked.Should().BeFalse();
+        (await throttle.GetStateAsync(expiring)).IsBlocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetStateAsync_is_never_blocked_when_disabled_and_matches_email_loosely()
+    {
+        var off = Throttle(MemoryCache(), permitLimit: 1, enabled: false);
+        await ReserveAsync(off, "off@struo.test", 3);
+        (await off.GetStateAsync("off@struo.test")).IsBlocked.Should().BeFalse();
+
+        var on = Throttle(MemoryCache(), permitLimit: 1);
+        await ReserveAsync(on, "  Spray@Struo.Test  ", 1);
+        (await on.GetStateAsync("spray@struo.test")).IsBlocked.Should().BeTrue();
+    }
 }

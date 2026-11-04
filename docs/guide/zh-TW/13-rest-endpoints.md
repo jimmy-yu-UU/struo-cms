@@ -151,6 +151,23 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 回傳 `{ code, labelKey, descriptionKey }` 的陣列，先是核心的系統權限，接著是 fork 註冊的。兩個鍵都是
 i18n 鍵，顯示的文字由後台提供。
 
+## Login locks `api/login-locks`
+
+| 方法與路徑 | 權限 | 用途 |
+|---|---|---|
+| `GET api/login-locks?email=…` | 超級管理員或 `login.unlock` | 讀某個帳號的登入是否被鎖定 |
+| `DELETE api/login-locks?email=…` | 超級管理員或 `login.unlock` | 解除鎖定，回 `204` |
+
+`GET` 回傳 `{ locked, retryAfterSeconds }`：帳號在目前視窗內已把依帳號的登入嘗試額度用光時，
+`locked` 為 `true`，`retryAfterSeconds` 是視窗還剩的秒數，沒鎖定時為 `0`。讀取不會算一次嘗試。
+email 依登入的做法去頭尾空白並轉小寫。`email` 缺少或格式錯誤回 `400`，沒有權限的呼叫端不論送什麼
+email 都是 `403`。
+
+答案不取決於這個 email 有沒有對應的帳號：沒有帳號的位址得到相同的狀態碼與相同的 body 形狀，
+`DELETE` 對它也回 `204`。用 cookie 登入的 `DELETE` 跟其他寫入一樣要帶 CSRF 標頭。每次 `DELETE` 會寫
+一行 `Information` 記錄，內容是呼叫端的使用者 id 與目標使用者 id，找不到帳號時則註明沒有這個帳號；
+email 不會寫進記錄。見[第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
+
 ## Languages `api/languages`
 
 | 方法與路徑 | 權限 | 用途 |

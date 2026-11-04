@@ -120,6 +120,10 @@ i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
 - 角色是 `public`，不論送什麼、空集合也一樣：`400`，`The public role cannot hold capabilities.`，什麼都不會寫入；
 - 有代碼不在清單內，包含空白的、只有大小寫不同的：`400`，`Unknown capabilities: …`，什麼都不會寫入。
 
+依系統權限動作的端點，檢查的是這個權限，不是超級管理員角色。`login.unlock` 開放
+`GET` 與 `DELETE api/login-locks?email=…`，它們讀取與解除某個帳號的登入鎖定：超級管理員，或角色持有
+`login.unlock` 的呼叫端可以用，其他人一律 `403`。
+
 呼叫端要知道自己持有哪些，讀 `GET /api/auth/me`：回應有一個 `capabilities` 陣列，列出它持有的代碼；
 超級管理員拿到完整清單。端點細節見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。
 

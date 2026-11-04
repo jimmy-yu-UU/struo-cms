@@ -15,6 +15,10 @@
   `GET api/auth/me` 帶有呼叫端的 `capabilities`。超級管理員持有所有系統權限，`public` 角色則不能持有
   任何系統權限。見
   [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
+- `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
+  `login.unlock` 的呼叫端可用。不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明
+  呼叫端與目標，不寫 email。`ILoginAttemptThrottle` 新增 `GetStateAsync`，讀取鎖定狀態而不計一次嘗試；
+  自己實作這個介面的 fork 要補上。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
 
 ## 0.23.0 — 2026-11-04
 

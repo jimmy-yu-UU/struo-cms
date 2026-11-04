@@ -177,6 +177,26 @@ A role is itself an ordinary collection, so `POST api/items/role` creates a new 
 It returns an array of `{ code, labelKey, descriptionKey }`, the core capabilities followed by any
 a fork registered. The two keys are i18n keys; the admin UI supplies the text.
 
+## Login locks `api/login-locks`
+
+| Method and path | Permission | Purpose |
+|---|---|---|
+| `GET api/login-locks?email=…` | Super-admin or `login.unlock` | Read whether an account's login is locked |
+| `DELETE api/login-locks?email=…` | Super-admin or `login.unlock` | Clear the lock, returns `204` |
+
+The `GET` returns `{ locked, retryAfterSeconds }`: `locked` is `true` when the account has used up its
+per-account login attempts for the current window, and `retryAfterSeconds` is the time left in that
+window, `0` when not locked. Reading never counts as an attempt. The email is trimmed and lowercased
+the way login does it. A missing or malformed `email` returns `400`, and a caller without the
+permission gets `403`, whatever the email.
+
+The answer does not depend on whether an account with that email exists: an address with no account
+gets the same status and the same body shape, and `DELETE` returns `204` for it too. A cookie-signed-in
+`DELETE` needs the CSRF header like any other mutation. Each `DELETE` writes one `Information` log
+line with the caller's user id and the target user id, or a note that no such account exists; the
+email is never logged. See [Chapter 16](16-authentication.md) and
+[Chapter 17](17-roles-and-permissions.md).
+
 ## Languages `api/languages`
 
 | Method and path | Permission | Purpose |

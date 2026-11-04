@@ -74,6 +74,21 @@ public sealed class DistributedCacheLoginAttemptThrottle(
         }
     }
 
+    public async Task<LoginThrottleState> GetStateAsync(string email, CancellationToken ct = default)
+    {
+        var opts = options.Value;
+        if (!opts.Enabled) return new LoginThrottleState(false, 0);
+
+        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
+        var state = await ReadAsync(CacheKey(email), ct);
+        if (state is null) return new LoginThrottleState(false, 0);
+
+        var windowEnd = state.WindowStartUnixSeconds + opts.WindowSeconds;
+        return now < windowEnd && state.Count >= opts.PermitLimit
+            ? new LoginThrottleState(true, (int)Math.Max(1, windowEnd - now))
+            : new LoginThrottleState(false, 0);
+    }
+
     public Task ResetAsync(string email, CancellationToken ct = default) =>
         options.Value.Enabled ? cache.RemoveAsync(CacheKey(email), ct) : Task.CompletedTask;
 
@@ -91,9 +106,9 @@ public sealed class DistributedCacheLoginAttemptThrottle(
                 AbsoluteExpiration = DateTimeOffset.FromUnixTimeSeconds(expiresAtUnixSeconds),
             }, ct);
 
-    // Never put the raw email in a cache key — hash the normalized (trimmed, lowercased) address so a
-    // Redis operator with read access to key names cannot enumerate attempted account emails.
+    // Never put the raw email in a cache key — hash the normalized address so a Redis operator with
+    // read access to key names cannot enumerate attempted account emails.
     private static string CacheKey(string email) =>
         KeyPrefix + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant())));
+            SHA256.HashData(Encoding.UTF8.GetBytes(EmailAddress.Normalize(email))));
 }

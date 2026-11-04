@@ -147,6 +147,10 @@ The rejections of the `PUT`:
 - a code is outside the list, including a blank one or one that differs only in case: `400`,
   `Unknown capabilities: …`, and nothing is written.
 
+The endpoints that act on a capability check it instead of the super-admin role. `login.unlock` opens
+`GET` and `DELETE api/login-locks?email=…`, which read and clear an account's login lock: they accept a
+super-admin or a caller whose roles hold `login.unlock`, and answer anyone else `403`.
+
 A caller reads its own capabilities from `GET /api/auth/me`, whose response carries a `capabilities`
 array of the codes it holds; a super-admin gets the whole list. Endpoint details are in
 [Chapter 13: REST API Endpoint Reference](13-rest-endpoints.md).
@@ -156,7 +160,7 @@ super-admin can still write `roleCapability` rows through the generic item API, 
 an unknown code there grants nothing, and a row on `public` is ignored.
 
 Deleting a role leaves its `role_capabilities` rows in place, as it does its `permissions` rows.
-Resolution reads only roles that still exist, so those rows no longer apply to anyone.
+Resolution reads only roles that still exist, so those rows apply to nobody.
 
 ## Public read
 

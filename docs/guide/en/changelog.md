@@ -18,6 +18,12 @@
   `GET api/auth/me` carries the caller's `capabilities`. A super-admin holds every capability; the
   `public` role cannot hold any. See
   [Chapter 13](13-rest-endpoints.md) and [Chapter 17](17-roles-and-permissions.md).
+- `GET`/`DELETE api/login-locks?email=…` read and clear an account's login lock, for a super-admin or
+  a caller whose role holds `login.unlock`. The answer is the same whether or not the email has an
+  account, and each clear writes a log line naming the caller and target by id, never the email.
+  `ILoginAttemptThrottle` gains `GetStateAsync`, which reads the lock without counting an attempt; a
+  fork that implements the interface must add it. See [Chapter 13](13-rest-endpoints.md) and
+  [Chapter 16](16-authentication.md).
 
 ## 0.23.0 — 2026-11-04
 

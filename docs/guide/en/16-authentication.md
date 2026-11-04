@@ -260,6 +260,10 @@ Counting every attempt has a cost: whoever knows an account's email can use up i
 that account locked out of password sign-in until the window ends. This is a deliberate trade-off;
 SSO sign-in is unaffected.
 
+A lock ends by itself when the window ends. A super-admin, or a caller whose role holds the
+`login.unlock` capability, can end it sooner through `DELETE api/login-locks?email=…`, and read it with
+`GET`; see [Chapter 13](13-rest-endpoints.md). Clearing a lock does not change the password.
+
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
 protects CPU and memory from a flood of parallel attempts whatever their source.
