@@ -9,6 +9,17 @@ using Struo.Infrastructure.Files;
 
 namespace Struo.Infrastructure.DependencyInjection;
 
+/// <summary>
+/// Registers the file-storage backend chosen by <c>Struo:Files:Backend</c>.
+///
+/// Measured: the startup log of a Compose run carries no message about <c>local</c> storage; only
+/// <c>custom</c> is checked at startup. Ruled out: a Production warning for <c>local</c>, since one
+/// replica on <c>local</c> is a supported setup and the warning would fire on every start.
+/// Unknown: whether operators read the deployment chapter before running several replicas.
+/// If undone: a warning on every correct single-replica start, which operators learn to ignore.
+///
+/// Full write-up: docs/ai/decisions/production-local-files-backend-has-no-startup-warning.md
+/// </summary>
 public static class FileStorageServiceCollectionExtensions
 {
     public static IServiceCollection AddStruoFiles(this IServiceCollection services)

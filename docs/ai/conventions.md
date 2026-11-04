@@ -706,7 +706,9 @@ destructive actions, the user is left with a blocked action and no working way t
   CI. See `AGENTS.md`, "Verification", for the five standing gates CI also runs. `ci.yml` also runs
   a `docker` job (builds and smoke-tests the two container images and the Compose stack —
   `docs/guide/en/20-deployment.md`'s "The two container images" and "The local Compose stack"
-  sections) and two `sonar-*` jobs; none of these is a standing gate.
+  sections) and two `sonar-*` jobs; none of these is a standing gate. The root `Dockerfile`'s floating base
+  tags, its curl install and its `VOLUME` are explained in
+  `docs/ai/decisions/dockerfile-base-image-choices.md`.
 
 See `docs/guide/en/22-testing.md` for all four layers in more depth — it covers the Contract
 layer both in its own "The schema contract" section and in its "What CI deliberately does not run"
