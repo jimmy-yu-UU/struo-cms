@@ -75,9 +75,7 @@ public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
     // container the connection does not point at.
     private static void AssertConnectionTargets(string container, string connectionString)
     {
-        var match = System.Text.RegularExpressions.Regex.Match(
-            connectionString, @"(^|;)\s*Port\s*=\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var port = match.Success ? match.Groups[2].Value : "5432";
+        var port = new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Port;
         var published = Docker("port", container);
         published.Should().MatchRegex($@":{port}(\s|$)",
             $"STRUO_TEST_PG_CONNECTION must target {container} (port {port}); it publishes: {published}");

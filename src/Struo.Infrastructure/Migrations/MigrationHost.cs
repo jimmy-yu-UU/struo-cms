@@ -81,7 +81,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         processor.BeginTransaction();
         try
         {
-            foreach (var (version, migration) in known.OrderBy(kv => kv.Key).Where(kv => !IsAfterBaselineSchema(kv)))
+            foreach (var (version, migration) in known.Where(kv => !IsAfterBaselineSchema(kv)).OrderBy(kv => kv.Key))
                 loader.UpdateVersionInfo(version, migration.Description ?? "");
             processor.CommitTransaction();
         }

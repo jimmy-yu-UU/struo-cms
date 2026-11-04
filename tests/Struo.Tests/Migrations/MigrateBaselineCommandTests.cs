@@ -27,6 +27,8 @@ namespace Struo.Tests.Migrations;
 [Collection("MigrationCli")] // OptionsOverride is static; keep these tests serial
 public sealed class MigrateBaselineCommandTests : IDisposable
 {
+    private static readonly string[] CodeColumn = ["code"];
+
     private const string AdminEmail = "admin@example.com";
     private const string AdminPassword = "s3cret-pw";
     private static readonly string[] PublicRead = ["article", "page"];
@@ -129,7 +131,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
         (await Run(sp, "migrate:baseline")).Code.Should().Be(MigrationCli.Failure);
         var languages = db.EntityMaintenance.GetTableName<Language>();
-        IndexCatalog.Read(db, dbType, languages).Should().ContainSingle(i => i.Columns.SequenceEqual(new[] { "code" }))
+        IndexCatalog.Read(db, dbType, languages).Should().ContainSingle(i => i.Columns.SequenceEqual(CodeColumn))
             .Which.IsUnique.Should().BeTrue();
 
         var report = SchemaChecker.Check(db, dbType, FrameworkEntityTypes.All);
