@@ -86,12 +86,12 @@ defineExpose({ reload })
     <h2 v-if="heading" class="panel-title">{{ t('loginLocks.title') }}</h2>
     <p v-if="errorKey" class="text-muted-foreground" role="alert">{{ t(errorKey) }}</p>
     <!-- Always rendered, so a screen reader registers the live region before its text changes. -->
-    <div ref="statusEl" role="status" aria-live="polite" tabindex="-1" class="status">
+    <output ref="statusEl" aria-live="polite" tabindex="-1" class="status">
       <template v-if="state && !errorKey">
         <p v-if="state.locked">{{ t('loginLocks.locked', { time: remaining }) }}</p>
         <p v-else class="text-muted-foreground">{{ t('loginLocks.notLocked') }}</p>
       </template>
-    </div>
+    </output>
     <div v-if="state?.locked && !errorKey" class="actions">
       <Button type="button" variant="outline" :disabled="busy" @click="onUnlock">
         {{ busy ? t('loginLocks.unlocking') : t('loginLocks.unlock') }}
@@ -103,6 +103,6 @@ defineExpose({ reload })
 <style scoped>
 .login-lock { display: grid; gap: 8px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.status { outline: none; }
+.status { display: block; outline: none; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>

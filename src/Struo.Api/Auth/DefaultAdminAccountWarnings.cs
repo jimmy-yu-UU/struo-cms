@@ -23,6 +23,7 @@ public static class DefaultAdminAccountWarnings
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(
+                ex,
                 "Could not check for an active user with the default bootstrap email ({ExceptionType}).",
                 ex.GetType().Name);
             return;

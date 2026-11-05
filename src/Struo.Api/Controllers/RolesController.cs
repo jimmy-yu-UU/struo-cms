@@ -19,6 +19,8 @@ public sealed class RolesController(
     IPermissionGrantStore grants, IRoleCapabilityStore capabilities, SystemCapabilityCatalog catalog,
     IMetadataProvider metadata, ICurrentPermissions permissions) : ControllerBase
 {
+    private const string RoleNotFound = "Role not found.";
+
     private ObjectResult? RequireAdmin() =>
         permissions.Current.IsSuperAdmin
             ? null
@@ -29,7 +31,7 @@ public sealed class RolesController(
     {
         if (RequireAdmin() is { } denied) return denied;
         if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
         var rows = await grants.ListAsync(id, ct);
         return Ok(rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList());
@@ -51,7 +53,7 @@ public sealed class RolesController(
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
                 "Body must be a JSON array of permission entries.");
         if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
         // Duplicates checked on the raw body (an all-false duplicate still signals a client bug).
         var dupes = body.GroupBy(e => e.Collection, StringComparer.OrdinalIgnoreCase)
@@ -84,7 +86,7 @@ public sealed class RolesController(
     {
         if (RequireAdmin() is { } denied) return denied;
         if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
         return Ok(Sorted(await capabilities.ListAsync(id, ct)));
     }
@@ -102,7 +104,7 @@ public sealed class RolesController(
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
                 "Body must be a JSON array of capability codes.");
         if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Role not found.");
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
         if (await capabilities.IsPublicRoleAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,

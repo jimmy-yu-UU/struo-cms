@@ -65,12 +65,21 @@ internal static class AuthUnlockCommand
     {
         email = "";
         string? value = null;
-        for (var i = 0; i < args.Count; i++)
+        var i = 0;
+        while (i < args.Count)
         {
             var arg = args[i];
             if (value is not null || !IsEmailFlag(arg)) return false;
-            if (arg.StartsWith("--email=", StringComparison.Ordinal)) value = arg["--email=".Length..];
-            else if (i + 1 < args.Count) value = args[++i];
+            if (arg.StartsWith("--email=", StringComparison.Ordinal))
+            {
+                value = arg["--email=".Length..];
+                i++;
+            }
+            else if (i + 1 < args.Count)
+            {
+                value = args[i + 1];
+                i += 2;
+            }
             else return false;
         }
 

@@ -73,7 +73,7 @@ describe('LoginLockPanel', () => {
       .mockResolvedValueOnce({ locked: true, retryAfterSeconds: 120 })
       .mockResolvedValueOnce({ locked: false, retryAfterSeconds: 0 })
     const w = mountPanel()
-    const status = w.get('[role="status"]')
+    const status = w.get('output')
     expect(status.attributes('aria-live')).toBe('polite')
     await flushPromises()
     expect(status.text()).toContain('2 min')

@@ -56,6 +56,7 @@ public sealed class LoginLocksController(
 
         // The project has no audit table; this line is the record. It names the actor and the account by
         // id and never carries the email.
+        if (!logger.IsEnabled(LogLevel.Information)) return NoContent();
         if (target is null)
             logger.LogInformation(
                 "Login lock cleared by {ActorId} for an account that does not exist", actor);

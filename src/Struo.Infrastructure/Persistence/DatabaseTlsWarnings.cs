@@ -117,9 +117,9 @@ public static class DatabaseTlsWarnings
     private static bool IsLocalSqlServer(string dataSource)
     {
         var source = dataSource.Trim();
-        foreach (var prefix in new[] { "tcp:", "np:", "lpc:" })
+        foreach (var prefix in new[] { "tcp:", "np:", "lpc:" }.Where(p => source.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
         {
-            if (source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) source = source[prefix.Length..].TrimStart();
+            source = source[prefix.Length..].TrimStart();
         }
 
         // A pipe source starts with two backslashes; its host is the segment before the next one.

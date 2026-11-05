@@ -32,11 +32,14 @@ const unavailableKey = computed(() =>
 
 // A fork's capability may ship without a locale entry in every language: the fallback locales are
 // consulted first, and only a key found nowhere lets the code stand in for the text.
+function fallbackLocales(): string[] {
+  const fb = fallbackLocale.value
+  if (typeof fb === 'string') return [fb]
+  return Array.isArray(fb) ? fb : []
+}
 function hasText(key: string): boolean {
   if (te(key)) return true
-  const fb = fallbackLocale.value
-  const list = typeof fb === 'string' ? [fb] : Array.isArray(fb) ? fb : []
-  return list.some((locale) => te(key, locale))
+  return fallbackLocales().some((locale) => te(key, locale))
 }
 function textFor(key: string, fallback: string): string {
   return hasText(key) ? t(key) : fallback
