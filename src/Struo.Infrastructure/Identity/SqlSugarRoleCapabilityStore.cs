@@ -32,4 +32,8 @@ public sealed class SqlSugarRoleCapabilityStore(ISqlSugarClient db) : IRoleCapab
             if (rows.Count > 0) await db.Insertable(rows).ExecuteCommandAsync(ct);
         }, ct);
     }
+
+    public async Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default) =>
+        await new TransactionRunner(db).InTransactionAsync(
+            async () => await db.Deleteable<RoleCapability>().Where(c => c.RoleId == roleId).ExecuteCommandAsync(ct), ct);
 }
