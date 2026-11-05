@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.25.0
+
+::: danger Breaking
+- A write that sends an `Email` or `Url` value failing its rule, or a top-level `Select` or `Radio`
+  value outside its options, answers `400 BAD_USER_INPUT` and writes nothing. This applies to
+  translation values and `Repeater` rows too. Stored values are not checked until a write sends that
+  field. A fork that stores relative paths in a `Url` field changes the field to `Text`.
+:::
+
+### Changed
+
+- `Email` and `Url` values, and top-level `Select` and `Radio` values, are format-checked on every
+  write, including translation values and `Repeater` child fields. An email needs one `@`, a local
+  part, a dotted domain and no whitespace; a URL must be an absolute `http` or `https` address with
+  a host; a `Select` or `Radio` value must equal one of its options. `null` and the empty string
+  skip the check. See [Chapter 6](06-field-types.md) and [Chapter 7](07-i18n.md).
+
 ## 0.24.0 — 2026-11-05
 
 ::: danger Breaking

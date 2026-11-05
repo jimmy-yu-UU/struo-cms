@@ -48,12 +48,23 @@ utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backe
 
 Five interfaces get their `string` property widened to long text automatically:
 `Textarea`, `RichText`, `Markdown`, `Code`, and `Json` (covered later); every other `string`
-interface stops at `varchar(255)`. Nothing checks format beyond `Required` and `MaxLength` —
-`Email`, `Url`, and `Phone` are no exception.
+interface stops at `varchar(255)`. Beyond `Required` and `MaxLength`, only `Email` and `Url` check
+their format; the other `string` interfaces, `Phone` included, accept any text.
 
 `Markdown` and `Code` are both plain text boxes, with no preview or syntax highlighting.
 `Password`'s input isn't masked, and it never appears in the GraphQL schema. `Color` is likewise a
 plain text input, with no color-swatch picker.
+
+`Email` and `Url` values are checked on every write, and a value that fails is a `400`
+`BAD_USER_INPUT` naming the field. An email needs exactly one `@`, text before it, a `.` inside the
+domain that is neither its first nor its last character, and no whitespace anywhere:
+`Field '{name}' must be a valid email address.` A URL must be an absolute `http` or `https` address
+with a host: `Field '{name}' must be a valid http or https URL.` `null` and the empty string skip
+the check. On a root or translation value so does whitespace-only text, which `Required` treats as
+empty too; a `Repeater` row checks it. A stored value is never re-checked on read; it is checked
+only when a write sends that field. A field that must hold relative paths belongs on `Text`, not
+`Url`. The same rules apply to translation values and to `Email` and `Url` child fields of a
+`Repeater`.
 
 ### Numbers and booleans
 
@@ -118,9 +129,11 @@ the column's text form. Oracle gets none of this and is unverified.
 from; `Tags` can pair with `[CmsOptions]` too, but it's optional and usually left free-form. How to
 declare `[CmsOptions]` is in [Chapter 5: Defining Collections](05-collections.md).
 
-On write, the only interfaces that actually check a value against the option list are
-`MultiSelect`, `CheckboxGroup`, and `Select`/`Radio` used as `Repeater` child fields; `Select` and
-`Radio` on their own accept any string.
+On write, `MultiSelect`, `CheckboxGroup`, `Select`, and `Radio` check each value against the option
+list. A `Select` or `Radio` value must equal one option's value exactly, case included:
+`Field '{name}' value '{value}' is not in its options.` The check applies to a top-level field, a
+translation value, and a `Repeater` child field. A `Select` or `Radio` with no `[CmsOptions]`
+accepts any string, and `null` and the empty string skip the check.
 
 ### Structured JSON
 

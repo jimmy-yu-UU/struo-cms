@@ -42,9 +42,18 @@ MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資�
 
 這五個介面的 `string` 屬性會自動加寬成長文字：`Textarea`、`RichText`、`Markdown`、
 `Code`，以及後面的 `Json`；其他 `string` 介面都停在 `varchar(255)`。除了 `Required` 與
-`MaxLength` 之外沒有任何格式檢查，`Email`／`Url`／`Phone` 也不例外。`Markdown` 與 `Code`
+`MaxLength` 之外，格式檢查只有 `Email` 與 `Url`，包含 `Phone` 在內的其他 `string` 介面接受任何
+文字。`Markdown` 與 `Code`
 都是一般文字方塊，沒有預覽或語法標示。`Password` 的輸入不遮蔽，也不會出現在 GraphQL schema
 裡。`Color` 同樣是純文字輸入，沒有色票選色器。
+
+`Email` 與 `Url` 的值每次寫入都會檢查，不符的值回 `400` `BAD_USER_INPUT` 並指名該欄位。Email
+必須剛好一個 `@`、前面有文字、網域裡有一個既不是第一個也不是最後一個字元的 `.`，且任何位置都
+不能有空白：`Field '{name}' must be a valid email address.` Url 必須是帶主機的絕對 `http` 或
+`https` 網址：`Field '{name}' must be a valid http or https URL.` `null` 與空字串略過檢查。root
+與翻譯值上，只有空白的文字也略過，因為 `Required` 同樣視它為空；`Repeater` 的列則會檢查它。已存的值
+讀取時不會重新檢查，只有寫入送出該欄位時才檢查。需要存相對路徑的欄位應該用 `Text`，而不是
+`Url`。同樣的規則也適用於翻譯值，以及 `Repeater` 裡的 `Email` 與 `Url` 子欄位。
 
 ### 數字與布林
 
@@ -105,9 +114,11 @@ UTC。
 
 `Select`／`MultiSelect`／`Radio`／`CheckboxGroup` 要掛 `[CmsOptions]` 才有值可選；`Tags`
 可以搭配 `[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
-[第 5 章：定義集合](05-collections.md)。寫入時真正檢查值有沒有在選項清單裡的只有
-`MultiSelect`、`CheckboxGroup`，以及 `Repeater` 子欄位裡的 `Select`、`Radio`；`Select`、
-`Radio` 自己接受任意字串。
+[第 5 章：定義集合](05-collections.md)。寫入時，`MultiSelect`、`CheckboxGroup`、
+`Select`、`Radio` 都會拿每個值對照選項清單。`Select` 或 `Radio` 的值必須與某個選項的值完全相同，
+大小寫也要一致：`Field '{name}' value '{value}' is not in its options.` 頂層欄位、翻譯值與
+`Repeater` 子欄位都適用。沒有 `[CmsOptions]` 的 `Select` 或 `Radio` 接受任意字串，`null` 與空字串
+略過檢查。
 
 ### 結構化 JSON
 
