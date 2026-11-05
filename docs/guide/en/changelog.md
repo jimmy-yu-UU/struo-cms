@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.0
+
+### Changed
+
+- A translatable field over its `MaxLength` answers `400` with `error.details` carrying `field` and
+  `locale`, as the other translation errors do; the message text is unchanged. In the admin item
+  editor, once a non-default locale tab holds content, its required fields show the asterisk, which the
+  server requires of any locale that is sent. See [Chapter 7](07-i18n.md) and
+  [Chapter 12](12-rest-conventions.md).
+
 ## 0.25.0 — 2026-11-05
 
 ::: danger Breaking
