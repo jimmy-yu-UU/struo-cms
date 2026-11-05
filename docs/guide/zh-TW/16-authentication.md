@@ -38,8 +38,12 @@ email 存不存在。
 `POST /api/users` 建立使用者，只有超級管理員能呼叫：成功回 `201`，body 是
 `{ id, email, name }`，`Location` 指向 `/api/items/user/{id}`，這是通用項目路由，因為沒有專屬
 的 `GET /api/users/{id}`；通用的 `POST /api/items/user` 不會建立使用者（`400`），因為只有這個
-端點會雜湊密碼並套用密碼原則；email 已經有人用則回 `409` `CONFLICT` `Email already in use.`。密碼要合乎的長度
-上下限與鍵名，見[第 4 章：設定參考](04-configuration.md)的 `Auth` 一節。
+端點會雜湊密碼並套用密碼原則；email 會先去除前後空白並轉小寫，再用[第 6 章](06-field-types.md)的
+`Email` 規則檢查，不符的回 `400` `BAD_USER_INPUT` `Field 'email' must be a valid email address.`；
+email 已經有人用則回 `409` `CONFLICT` `Email already in use.`。密碼要合乎的長度
+上下限與鍵名，見[第 4 章：設定參考](04-configuration.md)的 `Auth` 一節。透過
+`PUT /api/items/user/{id}` 改使用者的 email 時，檢查的是送出時的原樣，還沒有去除空白與轉小寫，
+所以 `" A@b.co "` 在那裡是 `400`。
 
 後台從使用者清單的「新增」按鈕呼叫這個端點，只有超級管理員看得到。對話框要填 email、選填的顯示
 名稱，以及輸入兩次的密碼；它不處理角色，建立完成後會開啟新使用者的頁面，角色在那裡指派。

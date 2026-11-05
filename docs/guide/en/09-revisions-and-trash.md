@@ -33,7 +33,14 @@ A snapshot is one flat JSON object, with a fixed shape:
 - Every many-to-one relation's foreign-key id, keyed by the relation's camelCase name.
 - Every many-to-many relation, keyed by the relation name.
 - `translations`, holding every locale the item has a row for — the full translation state, not
-  just the locale used for the current query.
+  just the locale used for the current query. A translatable `Json` field's stored text is parsed
+  back into a real JSON value there too, like a root `Json` field.
+
+A revert of a snapshot taken before 0.25.0 stores each translatable `Json` string value verbatim, as
+the text that was stored when the snapshot was taken. Restoring a new-format snapshot stores a stored
+value that was not valid JSON as a JSON string, and the value read back is the same. The server tells
+the two apart by an internal format marker that new snapshots carry and that no API response ever
+shows.
 
 Date-time values in a snapshot are UTC instants ending in `Z`. A snapshot taken before 0.10.0 is
 returned as captured, without a zone.

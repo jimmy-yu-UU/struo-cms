@@ -28,7 +28,7 @@ public sealed class ItemWriteSideSync(
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
     /// <c>translations</c> object, canonicalizes and validates each locale (enabled), each field key (⊆ translatable
-    /// fields), and required fields, then delegates to
+    /// fields), required fields, then Email / Url / Select / Radio format and max length, then delegates to
     /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
     /// <para>
     /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory:
@@ -41,11 +41,17 @@ public sealed class ItemWriteSideSync(
     /// On update the store merges each sent locale per field: a field the request omits keeps its stored
     /// value and an explicit null clears it, so required fields are judged on the merged value. A locale
     /// whose value is null is deleted instead (see <see cref="CollectLocaleDeleteAsync"/>) and takes no part
-    /// in the required and max-length checks.
+    /// in the required, format and max-length checks.
+    /// </para>
+    /// <para>
+    /// A translatable <c>Json</c> field stores the raw JSON text of every non-null value, like a root
+    /// <c>Json</c> field. <paramref name="legacyJsonStrings"/> is set only by the revert of a snapshot
+    /// written before that rule: a string value there is the stored text itself and is stored verbatim.
     /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
-        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct)
+        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate,
+        bool legacyJsonStrings = false, CancellationToken ct = default)
     {
         var tm = meta.Translation;
         if (tm is null) return;
@@ -72,6 +78,10 @@ public sealed class ItemWriteSideSync(
         var maxLengths = meta.Fields
             .Where(f => f.MaxLength is > 0)
             .ToDictionary(f => f.Name, f => f.MaxLength!.Value, StringComparer.OrdinalIgnoreCase);
+
+        var formatFields = meta.Fields
+            .Where(f => f.Translatable && FieldFormatRules.IsChecked(f.Interface))
+            .ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
         var deleteLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -103,7 +113,7 @@ public sealed class ItemWriteSideSync(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = BindTranslationValue(meta, tm, field, locale);
+                var value = BindTranslationValue(meta, tm, field, locale, legacyJsonStrings);
                 if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
                     value = richText.Sanitize(s);
                 fieldValues[field.Name] = value;
@@ -125,6 +135,11 @@ public sealed class ItemWriteSideSync(
 
         if (missing.Count > 0)
             throw FieldValueRules.MissingTranslationsError(missing);
+
+        // Format — Email / Url / Select / Radio values, after every required check and before max length.
+        foreach (var (locale, fieldValues) in perLocale)
+            foreach (var (name, value) in fieldValues)
+                CheckFormat(formatFields, name, value, locale);
 
         // Max length — a CMS-layer limit, measured after RichText sanitization and after every required check.
         foreach (var (locale, fieldValues) in perLocale)
@@ -158,6 +173,17 @@ public sealed class ItemWriteSideSync(
                 ct);
     }
 
+    // Null and the empty string are not checked, nor is whitespace-only text of a Required field. The error
+    // names the field and the locale, like the type error of BindTranslationValue.
+    private static void CheckFormat(
+        Dictionary<string, FieldMetadata> formatFields, string name, object? value, string locale)
+    {
+        if (value is not string sv || !formatFields.TryGetValue(name, out var field)) return;
+        if (FieldFormatRules.Violation(field.Interface, field.Options, sv, field.Required) is not { } phrase) return;
+        var message = $"Field '{name}' {phrase} for locale '{locale}'.";
+        throw new QueryException(message, [new QueryErrorDetail(name, locale, message)]);
+    }
+
     /// <summary>The error for a locale named more than once in one <c>translations</c> payload.</summary>
     public static QueryException DuplicateLocale(string locale)
     {
@@ -166,11 +192,11 @@ public sealed class ItemWriteSideSync(
     }
 
     // A value binds to its sidecar property type with the options root fields use; JSON null clears the
-    // field. A Json field stores a string value as its content and any other value as its raw JSON text,
-    // so a value read back and sent again is stored unchanged. A value of the wrong shape is a 400 naming
-    // the field and the locale.
+    // field. A Json field stores the raw JSON text of every non-null value, like a root Json field, so a value
+    // read back and sent again is stored unchanged; only a legacy snapshot revert stores a string verbatim.
+    // A value of the wrong shape is a 400 naming the field and the locale.
     private static object? BindTranslationValue(
-        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale)
+        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale, bool legacyJsonStrings)
     {
         if (field.Value.ValueKind == JsonValueKind.Null) return null;
         var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, field.Name);
@@ -178,7 +204,9 @@ public sealed class ItemWriteSideSync(
         var isJson = meta.Fields.Any(f => f.Translatable && f.Interface == FieldInterface.Json
                                           && string.Equals(f.Name, field.Name, StringComparison.OrdinalIgnoreCase));
         if (isJson && prop.PropertyType == typeof(string))
-            return field.Value.ValueKind == JsonValueKind.String ? field.Value.GetString() : field.Value.GetRawText();
+            return legacyJsonStrings && field.Value.ValueKind == JsonValueKind.String
+                ? field.Value.GetString()
+                : field.Value.GetRawText();
         try
         {
             return field.Value.Deserialize(prop.PropertyType, ItemDeserializer.JsonOpts);

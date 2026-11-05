@@ -62,6 +62,8 @@ public sealed class TranslationOverlay(
                                          System.Reflection.BindingFlags.IgnoreCase)?.Name ?? f,
                 StringComparer.OrdinalIgnoreCase);
 
+        var jsonFields = StoredJson.TranslatableJsonFields(meta);
+
         // Group translation rows by parent id (string-keyed for cross-type comparison safety).
         var grouped = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>();
         foreach (var tr in tRows)
@@ -75,7 +77,11 @@ public sealed class TranslationOverlay(
 
             var fieldMap = new Dictionary<string, object?>();
             foreach (var (camel, clr) in camelToClr)
-                fieldMap[camel] = PropertyAccessorCache.Read(tr, clr);
+            {
+                var value = PropertyAccessorCache.Read(tr, clr);
+                // A translatable Json field reads like a root Json field.
+                fieldMap[camel] = jsonFields.Contains(camel) ? StoredJson.Read(value) : value;
+            }
             byLocale[loc] = fieldMap;
         }
 
