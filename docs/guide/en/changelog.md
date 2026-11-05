@@ -12,6 +12,11 @@
   fails too.
 - `POST /api/users` applies the `Email` rule to the normalized (trimmed, lowercased) email and
   answers `400 BAD_USER_INPUT` for one that fails. SSO provisioning and login lookup are unchanged.
+- `translations` returns structured JSON for a translatable `Json` field, like a root `Json` field,
+  in REST, GraphQL and revision snapshots; stored text that is not valid JSON still comes back as the
+  raw string. A write stores every non-null value as its raw JSON text, so a string value is stored
+  as a JSON string. Stored values need no migration. Reverting to a revision taken before this
+  version stores such a string value verbatim, as it was stored then.
 :::
 
 ### Changed
