@@ -9,7 +9,7 @@
   field. A fork that stores relative paths in a `Url` field changes the field to `Text`.
 - The admin item editor sends every field on save, so an item that holds a value these rules reject
   cannot be saved until that value is fixed, and reverting to a revision that holds such a value
-  fails too.
+  fails too. This includes a user whose email does not meet the rule.
 - `POST /api/users` applies the `Email` rule to the normalized (trimmed, lowercased) email and
   answers `400 BAD_USER_INPUT` for one that fails. SSO provisioning and login lookup are unchanged.
 - `translations` returns structured JSON for a translatable `Json` field, like a root `Json` field,
