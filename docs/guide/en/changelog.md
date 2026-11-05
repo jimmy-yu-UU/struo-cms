@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.26.0
+## 0.26.0 — 2026-11-05
 
 ::: danger Breaking
 - `IPermissionGrantStore` and `IRoleCapabilityStore` each have a new member,
