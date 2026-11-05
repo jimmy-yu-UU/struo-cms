@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.25.0
+## 0.25.0 — 2026-11-05
 
 ::: danger Breaking
 - A write that sends an `Email` or `Url` value failing its rule, or a top-level `Select` or `Radio`
