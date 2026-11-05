@@ -302,4 +302,84 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         all.Should().NotContain(m => m.Contains(email, StringComparison.OrdinalIgnoreCase)
                                      || m.Contains(unknown, StringComparison.OrdinalIgnoreCase));
     }
+
+    // A second super-admin account (active or not), seeded through the base factory.
+    private async Task<(string Email, string Password, Guid Id)> SeedSuperAdminAsync(bool active = true)
+    {
+        await factory.CreateAuthenticatedClientAsync(); // seeds the "admin" super-admin role
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var hasher = scope.ServiceProvider.GetRequiredService<Struo.Application.Security.IPasswordHasher>();
+        var id = Guid.CreateVersion7();
+        var email = $"root-{id:N}@struo.test";
+        const string password = "root-pw-123";
+        var role = await db.Queryable<Role>().Where(r => r.Name == "admin").FirstAsync();
+        await db.Insertable(new User
+        {
+            Id = id, Email = email, Password = hasher.Hash(password), Name = "Root", IsActive = active,
+        }).ExecuteCommandAsync();
+        await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = id, RoleId = role.Id })
+            .ExecuteCommandAsync();
+        return (email, password, id);
+    }
+
+    private async Task<HttpClient> HelperAsync(WebApplicationFactory<Program> host)
+    {
+        var (email, password, id) = await factory.SeedEditorAsync([], []);
+        await GrantUnlockAsync(id);
+        return await LoggedInAsync(host, email, password);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_holder_cannot_clear_the_lock_on_a_super_admin_account(bool targetActive)
+    {
+        var logs = new CapturingProvider();
+        using var host = Host(logs);
+        var root = await SeedSuperAdminAsync(targetActive);
+        using var helper = await HelperAsync(host);
+        using var admin = await AdminAsync(host);
+        await LockAsync(host, root.Email);
+
+        var refused = await helper.DeleteAsync(Q(root.Email));
+
+        refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var body = await refused.Content.ReadAsStringAsync();
+        body.Should().Contain("FORBIDDEN").And.Contain("super-admin");
+        (await StateAsync(admin, root.Email)).locked.Should().BeTrue();
+
+        string[] all;
+        lock (logs.Messages) all = logs.Messages.ToArray();
+        var refusals = all.Where(m => m.Contains("clear refused")).ToArray();
+        refusals.Should().ContainSingle().Which.Should().Contain(root.Id.ToString());
+        all.Should().NotContain(m => m.Contains(root.Email, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task A_super_admin_can_clear_the_lock_on_a_super_admin_account()
+    {
+        using var host = Host();
+        var root = await SeedSuperAdminAsync();
+        using var admin = await AdminAsync(host);
+        await LockAsync(host, root.Email);
+
+        (await admin.DeleteAsync(Q(root.Email))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StateAsync(admin, root.Email)).locked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_holder_can_still_clear_a_normal_account_and_an_unknown_email()
+    {
+        using var host = Host();
+        var (victim, _, _) = await factory.SeedEditorAsync([], []);
+        var unknown = $"nobody-{Guid.NewGuid():N}@struo.test";
+        using var helper = await HelperAsync(host);
+        using var admin = await AdminAsync(host);
+        await LockAsync(host, victim);
+
+        (await helper.DeleteAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await helper.DeleteAsync(Q(unknown))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StateAsync(admin, victim)).locked.Should().BeFalse();
+    }
 }

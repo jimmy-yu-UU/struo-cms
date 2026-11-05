@@ -9,7 +9,8 @@ public sealed record SystemCapability(string Code, string LabelKey, string Descr
 /// <see cref="ISystemCapabilitySource"/>; <see cref="SystemCapabilityCatalog"/> is the complete list.</summary>
 public static class SystemCapabilities
 {
-    /// <summary>Lets the holder list and clear locked login accounts.</summary>
+    /// <summary>Lets the holder list and clear locked login accounts. It does not reach a super-admin
+    /// account: only a super-admin can clear that lock.</summary>
     public const string LoginUnlock = "login.unlock";
 
     public static IReadOnlyList<SystemCapability> Core { get; } =

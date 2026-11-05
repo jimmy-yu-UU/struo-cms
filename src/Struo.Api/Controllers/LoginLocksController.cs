@@ -12,13 +12,14 @@ namespace Struo.Api.Controllers;
 /// by email. Reserved for a super-admin or a caller whose roles hold the <c>login.unlock</c> capability.
 /// The answer never depends on whether an account with that email exists: the lock is keyed on the
 /// address alone, exactly as <c>AuthController.Login</c> counts it, so an unknown address answers in the
-/// same shape and status as a known one.</summary>
+/// same shape and status as a known one. The one exception is clearing the lock on a super-admin
+/// account, which only a super-admin may do.</summary>
 [ApiController]
 [Route("api/login-locks")]
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class LoginLocksController(
     ILoginAttemptThrottle throttle, ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
-    IUserCredentialStore users, ILogger<LoginLocksController> logger) : ControllerBase
+    IUserCredentialStore users, IRolePermissionStore rolePermissions, ILogger<LoginLocksController> logger) : ControllerBase
 {
     public sealed record LoginLockState(bool Locked, int RetryAfterSeconds);
 
@@ -38,11 +39,23 @@ public sealed class LoginLocksController(
 
         // Looked up before the lock is cleared, so a failing lookup leaves the lock and the record in step.
         var target = await users.FindByEmailAsync(email!, ct);
+        var actor = currentUser.GetCurrentUserId();
+
+        // A super-admin account's lock is cleared only by a super-admin: a capability holder could
+        // otherwise keep guessing at an administrator's password by clearing the lock between attempts.
+        if (target is not null && !permissions.Current.IsSuperAdmin
+            && PermissionResolver.Resolve(await rolePermissions.LoadForUserAsync(target.Id, ct)).IsSuperAdmin)
+        {
+            logger.LogWarning(
+                "Login lock clear refused for {ActorId}: target {TargetUserId} is a super-admin", actor, target.Id);
+            return ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
+                "Only a super-admin can clear the lock on a super-admin account.");
+        }
+
         await throttle.ResetAsync(email!, ct);
 
         // The project has no audit table; this line is the record. It names the actor and the account by
         // id and never carries the email.
-        var actor = currentUser.GetCurrentUserId();
         if (target is null)
             logger.LogInformation(
                 "Login lock cleared by {ActorId} for an account that does not exist", actor);
