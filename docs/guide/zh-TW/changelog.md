@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.24.0
+## 0.24.0 — 2026-11-05
 
 ::: danger 破壞性變更
 - `ILoginAttemptThrottle` 新增成員 `Task<LoginThrottleState> GetStateAsync(string, CancellationToken)`，

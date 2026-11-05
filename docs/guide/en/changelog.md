@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.24.0
+## 0.24.0 — 2026-11-05
 
 ::: danger Breaking
 - `ILoginAttemptThrottle` has a new member, `Task<LoginThrottleState> GetStateAsync(string,
