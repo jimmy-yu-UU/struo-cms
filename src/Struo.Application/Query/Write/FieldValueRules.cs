@@ -41,8 +41,8 @@ internal static class FieldValueRules
 
     internal static void CheckMaxLengthTranslation(string fieldName, int max, string locale, string? value)
     {
-        if (value is not null && value.Length > max)
-            throw new QueryException(
-                $"Field '{fieldName}' exceeds maximum length {max} for locale '{locale}'.");
+        if (value is null || value.Length <= max) return;
+        var message = $"Field '{fieldName}' exceeds maximum length {max} for locale '{locale}'.";
+        throw new QueryException(message, [new QueryErrorDetail(fieldName, locale, message)]);
     }
 }
