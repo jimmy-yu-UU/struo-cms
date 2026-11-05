@@ -10,6 +10,7 @@ using Struo.Application.Files;
 using Struo.Application.Security;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Identity;
+using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
@@ -340,5 +341,20 @@ public sealed class ShippedConfigurationBindingTests
             $"every key under '{sectionName}' must bind to a {typeof(TOptions).Name} property and every " +
             "property must be represented in the shipped file — a misspelled key on either side keeps " +
             "the C# default with no error");
+    }
+
+    // Both startup warnings fire on CoreSeedData.DefaultAdminEmail. A shipped default that drifted from it
+    // would silence them for the very address the template ships.
+    [Fact]
+    public void Shipped_bootstrap_email_defaults_equal_the_seed_constant()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(ShippedAppSettingsPath()));
+        var appsettings = doc.RootElement.GetProperty("Auth").GetProperty("BootstrapAdmin")
+            .GetProperty("Email").GetString();
+        var compose = File.ReadAllLines(Path.Combine(RepoRoot.Find(), "docker-compose.yml"))
+            .Single(l => l.Contains("Auth__BootstrapAdmin__Email:", StringComparison.Ordinal)).TrimEnd();
+
+        appsettings.Should().Be(CoreSeedData.DefaultAdminEmail);
+        compose.Should().EndWith(":-" + CoreSeedData.DefaultAdminEmail + "}");
     }
 }

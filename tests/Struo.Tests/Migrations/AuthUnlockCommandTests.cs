@@ -1,12 +1,14 @@
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Application.Configuration;
 using Struo.Application.Security;
-using Struo.Tests.Security;
+using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Migrations.Commands;
+using Struo.Tests.Security;
 using Xunit;
 
 namespace Struo.Tests.Migrations;
@@ -56,6 +58,21 @@ public sealed class AuthUnlockCommandTests
         var invocation = MigrationCli.Parse(["auth:unlock", .. args]);
         var code = await MigrationCli.RunAsync(invocation, sp, stdout, stderr, CancellationToken.None);
         return (code, stdout.ToString(), stderr.ToString());
+    }
+
+    // The command treats a configured Redis:ConnectionString as "the API counts in Redis". That holds only
+    // while AddStruoAuth selects the Redis throttle for the same key; the factory is lazy, so nothing connects.
+    [Theory]
+    [InlineData("127.0.0.1:1", typeof(RedisLoginAttemptThrottle))]
+    [InlineData("", typeof(DistributedCacheLoginAttemptThrottle))]
+    public void AddStruoAuth_selects_the_throttle_the_command_assumes(string redis, Type expected)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Configuration.AddInMemoryCollection([new("Redis:ConnectionString", redis)]);
+        builder.Services.AddStruoAuth(builder.Configuration, builder.Environment);
+        using var sp = builder.Services.BuildServiceProvider();
+
+        sp.GetRequiredService<ILoginAttemptThrottle>().Should().BeOfType(expected);
     }
 
     [Fact]
