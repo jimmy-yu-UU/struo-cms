@@ -88,8 +88,8 @@ defineExpose({ reload })
     <!-- Always rendered, so a screen reader registers the live region before its text changes. -->
     <output ref="statusEl" aria-live="polite" tabindex="-1" class="status">
       <template v-if="state && !errorKey">
-        <p v-if="state.locked">{{ t('loginLocks.locked', { time: remaining }) }}</p>
-        <p v-else class="text-muted-foreground">{{ t('loginLocks.notLocked') }}</p>
+        <span v-if="state.locked" class="block">{{ t('loginLocks.locked', { time: remaining }) }}</span>
+        <span v-else class="block text-muted-foreground">{{ t('loginLocks.notLocked') }}</span>
       </template>
     </output>
     <div v-if="state?.locked && !errorKey" class="actions">
