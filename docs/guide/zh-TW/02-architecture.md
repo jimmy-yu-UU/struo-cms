@@ -26,7 +26,7 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 ## 核心與範例的界線
 
 核心是 `src/Struo.*` 底下的所有程式碼，加上框架自己會持久化的 entity。這些 entity 集中列在
-`FrameworkEntityTypes.All`，一共十一筆。資料表的實際名稱是
+`FrameworkEntityTypes.All`，一共十二筆。資料表的實際名稱是
 `Database:TablePrefix` 加上基底名，預設前綴 `struo_`，所以 `User` 的表是 `struo_users`；把前綴設成空
 字串就只剩基底名。範例專案與你自己的集合不加前綴。
 
@@ -40,12 +40,13 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 | `Role` | `roles` |
 | `Permission` | `permissions` |
 | `UserRole` | `user_roles` |
+| `RoleCapability` | `role_capabilities` |
 | `Revision` | `revisions` |
 | `SiteSettings` | `site_settings` |
 | `UserSession` | `user_sessions` |
 
-這十一種裡有七種本身也是集合（宣告了 `[CmsCollection]`）：`Language`、`File`、`MediaFolder`、
-`User`、`Role`、`Permission`、`UserRole`。另外四種——`FileTranslation`、`Revision`、
+這十二種裡有八種本身也是集合（宣告了 `[CmsCollection]`）：`Language`、`File`、`MediaFolder`、
+`User`、`Role`、`Permission`、`UserRole`、`RoleCapability`。另外四種——`FileTranslation`、`Revision`、
 `SiteSettings`、`UserSession`——是框架資料表，但不是集合。
 
 核心還有兩個不在 `src/Struo.*` 底下的資料夾，fork 時都要留著：
@@ -54,7 +55,8 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 - `schema/`：schema gate 用來比對前後端契約的快照。
 
 框架資料表由 `Struo.Infrastructure` 裡的核心 migration 建立：`CreateCoreSchema` 建表，
-`SeedCoreData` 植入初始資料，`AddLanguageCodeUniqueIndex` 為語言的 `code` 加上唯一索引，三支都由
+`SeedCoreData` 植入初始資料，`AddLanguageCodeUniqueIndex` 為語言的 `code` 加上唯一索引，
+`CreateRoleCapabilities` 建立角色系統權限表，四支都由
 `migrate` 或 `Database:MigrateOnStartup` 套用。API 不會照 entity 類別自己建表。fork 為自己的集合寫的
 migration 屬於那個 fork。
 
@@ -87,12 +89,11 @@ migration 屬於那個 fork。
 - **變更通知**：`IItemChangeListener` 同樣是讓出去的介面，核心只提供一個預設註冊的
   `ItemChangeNotifier` 負責派送；fork 沒註冊任何監聽者時，一次寫入通知零個監聽者，fork 可以
   註冊任意數量。
-- **識別 store**：身分資料的存取也是收在幾個介面後面——`IUserCredentialStore`、
-  `IUserAccountStore`、`IPermissionGrantStore`、`IRolePermissionStore`、
-  `IExternalUserStore`、`IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個
-  介面各自有對應的 `SqlSugar*` 實作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。
-  fork 要換掉識別儲存的實作，得在呼叫 `AddStruoCms()` 之後再註冊自己的版本——後註
-  冊的贏，這幾個不是 `TryAdd`。
+- **識別 store**：身分資料的存取也是收在幾個介面後面——`IUserCredentialStore`、`IUserAccountStore`、
+  `IPermissionGrantStore`、`IRolePermissionStore`、`IRoleCapabilityStore`、`IExternalUserStore`、
+  `IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個介面各自有對應的 `SqlSugar*` 實
+  作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。fork 要換掉識別儲存的實作，得在呼叫
+  `AddStruoCms()` 之後再註冊自己的版本——後註冊的贏，這幾個不是 `TryAdd`。
 
 不能換的是 SqlSugar 本身，以及它牽動的框架資料表：每個內容 entity 都直接背著 SqlSugar 的屬
 性，fork 寫的每一個 entity 都繼承這層語意；`IItemRepository` 也只有一個實作

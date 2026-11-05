@@ -20,6 +20,7 @@ internal static class StruoCmsStartupChecks
         sp.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
             .Get(Struo.Api.Auth.AuthSchemes.Cookie);
         VerifyCustomFileStorage(sp);
+        VerifyCapabilityCatalog(sp);
         await StruoCmsGraphQlCheck.RunAsync(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
         var dbOptions = sp.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>().Value;
@@ -31,6 +32,8 @@ internal static class StruoCmsStartupChecks
             app.Configuration, app.Environment, startupLogger);
         Struo.Api.Auth.DataProtectionWarnings.Log(
             app.Configuration, app.Environment, startupLogger);
+        Struo.Infrastructure.Persistence.DatabaseTlsWarnings.Log(
+            dbOptions.DbType, dbOptions.ConnectionString, app.Environment, startupLogger);
         var host = new MigrationHost(
             MigrationHostOptions.FromServices(sp, includeSeed: dbOptions.MigrateOnStartup),
             sp.GetRequiredService<ILoggerFactory>());
@@ -48,7 +51,14 @@ internal static class StruoCmsStartupChecks
             sp.GetRequiredService<ISqlSugarClient>(), dbOptions.DbType,
             startupLogger);
 
+        await Struo.Api.Auth.DefaultAdminAccountWarnings.LogAsync(
+            sp.GetRequiredService<ISqlSugarClient>(), app.Environment, startupLogger);
     }
+
+    // The catalog validates its sources when first built: resolving it here fails startup on a duplicate or
+    // blank code instead of the first request that needs it.
+    private static void VerifyCapabilityCatalog(IServiceProvider sp) =>
+        _ = sp.GetRequiredService<Struo.Application.Security.SystemCapabilityCatalog>();
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
     // startup with the message naming the key, not the first file request.

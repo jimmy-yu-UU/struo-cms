@@ -22,7 +22,9 @@ covers, and `admin` is refused in any letter case; when the seed runs and the pa
 weak, `migrate`, `migrate:preview` and a `Database:MigrateOnStartup` start refuse with an error that
 names `Auth__BootstrapAdmin__Password`. Once the seed has been applied nothing needs the value
 any more, so it can be removed. The transcripts log in with a placeholder for that password. The default email
-`admin@admin.com` is accepted; change it too.
+`admin@admin.com` is accepted; change it too. In Production, the seed logs a warning when it creates the
+account with that email, and every start logs one while an active user still has it; see
+[Chapter 20](20-deployment.md).
 
 The same seed data also creates the `admin` and `public` roles, and adds the first administrator
 to `admin` — the detail is left to
@@ -260,9 +262,26 @@ Counting every attempt has a cost: whoever knows an account's email can use up i
 that account locked out of password sign-in until the window ends. This is a deliberate trade-off;
 SSO sign-in is unaffected.
 
+A lock ends by itself when the window ends. A super-admin, or a caller whose role holds the
+`login.unlock` capability, can end it sooner through `DELETE api/login-locks?email=…`, and read it with
+`GET`; see [Chapter 13](13-rest-endpoints.md). The admin UI does the same on its Login locks page, for a
+super-admin or a holder of `login.unlock`, and on a user's edit page, for a super-admin. Clearing a lock
+does not change the password. A holder of `login.unlock` who is not a super-admin cannot clear the lock
+on a super-admin account: the endpoint answers `403`, the Login locks page says so, and only a
+super-admin can clear it.
+
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
 protects CPU and memory from a flood of parallel attempts whatever their source.
+
+That cap is one partition for the whole process, not split by account or by IP: it sheds load, and
+it cannot tell an attacker from a legitimate user. While a flood of password logins is in progress,
+legitimate password logins can get `429` too, until the flood stops; SSO sign-in is unaffected.
+Shed the flood before it reaches the API: put a rate limit at the reverse proxy or WAF in front;
+turn on `RateLimiting:Login` where client IPs are reliable, with `ForwardedHeaders` configured; and
+set `PermitLimit` and `QueueLimit` to what the machine can verify at once. Where each key is set is
+in [Chapter 4](04-configuration.md), and the proxy side is in
+[Chapter 20](20-deployment.md).
 
 Per-caller-IP throttling (`RateLimiting:Login`) is the opposite: off by default, and it protects
 only the login endpoint — logout, `me`, and the OIDC challenge are all unaffected by it.
@@ -293,6 +312,43 @@ HTTP_STATUS:429
 The `$TW` in the transcript is an email that's never been used. Only this one account is blocked:
 within the same run, a correct login for another account still goes through immediately. The
 partition key is the account, not the caller's IP.
+
+## Recovering a locked account
+
+When the locked account is the only administrator, a lock that ends by itself in a few minutes is
+still a locked door. There are three ways to open it sooner:
+
+- Another super-admin clears it, as described above. A holder of `login.unlock` cannot, because the
+  lock is on a super-admin account.
+- Sign in with SSO, when an OIDC provider is enabled. The per-account count applies to password
+  sign-in only.
+- Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.
+
+```text
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
+auth:unlock: cleared the login lock for the given account, if it had one.
+```
+
+The command reads the same configuration as the API, so it needs `Redis:ConnectionString`, the same
+value the API runs with. The email is trimmed and lowercased the way login does it. A missing, blank
+or over-long (more than 255 characters) `--email` prints `Usage: auth:unlock --email <email>` and
+exits `2`. The command never prints the email back, and it says "if it had one" because it cannot
+tell whether the account exists or was locked; the endpoint's answer does not say either, except that
+it refuses a caller who is not a super-admin for a super-admin account. When
+`RateLimiting:LoginAccount` is disabled it says so and exits `0`, since there is no lock. If the
+reset fails, for example because Redis cannot be reached, it prints the error type, never the
+connection string, and exits `1`.
+
+Without Redis, each API process counts attempts in its own memory, which a separate command cannot
+reach. The command says so and exits `1`, so a script does not take it for success:
+
+```text
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
+auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.
+```
+
+Restarting the API clears the count of every account, locked or not. See
+[Chapter 21](21-schema-and-upgrades.md) for how the command line finds its configuration.
 
 ## OIDC external login
 

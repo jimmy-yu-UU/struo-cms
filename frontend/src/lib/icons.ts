@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, ArrowUp, ArrowDown,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Menu, User, LogOut,
   Sun, Moon, Check, X, Upload, History, RotateCcw, List, ListOrdered, Table,
-  Megaphone, Newspaper, Image as ImageIcon, Video, Volume2,
+  Megaphone, Newspaper, Image as ImageIcon, Video, Volume2, Lock,
 } from '@lucide/vue'
 
 // One table, two input dialects:
@@ -27,6 +27,7 @@ export const ICON_MAP: Record<string, Component> = {
   'th-large': LayoutGrid,
   images: Images,
   cog: Settings,
+  lock: Lock,
   bars: Menu,
   user: User,
   'sign-out': LogOut,

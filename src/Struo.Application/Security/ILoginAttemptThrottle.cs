@@ -26,4 +26,10 @@ public interface ILoginAttemptThrottle
     /// <summary>Clears the attempt count for <paramref name="email"/>, called on a successful
     /// login so a legitimate user cannot lock themselves out by logging in normally.</summary>
     Task ResetAsync(string email, CancellationToken ct = default);
+
+    /// <summary>Reports whether <paramref name="email"/> is locked, without counting an attempt. Locked
+    /// means the next <see cref="TryReserveAsync"/> would be refused: the window's permit limit is
+    /// already reached. <see cref="LoginThrottleState.RetryAfterSeconds"/> is the time left in the window
+    /// (at least 1) when locked, and 0 otherwise. Never locked while the throttle is disabled.</summary>
+    Task<LoginThrottleState> GetStateAsync(string email, CancellationToken ct = default);
 }

@@ -56,7 +56,21 @@ PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密�
 沒用 Kerberos 的話，建議加上 `GSS Encryption Mode=Disable`。不加的話，驅動程式每開一條新的實體連線，
 都會先試一次 GSS 加密，連線因此變慢。migration 鎖的連線不走連線池，所以每次 `migrate` 都會再慢一次。
 
-其他後端就用該驅動程式自己的 TLS 選項寫在連線字串裡。
+SQL Server 用 `Encrypt=Mandatory`（驅動程式的預設）加 `TrustServerCertificate=False`，會加密連線並驗證憑證。
+`Encrypt=Strict` 走 TDS 8.0，效果相同，並忽略 `TrustServerCertificate`。`Encrypt=Optional`、`Encrypt=False`
+與 `TrustServerCertificate=True` 都不驗證。
+
+MySQL 與 MariaDB 要設 `SSL Mode=VerifyFull`；只驗證憑證、不比對主機名稱的話用 `VerifyCA`。`Required` 與
+`Preferred` 不驗證，`None` 是明文。沒設 `SSL Mode` 時，預設是 `Preferred`。
+
+在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，
+啟動會記一則警告。警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時
+不警告：`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與
+`(localdb)`。SQL Server 的具名管道或共用記憶體來源，主機是上述本機主機之一才算本機；連到其他機器的管
+道走網路，仍會警告。解析失敗的連線字串也不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
+
+根目錄的 `docker-compose.yml` 會出現這則警告：資料庫是同一個 Docker 網路裡的另一個容器，連線字串沒設
+TLS，取捨與沒設密碼的 Redis 相同。本機堆疊可以放著不管，正式部署要改成會驗證的模式。
 
 每個 API 行程最多開 `Maximum Pool Size` 條連線（Npgsql 預設 100）。把它乘上副本數，結果要低於伺服器的
 `max_connections`，還要留空間給 `migrate` job 與你自己的工具。
@@ -80,12 +94,22 @@ seed 要執行、而且 `Auth:BootstrapAdmin:Email` 有設時，密碼若是空�
 
 預設 email `admin@admin.com` 也請改掉。Compose 檔讀 `STRUO_ADMIN_PASSWORD`，沒設就不會啟動。
 
+在 Production，有兩則警告指向預設 email。seed 用 `admin@admin.com` 建立 bootstrap 管理員時記一則。
+每次啟動時只要有啟用中的使用者用這個 email 就記一則，先前建立的帳號也包含在內。兩則都點名這個地址，
+不會印出任何密碼。請到後台改掉這個帳號的 email，或另外建立一位管理員後停用這個帳號。
+
 ### 登入速率限制：帳號層開、IP 層看拓樸
 
 帳號層的節流（`RateLimiting:LoginAccount`）預設開著，能單獨擋下針對單一帳號的暴力嘗試；IP 層
 的節流（`RateLimiting:Login`）預設關閉，因為它依 `Connection.RemoteIpAddress` 分桶：反向代理
 後面（沒有透過 `ForwardedHeaders` 信任的代理）每個人看起來都是代理自己的位址，而共用一條對外 NAT
-的辦公室即使代理設定正確，也一樣擠在同一個桶裡。兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
+的辦公室即使代理設定正確，也一樣擠在同一個桶裡。
+
+行程層級的上限（`RateLimiting:LoginConcurrency`）是卸載負載的 CPU 防護：大量密碼登入湧入期間，
+它也會把正常的登入以 `429` 擋回，SSO 不受影響。讓洪流到不了它的，是前面反向代理或 WAF 的速率限
+制；`PermitLimit` 與 `QueueLimit` 則依機器調整。
+
+兩層各自的行為見[第 16 章：認證與 SSO](16-authentication.md)〈登入速率限制〉一節。
 
 ### 反向代理後面要啟用 `ForwardedHeaders`
 
@@ -219,8 +243,9 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 子。下面是 API 映像對一個空的 SQLite 資料庫啟動：
 
 ```
-[01:45:34 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+[06:21:22 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -484,14 +509,15 @@ Compose 環境會把兩個映像連同 PostgreSQL、Redis 一起起來：
 ```
 docker network create struo-verify
 docker volume create struo-verify-data
-docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' --env 'Auth__BootstrapAdmin__Password=<your-admin-password>' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData` 與
-`Applied 202611030000  AddLanguageCodeUniqueIndex`。
-少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
+第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData`、
+`Applied 202611030000  AddLanguageCodeUniqueIndex` 與 `Applied 202611040000  CreateRoleCapabilities`。沒有 bootstrap 密碼的話，植入 migration 會以
+`Auth__BootstrapAdmin__Password is required` 失敗。
+少了 `migrate` 這一步，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用
 者自訂的 network 上，而 API 容器就叫 `api`。API 容器如果要連到 Docker host 上的資料庫，用
@@ -629,7 +655,8 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 為檔案位置掛上的 volume `struo-dpkeys` 用不到。`redis` 服務沒有 volume：重建它會丟掉金鑰圈，連同所有
 工作階段。開發與測試這樣就夠了；正式環境要替 Redis 設密碼，並照上面「DataProtection 金鑰」一節保護金鑰。
 
-`api` 服務每次啟動都會記下兩則 Redis 警告（金鑰沒有保護、Redis 沒有密碼）；快速上手的這個環境這是預期的。
+`api` 服務每次啟動都會記下兩則 Redis 警告（金鑰沒有保護、Redis 沒有密碼）與資料庫 TLS 警告；
+快速上手的這個環境這是預期的。
 
 ### S3 相容儲存
 

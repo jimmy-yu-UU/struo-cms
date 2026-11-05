@@ -3,7 +3,7 @@
 通過驗證之後，呼叫端能對哪個集合做什麼、系統怎麼算出這個答案、以及要去哪裡改，是這一章的主題。
 呼叫端怎麼證明自己是誰，見[第 16 章：認證與 SSO](16-authentication.md)。
 
-## 三張表
+## RBAC 資料表
 
 RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐集合的授權。
 
@@ -17,7 +17,7 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 因此既不會出現在一般的查詢結果，也不能被呼叫端直接寫入。
 
 使用者的角色是一個對 `role` 的 `TagSelect` 多對多，後台表單上就是勾選角色名稱；使用者與角色之間
-的 junction 是第四張表 `userRole`（資料表 `struo_user_roles`），呼叫端看不到它。
+的 junction 是第四張表 `userRole`（資料表 `struo_user_roles`），呼叫端看不到它。角色持有的系統權限存在第五張表 `roleCapability`，見下面的〈系統權限〉。
 
 `permission` 這一列除了指向哪個角色、哪個集合之外，只有三個授權旗標：`canRead`、`canWrite`、
 `canDelete`，沒有第四個，也沒有另外存一個「可以讀取未發布內容」的旗標。角色本身另外帶一個
@@ -66,7 +66,7 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 
 ## `AdminOnly` 集合
 
-框架自帶的集合裡，標成 `AdminOnly` 的就是 `user`、`role`、`permission`、`userRole` 這四個；屬性
+框架自帶的集合裡，標成 `AdminOnly` 的就是 `user`、`role`、`permission`、`userRole`、`roleCapability` 這五個；屬性
 本身的定義與怎麼在自己的集合上設，見[第 5 章：定義集合](05-collections.md)。
 
 `AdminOnly` 只管寫入：通用 CRUD 路徑上的建立、更新、刪除、復原與版本還原，一律要求呼叫端是超級管
@@ -80,6 +80,62 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 呼叫端在這個集合上完全沒有授權，看到的就是這兩句一般訊息；只有本來就持有相關授權、卻不是超級管
 理員的呼叫端，才會看到專屬訊息 `Writes to '{collection}' require a super-admin.`，這句話因此只
 對已經有資格寫、但少了超級管理員身分的人出現。
+
+## 系統權限
+
+集合授權管的是角色能對某個集合的項目做什麼；有些動作不屬於任何集合，例如解除被鎖定的登入帳號。
+這類動作用系統權限處理：一個有名字的權限，由角色持有，由超級管理員授予或收回。核心定義了一個，
+`login.unlock`，也就是解除被鎖定登入帳號（超級管理員帳號除外）的權限。
+
+一個系統權限有三個部分：代碼、標籤鍵、說明鍵。代碼是存進資料庫、也在 API 上傳遞的字串；兩個鍵是
+i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
+`capabilities.login.unlock.description`，顯示的文字由後台的語系檔（`frontend/src/locales/*.ts`）提供。
+鍵在任何語系都沒有條目的系統權限，會以代碼顯示，沒有說明。
+
+有效的代碼清單只在程式裡定義一次。`SystemCapabilities.Core` 放核心的，`SystemCapabilityCatalog` 把它
+們與所有已註冊的 `ISystemCapabilitySource` 合併。fork 要加自己的系統權限，就實作這個介面，再用
+`services.AddSingleton<ISystemCapabilitySource, MySource>()` 註冊；來源可以註冊任意多個。代碼若與
+核心代碼或另一個來源的代碼重複、是空白、或超過 255 字元，啟動就會以
+`InvalidOperationException` 停下。代碼逐字比對，不做大小寫轉換。
+
+角色持有的系統權限存在 `role_capabilities`（資料表 `struo_role_capabilities`，集合 `roleCapability`）：
+一列代表一個角色一個代碼，（`roleId`、`capability`）唯一。它跟 `permission`、`userRole` 一樣同時是
+`Hidden` 與 `AdminOnly`，後台不會直接編輯它。
+
+解析時，讀授權的同一個請求也會讀呼叫端各角色的系統權限列，再做聯集。`public` 角色不能持有系統權限，
+因為每個呼叫端都持有這個角色，匿名的也不例外：`PUT` 會拒絕它，解析時也會忽略它名下已存在的列。
+超級管理員不需要任何一列，每個代碼都持有。結果跟授權一樣不快取，改完，持有者的下一次請求就生效。
+
+管理它們有三個端點，都只有超級管理員能用；其他已登入的呼叫端一律 `403`，就算他自己的角色持有這個
+系統權限也一樣：
+
+- `GET /api/capabilities` 列出角色能被授予的所有系統權限，每筆是 `{ code, labelKey, descriptionKey }`；
+- `GET /api/roles/{id}/capabilities` 依代碼排序回傳該角色的代碼陣列；
+- `PUT /api/roles/{id}/capabilities` 用 JSON 代碼陣列整組覆寫；空陣列就是全部移除，重複的代碼只算
+  一次。
+
+`PUT` 被擋下時：
+
+- body 不是字串的 JSON 陣列：`400`；
+- 角色 id 不存在：`404`；
+- 角色是 `public`，不論送什麼、空集合也一樣：`400`，`The public role cannot hold capabilities.`，什麼都不會寫入；
+- 有代碼不在清單內，包含空白的、只有大小寫不同的：`400`，`Unknown capabilities: …`，什麼都不會寫入。
+
+依系統權限動作的端點，檢查的是這個權限，不是超級管理員角色。`login.unlock` 開放
+`GET` 與 `DELETE api/login-locks?email=…`，它們讀取與解除某個帳號的登入鎖定：超級管理員，或角色持有
+`login.unlock` 的呼叫端可以用，其他人一律 `403`。這個系統權限不涵蓋超級管理員帳號：不是超級管理員的
+持有者去解除它的鎖定會得到 `403`，只有超級管理員能解除。對其他帳號，持有者想解除幾次都可以，這也等於
+拿掉了針對該帳號猜密碼的依帳號上限。只把這個系統權限授予信任到這個程度的角色，並留意
+`Login lock cleared by` 的記錄行。
+
+呼叫端要知道自己持有哪些，讀 `GET /api/auth/me`：回應有一個 `capabilities` 陣列，列出它持有的代碼；
+超級管理員拿到完整清單。端點細節見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。
+
+只有 `PUT` 會檢查代碼是否在清單內、並拒絕 `public`。超級管理員仍可經由通用項目 API 寫入
+`roleCapability` 的列，那條路兩項都不檢查；寫進去的未知代碼不會授予任何東西，`public` 名下的列則會被忽略。
+
+刪除角色時，它在 `role_capabilities` 的列跟在 `permissions` 的列一樣會留在原處。解析只讀還存在的角
+色，所以這些列對任何人都不生效。
 
 ## 公開讀取
 
@@ -204,11 +260,14 @@ pretty:
 
 ## 在後台管理角色
 
-後台不會讓管理者直接編輯 `permission`／`userRole` 這兩個集合本身：`Hidden` 與 `AdminOnly` 是各自獨立
-的旗標，一個集合可以只設其中一個，這兩個集合卻兩個都設，因為它們純粹是 RBAC 機制內部的資料，讓一般的
+後台不會讓管理者直接編輯 `permission`、`userRole`、`roleCapability` 這三個集合本身：`Hidden` 與 `AdminOnly` 是各自獨立
+的旗標，一個集合可以只設其中一個，這三個集合卻兩個都設，因為它們純粹是 RBAC 機制內部的資料，讓一般的
 寫入授權就能碰到它們，正好是 `AdminOnly` 要擋住的那種自我升權。要改一個角色的授權，走的是角色權限矩
 陣，逐集合勾選 `canRead`／`canWrite`／`canDelete`，一次送出就是整組覆蓋。使用者表單上的有效權限預覽
 面板，則即時顯示目前選的角色組合換算出來的結果。
+
+矩陣下方，角色表單有一個「系統權限」區塊：每個系統權限一個勾選框，並有自己的儲存按鈕，表單的儲存也會一併
+送出它。它列出的是已儲存、且既不是 `public` 也不是超級管理員角色的系統權限；新角色則會提示先儲存角色。
 
 角色的授權整組寫在 `PUT /api/roles/{id}/permissions`，整組覆蓋、在同一個交易裡完成，端點本身的
 語意見[第 13 章：REST API 端點參考](13-rest-endpoints.md)。被擋下時的訊息是：

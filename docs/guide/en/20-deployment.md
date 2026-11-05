@@ -71,7 +71,27 @@ Without Kerberos, `GSS Encryption Mode=Disable` is recommended. Otherwise the dr
 encryption first on every new physical connection, which adds latency. The migration lock's
 connection is unpooled, so each `migrate` run pays it again.
 
-For the other backends, use the driver's own TLS options in the connection string.
+On SQL Server, `Encrypt=Mandatory` (the driver's default) with `TrustServerCertificate=False` encrypts
+the connection and validates the certificate. `Encrypt=Strict` does the same over TDS 8.0 and ignores
+`TrustServerCertificate`. `Encrypt=Optional`, `Encrypt=False` and `TrustServerCertificate=True` do not
+validate it.
+
+On MySQL and MariaDB, set `SSL Mode=VerifyFull`, or `VerifyCA` to validate the certificate without
+checking the host name; `Required` and `Preferred` do not validate it, and `None` is plaintext. When
+`SSL Mode` is not set, it defaults to `Preferred`.
+
+In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/MariaDB connection
+string does not validate the server's certificate, as defined above. The warning names the setting
+and the value to use, and never prints the connection string, a host or a credential. It is skipped
+when every host is local: `localhost`, `127.0.0.1`, `::1`, a Unix socket, or on SQL Server also
+`(local)`, `.` and `(localdb)`. A SQL Server named-pipe or shared-memory source is local when its
+host is one of those local hosts; a pipe to another machine travels over the network and still
+warns. A connection string that does not parse is skipped, because the connection itself reports it.
+SQLite and Oracle are not checked.
+
+The root `docker-compose.yml` triggers this warning: the database is another container on the same
+Docker network and the connection string sets no TLS, which is the same trade-off as the Redis
+without a password. Leave it for the local stack and set a validating mode for a real deployment.
 
 Each API process opens up to `Maximum Pool Size` connections (Npgsql defaults to 100). Multiply it by
 the number of replicas, and keep the result under the server's `max_connections` with room left for
@@ -100,6 +120,11 @@ account exists.
 Change the default email `admin@admin.com` as well. The Compose file reads `STRUO_ADMIN_PASSWORD` and
 refuses to start without it.
 
+In Production, two warnings point at the default email. The seed logs one when it creates the
+bootstrap admin with `admin@admin.com`. Every start logs one when an active user has that email,
+which covers an account created earlier. Both name the address and never print a password. Change
+the account's email in the admin UI, or create another administrator and deactivate this account.
+
 ### Login rate limiting: account layer on, IP layer depends on topology
 
 Account-layer throttling (`RateLimiting:LoginAccount`) is on by default and blocks brute-force
@@ -108,6 +133,11 @@ default, because it buckets by `Connection.RemoteIpAddress`: behind a reverse pr
 trusted through `ForwardedHeaders`, every client appears to come from the proxy's own address, and
 an office sharing one outbound NAT ends up in the same bucket even when the proxy is configured
 correctly.
+
+The process-wide cap (`RateLimiting:LoginConcurrency`) is a CPU guard that sheds load: during a
+flood of password logins it also turns legitimate ones away with `429`, and SSO is unaffected. A
+rate limit at the reverse proxy or WAF in front is what keeps the flood from reaching it; tune
+`PermitLimit` and `QueueLimit` to the machine.
 
 How each layer behaves is covered in the "Login rate limiting" section of
 [Chapter 16: Authentication and SSO](16-authentication.md).
@@ -278,8 +308,9 @@ A database with pending migrations while `MigrateOnStartup` is `false` is anothe
 same fail-fast mechanism. Here is the API image starting against an empty SQLite database:
 
 ```
-[01:45:34 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 3 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+…
+[06:21:22 FTL] StruoCMS host terminated unexpectedly
+System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -600,14 +631,17 @@ this chapter starts both images together with PostgreSQL and Redis:
 ```
 docker network create struo-verify
 docker volume create struo-verify-data
-docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local migrate
+docker run --rm --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' --env 'Auth__BootstrapAdmin__Password=<your-admin-password>' struo-api:local migrate
 docker run --detach --name api --network struo-verify --volume struo-verify-data:/app/App_Data --env Database__DbType=Sqlite --env 'Database__ConnectionString=Data Source=/app/App_Data/struo.db' struo-api:local
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
-`Applied 202610080001  SeedCoreData` and `Applied 202611030000  AddLanguageCodeUniqueIndex`.
-Without it, the `api` container exits with the message shown in "What fails fast at startup" above.
+`Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
+`Applied 202611040000  CreateRoleCapabilities`. Without the bootstrap password the seed migration
+fails with `Auth__BootstrapAdmin__Password is required`.
+Without the `migrate` step, the `api` container exits with the message shown in
+"What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit
 on this same user-defined network, and the API container is named `api`. If the API container
@@ -751,8 +785,8 @@ The PostgreSQL password is a fixed dev value and Redis has no password. Every po
 interfaces, so other machines on the network can reach them, and the fixed dev passwords and the
 password-less Redis go with them. Do that only on a network you trust.
 
-The `api` service logs both Redis warnings (no key protection, no Redis password) on every start; this
-is expected for the quick-start stack.
+The `api` service logs both Redis warnings (no key protection, no Redis password) and the database TLS
+warning on every start; this is expected for the quick-start stack.
 
 The `api` service publishes its port (`STRUO_API_PORT`, default 8081) for local debugging only. When you
 move `STRUO_BIND_ADDRESS` off loopback, remove the `api` `ports` mapping from `docker-compose.yml` as

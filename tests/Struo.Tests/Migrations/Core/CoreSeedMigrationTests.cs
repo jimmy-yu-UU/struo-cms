@@ -125,7 +125,7 @@ public sealed class CoreSeedMigrationTests : IDisposable
 
         var pending = _h.Host(CoreMigrationHarness.Seed(password: "plain-pw-9f3")).Preview(sql);
 
-        pending.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version, AddLanguageCodeUniqueIndex.Version);
+        pending.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version, AddLanguageCodeUniqueIndex.Version, CreateRoleCapabilities.Version);
         sql.ToString().Should().Contain("INSERT INTO").And.Contain("$argon2").And.NotContain("plain-pw-9f3");
         _h.Db().DbMaintenance.GetTableInfoList(false).Should().BeEmpty();
     }

@@ -289,7 +289,7 @@ own.
 A write made through any channel outside this API — a fork's own ETL, or a direct database
 connection — likewise never passes through here.
 
-The identity collections `user`, `role`, `permission`, and `userRole`, when written through the
+The identity collections `user`, `role`, `permission`, `userRole`, and `roleCapability`, when written through the
 generic item API instead (which suits a super-admin), go through the same path as any other
 collection and are notified the same way — what differs is which API did the writing, not the
 collections themselves.
@@ -614,6 +614,18 @@ registers its own `IXmlEncryptor` by setting `KeyManagementOptions.XmlEncryptor`
 the `EncryptedXmlInfo` it returns names the matching `IXmlDecryptor`. The startup warning and
 `RequireKeyProtection` look only at `DataProtection:Certificate:Path`, so a fork that uses its own
 encryptor sees the warning and leaves `RequireKeyProtection` off.
+
+## System capabilities: `ISystemCapabilitySource`
+
+A fork adds its own system capabilities, the action permissions a role holds, by implementing
+`ISystemCapabilitySource`, whose `Capabilities` property returns `SystemCapability(Code, LabelKey,
+DescriptionKey)` records, and registering it with `services.AddSingleton<ISystemCapabilitySource,
+MySource>()` after `AddStruoCms()`. Any number of sources may be registered. A code that repeats a core
+code or another source's code, or that is blank or longer than 255 characters, stops startup with
+`InvalidOperationException`. Code that guards an action asks
+`ICurrentPermissions.Current.HasCapability("my.code")`, which is true for a super-admin and for a caller
+whose roles hold the code. What a capability is and how a role is given one are in
+[Chapter 17](17-roles-and-permissions.md).
 
 ## Your own errors: `StruoDomainException`
 

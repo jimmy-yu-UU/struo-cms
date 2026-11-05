@@ -75,6 +75,24 @@ public sealed class RedisLoginAttemptThrottle : ILoginAttemptThrottle, IDisposab
         return new LoginThrottleState(true, (int)Math.Max(1, Math.Ceiling(ttl.Value.TotalSeconds)));
     }
 
+    public async Task<LoginThrottleState> GetStateAsync(string email, CancellationToken ct = default)
+    {
+        var opts = _options.Value;
+        if (!opts.Enabled) return new LoginThrottleState(false, 0);
+
+        var db = (await _connection.Value).GetDatabase();
+        var key = Key(email);
+        // TTL first: a key that expired between the two reads then reads as absent, never as locked.
+        var ttl = await db.KeyTimeToLiveAsync(key);
+        var count = (long?)await db.StringGetAsync(key) ?? 0;
+        if (count < opts.PermitLimit) return new LoginThrottleState(false, 0);
+
+        // A counted key without a TTL is one TryReserveAsync repairs on its next attempt; report it as
+        // locked for a whole window, the longest it can stay so.
+        var remaining = ttl ?? TimeSpan.FromSeconds(opts.WindowSeconds);
+        return new LoginThrottleState(true, (int)Math.Max(1, Math.Ceiling(remaining.TotalSeconds)));
+    }
+
     public async Task ResetAsync(string email, CancellationToken ct = default)
     {
         if (!_options.Value.Enabled) return;
@@ -90,5 +108,5 @@ public sealed class RedisLoginAttemptThrottle : ILoginAttemptThrottle, IDisposab
     // The hashed, normalized email keeps raw addresses out of Redis key names.
     private string Key(string email) =>
         _keyPrefix + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant())));
+            SHA256.HashData(Encoding.UTF8.GetBytes(EmailAddress.Normalize(email))));
 }

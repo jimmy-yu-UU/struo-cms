@@ -1,6 +1,8 @@
 using FluentMigrator;
 using FluentMigrator.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Infrastructure.Persistence;
 
@@ -10,6 +12,10 @@ namespace Struo.Infrastructure.Migrations;
 public abstract class StruoMigration : Migration
 {
     private StruoMigrationContext? _struo;
+    private ILogger? _log;
+
+    /// <summary>A logger of the migration runner's host; available only inside Up() and Down().</summary>
+    protected ILogger Log => _log ?? NullLogger.Instance;
 
     protected StruoDbType Db => Struo.DbType;
 
@@ -33,12 +39,14 @@ public abstract class StruoMigration : Migration
     public override void GetUpExpressions(IMigrationContext context)
     {
         _struo = context.ServiceProvider.GetRequiredService<StruoMigrationContext>();
+        _log = context.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType());
         base.GetUpExpressions(context);
     }
 
     public override void GetDownExpressions(IMigrationContext context)
     {
         _struo = context.ServiceProvider.GetRequiredService<StruoMigrationContext>();
+        _log = context.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType());
         base.GetDownExpressions(context);
     }
 }

@@ -146,9 +146,9 @@ type, field→property map, id property name, eagerly-built property-accessor ca
 `src/Struo.Application/Metadata/IEntityTypeCollector.cs`: `CollectForInitTables()` returns every CLR
 entity type that needs a database table — scanned collections, their translation sidecars, and M2M
 junction types — unioned and de-duplicated against `FrameworkEntityTypes.All`
-(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the eleven framework entity types:
-Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, Revision,
-SiteSettings, UserSession). Implementation: `EntityTypeCollector`
+(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the twelve framework entity types:
+Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, RoleCapability,
+Revision, SiteSettings, UserSession). Implementation: `EntityTypeCollector`
 (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
 container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
 (`MetadataServiceCollectionExtensions.cs`). Consumed by `StruoCmsStartupChecks`, which hands it to
@@ -414,10 +414,10 @@ these three query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelati
 the non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly
 implement.
 
-### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`)
+### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`, `IRoleCapabilityStore`)
 
-All five live in `src/Struo.Application/Security/`, all five are implemented by a `SqlSugar*` class in
-`src/Struo.Infrastructure/Identity/`, and all five are registered scoped in
+All six live in `src/Struo.Application/Security/`, all six are implemented by a `SqlSugar*` class in
+`src/Struo.Infrastructure/Identity/`, and all six are registered scoped in
 `ServiceCollectionExtensions.AddStruoInfrastructure`. They are deliberately narrow rather than one
 identity god-interface, split by *consumer* rather than by table:
 
@@ -440,8 +440,22 @@ identity god-interface, split by *consumer* rather than by table:
   documents itself as bypassing permission gating on purpose: the query that resolves the gate must
   never itself be gated.
 - **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
+- **`IRoleCapabilityStore`** → `SqlSugarRoleCapabilityStore`. The write side of system capabilities (the
+  role-held action permissions that are not per-collection grants): list and atomic full-replace of a
+  role's codes in `role_capabilities` (`RoleCapability`). The read side rides on
+  `IRolePermissionStore`: `RolePermissionData.Capabilities` is folded by `PermissionResolver` into
+  `EffectivePermissions.HasCapability(code)`, which is true for every code when the caller is a
+  super-admin. Nothing caches the result; `PermissionResolutionMiddleware` resolves it per request.
 
-Session revocation is a separate pair of seams, registered alongside the five above in the same
+The valid codes are defined once, in `SystemCapabilityCatalog` (`src/Struo.Application/Security/`),
+a singleton built from `SystemCapabilities.Core` plus every registered `ISystemCapabilitySource`. A fork
+adds its own with `services.AddSingleton<ISystemCapabilitySource, MySource>()`; a duplicate or blank
+code stops startup (`StruoCmsStartupChecks` resolves the catalog). `RolesController` validates `PUT api/roles/{id}/capabilities`
+against the catalog and `AuthController.Me` lists the caller's codes. The `public` role cannot hold capabilities: `PUT` refuses it (`IRoleCapabilityStore.IsPublicRoleAsync`) and
+`SqlSugarRolePermissionStore` ignores any row on it. Deleting a role does not delete its
+`permissions` or `role_capabilities` rows; resolution reads only existing roles, so they stop applying.
+
+Session revocation is a separate pair of seams, registered alongside the six above in the same
 `AddStruoInfrastructure`
 (`src/Struo.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`): `IUserSessionStore`
 → `SqlSugarUserSessionStore` and `IUserSessionRevocationService` → `UserSessionRevocationService`

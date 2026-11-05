@@ -13,7 +13,8 @@ import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/authStore'
 import { useSchemaStore } from '@/stores/schemaStore'
 import { useAppConfigStore } from '@/stores/appConfigStore'
-import { buildNav } from '@/lib/buildNav'
+import { buildNav, type NavExtra, type NavItem } from '@/lib/buildNav'
+import { LOGIN_UNLOCK } from '@/lib/capabilities'
 import SidebarNavItem from './SidebarNavItem.vue'
 import BrandMark from './BrandMark.vue'
 
@@ -62,9 +63,29 @@ const canReadMedia = computed(
 )
 const isSuperAdmin = computed(() => auth.user?.isSuperAdmin === true)
 
+// The Login locks page sits in the System group beside Language, Role and User.
+const navExtras = computed<NavExtra[]>(() => [
+  {
+    group: 'System',
+    capability: LOGIN_UNLOCK,
+    item: { name: 'login-locks', label: t('nav.loginLocks'), icon: 'pi pi-lock', route: 'login-locks' },
+  },
+])
+
 const groups = computed(() =>
-  buildNav(schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {}),
+  buildNav(
+    schema.collections, auth.user?.isSuperAdmin ?? false, auth.user?.permissions ?? {},
+    navExtras.value, (code) => auth.hasCapability(code),
+  ),
 )
+
+function openItem(it: NavItem): void {
+  go(it.route ? { name: it.route } : { name: 'collection-list', params: { name: it.name } })
+}
+
+function isActive(it: NavItem): boolean {
+  return it.route ? route.name === it.route : activeCollection() === it.name
+}
 
 function activeCollection(): string | null {
   const r = route.name as string | undefined
@@ -151,8 +172,7 @@ watch(() => route.path, () => {
                 <template v-if="g.group === UNGROUPED">
                   <SidebarMenuItem v-for="it in g.items" :key="it.name">
                     <SidebarNavItem :label="it.label" :icon="it.icon"
-                                    :active="activeCollection() === it.name"
-                                    @activate="go({ name: 'collection-list', params: { name: it.name } })" />
+                                    :active="isActive(it)" @activate="openItem(it)" />
                   </SidebarMenuItem>
                 </template>
 
@@ -170,8 +190,7 @@ watch(() => route.path, () => {
                       <SidebarMenuSub>
                         <SidebarMenuSubItem v-for="it in g.items" :key="it.name">
                           <SidebarNavItem sub :label="it.label" :icon="it.icon"
-                                          :active="activeCollection() === it.name"
-                                          @activate="go({ name: 'collection-list', params: { name: it.name } })" />
+                                          :active="isActive(it)" @activate="openItem(it)" />
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>

@@ -135,6 +135,53 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
 
         (await db.KeyTimeToLiveAsync(KeyOf(email))).Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task GetStateAsync_does_not_count_and_agrees_with_TryReserveAsync()
+    {
+        if (ConnectionString is null) return;
+        using var throttle = Throttle(permitLimit: 3, windowSeconds: 120);
+        var email = Email("peek");
+
+        for (var i = 0; i < 5; i++)
+            (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
+        for (var i = 0; i < 2; i++)
+            (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
+        (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
+
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeFalse();
+        var state = await throttle.GetStateAsync(email);
+        state.IsBlocked.Should().BeTrue("the next attempt would be refused");
+        state.RetryAfterSeconds.Should().BeInRange(1, 120);
+        (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
+
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        ((long)await mux.GetDatabase().StringGetAsync(KeyOf(email))).Should().Be(4, "peeks must not have counted");
+    }
+
+    [Fact]
+    public async Task GetStateAsync_is_not_blocked_after_ResetAsync()
+    {
+        if (ConnectionString is null) return;
+        using var throttle = Throttle(permitLimit: 1);
+        var email = Email("peek-reset");
+        await throttle.TryReserveAsync(email);
+        (await throttle.GetStateAsync(email)).IsBlocked.Should().BeTrue();
+
+        await throttle.ResetAsync(email);
+
+        (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetStateAsync_is_never_blocked_when_disabled()
+    {
+        if (ConnectionString is null) return;
+        using var throttle = new RedisLoginAttemptThrottle(ConnectionString!, Options.Create(
+            new LoginAccountRateLimitOptions { Enabled = false, PermitLimit = 1, WindowSeconds = 60 }), _prefix);
+
+        (await throttle.GetStateAsync(Email("off"))).IsBlocked.Should().BeFalse();
+    }
 }
 
 // A throttle that cannot reach its store must fail the login, never skip the check.

@@ -2,6 +2,15 @@
 
 ## 0.24.0
 
+::: danger Breaking
+- `ILoginAttemptThrottle` has a new member, `Task<LoginThrottleState> GetStateAsync(string,
+  CancellationToken)`, which reads the lock without counting an attempt; a fork's own implementation
+  must add it to compile.
+- `RolePermissionData` has a third member, `Capabilities`; a fork's own `IRolePermissionStore` must
+  fill it, or no caller other than a super-admin holds a capability. `PermissionResolver` drops the
+  rows of the `public` role whatever the store returns.
+:::
+
 ### Added
 
 - [Chapter 15](15-files-and-media.md) and [Chapter 20](20-deployment.md) cover the
@@ -9,6 +18,44 @@
   a deployment that stores sensitive files should set `draft`. Chapter 15 also says the `nosniff`
   header belongs to the API's own responses, not to the storage service's response behind a
   presigned redirect.
+- System capabilities: action permissions a role holds that are not per-collection grants. The core
+  defines `login.unlock`; a fork adds its own by registering an `ISystemCapabilitySource`. The core
+  migration `CreateRoleCapabilities` (`202611040000`) creates `struo_role_capabilities`, so `migrate` or
+  `Database:MigrateOnStartup` must run before the API starts, and `migrate:baseline` leaves it pending
+  like `AddLanguageCodeUniqueIndex`. A super-admin sets a role's capabilities with
+  `GET`/`PUT api/roles/{id}/capabilities` and lists the available ones with `GET api/capabilities`;
+  `GET api/auth/me` carries the caller's `capabilities`. A super-admin holds every capability; the
+  `public` role cannot hold any. See
+  [Chapter 13](13-rest-endpoints.md) and [Chapter 17](17-roles-and-permissions.md).
+- `GET`/`DELETE api/login-locks?email=…` read and clear an account's login lock, for a super-admin
+  or a caller whose role holds `login.unlock`; the `email` is at most 255 characters, the length of
+  the users table's `email` column. The answer is the same whether or not the email has an account,
+  except that only a super-admin can clear the lock on a super-admin account (any other caller gets
+  `403`). Each clear writes a log line naming the caller and target by id, never the email. The
+  email is part of the URL, so access logs in front of the API record it. See
+  [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md).
+- The admin UI sets a role's system capabilities in a System capabilities section on the role form
+  (a new role asks to be saved first, the `public` role cannot hold any, and a super-admin role has
+  no section), and has a Login locks page, in the System group of the sidebar for a super-admin or a
+  holder of `login.unlock`, that looks up an email's lock and clears it. A user's edit page has the
+  same lock panel for a super-admin. See [Chapter 16](16-authentication.md) and
+  [Chapter 17](17-roles-and-permissions.md).
+- `auth:unlock --email <email>` clears an account's login lock from the server when no administrator
+  can sign in. With `Redis:ConnectionString` set it resets the count and exits `0`; without Redis the
+  count lives in the API process, so the command says a restart clears it and exits `1`. A missing or
+  over-long (more than 255 characters) `--email` exits `2`. [Chapter 16](16-authentication.md) lists
+  the three ways to recover a locked account, and [Chapter 21](21-schema-and-upgrades.md) lists the
+  command.
+- In Production, startup logs a warning while an active user has the default bootstrap email
+  `admin@admin.com`, and the seed logs one when it creates the bootstrap admin with that email. Both
+  name the address and never a password. See [Chapter 16](16-authentication.md) and
+  [Chapter 20](20-deployment.md).
+- In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/MariaDB connection
+  string does not validate the server's certificate (`SSL Mode` below `VerifyCA` on PostgreSQL and
+  MySQL/MariaDB; `Encrypt` below `Mandatory`, or `TrustServerCertificate=True` unless `Encrypt=Strict`,
+  which ignores it, on SQL Server) and the server is not local. The warning names the setting and never
+  prints the connection string or a credential. The root `docker-compose.yml` triggers it. See
+  [Chapter 20](20-deployment.md).
 
 ## 0.23.0 — 2026-11-04
 

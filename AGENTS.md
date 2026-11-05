@@ -13,15 +13,15 @@ actual project.
 
 ## Core vs. sample boundary
 
-**Core** = `src/Struo.*` plus the eleven `FrameworkEntityTypes.All` types
+**Core** = `src/Struo.*` plus the twelve `FrameworkEntityTypes.All` types
 (`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`): `Language`, `File`, `FileTranslation`,
-`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `Revision`, `SiteSettings`, `UserSession`. Of
-these, seven carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`,
-`User`, `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, `SiteSettings`, and
+`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `RoleCapability`, `Revision`, `SiteSettings`, `UserSession`. Of
+these, eight carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`,
+`User`, `Role`, `Permission`, `UserRole`, `RoleCapability` — `FileTranslation`, `Revision`, `SiteSettings`, and
 `UserSession` are framework tables but not collections. If you're unsure whether something is core, it's core only if it lives in
 `src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
 them. `schema/` is core too, despite living outside that path: it holds the
-committed snapshots of these seven collections' wire metadata and of the declared interface enums
+committed snapshots of these eight collections' wire metadata and of the declared interface enums
 (`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
 
@@ -145,6 +145,11 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   trashed rows included. It prints its storage and database targets first, and `--apply` refuses
   (exit 3) when over 50% of the eligible blobs are orphans unless `--force`. It lists through
   `IFileStorage.ListAsync`. Exit 0 ok, 1 failure, 2 usage.
+- **`auth:unlock --email <email>` clears a login lock from the server.** `MigrationCli` dispatches it and
+  `AuthUnlockCommand` implements it. With `Redis:ConnectionString` set it calls `ILoginAttemptThrottle.ResetAsync`
+  (the Redis throttle) and exits 0; without Redis the count is in the API process's memory, so it says a restart
+  clears it and exits 1. A missing or over-long `--email` (`EmailAddress.IsUsable`, cap `EmailAddress.MaxLength`,
+  the `email` column length) exits 2. It never echoes the email.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
   `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,

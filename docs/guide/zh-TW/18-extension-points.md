@@ -243,7 +243,7 @@ junction 列被清掉而失去一段多對多關聯的現存父列，都會各�
 有主動被改的那一側算數，被牽動的另一側不會另外算一次通知；透過這個 API 以外的管道寫進
 資料庫，例如 fork 自己的 ETL 或直接接資料庫，同樣不會經過這裡。
 
-`user`、`role`、`permission`、`userRole` 這幾個身分集合，如果改成透過通用的項目 API
+`user`、`role`、`permission`、`userRole`、`roleCapability` 這幾個身分集合，如果改成透過通用的項目 API
 去寫（適合超級管理員），走的就是跟其他集合一樣的路徑，一樣會通知：差別只在用哪一條
 API 寫，不在這幾個集合本身。
 
@@ -539,6 +539,15 @@ builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
 `KeyManagementOptions.XmlEncryptor`，註冊自己的 `IXmlEncryptor`；它回傳的 `EncryptedXmlInfo` 指定對應的
 `IXmlDecryptor`。啟動警告與 `RequireKeyProtection` 只看 `DataProtection:Certificate:Path`，所以用自己加密器的
 fork 會看到警告，也不要開 `RequireKeyProtection`。
+
+## 系統權限：`ISystemCapabilitySource`
+
+fork 要加自己的系統權限（角色持有的動作權限），就實作 `ISystemCapabilitySource`，它的 `Capabilities`
+屬性回傳 `SystemCapability(Code, LabelKey, DescriptionKey)` 記錄，再在 `AddStruoCms()` 之後用
+`services.AddSingleton<ISystemCapabilitySource, MySource>()` 註冊；來源可以註冊任意多個。代碼若與核心代碼
+或另一個來源的代碼重複、是空白、或超過 255 字元，啟動就會以 `InvalidOperationException` 停下。要保護某個動作的
+程式碼，問 `ICurrentPermissions.Current.HasCapability("my.code")`：超級管理員一律為真，其他呼叫端要有角色
+持有這個代碼才為真。系統權限是什麼、怎麼授予角色，見[第 17 章](17-roles-and-permissions.md)。
 
 ## 自己的錯誤：`StruoDomainException`
 

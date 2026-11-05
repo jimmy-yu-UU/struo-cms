@@ -2,11 +2,49 @@
 
 ## 0.24.0
 
+::: danger 破壞性變更
+- `ILoginAttemptThrottle` 新增成員 `Task<LoginThrottleState> GetStateAsync(string, CancellationToken)`，
+  讀取鎖定狀態而不計一次嘗試；fork 自己實作這個介面的話，要補上它才能編譯。
+- `RolePermissionData` 新增第三個成員 `Capabilities`；fork 自己實作的 `IRolePermissionStore` 要填它，
+  否則除了超級管理員，沒有任何呼叫端持有系統權限。不論 store 回傳什麼，`PermissionResolver` 都會丟掉
+  `public` 角色的列。
+:::
+
 ### 新增
 
 - [第 15 章](15-files-and-media.md)與[第 20 章](20-deployment.md)說明 `Struo:Files:DefaultStatus` 的
   取捨：`published` 時，任何持有檔案 id 的人都能讀；存放敏感檔案的部署建議設成 `draft`。第 15 章也
   寫明 `nosniff` 標頭只屬於 API 自己的回應，不涵蓋 presigned 轉址之後儲存服務的回應。
+- 系統權限：角色持有、但不是逐集合授權的動作權限。核心定義了 `login.unlock`；fork 註冊
+  `ISystemCapabilitySource` 就能加自己的。核心 migration `CreateRoleCapabilities`（`202611040000`）
+  建立 `struo_role_capabilities`，所以 API 啟動前要先跑 `migrate` 或 `Database:MigrateOnStartup`，
+  而且 `migrate:baseline` 跟 `AddLanguageCodeUniqueIndex` 一樣不會記錄它，它會維持待套用。超級管理員用
+  `GET`／`PUT api/roles/{id}/capabilities` 設定角色的系統權限，用 `GET api/capabilities` 列出可用的；
+  `GET api/auth/me` 帶有呼叫端的 `capabilities`。超級管理員持有所有系統權限，`public` 角色則不能持有
+  任何系統權限。見
+  [第 13 章](13-rest-endpoints.md)與[第 17 章](17-roles-and-permissions.md)。
+- `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
+  `login.unlock` 的呼叫端可用；`email` 最長 255 字元，即 users 資料表 `email` 欄位的長度。不論這個
+  email 有沒有帳號，回答都一樣，唯一例外是超級管理員帳號的鎖定只有超級管理員能解除（其他呼叫端得到
+  `403`）；每次解除會寫一行記錄，以 id 註明呼叫端與目標，不寫 email。email 在網址裡，所以 API 前面的
+  存取記錄會留下它。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
+- 管理介面在角色表單的「系統權限」區塊設定角色的系統權限（新角色會提示先儲存，`public` 角色不能持有，
+  超級管理員角色不提供此區塊），並新增「登入鎖定」頁，超級管理員或持有 `login.unlock` 的人會在側欄的
+  System 群組看到它，可查詢某個 email 的鎖定並解除。使用者編輯頁對超級管理員也有同樣的鎖定面板。見
+  [第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
+- `auth:unlock --email <email>` 在沒有任何管理員能登入時，從伺服器解除某個帳號的登入鎖定。有設
+  `Redis:ConnectionString` 時重設計數並以 `0` 結束；沒有 Redis 時計數存在 API 行程裡，命令會說明
+  重新啟動即可清除並以 `1` 結束。`--email` 缺少或過長（超過 255 字元）以 `2` 結束。
+  [第 16 章](16-authentication.md)列出帳號被鎖住時的三種恢復方式，
+  [第 21 章](21-schema-and-upgrades.md)列出這個命令。
+- 在 Production，只要有啟用中的使用者用預設 bootstrap email `admin@admin.com`，啟動就會記一則警告；seed 用這個 email
+  建立 bootstrap 管理員時也會記一則。兩則都點名這個地址，不會印出密碼。見
+  [第 16 章](16-authentication.md)與[第 20 章](20-deployment.md)。
+- 在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（PostgreSQL 與
+  MySQL／MariaDB 是 `SSL Mode` 低於 `VerifyCA`；SQL Server 是 `Encrypt` 低於 `Mandatory`，或
+  `TrustServerCertificate=True` 而 `Encrypt` 不是 `Strict`，`Strict` 會忽略它），而且伺服器不是本機時，
+  啟動會記一則警告。警告點出設定名稱，不會印出連線字串或
+  任何帳密。根目錄的 `docker-compose.yml` 會出現這則警告。見[第 20 章](20-deployment.md)。
 
 ## 0.23.0 — 2026-11-04
 

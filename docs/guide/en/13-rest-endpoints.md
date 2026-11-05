@@ -52,9 +52,9 @@ string, `null`, or absent; any other value is a `400` `INVALID_VERSION` ([Chapte
 
 Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
 grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing
-to or deleting from the four built-in collections `permission`, `role`, `user` and `userRole`, or
-any junction a fork has marked `AdminOnly`, additionally requires the caller to be a super-admin — a
-delegated collection grant doesn't count.
+to or deleting from the five built-in collections `permission`, `role`, `roleCapability`, `user` and
+`userRole`, or any junction a fork has marked `AdminOnly`, additionally requires the caller to be a
+super-admin — a delegated collection grant doesn't count.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
@@ -150,6 +150,8 @@ the error message is `Items cannot be created in collection 'user' through the g
 |---|---|---|
 | `GET api/roles/{id}/permissions` | Super-admin | Read the role's current grant rows |
 | `PUT api/roles/{id}/permissions` | Super-admin | Overwrite the whole set of grants |
+| `GET api/roles/{id}/capabilities` | Super-admin | Read the role's system capability codes |
+| `PUT api/roles/{id}/capabilities` | Super-admin | Overwrite the whole set of capability codes |
 
 `GET` returns a `{ collection, canRead, canWrite, canDelete }` array ordered by collection name, and
 a nonexistent role is a `404`. `PUT` overwrites the whole set rather than merging row by row — a row
@@ -157,7 +159,47 @@ where all three flags are false is never stored at all, and the response only sh
 genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
 or names a collection that doesn't exist, and collection-name casing is normalized.
 
+`GET .../capabilities` returns the role's capability codes as a sorted array of strings, and a
+nonexistent role is a `404`. `PUT .../capabilities` takes a JSON array of codes and overwrites the whole
+set; an empty array removes them all, a repeated code counts once, and the response is the stored array.
+The request is rejected with `400` when the body isn't a JSON array of strings, when the role is
+`public` (it cannot hold capabilities, whatever the set), or when any code is outside the list
+`GET api/capabilities` returns (`Unknown capabilities: …`), and then nothing is written. [Chapter 17](17-roles-and-permissions.md) covers what a capability is.
+
 A role is itself an ordinary collection, so `POST api/items/role` creates a new one.
+
+## Capabilities `api/capabilities`
+
+| Method and path | Permission | Purpose |
+|---|---|---|
+| `GET api/capabilities` | Super-admin | List the system capabilities a role can be given |
+
+It returns an array of `{ code, labelKey, descriptionKey }`, the core capabilities followed by any
+a fork registered. The two keys are i18n keys; the admin UI supplies the text.
+
+## Login locks `api/login-locks`
+
+| Method and path | Permission | Purpose |
+|---|---|---|
+| `GET api/login-locks?email=…` | Super-admin or `login.unlock` | Read whether an account's login is locked |
+| `DELETE api/login-locks?email=…` | Super-admin or `login.unlock` | Clear the lock, returns `204` |
+
+The `GET` returns `{ locked, retryAfterSeconds }`: `locked` is `true` when the account has used up its
+per-account login attempts for the current window, and `retryAfterSeconds` is the time left in that
+window, `0` when not locked. Reading never counts as an attempt. The email is trimmed and lowercased
+the way login does it. A missing, blank or over-long (more than 255 characters) `email` returns
+`400`, and a caller without the permission gets `403`, whatever the email.
+
+The answer does not depend on whether an account with that email exists: an address with no account
+gets the same status and the same body shape, and `DELETE` returns `204` for it too. The one exception
+is a `DELETE` for a super-admin account, active or not, by a caller who is not a super-admin: it returns
+`403` with `Only a super-admin can clear the lock on a super-admin account.` and leaves the lock. A
+cookie-signed-in `DELETE` needs the CSRF header like any other mutation. Each `DELETE` writes one
+`Information` log line with the caller's user id and the target user id, or a note that no such account
+exists; a refused one writes a `Warning` line naming the caller and the target by id. The API never logs
+the email, but the email is part of the URL, so access logs in front of the API, such as a reverse
+proxy's, record it. An operator who must keep emails out of those logs filters the `login-locks` path.
+See [Chapter 16](16-authentication.md) and [Chapter 17](17-roles-and-permissions.md).
 
 ## Languages `api/languages`
 
@@ -196,7 +238,7 @@ the New button.
 |---|---|---|
 | `POST api/auth/login` | Anonymous | Log in, sets the session cookie |
 | `POST api/auth/logout` | Signed in | Log out, returns `204` |
-| `GET api/auth/me` | Signed in | Read the current caller's identity and permissions |
+| `GET api/auth/me` | Signed in | Read the caller's identity, permissions, capabilities |
 | `GET api/auth/login/oidc/{provider}` | Anonymous | Redirect to that OIDC provider |
 
 The login body is `{ email, password }`; success returns `200` with `{ id }` and sets the session
@@ -213,7 +255,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:49 GMT
+Date: Wed, 04 Nov 2026 05:40:08 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -222,18 +264,20 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{},"capabilities":["login.unlock"]}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie`'s value is long and elided here; what matters is that the header itself appears,
 carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a Development host; where the
 cookie is always `Secure`, the name is `__Host-struo.session` and `secure` is added. `me` returns an
-empty `permissions` for a super-admin, because every grant is already implied by that identity.
+empty `permissions` for a super-admin, because every grant is already implied by that identity, and
+lists in `capabilities` every capability the catalog defines; for anyone else it lists the codes their
+roles hold.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
 disabled provider, and a `302` redirect to that provider when it is enabled, with

@@ -15,7 +15,7 @@
 範本不附 bootstrap 密碼，也不會替你產生。建立帳號一定要設 `Auth:BootstrapAdmin:Password`。密碼會經過下一節的
 密碼原則，而且 `admin`（不分大小寫）會被拒絕；seed 要執行的時候，密碼是空的或弱值，`migrate`、
 `migrate:preview` 與 `Database:MigrateOnStartup` 啟動都會拒絕，錯誤訊息點名
-`Auth__BootstrapAdmin__Password`。seed 套用過之後就用不到這個值，可以移除。示範裡登入用的是這組密碼的佔位符。預設 email `admin@admin.com` 可以用，但請改掉。
+`Auth__BootstrapAdmin__Password`。seed 套用過之後就用不到這個值，可以移除。示範裡登入用的是這組密碼的佔位符。預設 email `admin@admin.com` 可以用，但請改掉。在 Production，seed 用這個 email 建立帳號時會記一則警告，之後每次啟動只要還有啟用中的使用者用它，也會記一則；見[第 20 章](20-deployment.md)。
 
 同一批種子資料也會建立 `admin`、`public` 兩個角色，並把第一個管理者加進 `admin`，細節留給
 [第 17 章：角色與權限](17-roles-and-permissions.md)。
@@ -196,9 +196,21 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 每一次嘗試都算數是有代價的：知道某個帳號 email 的人可以把它的額度用光，讓該帳號在視窗結束前無法
 用密碼登入。這是刻意接受的取捨；SSO 登入不受影響。
 
+鎖定在視窗結束時會自動解開。超級管理員，或角色持有 `login.unlock` 系統權限的呼叫端，可以用
+`DELETE api/login-locks?email=…` 提早解除，用 `GET` 查詢，見[第 13 章](13-rest-endpoints.md)。管理介面在
+「登入鎖定」頁也能做同樣的事，超級管理員或持有 `login.unlock` 的人可用；使用者編輯頁也有，限超級管理員。
+解除鎖定不會改動密碼。持有 `login.unlock` 但不是超級管理員的人，不能解除超級管理員帳號的鎖定：端點回
+`403`，「登入鎖定」頁會說明，只有超級管理員能解除。
+
 另有一個行程層級的並行上限（`RateLimiting:LoginConcurrency`），限制同一時間有多少個登入在驗證密
 碼：4 個同時跑、32 個排隊，其餘回同一種 `429` 並帶 `Retry-After`，不論來源為何，都能保護 CPU 與記
 憶體不被大量並行的嘗試拖垮。
+
+這個上限是整個行程共用的一個分桶，不依帳號或 IP 切分：它負責卸載負載，分不出攻擊者與正常使用
+者。大量密碼登入湧入期間，正常的密碼登入也可能被回 `429`，直到洪流停止；SSO 登入不受影響。
+要在洪流到達 API 之前就擋下：在前面的反向代理或 WAF 設速率限制；用戶端 IP 可信時，搭配設好的
+`ForwardedHeaders` 開啟 `RateLimiting:Login`；並依機器一次能驗證的量調整 `PermitLimit` 與
+`QueueLimit`。各鍵怎麼設見[第 4 章](04-configuration.md)，代理端見[第 20 章](20-deployment.md)。
 
 依呼叫端 IP 的限流（`RateLimiting:Login`）則相反，預設是關的，只保護登入這一個端點，登出、
 `me`、OIDC 挑戰都不受它限制；預設關閉的原因、什麼時候適合打開，見
@@ -226,6 +238,37 @@ HTTP_STATUS:429
 
 示範裡的 `$TW` 是一個從沒被用過的 email。擋下的只有這一個帳號：同一次示範裡，對另一個帳號的正確
 登入立刻就能通過，不受影響。分桶鍵是帳號，不是來源 IP。
+
+## 帳號被鎖住時怎麼恢復
+
+被鎖住的帳號如果就是唯一的管理員，幾分鐘後自動解開的鎖仍然是一扇關著的門。提早打開它有三種方式：
+
+- 另一位超級管理員照上面說的解除。持有 `login.unlock` 的人做不到，因為被鎖的是超級管理員帳號。
+- 啟用了 OIDC 提供者時，用 SSO 登入。依帳號的計數只適用於密碼登入。
+- 在伺服器上執行 `auth:unlock`。完全沒有人能登入時，走的就是這條路。
+
+```text
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
+auth:unlock: cleared the login lock for the given account, if it had one.
+```
+
+這個命令讀的設定跟 API 一樣，所以需要 `Redis:ConnectionString`，且要跟 API 實際使用的值相同。
+email 依登入的做法去頭尾空白並轉小寫。`--email` 缺少、空白或過長（超過 255 字元）時，印出
+`Usage: auth:unlock --email <email>` 並以 `2` 結束。命令不會把 email 印回來，訊息裡說「if it had one」，
+是因為它無從得知帳號存在與否、是否被鎖；端點的答案也不會說，只有拒絕非超級管理員對超級管理員帳號的解
+除是例外。`RateLimiting:LoginAccount` 停用時，它會這麼說並以 `0` 結束，因為本來就沒有鎖。重設失敗時，
+例如連不上 Redis，它只印出錯誤型別，不印連線字串，並以 `1` 結束。
+
+沒有 Redis 時，每個 API 行程各自在記憶體裡計數，另一個命令碰不到。命令會這樣說並以 `1` 結束，
+腳本才不會把它當成成功：
+
+```text
+$ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
+auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.
+```
+
+重新啟動 API 會清除所有帳號的計數，不論有沒有被鎖。命令列怎麼找到設定，見
+[第 21 章](21-schema-and-upgrades.md)。
 
 ## OIDC 外部登入
 
