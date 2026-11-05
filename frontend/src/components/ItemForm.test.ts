@@ -271,6 +271,42 @@ describe('ItemForm per-locale errors', () => {
     await flushPromises()
     expect(w.find('.field label .text-destructive').exists()).toBe(false)
   })
+  it('puts the asterisk on a non-default tab once that locale holds content', async () => {
+    const started: FormModel = { ...m3, translations: { ...m3.translations, 'zh-TW': { title: '' }, fr: { title: 'bonjour' } } }
+    const w = mountForm({ meta: reqMeta, model: started, locales: three, errors: {} })
+    const tabs = w.findAll('[role="tab"]')
+    await tabs[2].trigger('mousedown')
+    await flushPromises()
+    expect(w.find('.field label .text-destructive').exists()).toBe(true)
+    await tabs[1].trigger('mousedown')
+    await flushPromises()
+    expect(w.find('.field label .text-destructive').exists()).toBe(false)
+  })
+  it('marks every required field on a started tab, and none that are not required', async () => {
+    const meta: CollectionMeta = { name: 'article', label: 'Article', fields: [
+      field('title', { translatable: true, required: true, sort: 1 }),
+      field('summary', { translatable: true, required: true, sort: 2 }),
+      field('note', { translatable: true, sort: 3 }),
+    ], relations: [] }
+    const model: FormModel = { shared: {}, translations: { en: {}, 'zh-TW': { note: 'n' }, fr: {} }, relations: {} }
+    const w = mountForm({ meta, model, locales: three, errors: {} })
+    await w.findAll('[role="tab"]')[1].trigger('mousedown')
+    await flushPromises()
+    const stars = w.findAll('.field').map((f) => f.find('label .text-destructive').exists())
+    expect(stars).toEqual([true, true, false])
+  })
+  it('shows a server translation MaxLength error on its non-default tab', async () => {
+    const { splitServerErrors } = await import('../lib/applyServerErrors')
+    const { fieldErrors } = splitServerErrors(
+      [{ field: 'title', locale: 'fr', message: "Field 'title' exceeds maximum length 255 for locale 'fr'." }],
+      new Set(['status', 'title']), { defaultLocale: 'en', locales: new Set(['en', 'zh-TW', 'fr']) })
+    const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
+    await w.setProps({ errors: fieldErrors })
+    await flushPromises()
+    expect(vmLocale(w)).toBe('fr')
+    expect(w.text()).toContain('exceeds maximum length 255 for locale')
+    expect(w.findAll('[role="tab"]')[2].find('.tab-error').exists()).toBe(true)
+  })
   it('has the tab error string in both catalogs', async () => {
     const { default: en } = await import('../locales/en')
     const { default: zh } = await import('../locales/zh-TW')
