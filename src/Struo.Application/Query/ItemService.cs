@@ -192,7 +192,7 @@ public sealed class ItemService(
             created = await repository.CreateAsync(collection, entity, ct);
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
-            await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct);
+            await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct: ct);
             hooks.Stored(created, createdId);
             await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
@@ -358,7 +358,7 @@ public sealed class ItemService(
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
-            await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct, legacyJsonStrings);
+            await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, legacyJsonStrings: legacyJsonStrings, ct: ct);
             hooks.Stored(updated, updatedId);
             await hooks.InTransactionAsync(ct);
             if (meta.Revisions)

@@ -50,8 +50,8 @@ public sealed class ItemWriteSideSync(
     /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
-        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct,
-        bool legacyJsonStrings = false)
+        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate,
+        bool legacyJsonStrings = false, CancellationToken ct = default)
     {
         var tm = meta.Translation;
         if (tm is null) return;

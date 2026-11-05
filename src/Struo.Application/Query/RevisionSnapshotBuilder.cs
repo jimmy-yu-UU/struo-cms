@@ -113,7 +113,7 @@ public sealed class RevisionSnapshotBuilder(
                 f => PropertyAccessorCache.Resolve(tm.TranslationEntityType, f)?.Name ?? f,
                 StringComparer.OrdinalIgnoreCase);
 
-            var jsonFields = TranslatableJsonFields(meta);
+            var jsonFields = StoredJson.TranslatableJsonFields(meta);
             var byLocale = new Dictionary<string, object?>(StringComparer.Ordinal);
             foreach (var tr in tRows)
             {
@@ -132,12 +132,6 @@ public sealed class RevisionSnapshotBuilder(
         snap[FormatKey] = CurrentFormat;
         return JsonSerializer.Serialize(snap, JsonOpts);
     }
-
-    internal static HashSet<string> TranslatableJsonFields(CollectionMetadata meta) =>
-        meta.Fields
-            .Where(f => f.Translatable && f.Interface == FieldInterface.Json)
-            .Select(f => f.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static object? ReadProp(object o, string name) =>
         PropertyAccessorCache.Read(o, name);

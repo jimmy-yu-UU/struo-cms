@@ -1,5 +1,7 @@
 // src/Struo.Application/Query/Projection/StoredJson.cs
 using System.Text.Json;
+using Struo.Domain.Metadata.Enums;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Application.Query;
 
@@ -9,6 +11,13 @@ namespace Struo.Application.Query;
 /// </summary>
 internal static class StoredJson
 {
+    /// <summary>The names of the translatable <c>Json</c> fields of a collection, case-insensitive.</summary>
+    public static HashSet<string> TranslatableJsonFields(CollectionMetadata meta) =>
+        meta.Fields
+            .Where(f => f.Translatable && f.Interface == FieldInterface.Json)
+            .Select(f => f.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Parses stored JSON text to a fresh (non-disposed) <see cref="JsonElement"/> so the API emits
     /// structured JSON, not a quoted string. A value that is not a string, and text that is not valid JSON,

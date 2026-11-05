@@ -62,7 +62,7 @@ public sealed class TranslationOverlay(
                                          System.Reflection.BindingFlags.IgnoreCase)?.Name ?? f,
                 StringComparer.OrdinalIgnoreCase);
 
-        var jsonFields = RevisionSnapshotBuilder.TranslatableJsonFields(meta);
+        var jsonFields = StoredJson.TranslatableJsonFields(meta);
 
         // Group translation rows by parent id (string-keyed for cross-type comparison safety).
         var grouped = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>();
