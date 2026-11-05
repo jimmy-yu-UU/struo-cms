@@ -5,6 +5,8 @@
 ::: danger 破壞性變更
 - `ILoginAttemptThrottle` 新增成員 `Task<LoginThrottleState> GetStateAsync(string, CancellationToken)`，
   讀取鎖定狀態而不計一次嘗試；fork 自己實作這個介面的話，要補上它才能編譯。
+- `RolePermissionData` 新增第三個成員 `Capabilities`；fork 自己實作的 `IRolePermissionStore` 要填它，
+  否則沒有任何呼叫端持有系統權限。不論 store 回傳什麼，`PermissionResolver` 都會丟掉 `public` 角色的列。
 :::
 
 ### 新增
@@ -23,10 +25,11 @@
 - `GET`／`DELETE api/login-locks?email=…` 讀取與解除某個帳號的登入鎖定，超級管理員或角色持有
   `login.unlock` 的呼叫端可用；`email` 最長 255 字元，即 users 資料表 `email` 欄位的長度。
   不論這個 email 有沒有帳號，回答都一樣；每次解除會寫一行記錄，以 id 註明呼叫端與目標，不寫
-  email。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
+  email。超級管理員帳號的鎖定只有超級管理員能解除，其他呼叫端得到 `403`。email 在網址裡，所以 API
+  前面的存取記錄會留下它。見[第 13 章](13-rest-endpoints.md)與[第 16 章](16-authentication.md)。
 - 管理介面在角色表單的「系統權限」區塊設定角色的系統權限（新角色會提示先儲存，`public` 角色不能持有，
-  超級管理員角色不提供此區塊），並新增「登入鎖定」頁，超級管理員或持有 `login.unlock` 的人會在側欄看到
-  它，可查詢某個 email 的鎖定並解除。使用者編輯頁對超級管理員也有同樣的鎖定面板。見
+  超級管理員角色不提供此區塊），並新增「登入鎖定」頁，超級管理員或持有 `login.unlock` 的人會在側欄的
+  System 群組看到它，可查詢某個 email 的鎖定並解除。使用者編輯頁對超級管理員也有同樣的鎖定面板。見
   [第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
 - `auth:unlock --email <email>` 在沒有任何管理員能登入時，從伺服器解除某個帳號的登入鎖定。有設
   `Redis:ConnectionString` 時重設計數並以 `0` 結束；沒有 Redis 時計數存在 API 行程裡，命令會說明

@@ -91,7 +91,7 @@ migration 屬於那個 fork。
   註冊任意數量。
 - **識別 store**：身分資料的存取也是收在幾個介面後面——`IUserCredentialStore`、
   `IUserAccountStore`、`IPermissionGrantStore`、`IRolePermissionStore`、
-  `IExternalUserStore`、`IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個
+  `IRoleCapabilityStore`、`IExternalUserStore`、`IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個
   介面各自有對應的 `SqlSugar*` 實作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。
   fork 要換掉識別儲存的實作，得在呼叫 `AddStruoCms()` 之後再註冊自己的版本——後註
   冊的贏，這幾個不是 `TryAdd`。

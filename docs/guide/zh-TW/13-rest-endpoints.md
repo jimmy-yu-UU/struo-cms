@@ -164,9 +164,13 @@ email 依登入的做法去頭尾空白並轉小寫。`email` 缺少、空白或
 沒有權限的呼叫端不論送什麼 email 都是 `403`。
 
 答案不取決於這個 email 有沒有對應的帳號：沒有帳號的位址得到相同的狀態碼與相同的 body 形狀，
-`DELETE` 對它也回 `204`。用 cookie 登入的 `DELETE` 跟其他寫入一樣要帶 CSRF 標頭。每次 `DELETE` 會寫
-一行 `Information` 記錄，內容是呼叫端的使用者 id 與目標使用者 id，找不到帳號時則註明沒有這個帳號；
-email 不會寫進記錄。見[第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
+`DELETE` 對它也回 `204`。唯一的例外是不是超級管理員的呼叫端對超級管理員帳號（不論啟用與否）送
+`DELETE`：回 `403` 與 `Only a super-admin can clear the lock on a super-admin account.`，鎖定維持不變。
+用 cookie 登入的 `DELETE` 跟其他寫入一樣要帶 CSRF 標頭。每次 `DELETE` 會寫一行 `Information` 記錄，
+內容是呼叫端的使用者 id 與目標使用者 id，找不到帳號時則註明沒有這個帳號；被拒絕的那次則寫一行
+`Warning`，以 id 註明呼叫端與目標。API 不會記錄 email，但 email 在網址裡，所以 API 前面的存取記錄
+（例如反向代理的）會留下它；必須讓 email 不進那些記錄的維運人員，要過濾 `login-locks` 路徑。
+見[第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
 
 ## Languages `api/languages`
 

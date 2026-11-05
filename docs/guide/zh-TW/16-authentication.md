@@ -199,7 +199,8 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 鎖定在視窗結束時會自動解開。超級管理員，或角色持有 `login.unlock` 系統權限的呼叫端，可以用
 `DELETE api/login-locks?email=…` 提早解除，用 `GET` 查詢，見[第 13 章](13-rest-endpoints.md)。管理介面在
 「登入鎖定」頁也能做同樣的事，超級管理員或持有 `login.unlock` 的人可用；使用者編輯頁也有，限超級管理員。
-解除鎖定不會改動密碼。
+解除鎖定不會改動密碼。持有 `login.unlock` 但不是超級管理員的人，不能解除超級管理員帳號的鎖定：端點回
+`403`，「登入鎖定」頁會說明，只有超級管理員能解除。
 
 另有一個行程層級的並行上限（`RateLimiting:LoginConcurrency`），限制同一時間有多少個登入在驗證密
 碼：4 個同時跑、32 個排隊，其餘回同一種 `429` 並帶 `Retry-After`，不論來源為何，都能保護 CPU 與記
@@ -242,7 +243,7 @@ HTTP_STATUS:429
 
 被鎖住的帳號如果就是唯一的管理員，幾分鐘後自動解開的鎖仍然是一扇關著的門。提早打開它有三種方式：
 
-- 另一位超級管理員，或持有 `login.unlock` 的人，照上面說的解除。
+- 另一位超級管理員照上面說的解除。持有 `login.unlock` 的人做不到，因為被鎖的是超級管理員帳號。
 - 啟用了 OIDC 提供者時，用 SSO 登入。依帳號的計數只適用於密碼登入。
 - 在伺服器上執行 `auth:unlock`。完全沒有人能登入時，走的就是這條路。
 
@@ -254,7 +255,8 @@ auth:unlock: cleared the login lock for the given account, if it had one.
 這個命令讀的設定跟 API 一樣，所以需要 `Redis:ConnectionString`，且要跟 API 實際使用的值相同。
 email 依登入的做法去頭尾空白並轉小寫。`--email` 缺少、空白或過長（超過 255 字元）時，印出
 `Usage: auth:unlock --email <email>` 並以 `2` 結束。命令不會把 email 印回來，訊息裡說
-「if it had one」，是因為它跟端點一樣無從得知帳號存在與否、是否被鎖。`RateLimiting:LoginAccount`
+「if it had one」，是因為它無從得知帳號存在與否、是否被鎖；端點的答案也不會說，只有拒絕非超級管理員對超級管理員帳號
+的解除是例外。`RateLimiting:LoginAccount`
 停用時，它會這麼說並以 `0` 結束，因為本來就沒有鎖。重設失敗時，例如連不上 Redis，它只印出錯誤
 型別，不印連線字串，並以 `1` 結束。
 

@@ -100,7 +100,7 @@ Swappable parts:
   fork registers no listener, a write notifies zero listeners; a fork can register any number.
 - **Identity stores**: identity data access sits behind several interfaces too —
   `IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`,
-  `IExternalUserStore`, `IUserSessionStore` — all under `Struo.Application/Security/`. Each has a
+  `IRoleCapabilityStore`, `IExternalUserStore`, `IUserSessionStore` — all under `Struo.Application/Security/`. Each has a
   corresponding `SqlSugar*` implementation class, registered with `AddScoped` inside
   `AddStruoInfrastructure`. To replace an identity store, a fork registers its own implementation
   after calling `AddStruoCms()` — the later registration wins, since these are not

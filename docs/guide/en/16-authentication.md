@@ -266,7 +266,9 @@ A lock ends by itself when the window ends. A super-admin, or a caller whose rol
 `login.unlock` capability, can end it sooner through `DELETE api/login-locks?email=…`, and read it with
 `GET`; see [Chapter 13](13-rest-endpoints.md). The admin UI does the same on its Login locks page, for a
 super-admin or a holder of `login.unlock`, and on a user's edit page, for a super-admin. Clearing a lock
-does not change the password.
+does not change the password. A holder of `login.unlock` who is not a super-admin cannot clear the lock
+on a super-admin account: the endpoint answers `403`, the Login locks page says so, and only a
+super-admin can clear it.
 
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
@@ -316,7 +318,8 @@ partition key is the account, not the caller's IP.
 When the locked account is the only administrator, a lock that ends by itself in a few minutes is
 still a locked door. There are three ways to open it sooner:
 
-- Another super-admin, or a holder of `login.unlock`, clears it, as described above.
+- Another super-admin clears it, as described above. A holder of `login.unlock` cannot, because the
+  lock is on a super-admin account.
 - Sign in with SSO, when an OIDC provider is enabled. The per-account count applies to password
   sign-in only.
 - Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.
@@ -330,7 +333,8 @@ The command reads the same configuration as the API, so it needs `Redis:Connecti
 value the API runs with. The email is trimmed and lowercased the way login does it. A missing, blank
 or over-long (more than 255 characters) `--email` prints `Usage: auth:unlock --email <email>` and
 exits `2`. The command never prints the email back, and it says "if it had one" because it cannot
-tell whether the account exists or was locked, the same as the endpoint. When
+tell whether the account exists or was locked; the endpoint's answer does not say either, except that
+it refuses a caller who is not a super-admin for a super-admin account. When
 `RateLimiting:LoginAccount` is disabled it says so and exits `0`, since there is no lock. If the
 reset fails, for example because Redis cannot be reached, it prints the error type, never the
 connection string, and exits `1`.

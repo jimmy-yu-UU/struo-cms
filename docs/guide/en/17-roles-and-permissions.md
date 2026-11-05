@@ -4,7 +4,7 @@ Once a caller is authenticated, this chapter covers what it can do on a given co
 system computes that answer, and where to change it.
 [Chapter 16: Authentication and SSO](16-authentication.md) covers how a caller proves who it is.
 
-## The three tables
+## The RBAC tables
 
 The RBAC data model rests on three collections: the users themselves, roles, and per-collection
 grants.
@@ -104,7 +104,7 @@ would otherwise be allowed to write.
 A collection grant says what a role may do to that collection's items. Some actions belong to no
 collection, such as unlocking a locked login account. A system capability covers those: a named
 permission that a role holds and a super-admin gives or takes away. The core defines one,
-`login.unlock`, the permission to unlock a locked login account.
+`login.unlock`, the permission to unlock a locked login account other than a super-admin's.
 
 A capability has three parts: a code, a label key and a description key. The code is the string stored
 in the database and sent over the API. The two keys are i18n keys, for `login.unlock`
@@ -150,7 +150,11 @@ The rejections of the `PUT`:
 
 The endpoints that act on a capability check it instead of the super-admin role. `login.unlock` opens
 `GET` and `DELETE api/login-locks?email=…`, which read and clear an account's login lock: they accept a
-super-admin or a caller whose roles hold `login.unlock`, and answer anyone else `403`.
+super-admin or a caller whose roles hold `login.unlock`, and answer anyone else `403`. The capability
+does not reach a super-admin account: a holder who is not a super-admin gets `403` when clearing its
+lock, and only a super-admin can. For every other account the holder can clear the lock as often as it
+likes, which also removes the per-account limit on password guesses against that account. Grant the
+capability only to roles trusted at that level, and watch the `Login lock cleared by` log lines.
 
 A caller reads its own capabilities from `GET /api/auth/me`, whose response carries a `capabilities`
 array of the codes it holds; a super-admin gets the whole list. Endpoint details are in

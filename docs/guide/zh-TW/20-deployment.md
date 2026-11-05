@@ -63,10 +63,11 @@ SQL Server 用 `Encrypt=Mandatory`（驅動程式的預設）加 `TrustServerCer
 MySQL 與 MariaDB 要設 `SSL Mode=VerifyFull`；只驗證憑證、不比對主機名稱的話用 `VerifyCA`。`Required` 與
 `Preferred` 不驗證，`None` 是明文。沒設 `SSL Mode` 時，預設是 `Preferred`。
 
-在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，啟動會記一則警告。
-警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：
-`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與共用記憶體。
-具名管道只有主機是 `.` 或 `localhost` 才算本機；連到其他機器的管道走網路，仍會警告。
+在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，
+啟動會記一則警告。警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：
+`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與 `(localdb)`。
+SQL Server 的具名管道或共用記憶體來源，主機是上述本機主機之一才算本機；連到其他機器的管道走網路，
+仍會警告。
 解析失敗的連線字串也不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
 
 根目錄的 `docker-compose.yml` 會出現這則警告：資料庫是同一個 Docker 網路裡的另一個容器，連線字串沒設
@@ -517,7 +518,7 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData`、
 `Applied 202611030000  AddLanguageCodeUniqueIndex` 與 `Applied 202611040000  CreateRoleCapabilities`。沒有 bootstrap 密碼的話，植入 migration 會以
 `Auth__BootstrapAdmin__Password is required` 失敗。
-少了它，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
+少了 `migrate` 這一步，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 
 admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是因為兩個容器同在這個使用
 者自訂的 network 上，而 API 容器就叫 `api`。API 容器如果要連到 Docker host 上的資料庫，用

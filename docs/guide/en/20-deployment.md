@@ -84,8 +84,8 @@ In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/M
 string does not validate the server's certificate, as defined above. The warning names the setting and
 the value to use, and never prints the connection string, a host or a credential. It is skipped when
 every host is local: `localhost`, `127.0.0.1`, `::1`, a Unix socket, or on SQL Server also `(local)`,
-`.` and shared memory. A named pipe counts as local only when its host is `.` or `localhost`; a pipe
-to another machine travels over the network and still warns. A connection string that does not parse
+`.` and `(localdb)`. A SQL Server named-pipe or shared-memory source is local when its host is one of
+those local hosts; a pipe to another machine travels over the network and still warns. A connection string that does not parse
 is skipped, because the connection itself reports it. SQLite and Oracle are not checked.
 
 The root `docker-compose.yml` triggers this warning: the database is another container on the same
@@ -639,7 +639,7 @@ The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
 `Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
 `Applied 202611040000  CreateRoleCapabilities`. Without the bootstrap password the seed migration
 fails with `Auth__BootstrapAdmin__Password is required`.
-Without it, the `api` container exits with the message shown in "What fails fast at startup" above.
+Without the `migrate` step, the `api` container exits with the message shown in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit
 on this same user-defined network, and the API container is named `api`. If the API container

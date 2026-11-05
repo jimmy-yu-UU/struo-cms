@@ -6,6 +6,9 @@
 - `ILoginAttemptThrottle` has a new member, `Task<LoginThrottleState> GetStateAsync(string,
   CancellationToken)`, which reads the lock without counting an attempt; a fork's own implementation
   must add it to compile.
+- `RolePermissionData` has a third member, `Capabilities`; a fork's own `IRolePermissionStore` must
+  fill it, or no caller holds a capability. `PermissionResolver` drops the rows of the `public` role
+  whatever the store returns.
 :::
 
 ### Added
@@ -27,12 +30,14 @@
 - `GET`/`DELETE api/login-locks?email=…` read and clear an account's login lock, for a super-admin or
   a caller whose role holds `login.unlock`; the `email` is at most 255 characters, the length of the
   users table's `email` column. The answer is the same whether or not the email has an account, and
-  each clear writes a log line naming the caller and target by id, never the email. See
-  [Chapter 13](13-rest-endpoints.md) and [Chapter 16](16-authentication.md).
+  each clear writes a log line naming the caller and target by id, never the email. Only a super-admin
+  can clear the lock on a super-admin account; any other caller gets `403`. The email is part of the
+  URL, so access logs in front of the API record it. See [Chapter 13](13-rest-endpoints.md) and
+  [Chapter 16](16-authentication.md).
 - The admin UI sets a role's system capabilities in a System capabilities section on the role form (a
   new role asks to be saved first, the `public` role cannot hold any, and a super-admin role has no
-  section), and has a Login locks page, in the sidebar for a super-admin or a holder of `login.unlock`,
-  that looks up an email's lock and clears it. A user's edit page has the same lock panel for a
+  section), and has a Login locks page, in the System group of the sidebar for a super-admin or a
+  holder of `login.unlock`, that looks up an email's lock and clears it. A user's edit page has the same lock panel for a
   super-admin. See [Chapter 16](16-authentication.md) and
   [Chapter 17](17-roles-and-permissions.md).
 - `auth:unlock --email <email>` clears an account's login lock from the server when no administrator
@@ -48,9 +53,9 @@
 - In Production, startup logs one warning when a PostgreSQL, SQL Server or MySQL/MariaDB connection
   string does not validate the server's certificate (`SSL Mode` below `VerifyCA` on PostgreSQL and
   MySQL/MariaDB; `Encrypt` below `Mandatory`, or `TrustServerCertificate=True` unless `Encrypt=Strict`,
-  which ignores it, on SQL Server) and the
-  server is not local. The warning names the setting and never prints the connection string or a
-  credential. The root `docker-compose.yml` triggers it. See [Chapter 20](20-deployment.md).
+  which ignores it, on SQL Server) and the server is not local. The warning names the setting and never
+  prints the connection string or a credential. The root `docker-compose.yml` triggers it. See
+  [Chapter 20](20-deployment.md).
 
 ## 0.23.0 — 2026-11-04
 

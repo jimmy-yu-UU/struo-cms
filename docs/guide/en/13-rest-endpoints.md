@@ -191,11 +191,15 @@ the way login does it. A missing, blank or over-long (more than 255 characters) 
 `400`, and a caller without the permission gets `403`, whatever the email.
 
 The answer does not depend on whether an account with that email exists: an address with no account
-gets the same status and the same body shape, and `DELETE` returns `204` for it too. A cookie-signed-in
-`DELETE` needs the CSRF header like any other mutation. Each `DELETE` writes one `Information` log
-line with the caller's user id and the target user id, or a note that no such account exists; the
-email is never logged. See [Chapter 16](16-authentication.md) and
-[Chapter 17](17-roles-and-permissions.md).
+gets the same status and the same body shape, and `DELETE` returns `204` for it too. The one exception
+is a `DELETE` for a super-admin account, active or not, by a caller who is not a super-admin: it returns
+`403` with `Only a super-admin can clear the lock on a super-admin account.` and leaves the lock. A
+cookie-signed-in `DELETE` needs the CSRF header like any other mutation. Each `DELETE` writes one
+`Information` log line with the caller's user id and the target user id, or a note that no such account
+exists; a refused one writes a `Warning` line naming the caller and the target by id. The API never logs
+the email, but the email is part of the URL, so access logs in front of the API, such as a reverse
+proxy's, record it. An operator who must keep emails out of those logs filters the `login-locks` path.
+See [Chapter 16](16-authentication.md) and [Chapter 17](17-roles-and-permissions.md).
 
 ## Languages `api/languages`
 
