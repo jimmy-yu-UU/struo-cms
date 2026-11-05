@@ -88,14 +88,14 @@ describe('LoginLockPanel', () => {
     expect(document.activeElement).not.toBe(document.body)
   })
 
-  it('maps a 403 on unlock to the not-permitted message', async () => {
+  it('maps a 403 on unlock to the super-admin-only message', async () => {
     vi.mocked(loginLocksApi.get).mockResolvedValue({ locked: true, retryAfterSeconds: 120 })
     vi.mocked(loginLocksApi.clear).mockRejectedValue(new ApiError(403, 'x'))
     const w = mountPanel()
     await flushPromises()
     await unlockButton(w)!.trigger('click')
     await flushPromises()
-    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.loginLocks.notPermitted }))
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.loginLocks.superAdminOnly }))
   })
 
   it('reports a failed unlock and keeps the button', async () => {

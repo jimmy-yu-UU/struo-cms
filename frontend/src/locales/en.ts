@@ -358,6 +358,7 @@ export default {
     unlockFailed: 'Failed to clear the lock',
     loadFailed: 'Failed to read the lock state',
     notPermitted: 'The login.unlock permission is required.',
+    superAdminOnly: 'This is a super-admin account; only a super-admin can clear its lock.',
     badEmail: 'Enter a valid email.',
   },
   settings: {

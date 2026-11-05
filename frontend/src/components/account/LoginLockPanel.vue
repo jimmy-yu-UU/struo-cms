@@ -59,7 +59,11 @@ async function onUnlock(): Promise<void> {
     await nextTick()
     statusEl.value?.focus()
   } catch (e) {
-    toast.add({ severity: 'error', summary: t(errorKeyFor(e, 'loginLocks.unlockFailed')), life: 3500 })
+    // The page is open only to a holder, so a 403 here means the account is a super-admin's.
+    const key = e instanceof ApiError && e.status === 403
+      ? 'loginLocks.superAdminOnly'
+      : errorKeyFor(e, 'loginLocks.unlockFailed')
+    toast.add({ severity: 'error', summary: t(key), life: 3500 })
   } finally {
     busy.value = false
   }

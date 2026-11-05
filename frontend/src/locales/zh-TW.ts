@@ -358,6 +358,7 @@ export default {
     unlockFailed: '無法解除鎖定',
     loadFailed: '無法讀取鎖定狀態',
     notPermitted: '需要 login.unlock 權限。',
+    superAdminOnly: '此帳號為 super-admin，需由 super-admin 解除鎖定。',
     badEmail: '請輸入有效的 email。',
   },
   settings: {
