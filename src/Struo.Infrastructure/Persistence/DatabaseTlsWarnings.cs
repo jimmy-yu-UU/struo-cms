@@ -119,7 +119,7 @@ public static class DatabaseTlsWarnings
         var source = dataSource.Trim();
         foreach (var prefix in new[] { "tcp:", "np:", "lpc:" })
         {
-            if (source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) source = source[prefix.Length..];
+            if (source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) source = source[prefix.Length..].TrimStart();
         }
 
         // A pipe source starts with two backslashes; its host is the segment before the next one.
@@ -131,7 +131,7 @@ public static class DatabaseTlsWarnings
         if (instance >= 0) source = source[..instance];
         source = source.Trim();
 
-        return source is "." or "(local)" || IsLoopback(source)
+        return source == "." || source.Equals("(local)", StringComparison.OrdinalIgnoreCase) || IsLoopback(source)
             || source.Equals("(localdb)", StringComparison.OrdinalIgnoreCase);
     }
 }

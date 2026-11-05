@@ -104,8 +104,27 @@ public sealed class DatabaseTlsWarningsTests
     [InlineData("\\\\.\\pipe\\sql\\query", "Encrypt=False")]
     [InlineData("np:\\\\localhost\\pipe\\sql\\query", "Encrypt=False")]
     [InlineData("np:.", "Encrypt=False")]
+    [InlineData("(LOCAL)", "Encrypt=False")]
+    [InlineData("NP:\\\\.\\pipe\\x", "Encrypt=False")]
+    [InlineData("np: \\\\.\\pipe\\sql\\query", "Encrypt=False")]
+    [InlineData("tcp: localhost", "Encrypt=False")]
+    [InlineData(" localhost ", "Encrypt=False")]
     public void SqlServer_local_sources_do_not_warn(string source, string tls) =>
         Run(StruoDbType.SqlServer, Mssql(source, tls)).Should().BeEmpty();
+
+    [Theory]
+    [InlineData("np:")]
+    [InlineData("\\\\")]
+    [InlineData("\\")]
+    [InlineData("db.internal\\")]
+    [InlineData("lpc:")]
+    [InlineData(",")]
+    public void SqlServer_odd_sources_never_throw(string source)
+    {
+        var act = () => Run(StruoDbType.SqlServer, Mssql(source, "Encrypt=False"));
+
+        act.Should().NotThrow();
+    }
 
     [Theory]
     [InlineData("db.internal\\SQLEXPRESS")]
