@@ -12,8 +12,9 @@ public static class EmailAddress
     public static string Normalize(string email) => email.Trim().ToLowerInvariant();
 
     /// <summary>Whether <paramref name="email"/> can address a login lock: not blank and at most
-    /// <see cref="MaxLength"/> characters once trimmed. A lock is keyed on the string alone, and an account
-    /// can hold any non-blank email, so this checks nothing about the address's shape.</summary>
+    /// <see cref="MaxLength"/> characters once trimmed. A lock is keyed on the string alone, so this checks
+    /// nothing about the address's shape; <c>POST /api/users</c> applies the Email field rule when it creates
+    /// the account.</summary>
     public static bool IsUsable(string? email) =>
         !string.IsNullOrWhiteSpace(email) && email.Trim().Length <= MaxLength;
 }

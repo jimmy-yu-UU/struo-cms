@@ -592,8 +592,9 @@ none is ever surfaced client-side.
   (`src/Struo.Application/Query/Write/ItemWriteSideSync.cs`). `FieldValidatorRegistry`'s
   per-`FieldInterface` validators (`src/Struo.Application/Query/Write/Validators/`) enforce
   structural constraints for `MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`
-  fields, in that fixed phase order. `Required` is enforced for non-translatable fields at this
-  layer.
+  fields, in that fixed phase order, then the `Email`/`Url`/`Select`/`Radio` format rules
+  (`FieldFormatRules`, shared with translation values and `Repeater` sub-fields). `Required` is
+  enforced for non-translatable fields at this layer.
 - **Configuration**: bound with the `IOptions` pattern and validated with `ValidateOnStart` —
   `Database`, `Struo:Files`, `Oidc`, and `Query` options all fail fast at startup (before the app
   accepts a single request) rather than surfacing as a confusing first-request failure

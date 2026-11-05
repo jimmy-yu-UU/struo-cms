@@ -48,6 +48,17 @@ public sealed class RevisionSnapshotRedactorTests
     }
 
     [Fact]
+    public void Removes_the_snapshot_format_marker()
+    {
+        var json = """{"id":"1","$snapshotFormat":2,"status":"draft"}""";
+        var redacted = RevisionSnapshotRedactor.RedactHidden(json, Meta);
+
+        using var doc = JsonDocument.Parse(redacted);
+        doc.RootElement.TryGetProperty(RevisionSnapshotBuilder.FormatKey, out _).Should().BeFalse();
+        doc.RootElement.GetProperty("status").GetString().Should().Be("draft");
+    }
+
+    [Fact]
     public void Removes_hidden_translatable_key_from_every_locale()
     {
         var json = """

@@ -14,6 +14,7 @@ namespace Struo.Application.Query;
 ///   <item>Then — KeyValue.</item>
 ///   <item>Then — Files.</item>
 ///   <item>Then — Repeater.</item>
+///   <item>Last — Email / Url / Select / Radio format (<see cref="FormatFieldValidator"/>).</item>
 /// </list>
 /// </summary>
 public sealed class FieldValidatorRegistry
@@ -23,6 +24,7 @@ public sealed class FieldValidatorRegistry
     private static readonly KeyValueFieldValidator KeyValue = new();
     private static readonly FilesFieldValidator Files = new();
     private static readonly RepeaterFieldValidator Repeater = new();
+    private static readonly FormatFieldValidator Format = new();
 
     /// <summary>
     /// Each phase pairs the set of <see cref="FieldInterface"/>s it handles (for filtering
@@ -51,6 +53,19 @@ public sealed class FieldValidatorRegistry
         (
             new HashSet<FieldInterface> { FieldInterface.Repeater },
             new Dictionary<FieldInterface, IFieldValidator> { [FieldInterface.Repeater] = Repeater }
+        ),
+        (
+            new HashSet<FieldInterface>
+            {
+                FieldInterface.Email, FieldInterface.Url, FieldInterface.Select, FieldInterface.Radio,
+            },
+            new Dictionary<FieldInterface, IFieldValidator>
+            {
+                [FieldInterface.Email] = Format,
+                [FieldInterface.Url] = Format,
+                [FieldInterface.Select] = Format,
+                [FieldInterface.Radio] = Format,
+            }
         ),
     ];
 }

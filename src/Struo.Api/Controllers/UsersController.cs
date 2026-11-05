@@ -9,6 +9,7 @@ using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `
 using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
+using Struo.Application.Query;
 using Struo.Application.Security;
 
 namespace Struo.Api.Controllers;
@@ -38,6 +39,9 @@ public sealed class UsersController(
         if (PasswordPolicy.Validate(body.Password, passwordPolicy.Value) is { } policyError)
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, policyError);
         var email = EmailAddress.Normalize(body.Email);
+        if (!FieldFormatRules.IsEmail(email))
+            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                $"Field 'email' {FieldFormatRules.EmailPhrase}.");
         if (await store.FindByEmailAsync(email, ct) is not null)
             return ApiResults.Fail(StatusCodes.Status409Conflict, ErrorCodes.Conflict, "Email already in use.");
 

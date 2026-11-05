@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.25.0
+
+::: danger Breaking
+- A write that sends an `Email` or `Url` value failing its rule, or a top-level `Select` or `Radio`
+  value outside its options, answers `400 BAD_USER_INPUT` and writes nothing. This applies to
+  translation values and `Repeater` rows too. Stored values are not checked until a write sends that
+  field. A fork that stores relative paths in a `Url` field changes the field to `Text`.
+- The admin item editor sends every field on save, so an item that holds a value these rules reject
+  cannot be saved until that value is fixed, and reverting to a revision that holds such a value
+  fails too. This includes a user whose email does not meet the rule.
+- `POST /api/users` applies the `Email` rule to the normalized (trimmed, lowercased) email and
+  answers `400 BAD_USER_INPUT` for one that fails. SSO provisioning and login lookup are unchanged.
+- `translations` returns structured JSON for a translatable `Json` field, like a root `Json` field,
+  in REST, GraphQL and revision snapshots; stored text that is not valid JSON still comes back as the
+  raw string. A write stores every non-null value as its raw JSON text, so a string value is stored
+  as a JSON string. Stored values need no migration. Reverting to a revision taken before this
+  version stores such a string value verbatim, as it was stored then.
+:::
+
+### Changed
+
+- `Email` and `Url` values, and top-level `Select` and `Radio` values, are format-checked on every
+  write, including translation values and `Repeater` child fields. An email needs one `@`, a local
+  part, a dotted domain and no whitespace; a URL must be an absolute `http` or `https` address with
+  a host and no whitespace; a `Select` or `Radio` value must equal one of its options. `null` and
+  the empty string skip the check, and so does whitespace-only text in a `Required` field, which
+  `Required` reports. See [Chapter 6](06-field-types.md) and [Chapter 7](07-i18n.md).
+
 ## 0.24.0 — 2026-11-05
 
 ::: danger Breaking

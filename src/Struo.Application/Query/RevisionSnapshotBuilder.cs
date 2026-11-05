@@ -30,6 +30,14 @@ public sealed class RevisionSnapshotBuilder(
     IEntityRegistry registry,
     IM2MDescriptorSource m2mSource)
 {
+    /// <summary>The reserved top-level key every snapshot carries. No field name can start with <c>$</c>.
+    /// A snapshot without it was written before translatable Json values were stored as raw JSON text:
+    /// it holds such a value as the stored text itself (see <see cref="ItemService.RevertAsync"/>).</summary>
+    public const string FormatKey = "$snapshotFormat";
+
+    /// <summary>The snapshot format written now.</summary>
+    public const int CurrentFormat = 2;
+
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
         Converters = { new UtcDateTimeJsonConverter() },
@@ -48,18 +56,14 @@ public sealed class RevisionSnapshotBuilder(
             snap["version"] = versioned.Version;
 
         // (1) All [CmsField] own-field values — no RBAC filtering, no hidden-skip. Json stays raw text
-        //     (parsed to a structured JsonElement so it serialises as JSON, not a quoted string).
+        //     (StoredJson parses it to a structured JsonElement so it serialises as JSON, not a quoted string).
         foreach (var field in meta.Fields)
         {
             if (field.IsSystem) continue;                 // audit fields are server-managed, not part of a revert body
             if (field.Translatable) continue;             // translatable own-fields live in `translations` below
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
             var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
-            if (field.Interface == FieldInterface.Json && value is string rawJson)
-            {
-                try { value = JsonSerializer.Deserialize<JsonElement>(rawJson); }
-                catch (JsonException) { /* leave raw string; defensive, unreachable via the write path */ }
-            }
+            if (field.Interface == FieldInterface.Json) value = StoredJson.Read(value);
             snap[field.Name] = value;
         }
 
@@ -96,8 +100,9 @@ public sealed class RevisionSnapshotBuilder(
                 : ordered.Select(j => ReadProp(j, desc.TargetFkProperty)).ToList();
         }
 
-        // (4) All-locale translations: { locale: { camelField: rawValue } }. Image/file fields stay
-        //     raw ids (they round-trip through the write path). Verbatim locale keys.
+        // (4) All-locale translations: { locale: { camelField: value } }. Image/file fields stay
+        //     raw ids (they round-trip through the write path); a translatable Json field is parsed like
+        //     a root Json field. Verbatim locale keys.
         var tm = meta.Translation;
         if (tm is not null && idValue is not null)
         {
@@ -108,17 +113,23 @@ public sealed class RevisionSnapshotBuilder(
                 f => PropertyAccessorCache.Resolve(tm.TranslationEntityType, f)?.Name ?? f,
                 StringComparer.OrdinalIgnoreCase);
 
+            var jsonFields = StoredJson.TranslatableJsonFields(meta);
             var byLocale = new Dictionary<string, object?>(StringComparer.Ordinal);
             foreach (var tr in tRows)
             {
                 if (ReadProp(tr, tm.LocaleProperty) is not string loc) continue;
                 var fieldMap = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var (camel, clr) in camelToClr) fieldMap[camel] = ReadProp(tr, clr);
+                foreach (var (camel, clr) in camelToClr)
+                {
+                    var value = ReadProp(tr, clr);
+                    fieldMap[camel] = jsonFields.Contains(camel) ? StoredJson.Read(value) : value;
+                }
                 byLocale[loc] = fieldMap;
             }
             snap["translations"] = byLocale;
         }
 
+        snap[FormatKey] = CurrentFormat;
         return JsonSerializer.Serialize(snap, JsonOpts);
     }
 

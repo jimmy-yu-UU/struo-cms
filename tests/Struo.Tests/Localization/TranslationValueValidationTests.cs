@@ -90,7 +90,7 @@ public class TranslationValueValidationTests(ApiFactory factory)
     [InlineData("{\"a\":1}")]
     [InlineData("[1,2]")]
     [InlineData("5")]
-    public async Task Translatable_json_field_stores_the_raw_text(string rawJson)
+    public async Task Translatable_json_field_reads_back_structured(string rawJson)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/items/fxArticle", Json(
@@ -99,11 +99,11 @@ public class TranslationValueValidationTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
         var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
         (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetString().Should().Be(rawJson);
+            .GetProperty("facts").GetRawText().Should().Be(rawJson);
     }
 
     [Fact]
-    public async Task Translatable_json_string_value_stores_its_content()
+    public async Task Translatable_json_string_value_reads_back_as_that_string()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var resp = await c.PostAsync("/api/items/fxArticle", Json(
@@ -130,7 +130,7 @@ public class TranslationValueValidationTests(ApiFactory factory)
 
         put.StatusCode.Should().Be(HttpStatusCode.OK);
         (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
+            .GetProperty("facts").GetRawText().Should().Be("{\"a\":1}");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class TranslationValueValidationTests(ApiFactory factory)
 
         revert.StatusCode.Should().Be(HttpStatusCode.OK);
         (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
+            .GetProperty("facts").GetRawText().Should().Be("{\"a\":1}");
     }
 
     public static TheoryData<string> DuplicateBodies => new()

@@ -89,7 +89,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         for (var i = 0; i < articleCount; i++)
             await Post(c, "fxArticle", new
             {
-                status = $"s{i}", categoryId = catId,
+                status = "draft", publishedAt = new DateTime(2026, 1, i + 1, 12, 0, 0, DateTimeKind.Utc), categoryId = catId,
                 translations = new { en = new { title = $"ArgBatch-{label}-{i}" } }
             });
 
@@ -109,7 +109,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
                 new DeepSpec(new Dictionary<string, DeepRelationSpec> { ["category"] = new DeepRelationSpec(null, null) }))
             {
                 Filter = new ComparisonFilter("status", QueryOperator.Neq, "zzz"),
-                Sort = new List<SortField> { new("status", false) }
+                Sort = new List<SortField> { new("publishedAt", false) }
             }
         });
 

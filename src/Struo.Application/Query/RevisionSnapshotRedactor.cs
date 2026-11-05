@@ -24,7 +24,8 @@ public static class RevisionSnapshotRedactor
         RedactHidden(snapshotJson, meta, []);
 
     /// <summary>
-    /// Returns a NEW JSON string equal to <paramref name="snapshotJson"/> except: (1) any top-level key
+    /// Returns a NEW JSON string equal to <paramref name="snapshotJson"/> except: (0) the
+    /// <see cref="RevisionSnapshotBuilder.FormatKey"/> marker is omitted; (1) any top-level key
     /// whose field metadata has <c>Hidden == true</c> is omitted; (2) inside every
     /// <c>translations.{locale}</c> object, any key belonging to a field with <c>Hidden == true</c> AND
     /// <c>Translatable == true</c> is omitted; and (3) for every relation in <paramref name="m2m"/> that
@@ -61,6 +62,7 @@ public static class RevisionSnapshotRedactor
             foreach (var prop in root.EnumerateObject())
             {
                 if (hiddenTopLevel.Contains(prop.Name)) continue;
+                if (prop.NameEquals(RevisionSnapshotBuilder.FormatKey)) continue;
 
                 if (prop.NameEquals("translations") && prop.Value.ValueKind == JsonValueKind.Object)
                 {
