@@ -39,6 +39,9 @@ describe('TheSidebar login locks entry', () => {
     const text = sidebarText({ isSuperAdmin: false, capabilities: ['login.unlock'] })
     expect(text).toContain(en.nav.loginLocks)
     expect(text).not.toContain(en.nav.settings)
+    // The entry sits under the System group heading, which no collection supplies here.
+    expect(text.indexOf('System')).toBeGreaterThanOrEqual(0)
+    expect(text.indexOf('System')).toBeLessThan(text.indexOf(en.nav.loginLocks))
   })
 
   it('is hidden for a user without the capability', () => {

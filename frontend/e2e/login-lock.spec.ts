@@ -89,7 +89,7 @@ test('a role holding login.unlock lets its user clear an account lock in the adm
       try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ }
     })
     await signIn(unlocker, UNLOCKER_EMAIL, ACCOUNT_PASSWORD)
-    await unlocker.locator('[data-sidebar="menu-button"]', { hasText: 'Login locks' }).click()
+    await unlocker.locator('[data-sidebar="menu-sub-button"]', { hasText: 'Login locks' }).click()
     await expect(unlocker).toHaveURL(/\/login-locks$/)
     await unlocker.locator('input[type="email"]').fill(VICTIM_EMAIL)
     await unlocker.getByRole('button', { name: 'Look up' }).click()

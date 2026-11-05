@@ -59,4 +59,27 @@ describe('buildNav', () => {
     const nav = buildNav(collections, true, {})
     expect(nav.flatMap((g) => g.items.map((i) => i.name))).toContain('file')
   })
+
+  describe('extra items', () => {
+    const extra = {
+      group: 'System',
+      capability: 'login.unlock',
+      item: { name: 'login-locks', label: 'Login locks', route: 'login-locks' },
+    }
+
+    it('adds the item to an existing group when the capability is held', () => {
+      const cols = [coll('role', 'System')]
+      const nav = buildNav(cols, false, { role: grant(true) }, [extra], (c) => c === 'login.unlock')
+      expect(nav.find((g) => g.group === 'System')!.items.map((i) => i.name)).toEqual(['role', 'login-locks'])
+    })
+
+    it('creates the group when no collection filled it', () => {
+      const nav = buildNav([], false, {}, [extra], () => true)
+      expect(nav).toEqual([{ group: 'System', items: [extra.item] }])
+    })
+
+    it('leaves the item out without the capability', () => {
+      expect(buildNav([], false, {}, [extra], () => false)).toEqual([])
+    })
+  })
 })
