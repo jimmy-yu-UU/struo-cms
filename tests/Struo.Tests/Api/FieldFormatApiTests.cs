@@ -70,4 +70,49 @@ public class FieldFormatApiTests(ApiFactory factory)
         var read = Root(await c.GetStringAsync($"/api/items/fxArticle/{id}")).GetProperty("data");
         read.GetProperty("status").GetString().Should().Be("draft");
     }
+
+    // The core `user` collection's email is an Email field, so the same rule reaches it over both surfaces.
+    private const string EmailMessage = "Field 'email' must be a valid email address.";
+
+    [Fact]
+    public async Task Rest_update_of_a_user_email_that_is_not_an_email_is_a_400()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+
+        var resp = await c.PutAsJsonAsync($"/api/items/user/{_factory.AdminUserId}", new { email = "not-an-email" });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = Root(await resp.Content.ReadAsStringAsync()).GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        error.GetProperty("message").GetString().Should().Be(EmailMessage);
+    }
+
+    [Fact]
+    public async Task Graphql_update_of_a_user_email_that_is_not_an_email_is_a_400_equivalent()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+
+        var resp = await c.PostAsJsonAsync("/graphql", new
+        {
+            query = $"mutation {{ updateUser(id: \"{_factory.AdminUserId}\", input: {{ email: \"not-an-email\" }}) {{ id }} }}",
+        });
+
+        var err = Root(await resp.Content.ReadAsStringAsync()).GetProperty("errors")[0];
+        err.GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        err.GetProperty("message").GetString().Should().Be(EmailMessage);
+    }
+
+    // The items API checks the email as sent: UserWriteInterceptor trims and lowercases it only afterwards,
+    // so a padded address is a 400 here while POST /api/users accepts it.
+    [Fact]
+    public async Task Rest_update_of_a_user_email_checks_it_before_it_is_trimmed()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+
+        var resp = await c.PutAsJsonAsync($"/api/items/user/{_factory.AdminUserId}", new { email = " A@b.co " });
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("message").GetString()
+            .Should().Be(EmailMessage);
+    }
 }
