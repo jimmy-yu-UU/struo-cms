@@ -28,7 +28,7 @@ public sealed class ItemWriteSideSync(
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
     /// <c>translations</c> object, canonicalizes and validates each locale (enabled), each field key (⊆ translatable
-    /// fields), and required fields, then delegates to
+    /// fields), required fields, then Email / Url / Select / Radio format and max length, then delegates to
     /// <see cref="IItemRepository.SyncTranslationsAsync"/>.
     /// <para>
     /// On create (<paramref name="isCreate"/> = true) the default-locale translation is mandatory:
@@ -41,7 +41,7 @@ public sealed class ItemWriteSideSync(
     /// On update the store merges each sent locale per field: a field the request omits keeps its stored
     /// value and an explicit null clears it, so required fields are judged on the merged value. A locale
     /// whose value is null is deleted instead (see <see cref="CollectLocaleDeleteAsync"/>) and takes no part
-    /// in the required and max-length checks.
+    /// in the required, format and max-length checks.
     /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
@@ -72,6 +72,10 @@ public sealed class ItemWriteSideSync(
         var maxLengths = meta.Fields
             .Where(f => f.MaxLength is > 0)
             .ToDictionary(f => f.Name, f => f.MaxLength!.Value, StringComparer.OrdinalIgnoreCase);
+
+        var formatFields = meta.Fields
+            .Where(f => f.Translatable && FieldFormatRules.IsChecked(f.Interface))
+            .ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
         var perLocale = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
         var deleteLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -126,6 +130,11 @@ public sealed class ItemWriteSideSync(
         if (missing.Count > 0)
             throw FieldValueRules.MissingTranslationsError(missing);
 
+        // Format — Email / Url / Select / Radio values, after every required check and before max length.
+        foreach (var (locale, fieldValues) in perLocale)
+            foreach (var (name, value) in fieldValues)
+                CheckFormat(formatFields, name, value, locale);
+
         // Max length — a CMS-layer limit, measured after RichText sanitization and after every required check.
         foreach (var (locale, fieldValues) in perLocale)
         {
@@ -156,6 +165,18 @@ public sealed class ItemWriteSideSync(
                     tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields, parentId, perLocale)
                 { DeleteLocales = deleteLocales },
                 ct);
+    }
+
+    // A whitespace-only value counts as empty, as it does for Required. The error names the field and the
+    // locale, like the type error of BindTranslationValue.
+    private static void CheckFormat(
+        Dictionary<string, FieldMetadata> formatFields, string name, object? value, string locale)
+    {
+        if (value is not string sv || FieldValueRules.IsMissing(sv)
+            || !formatFields.TryGetValue(name, out var field)) return;
+        if (FieldFormatRules.Violation(field.Interface, field.Options, sv) is not { } phrase) return;
+        var message = $"Field '{name}' {phrase} for locale '{locale}'.";
+        throw new QueryException(message, [new QueryErrorDetail(name, locale, message)]);
     }
 
     /// <summary>The error for a locale named more than once in one <c>translations</c> payload.</summary>
