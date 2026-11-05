@@ -52,21 +52,8 @@ public sealed class ItemProjector(IEntityRegistry registry, IPermissionService p
             // `prop` is an exact CLR property name (a FieldToProperty value); the OrdinalIgnoreCase
             // Properties map resolves it to the same PropertyInfo a case-sensitive lookup would.
             var value = d.Properties.GetValueOrDefault(prop)?.GetValue(entity);
-            // Json fields store raw JSON text; parse to a fresh (non-disposed) JsonElement so the API
-            // emits structured JSON, not a quoted string. Null stays null.
-            if (field.Interface == FieldInterface.Json && value is string rawJson)
-            {
-                try
-                {
-                    value = JsonSerializer.Deserialize<JsonElement>(rawJson);
-                }
-                catch (JsonException)
-                {
-                    // Defensive: the write path only ever stores valid JSON, so this is unreachable
-                    // via the API. Guards against out-of-band/legacy rows holding non-JSON text —
-                    // leave the raw string so the rest of the page still loads instead of a 500.
-                }
-            }
+            // Json fields store raw JSON text; StoredJson parses it so the API emits structured JSON.
+            if (field.Interface == FieldInterface.Json) value = StoredJson.Read(value);
             dict[field.Name] = value;
         }
         return dict;

@@ -43,9 +43,15 @@ public sealed class ItemWriteSideSync(
     /// whose value is null is deleted instead (see <see cref="CollectLocaleDeleteAsync"/>) and takes no part
     /// in the required, format and max-length checks.
     /// </para>
+    /// <para>
+    /// A translatable <c>Json</c> field stores the raw JSON text of every non-null value, like a root
+    /// <c>Json</c> field. <paramref name="legacyJsonStrings"/> is set only by the revert of a snapshot
+    /// written before that rule: a string value there is the stored text itself and is stored verbatim.
+    /// </para>
     /// </summary>
     public async Task SyncTranslationsAsync(
-        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct)
+        CollectionMetadata meta, JsonElement body, object parentId, bool isCreate, CancellationToken ct,
+        bool legacyJsonStrings = false)
     {
         var tm = meta.Translation;
         if (tm is null) return;
@@ -107,7 +113,7 @@ public sealed class ItemWriteSideSync(
                 if (!allowed.Contains(field.Name))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = BindTranslationValue(meta, tm, field, locale);
+                var value = BindTranslationValue(meta, tm, field, locale, legacyJsonStrings);
                 if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
                     value = richText.Sanitize(s);
                 fieldValues[field.Name] = value;
@@ -186,11 +192,11 @@ public sealed class ItemWriteSideSync(
     }
 
     // A value binds to its sidecar property type with the options root fields use; JSON null clears the
-    // field. A Json field stores a string value as its content and any other value as its raw JSON text,
-    // so a value read back and sent again is stored unchanged. A value of the wrong shape is a 400 naming
-    // the field and the locale.
+    // field. A Json field stores the raw JSON text of every non-null value, like a root Json field, so a value
+    // read back and sent again is stored unchanged; only a legacy snapshot revert stores a string verbatim.
+    // A value of the wrong shape is a 400 naming the field and the locale.
     private static object? BindTranslationValue(
-        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale)
+        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale, bool legacyJsonStrings)
     {
         if (field.Value.ValueKind == JsonValueKind.Null) return null;
         var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, field.Name);
@@ -198,7 +204,9 @@ public sealed class ItemWriteSideSync(
         var isJson = meta.Fields.Any(f => f.Translatable && f.Interface == FieldInterface.Json
                                           && string.Equals(f.Name, field.Name, StringComparison.OrdinalIgnoreCase));
         if (isJson && prop.PropertyType == typeof(string))
-            return field.Value.ValueKind == JsonValueKind.String ? field.Value.GetString() : field.Value.GetRawText();
+            return legacyJsonStrings && field.Value.ValueKind == JsonValueKind.String
+                ? field.Value.GetString()
+                : field.Value.GetRawText();
         try
         {
             return field.Value.Deserialize(prop.PropertyType, ItemDeserializer.JsonOpts);

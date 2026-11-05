@@ -206,11 +206,11 @@ public sealed class ItemService(
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
-        => UpdateCoreAsync(collection, id, body, "update", sourceRevisionNumber: null, ct: ct);
+        => UpdateCoreAsync(collection, id, body, "update", sourceRevisionNumber: null, legacyJsonStrings: false, ct: ct);
 
     private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(
         string collection, string id, JsonElement body, string operation,
-        long? sourceRevisionNumber, CancellationToken ct)
+        long? sourceRevisionNumber, bool legacyJsonStrings, CancellationToken ct)
     {
         var meta = Meta(collection);
         if (!permissions.CanWrite(collection)) throw new PermissionDeniedException("Write not permitted.");
@@ -234,7 +234,7 @@ public sealed class ItemService(
         await ValidateMergedAsync(collection, meta, d, body, existing, ct);
 
         var persisted = await PersistUpdateAsync(
-            new UpdateTarget(collection, id, operation, sourceRevisionNumber), meta, d, body, existing, hooks, ct);
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings), meta, d, body, existing, hooks, ct);
         if (persisted is null) return null;
         var (updated, updatedId) = persisted.Value;
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
@@ -339,14 +339,15 @@ public sealed class ItemService(
             ex.Version = JsonBodyUtil.ReadVersion(body) ?? ex.Version;
     }
 
-    private readonly record struct UpdateTarget(string Collection, string Id, string Operation, long? SourceRevisionNumber);
+    private readonly record struct UpdateTarget(
+        string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings);
 
     // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
     private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
         UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
         object existing, ItemWriteHooks hooks, CancellationToken ct)
     {
-        var (collection, id, operation, sourceRevisionNumber) = target;
+        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
@@ -357,7 +358,7 @@ public sealed class ItemService(
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (operation == "revert"); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
-            await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct);
+            await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, ct, legacyJsonStrings);
             hooks.Stored(updated, updatedId);
             await hooks.InTransactionAsync(ct);
             if (meta.Revisions)
@@ -582,7 +583,13 @@ public sealed class ItemService(
         // compare-and-swap then raises the 409 when the row has moved on), or dropped when the caller
         // sent none. Keep the JsonDocument alive across the awaited update (the body's JsonElement must
         // stay valid).
-        using var src = JsonDocument.Parse(rec.Snapshot);
+        // The format marker is not a field: it only says how the snapshot holds a translatable Json
+        // value. A snapshot without it was written before such a value was stored as raw JSON text, so
+        // its string values are the stored text and are stored verbatim.
+        using var raw = JsonDocument.Parse(rec.Snapshot);
+        var legacyJsonStrings = !raw.RootElement.TryGetProperty(RevisionSnapshotBuilder.FormatKey, out _);
+        using var src = JsonDocument.Parse(
+            JsonBodyUtil.StripKeys(raw.RootElement, new HashSet<string> { RevisionSnapshotBuilder.FormatKey }));
         // A locale stored now but absent from the snapshot did not exist at that revision, so the revert
         // deletes it (`"<locale>": null`).
         List<string> nonDefault = meta.Translation is null
@@ -590,7 +597,7 @@ public sealed class ItemService(
             : (await languages.GetEnabledAsync()).Where(l => !l.IsDefault).Select(l => l.Code).ToList();
         using var withLocales = JsonDocument.Parse(JsonBodyUtil.WithNullLocales(src.RootElement, nonDefault));
         using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(withLocales.RootElement, expectedVersion));
-        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, ct: ct);
+        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, legacyJsonStrings, ct: ct);
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
