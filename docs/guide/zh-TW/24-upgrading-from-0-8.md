@@ -35,10 +35,10 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    會把它記成已套用，那張表就永遠不會被建出來，等第 5 步之後再加。`--output` 的相對路徑從
    `src/Struo.Api` 算起，目錄要先建好，見[第 21 章〈撰寫 migration〉](21-schema-and-upgrades.md#撰寫-migration)。
 
-   fork 若有多個在 migration 出現之前建好的資料庫，要先把它們全部 baseline，再加入 fork 的
-   migration。baseline 會把當下存在的每一個 fork migration 記成已套用、但不執行，對跑它的那個資料庫
-   都一樣，所以在某個資料庫 baseline 之後才加入的 migration，會在之後才 baseline 的資料庫上被跳過。
-   baseline 這樣的資料庫之前，先確認它的結構已經包含那些 migration 會建立的內容。
+   fork 若有多個在 migration 出現之前建好的資料庫，要先把它們全部 baseline，再加入第 4 步以外的
+   fork migration。baseline 會把當下存在的每一個 fork migration 記成已套用、但不執行，對跑它的那個
+   資料庫都一樣，所以在某個資料庫 baseline 之後才加入的 migration，會在之後才 baseline 的資料庫上
+   被跳過。baseline 這樣的資料庫之前，先確認它的結構已經包含那些 migration 會建立的內容。
 5. **跑一次 `migrate:baseline`。** 在這之前，`migrate` 與 API 啟動都會拒絕，訊息要你跑
    `migrate:baseline`。baseline 拿 migration 鎖，在一個交易裡寫入核心（到 `SeedCoreData` 為止）、範例
    （有開啟的話）與 fork 的版本，並列出 FluentMigrator 執行的 SQL：

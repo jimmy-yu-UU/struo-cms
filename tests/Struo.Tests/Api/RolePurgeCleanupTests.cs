@@ -12,8 +12,8 @@ using Xunit;
 namespace Struo.Tests.Api;
 
 /// <summary>
-/// Purging a role removes the rows that name it in <c>permissions</c>, <c>user_roles</c> and
-/// <c>role_capabilities</c>; trashing it keeps them, so a restore is whole.
+/// Deleting a role (not soft-deletable, so every delete is a purge) removes the rows that name it in
+/// <c>permissions</c>, <c>user_roles</c> and <c>role_capabilities</c>; other roles' rows stay.
 /// </summary>
 [Collection("ApiIntegration")]
 public class RolePurgeCleanupTests(ApiFactory factory)
@@ -94,6 +94,25 @@ public class RolePurgeCleanupTests(ApiFactory factory)
         (await admin.DeleteAsync($"/api/items/role/{roleId}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0, 0));
+    }
+
+    [Fact]
+    public async Task Deleting_a_role_through_graphql_removes_its_rows_and_leaves_other_roles_untouched()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var (roleId, _) = await ArrangeAsync(admin);
+        var (otherId, _) = await ArrangeAsync(admin);
+
+        var resp = await admin.PostAsJsonAsync("/graphql", new
+        {
+            query = $"mutation {{ deleteRole(id: \"{roleId}\", purge: true) }}"
+        });
+
+        var body = await resp.Content.ReadAsStringAsync();
+        JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("deleteRole").GetBoolean()
+            .Should().BeTrue(body);
+        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0, 0));
+        (await CountAsync(otherId)).Should().Be(new RoleRows(1, 1, 1));
     }
 
     [Fact]

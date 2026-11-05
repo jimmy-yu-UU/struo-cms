@@ -18,8 +18,8 @@
 
 ### Fixed
 
-- Deleting a role removes its permission and system-capability rows in the same transaction. A role
-  is not soft-deletable, so every delete is permanent. Its user-role rows go with it through the `User.Roles` relation.
+- Deleting a role removes its permission and system-capability rows in the same transaction. Its
+  user-role rows go with it through the `User.Roles` relation.
 
 ## 0.25.0 — 2026-11-05
 

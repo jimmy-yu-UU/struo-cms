@@ -435,7 +435,8 @@ identity god-interface, split by *consumer* rather than by table:
   `InsertByObject`/`UpdateByObject`) and `SqlSugarItemRepository`'s version bump; `CreateAsync` is an
   ordinary `Insertable`, which `AuditAop` does stamp.
 - **`IPermissionGrantStore`** → `SqlSugarPermissionGrantStore`. The RBAC *write* side — the admin
-  permission matrix's read and atomic full-replace of a role's grants.
+  permission matrix's read and atomic full-replace of a role's grants, and the deletion of a role's
+  rows when the role is purged.
 - **`IRolePermissionStore`** → `SqlSugarRolePermissionStore`. The RBAC *read* side, resolving a
   caller's effective permissions once per request. Kept separate from the write side above because it
   documents itself as bypassing permission gating on purpose: the query that resolves the gate must
@@ -443,7 +444,8 @@ identity god-interface, split by *consumer* rather than by table:
 - **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
 - **`IRoleCapabilityStore`** → `SqlSugarRoleCapabilityStore`. The write side of system capabilities (the
   role-held action permissions that are not per-collection grants): list and atomic full-replace of a
-  role's codes in `role_capabilities` (`RoleCapability`). The read side rides on
+  role's codes in `role_capabilities` (`RoleCapability`), and the deletion of a role's rows when the
+  role is purged. The read side rides on
   `IRolePermissionStore`: `RolePermissionData.Capabilities` is folded by `PermissionResolver` into
   `EffectivePermissions.HasCapability(code)`, which is true for every code when the caller is a
   super-admin. Nothing caches the result; `PermissionResolutionMiddleware` resolves it per request.
