@@ -7,7 +7,7 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
 {
     /// <summary>Name of the role that acts as the permission FLOOR for every caller (anonymous and
     /// authenticated alike). The core seed migration creates it.</summary>
-    public const string PublicRoleName = "public";
+    public const string PublicRoleName = PermissionResolver.PublicRoleName;
 
     /// <remarks>
     /// The <c>public</c> role is the permission FLOOR for every caller, not a fallback for the
@@ -59,9 +59,12 @@ public sealed class SqlSugarRolePermissionStore(ISqlSugarClient db) : IRolePermi
         // The public role reaches every caller, anonymous ones included, so it never contributes a capability,
         // whichever path wrote a row for it.
         var capabilityRoleIds = roles.Where(r => r.Name != PublicRoleName).Select(r => r.Id).ToList();
-        var capabilities = await db.Queryable<RoleCapability>()
-            .Where(c => capabilityRoleIds.Contains(c.RoleId))
-            .ToListAsync(ct);
+        // An anonymous caller holds only the public role: nothing to query.
+        var capabilities = capabilityRoleIds.Count == 0
+            ? []
+            : await db.Queryable<RoleCapability>()
+                .Where(c => capabilityRoleIds.Contains(c.RoleId))
+                .ToListAsync(ct);
 
         return new RolePermissionData(
             roles.Select(r => new RoleRow(r.Id, r.Name, r.IsSuperAdmin)).ToList(),

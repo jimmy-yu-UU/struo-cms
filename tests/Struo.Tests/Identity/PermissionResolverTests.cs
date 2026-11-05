@@ -77,4 +77,20 @@ public class PermissionResolverTests
         EffectivePermissions.DenyAll.HasCapability("login.unlock").Should().BeFalse();
         PermissionResolver.Resolve(new RolePermissionData([], [])).HasCapability("login.unlock").Should().BeFalse();
     }
+
+    // A store written by a fork may hand back capability rows for the public role, which every caller holds.
+    [Fact]
+    public void A_capability_row_on_the_public_role_is_dropped_whatever_the_store_returned()
+    {
+        var pub = Guid.NewGuid();
+        var editor = Guid.NewGuid();
+        var data = new RolePermissionData(
+            [new RoleRow(pub, "public", false), new RoleRow(editor, "editor", false)], [],
+            [new RoleCapabilityRow(pub, "login.unlock"), new RoleCapabilityRow(editor, "reports.export")]);
+
+        var p = PermissionResolver.Resolve(data);
+
+        p.HasCapability("login.unlock").Should().BeFalse();
+        p.HasCapability("reports.export").Should().BeTrue();
+    }
 }

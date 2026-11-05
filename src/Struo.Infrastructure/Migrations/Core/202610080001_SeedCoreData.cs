@@ -59,7 +59,7 @@ public sealed class SeedCoreData : StruoMigration
 
     private void WarnAboutDefaultAdminEmail() =>
         Log.LogWarning(
-            "The bootstrap admin was created with the default email {Email}, which anyone can look up. Change " +
+            "The bootstrap admin is being created with the default email {Email}, which anyone can look up. Change " +
             "its email in the admin UI, or create another administrator and deactivate this account.",
             CoreSeedData.DefaultAdminEmail);
 
