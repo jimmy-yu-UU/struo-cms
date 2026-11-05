@@ -178,6 +178,18 @@ public sealed class ItemServiceFieldFormatTranslationTests : IDisposable
     }
 
     [Fact]
+    public async Task Whitespace_only_value_is_a_format_error_with_field_and_locale()
+    {
+        var ex = await Rejected(CreateAsync(new Dictionary<string, object>
+        {
+            ["en"] = new { title = "T" },
+            ["zh-TW"] = En("email", "   "),
+        })!);
+
+        ex.Message.Should().Be("Field 'email' must be a valid email address for locale 'zh-TW'.");
+    }
+
+    [Fact]
     public async Task Null_and_empty_skip_the_check_and_null_clears()
     {
         var id = await CreateValidAsync();

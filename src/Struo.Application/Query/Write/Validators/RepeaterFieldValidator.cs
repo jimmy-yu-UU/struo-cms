@@ -51,7 +51,7 @@ public sealed class RepeaterFieldValidator : IFieldValidator
                     throw new QueryException(
                         $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' exceeds maximum length {sub.MaxLength}.");
 
-                if (FieldFormatRules.Violation(sub.Interface, sub.Options, sv) is { } phrase)
+                if (FieldFormatRules.Violation(sub.Interface, sub.Options, sv, sub.Required) is { } phrase)
                     throw new QueryException(
                         $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' {phrase}.");
             }

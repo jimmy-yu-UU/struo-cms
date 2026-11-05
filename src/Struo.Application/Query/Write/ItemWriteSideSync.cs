@@ -167,14 +167,13 @@ public sealed class ItemWriteSideSync(
                 ct);
     }
 
-    // A whitespace-only value counts as empty, as it does for Required. The error names the field and the
-    // locale, like the type error of BindTranslationValue.
+    // Null and the empty string are not checked, nor is whitespace-only text of a Required field. The error
+    // names the field and the locale, like the type error of BindTranslationValue.
     private static void CheckFormat(
         Dictionary<string, FieldMetadata> formatFields, string name, object? value, string locale)
     {
-        if (value is not string sv || FieldValueRules.IsMissing(sv)
-            || !formatFields.TryGetValue(name, out var field)) return;
-        if (FieldFormatRules.Violation(field.Interface, field.Options, sv) is not { } phrase) return;
+        if (value is not string sv || !formatFields.TryGetValue(name, out var field)) return;
+        if (FieldFormatRules.Violation(field.Interface, field.Options, sv, field.Required) is not { } phrase) return;
         var message = $"Field '{name}' {phrase} for locale '{locale}'.";
         throw new QueryException(message, [new QueryErrorDetail(name, locale, message)]);
     }

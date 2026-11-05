@@ -166,11 +166,14 @@ public sealed class ItemServiceFieldFormatTests : IDisposable
         (await CreateWith("email", ""))["email"].Should().Be("");
     }
 
-    [Fact]
-    public async Task Whitespace_only_email_counts_as_empty_like_required_does()
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    public async Task Whitespace_only_email_is_a_format_error_when_not_required(string value)
     {
-        var created = await CreateWith("email", "   ");
-        created["email"].Should().Be("   ");
+        var act = () => CreateWith("email", value);
+        await act.Should().ThrowAsync<QueryException>()
+            .WithMessage("Field 'email' must be a valid email address.");
     }
 
     [Fact]
@@ -198,6 +201,9 @@ public sealed class ItemServiceFieldFormatTests : IDisposable
     [InlineData("javascript:alert(1)")]
     [InlineData("mailto:a@b.co")]
     [InlineData("http://")]
+    [InlineData("http://example.com/a b")]
+    [InlineData("  http://x  ")]
+    [InlineData("http://x\n")]
     public async Task Invalid_url_is_rejected_on_create(string value)
     {
         var act = () => CreateWith("site", value);
@@ -384,6 +390,17 @@ public sealed class ItemServiceFieldFormatTests : IDisposable
 
         await act.Should().ThrowAsync<QueryException>().WithMessage(
             "Repeater field 'contacts' row 2: 'email' must be a valid email address.");
+    }
+
+    [Fact]
+    public async Task Repeater_row_with_a_whitespace_only_email_is_a_format_error()
+    {
+        var body = Body(With("contacts", Rows(new { name = "a", email = "  ", site = (string?)null })));
+
+        var act = () => _svc.CreateAsync(Collection, body);
+
+        await act.Should().ThrowAsync<QueryException>().WithMessage(
+            "Repeater field 'contacts' row 1: 'email' must be a valid email address.");
     }
 
     [Fact]

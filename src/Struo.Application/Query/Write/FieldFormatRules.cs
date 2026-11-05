@@ -9,9 +9,9 @@ namespace Struo.Application.Query;
 /// values and Repeater sub-fields. <see cref="Violation"/> returns the predicate of the error message
 /// (so each caller can wrap it in its own field/locale/row prefix) or null when the value passes.
 /// </summary>
-internal static class FieldFormatRules
+public static class FieldFormatRules
 {
-    internal const string EmailPhrase = "must be a valid email address";
+    public const string EmailPhrase = "must be a valid email address";
     internal const string UrlPhrase = "must be a valid http or https URL";
 
     internal static bool IsChecked(FieldInterface fieldInterface) =>
@@ -19,12 +19,15 @@ internal static class FieldFormatRules
             or FieldInterface.Select or FieldInterface.Radio;
 
     /// <summary>
-    /// The violated rule's phrase, or null. Null and empty values are not checked; a caller that also
-    /// treats whitespace-only text as empty skips those before calling.
+    /// The violated rule's phrase, or null. Null and the empty string are not checked, and neither is
+    /// whitespace-only text of a Required field: Required reports that value as missing, so the format
+    /// rule stays out of its way. Any other whitespace-only text is checked and fails.
     /// </summary>
-    internal static string? Violation(FieldInterface fieldInterface, IReadOnlyList<FieldOption>? options, string? value)
+    internal static string? Violation(
+        FieldInterface fieldInterface, IReadOnlyList<FieldOption>? options, string? value, bool required)
     {
         if (string.IsNullOrEmpty(value)) return null;
+        if (required && string.IsNullOrWhiteSpace(value)) return null;
         return fieldInterface switch
         {
             FieldInterface.Email => IsEmail(value) ? null : EmailPhrase,
@@ -36,7 +39,8 @@ internal static class FieldFormatRules
         };
     }
 
-    internal static bool IsEmail(string value)
+    /// <summary>The Email rule: one <c>@</c>, a local part, a dotted domain and no whitespace.</summary>
+    public static bool IsEmail(string value)
     {
         if (value.Any(char.IsWhiteSpace)) return false;
         var at = value.IndexOf('@');
@@ -48,7 +52,8 @@ internal static class FieldFormatRules
     }
 
     internal static bool IsHttpUrl(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        !value.Any(char.IsWhiteSpace)
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
         && uri.Host.Length > 0;
 
