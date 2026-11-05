@@ -164,8 +164,7 @@ The `PUT` is the only write path that checks the codes against the list and refu
 super-admin can still write `roleCapability` rows through the generic item API, which checks neither;
 an unknown code there grants nothing, and a row on `public` is ignored.
 
-Deleting a role leaves its `role_capabilities` rows in place, as it does its `permissions` rows.
-Resolution reads only roles that still exist, so those rows apply to nobody.
+Deleting a role removes its `role_capabilities` and `permissions` rows in the same transaction.
 
 ## Public read
 

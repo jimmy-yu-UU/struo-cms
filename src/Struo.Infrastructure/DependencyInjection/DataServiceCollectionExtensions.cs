@@ -69,6 +69,7 @@ public static class DataServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, LanguageWriteInterceptor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, UserWriteInterceptor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, FileWriteInterceptor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IItemWriteInterceptor, RoleWriteInterceptor>());
         services.AddScoped<ItemService>();
         // Expose the use-case seam controllers depend on, forwarding to the SAME scoped
         // ItemService instance (same request scope, same object) so behavior is byte-for-byte unchanged.
