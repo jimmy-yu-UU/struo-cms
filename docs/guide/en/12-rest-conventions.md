@@ -323,9 +323,10 @@ HTTP_STATUS:409
 
 The caller's `version` has already fallen behind the row's real current value, so the write is
 rejected; this message is exactly what a client's "reload and try again" path is built on. Leaving
-`version` out of the body entirely is also allowed — doing so skips the comparison altogether, so the
-update overwrites the row whatever its current `version` is. A client that needs conflict protection
-sends the `version` it read, and a stale one answers `409`. A JSON `null` counts as leaving it out.
+`version` out of the body entirely is also allowed: the server then compares against the version it has
+just read itself, so the update overwrites whatever another client wrote since this caller read the
+row. A client that needs conflict protection sends the `version` it read, and a stale one answers
+`409`. A JSON `null` counts as leaving it out.
 
 When `version` is present and not `null`, it must be a JSON number written as an integer literal,
 with no fraction or exponent, within the range of a 64-bit integer, or an integer string such as

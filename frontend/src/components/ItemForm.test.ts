@@ -264,7 +264,7 @@ describe('ItemForm per-locale errors', () => {
     expect(tabs[0].find('.tab-error').exists()).toBe(false)
     expect(tabs[1].find('.tab-error').exists()).toBe(false)
   })
-  it('puts the required asterisk only on the default tab', async () => {
+  it('puts the required asterisk on the default tab and not on an empty non-default tab', async () => {
     const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
     expect(w.find('.field label .text-destructive').exists()).toBe(true)
     await w.findAll('[role="tab"]')[1].trigger('mousedown')
@@ -272,7 +272,7 @@ describe('ItemForm per-locale errors', () => {
     expect(w.find('.field label .text-destructive').exists()).toBe(false)
   })
   it('puts the asterisk on a non-default tab once that locale holds content', async () => {
-    const started: FormModel = { ...m3, translations: { ...m3.translations, 'zh-TW': { title: '' }, fr: { title: 'bonjour' } } }
+    const started: FormModel = { ...m3, translations: { ...m3.translations, fr: { title: 'bonjour' } } }
     const w = mountForm({ meta: reqMeta, model: started, locales: three, errors: {} })
     const tabs = w.findAll('[role="tab"]')
     await tabs[2].trigger('mousedown')

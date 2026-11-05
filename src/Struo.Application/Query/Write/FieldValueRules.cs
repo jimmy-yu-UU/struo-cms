@@ -4,9 +4,9 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Shared Required / MaxLength primitives for the write path, deduplicating the parent-field
-/// (<see cref="ItemDeserializer"/>) and per-locale translation (<see cref="ItemService"/>) variants.
-/// Exception message strings are byte-for-byte identical to the inline checks they replaced.
+/// Shared Required / MaxLength primitives for the write path. The parent-field variants are called
+/// from <see cref="ItemDeserializer"/>, the per-locale translation variants from
+/// <see cref="ItemWriteSideSync"/>.
 /// </summary>
 internal static class FieldValueRules
 {
