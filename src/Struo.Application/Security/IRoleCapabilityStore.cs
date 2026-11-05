@@ -13,4 +13,7 @@ public interface IRoleCapabilityStore
     /// <summary>Replaces the role's whole capability set in one transaction, joining the caller's
     /// transaction when one is open. The caller has validated the codes and removed repeats.</summary>
     Task ReplaceAsync(Guid roleId, IReadOnlyList<string> codes, CancellationToken ct = default);
+
+    /// <summary>Removes every capability of the role, joining the caller's transaction when one is open.</summary>
+    Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default);
 }

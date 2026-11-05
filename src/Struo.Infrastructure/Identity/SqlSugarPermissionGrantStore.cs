@@ -42,4 +42,8 @@ public sealed class SqlSugarPermissionGrantStore(ISqlSugarClient db) : IPermissi
             if (rows.Count > 0) await db.Insertable(rows).ExecuteCommandAsync(ct);
         }, ct);
     }
+
+    public async Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default) =>
+        await new TransactionRunner(db).InTransactionAsync(
+            async () => await db.Deleteable<Permission>().Where(p => p.RoleId == roleId).ExecuteCommandAsync(ct), ct);
 }

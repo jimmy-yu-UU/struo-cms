@@ -181,6 +181,14 @@ In that case set the header from the connection's own scheme in
 `frontend/nginx/default.conf.template`: replace `$struo_forwarded_proto` in the two
 `proxy_set_header X-Forwarded-Proto` lines with `$scheme`.
 
+When the admin container is reached directly, with no TLS-terminating proxy in front of it, make the
+`$scheme` change above. The container can then stay listed in `ForwardedHeaders__KnownProxies__0` or
+`ForwardedHeaders__KnownNetworks__0`, because its nginx forwards only its own connection's scheme.
+Without that change, do not list it: its nginx passes on whatever `X-Forwarded-Proto` a client sent,
+so a client could claim `https` for its own requests. The API then ignores `X-Forwarded-For` as well
+and sees the nginx container's address for every client, so the per-IP login limit
+(`RateLimiting:Login`, when enabled) is shared by all clients.
+
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
 Left empty, session state — the ticket a cookie maps to, and the `RateLimiting:LoginAccount`
