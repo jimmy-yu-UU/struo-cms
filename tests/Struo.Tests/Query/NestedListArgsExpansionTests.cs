@@ -114,7 +114,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
     private static readonly string[] SortByPublished = ["publishedAt"];
 
     // Distinct sort keys need no free-text status: the fixture status is limited to its options.
-    private static DateTime Day(int day) => new(2026, 1, day, 0, 0, 0, DateTimeKind.Utc);
+    private static DateTime Day(int day) => new(2026, 1, day, 12, 0, 0, DateTimeKind.Utc);
     private static readonly Dictionary<string, int> DayOf = new() { ["a"] = 1, ["b"] = 2, ["c"] = 3 };
 
     [Fact]

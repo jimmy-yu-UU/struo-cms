@@ -89,7 +89,7 @@ public class DeepNestingBatchingTests(ApiFactory factory)
         for (var i = 0; i < articleCount; i++)
             await Post(c, "fxArticle", new
             {
-                status = "draft", publishedAt = new DateTime(2026, 1, i + 1, 0, 0, 0, DateTimeKind.Utc), categoryId = catId,
+                status = "draft", publishedAt = new DateTime(2026, 1, i + 1, 12, 0, 0, DateTimeKind.Utc), categoryId = catId,
                 translations = new { en = new { title = $"ArgBatch-{label}-{i}" } }
             });
 
