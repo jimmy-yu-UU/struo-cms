@@ -121,7 +121,12 @@ public class CoreWriteInterceptorTests(ApiFactory factory)
 
         var bad = await admin.PutAsJsonAsync($"/api/items/file/{id}", new { status = "archived" });
         bad.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        (await bad.Content.ReadAsStringAsync()).Should().Contain("must be 'published' or 'draft'");
+        (await bad.Content.ReadAsStringAsync()).Should().Contain("Field 'status' value 'archived' is not in its options.");
+
+        // An empty status skips the option check, so the interceptor's own rule rejects it.
+        var empty = await admin.PutAsJsonAsync($"/api/items/file/{id}", new { status = "" });
+        empty.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await empty.Content.ReadAsStringAsync()).Should().Contain("must be 'published' or 'draft'");
 
         (await admin.PutAsJsonAsync($"/api/items/file/{id}", new { status = "draft" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);

@@ -111,7 +111,11 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         tags[0].GetProperty("name").GetString().Should().Be("AI");
     }
 
-    private static readonly string[] SortByStatus = ["status"];
+    private static readonly string[] SortByPublished = ["publishedAt"];
+
+    // Distinct sort keys need no free-text status: the fixture status is limited to its options.
+    private static DateTime Day(int day) => new(2026, 1, day, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly Dictionary<string, int> DayOf = new() { ["a"] = 1, ["b"] = 2, ["c"] = 3 };
 
     [Fact]
     public async Task Nested_o2m_sort_and_limit_apply_per_parent()
@@ -119,18 +123,18 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "fxCategory", new { name = "SortCat" });
         foreach (var s in new[] { "c", "a", "b" })
-            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "S-" + s } } });
+            await Post(c, "fxArticle", new { status = "draft", publishedAt = Day(DayOf[s]), categoryId = cat, translations = new { en = new { title = "S-" + s } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = SortByStatus, limit = 2 } }
+            deep = new { articles = new { sort = SortByPublished, limit = 2 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
-        var statuses = row.GetProperty("articles").EnumerateArray()
-            .Select(a => a.GetProperty("status").GetString()).ToList();
-        statuses.Should().Equal("a", "b"); // sorted asc, top-2
+        var days = row.GetProperty("articles").EnumerateArray()
+            .Select(a => a.GetProperty("publishedAt").GetDateTime().Day).ToList();
+        days.Should().Equal(1, 2); // sorted asc, top-2
     }
 
     [Fact]
@@ -139,18 +143,18 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "fxCategory", new { name = "OffsetCat" });
         foreach (var s in new[] { "a", "b", "c" })
-            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "O-" + s } } });
+            await Post(c, "fxArticle", new { status = "draft", publishedAt = Day(DayOf[s]), categoryId = cat, translations = new { en = new { title = "O-" + s } } });
 
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = SortByStatus, offset = 1, limit = 1 } }
+            deep = new { articles = new { sort = SortByPublished, offset = 1, limit = 1 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
-        var statuses = row.GetProperty("articles").EnumerateArray()
-            .Select(a => a.GetProperty("status").GetString()).ToList();
-        statuses.Should().Equal("b"); // skip 1 (a), take 1 -> b
+        var days = row.GetProperty("articles").EnumerateArray()
+            .Select(a => a.GetProperty("publishedAt").GetDateTime().Day).ToList();
+        days.Should().Equal(2); // skip 1 (day 1), take 1 -> day 2
     }
 
     private static readonly string[] SortByName = ["name"];
@@ -162,15 +166,15 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var cat1 = await Post(c, "fxCategory", new { name = "PP-1" });
         var cat2 = await Post(c, "fxCategory", new { name = "PP-2" });
         for (var i = 0; i < 3; i++)
-            await Post(c, "fxArticle", new { status = "s" + i, categoryId = cat1, translations = new { en = new { title = $"PP1-{i}" } } });
-        await Post(c, "fxArticle", new { status = "s0", categoryId = cat2, translations = new { en = new { title = "PP2-0" } } });
+            await Post(c, "fxArticle", new { status = "draft", publishedAt = Day(i + 1), categoryId = cat1, translations = new { en = new { title = $"PP1-{i}" } } });
+        await Post(c, "fxArticle", new { status = "draft", publishedAt = Day(1), categoryId = cat2, translations = new { en = new { title = "PP2-0" } } });
 
         // Query BOTH parents in one page; each must be trimmed independently to limit 2.
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { name = new Dictionary<string, object> { ["_starts_with"] = "PP-" } },
             sort = SortByName,
-            deep = new { articles = new { sort = SortByStatus, limit = 2 } }
+            deep = new { articles = new { sort = SortByPublished, limit = 2 } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
@@ -209,19 +213,19 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "fxCategory", new { name = "TrimCat" });
         foreach (var s in new[] { "a", "b", "c" })
-            await Post(c, "fxArticle", new { status = s, categoryId = cat, translations = new { en = new { title = "T-" + s } } });
+            await Post(c, "fxArticle", new { status = "draft", publishedAt = Day(DayOf[s]), categoryId = cat, translations = new { en = new { title = "T-" + s } } });
 
         // limit=1 on articles; each surviving article expands its category (nested M2O).
         var envelope = JsonSerializer.SerializeToElement(new
         {
             filter = new { id = new Dictionary<string, object> { ["_eq"] = cat } },
-            deep = new { articles = new { sort = SortByStatus, limit = 1, deep = new { category = new { } } } }
+            deep = new { articles = new { sort = SortByPublished, limit = 1, deep = new { category = new { } } } }
         });
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var articles = row.GetProperty("articles");
         articles.GetArrayLength().Should().Be(1);
-        articles[0].GetProperty("status").GetString().Should().Be("a");
+        articles[0].GetProperty("publishedAt").GetDateTime().Day.Should().Be(1);
         articles[0].GetProperty("category").GetProperty("name").GetString().Should().Be("TrimCat");
     }
 }

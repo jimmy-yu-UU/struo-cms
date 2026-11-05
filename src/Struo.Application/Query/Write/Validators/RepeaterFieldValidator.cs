@@ -8,9 +8,9 @@ namespace Struo.Application.Query;
 /// <summary>
 /// Repeater fields (List&lt;TChild&gt;) live on the parent entity as an ordered list of typed child
 /// objects. Drop fully-blank rows (every sub-field null or whitespace string), enforce each
-/// kept row's sub-field Required / Select-Radio option membership / MaxLength, and enforce the
-/// parent Required as a non-empty list. Non-translatable only. A wrong-shaped element already
-/// 400s at the deserialize guard.
+/// kept row's sub-field Required / MaxLength / Select-Radio option membership / Email-Url format
+/// (<see cref="FieldFormatRules"/>), and enforce the parent Required as a non-empty list.
+/// Non-translatable only. A wrong-shaped element already 400s at the deserialize guard.
 /// </summary>
 public sealed class RepeaterFieldValidator : IFieldValidator
 {
@@ -51,11 +51,9 @@ public sealed class RepeaterFieldValidator : IFieldValidator
                     throw new QueryException(
                         $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' exceeds maximum length {sub.MaxLength}.");
 
-                if (sv is not null && sub.Options is { Count: > 0 } &&
-                    !string.IsNullOrEmpty(sv) &&
-                    !sub.Options.Any(o => string.Equals(o.Value, sv, StringComparison.Ordinal)))
+                if (FieldFormatRules.Violation(sub.Interface, sub.Options, sv) is { } phrase)
                     throw new QueryException(
-                        $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' value '{sv}' is not in its options.");
+                        $"Repeater field '{field.Name}' row {rowIndex}: '{sub.Name}' {phrase}.");
             }
             cleaned.Add(row);
         }
