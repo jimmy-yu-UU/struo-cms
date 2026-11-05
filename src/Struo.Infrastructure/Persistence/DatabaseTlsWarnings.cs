@@ -112,12 +112,14 @@ public static class DatabaseTlsWarnings
         return colon >= 0 && colon == host.LastIndexOf(':') ? host[..colon] : host;
     }
 
+    private static readonly string[] SqlServerSourcePrefixes = ["tcp:", "np:", "lpc:"];
+
     // The server named by a Data Source. A pipe or lpc source is local only when its host is: a pipe to
     // another machine travels over the network.
     private static bool IsLocalSqlServer(string dataSource)
     {
         var source = dataSource.Trim();
-        foreach (var prefix in new[] { "tcp:", "np:", "lpc:" }.Where(p => source.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        foreach (var prefix in SqlServerSourcePrefixes.Where(p => source.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
         {
             source = source[prefix.Length..].TrimStart();
         }
