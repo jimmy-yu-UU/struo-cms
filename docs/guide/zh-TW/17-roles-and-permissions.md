@@ -134,8 +134,7 @@ i18n 鍵，`login.unlock` 的是 `capabilities.login.unlock.label` 與
 只有 `PUT` 會檢查代碼是否在清單內、並拒絕 `public`。超級管理員仍可經由通用項目 API 寫入
 `roleCapability` 的列，那條路兩項都不檢查；寫進去的未知代碼不會授予任何東西，`public` 名下的列則會被忽略。
 
-刪除角色時，它在 `role_capabilities` 的列跟在 `permissions` 的列一樣會留在原處。解析只讀還存在的角
-色，所以這些列對任何人都不生效。
+刪除角色時，它在 `role_capabilities` 與 `permissions` 的列會在同一個交易裡一併刪除。
 
 ## 公開讀取
 

@@ -213,7 +213,8 @@ same underlying repository/expander/resolver primitives.
 
 `ItemService` names no collection. Per-collection write rules are `IItemWriteInterceptor`
 registrations (`src/Struo.Application/Query/Write/`) — `LanguageWriteInterceptor`,
-`UserWriteInterceptor` and `FileWriteInterceptor` — added with `TryAddEnumerable` in
+`UserWriteInterceptor`, `FileWriteInterceptor` and `RoleWriteInterceptor` (a role purge also deletes
+its permission and capability rows) — added with `TryAddEnumerable` in
 `AddStruoData`, so a fork's own interceptors run after them. `FileDeleteHandler` is the one
 `ICollectionDeleteHandler`. `ItemService` takes both as trailing optional
 `IEnumerable<…>` constructor parameters and creating in a collection with `Creatable = false` is
@@ -452,8 +453,8 @@ a singleton built from `SystemCapabilities.Core` plus every registered `ISystemC
 adds its own with `services.AddSingleton<ISystemCapabilitySource, MySource>()`; a duplicate or blank
 code stops startup (`StruoCmsStartupChecks` resolves the catalog). `RolesController` validates `PUT api/roles/{id}/capabilities`
 against the catalog and `AuthController.Me` lists the caller's codes. The `public` role cannot hold capabilities: `PUT` refuses it (`IRoleCapabilityStore.IsPublicRoleAsync`) and
-`SqlSugarRolePermissionStore` ignores any row on it. Deleting a role does not delete its
-`permissions` or `role_capabilities` rows; resolution reads only existing roles, so they stop applying.
+`SqlSugarRolePermissionStore` ignores any row on it. Deleting a role deletes its
+`permissions` and `role_capabilities` rows in the delete transaction (`RoleWriteInterceptor`).
 
 Session revocation is a separate pair of seams, registered alongside the six above in the same
 `AddStruoInfrastructure`

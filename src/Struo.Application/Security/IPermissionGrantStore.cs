@@ -31,4 +31,7 @@ public interface IPermissionGrantStore
     /// </para>
     /// </summary>
     Task ReplaceAsync(Guid roleId, IReadOnlyList<PermissionGrant> grants, CancellationToken ct = default);
+
+    /// <summary>Removes every grant of the role, joining the caller's transaction when one is open.</summary>
+    Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default);
 }
