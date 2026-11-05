@@ -64,11 +64,10 @@ MySQL 與 MariaDB 要設 `SSL Mode=VerifyFull`；只驗證憑證、不比對主�
 `Preferred` 不驗證，`None` 是明文。沒設 `SSL Mode` 時，預設是 `Preferred`。
 
 在 Production，PostgreSQL、SQL Server 或 MySQL／MariaDB 的連線字串沒有驗證伺服器憑證（定義如上）時，
-啟動會記一則警告。警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時不警告：
-`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與 `(localdb)`。
-SQL Server 的具名管道或共用記憶體來源，主機是上述本機主機之一才算本機；連到其他機器的管道走網路，
-仍會警告。
-解析失敗的連線字串也不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
+啟動會記一則警告。警告點出設定名稱與該改成的值，不會印出連線字串、主機或任何帳密。所有主機都是本機時
+不警告：`localhost`、`127.0.0.1`、`::1`、Unix socket，SQL Server 另外還有 `(local)`、`.` 與
+`(localdb)`。SQL Server 的具名管道或共用記憶體來源，主機是上述本機主機之一才算本機；連到其他機器的管
+道走網路，仍會警告。解析失敗的連線字串也不警告，因為連線本身會回報。SQLite 與 Oracle 不檢查。
 
 根目錄的 `docker-compose.yml` 會出現這則警告：資料庫是同一個 Docker 網路裡的另一個容器，連線字串沒設
 TLS，取捨與沒設密碼的 Redis 相同。本機堆疊可以放著不管，正式部署要改成會驗證的模式。

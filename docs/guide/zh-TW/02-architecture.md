@@ -89,12 +89,11 @@ migration 屬於那個 fork。
 - **變更通知**：`IItemChangeListener` 同樣是讓出去的介面，核心只提供一個預設註冊的
   `ItemChangeNotifier` 負責派送；fork 沒註冊任何監聽者時，一次寫入通知零個監聽者，fork 可以
   註冊任意數量。
-- **識別 store**：身分資料的存取也是收在幾個介面後面——`IUserCredentialStore`、
-  `IUserAccountStore`、`IPermissionGrantStore`、`IRolePermissionStore`、
-  `IRoleCapabilityStore`、`IExternalUserStore`、`IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個
-  介面各自有對應的 `SqlSugar*` 實作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。
-  fork 要換掉識別儲存的實作，得在呼叫 `AddStruoCms()` 之後再註冊自己的版本——後註
-  冊的贏，這幾個不是 `TryAdd`。
+- **識別 store**：身分資料的存取也是收在幾個介面後面——`IUserCredentialStore`、`IUserAccountStore`、
+  `IPermissionGrantStore`、`IRolePermissionStore`、`IRoleCapabilityStore`、`IExternalUserStore`、
+  `IUserSessionStore`，都在 `Struo.Application/Security/` 底下。每個介面各自有對應的 `SqlSugar*` 實
+  作類別，在 `AddStruoInfrastructure` 裡用 `AddScoped` 註冊。fork 要換掉識別儲存的實作，得在呼叫
+  `AddStruoCms()` 之後再註冊自己的版本——後註冊的贏，這幾個不是 `TryAdd`。
 
 不能換的是 SqlSugar 本身，以及它牽動的框架資料表：每個內容 entity 都直接背著 SqlSugar 的屬
 性，fork 寫的每一個 entity 都繼承這層語意；`IItemRepository` 也只有一個實作

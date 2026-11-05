@@ -22,7 +22,7 @@ const statusEl = ref<HTMLElement | null>(null)
 
 const guard = createLatestWins()
 
-// A 403 or 400 reads the same whichever call raised it; other failures use the caller's own message.
+// A 403 or 400 on the lookup reads the same; onUnlock maps its own 403 to the super-admin message.
 function errorKeyFor(e: unknown, otherwise: string): string {
   if (e instanceof ApiError && e.status === 403) return 'loginLocks.notPermitted'
   if (e instanceof ApiError && e.status === 400) return 'loginLocks.badEmail'
