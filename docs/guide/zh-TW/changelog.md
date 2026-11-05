@@ -1,6 +1,6 @@
 # 版本紀錄
 
-## 0.26.0
+## 0.26.0 — 2026-11-05
 
 ::: danger 破壞性變更
 - `IPermissionGrantStore` 與 `IRoleCapabilityStore` 各新增成員
