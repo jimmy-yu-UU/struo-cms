@@ -59,12 +59,17 @@ plain text input, with no color-swatch picker.
 `BAD_USER_INPUT` naming the field. An email needs exactly one `@`, text before it, a `.` inside the
 domain that is neither its first nor its last character, and no whitespace anywhere:
 `Field '{name}' must be a valid email address.` A URL must be an absolute `http` or `https` address
-with a host: `Field '{name}' must be a valid http or https URL.` `null` and the empty string skip
-the check. On a root or translation value so does whitespace-only text, which `Required` treats as
-empty too; a `Repeater` row checks it. A stored value is never re-checked on read; it is checked
-only when a write sends that field. A field that must hold relative paths belongs on `Text`, not
-`Url`. The same rules apply to translation values and to `Email` and `Url` child fields of a
-`Repeater`.
+with a host and no whitespace: `Field '{name}' must be a valid http or https URL.` `null` and the
+empty string skip the check. So does whitespace-only text in a `Required` field, which `Required`
+reports as missing; in any other field whitespace-only text is checked and fails. A stored value is
+never re-checked on read; it is checked only when a write sends that field. A field that must hold
+relative paths belongs on `Text`, not `Url`. The same rules apply to translation values and to
+`Email` and `Url` child fields of a `Repeater`.
+
+When one value breaks several rules, which error comes first depends on the path. A root field
+reports `MaxLength`, then the format, and `Required` after both. A translation value reports
+`Required` for every locale, then the format, then `MaxLength`. A `Repeater` child field reports
+`Required`, then `MaxLength`, then the format.
 
 ### Numbers and booleans
 
@@ -133,7 +138,8 @@ On write, `MultiSelect`, `CheckboxGroup`, `Select`, and `Radio` check each value
 list. A `Select` or `Radio` value must equal one option's value exactly, case included:
 `Field '{name}' value '{value}' is not in its options.` The check applies to a top-level field, a
 translation value, and a `Repeater` child field. A `Select` or `Radio` with no `[CmsOptions]`
-accepts any string, and `null` and the empty string skip the check.
+accepts any string, and `null` and the empty string skip the check. A `Select` or `Radio` field
+whose property is not a `string` is not checked against its options.
 
 ### Structured JSON
 

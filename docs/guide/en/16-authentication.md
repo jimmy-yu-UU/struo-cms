@@ -52,9 +52,13 @@ are deliberately indistinguishable. Success returns `200` with `{ id }` and no o
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
 route, since there's no dedicated `GET /api/users/{id}`. The generic `POST /api/items/user` refuses
 to create a user (`400`), because only this endpoint hashes the password and applies the password
-policy. An email already in use returns `409` `CONFLICT` `Email already in use.`. The password's
-minimum and maximum length, and the configuration keys, are in the `Auth` section of
-[Chapter 4: Configuration Reference](04-configuration.md).
+policy. The email is trimmed and lowercased first, then checked with the `Email` rule of
+[Chapter 6](06-field-types.md): one that fails returns `400` `BAD_USER_INPUT`
+`Field 'email' must be a valid email address.` An email already in use returns `409` `CONFLICT`
+`Email already in use.`. The password's minimum and maximum length, and the configuration keys, are
+in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.md). Changing a
+user's email through `PUT /api/items/user/{id}` checks the address as sent, before it is trimmed and
+lowercased, so `" A@b.co "` is a `400` there.
 
 The admin UI calls this endpoint from the "New" button on the user list, shown to super-admins only.
 The dialog asks for an email, an optional display name, and a password typed twice; it takes no
