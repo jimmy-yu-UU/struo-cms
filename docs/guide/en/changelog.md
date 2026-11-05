@@ -11,12 +11,21 @@
 ### Added
 
 - [Chapter 24](24-upgrading-from-0-8.md) says what to do when a fork has more than one database
-  built before migrations: baseline all of them before adding fork migrations, because a migration
-  added afterwards is recorded as applied, without running, on any database baselined later.
+  built before migrations: baseline all of them before adding fork migrations beyond the ones step 4
+  writes for existing tables, because a migration added afterwards is recorded as applied, without
+  running, on any database baselined later.
 - [Chapter 20](20-deployment.md) says how to keep trusting a directly exposed admin container: change
   its nginx to forward `$scheme`. Without that change, do not list it as a trusted proxy, because its
   nginx passes on a client's `X-Forwarded-Proto`; the API then sees the nginx address for every
   client, and the per-IP login limit is shared by all of them.
+
+### Changed
+
+- A translatable field over its `MaxLength` answers `400` with `error.details` carrying `field` and
+  `locale`, as the other translation errors do; the message text is unchanged. In the admin item
+  editor, once a non-default locale tab holds content, its required fields show the asterisk, which the
+  server requires of any locale that is sent. See [Chapter 7](07-i18n.md) and
+  [Chapter 12](12-rest-conventions.md).
 
 ### Fixed
 

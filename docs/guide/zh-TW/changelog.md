@@ -10,11 +10,17 @@
 ### 新增
 
 - [第 24 章](24-upgrading-from-0-8.md)說明 fork 有多個在 migration 出現之前建好的資料庫時怎麼做：
-  先把它們全部 baseline，再加入 fork 的 migration，因為之後才加入的 migration，在之後才 baseline
-  的資料庫上會被記成已套用、但不執行。
+  先把它們全部 baseline，再加入第 4 步以外的 fork migration，因為之後才加入的 migration，
+  在之後才 baseline 的資料庫上會被記成已套用、但不執行。
 - [第 20 章](20-deployment.md)說明怎麼繼續信任直接對外的 admin 容器：把它的 nginx 改成轉送 `$scheme`。
   沒做這個修改就不要把它列為受信任的代理，因為它的 nginx 會把用戶端送來的 `X-Forwarded-Proto`
   原樣帶過去；此時 API 對每個用戶端看到的都是 nginx 的位址，每 IP 登入限流由所有用戶端共用。
+
+### 變更
+
+- 可翻譯欄位超過 `MaxLength` 時回 `400`，`error.details` 帶 `field` 與 `locale`，與其他翻譯錯誤一
+  致；訊息文字不變。後台項目編輯器中，非預設語言的分頁一旦有內容，其必填欄位就會顯示星號，伺服器
+  對送出的語言本來就要求這些欄位。見[第 7 章](07-i18n.md)與[第 12 章](12-rest-conventions.md)。
 
 ### 修正
 

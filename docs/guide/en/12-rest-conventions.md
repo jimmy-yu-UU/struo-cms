@@ -19,12 +19,12 @@ On failure:
 ```
 
 `details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` that a missing
-required translation, an invalid translation value (a wrong type or a format violation) or a duplicate
-translation locale produces; every other code omits the key entirely. `meta` is omitted the same way:
-it appears only on a paginated list result. A single-item read, a create, and an update all omit the
-key outright rather than sending `null`. When `meta` is present, it can also carry two more keys,
-`facets` and `aggregate`, each showing up only when the request actually asked for it; the two are
-independent of each other.
+required translation, an invalid translation value (a wrong type, a format violation or a value over
+its `MaxLength`) or a duplicate translation locale produces; every other code omits the key entirely.
+`meta` is omitted the same way: it appears only on a paginated list result. A single-item read, a
+create, and an update all omit the key outright rather than sending `null`. When `meta` is present,
+it can also carry two more keys, `facets` and `aggregate`, each showing up only when the request
+actually asked for it; the two are independent of each other.
 
 Three different sources all end up in the same envelope: an ordinary controller response, an
 exception the framework catches on its own, and the handful of requests that end early during
@@ -187,8 +187,9 @@ carries exactly one entry, naming `Email`.
 
 An error the application layer works out for itself is a different matter — it's `BAD_USER_INPUT`,
 with no `details` key, and the message itself carries the whole story. The exceptions are the three
-translation errors (a missing required translation, an invalid translation value, whether a wrong type
-or a format violation, and a duplicate locale), of which the first is shown below:
+translation errors (a missing required translation, an invalid translation value, whether a wrong type,
+a format violation or a value over its `MaxLength`, and a duplicate locale), of which the first is shown
+below:
 
 ```text
 $ POST /api/users
@@ -322,9 +323,10 @@ HTTP_STATUS:409
 
 The caller's `version` has already fallen behind the row's real current value, so the write is
 rejected; this message is exactly what a client's "reload and try again" path is built on. Leaving
-`version` out of the body entirely is also allowed — doing so skips the comparison altogether,
-giving up this layer of protection while staying compatible with an older caller that doesn't
-send it. A JSON `null` counts as leaving it out.
+`version` out of the body entirely is also allowed: the server then compares against the version it has
+just read itself, so the update overwrites whatever another client wrote since this caller read the
+row. A client that needs conflict protection sends the `version` it read, and a stale one answers
+`409`. A JSON `null` counts as leaving it out.
 
 When `version` is present and not `null`, it must be a JSON number written as an integer literal,
 with no fraction or exponent, within the range of a 64-bit integer, or an integer string such as
