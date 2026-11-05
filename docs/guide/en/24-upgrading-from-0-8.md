@@ -39,6 +39,12 @@ The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB
    would never be created. Add those after step 5. A relative `--output` resolves against
    `src/Struo.Api`, and the directory must already exist; see
    [Writing a migration](21-schema-and-upgrades.md#writing-a-migration) in Chapter 21.
+
+   A fork with more than one database built before migrations baselines all of them before it adds
+   fork migrations. Baseline records every fork migration present at that moment as applied, without
+   running it, on whichever database it runs against, so a migration added after one database is
+   baselined is skipped on any database baselined later. Before baselining such a database, confirm
+   its schema already contains what those migrations create.
 5. **Run `migrate:baseline`, once.** Until then, both `migrate` and API startup refuse, with a
    message telling you to run `migrate:baseline`. Baseline takes the migration lock, writes the
    versions in one transaction — core up to and including `SeedCoreData`, the sample if enabled, and

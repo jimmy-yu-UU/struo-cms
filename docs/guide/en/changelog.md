@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.26.0
+
+::: danger Breaking
+- `IPermissionGrantStore` and `IRoleCapabilityStore` each have a new member,
+  `Task DeleteForRoleAsync(Guid, CancellationToken)`; a fork's own implementation must add it to
+  compile.
+:::
+
+### Added
+
+- [Chapter 24](24-upgrading-from-0-8.md) says what to do when a fork has more than one database
+  built before migrations: baseline all of them before adding fork migrations, because a migration
+  added afterwards is recorded as applied, without running, on any database baselined later.
+
+### Fixed
+
+- Deleting a role removes its permission and system-capability rows in the same transaction. A role
+  is not soft-deletable, so every delete is permanent. Its user-role rows go with it through the `User.Roles` relation.
+
 ## 0.25.0 — 2026-11-05
 
 ::: danger Breaking

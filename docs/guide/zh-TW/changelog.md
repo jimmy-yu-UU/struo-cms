@@ -1,5 +1,23 @@
 # 版本紀錄
 
+## 0.26.0
+
+::: danger 破壞性變更
+- `IPermissionGrantStore` 與 `IRoleCapabilityStore` 各新增成員
+  `Task DeleteForRoleAsync(Guid, CancellationToken)`；fork 自己的實作要補上才能編譯。
+:::
+
+### 新增
+
+- [第 24 章](24-upgrading-from-0-8.md)說明 fork 有多個在 migration 出現之前建好的資料庫時怎麼做：
+  先把它們全部 baseline，再加入 fork 的 migration，因為之後才加入的 migration，在之後才 baseline
+  的資料庫上會被記成已套用、但不執行。
+
+### 修正
+
+- 刪除角色時，會在同一個交易裡一併刪除它的權限與系統權限列。角色不能軟刪除，所以每次刪除都是
+  永久刪除。它的使用者角色列則經由 `User.Roles` 關聯一起刪除。
+
 ## 0.25.0 — 2026-11-05
 
 ::: danger 破壞性變更
