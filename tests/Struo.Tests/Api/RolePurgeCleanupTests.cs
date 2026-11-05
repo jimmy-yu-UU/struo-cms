@@ -28,7 +28,7 @@ public class RolePurgeCleanupTests(ApiFactory factory)
         return json.GetProperty("data").GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> SeedUserAsync(ISqlSugarClient db)
+    private static async Task<Guid> SeedUserAsync(ISqlSugarClient db)
     {
         var id = Guid.CreateVersion7();
         await db.Insertable(new User { Id = id, Email = $"purge-{id:N}@struo.test", Password = "x", IsActive = true })
