@@ -141,6 +141,10 @@ API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出�
 時，用戶端可以自己送這個標頭並被原樣帶過去。這種情況下，在 `frontend/nginx/default.conf.template` 裡，
 把兩行 `proxy_set_header X-Forwarded-Proto` 的 `$struo_forwarded_proto` 換成 `$scheme`。
 
+用戶端直接連得到、前面又沒有終結 TLS 的代理的 admin 容器，不要列在
+`ForwardedHeaders__KnownProxies__0` 或 `ForwardedHeaders__KnownNetworks__0`。它的 nginx 會把用戶端
+送來的 `X-Forwarded-Proto` 原樣帶過去，用戶端就能替自己的請求聲稱是 `https`。
+
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 
 留空時，工作階段狀態（cookie 對應的 ticket、`RateLimiting:LoginAccount` 的計數）全部退回行程

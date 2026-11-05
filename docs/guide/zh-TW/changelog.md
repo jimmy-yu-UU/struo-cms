@@ -12,6 +12,8 @@
 - [第 24 章](24-upgrading-from-0-8.md)說明 fork 有多個在 migration 出現之前建好的資料庫時怎麼做：
   先把它們全部 baseline，再加入 fork 的 migration，因為之後才加入的 migration，在之後才 baseline
   的資料庫上會被記成已套用、但不執行。
+- [第 20 章](20-deployment.md)說明不要把直接對外的 admin 容器列為受信任的代理，因為它的 nginx
+  會把用戶端送來的 `X-Forwarded-Proto` 原樣帶過去。
 
 ### 修正
 

@@ -181,6 +181,11 @@ In that case set the header from the connection's own scheme in
 `frontend/nginx/default.conf.template`: replace `$struo_forwarded_proto` in the two
 `proxy_set_header X-Forwarded-Proto` lines with `$scheme`.
 
+An admin container that clients reach directly, with no TLS-terminating proxy in front of it, should
+not be listed in `ForwardedHeaders__KnownProxies__0` or `ForwardedHeaders__KnownNetworks__0`. Its
+nginx would pass on whatever `X-Forwarded-Proto` a client sent, so a client could claim `https` for
+its own requests.
+
 ### `Redis:ConnectionString`: required for more than one replica or to survive a restart
 
 Left empty, session state — the ticket a cookie maps to, and the `RateLimiting:LoginAccount`
