@@ -141,9 +141,12 @@ API 前面是管理映像時，API 的代理就是那個 nginx 容器：列出�
 時，用戶端可以自己送這個標頭並被原樣帶過去。這種情況下，在 `frontend/nginx/default.conf.template` 裡，
 把兩行 `proxy_set_header X-Forwarded-Proto` 的 `$struo_forwarded_proto` 換成 `$scheme`。
 
-用戶端直接連得到、前面又沒有終結 TLS 的代理的 admin 容器，不要列在
-`ForwardedHeaders__KnownProxies__0` 或 `ForwardedHeaders__KnownNetworks__0`。它的 nginx 會把用戶端
-送來的 `X-Forwarded-Proto` 原樣帶過去，用戶端就能替自己的請求聲稱是 `https`。
+admin 容器由用戶端直接連、前面又沒有終結 TLS 的代理時，請做上面的 `$scheme` 修改。這樣該容器可以
+繼續列在 `ForwardedHeaders__KnownProxies__0` 或 `ForwardedHeaders__KnownNetworks__0`，因為它的 nginx
+只會轉送自己這條連線的 scheme。沒做這個修改就不要列它：它的 nginx 會把用戶端送來的
+`X-Forwarded-Proto` 原樣帶過去，用戶端就能替自己的請求聲稱是 `https`。此時 API 連
+`X-Forwarded-For` 也會忽略，每個用戶端看到的都是 nginx 容器的位址，所以每 IP 登入限流
+（`RateLimiting:Login`，有啟用時）由所有用戶端共用。
 
 ### `Redis:ConnectionString`：多副本或要撐過重啟就必設
 

@@ -13,8 +13,10 @@
 - [Chapter 24](24-upgrading-from-0-8.md) says what to do when a fork has more than one database
   built before migrations: baseline all of them before adding fork migrations, because a migration
   added afterwards is recorded as applied, without running, on any database baselined later.
-- [Chapter 20](20-deployment.md) says not to list a directly exposed admin container as a trusted
-  proxy, because its nginx passes on a client's `X-Forwarded-Proto`.
+- [Chapter 20](20-deployment.md) says how to keep trusting a directly exposed admin container: change
+  its nginx to forward `$scheme`. Without that change, do not list it as a trusted proxy, because its
+  nginx passes on a client's `X-Forwarded-Proto`; the API then sees the nginx address for every
+  client, and the per-IP login limit is shared by all of them.
 
 ### Fixed
 
