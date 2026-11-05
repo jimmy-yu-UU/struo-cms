@@ -26,7 +26,7 @@ public sealed class ConcurrentLanguageCreateTests(ApiFactory factory)
         {
             await start.Task;
             var resp = await client.PostAsJsonAsync("/api/items/language",
-                new { code, name = code, isDefault = false, enabled = true, sort = 90 });
+                new { code, name = code, isDefault = false, enabled = false, sort = 90 });
             return (resp.StatusCode, await resp.Content.ReadAsStringAsync());
         }).ToArray();
         start.SetResult();

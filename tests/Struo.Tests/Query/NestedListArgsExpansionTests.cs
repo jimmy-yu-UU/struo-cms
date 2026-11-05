@@ -133,7 +133,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var days = row.GetProperty("articles").EnumerateArray()
-            .Select(a => a.GetProperty("publishedAt").GetDateTime().Day).ToList();
+            .Select(a => a.GetProperty("publishedAt").GetDateTime().ToUniversalTime().Day).ToList();
         days.Should().Equal(1, 2); // sorted asc, top-2
     }
 
@@ -153,7 +153,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var resp = await c.PostAsJsonAsync("/api/items/fxCategory/query", envelope);
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var days = row.GetProperty("articles").EnumerateArray()
-            .Select(a => a.GetProperty("publishedAt").GetDateTime().Day).ToList();
+            .Select(a => a.GetProperty("publishedAt").GetDateTime().ToUniversalTime().Day).ToList();
         days.Should().Equal(2); // skip 1 (day 1), take 1 -> day 2
     }
 
@@ -225,7 +225,7 @@ public class NestedListArgsExpansionTests(ApiFactory factory)
         var row = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data")[0];
         var articles = row.GetProperty("articles");
         articles.GetArrayLength().Should().Be(1);
-        articles[0].GetProperty("publishedAt").GetDateTime().Day.Should().Be(1);
+        articles[0].GetProperty("publishedAt").GetDateTime().ToUniversalTime().Day.Should().Be(1);
         articles[0].GetProperty("category").GetProperty("name").GetString().Should().Be("TrimCat");
     }
 }
