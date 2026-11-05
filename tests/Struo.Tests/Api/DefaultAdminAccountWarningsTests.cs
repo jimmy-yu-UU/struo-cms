@@ -65,4 +65,26 @@ public sealed class DefaultAdminAccountWarningsTests : IDisposable
     [Fact]
     public async Task No_users_log_nothing() =>
         (await Run("Production")).Should().BeEmpty();
+
+    [Fact]
+    public async Task A_mixed_case_default_email_still_warns() =>
+        (await Run("Production", CoreSeedData.DefaultAdminEmail.ToUpperInvariant()))
+            .Should().ContainSingle().Which.Level.Should().Be(LogLevel.Warning);
+
+    [Fact]
+    public async Task A_failing_read_logs_a_warning_with_the_exception_type_and_does_not_throw()
+    {
+        await _h.Host(CoreMigrationHarness.Seed(email: null, password: "")).ApplyAsync(default);
+        var db = _h.Db();
+        db.DbMaintenance.DropTable<User>();
+        var logger = new ListLogger();
+
+        var act = () => DefaultAdminAccountWarnings.LogAsync(
+            db, new HostingEnvironment { EnvironmentName = "Production" }, logger);
+
+        await act.Should().NotThrowAsync();
+        var warning = logger.Entries.Should().ContainSingle().Subject;
+        warning.Level.Should().Be(LogLevel.Warning);
+        warning.Message.Should().Contain("Could not check");
+    }
 }

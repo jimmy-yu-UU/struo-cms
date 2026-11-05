@@ -55,13 +55,13 @@ internal static class StruoCmsStartupChecks
             sp.GetRequiredService<ISqlSugarClient>(), app.Environment, startupLogger);
     }
 
-    // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
-    // startup with the message naming the key, not the first file request.
     // The catalog validates its sources when first built: resolving it here fails startup on a duplicate or
     // blank code instead of the first request that needs it.
     private static void VerifyCapabilityCatalog(IServiceProvider sp) =>
         _ = sp.GetRequiredService<Struo.Application.Security.SystemCapabilityCatalog>();
 
+    // Backend=custom has no core-built storage: resolving it here makes a missing registration fail
+    // startup with the message naming the key, not the first file request.
     private static void VerifyCustomFileStorage(IServiceProvider sp)
     {
         var files = sp.GetRequiredService<Struo.Application.Files.FileStorageOptions>();
