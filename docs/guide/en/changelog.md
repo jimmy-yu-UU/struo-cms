@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.0 — 2026-11-06
+
+### Fixed
+
+- The API image upgrades its OS packages at build time, so fixes the base image has not picked up
+  yet, such as the `apt` one, are in every build.
+
 ## 0.26.0 — 2026-11-05
 
 ::: danger Breaking

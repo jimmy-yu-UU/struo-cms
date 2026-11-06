@@ -23,10 +23,15 @@ RUN dotnet restore src/Struo.Api/Struo.Api.csproj
 RUN dotnet publish src/Struo.Api/Struo.Api.csproj --configuration Release --no-restore --output /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# The runtime stage upgrades the OS packages first: Ubuntu publishes package fixes before the
+# upstream image is rebuilt, and this keeps every build on the current fixes. It is permanent, not a
+# workaround for a particular CVE: when the base image already carries the fixes it upgrades nothing.
 # The base image has neither curl nor wget (verified by probing it directly), so install curl
 # here for the HEALTHCHECK below; --no-install-recommends and clearing apt lists keep the layer small.
 # See docs/ai/decisions/dockerfile-base-image-choices.md for what that costs.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish ./
 # /app/logs is where Serilog's File sink (logs/struo-.log, relative to the content root) writes;
