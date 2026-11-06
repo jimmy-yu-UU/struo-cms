@@ -13,15 +13,15 @@ actual project.
 
 ## Core vs. sample boundary
 
-**Core** = `src/Struo.*` plus the twelve `FrameworkEntityTypes.All` types
+**Core** = `src/Struo.*` plus the eleven `FrameworkEntityTypes.All` types
 (`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`): `Language`, `File`, `FileTranslation`,
-`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `RoleCapability`, `Revision`, `SiteSettings`, `UserSession`. Of
-these, eight carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`,
-`User`, `Role`, `Permission`, `UserRole`, `RoleCapability` — `FileTranslation`, `Revision`, `SiteSettings`, and
+`MediaFolder`, `User`, `Role`, `Permission`, `UserRole`, `Revision`, `SiteSettings`, `UserSession`. Of
+these, seven carry `[CmsCollection]` (are themselves collections): `Language`, `File`, `MediaFolder`,
+`User`, `Role`, `Permission`, `UserRole` — `FileTranslation`, `Revision`, `SiteSettings`, and
 `UserSession` are framework tables but not collections. If you're unsure whether something is core, it's core only if it lives in
 `src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
 them. `schema/` is core too, despite living outside that path: it holds the
-committed snapshots of these eight collections' wire metadata and of the declared interface enums
+committed snapshots of these seven collections' wire metadata and of the declared interface enums
 (`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
 

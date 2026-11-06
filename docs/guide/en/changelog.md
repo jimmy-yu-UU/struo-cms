@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.28.0
+
+::: danger Breaking
+- System capabilities are removed. `ISystemCapabilitySource`, `IRoleCapabilityStore`, `SystemCapabilities`,
+  `SystemCapabilityCatalog`, the `RoleCapability` entity, `EffectivePermissions.HasCapability` and the
+  capability members of `IRolePermissionStore` and `RolePermissionData` are gone, and so are
+  `GET api/capabilities`, `GET`/`PUT api/roles/{id}/capabilities` and the `capabilities` field of
+  `GET api/auth/me`. The core migration `DropRoleCapabilities` (`202611060000`) drops the
+  `role_capabilities` table and every capability row in it; `migrate` or `Database:MigrateOnStartup`
+  applies it. A fork that registered a source or called `HasCapability` must express the permission
+  as a grant on a collection instead.
+- `GET api/login-locks?email=…` is removed. A login lock is read with `POST api/login-locks/query` and
+  needs read on the `user` collection, and `DELETE api/login-locks?email=…` needs write on it. The
+  `login.unlock` capability does not exist any more.
+- `user`, `role`, `permission` and `userRole` are ordinary collections: they no longer declare
+  `AdminOnly`. A role can be given read, write or delete on `user` and `role` in the permission matrix,
+  and the endpoints that were super-admin only now take those grants: `POST api/users`, resetting
+  another user's password, issuing and revoking an access token (write on `user`), reading a token's
+  state and `effective-permissions` (read on `user`), and the role permission endpoints (read and write
+  on `role`). `userRole` follows the grant of `user` and `permission` that of `role`; neither has a
+  matrix row, and a grant stored under either name is ignored. A caller who is not a super-admin gets
+  `403` for a super-admin account or role, and for assigning a super-admin role. See
+  [Chapter 17](17-roles-and-permissions.md) and [Chapter 13](13-rest-endpoints.md).
+- `Role.IsSuperAdmin` is read-only. No request can set or clear it: a body that carries it is accepted
+  and the field ignored. The seeded `admin` role is the super-admin role, and a role created through the
+  API never is one.
+- A super-admin role cannot be deleted (`409` `CONFLICT`), and the last active account in a super-admin
+  role cannot be removed from it, deactivated or deleted (`409` `CONFLICT`); the write is rolled back.
+  The `AdminOnly` attribute stays available to a fork for its own collections.
+:::
+
+### Added
+
+- `POST api/login-locks/query` takes one to 100 emails and answers, in request order, `{ email, locked,
+  retryAfterSeconds, clearable }` for each; `clearable` is `false` for a super-admin account when the
+  caller is not a super-admin.
+- The user list has a Login lock column: one query per page, a badge with the time left on a locked
+  account and, for a caller with write on `user`, an Unlock button that asks for confirmation.
+- `ISuperAdminDirectory` and `SuperAdminGuard`, the application-layer seam every write path uses for the
+  super-admin rules; the `userRole` and `permission` collections have write interceptors.
+
+### Changed
+
+- The Login locks page, the lock panel on the user form and the System capabilities section of the role
+  form are removed from the admin UI.
+- The admin UI follows the grants: the permission matrix is read-only without write on `role`, the
+  create-user action and the password and token actions need write on `user`, and the form, actions and
+  role choices that concern a super-admin account or role are disabled for a caller who is not a
+  super-admin, with the reason on hover.
+
+### Upgrade notes
+
+A role that held `login.unlock` loses it with the table. To keep the same people able to clear login
+locks, give their role read and write on `user` in the permission matrix; that also lets them manage
+ordinary accounts, as [Chapter 17](17-roles-and-permissions.md) describes. The lock on a super-admin
+account stays a super-admin's to clear.
+
 ## 0.27.0 — 2026-11-06
 
 ::: danger Breaking

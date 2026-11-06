@@ -1,5 +1,51 @@
 # 版本紀錄
 
+## 0.28.0
+
+::: danger 破壞性變更
+- 系統權限整套移除。`ISystemCapabilitySource`、`IRoleCapabilityStore`、`SystemCapabilities`、
+  `SystemCapabilityCatalog`、`RoleCapability` entity、`EffectivePermissions.HasCapability`，以及
+  `IRolePermissionStore` 與 `RolePermissionData` 上與系統權限有關的成員都不存在了；`GET api/capabilities`、
+  `GET`/`PUT api/roles/{id}/capabilities` 與 `GET api/auth/me` 的 `capabilities` 欄位也一併移除。核心
+  migration `DropRoleCapabilities`（`202611060000`）會刪掉 `role_capabilities` 表與表內所有資料；
+  `migrate` 或 `Database:MigrateOnStartup` 會套用它。註冊過來源或呼叫過 `HasCapability` 的 fork，必須改成
+  對某個集合的授權來表達這個權限。
+- `GET api/login-locks?email=…` 移除。要讀登入鎖定，用 `POST api/login-locks/query`，需要 `user` 集合的
+  讀取授權；`DELETE api/login-locks?email=…` 需要 `user` 的寫入授權。`login.unlock` 系統權限不再存在。
+- `user`、`role`、`permission`、`userRole` 是一般集合：不再宣告 `AdminOnly`。權限矩陣可以授予角色 `user`
+  與 `role` 的讀取、寫入或刪除，原本只有超級管理員能用的端點改為接受這些授權：`POST api/users`、重設別人的
+  密碼、核發與撤銷存取權杖（`user` 的寫入），讀取權杖狀態與 `effective-permissions`（`user` 的讀取），以及
+  角色權限端點（`role` 的讀取與寫入）。`userRole` 沿用 `user` 的授權，`permission` 沿用 `role` 的；兩者都沒有
+  矩陣的列，存在這兩個名稱底下的授權會被忽略。不是超級管理員的呼叫端，對超級管理員帳號或角色、以及指派
+  超級管理員角色，一律得到 `403`。見[第 17 章](17-roles-and-permissions.md)與
+  [第 13 章](13-rest-endpoints.md)。
+- `Role.IsSuperAdmin` 唯讀。沒有任何請求能設定或取消它：帶著它的 body 會被接受，欄位則被忽略。內建的
+  `admin` 角色就是超級管理員角色，透過 API 建立的角色不可能是。
+- 超級管理員角色不能被刪除（`409` `CONFLICT`），超級管理員角色裡最後一個啟用中的帳號，不能被移出角色、
+  停用或刪除（`409` `CONFLICT`），寫入會被回復。`AdminOnly` 屬性仍保留給 fork 用在自己的集合上。
+:::
+
+### 新增
+
+- `POST api/login-locks/query` 收一到 100 個 email，依請求順序為每一個回答 `{ email, locked,
+  retryAfterSeconds, clearable }`；目標是超級管理員帳號、而呼叫端不是超級管理員時，`clearable` 為 `false`。
+- 使用者清單多了「登入鎖定」欄：每頁一次查詢，被鎖定的帳號顯示剩餘時間的標記；持有 `user` 寫入授權的人
+  還會看到「解除鎖定」按鈕，按下會先確認。
+- `ISuperAdminDirectory` 與 `SuperAdminGuard`：每條寫入路徑共用的應用層介面，套用超級管理員的規則；
+  `userRole` 與 `permission` 集合也有了寫入攔截器。
+
+### 變更
+
+- 後台移除「登入鎖定」頁、使用者表單的鎖定面板，以及角色表單的「系統權限」區塊。
+- 後台跟著授權走：沒有 `role` 寫入授權時權限矩陣唯讀，新增使用者、密碼與權杖動作需要 `user` 的寫入授權，
+  與超級管理員帳號或角色有關的表單、動作與角色選項，對不是超級管理員的呼叫端會停用，並在滑鼠停留時說明原因。
+
+### 升級說明
+
+持有 `login.unlock` 的角色會隨資料表一起失去它。要讓同一批人繼續能解除登入鎖定，在權限矩陣給他們的角色
+`user` 的讀取與寫入；這也會讓他們能管理一般帳號，見[第 17 章](17-roles-and-permissions.md)。超級管理員帳號的
+鎖定仍然只有超級管理員能解除。
+
 ## 0.27.0 — 2026-11-06
 
 ::: danger 破壞性變更

@@ -146,8 +146,8 @@ type, field→property map, id property name, eagerly-built property-accessor ca
 `src/Struo.Application/Metadata/IEntityTypeCollector.cs`: `CollectForInitTables()` returns every CLR
 entity type that needs a database table — scanned collections, their translation sidecars, and M2M
 junction types — unioned and de-duplicated against `FrameworkEntityTypes.All`
-(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the twelve framework entity types:
-Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole, RoleCapability,
+(`src/Struo.Infrastructure/Metadata/FrameworkEntityTypes.cs`, the eleven framework entity types:
+Language, File, FileTranslation, MediaFolder, User, Role, Permission, UserRole,
 Revision, SiteSettings, UserSession). Implementation: `EntityTypeCollector`
 (`src/Struo.Infrastructure/Metadata/EntityTypeCollector.cs`). Registered as a singleton via the
 container: `services.AddSingleton<IEntityTypeCollector, EntityTypeCollector>()`
@@ -213,8 +213,8 @@ same underlying repository/expander/resolver primitives.
 
 `ItemService` names no collection. Per-collection write rules are `IItemWriteInterceptor`
 registrations (`src/Struo.Application/Query/Write/`) — `LanguageWriteInterceptor`,
-`UserWriteInterceptor`, `FileWriteInterceptor` and `RoleWriteInterceptor` (a role purge also deletes
-its permission and capability rows) — added with `TryAddEnumerable` in
+`UserWriteInterceptor`, `FileWriteInterceptor`, `RoleWriteInterceptor` (a role purge also deletes
+its permission rows), `UserRoleWriteInterceptor` and `PermissionWriteInterceptor` — added with `TryAddEnumerable` in
 `AddStruoData`, so a fork's own interceptors run after them. `FileDeleteHandler` is the one
 `ICollectionDeleteHandler`. `ItemService` takes both as trailing optional
 `IEnumerable<…>` constructor parameters and creating in a collection with `Creatable = false` is
@@ -415,7 +415,7 @@ these three query-layer seams (`IItemRepository`, `IRelationshipGraph`, `IRelati
 the non-DI-registered `FilterTranslator`/`FacetQueries`/`AggregateQueries` above — jointly
 implement.
 
-### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`, `IRoleCapabilityStore`)
+### Identity seams (`IUserCredentialStore`, `IUserAccountStore`, `IPermissionGrantStore`, `IRolePermissionStore`, `IExternalUserStore`, `ISuperAdminDirectory`)
 
 All six live in `src/Struo.Application/Security/`, all six are implemented by a `SqlSugar*` class in
 `src/Struo.Infrastructure/Identity/`, and all six are registered scoped in
@@ -442,21 +442,20 @@ identity god-interface, split by *consumer* rather than by table:
   documents itself as bypassing permission gating on purpose: the query that resolves the gate must
   never itself be gated.
 - **`IExternalUserStore`** → `SqlSugarExternalUserStore`. OIDC just-in-time provisioning by email.
-- **`IRoleCapabilityStore`** → `SqlSugarRoleCapabilityStore`. The write side of system capabilities (the
-  role-held action permissions that are not per-collection grants): list and atomic full-replace of a
-  role's codes in `role_capabilities` (`RoleCapability`), and the deletion of a role's rows when the
-  role is purged. The read side rides on
-  `IRolePermissionStore`: `RolePermissionData.Capabilities` is folded by `PermissionResolver` into
-  `EffectivePermissions.HasCapability(code)`, which is true for every code when the caller is a
-  super-admin. Nothing caches the result; `PermissionResolutionMiddleware` resolves it per request.
+- **`ISuperAdminDirectory`** → `SqlSugarSuperAdminDirectory`. Who counts as a super-admin, read straight
+  from the tables like `IRolePermissionStore`: which of a set of users, emails or roles belong to a
+  super-admin role (`Role.IsSuperAdmin`), and which active accounts do. Every method answers for a whole
+  set in one query, so a list never costs a query per row.
 
-The valid codes are defined once, in `SystemCapabilityCatalog` (`src/Struo.Application/Security/`),
-a singleton built from `SystemCapabilities.Core` plus every registered `ISystemCapabilitySource`. A fork
-adds its own with `services.AddSingleton<ISystemCapabilitySource, MySource>()`; a duplicate or blank
-code stops startup (`StruoCmsStartupChecks` resolves the catalog). `RolesController` validates `PUT api/roles/{id}/capabilities`
-against the catalog and `AuthController.Me` lists the caller's codes. The `public` role cannot hold capabilities: `PUT` refuses it (`IRoleCapabilityStore.IsPublicRoleAsync`) and
-`SqlSugarRolePermissionStore` ignores any row on it. Deleting a role deletes its
-`permissions` and `role_capabilities` rows in the delete transaction (`RoleWriteInterceptor`).
+`SuperAdminGuard` (`src/Struo.Application/Security/`, scoped) is the one place that applies the
+super-admin rules: a caller who is not a super-admin gets `403` for a super-admin account or role, and
+`EnsureActiveSuperAdminAsync` throws a conflict when no active super-admin would remain. The interceptors
+for `user`, `role`, `userRole` and `permission` call it from the item write path (REST and GraphQL), the
+last-member check inside the write transaction so it rolls back; `UsersController`, `RolesController` and
+`LoginLocksController` call it for their own endpoints. `RbacCollections.GoverningCollection` maps the
+hidden junctions to the grant of the collection that owns them (`userRole` to `user`, `permission` to
+`role`), applied in `EffectivePermissions`, so every permission check agrees. `Role.IsSuperAdmin` is
+`ReadOnly`, so no API path can set it.
 
 Session revocation is a separate pair of seams, registered alongside the six above in the same
 `AddStruoInfrastructure`

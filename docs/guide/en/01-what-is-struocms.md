@@ -62,11 +62,11 @@ covered in [Chapter 23: Sample Project Walkthrough](23-sample-walkthrough.md).
 
 A StruoCMS install with no collections added yet looks like this:
 
-- After `migrate`, the database has exactly thirteen tables: the twelve framework tables plus the
+- After `migrate`, the database has exactly twelve tables: the eleven framework tables plus the
   version table `struo_schema_versions`, which records the applied migrations.
 - The admin sidebar has no content groups, only System. For a super-admin, System holds Language,
   Role, and User — nothing else, because the framework collections File, MediaFolder, Permission,
-  UserRole, and RoleCapability all declare `Hidden = true`. That is a display-layer flag, not a permission.
+  and UserRole all declare `Hidden = true`. That is a display-layer flag, not a permission.
 - Dashboard always shows. Media Library needs the `file.read` permission (or super-admin); Settings
   shows only for a super-admin.
 

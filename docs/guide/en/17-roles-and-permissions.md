@@ -20,8 +20,7 @@ and token hashes never appear in an ordinary query result and can't be written d
 
 A user's roles are a `TagSelect` many-to-many relation to `role` — on the admin form, that means
 ticking role names. The junction between user and role is a fourth table, `userRole` (table
-`struo_user_roles`), which no caller ever sees. The system capabilities a role holds are stored in a fifth table,
-`roleCapability`; see "System capabilities" below.
+`struo_user_roles`), which no caller ever sees.
 
 A `permission` row names a role and a collection, and carries exactly three grant flags:
 `canRead`, `canWrite`, `canDelete`. There's no fourth flag, and no separately stored "can read
@@ -80,9 +79,10 @@ grant on `file`. Every other case is `404`; the details are in
 
 ## `AdminOnly` collections
 
-Among the framework's built-in collections, the ones marked `AdminOnly` are `user`, `role`,
-`permission`, `userRole`, and `roleCapability`. What the attribute itself declares, and how to set it on a
-collection of your own, are in [Chapter 5: Defining Collections](05-collections.md).
+`AdminOnly` is an attribute a collection can declare; what it declares, and how to set it on a
+collection of your own, are in [Chapter 5: Defining Collections](05-collections.md). None of the
+framework's built-in collections declares it: `user`, `role`, `permission` and `userRole` are ordinary
+collections, governed as described in the next section.
 
 `AdminOnly` governs writes only: create, update, delete, restore from the trash, and revert to a
 revision on the generic CRUD path all require the caller to be a super-admin, whatever the
@@ -99,72 +99,65 @@ caller that already holds the relevant grant, but isn't a super-admin, sees the 
 `Writes to '{collection}' require a super-admin.` — so that message appears only for someone who
 would otherwise be allowed to write.
 
-## System capabilities
+## Users and roles are ordinary collections
 
-A collection grant says what a role may do to that collection's items. Some actions belong to no
-collection, such as unlocking a locked login account. A system capability covers those: a named
-permission that a role holds and a super-admin gives or takes away. The core defines one,
-`login.unlock`, the permission to unlock a locked login account other than a super-admin's.
+`user` and `role` have a row in the permission matrix like any other collection, so a role can be given
+read, write or delete on them. `permission` and `userRole` are hidden junctions. They carry no grant of
+their own and have no matrix row: each answers with the grant of the collection that owns it, read
+following read, and write and delete both following write. A grant stored for either name is ignored.
 
-A capability has three parts: a code, a label key and a description key. The code is the string stored
-in the database and sent over the API. The two keys are i18n keys, for `login.unlock`
-`capabilities.login.unlock.label` and `capabilities.login.unlock.description`; the admin UI's locale
-files (`frontend/src/locales/*.ts`) supply the text. A capability whose keys have no entry in any
-locale is shown by its code, with no description.
+That makes two grants govern the whole area:
 
-The list of valid codes is defined in code, once. `SystemCapabilities.Core` holds the core ones, and
-`SystemCapabilityCatalog` merges them with every registered `ISystemCapabilitySource`. A fork adds its
-own capabilities by implementing that interface and registering it with
-`services.AddSingleton<ISystemCapabilitySource, MySource>()`; any number of sources may be registered.
-A code that repeats a core code or another source's code, or that is blank or longer than 255
-characters stops startup with `InvalidOperationException`. Codes are compared exactly, with no case
-folding.
+- Assigning roles to a user, through the Roles field on the user form or through `userRole` rows, is a
+  write on `user`.
+- Changing a role's permission grants, through `PUT /api/roles/{id}/permissions` or `permission` rows,
+  is a write on `role`.
 
-A role's capabilities are stored in `role_capabilities` (table `struo_role_capabilities`, collection
-`roleCapability`): one row per role and code, unique on (`roleId`, `capability`). Like `permission`
-and `userRole`, it is both `Hidden` and `AdminOnly`, so the admin UI never edits it directly.
+Deleting a user or a role still needs `canDelete` on that collection. Creating a user through
+`POST /api/users`, resetting another user's password and issuing or revoking an access token need write
+on `user`; reading a user's token state and its effective permissions needs read on `user`. Changing
+your own password is unchanged.
 
-Resolution reads the capability rows of the caller's roles in the same request that reads the
-grants, and unions them. The `public` role cannot hold a capability, because every caller holds that
-role, anonymous ones included: `PUT` refuses it, and resolution ignores any row that exists for it. A
-super-admin holds every code without any row. The result is not cached any more than the grants are, so
-a change applies to the holder's next request.
+### The super-admin role
 
-Three endpoints manage them, all super-admin only; any other signed-in caller gets `403`, even one
-whose own role holds the capability:
+Super-admin is a system role. The `isSuperAdmin` field of `role` is read-only: no caller, a super-admin
+included, can set or clear it through the API. A request that carries it is accepted and the field is
+ignored, as for any read-only field. The seeded `admin` role is the super-admin role; a role created
+through the API never is one, and becoming a super-admin means joining a role that already is. A role
+that carries the flag keeps it and is treated the same, whichever migration or seed set it.
 
-- `GET /api/capabilities` lists every capability a role can be given, each as
-  `{ code, labelKey, descriptionKey }`;
-- `GET /api/roles/{id}/capabilities` returns the role's codes as a sorted array;
-- `PUT /api/roles/{id}/capabilities` overwrites the whole set from a JSON array of codes; an empty
-  array removes them all and a repeated code counts once.
+### What only a super-admin can do
 
-The rejections of the `PUT`:
+A caller who is not a super-admin, even with the grant, gets `403` `FORBIDDEN` with a message that
+begins `Only a super-admin can` when the target is a super-admin account (a member of any super-admin
+role) or a super-admin role. The refused operations are:
 
-- the body isn't a JSON array of strings: `400`;
-- the role id doesn't exist: `404`;
-- the role is `public`, for any set, an empty one included: `400`, `The public role cannot hold
-  capabilities.`, and nothing is written;
-- a code is outside the list, including a blank one or one that differs only in case: `400`,
-  `Unknown capabilities: …`, and nothing is written.
+- updating, deactivating, deleting, restoring or reverting a super-admin account;
+- resetting its password, issuing or revoking its access token, and clearing its login lock;
+- updating, restoring or reverting a super-admin role, and writing its permission grants;
+- adding a membership of a super-admin role, or removing one, by any path: the Roles field, a
+  `userRole` row, GraphQL.
 
-The endpoints that act on a capability check it instead of the super-admin role. `login.unlock` opens
-`GET` and `DELETE api/login-locks?email=…`, which read and clear an account's login lock: they accept a
-super-admin or a caller whose roles hold `login.unlock`, and answer anyone else `403`. The capability
-does not reach a super-admin account: a holder who is not a super-admin gets `403` when clearing its
-lock, and only a super-admin can. For every other account the holder can clear the lock as often as it
-likes, which also removes the per-account limit on password guesses against that account. Grant the
-capability only to roles trusted at that level, and watch the `Login lock cleared by` log lines.
+Reading stays ordinary: read on `user` shows a super-admin account's token state and effective
+permissions. A super-admin passes all of these checks.
 
-A caller reads its own capabilities from `GET /api/auth/me`, whose response carries a `capabilities`
-array of the codes it holds; a super-admin gets the whole list. Endpoint details are in
-[Chapter 13: REST API Endpoint Reference](13-rest-endpoints.md).
+### Two rules for every caller
 
-The `PUT` is the only write path that checks the codes against the list and refuses `public`. A
-super-admin can still write `roleCapability` rows through the generic item API, which checks neither;
-an unknown code there grants nothing, and a row on `public` is ignored.
+A super-admin role cannot be deleted, softly or permanently, by anyone: `409` `CONFLICT`, `A super-admin
+role cannot be deleted.` A caller who is not a super-admin is refused first, with the `403` above.
 
-Deleting a role removes its `role_capabilities` and `permissions` rows in the same transaction.
+At least one active account must stay in a super-admin role. Removing the last one from the role,
+deactivating it, or deleting it answers `409` `CONFLICT`, `At least one active account must remain in
+a super-admin role.`, and nothing is written.
+
+Both rules sit in the application layer that every write path shares, so the item endpoints, the
+`users` and `roles` controllers and GraphQL all apply them, and each path is covered by a test.
+
+### What a grant on `user` or `role` delegates
+
+The holder of write on `user` can assign any ordinary role to any ordinary account, and the holder of
+write on `role` can give any ordinary role any grant, including write on `user` and `role`. Hand these
+grants only to people trusted to that extent; a super-admin role and its members stay out of reach.
 
 ## Public read
 
@@ -243,8 +236,8 @@ which is a different question from whether this caller could pass authentication
 
 Before saving a role selection, the user form in the admin UI needs to show what permissions that
 selection would actually grant. `GET /api/users/{id}/effective-permissions` is for that screen.
-Like `RolesController`, only a super-admin can call it; a signed-in caller that isn't a
-super-admin always gets `403` `FORBIDDEN`, `Admin role required.`.
+It needs read on `user`; a signed-in caller without it gets `403` `FORBIDDEN`, `Read permission on the
+user collection is required.`.
 
 This endpoint runs the exact same two-stage resolution as a real request: union the role grants,
 then fold. The preview's answer is computed by the same logic that computes what this user gets
@@ -312,19 +305,19 @@ because this is a hypothesis, not a real swap.
 
 ## Managing roles in the admin UI
 
-The admin UI never lets an administrator edit the `permission`, `userRole` or `roleCapability`
-collections directly. `Hidden` and `AdminOnly` are independent flags, and a collection can carry just
-one of them, but these three carry both, because they're purely internal RBAC data — letting the ordinary write grant
-reach them would be exactly the self-escalation `AdminOnly` exists to block.
+The admin UI does not offer `permission` and `userRole`: they are hidden junctions that follow the
+grant of `role` and `user`, so the permission matrix has no row for them.
 
-To change a role's grants, use the role permission matrix instead: tick `canRead`, `canWrite`,
-and `canDelete` per collection, and submit the whole set in one go. The effective-permissions
-preview panel on the user form updates live to show what the currently selected role set computes
-to.
+To change a role's grants, use the role permission matrix: tick `canRead`, `canWrite`, and
+`canDelete` per collection, and submit the whole set in one go. Read on `role` shows the matrix and
+write on `role` changes it. The effective-permissions preview panel on the user form updates live to
+show what the currently selected role set computes to.
 
-Below the matrix, the role form has a System capabilities section: one checkbox per capability, with
-its own Save button, which the form's Save also flushes. It lists the capabilities of a saved role
-that is neither `public` nor a super-admin role; on a new role it asks you to save the role first.
+For a caller who is not a super-admin, the form of a super-admin account or role is disabled, with a
+note saying why, and so are its Delete, reset-password and token actions; the Roles field offers no
+super-admin role. The Super Admin checkbox of the role form is read-only for everyone, and a
+super-admin role's Delete is disabled. A super-admin role's matrix shows full access and has nothing
+to edit.
 
 A role's whole grant set is written through `PUT /api/roles/{id}/permissions`, a full overwrite
 completed in one transaction; the endpoint's own semantics are in

@@ -644,12 +644,11 @@ docker run --detach --name api --network struo-verify --volume struo-verify-data
 docker run --detach --name admin --network struo-verify --publish 8081:8080 struo-admin:local
 ```
 
-The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
-`Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
-`Applied 202611040000  CreateRoleCapabilities`. Without the bootstrap password the seed migration
-fails with `Auth__BootstrapAdmin__Password is required`.
-Without the `migrate` step, the `api` container exits with the message shown in
-"What fails fast at startup" above.
+The third command ends by printing `Applied 202610080000  CreateCoreSchema`, `Applied 202610080001
+SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex`, `Applied 202611040000
+CreateRoleCapabilities` and `Applied 202611060000  DropRoleCapabilities`. Without the bootstrap password
+the seed migration fails with `Auth__BootstrapAdmin__Password is required`. Without the `migrate` step,
+the `api` container exits with the message shown in "What fails fast at startup" above.
 
 The admin container's default `API_UPSTREAM=http://api:8080` resolves because both containers sit
 on this same user-defined network, and the API container is named `api`. If the API container

@@ -19,7 +19,7 @@ namespace Struo.Tests.Query;
 
 public sealed class ItemServicePermissionTests : IDisposable
 {
-    // A collection that declares AdminOnly, as a fork may: the identity collections no longer do.
+    // A collection that declares AdminOnly, as a fork's may; the identity collections do not.
     [SqlSugar.SugarTable("fx_vaults")]
     [Struo.Domain.Metadata.Attributes.CmsCollection("Vault", AdminOnly = true)]
     public sealed class FxVault : Struo.Domain.Auditing.AuditableEntity

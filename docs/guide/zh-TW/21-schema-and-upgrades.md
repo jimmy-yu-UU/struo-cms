@@ -15,7 +15,7 @@ Migration 放在三個地方：
 - **核心**：`src/Struo.Infrastructure/Migrations/Core/`。`CreateCoreSchema` 建框架資料表，
   `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
   `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code`
-  加上唯一索引。`CreateRoleCapabilities` 建立角色系統權限表。
+  加上唯一索引。`CreateRoleCapabilities` 建立角色系統權限表，`DropRoleCapabilities` 再把它刪掉。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
@@ -60,12 +60,13 @@ API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>`
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-04 05:39:43Z  CreateCoreSchema
-202610080001   Applied   2026-11-04 05:39:43Z  SeedCoreData
-202610080100   Applied   2026-11-04 05:39:43Z  CreateBlogSchema
-202611030000   Applied   2026-11-04 05:39:43Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-04 05:39:43Z  CreateRoleCapabilities
-5 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-06 06:14:59Z  CreateCoreSchema
+202610080001   Applied   2026-11-06 06:14:59Z  SeedCoreData
+202610080100   Applied   2026-11-06 06:14:59Z  CreateBlogSchema
+202611030000   Applied   2026-11-06 06:14:59Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-06 06:14:59Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-06 06:14:59Z  DropRoleCapabilities
+6 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` 是還沒套用，`Orphaned` 是版本表裡有紀錄、但掃描到的組件裡已經找不到那支
@@ -210,12 +211,13 @@ migration 而拒絕之前，會記下同一則警告。不會因為順序錯亂�
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-04 05:39:46Z  CreateCoreSchema
-202610080001   Applied   2026-11-04 05:39:46Z  SeedCoreData
+202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
+202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
 202610080100   Pending   -                     CreateBlogSchema  (out of order)
-202611030000   Applied   2026-11-04 05:39:46Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-04 05:39:46Z  CreateRoleCapabilities
-4 applied, 1 pending, 0 orphaned
+202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
+5 applied, 1 pending, 0 orphaned
 ```
 
 該怎麼做：用 `migrate:preview` 看那支 migration 的 SQL，確認它不依賴後來那支改過的東西，例如被改名或

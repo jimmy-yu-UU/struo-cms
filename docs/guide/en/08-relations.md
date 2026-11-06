@@ -150,8 +150,9 @@ fails; the requirement is writability, not a particular interface — `UserRole`
 A junction collection can carry `Hidden` too, and it behaves exactly like a collection-level
 `Hidden` ([Chapter 5: Defining Collections](05-collections.md)): it only removes the junction
 collection from the admin sidebar. It still appears fully in `/api/schema`, in the RBAC permission
-matrix, and in the generated GraphQL schema. `UserRole` additionally carries `AdminOnly = true`,
-which the sample's `ArticleTag` does not — so the two differ in who can write to them.
+matrix, and in the generated GraphQL schema. The framework's own `UserRole` is the exception to the
+matrix: it follows the grant of `user` and has no row of its own ([Chapter 17](17-roles-and-permissions.md)),
+while the sample's `ArticleTag` is granted like any collection.
 
 The relation's own schema entry names the junction collection, its payload field names, and its
 sort field, which is how a caller discovers that it also needs a separate write grant on the

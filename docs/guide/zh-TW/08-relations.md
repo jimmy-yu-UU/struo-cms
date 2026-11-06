@@ -127,10 +127,10 @@ writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items cre
 store empty keys.`
 
 跟集合層的 `Hidden`（見[第 5 章：定義集合](05-collections.md)）一樣，只讓它從後台側邊欄消失：它仍然
-完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。`UserRole` 另外掛了
-`AdminOnly = true`，範例的 `ArticleTag` 沒有，兩者誰能寫入因此不同。關聯的 schema 項目會點名
-junction collection、它的 payload 欄位名稱與排序欄位，這是呼叫端發現「還需要 junction collection 自
-己的寫入授權」的方式。
+完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。框架自己的 `UserRole` 是權限表的例外：
+它沿用 `user` 的授權，沒有自己的列（見[第 17 章](17-roles-and-permissions.md)），範例的 `ArticleTag` 則跟
+一般集合一樣另外授權。關聯的 schema 項目會點名 junction collection、它的 payload 欄位名稱與排序欄位，這是
+呼叫端發現「還需要 junction collection 自己的寫入授權」的方式。
 
 範例的 `ArticleTag` 就是這樣一個 junction collection：
 
