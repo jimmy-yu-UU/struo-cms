@@ -2,9 +2,40 @@
 
 ## 0.28.0 — 2026-11-07
 
+::: danger Breaking
+- System capabilities are removed. `ISystemCapabilitySource`, `IRoleCapabilityStore`, `SystemCapabilities`,
+  `SystemCapabilityCatalog`, the `RoleCapability` entity, `EffectivePermissions.HasCapability` and the
+  capability members of `IRolePermissionStore` and `RolePermissionData` are gone, and so are
+  `GET api/capabilities`, `GET`/`PUT api/roles/{id}/capabilities` and the `capabilities` field of
+  `GET api/auth/me`. The core migration `DropRoleCapabilities` (`202611060000`) drops the
+  `role_capabilities` table and every capability row in it; `migrate` or `Database:MigrateOnStartup`
+  applies it. A fork that registered a source or called `HasCapability` must express the permission
+  as a grant on a collection instead.
+- `GET api/login-locks?email=…` is removed. A login lock is read with `POST api/login-locks/query` and
+  needs read on the `user` collection, and `DELETE api/login-locks?email=…` needs write on it. The
+  `login.unlock` capability does not exist any more.
+- `user`, `role`, `permission` and `userRole` are ordinary collections: they no longer declare
+  `AdminOnly`. A role can be given read, write or delete on `user` and `role` in the permission matrix,
+  and the endpoints that were super-admin only now take those grants: `POST api/users`, resetting
+  another user's password, issuing and revoking an access token (write on `user`), reading a token's
+  state and `effective-permissions` (read on `user`), and the role permission endpoints (read and write
+  on `role`). `userRole` follows the grant of `user` and `permission` that of `role`; neither has a
+  matrix row, and a grant stored under either name is ignored. A caller who is not a super-admin gets
+  `403` for a super-admin account or role, and for assigning a super-admin role. See
+  [Chapter 17](17-roles-and-permissions.md) and [Chapter 13](13-rest-endpoints.md).
+- `Role.IsSuperAdmin` is read-only. No request can set or clear it: a body that carries it is accepted
+  and the field ignored. The seeded `admin` role is the super-admin role, and a role created through the
+  API never is one.
+- A super-admin role cannot be deleted (`409` `CONFLICT`), and the last active account in a super-admin
+  role cannot be removed from it, deactivated or deleted (`409` `CONFLICT`); the write is rolled back.
+  The `AdminOnly` attribute stays available to a fork for its own collections.
 - The seeded `public` role cannot be deleted, even by a super-admin (`409` `CONFLICT`). It is protected like
   a super-admin role: a caller who is not a super-admin gets `403` when updating, restoring or reverting it,
   changing its permission grants, or naming a role `public`, even with a grant on `role`.
+  A deployment that let a non-super-admin edit the public grants must give that work to a super-admin.
+- A JSON body that names the same top-level property twice is refused with `400` `BAD_USER_INPUT` on the
+  item create and update paths; a client that sent such a body must send each property once.
+:::
 
 ### Added
 
