@@ -216,8 +216,8 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // Relations section: pick a Category (single-select Combobox) and a Tag (multi-select Combobox).
   await pickFirstCategory(page)
   const tagName = await pickFirstTag(page)
-  // RelationPicker.vue's multi-select branch renders each selection as a Badge chip OUTSIDE the
-  // trigger/overlay, so this is visible regardless of the overlay's open/closed state and proves
+  // RelationPicker.vue's multi-select branch renders each selection as a Badge chip inside the field
+  // box, beside the trigger, so this is visible regardless of the overlay's open/closed state and proves
   // the click actually landed on Tags' own list (see pickFirstTag's doc comment).
   await expect(fieldByLabel(page, 'Tags').getByText(tagName, { exact: true })).toBeVisible()
 

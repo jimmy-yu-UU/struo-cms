@@ -14,6 +14,9 @@
 
 ### Changed
 
+- In the admin UI, the values of a plain `TagSelect` relation (a user's roles, the sample's tags) show as chips
+  inside the field box instead of in a row above it; each chip has a remove button, and a value the caller
+  may not change has none.
 - The Login locks page, the lock panel on the user form and the System capabilities section of the role
   form are removed from the admin UI.
 - The admin UI follows the grants: the permission matrix is read-only without write on `role`, the

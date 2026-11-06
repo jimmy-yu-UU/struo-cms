@@ -40,6 +40,9 @@ const langStore = useLanguageStore()
 type Option = { id: string; label: string; raw: Record<string, unknown> }
 const options = ref<Option[]>([])
 const labelById = ref<Record<string, string>>({})
+const rawById = ref<Record<string, Record<string, unknown>>>({})
+// The multi-select menu is controlled so a click on the empty part of the field box can open it.
+const menuOpen = ref(false)
 const loading = ref(false)
 const loadError = ref('')
 const search = ref('')
@@ -64,7 +67,10 @@ async function loadOptions(): Promise<void> {
     })
     if (!optionsLoad.isCurrent(token)) return
     options.value = res.data.map(toOption)
-    for (const o of options.value) labelById.value[o.id] = o.label
+    for (const o of options.value) {
+      labelById.value[o.id] = o.label
+      rawById.value[o.id] = o.raw
+    }
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
     loadError.value = e instanceof Error ? e.message : t('fields.loadOptionsFailed')
@@ -83,7 +89,9 @@ async function ensureSelectedLabels(): Promise<void> {
   await Promise.all(missing.map(async (id) => {
     try {
       const row = await itemsApi.get(props.relation.targetCollection, id, { locale: langStore.defaultCode })
-      labelById.value[id] = toOption(row).label
+      const option = toOption(row)
+      labelById.value[id] = option.label
+      rawById.value[id] = option.raw
     } catch {
       labelById.value[id] = id // deleted / inaccessible -> show id
     }
@@ -99,7 +107,7 @@ const displayOptions = computed<Option[]>(() => {
   const present = new Set(options.value.map((o) => o.id))
   const missingIds = [...new Set(selected.filter((id) => !present.has(id)))]
   const missing: Option[] = missingIds.map((id) => ({
-    id, label: labelById.value[id] ?? id, raw: {},
+    id, label: labelById.value[id] ?? id, raw: rawById.value[id] ?? {},
   }))
   return [...options.value, ...missing]
 })
@@ -122,6 +130,16 @@ function onChange(v: unknown): void {
 
 function hintFor(opt: Option): string | null {
   return props.optionHint ? props.optionHint(opt.raw) : null
+}
+
+// A click on the empty part of the field box opens or closes the menu; a click on a chip or its remove
+// button is not on the box itself and never gets here.
+function onBoxClick(): void {
+  if (!props.disabled) menuOpen.value = !menuOpen.value
+}
+
+function openMenu(): void {
+  if (!props.disabled) menuOpen.value = true
 }
 
 // form/TreeSelect.vue takes and emits a plain key directly; no `{ [key]: true }` packing.
@@ -149,7 +167,7 @@ const singleSelectedOption = computed(() => (
   singleSelected.value == null ? null : displayOptions.value.find((o) => o.id === singleSelected.value) ?? null
 ))
 const multipleSelectedOptions = computed(() => (
-  multipleSelected.value.map((id) => displayOptions.value.find((o) => o.id === id) ?? { id, label: id, raw: {} })
+  multipleSelected.value.map((id) => displayOptions.value.find((o) => o.id === id) ?? { id, label: id, raw: rawById.value[id] ?? {} })
 ))
 
 // aria-label overrides the trigger's visible contents entirely, so it has to carry both the
@@ -169,6 +187,9 @@ const multipleAccessibleName = computed(() => (
 // The combobox owns neither the chip display nor the array arithmetic — emit a new array every
 // time per this repo's immutability convention.
 function toggleValue(id: string): void {
+  // A value the hint locks is neither added nor removed, from the menu or any other path.
+  const option = displayOptions.value.find((o) => o.id === id)
+  if (option && hintFor(option) !== null) return
   const next = multipleSelected.value.includes(id)
     ? multipleSelected.value.filter((v) => v !== id)
     : [...multipleSelected.value, id]
@@ -204,32 +225,46 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
       />
     </div>
 
-    <div v-else-if="multiple" class="flex w-full max-w-[480px] flex-col gap-1.5">
-      <!-- Chips live outside the trigger, not inside it: the trigger renders as a <button>, and a
-           remove control nested inside another <button> is invalid HTML with real focus/click
-           hazards. -->
-      <div v-if="showChips && multipleSelectedOptions.length" class="flex flex-wrap gap-1.5">
-        <Badge v-for="opt in multipleSelectedOptions" :key="opt.id" variant="secondary" class="gap-1 py-0.5 pr-1">
-          {{ opt.label }}
-          <button
-            type="button"
-            class="inline-flex size-4 items-center justify-center rounded-full hover:bg-foreground/10"
-            :aria-label="t('fields.removeOption', { label: opt.label })"
-            :disabled="disabled"
-            @click="toggleValue(opt.id)"
-          >
-            <X class="size-3" />
-          </button>
-        </Badge>
-      </div>
-      <Combobox :model-value="multipleSelected" multiple :disabled="disabled">
-        <ComboboxAnchor class="w-full">
+    <div v-else-if="multiple" class="w-full max-w-[480px]">
+      <Combobox v-model:open="menuOpen" :model-value="multipleSelected" multiple :disabled="disabled">
+        <!-- The field box. The chips sit in it beside the one trigger, as siblings, never inside it: a remove
+             control nested in the trigger button would be invalid HTML with real focus and click hazards. -->
+        <ComboboxAnchor
+          class="border-input flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1 text-sm"
+          :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+          @click.self="onBoxClick"
+        >
+          <template v-if="showChips">
+            <Badge
+              v-for="opt in multipleSelectedOptions"
+              :key="opt.id"
+              variant="secondary"
+              data-testid="relation-chip"
+              class="gap-1 py-0.5"
+              :class="disabled || hintFor(opt) !== null ? '' : 'pr-1'"
+              :title="hintFor(opt) ?? undefined"
+            >
+              {{ opt.label }}
+              <button
+                v-if="!disabled && hintFor(opt) === null"
+                type="button"
+                class="inline-flex size-4 items-center justify-center rounded-full hover:bg-foreground/10"
+                :aria-label="t('fields.removeOption', { label: opt.label })"
+                @click="toggleValue(opt.id)"
+              >
+                <X class="size-3" />
+              </button>
+            </Badge>
+          </template>
           <ComboboxTrigger
             :aria-label="multipleAccessibleName"
-            class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left disabled:cursor-not-allowed"
+            @keydown.down.prevent="openMenu"
           >
             <span :class="multipleSelected.length ? '' : 'text-muted-foreground'">
-              {{ multipleSelected.length ? t('fields.selectedCount', { n: multipleSelected.length }) : relation.label }}
+              {{ showChips
+                ? (multipleSelected.length ? '' : relation.label)
+                : (multipleSelected.length ? t('fields.selectedCount', { n: multipleSelected.length }) : relation.label) }}
             </span>
             <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
           </ComboboxTrigger>
@@ -242,7 +277,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
               v-for="opt in displayOptions"
               :key="opt.id"
               :value="opt.id"
-              :disabled="hintFor(opt) !== null && !multipleSelected.includes(opt.id)"
+              :disabled="hintFor(opt) !== null"
               :title="hintFor(opt) ?? undefined"
               @select.prevent="toggleValue(opt.id)"
             >

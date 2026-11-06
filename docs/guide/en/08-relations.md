@@ -339,6 +339,10 @@ links editor, each selected target gets its own row, showing:
 
 The dropdown underneath only adds and removes members.
 
+In the plain picker the selected values show as chips inside the field box, each with a remove button,
+and a click on the empty part of the box opens the list of targets; a value the caller may not change
+shows as a chip without a remove button.
+
 Authorization has three tiers:
 
 - No read grant on the junction: the row still appears, but no payload field is shown at all —
