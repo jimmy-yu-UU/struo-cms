@@ -409,6 +409,10 @@ The response status is `200`, not `401`; `data` is `null`, and the error itself 
 `errors` array, with `extensions.code` at `UNAUTHORIZED`. A caller has to check each error's own
 `extensions.code`, never the status line.
 
+Every error in the `errors` array also carries `extensions.traceId`, the same request trace id the REST
+error envelope carries (see [Chapter 12](12-rest-conventions.md)), for the errors described in both
+parts of this section. The examples here leave it out.
+
 GraphQL's error filter is the counterpart of REST's exception handler: it folds whatever exception a
 resolver throws into the same lookup table, stamping on the identical stable code string, but the
 transport-layer status always stays at `200`. `SEARCH_UNAVAILABLE` works the same way — REST maps it
@@ -441,6 +445,10 @@ The error message names the nonexistent field `bogusThing`, but carries no `exte
 that's the dividing line for whether a GraphQL error should be read by status code or by
 `extensions.code`: a request-level structural error is `400` with no code, while an exception a
 resolver throws at execution time is `200` with a code.
+
+A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
+`extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
+holds whether the request declared its length or streamed the body.
 
 Every REST validation message listed in Chapter 10 and [Chapter 11](11-query-advanced.md) — an
 unknown field, an unknown relation, exceeding the depth cap — is stamped `BAD_USER_INPUT` on

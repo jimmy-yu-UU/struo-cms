@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.27.0 — 2026-11-06
+
+::: danger Breaking
+- A JSON request body over `Api:MaxJsonBodyBytes` (default 4 MB) is answered with `413` and the error
+  code `PAYLOAD_TOO_LARGE`. It applies to every REST endpoint that takes JSON and to `POST /graphql`;
+  file uploads keep `Struo:Files:MaxUploadBytes`. A client that sends JSON bodies over 4 MB must raise
+  the key (`Api__MaxJsonBodyBytes`). See [Chapter 4](04-configuration.md) and
+  [Chapter 12](12-rest-conventions.md).
+:::
+
+### Added
+
+- Every REST error envelope carries `error.traceId`, and every GraphQL error carries
+  `extensions.traceId`: the request's trace id, which the request log and the error entries logged for
+  that request record too. The console and file log sinks print it before each message. The admin UI
+  shows it on a server fault (`5xx`), in the error message and in the detail line of an error toast.
+  See [Chapter 12](12-rest-conventions.md) and [Chapter 14](14-graphql.md).
+- `Api:MaxJsonBodyBytes`, the JSON body cap above. It must be greater than 0, or startup fails.
+
 ## 0.26.0 — 2026-11-05
 
 ::: danger Breaking

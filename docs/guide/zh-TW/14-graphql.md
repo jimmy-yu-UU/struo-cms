@@ -334,6 +334,9 @@ HTTP_STATUS:200
 回應狀態是 `200`，不是 `401`；資料是 `null`，錯誤本身在 `errors` 陣列裡，`extensions.code` 是
 `UNAUTHORIZED`。呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列。
 
+`errors` 陣列裡的每一則錯誤還帶有 `extensions.traceId`，跟 REST 錯誤信封帶的是同一個請求 trace id（見
+[第 12 章](12-rest-conventions.md)），本節兩種錯誤都有。這裡的範例都省略了它。
+
 GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver 丟出的例外套進同一份對照表，蓋上一模
 一樣的穩定代碼字串，但傳輸層的狀態永遠留在 `200`。`SEARCH_UNAVAILABLE` 也一樣——REST 對應到 503，這
 裡一樣是 `200` 配這個代碼。沒有對照表可查的例外會被遮罩成固定的通用訊息，伺服器端照樣完整記錄，搜
@@ -361,6 +364,10 @@ HTTP_STATUS:400
 錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——這是判斷一則 GraphQL 錯誤該看狀
 態碼還是該看 `extensions.code` 的分界：request 層級的結構性錯誤是 `400` 沒有代碼，resolver 執行時
 丟出的例外是 `200` 配代碼。
+
+JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
+`PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，結果
+都一樣。
 
 第 10 章與[第 11 章](11-query-advanced.md)列的 REST 驗證訊息——未知欄位、未知關聯、超出深度——因為兩
 個協定共用同一個驗證器，在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。讀

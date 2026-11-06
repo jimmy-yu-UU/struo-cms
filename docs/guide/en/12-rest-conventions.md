@@ -15,12 +15,17 @@ Every JSON response, success or failure, is wrapped in the same shape. On succes
 On failure:
 
 ```json
-{ "success": false, "error": { "code": "…", "message": "…", "details": … } }
+{ "success": false, "error": { "code": "…", "message": "…", "details": …, "traceId": "…" } }
 ```
 
 `details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` that a missing
 required translation, an invalid translation value (a wrong type, a format violation or a value over
 its `MaxLength`) or a duplicate translation locale produces; every other code omits the key entirely.
+`traceId` is on every error response. It is the request's trace id, 32 hexadecimal characters, and
+the server's request log and any error entry logged for that request record the same id, so an id
+quoted from a response finds its log lines; the console and file sinks print it ahead of the message.
+The examples in this manual leave it out.
+
 `meta` is omitted the same way: it appears only on a paginated list result. A single-item read, a
 create, and an update all omit the key outright rather than sending `null`. When `meta` is present,
 it can also carry two more keys, `facets` and `aggregate`, each showing up only when the request
@@ -102,7 +107,7 @@ means the same thing on both protocols:
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
 | `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
-| `PAYLOAD_TOO_LARGE` | 413 | Upload bytes over the configured cap |
+| `PAYLOAD_TOO_LARGE` | 413 | A file upload over its cap, or a JSON body over `Api:MaxJsonBodyBytes` |
 | `INVALID_CURRENT_PASSWORD` | 400 | Wrong current password on self-service change |
 | `NO_LOCAL_PASSWORD` | 400 | External OIDC account, no local password |
 | `ACCOUNT_INACTIVE` | 401 | Correct password, deactivated account |
@@ -127,8 +132,18 @@ means the same thing on both protocols:
   [Chapter 15](15-files-and-media.md)).
 
 `PAYLOAD_TOO_LARGE` and `SEARCH_UNAVAILABLE` are both hard to trigger on an ordinary host — the
-first needs an upload that genuinely exceeds the cap, and the second needs a search provider that
-actively fails; `INTERNAL_SERVER_ERROR` only shows up for a truly unhandled error.
+first needs an upload or a JSON body that genuinely exceeds its cap, and the second needs a search
+provider that actively fails; `INTERNAL_SERVER_ERROR` only shows up for a truly unhandled error.
+
+### JSON body size
+
+A request whose body is JSON is capped at `Api:MaxJsonBodyBytes` (default 4 MB, see
+[Chapter 4](04-configuration.md)). That covers every REST endpoint that takes JSON and `POST
+/graphql`; a file upload is multipart, not JSON, and keeps its own cap,
+`Struo:Files:MaxUploadBytes`. A body over the cap answers `413` with `PAYLOAD_TOO_LARGE` in the
+envelope. When the request declares a `Content-Length` over the cap, it is refused before the body is
+read; a body sent without one is cut off once it passes the cap. `/graphql` answers `413` in its own
+shape, described in [Chapter 14](14-graphql.md).
 
 ### Your own error codes
 
