@@ -14,6 +14,10 @@
 
 ### Changed
 
+- In the admin UI, the links editor of a `TagSelect` relation whose junction has payload fields or a
+  `SortField` is a list with a description, a header row, one row per link and a separate "Add" section;
+  rows stack on a narrow screen, and the first row's up and the last row's down are greyed out.
+- The badge on a translatable field reads "Per language" (`多語系`) and explains itself in a tooltip.
 - In the admin UI, the values of a plain `TagSelect` relation (a user's roles, the sample's tags) show as chips
   inside the field box instead of in a row above it; each chip has a remove button, and a value the caller
   may not change has none.

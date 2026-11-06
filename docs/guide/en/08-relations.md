@@ -331,13 +331,20 @@ the admin SPA wires each one to its own input component:
 
 `TagSelect` is a plain multi-value tag picker when the relation's junction has no visible payload
 and no `SortField`; as soon as either is true, it becomes a per-row links editor instead. In the
-links editor, each selected target gets its own row, showing:
+links editor, a one-line note says the extra fields belong to the link itself, and a header row names the
+columns: the order (only with a `SortField`), the target collection's label, one column per visible
+payload field, and remove. Each selected target is one row, showing:
 
+- reorder controls, which appear only when the relation declares a `SortField`; the first row's up and the
+  last row's down are greyed out and inactive
+- the target's display text
 - that link's visible payload fields, rendered with the same field-type registry the item form uses
 - a remove button
-- reorder controls, which appear only when the relation declares a `SortField`
 
-The dropdown underneath only adds and removes members.
+On a narrow screen a row stacks: the target on top, the payload inputs under it with their own labels, and
+the buttons in a compact row. Below the list, a separate "Add {target}" section holds the dropdown, which
+only adds members (removing is the row's button); a read-only field shows the rows without it, and with
+no buttons active. When nothing is linked, the list says so.
 
 In the plain picker the selected values show as chips inside the field box, each with a remove button,
 and a click on the empty part of the box opens the list of targets; a value the caller may not change

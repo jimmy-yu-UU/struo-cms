@@ -102,7 +102,7 @@ defineExpose({ activeLocale })
           <Field v-for="f in fields.translatable" :key="f.name" class="field">
             <div class="lbl-row flex items-center gap-2">
               <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && (loc.isDefault || localeFilled(loc.code))" class="text-destructive ml-0.5">*</span></FieldLabel>
-              <Badge variant="secondary" class="tr-badge">{{ t('itemForm.translatableBadge') }}</Badge>
+              <Badge variant="secondary" class="tr-badge" :title="t('itemForm.translatableBadgeHint')">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
             <FieldInput :id="translatableFieldId(f.name, loc.code)" :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
             <FieldError v-if="fieldError(loc.code, f.name)" role="alert">{{ fieldError(loc.code, f.name) }}</FieldError>

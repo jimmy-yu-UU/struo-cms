@@ -159,4 +159,133 @@ describe('JunctionLinksEditor', () => {
     await flushPromises()
     expect(w.find('.junction-links__empty').text()).toBe(en.fields.noItems)
   })
+
+  // ---- the links list: description, header, rows, a separate add picker ----
+
+  const orderButtons = (w: ReturnType<typeof mountEditor>, id: 'move-up' | 'move-down') =>
+    w.findAll(`[data-testid="${id}"]`)
+  const idsOf = (w: ReturnType<typeof mountEditor>) =>
+    (w.emitted('update:modelValue')!.at(-1)![0] as RelationLink[]).map((l) => l.id)
+
+  it('describes the list in one muted line above it', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    const description = w.get('.junction-links__description')
+    expect(description.text()).toBe(en.fields.junctionDescription)
+    expect(description.classes()).toContain('text-muted-foreground')
+    expect(description.element.compareDocumentPosition(w.get('ul').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('has a header row with order, the target label, one column per payload field and remove', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    const header = w.get('[data-testid="junction-header"]')
+    expect(Array.from(header.element.children).map((c) => c.textContent?.trim())).toEqual(
+      [en.fields.junctionOrder, 'Tag', 'note', 'weight', en.fields.junctionRemoveHeader])
+    expect(header.classes()).toContain('hidden')
+    expect(header.classes()).toContain('sm:grid')
+  })
+
+  it('has no order column without a sortField and no header without rows', async () => {
+    setup()
+    const noSort = mountEditor({ relation: rel({ sortField: null }) })
+    await flushPromises()
+    expect(Array.from(noSort.get('[data-testid="junction-header"]').element.children).map((c) => c.textContent?.trim()))
+      .toEqual(['Tag', 'note', 'weight', en.fields.junctionRemoveHeader])
+
+    const empty = mountEditor({ modelValue: [] })
+    await flushPromises()
+    expect(empty.find('[data-testid="junction-header"]').exists()).toBe(false)
+    expect(empty.find('.junction-links__empty').exists()).toBe(true)
+  })
+
+  it('gives every row one payload input per visible field, and stacks the row on a narrow screen', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    for (const row of w.findAll('.junction-link')) {
+      expect(row.findAll('.junction-link__field')).toHaveLength(2)
+      expect(row.findAll('input').length).toBeGreaterThanOrEqual(2)
+      expect(row.classes()).toContain('flex-col')
+      expect(row.classes()).toContain('sm:grid')
+    }
+  })
+
+  it('keeps the add picker apart from the rows, labelled with the target', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    const add = w.get('[data-testid="junction-add"]')
+    expect(add.text()).toContain('Add Tag')
+    expect(add.findComponent(RelationPicker).exists()).toBe(true)
+    expect(w.get('ul').findComponent(RelationPicker).exists()).toBe(false)
+    expect(add.classes()).toContain('border-t')
+  })
+
+  it('disables the first row up and the last row down, as greyed buttons without a forbidden cursor', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    const ups = orderButtons(w, 'move-up')
+    const downs = orderButtons(w, 'move-down')
+    expect(ups[0].attributes('disabled')).toBeDefined()
+    expect(ups[1].attributes('disabled')).toBeUndefined()
+    expect(downs[0].attributes('disabled')).toBeUndefined()
+    expect(downs[1].attributes('disabled')).toBeDefined()
+    expect([...ups, ...downs].map((b) => b.classes().join(' ')).join(' ')).not.toContain('cursor-not-allowed')
+    expect(ups[1].classes()).toContain('cursor-pointer')
+    expect(downs[0].classes()).toContain('cursor-pointer')
+    // Nor does the remove button; the payload inputs' own controls are the shared field inputs, left alone.
+    expect(w.findAll('[data-testid="move-up"], [data-testid="move-down"], .junction-link__remove').map((b) => b.classes().join(' ')).join(' ')).not.toContain('cursor-not-allowed')
+  })
+
+  it('gives the order buttons a tooltip and an accessible name that includes the row', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    expect(orderButtons(w, 'move-up')[1].attributes('title')).toBe('Move up')
+    expect(orderButtons(w, 'move-up')[1].attributes('aria-label')).toBe('Move Two up')
+    expect(orderButtons(w, 'move-down')[0].attributes('title')).toBe('Move down')
+    expect(orderButtons(w, 'move-down')[0].attributes('aria-label')).toBe('Move One down')
+  })
+
+  it('moves a row up or down and emits the new order', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    await orderButtons(w, 'move-up')[1].trigger('click')
+    expect(idsOf(w)).toEqual(['t2', 't1'])
+    await orderButtons(w, 'move-down')[0].trigger('click')
+    expect(idsOf(w)).toEqual(['t2', 't1'])
+  })
+
+  it('shows a disabled field read-only: no add picker, and the order and remove buttons are inactive', async () => {
+    setup()
+    const w = mountEditor({ disabled: true })
+    await flushPromises()
+
+    expect(w.find('[data-testid="junction-add"]').exists()).toBe(false)
+    // The picker stays mounted, hidden, only to resolve the rows' labels.
+    expect(w.findComponent(RelationPicker).classes()).toContain('hidden')
+    for (const b of [...orderButtons(w, 'move-up'), ...orderButtons(w, 'move-down'), ...w.findAll('.junction-link__remove')])
+      expect(b.attributes('disabled')).toBeDefined()
+    expect((w.find('.junction-link input').element as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('names the remove button after the row', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    expect(w.findAll('.junction-link__remove')[0].attributes('aria-label')).toBe('Remove One')
+  })
 })

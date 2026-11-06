@@ -3,8 +3,8 @@ import { ref, computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { X } from '@lucide/vue'
-import SortableList from '@/components/form/SortableList.vue'
+import { ArrowDown, ArrowUp, X } from '@lucide/vue'
+import { reorder } from '@/components/form/sortableReorder'
 import RelationPicker from './RelationPicker.vue'
 import FieldInput from './FieldInput.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
@@ -19,10 +19,12 @@ defineOptions({ name: 'JunctionLinksEditor' })
 
 // The per-row editor for a many-to-many relation whose junction carries payload and/or a SortField
 // (spec U2b). RelationInput dispatches here instead of RelationPicker's chip branch when
-// usesLinksEditor() says so. Each link is one row: target label, that link's payload inputs (the
-// same field-type registry ItemForm uses), a remove button, and — only with a SortField — the
-// SortableList arrows. The combobox below the rows is RelationPicker itself with its chips turned
-// off; its id[] model is treated purely as the membership set, order always comes from `links`.
+// usesLinksEditor() says so. A one-line description, then a header row and one row per link: order
+// buttons (only with a SortField), the target label, that link's payload inputs (the same field-type
+// registry ItemForm uses) and a remove button; below the list, a separate "Add" section holds the
+// combobox, which is RelationPicker itself with its chips turned off. Its id[] model is treated purely
+// as the membership set, order always comes from `links`. Rows and header share one grid template on a
+// wide screen; on a narrow one a row stacks: target, payload inputs, then the buttons in a compact row.
 const props = defineProps<{ relation: RelationMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: RelationLink[]): void }>()
 const { t } = useI18n()
@@ -40,6 +42,14 @@ const readable = computed(() => canReadJunction(props.relation, access.value))
 const payloadFields = computed<FieldMeta[]>(() => (readable.value ? visiblePayloadFields(props.relation, resolve) : []))
 const payloadEditable = computed(() => props.disabled !== true && canWriteJunction(props.relation, resolve, access.value))
 const reorderable = computed(() => !!props.relation.sortField)
+const targetLabel = computed(() => schema.get(props.relation.targetCollection)?.label ?? props.relation.label)
+// Fixed widths for the two button columns, so the header and every row (each its own grid) line up.
+const gridTemplate = computed(() => [
+  reorderable.value ? '4.5rem' : null,
+  'minmax(0, 1.2fr)',
+  ...payloadFields.value.map(() => 'minmax(0, 1.6fr)'),
+  '2.5rem',
+].filter((c) => c !== null).join(' '))
 
 // Labels come from the picker's own option/label cache (it already resolves every selected id's
 // display label for its list) rather than a second round of fetches here.
@@ -62,8 +72,10 @@ function removeLink(id: string): void {
 function setPayload(id: string, name: string, v: unknown): void {
   emit('update:modelValue', links.value.map((l) => (l.id === id ? { ...l, junction: { ...l.junction, [name]: v } } : l)))
 }
-function onReorder(v: RelationLink[]): void {
-  emit('update:modelValue', v)
+function move(from: number, to: number): void {
+  // reorder() hands back the same array for an out-of-range move: nothing changed, nothing to emit.
+  const next = reorder(links.value, from, to)
+  if (next !== links.value) emit('update:modelValue', next)
 }
 
 // Row- and instance-scoped ids for <label for>, same reasoning as RepeaterField.
@@ -72,26 +84,87 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
 </script>
 
 <template>
-  <div class="junction-links flex w-full max-w-[720px] flex-col gap-3">
-    <SortableList
-      v-if="links.length"
-      :model-value="links"
-      :item-key="(l: RelationLink) => l.id"
-      :disabled="disabled"
-      :reorderable="reorderable"
-      @update:model-value="onReorder"
-    >
-      <template #item="{ item }">
-        <div class="junction-link flex w-full flex-col gap-2 rounded-md border p-3" :data-link-id="item.id">
-          <div class="flex items-center gap-2">
-            <Badge variant="secondary" class="junction-link__label">{{ labelFor(item.id) }}</Badge>
-            <span class="flex-1" />
-            <!-- type="button": this editor lives inside ItemForm.vue's <form @submit.prevent>. -->
+  <div class="junction-links flex w-full max-w-[880px] flex-col gap-3">
+    <p class="junction-links__description text-sm text-muted-foreground">{{ t('fields.junctionDescription') }}</p>
+
+    <template v-if="links.length">
+      <div
+        data-testid="junction-header"
+        class="hidden gap-3 px-3 text-xs font-medium text-muted-foreground sm:grid"
+        :style="{ gridTemplateColumns: gridTemplate }"
+      >
+        <span v-if="reorderable">{{ t('fields.junctionOrder') }}</span>
+        <span>{{ targetLabel }}</span>
+        <span v-for="f in payloadFields" :key="f.name">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></span>
+        <span class="sr-only">{{ t('fields.junctionRemoveHeader') }}</span>
+      </div>
+
+      <ul class="flex w-full flex-col gap-2">
+        <li
+          v-for="(item, i) in links"
+          :key="item.id"
+          class="junction-link flex w-full flex-col gap-2 rounded-md border p-3 sm:grid sm:items-center sm:gap-3"
+          :style="{ gridTemplateColumns: gridTemplate }"
+          :data-link-id="item.id"
+        >
+          <Badge variant="secondary" class="junction-link__label order-1 w-fit max-w-full justify-self-start sm:order-2">
+            {{ labelFor(item.id) }}
+          </Badge>
+          <div
+            v-for="f in payloadFields"
+            :key="f.name"
+            class="junction-link__field order-2 flex min-w-0 flex-col gap-1 sm:order-3"
+          >
+            <!-- Visible labels while the row is stacked; the header names the columns on a wide screen. -->
+            <label class="text-xs text-muted-foreground sm:sr-only" :for="fieldId(item.id, f.name)">
+              {{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span>
+            </label>
+            <FieldInput
+              :id="fieldId(item.id, f.name)"
+              :field="f"
+              :model-value="item.junction[f.name]"
+              :disabled="!payloadEditable"
+              @update:model-value="(v: unknown) => setPayload(item.id, f.name, v)"
+            />
+          </div>
+          <!-- A compact row of buttons while stacked; on a wide screen the wrapper disappears and each
+               button is a cell of the row grid. type="button": this editor lives inside ItemForm.vue's
+               <form @submit.prevent>. A disabled button gets no pointer events, so it keeps the default
+               cursor; an enabled one shows the pointer. -->
+          <div class="order-3 flex items-center gap-1 sm:contents">
+            <div v-if="reorderable" class="flex items-center gap-1 sm:order-1">
+              <Button
+                type="button"
+                data-testid="move-up"
+                variant="outline"
+                size="icon-sm"
+                class="cursor-pointer disabled:opacity-40"
+                :title="t('fields.moveUp')"
+                :aria-label="t('fields.moveUpLabel', { label: labelFor(item.id) })"
+                :disabled="disabled || i === 0"
+                @click="move(i, i - 1)"
+              >
+                <ArrowUp class="size-4" />
+              </Button>
+              <Button
+                type="button"
+                data-testid="move-down"
+                variant="outline"
+                size="icon-sm"
+                class="cursor-pointer disabled:opacity-40"
+                :title="t('fields.moveDown')"
+                :aria-label="t('fields.moveDownLabel', { label: labelFor(item.id) })"
+                :disabled="disabled || i === links.length - 1"
+                @click="move(i, i + 1)"
+              >
+                <ArrowDown class="size-4" />
+              </Button>
+            </div>
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              class="junction-link__remove"
+              size="icon-sm"
+              class="junction-link__remove ml-auto cursor-pointer justify-self-end disabled:opacity-40 sm:order-4 sm:ml-0"
               :aria-label="t('fields.removeOption', { label: labelFor(item.id) })"
               :disabled="disabled"
               @click="removeLink(item.id)"
@@ -99,33 +172,34 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
               <X class="size-4" />
             </Button>
           </div>
-          <div v-if="payloadFields.length" class="grid gap-2 sm:grid-cols-2">
-            <div v-for="f in payloadFields" :key="f.name" class="junction-link__field flex flex-col gap-1">
-              <label class="text-xs text-muted-foreground" :for="fieldId(item.id, f.name)">
-                {{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span>
-              </label>
-              <FieldInput
-                :id="fieldId(item.id, f.name)"
-                :field="f"
-                :model-value="item.junction[f.name]"
-                :disabled="!payloadEditable"
-                @update:model-value="(v: unknown) => setPayload(item.id, f.name, v)"
-              />
-            </div>
-          </div>
-        </div>
-      </template>
-    </SortableList>
+        </li>
+      </ul>
+    </template>
     <p v-else class="junction-links__empty text-sm italic text-muted-foreground">{{ t('fields.noItems') }}</p>
 
+    <!-- Adding is a separate section, not part of the rows. -->
+    <div v-if="!disabled" data-testid="junction-add" class="flex flex-col gap-1.5 border-t pt-3">
+      <span class="text-sm font-medium">{{ t('fields.junctionAdd', { target: targetLabel }) }}</span>
+      <RelationPicker
+        ref="picker"
+        :relation="relation"
+        :model-value="ids"
+        multiple
+        :show-chips="false"
+        @update:model-value="onPickerChange"
+      />
+    </div>
+    <!-- A read-only field offers no add picker; this one stays mounted, hidden, only to resolve the labels. -->
     <RelationPicker
+      v-else
       ref="picker"
+      class="hidden"
+      aria-hidden="true"
       :relation="relation"
       :model-value="ids"
       multiple
       :show-chips="false"
-      :disabled="disabled"
-      @update:model-value="onPickerChange"
+      disabled
     />
   </div>
 </template>

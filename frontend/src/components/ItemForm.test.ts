@@ -9,7 +9,8 @@ import type { FormModel } from '../types/itemForm'
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
-    translatableBadge: 'Translatable',
+    translatableBadge: 'Per language',
+    translatableBadgeHint: 'One value per language.',
     localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: 'has errors',
   } } },
 })
@@ -312,5 +313,13 @@ describe('ItemForm per-locale errors', () => {
     const { default: zh } = await import('../locales/zh-TW')
     for (const cat of [en, zh] as unknown as Array<{ itemForm: Record<string, string> }>)
       expect(cat.itemForm.tabHasErrors).toBeTruthy()
+  })
+
+  it('labels a translatable field with a per-language badge that carries its explanation as a tooltip', () => {
+    const w = mountForm({ meta, locales, model, errors: {} })
+
+    const badge = w.get('.tr-badge')
+    expect(badge.text()).toBe('Per language')
+    expect(badge.attributes('title')).toBe('One value per language.')
   })
 })
