@@ -86,7 +86,6 @@ public sealed class AuthController(
         [FromServices] Struo.Application.Security.ICurrentPermissions permissions,
         [FromServices] Struo.Application.Metadata.SchemaService schema,
         [FromServices] IUserAccountStore accounts,
-        [FromServices] Struo.Application.Security.SystemCapabilityCatalog catalog,
         CancellationToken ct)
     {
         var eff = permissions.Current;
@@ -108,8 +107,7 @@ public sealed class AuthController(
             email,
             name,
             isSuperAdmin = eff.IsSuperAdmin,
-            permissions = map,
-            capabilities = catalog.All.Select(c => c.Code).Where(eff.HasCapability).ToList()
+            permissions = map
         });
     }
 

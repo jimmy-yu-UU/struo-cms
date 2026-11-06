@@ -49,12 +49,12 @@ public sealed class StartupMigrationGateLiveTests
             await Task.WhenAll(RunGate(dbType, conn, prefix, first), RunGate(dbType, conn, prefix, second));
 
             var applied = first.Entries.Concat(second.Entries).Count(e => e.Message.StartsWith("Applied migration"));
-            applied.Should().Be(4);
+            applied.Should().Be(5);
             var host = new MigrationHost(
                 new MigrationHostOptions(dbType, conn, prefix, [typeof(StruoMigration).Assembly], 60)
                 { NamespaceFilter = "Struo.Infrastructure.Migrations.Core" },
                 NullLoggerFactory.Instance);
-            host.GetStatus().Should().HaveCount(4).And.OnlyContain(m => m.State == MigrationState.Applied);
+            host.GetStatus().Should().HaveCount(5).And.OnlyContain(m => m.State == MigrationState.Applied);
             db.Queryable<Language>().Count().Should().Be(2);
             db.Queryable<User>().Count().Should().Be(1);
         }

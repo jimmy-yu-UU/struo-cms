@@ -10,19 +10,19 @@ using Microsoft.Extensions.Logging;
 using SqlSugar;
 using Struo.Api.Auth;
 using Struo.Api.Controllers;
+using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Api;
 
-// GET/DELETE /api/login-locks?email=: query and clear the per-account login lock. Every test runs on
+// POST /api/login-locks/query and DELETE /api/login-locks?email=: query and clear the per-account login lock. Every test runs on
 // its own derived host (isolated in-memory throttle) with a small PermitLimit, seeding through the
 // shared base factory, like LoginAccountThrottleTests.
 [Collection("ApiIntegration")]
 public class LoginLocksEndpointTests(ApiFactory factory)
 {
-    private const string Unlock = "login.unlock";
     private const string WrongPassword = "wrong-password";
     private const string Url = "/api/login-locks";
 
@@ -85,12 +85,20 @@ public class LoginLocksEndpointTests(ApiFactory factory)
 
     private static string Q(string email) => $"{Url}?email={Uri.EscapeDataString(email)}";
 
+    private static Task<HttpResponseMessage> QueryAsync(HttpClient client, params string[] emails) =>
+        client.PostAsJsonAsync($"{Url}/query", new { emails });
+
+    private static async Task<List<JsonElement>> EntriesAsync(HttpClient client, params string[] emails)
+    {
+        var resp = await QueryAsync(client, emails);
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        return (await resp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").EnumerateArray().ToList();
+    }
+
     private static async Task<(bool locked, int retryAfter)> StateAsync(HttpClient client, string email)
     {
-        var resp = await client.GetAsync(Q(email));
-        resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
-        var data = (await resp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
-        return (data.GetProperty("locked").GetBoolean(), data.GetProperty("retryAfterSeconds").GetInt32());
+        var entry = (await EntriesAsync(client, email)).Single();
+        return (entry.GetProperty("locked").GetBoolean(), entry.GetProperty("retryAfterSeconds").GetInt32());
     }
 
     private static async Task LockAsync(WebApplicationFactory<Program> host, string email, int failures = 3)
@@ -98,18 +106,6 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         using var client = NewClient(host);
         for (var i = 0; i < failures; i++)
             (await LoginAsync(client, email, WrongPassword)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    private async Task GrantUnlockAsync(Guid userId)
-    {
-        Guid roleId;
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-            roleId = (await db.Queryable<UserRole>().Where(ur => ur.UserId == userId).FirstAsync()).RoleId;
-        }
-        using var admin = await factory.CreateAuthenticatedClientAsync();
-        (await admin.PutAsJsonAsync($"/api/roles/{roleId}/capabilities", new[] { Unlock })).EnsureSuccessStatusCode();
     }
 
     [Fact]
@@ -160,13 +156,11 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_holder_of_login_unlock_can_query_and_clear()
+    public async Task A_caller_with_write_on_user_can_query_and_clear()
     {
         using var host = Host();
         var (victim, _, _) = await factory.SeedEditorAsync([], []);
-        var (helperEmail, helperPassword, helperId) = await factory.SeedEditorAsync([], []);
-        await GrantUnlockAsync(helperId);
-        using var helper = await LoggedInAsync(host, helperEmail, helperPassword);
+        using var helper = await HelperAsync(host);
         await LockAsync(host, victim);
 
         (await StateAsync(helper, victim)).locked.Should().BeTrue();
@@ -175,7 +169,22 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_caller_without_login_unlock_is_403_on_both_verbs_and_the_lock_stays()
+    public async Task A_read_only_caller_can_query_but_not_clear()
+    {
+        using var host = Host();
+        var (victim, _, _) = await factory.SeedEditorAsync([], []);
+        var (email, password, _) = await factory.SeedEditorAsync(["user"], []);
+        using var reader = await LoggedInAsync(host, email, password);
+        using var admin = await AdminAsync(host);
+        await LockAsync(host, victim);
+
+        (await StateAsync(reader, victim)).locked.Should().BeTrue();
+        (await reader.DeleteAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await StateAsync(admin, victim)).locked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_caller_without_a_grant_on_user_is_403_on_both_verbs_and_the_lock_stays()
     {
         using var host = Host();
         var (victim, _, _) = await factory.SeedEditorAsync([], []);
@@ -184,7 +193,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         using var admin = await AdminAsync(host);
         await LockAsync(host, victim);
 
-        (await other.GetAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await QueryAsync(other, victim)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await other.DeleteAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await StateAsync(admin, victim)).locked.Should().BeTrue();
     }
@@ -195,7 +204,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         using var host = Host();
         using var anonymous = NewClient(host);
 
-        (await anonymous.GetAsync(Q("a@struo.test"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await QueryAsync(anonymous, "a@struo.test")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await anonymous.DeleteAsync(Q("a@struo.test"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -225,10 +234,11 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         var unknown = $"nobody-{Guid.NewGuid():N}@struo.test";
         using var admin = await AdminAsync(host);
 
-        var knownResp = await admin.GetAsync(Q(known));
-        var unknownResp = await admin.GetAsync(Q(unknown));
-        unknownResp.StatusCode.Should().Be(knownResp.StatusCode);
-        (await unknownResp.Content.ReadAsStringAsync()).Should().Be(await knownResp.Content.ReadAsStringAsync());
+        var knownEntry = (await EntriesAsync(admin, known)).Single();
+        var unknownEntry = (await EntriesAsync(admin, unknown)).Single();
+        unknownEntry.GetProperty("locked").GetBoolean().Should().Be(knownEntry.GetProperty("locked").GetBoolean());
+        unknownEntry.GetProperty("retryAfterSeconds").GetInt32().Should().Be(knownEntry.GetProperty("retryAfterSeconds").GetInt32());
+        unknownEntry.GetProperty("clearable").GetBoolean().Should().Be(knownEntry.GetProperty("clearable").GetBoolean());
 
         (await admin.DeleteAsync(Q(unknown))).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
@@ -247,9 +257,8 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         using var host = Host();
         using var admin = await AdminAsync(host);
 
-        (await admin.GetAsync($"{Url}?email={Uri.EscapeDataString(email)}")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await QueryAsync(admin, email)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await admin.DeleteAsync($"{Url}?email={Uri.EscapeDataString(email)}")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        (await admin.GetAsync(Url)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await admin.DeleteAsync(Url)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -260,7 +269,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         using var admin = await AdminAsync(host);
         var tooLong = new string('a', 256) + "@struo.test";
 
-        (await admin.GetAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await QueryAsync(admin, tooLong)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await admin.DeleteAsync(Q(tooLong))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -325,15 +334,14 @@ public class LoginLocksEndpointTests(ApiFactory factory)
 
     private async Task<HttpClient> HelperAsync(WebApplicationFactory<Program> host)
     {
-        var (email, password, id) = await factory.SeedEditorAsync([], []);
-        await GrantUnlockAsync(id);
+        var (email, password, _) = await factory.SeedEditorAsync(["user"], ["user"]);
         return await LoggedInAsync(host, email, password);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task A_holder_cannot_clear_the_lock_on_a_super_admin_account(bool targetActive)
+    public async Task A_user_manager_cannot_clear_the_lock_on_a_super_admin_account(bool targetActive)
     {
         var logs = new CapturingProvider();
         using var host = Host(logs);
@@ -369,7 +377,7 @@ public class LoginLocksEndpointTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_holder_can_still_clear_a_normal_account_and_an_unknown_email()
+    public async Task A_user_manager_can_still_clear_a_normal_account_and_an_unknown_email()
     {
         using var host = Host();
         var (victim, _, _) = await factory.SeedEditorAsync([], []);
@@ -381,5 +389,111 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         (await helper.DeleteAsync(Q(victim))).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await helper.DeleteAsync(Q(unknown))).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await StateAsync(admin, victim)).locked.Should().BeFalse();
+    }
+
+    // ----------------------------------------------------------------- batch query
+
+    [Fact]
+    public async Task The_query_answers_in_request_order_with_one_entry_per_occurrence()
+    {
+        using var host = Host();
+        var (locked, _, _) = await factory.SeedEditorAsync([], []);
+        var (free, _, _) = await factory.SeedEditorAsync([], []);
+        var unknown = $"nobody-{Guid.NewGuid():N}@struo.test";
+        using var admin = await AdminAsync(host);
+        await LockAsync(host, locked);
+
+        var entries = await EntriesAsync(admin, free, locked, unknown, locked.ToUpperInvariant(), free);
+
+        entries.Select(e => e.GetProperty("email").GetString()).Should()
+            .Equal(free, locked, unknown, locked.ToUpperInvariant(), free);
+        entries.Select(e => e.GetProperty("locked").GetBoolean()).Should().Equal(false, true, false, true, false);
+        entries[1].GetProperty("retryAfterSeconds").GetInt32().Should().BeInRange(1, 300);
+        entries[0].GetProperty("retryAfterSeconds").GetInt32().Should().Be(0);
+        entries.Should().OnlyContain(e => e.GetProperty("clearable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Clearable_is_false_for_a_super_admin_account_unless_the_caller_is_a_super_admin()
+    {
+        using var host = Host();
+        var root = await SeedSuperAdminAsync();
+        var (plain, _, _) = await factory.SeedEditorAsync([], []);
+        using var helper = await HelperAsync(host);
+        using var admin = await AdminAsync(host);
+
+        var asManager = await EntriesAsync(helper, root.Email, plain);
+        asManager.Select(e => e.GetProperty("clearable").GetBoolean()).Should().Equal(false, true);
+
+        var asAdmin = await EntriesAsync(admin, root.Email, plain);
+        asAdmin.Select(e => e.GetProperty("clearable").GetBoolean()).Should().Equal(true, true);
+    }
+
+    [Fact]
+    public async Task A_query_looks_the_accounts_up_once_whatever_the_number_of_emails()
+    {
+        var counter = new DirectoryCalls();
+        using var host = Host().WithWebHostBuilder(b => b.ConfigureServices(services =>
+            services.AddScoped<ISuperAdminDirectory>(sp => new CountingDirectory(
+                new SqlSugarSuperAdminDirectory(sp.GetRequiredService<ISqlSugarClient>()), counter))));
+        using var helper = await HelperAsync(host);
+        var emails = Enumerable.Range(0, 100).Select(i => $"batch-{i}-{Guid.NewGuid():N}@struo.test").ToArray();
+
+        (await EntriesAsync(helper, emails)).Should().HaveCount(100);
+
+        counter.EmailLookups.Should().Be(1);
+    }
+
+    private sealed class DirectoryCalls { public int EmailLookups; }
+
+    private sealed class CountingDirectory(ISuperAdminDirectory inner, DirectoryCalls counter) : ISuperAdminDirectory
+    {
+        public Task<IReadOnlySet<Guid>> SuperAdminUserIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct = default) =>
+            inner.SuperAdminUserIdsAsync(userIds, ct);
+
+        public Task<IReadOnlySet<string>> SuperAdminEmailsAsync(IReadOnlyCollection<string> emails, CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref counter.EmailLookups);
+            return inner.SuperAdminEmailsAsync(emails, ct);
+        }
+
+        public Task<IReadOnlySet<Guid>> SuperAdminRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default) =>
+            inner.SuperAdminRoleIdsAsync(roleIds, ct);
+
+        public Task<IReadOnlySet<Guid>> ActiveSuperAdminUserIdsAsync(CancellationToken ct = default) =>
+            inner.ActiveSuperAdminUserIdsAsync(ct);
+    }
+
+    [Fact]
+    public async Task A_query_for_a_hundred_and_one_emails_is_400()
+    {
+        using var host = Host();
+        using var admin = await AdminAsync(host);
+        var emails = Enumerable.Range(0, 101).Select(i => $"e{i}@struo.test").ToArray();
+
+        var resp = await QueryAsync(admin, emails);
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await resp.Content.ReadAsStringAsync()).Should().Contain("BAD_USER_INPUT");
+    }
+
+    [Fact]
+    public async Task An_empty_or_missing_email_list_is_400()
+    {
+        using var host = Host();
+        using var admin = await AdminAsync(host);
+
+        (await QueryAsync(admin)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await admin.PostAsJsonAsync($"{Url}/query", new { })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await QueryAsync(admin, "ok@struo.test", "  ")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task The_single_lookup_endpoint_is_gone()
+    {
+        using var host = Host();
+        using var admin = await AdminAsync(host);
+
+        (await admin.GetAsync(Q("a@struo.test"))).StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
     }
 }

@@ -26,12 +26,12 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<Struo.Application.Security.IPasswordHasher, Identity.Argon2idPasswordHasher>();
         services.AddScoped<Struo.Application.Security.IUserCredentialStore, Identity.SqlSugarUserCredentialStore>();
         services.AddScoped<Struo.Application.Security.IRolePermissionStore, Identity.SqlSugarRolePermissionStore>();
+        services.AddScoped<Struo.Application.Security.ISuperAdminDirectory, Identity.SqlSugarSuperAdminDirectory>();
+        services.AddScoped<Struo.Application.Security.SuperAdminGuard>();
         // Identity administration seams: UsersController/RolesController/AuthController depend on
         // these interfaces instead of persisting directly against ISqlSugarClient.
         services.AddScoped<Struo.Application.Security.IUserAccountStore, Identity.SqlSugarUserAccountStore>();
         services.AddScoped<Struo.Application.Security.IPermissionGrantStore, Identity.SqlSugarPermissionGrantStore>();
-        services.AddScoped<Struo.Application.Security.IRoleCapabilityStore, Identity.SqlSugarRoleCapabilityStore>();
-        services.AddSingleton<Struo.Application.Security.SystemCapabilityCatalog>();
         services.AddScoped<Struo.Application.Security.IAuthService, Struo.Application.Security.AuthService>();
         services.AddScoped<Struo.Application.Security.IExternalUserStore, Identity.SqlSugarExternalUserStore>();
         services.AddScoped<Struo.Application.Security.IExternalLoginService, Struo.Application.Security.ExternalLoginService>();

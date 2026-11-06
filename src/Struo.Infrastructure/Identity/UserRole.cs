@@ -15,7 +15,7 @@ namespace Struo.Infrastructure.Identity;
 [SugarIndex("ix_{table}_userid", nameof(UserId), OrderByType.Asc)]
 [SugarIndex("ix_{table}_roleid", nameof(RoleId), OrderByType.Asc)]
 [SugarIndex("ux_{table}_user_role", nameof(UserId), OrderByType.Asc, nameof(RoleId), OrderByType.Asc, true)]
-[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId), AdminOnly = true, Hidden = true)]
+[CmsCollection("UserRole", Group = "System", DefaultDisplayField = nameof(UserId), Hidden = true)]
 public sealed class UserRole : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

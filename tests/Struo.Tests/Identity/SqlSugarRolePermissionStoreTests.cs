@@ -16,7 +16,7 @@ public class SqlSugarRolePermissionStoreTests
         var db = SqlSugarClientFactory.Create(
             file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
-        db.CodeFirst.InitTables(typeof(User), typeof(Role), typeof(Permission), typeof(UserRole), typeof(RoleCapability));
+        db.CodeFirst.InitTables(typeof(User), typeof(Role), typeof(Permission), typeof(UserRole));
         return db;
     }
 
@@ -37,46 +37,6 @@ public class SqlSugarRolePermissionStoreTests
 
         data.Roles.Should().ContainSingle(r => r.Name == "public");
         data.Permissions.Should().ContainSingle(p => p.Collection == "article" && p.CanRead);
-    }
-
-    // A capability row on the public role (written around the API) must never resolve: an anonymous
-    // caller would otherwise hold it.
-    [Fact]
-    public async Task Capability_rows_on_the_public_role_are_ignored_for_every_caller()
-    {
-        using var file = TestBackend.CreateUnitDatabase();
-        var db = NewDb(file);
-        var userId = Guid.CreateVersion7();
-        var pub = new Role { Id = Guid.CreateVersion7(), Name = "public" };
-        var editor = new Role { Id = Guid.CreateVersion7(), Name = "editor" };
-        await db.Insertable(new[] { pub, editor }).ExecuteCommandAsync();
-        await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = userId, RoleId = editor.Id }).ExecuteCommandAsync();
-        await db.Insertable(new RoleCapability { Id = Guid.CreateVersion7(), RoleId = pub.Id, Capability = "login.unlock" }).ExecuteCommandAsync();
-        await db.Insertable(new RoleCapability { Id = Guid.CreateVersion7(), RoleId = editor.Id, Capability = "reports.export" }).ExecuteCommandAsync();
-        var store = new SqlSugarRolePermissionStore(db);
-
-        PermissionResolver.Resolve(await store.LoadForUserAsync(null)).HasCapability("login.unlock").Should().BeFalse();
-        var signedIn = PermissionResolver.Resolve(await store.LoadForUserAsync(userId));
-        signedIn.HasCapability("login.unlock").Should().BeFalse();
-        signedIn.HasCapability("reports.export").Should().BeTrue();
-        PermissionResolver.Resolve(await store.LoadForRolesAsync([editor.Id])).HasCapability("login.unlock").Should().BeFalse();
-    }
-
-    // Anonymous callers are the hot path: with only the public role there is no capability to read, so
-    // the role_capabilities table is never queried (dropping it would make the query throw).
-    [Fact]
-    public async Task Anonymous_resolution_does_not_query_capabilities_and_holds_none()
-    {
-        using var file = TestBackend.CreateUnitDatabase();
-        var db = NewDb(file);
-        await db.Insertable(new Role { Id = Guid.CreateVersion7(), Name = "public" }).ExecuteCommandAsync();
-        db.DbMaintenance.DropTable<RoleCapability>();
-        var store = new SqlSugarRolePermissionStore(db);
-
-        var data = await store.LoadForUserAsync(null);
-
-        data.Capabilities.Should().BeEmpty();
-        PermissionResolver.Resolve(data).HasCapability("login.unlock").Should().BeFalse();
     }
 
     [Fact]

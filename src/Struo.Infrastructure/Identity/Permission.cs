@@ -12,7 +12,7 @@ namespace Struo.Infrastructure.Identity;
 // the core migration creates this index.
 [SugarIndex("ix_{table}_roleid", nameof(RoleId), OrderByType.Asc)]
 [SugarIndex("ux_{table}_role_collection", nameof(RoleId), OrderByType.Asc, nameof(Collection), OrderByType.Asc, true)]
-[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), AdminOnly = true, Hidden = true)]
+[CmsCollection("Permission", Group = "System", DefaultDisplayField = nameof(Collection), Hidden = true)]
 public sealed class Permission : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }

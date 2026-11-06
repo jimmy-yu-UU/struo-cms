@@ -38,15 +38,4 @@ public class RbacEntitiesMetadataTests
         var metas = MetadataScanner.ScanTypes([typeof(Role), typeof(User)]);
         metas.Should().OnlyContain(m => !m.Hidden);
     }
-
-    [Fact]
-    public void RoleCapability_collection_is_admin_only_hidden_and_carries_role_and_capability()
-    {
-        var meta = MetadataScanner.ScanTypes([typeof(RoleCapability)]).Single();
-
-        meta.Name.Should().Be("roleCapability");
-        meta.AdminOnly.Should().BeTrue();
-        meta.Hidden.Should().BeTrue();
-        meta.Fields.Select(f => f.Name).Should().Contain(["roleId", "capability"]);
-    }
 }

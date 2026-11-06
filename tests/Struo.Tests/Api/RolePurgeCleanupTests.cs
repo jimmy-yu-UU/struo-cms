@@ -13,12 +13,12 @@ namespace Struo.Tests.Api;
 
 /// <summary>
 /// Deleting a role (not soft-deletable, so every delete is a purge) removes the rows that name it in
-/// <c>permissions</c>, <c>user_roles</c> and <c>role_capabilities</c>; other roles' rows stay.
+/// <c>permissions</c> and <c>user_roles</c>; other roles' rows stay.
 /// </summary>
 [Collection("ApiIntegration")]
 public class RolePurgeCleanupTests(ApiFactory factory)
 {
-    private sealed record RoleRows(int Permissions, int UserRoles, int Capabilities);
+    private sealed record RoleRows(int Permissions, int UserRoles);
 
     private static async Task<Guid> CreateRoleAsync(HttpClient admin)
     {
@@ -46,10 +46,6 @@ public class RolePurgeCleanupTests(ApiFactory factory)
         }).ExecuteCommandAsync();
         await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = userId, RoleId = roleId })
             .ExecuteCommandAsync();
-        await db.Insertable(new RoleCapability
-        {
-            Id = Guid.CreateVersion7(), RoleId = roleId, Capability = "login.unlock",
-        }).ExecuteCommandAsync();
     }
 
     private async Task<RoleRows> CountAsync(Guid roleId)
@@ -58,8 +54,7 @@ public class RolePurgeCleanupTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         return new RoleRows(
             await db.Queryable<Permission>().Where(p => p.RoleId == roleId).CountAsync(),
-            await db.Queryable<UserRole>().Where(ur => ur.RoleId == roleId).CountAsync(),
-            await db.Queryable<RoleCapability>().Where(c => c.RoleId == roleId).CountAsync());
+            await db.Queryable<UserRole>().Where(ur => ur.RoleId == roleId).CountAsync());
     }
 
     private async Task<(Guid RoleId, Guid UserId)> ArrangeAsync(HttpClient admin)
@@ -80,8 +75,8 @@ public class RolePurgeCleanupTests(ApiFactory factory)
 
         (await admin.DeleteAsync($"/api/items/role/{roleId}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0, 0));
-        (await CountAsync(otherId)).Should().Be(new RoleRows(1, 1, 1));
+        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0));
+        (await CountAsync(otherId)).Should().Be(new RoleRows(1, 1));
     }
 
     // Role is not soft-deletable, so a plain DELETE is a purge too: there is no trash state to keep rows for.
@@ -93,7 +88,7 @@ public class RolePurgeCleanupTests(ApiFactory factory)
 
         (await admin.DeleteAsync($"/api/items/role/{roleId}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0, 0));
+        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0));
     }
 
     [Fact]
@@ -111,8 +106,8 @@ public class RolePurgeCleanupTests(ApiFactory factory)
         var body = await resp.Content.ReadAsStringAsync();
         JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("deleteRole").GetBoolean()
             .Should().BeTrue(body);
-        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0, 0));
-        (await CountAsync(otherId)).Should().Be(new RoleRows(1, 1, 1));
+        (await CountAsync(roleId)).Should().Be(new RoleRows(0, 0));
+        (await CountAsync(otherId)).Should().Be(new RoleRows(1, 1));
     }
 
     [Fact]
@@ -145,9 +140,8 @@ public class RolePurgeCleanupTests(ApiFactory factory)
 
         await db.Ado.BeginTranAsync();
         await scope.ServiceProvider.GetRequiredService<IPermissionGrantStore>().DeleteForRoleAsync(roleId);
-        await scope.ServiceProvider.GetRequiredService<IRoleCapabilityStore>().DeleteForRoleAsync(roleId);
         await db.Ado.RollbackTranAsync();
 
-        (await CountAsync(roleId)).Should().Be(new RoleRows(1, 1, 1));
+        (await CountAsync(roleId)).Should().Be(new RoleRows(1, 1));
     }
 }
