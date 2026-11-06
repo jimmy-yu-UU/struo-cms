@@ -35,6 +35,14 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
             throw Refusal($"change {what}the public role");
     }
 
+    /// <summary>Refuses (403) a caller who is not a super-admin when <paramref name="name"/> is the name of the
+    /// <c>public</c> role. A role named like it would become the permission floor every caller holds, and could
+    /// not be deleted.</summary>
+    public void RequireRoleNameAllowed(string? name)
+    {
+        if (!CallerIsSuperAdmin && directory.IsPublicRoleName(name)) throw Refusal("give a role the name of the public role");
+    }
+
     /// <summary>Whether <paramref name="roleId"/> is the <c>public</c> role.</summary>
     public async Task<bool> IsPublicRoleAsync(Guid roleId, CancellationToken ct = default) =>
         (await directory.PublicRoleIdsAsync([roleId], ct)).Contains(roleId);

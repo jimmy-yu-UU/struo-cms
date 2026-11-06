@@ -27,7 +27,7 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
-import { LANGUAGE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { CreatedUser } from '@/api/usersApi'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
@@ -161,6 +161,13 @@ function isProtectedRow(row: Row): boolean {
   return lockStates.value[emailOf(row)]?.clearable === false
 }
 
+// A super-admin role and the public role cannot be deleted by anyone; the reason, when the row is one.
+function undeletableRoleHint(row: Row): string | undefined {
+  if (name.value !== ROLE_COLLECTION) return undefined
+  if (row.isSuperAdmin === true) return t('superAdmin.roleUndeletable')
+  return row.name === PUBLIC_ROLE_NAME ? t('superAdmin.publicRoleUndeletable') : undefined
+}
+
 async function onUnlock(row: Row): Promise<void> {
   const email = emailOf(row)
   if (unlockingEmail.value !== null) return
@@ -212,8 +219,9 @@ function actionButtons(row: Row) {
     if (canDelete.value) {
       buttons.push(h(Button, {
         variant: 'ghost', size: 'icon', 'data-testid': 'row-delete',
-        disabled: isProtectedRow(row),
-        title: isProtectedRow(row) ? t('superAdmin.deleteAccountHint') : t('collectionList.delete'),
+        disabled: isProtectedRow(row) || undeletableRoleHint(row) !== undefined,
+        title: undeletableRoleHint(row)
+          ?? (isProtectedRow(row) ? t('superAdmin.deleteAccountHint') : t('collectionList.delete')),
         'aria-label': t('collectionList.delete'),
         onClick: () => onDelete(row),
       }, () => h(Trash2, { class: 'size-4 text-destructive' })))

@@ -22,6 +22,11 @@ public interface ISuperAdminDirectory
     /// every caller holds; found by the name <c>IRolePermissionStore</c> resolves it by.</summary>
     Task<IReadOnlySet<Guid>> PublicRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default);
 
+    /// <summary>Whether <paramref name="name"/> is the name of the <c>public</c> role, compared without regard to
+    /// capitalization or surrounding spaces, so a variant that a case-insensitive database would treat as
+    /// the same name is one too.</summary>
+    bool IsPublicRoleName(string? name);
+
     /// <summary>Takes a row lock on every super-admin role until the surrounding transaction ends, so two
     /// transactions that each count the active members before changing them run one after the other.</summary>
     Task LockSuperAdminRolesAsync(CancellationToken ct = default);

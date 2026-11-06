@@ -651,6 +651,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         public Task<IReadOnlySet<Guid>> PublicRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default) =>
             inner.PublicRoleIdsAsync(roleIds, ct);
 
+        public bool IsPublicRoleName(string? name) => inner.IsPublicRoleName(name);
+
         public Task LockSuperAdminRolesAsync(CancellationToken ct = default)
         {
             if (gate.Reached.Task.IsCompleted) gate.SecondAtLock.TrySetResult();
@@ -807,5 +809,50 @@ public class SuperAdminProtectionTests(ApiFactory factory)
 
         var undeletable = await GraphQlAsync(admin, "mutation { deleteRole(id: \"" + publicRole + "\", purge: true) }");
         FirstError(undeletable).Should().Contain("public role cannot be deleted");
+    }
+
+    // ---------------------------------------------------------------- naming a role after the floor
+
+    // If the `public` role is missing from a database, a role named like it would become the anonymous floor and
+    // could never be deleted. Only a super-admin may give a role that name, in any capitalization.
+    [Theory]
+    [InlineData("public")]
+    [InlineData("Public")]
+    [InlineData("  PUBLIC  ")]
+    public async Task A_caller_without_super_admin_cannot_create_or_rename_a_role_to_the_floor_name(string name)
+    {
+        var ordinary = await NormalRoleAsync();
+        using var manager = await RoleManagerAsync();
+
+        var create = await manager.PostAsJsonAsync("/api/items/role", new { name });
+        create.StatusCode.Should().Be(HttpStatusCode.Forbidden, await create.Content.ReadAsStringAsync());
+        (await create.Content.ReadAsStringAsync()).Should().Contain("Only a super-admin");
+
+        var rename = await Put(manager, $"/api/items/role/{ordinary}", new { name });
+        rename.StatusCode.Should().Be(HttpStatusCode.Forbidden, await rename.Content.ReadAsStringAsync());
+
+        var graphqlCreate = await GraphQlAsync(manager, "mutation { createRole(input: { name: \"" + name + "\" }) { id } }");
+        FirstError(graphqlCreate).Should().Contain("Only a super-admin");
+        var graphqlRename = await GraphQlAsync(manager,
+            "mutation { updateRole(id: \"" + ordinary + "\", input: { name: \"" + name + "\" }) { id } }");
+        FirstError(graphqlRename).Should().Contain("Only a super-admin");
+
+        (await WithDbAsync(db => db.Queryable<Role>().Where(r => r.Id == ordinary).FirstAsync())).Name
+            .Should().StartWith("plain-");
+    }
+
+    [Fact]
+    public async Task Ordinary_role_names_stay_open_to_a_role_writer_and_a_super_admin_is_not_refused()
+    {
+        var ordinary = await NormalRoleAsync();
+        using var manager = await RoleManagerAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
+
+        await ShouldBeAsync(manager.PostAsJsonAsync("/api/items/role", new { name = $"publication-{Guid.NewGuid():N}" }), HttpStatusCode.Created);
+        await ShouldBeAsync(Put(manager, $"/api/items/role/{ordinary}", new { name = $"renamed-{Guid.NewGuid():N}" }), HttpStatusCode.OK);
+
+        // The seeded public role exists, so the name collides; the answer is the uniqueness conflict, not a refusal.
+        var superAdminCreate = await admin.PostAsJsonAsync("/api/items/role", new { name = "Public " });
+        superAdminCreate.StatusCode.Should().NotBe(HttpStatusCode.Forbidden, await superAdminCreate.Content.ReadAsStringAsync());
     }
 }

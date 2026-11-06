@@ -54,6 +54,9 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
         return found.ToHashSet();
     }
 
+    public bool IsPublicRoleName(string? name) =>
+        name is not null && string.Equals(name.Trim(), SqlSugarRolePermissionStore.PublicRoleName, StringComparison.OrdinalIgnoreCase);
+
     // A typed update that leaves every column as it is: the database still locks the matched rows, on every
     // backend, until the transaction ends.
     public async Task LockSuperAdminRolesAsync(CancellationToken ct = default) =>

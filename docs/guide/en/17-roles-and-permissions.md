@@ -137,7 +137,9 @@ role), a super-admin role, or the `public` role. The refused operations are:
 - updating, restoring or reverting a super-admin role or the `public` role, and writing the permission
   grants of either;
 - adding a membership of a super-admin role, or removing one, by any path: the Roles field, a
-  `userRole` row, GraphQL.
+  `userRole` row, GraphQL;
+- creating a role named `public`, or renaming a role to that name, whatever its capitalization and
+  surrounding spaces: a role with that name would become the permission floor every caller holds.
 
 Reading stays ordinary: read on `user` shows a super-admin account's token state and effective
 permissions. A super-admin passes all of these checks.

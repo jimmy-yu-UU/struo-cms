@@ -28,7 +28,11 @@ const i18n = createI18n({
         superAdminOnly: 'Only a super-admin can clear this lock.', confirmHeader: 'Clear login lock',
         confirmMessage: 'Clear the login lock on {email}?', unlocked: 'Lock cleared', unlockFailed: 'Failed to clear the lock',
       },
-      superAdmin: { deleteAccountHint: 'Only a super-admin can delete a super-admin account.' },
+      superAdmin: {
+        deleteAccountHint: 'Only a super-admin can delete a super-admin account.',
+        roleUndeletable: 'A super-admin role cannot be deleted.',
+        publicRoleUndeletable: 'The public role cannot be deleted.',
+      },
       filterBuilder: {
         addCondition: 'Add condition', clear: 'Clear conditions', apply: 'Search', field: 'Field',
         operator: 'Operator', value: 'Value', remove: 'Remove condition',
@@ -271,5 +275,32 @@ describe('CollectionListView login lock column', () => {
     expect(w.findAll('[data-testid="lock-unavailable"]')).toHaveLength(ROWS.length)
     expect(w.find('[data-testid="lock-badge"]').exists()).toBe(false)
     expect(w.find('[role="alert"]').exists()).toBe(false)
+  })
+  it('disables the row delete of a super-admin role and of the public role, with the reason as tooltip', async () => {
+    seed('role', { superAdmin: false, grants: WRITER })
+    vi.mocked(itemsApi.list).mockResolvedValue({
+      data: [
+        { id: '1', name: 'editor', isSuperAdmin: false },
+        { id: '2', name: 'root', isSuperAdmin: true },
+        { id: '3', name: 'public', isSuperAdmin: false },
+      ],
+      total: 3,
+    })
+    const w = mountView()
+    await flushPromises()
+
+    const deletes = w.findAll('[data-testid="row-delete"]')
+    expect(deletes.map((d) => d.attributes('disabled') !== undefined)).toEqual([false, true, true])
+    expect(deletes[1].attributes('title')).toBe('A super-admin role cannot be deleted.')
+    expect(deletes[2].attributes('title')).toBe('The public role cannot be deleted.')
+  })
+
+  it('keeps the row delete of every other collection as it is', async () => {
+    seed('article', { superAdmin: false, grants: WRITER })
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: '1', name: 'public', isSuperAdmin: true }], total: 1 })
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.get('[data-testid="row-delete"]').attributes('disabled')).toBeUndefined()
   })
 })
