@@ -119,14 +119,14 @@ public sealed class LimitedReadStream(Stream inner, long limit) : Stream
         }
     }
 
-    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
-        await ReadAsync(buffer.AsMemory(offset, count), ct);
+    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
 
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         try
         {
-            return Count(await inner.ReadAsync(buffer, ct));
+            return Count(await inner.ReadAsync(buffer, cancellationToken));
         }
         catch (BadHttpRequestException e) when (IsTooLarge(e))
         {
