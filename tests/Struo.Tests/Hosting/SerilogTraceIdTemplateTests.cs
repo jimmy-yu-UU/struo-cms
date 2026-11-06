@@ -34,7 +34,7 @@ public class SerilogTraceIdTemplateTests
         templates.Should().NotBeEmpty();
         foreach (var (sink, template) in templates)
         {
-            var writer = new StringWriter();
+            using var writer = new StringWriter();
             new MessageTemplateTextFormatter(template).Format(captured!, writer);
             writer.ToString().Should().Contain(activity.TraceId.ToHexString(), $"the {sink} sink template must print it");
         }

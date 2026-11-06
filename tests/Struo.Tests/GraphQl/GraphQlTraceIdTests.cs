@@ -4,6 +4,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using HotChocolate;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -73,8 +74,8 @@ public class GraphQlTraceIdEndpointTests(ApiFactory factory)
 {
     private readonly CapturingLogSink _sink = new();
 
-    private HttpClient Client() => factory.WithWebHostBuilder(b =>
-        b.ConfigureServices(s => s.AddSingleton<ILogEventSink>(_sink))).CreateClient();
+    private WebApplicationFactory<Program> Host() => factory.WithWebHostBuilder(b =>
+        b.ConfigureServices(s => s.AddSingleton<ILogEventSink>(_sink)));
 
     private static JsonElement FirstError(string json) =>
         JsonDocument.Parse(json).RootElement.TryGetProperty("errors", out var errors)
@@ -88,7 +89,8 @@ public class GraphQlTraceIdEndpointTests(ApiFactory factory)
         var query = "{ fxCategories { items { " + string.Concat(Enumerable.Repeat("parent { ", nested))
             + "name" + string.Concat(Enumerable.Repeat(" }", nested)) + " } } }";
 
-        var response = await Client().PostAsJsonAsync("/graphql", new { query });
+        using var host = Host();
+        var response = await host.CreateClient().PostAsJsonAsync("/graphql", new { query });
 
         var vbody = await response.Content.ReadAsStringAsync();
         Assert.True(FirstError(vbody).TryGetProperty("extensions", out var ex) && ex.TryGetProperty("traceId", out _), vbody);
@@ -100,7 +102,8 @@ public class GraphQlTraceIdEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Resolver_error_carries_the_trace_id_the_request_log_records()
     {
-        var response = await Client().PostAsJsonAsync("/graphql", new
+        using var host = Host();
+        var response = await host.CreateClient().PostAsJsonAsync("/graphql", new
         {
             query = "{ fxArticles(filter: { ghost: { _eq: \"x\" } }) { items { id } } }",
         });

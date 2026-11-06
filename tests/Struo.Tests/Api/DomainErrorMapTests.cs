@@ -184,4 +184,25 @@ public class DomainErrorMapTests
         DomainErrorMap.StatusFor("SEARCH_UNAVAILABLE").Should().Be(503);
         ErrorCodes.ForStatus(503).Should().Be("SEARCH_UNAVAILABLE");
     }
+
+    [Fact]
+    public void Kestrel_413_maps_to_PAYLOAD_TOO_LARGE_with_a_fixed_message()
+    {
+        var (code, message) = DomainErrorMap.Map(
+            new Microsoft.AspNetCore.Http.BadHttpRequestException("internal detail", 413), authenticated: true);
+
+        code.Should().Be("PAYLOAD_TOO_LARGE");
+        message.Should().Be("Request body is too large.");
+        DomainErrorMap.StatusFor(code).Should().Be(413);
+    }
+
+    [Fact]
+    public void Another_BadHttpRequestException_stays_masked_internal()
+    {
+        var (code, message) = DomainErrorMap.Map(
+            new Microsoft.AspNetCore.Http.BadHttpRequestException("bad chunk", 400), authenticated: true);
+
+        code.Should().Be("INTERNAL_SERVER_ERROR");
+        message.Should().Be("An internal error occurred.");
+    }
 }

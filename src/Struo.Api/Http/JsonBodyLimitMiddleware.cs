@@ -82,42 +82,73 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
             || mediaType.Equals("text/json", StringComparison.OrdinalIgnoreCase)
             || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
     }
+}
 
-    private sealed class LimitedReadStream(Stream inner, long limit) : Stream
+/// <summary>
+/// Read-only stream that throws <see cref="PayloadTooLargeException"/> once more than <c>limit</c> bytes have
+/// been read, and flags <see cref="Exceeded"/>. Kestrel, when it enforces the same limit through
+/// <c>IHttpMaxRequestBodySizeFeature</c>, throws its own 413 first; that one is flagged and rethrown, so
+/// the feature stays as a guard and <see cref="Exceeded"/> is set either way.
+/// </summary>
+public sealed class LimitedReadStream(Stream inner, long limit) : Stream
+{
+    private long _read;
+
+    public bool Exceeded { get; private set; }
+
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position
     {
-        private long _read;
-
-        public bool Exceeded { get; private set; }
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
-        }
-
-        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
-
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
-            Count(await inner.ReadAsync(buffer.AsMemory(offset, count), ct));
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
-            Count(await inner.ReadAsync(buffer, ct));
-
-        private int Count(int read)
-        {
-            _read += read;
-            if (_read <= limit) return read;
-            Exceeded = true;
-            throw new PayloadTooLargeException(Message(limit));
-        }
-
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
     }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        try
+        {
+            return Count(inner.Read(buffer, offset, count));
+        }
+        catch (BadHttpRequestException e) when (IsTooLarge(e))
+        {
+            Exceeded = true;
+            throw;
+        }
+    }
+
+    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+        await ReadAsync(buffer.AsMemory(offset, count), ct);
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+    {
+        try
+        {
+            return Count(await inner.ReadAsync(buffer, ct));
+        }
+        catch (BadHttpRequestException e) when (IsTooLarge(e))
+        {
+            Exceeded = true;
+            throw;
+        }
+    }
+
+    private static bool IsTooLarge(BadHttpRequestException e) =>
+        e.StatusCode == StatusCodes.Status413PayloadTooLarge;
+
+    private int Count(int read)
+    {
+        _read += read;
+        if (_read <= limit) return read;
+        Exceeded = true;
+        throw new PayloadTooLargeException(JsonBodyLimitMiddleware.Message(limit));
+    }
+
+    // Read-only: there is nothing buffered to flush.
+    public override void Flush() { }
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

@@ -10,7 +10,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
-using Struo.Api.Http;
 using Struo.Application.Configuration;
 using Struo.Tests.Support;
 using Xunit;
@@ -95,7 +94,8 @@ public class JsonBodyLimitTests(ApiFactory factory)
     [Fact]
     public async Task Items_create_under_the_limit_is_not_rejected()
     {
-        var client = await AdminClientAsync(Host());
+        using var host = Host();
+        var client = await AdminClientAsync(host);
         var resp = await client.PostAsync("/api/items/fxArticle", Json(Limit - 200));
         resp.StatusCode.Should().NotBe(HttpStatusCode.RequestEntityTooLarge);
     }
@@ -103,14 +103,16 @@ public class JsonBodyLimitTests(ApiFactory factory)
     [Fact]
     public async Task Items_create_over_the_limit_by_content_length_is_413()
     {
-        var client = await AdminClientAsync(Host());
+        using var host = Host();
+        var client = await AdminClientAsync(host);
         await AssertPayloadTooLargeEnvelopeAsync(await client.PostAsync("/api/items/fxArticle", Json(Limit + 200)));
     }
 
     [Fact]
     public async Task Another_json_endpoint_over_the_limit_is_413()
     {
-        var client = Host().CreateClient();
+        using var host = Host();
+        var client = host.CreateClient();
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
         var resp = await client.PostAsJsonAsync("/api/auth/login",
             new { email = new string('a', Limit * 2) + "@x.test", password = "wrongwrong" });
@@ -120,7 +122,8 @@ public class JsonBodyLimitTests(ApiFactory factory)
     [Fact]
     public async Task Chunked_body_without_content_length_over_the_limit_is_413()
     {
-        var client = await AdminClientAsync(Host());
+        using var host = Host();
+        var client = await AdminClientAsync(host);
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/fxArticle")
         {
             Content = UnknownLengthContent.Of(Limit * 3),
@@ -134,7 +137,8 @@ public class JsonBodyLimitTests(ApiFactory factory)
     [Fact]
     public async Task Chunked_body_under_the_limit_is_not_rejected()
     {
-        var client = await AdminClientAsync(Host());
+        using var host = Host();
+        var client = await AdminClientAsync(host);
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/fxArticle")
         {
             Content = UnknownLengthContent.Of(Limit / 2),
@@ -147,7 +151,8 @@ public class JsonBodyLimitTests(ApiFactory factory)
     [Fact]
     public async Task Graphql_under_the_limit_is_served()
     {
-        var resp = await Host().CreateClient().PostAsJsonAsync("/graphql", new { query = "{ __typename }" });
+        using var host = Host();
+        var resp = await host.CreateClient().PostAsJsonAsync("/graphql", new { query = "{ __typename }" });
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -155,7 +160,8 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Graphql_over_the_limit_is_413_with_a_graphql_error()
     {
         var query = "{ __typename } # " + new string('a', Limit * 2);
-        var resp = await Host().CreateClient().PostAsJsonAsync("/graphql", new { query });
+        using var host = Host();
+        var resp = await host.CreateClient().PostAsJsonAsync("/graphql", new { query });
         await AssertGraphQlPayloadTooLargeAsync(resp);
     }
 
@@ -172,13 +178,15 @@ public class JsonBodyLimitTests(ApiFactory factory)
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         request.Headers.TransferEncodingChunked = true;
 
-        await AssertGraphQlPayloadTooLargeAsync(await Host().CreateClient().SendAsync(request));
+        using var host = Host();
+        await AssertGraphQlPayloadTooLargeAsync(await host.CreateClient().SendAsync(request));
     }
 
     [Fact]
     public async Task Multipart_upload_above_the_json_limit_still_works()
     {
-        var client = await AdminClientAsync(Host());
+        using var host = Host();
+        var client = await AdminClientAsync(host);
         var file = new ByteArrayContent(Encoding.UTF8.GetBytes(new string('x', Limit * 4)));
         file.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         var content = new MultipartFormDataContent { { file, "file", "big.txt" } };
