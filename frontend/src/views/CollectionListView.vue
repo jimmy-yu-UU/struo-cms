@@ -19,6 +19,9 @@ import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { useConfirm } from '@/composables/useConfirm'
 import { itemsApi } from '../api/itemsApi'
+import { loginLocksApi, type LoginLockState } from '../api/loginLocksApi'
+import { traceIdDetail } from '../api/apiClient'
+import { useToast } from '@/composables/useToast'
 import { selectListColumns, type ColumnDef as ListColumn } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
@@ -37,6 +40,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const toast = useToast()
 const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
@@ -44,14 +48,12 @@ const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
-// Users are created through a dialog backed by POST /api/users (super-admin only), not the generic
-// item form, so `user` is creatable for super-admins alone.
+// Users are created through a dialog backed by POST /api/users (write on the user collection), not the
+// generic item form, so `user` is creatable whatever `creatable` says.
 const isUserCollection = computed(() => name.value === USER_COLLECTION)
 // Nothing is creatable until the collection's meta has loaded: `creatable` is unknown before then.
 const canCreate = computed(() => !!meta.value && canWrite.value && (
-  isUserCollection.value
-    ? auth.user?.isSuperAdmin === true
-    : meta.value.creatable !== false
+  isUserCollection.value || meta.value.creatable !== false
 ))
 const createUserOpen = ref(false)
 const mode = ref<'active' | 'trash'>('active')
@@ -114,6 +116,90 @@ const filterFields = computed<FilterField[]>(() => {
   return [...listed, ...searchableOnly]
 })
 
+// ---- login lock column (user collection) ----
+// One batch query per loaded page. A failing query leaves the list as it is and marks the column
+// unavailable.
+const showLockColumn = computed(() => isUserCollection.value && mode.value === 'active' && canRead.value)
+const lockStates = ref<Record<string, LoginLockState>>({})
+const lockFailed = ref(false)
+const unlockingEmail = ref<string | null>(null)
+const lockLoad = createLatestWins()
+
+function emailOf(row: Row): string {
+  return String(row.email ?? '')
+}
+
+async function loadLocks(): Promise<void> {
+  const token = lockLoad.next()
+  lockFailed.value = false
+  const emails = showLockColumn.value ? rows.value.map(emailOf).filter((e) => e !== '') : []
+  if (emails.length === 0) {
+    lockStates.value = {}
+    return
+  }
+  try {
+    const states = await loginLocksApi.query(emails)
+    if (!lockLoad.isCurrent(token)) return
+    lockStates.value = Object.fromEntries(states.map((s) => [s.email, s]))
+  } catch {
+    if (!lockLoad.isCurrent(token)) return
+    lockStates.value = {}
+    lockFailed.value = true
+  }
+}
+
+// Seconds under a minute, minutes (rounded up) from a minute on.
+function lockRemaining(seconds: number): string {
+  return seconds < 60
+    ? t('loginLocks.durationSeconds', { n: seconds })
+    : t('loginLocks.durationMinutes', { n: Math.ceil(seconds / 60) })
+}
+
+// A super-admin account is the one a caller who is not a super-admin cannot clear; the same flag marks
+// the row whose delete is refused to that caller.
+function isProtectedRow(row: Row): boolean {
+  return lockStates.value[emailOf(row)]?.clearable === false
+}
+
+async function onUnlock(row: Row): Promise<void> {
+  const email = emailOf(row)
+  if (unlockingEmail.value !== null) return
+  const header = t('loginLocks.confirmHeader')
+  if (!(await confirm.require({ header, message: t('loginLocks.confirmMessage', { email }), severity: 'danger' }))) return
+  unlockingEmail.value = email
+  try {
+    await loginLocksApi.clear(email)
+    toast.add({ severity: 'success', summary: t('loginLocks.unlocked'), life: 3000 })
+    await loadLocks()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('loginLocks.unlockFailed'), detail: traceIdDetail(e), life: 3500 })
+  } finally {
+    unlockingEmail.value = null
+  }
+}
+
+function lockCell(row: Row) {
+  if (lockFailed.value) {
+    return h('span', { class: 'text-muted-foreground', title: t('loginLocks.unavailableHint'), 'data-testid': 'lock-unavailable' },
+      t('loginLocks.unavailable'))
+  }
+  const state = lockStates.value[emailOf(row)]
+  if (!state?.locked) return h('span', { class: 'text-muted-foreground', 'data-testid': 'lock-none' }, '—')
+  const parts = [h(Badge, { variant: 'outline', class: 'border-warning bg-warning/10', 'data-testid': 'lock-badge' },
+    () => t('loginLocks.lockedFor', { time: lockRemaining(state.retryAfterSeconds) }))]
+  if (canWrite.value) {
+    const busy = unlockingEmail.value === emailOf(row)
+    parts.push(h(Button, {
+      variant: 'outline', size: 'sm', 'data-testid': 'lock-unlock',
+      disabled: !state.clearable || busy,
+      title: state.clearable ? undefined : t('loginLocks.superAdminOnly'),
+      'aria-label': t('loginLocks.unlockLabel', { email: emailOf(row) }),
+      onClick: () => onUnlock(row),
+    }, () => (busy ? t('loginLocks.unlocking') : t('loginLocks.unlock'))))
+  }
+  return h('div', { class: 'flex items-center gap-2' }, parts)
+}
+
 function actionButtons(row: Row) {
   const buttons = []
   if (mode.value === 'active') {
@@ -126,7 +212,9 @@ function actionButtons(row: Row) {
     if (canDelete.value) {
       buttons.push(h(Button, {
         variant: 'ghost', size: 'icon', 'data-testid': 'row-delete',
-        title: t('collectionList.delete'), 'aria-label': t('collectionList.delete'),
+        disabled: isProtectedRow(row),
+        title: isProtectedRow(row) ? t('superAdmin.deleteAccountHint') : t('collectionList.delete'),
+        'aria-label': t('collectionList.delete'),
         onClick: () => onDelete(row),
       }, () => h(Trash2, { class: 'size-4 text-destructive' })))
     }
@@ -181,6 +269,14 @@ const tableColumns = computed<DataTableColumn<Row>[]>(() => {
     })
   }
 
+  if (showLockColumn.value) {
+    cols.push({
+      id: 'loginLock',
+      header: t('loginLocks.column'),
+      cell: ({ row }) => lockCell(row.original),
+    })
+  }
+
   if (canRead.value || canDelete.value) {
     cols.push({
       id: 'actions',
@@ -222,11 +318,13 @@ async function loadItems(): Promise<void> {
     if (!listLoad.isCurrent(token)) return
     rows.value = res.data
     total.value = res.total
+    void loadLocks()
   } catch (e) {
     if (!listLoad.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('common.loadFailed')
     rows.value = []
     total.value = 0
+    lockStates.value = {}
   } finally {
     // Only the current load may clear the spinner; a stale response must not
     // turn off the spinner of the newer request still in flight.
@@ -324,7 +422,7 @@ onMounted(loadItems)
 
 defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
   canWrite, canCreate, createUserOpen, onUserCreated, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
-  error, cellValue, tableState, filters })
+  error, cellValue, tableState, filters, lockStates, lockFailed, onUnlock })
 </script>
 
 <template>

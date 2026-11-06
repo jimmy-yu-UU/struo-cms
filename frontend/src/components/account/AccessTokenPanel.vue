@@ -14,7 +14,10 @@ import { createLatestWins } from '../../lib/latestWins'
 // regenerate or revoke it. The last-used time is written by the API at most once a minute, so the
 // hint says it can trail the latest request. A freshly issued token is held in `issuedToken` only
 // while its dialog is open: the server keeps just the hash, and dismissing the dialog clears it.
-const props = defineProps<{ userId: string }>()
+// `manageable` false keeps the state readable and disables the actions; `disabledHint` says why.
+const props = withDefaults(defineProps<{ userId: string; manageable?: boolean; disabledHint?: string }>(), {
+  manageable: true, disabledHint: undefined,
+})
 
 const { t } = useI18n()
 const confirm = useConfirm()
@@ -124,10 +127,12 @@ defineExpose({ reload })
     </template>
 
     <div v-if="info" class="actions">
-      <Button type="button" variant="outline" :disabled="busy" @click="onGenerate">
+      <Button type="button" variant="outline" :disabled="busy || !manageable"
+              :title="manageable ? undefined : disabledHint" @click="onGenerate">
         {{ info.hasToken ? t('accessToken.regenerate') : t('accessToken.generate') }}
       </Button>
-      <Button v-if="info.hasToken" type="button" variant="outline" :disabled="busy" @click="onRevoke">
+      <Button v-if="info.hasToken" type="button" variant="outline" :disabled="busy || !manageable"
+              :title="manageable ? undefined : disabledHint" @click="onRevoke">
         {{ t('accessToken.revoke') }}
       </Button>
     </div>

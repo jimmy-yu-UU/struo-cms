@@ -28,7 +28,9 @@ const props = withDefaults(defineProps<{
   // multiple only. JunctionLinksEditor renders each selection as its own payload row and turns the
   // chips off; every other caller keeps them.
   showChips?: boolean
-}>(), { showChips: true })
+  // Returns a reason when an option cannot be chosen; the option is then disabled and carries it as a tooltip.
+  optionHint?: (raw: Record<string, unknown>) => string | null
+}>(), { showChips: true, optionHint: undefined })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 const { t } = useI18n()
@@ -116,6 +118,10 @@ const treeNodes = computed<TreeNode[]>(() => {
 
 function onChange(v: unknown): void {
   emit('update:modelValue', v)
+}
+
+function hintFor(opt: Option): string | null {
+  return props.optionHint ? props.optionHint(opt.raw) : null
 }
 
 // form/TreeSelect.vue takes and emits a plain key directly; no `{ [key]: true }` packing.
@@ -236,6 +242,8 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
               v-for="opt in displayOptions"
               :key="opt.id"
               :value="opt.id"
+              :disabled="hintFor(opt) !== null && !multipleSelected.includes(opt.id)"
+              :title="hintFor(opt) ?? undefined"
               @select.prevent="toggleValue(opt.id)"
             >
               {{ opt.label }}
@@ -271,7 +279,8 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
           />
           <ComboboxEmpty>{{ loading ? t('common.loading') : t('fields.noOptions') }}</ComboboxEmpty>
           <ComboboxViewport>
-            <ComboboxItem v-for="opt in displayOptions" :key="opt.id" :value="opt.id">
+            <ComboboxItem v-for="opt in displayOptions" :key="opt.id" :value="opt.id"
+                          :disabled="hintFor(opt) !== null" :title="hintFor(opt) ?? undefined">
               {{ opt.label }}
               <ComboboxItemIndicator><Check class="size-4" /></ComboboxItemIndicator>
             </ComboboxItem>

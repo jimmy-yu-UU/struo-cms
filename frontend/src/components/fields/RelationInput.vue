@@ -14,6 +14,7 @@ const props = defineProps<{
   disabled?: boolean
   parentId?: string
   excludeId?: string
+  optionHint?: (raw: Record<string, unknown>) => string | null
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
@@ -28,7 +29,7 @@ function update(v: unknown): void { emit('update:modelValue', v) }
 <template>
   <RelationPicker
     v-if="kind === 'dropdown'"
-    :relation="relation" :model-value="modelValue" :disabled="isDisabled"
+    :relation="relation" :model-value="modelValue" :disabled="isDisabled" :option-hint="optionHint"
     @update:model-value="update"
   />
   <JunctionLinksEditor
@@ -38,7 +39,7 @@ function update(v: unknown): void { emit('update:modelValue', v) }
   />
   <RelationPicker
     v-else-if="kind === 'tagSelect'"
-    :relation="relation" :model-value="modelValue" multiple :disabled="isDisabled"
+    :relation="relation" :model-value="modelValue" multiple :disabled="isDisabled" :option-hint="optionHint"
     @update:model-value="update"
   />
   <RelationPicker

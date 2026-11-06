@@ -2,8 +2,8 @@ import { test, expect } from './fixtures'
 import { type APIRequestContext, type Page } from '@playwright/test'
 import { e2ePassword } from './credentials'
 
-// Live gate: a super-admin gives a role the `login.unlock` capability in the role form; an account
-// is locked by wrong passwords; a user holding that role clears the lock on the Login locks page;
+// Live gate: a super-admin gives a role read and write on the user collection; an account is locked by
+// wrong passwords; a user holding that role clears the lock from the user list's Login lock column;
 // the locked account then signs in again.
 //
 // Every record is stamped and created through the API, and removed in `finally`. The accounts used
@@ -43,7 +43,7 @@ async function lockByWrongPasswords(anonymous: APIRequestContext, email: string)
   throw new Error(`The account was still not locked after ${MAX_ATTEMPTS} wrong passwords.`)
 }
 
-test('a role holding login.unlock lets its user clear an account lock in the admin UI', async ({ page, browser, playwright }) => {
+test('a role with write on the user collection lets its user clear an account lock from the user list', async ({ page, browser, playwright }) => {
   const created: Array<{ path: string }> = []
   const anonymous = await playwright.request.newContext()
   const unlockerContext = await browser.newContext()
@@ -73,29 +73,25 @@ test('a role holding login.unlock lets its user clear an account lock in the adm
     })
     expect(assign.ok()).toBe(true)
 
-    // The role form offers the capability; ticking it and saving gives the role login.unlock.
-    await page.goto(`/collections/role/${roleId}`)
-    await page.getByRole('checkbox', { name: 'Unlock logins' }).click()
-    await page.getByRole('button', { name: 'Save capabilities' }).click()
-    await expect(page.getByText('Capabilities saved')).toBeVisible()
-    const held = await page.request.get(`${API}/api/roles/${roleId}/capabilities`)
-    expect((await held.json()).data).toEqual(['login.unlock'])
+    // Read and write on the user collection are the grants that show and clear a lock.
+    const grants = await page.request.put(`${API}/api/roles/${roleId}/permissions`, {
+      data: [{ collection: 'user', canRead: true, canWrite: true, canDelete: false }], headers: CSRF,
+    })
+    expect(grants.ok()).toBe(true)
 
     await lockByWrongPasswords(anonymous, VICTIM_EMAIL)
 
-    // The holder of the role finds the page in the sidebar and clears the lock there.
+    // The holder of the role finds the victim's row in the user list and clears the lock there.
     const unlocker = await unlockerContext.newPage()
     await unlocker.addInitScript(() => {
       try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ }
     })
     await signIn(unlocker, UNLOCKER_EMAIL, ACCOUNT_PASSWORD)
-    await unlocker.locator('[data-sidebar="menu-sub-button"]', { hasText: 'Login locks' }).click()
-    await expect(unlocker).toHaveURL(/\/login-locks$/)
-    await unlocker.locator('input[type="email"]').fill(VICTIM_EMAIL)
-    await unlocker.getByRole('button', { name: 'Look up' }).click()
-    await expect(unlocker.getByText(/sign-in for this email is locked/)).toBeVisible()
-    await unlocker.getByRole('button', { name: 'Unlock', exact: true }).click()
-    await expect(unlocker.getByText('Password sign-in for this email is not locked.')).toBeVisible()
+    await unlocker.goto('/collections/user')
+    await unlocker.getByRole('button', { name: `Unlock ${VICTIM_EMAIL}` }).click()
+    await unlocker.getByRole('alertdialog', { name: 'Clear login lock' }).getByRole('button', { name: 'Confirm' }).click()
+    await expect(unlocker.getByText('Lock cleared')).toBeVisible()
+    await expect(unlocker.getByRole('button', { name: `Unlock ${VICTIM_EMAIL}` })).toHaveCount(0)
 
     const after = await anonymous.post(`${API}/api/auth/login`, {
       data: { email: VICTIM_EMAIL, password: ACCOUNT_PASSWORD }, headers: CSRF,

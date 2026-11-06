@@ -433,6 +433,29 @@ describe('RelationPicker', () => {
     expect(before).toEqual(['c1'])
   })
 
+  it('disables an option the hint refuses, with the reason as its tooltip, and still selects the others', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Root' }], total: 2,
+    })
+    const w = mount(RelationPicker, {
+      props: {
+        relation, modelValue: [], multiple: true,
+        optionHint: (raw: Record<string, unknown>) => (raw.name === 'Root' ? 'Not for you' : null),
+      },
+      global: live,
+    })
+    await flushPromises()
+    await open(w)
+    const options = w.findAll('[role="option"]')
+    expect(options[0].attributes('data-disabled')).toBeUndefined()
+    expect(options[1].attributes('data-disabled')).toBeDefined()
+    expect(options[1].attributes('title')).toBe('Not for you')
+
+    await options[0].trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['c1']])
+  })
+
   it('removes a value via its chip remove button on the multi-select branch', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({

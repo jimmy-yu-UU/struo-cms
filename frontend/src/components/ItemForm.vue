@@ -19,6 +19,8 @@ const props = defineProps<{
   serverError?: string
   disabled?: boolean
   itemId?: string
+  // Returns a reason when an option of the named relation cannot be chosen.
+  relationOptionHint?: (relation: string, raw: Record<string, unknown>) => string | null
 }>()
 // The form edits the parent's draft object in place; declaring it as a model makes that
 // two-way contract explicit to consumers.
@@ -27,6 +29,10 @@ const emit = defineEmits<{ (e: 'submit'): void }>()
 const { t } = useI18n()
 
 const fields = computed(() => splitFields(props.meta))
+function optionHintFor(relation: string): ((raw: Record<string, unknown>) => string | null) | undefined {
+  const hint = props.relationOptionHint
+  return hint ? (raw) => hint(relation, raw) : undefined
+}
 const defaultCode = computed(() => props.locales.find((l) => l.isDefault)?.code ?? props.locales[0]?.code ?? '')
 const activeLocale = ref(props.locales[0]?.code ?? '')
 // Dots only carry information when there is more than one locale AND translatable fields exist.
@@ -122,6 +128,7 @@ defineExpose({ activeLocale })
           :disabled="disabled"
           :parent-id="itemId"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
+          :option-hint="optionHintFor(rel.name)"
         />
         <FieldError v-if="errors[rel.name]" role="alert">{{ errors[rel.name] }}</FieldError>
       </Field>
