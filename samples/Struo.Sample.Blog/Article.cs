@@ -76,7 +76,8 @@ public sealed class Article : AuditableEntity, ISoftDeletable
     public Category? Category { get; set; }
 
     [Navigate(typeof(ArticleTag), nameof(ArticleTag.ArticleId), nameof(ArticleTag.TagId))]
-    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(ArticleTag.Sort))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(ArticleTag.Sort),
+        HelpText = "Note: this tag's remark for this article. Use the arrows to order the tags.")]
     [SugarColumn(IsIgnore = true)]
     public List<Tag> Tags { get; set; } = [];
 }

@@ -98,7 +98,7 @@ metadata is always the PascalCase CLR property name; no attribute member can ove
 
 ## `[CmsRelation]` options
 
-Every `[CmsRelation]` setting is a named parameter; there is no constructor. The first four decide
+Every `[CmsRelation]` setting is a named parameter; there is no constructor. The first five decide
 display and target picking:
 
 | Member | CLR type | Default | Effect |
@@ -107,6 +107,7 @@ display and target picking:
 | `DisplayTemplate` | `string?` | `null` | `{Field}` template; falls back to id when unresolved |
 | `PickerQuery` | `string?` | `null` | saved to metadata; not read by the admin SPA |
 | `SortField` | `string?` | `null` | many-to-many only; the junction's sort column |
+| `HelpText` | `string?` | `null` | help line under the input, for any `Interface` |
 
 The last two decide write and delete behavior:
 
@@ -331,8 +332,8 @@ the admin SPA wires each one to its own input component:
 
 `TagSelect` is a plain multi-value tag picker when the relation's junction has no visible payload
 and no `SortField`; as soon as either is true, it becomes a per-row links editor instead. In the
-links editor, a one-line note above the field says the extra fields belong to the link itself, and one
-bordered box holds the rest. Its header row names the columns: the order (only with a `SortField`), the
+links editor, one bordered box holds the whole field; say what the extra fields mean with `HelpText`, which
+shows under it like any relation's help line. Its header row names the columns: the order (only with a `SortField`), the
 target collection's label, one column per visible payload field, and remove. Each selected target is one
 row, showing:
 
@@ -343,7 +344,7 @@ row, showing:
 - a remove button
 
 On a narrow screen a row stacks: the target on top, the payload inputs under it with their own labels, and
-the buttons in a compact row. The last row of the box is the add control, "Add {target}…", which opens the
+the buttons in a compact row. The last row of the box is the add control, an outline button reading "Add {target}", which opens the
 dropdown; it only adds members (removing is the row's button), and the chosen targets append as new rows.
 With nothing linked, the box holds only that row. A read-only field shows the rows without it, and with no
 buttons active.

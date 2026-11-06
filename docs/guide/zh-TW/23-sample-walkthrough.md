@@ -116,8 +116,8 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 `ArticleTag` 的兩個外鍵。
 
 兩個關聯：`Category`（多對一 `Dropdown`，`OnDelete = SetNull`）與 `Tags`（透過 `ArticleTag`
-junction 的多對多 `TagSelect`，用 `[CmsRelation(SortField = nameof(ArticleTag.Sort))]` 排
-序，表單上能就地編輯每個標籤的 `Note` 跟順序）；兩種關聯介面的運作方式見
+junction 的多對多 `TagSelect`，用 `[CmsRelation(SortField = nameof(ArticleTag.Sort), HelpText = ...)]` 排
+序，表單上能就地編輯每個標籤的 `Note` 跟順序，說明文字解釋那個備註）；兩種關聯介面的運作方式見
 [第 8 章：關聯](08-relations.md)。標題與內文不在 `Article` 上，而是放在下面的翻譯 sidecar。
 
 ### `ArticleTranslation.cs`

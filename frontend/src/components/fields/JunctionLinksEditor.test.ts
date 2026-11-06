@@ -181,15 +181,13 @@ describe('JunctionLinksEditor', () => {
   const idsOf = (w: ReturnType<typeof mountEditor>) =>
     (w.emitted('update:modelValue')!.at(-1)![0] as RelationLink[]).map((l) => l.id)
 
-  it('describes the list in one muted line above it', async () => {
+  it('carries no generic description line; the relation help text is the ItemForm field help', async () => {
     setup()
     const w = mountEditor()
     await flushPromises()
 
-    const description = w.get('.junction-links__description')
-    expect(description.text()).toBe(en.fields.junctionDescription)
-    expect(description.classes()).toContain('text-muted-foreground')
-    expect(description.element.compareDocumentPosition(w.get('ul').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(w.find('.junction-links__description').exists()).toBe(false)
+    expect(w.find('p').exists()).toBe(false)
   })
 
   it('has a header row with order, the target label, one column per payload field and remove', async () => {
@@ -253,8 +251,11 @@ describe('JunctionLinksEditor', () => {
     const w = mountEditor()
     await flushPromises()
 
-    const picker = w.get('[data-testid="junction-add"]').getComponent(RelationPicker)
-    expect(picker.props('addLabel')).toBe('Add Tag…')
+    const add = w.get('[data-testid="junction-add"]')
+    // Normal padding around the button, so a hover or focus ring covers only the button.
+    expect(add.classes()).toContain('p-3')
+    const picker = add.getComponent(RelationPicker)
+    expect(picker.props('addLabel')).toBe('Add Tag')
     expect(picker.props('showChips')).toBe(false)
     picker.vm.$emit('update:modelValue', ['t1', 't2', 't3'])
     expect(idsOf(w)).toEqual(['t1', 't2', 't3'])

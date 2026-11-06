@@ -127,8 +127,8 @@ required in the sample are `ArticleTranslation.Title`, `Tag.Name`, `Category.Nam
 
 Two relations: `Category` (a many-to-one `Dropdown`, `OnDelete = SetNull`) and `Tags` (a
 many-to-many `TagSelect` through the `ArticleTag` junction, sorted with
-`[CmsRelation(SortField = nameof(ArticleTag.Sort))]`, letting the form edit each tag's `Note` and
-order in place); how both relation interfaces work is in
+`[CmsRelation(SortField = nameof(ArticleTag.Sort), HelpText = ...)]`, letting the form edit each tag's `Note` and
+order in place, with the help line explaining the note); how both relation interfaces work is in
 [Chapter 8: Relations](08-relations.md). The title and body aren't on `Article` itself — they live
 on the translation sidecar below.
 

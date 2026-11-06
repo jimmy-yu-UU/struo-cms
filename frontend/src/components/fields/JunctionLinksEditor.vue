@@ -19,11 +19,10 @@ defineOptions({ name: 'JunctionLinksEditor' })
 
 // The per-row editor for a many-to-many relation whose junction carries payload and/or a SortField
 // (spec U2b). RelationInput dispatches here instead of RelationPicker's chip branch when
-// usesLinksEditor() says so. One field: a muted description above a single bordered box that holds a
-// header row, one row per link (order buttons, only with a SortField; the target label; that link's
-// payload inputs, the same field-type registry ItemForm uses; a remove button) and, as its last row, an
-// inline "Add {target}…" control, which is RelationPicker itself with its chips turned off and its box
-// drawn as a row. Its id[] model is treated purely as the membership set, order always comes from
+// usesLinksEditor() says so. One field: a single bordered box that holds a header row, one row per link
+// (order buttons, only with a SortField; the target label; that link's payload inputs, the same
+// field-type registry ItemForm uses; a remove button) and, as its last row, an outline "Add {target}"
+// button, which is RelationPicker itself with its chips turned off and its trigger drawn as that button. Its id[] model is treated purely as the membership set, order always comes from
 // `links`. Rows and header share one grid template on a wide screen; on a narrow one a row stacks:
 // target, payload inputs, then the buttons in a compact row.
 const props = defineProps<{ relation: RelationMeta; modelValue: unknown; disabled?: boolean }>()
@@ -86,8 +85,6 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
 
 <template>
   <div class="junction-links flex w-full max-w-[880px] flex-col gap-1.5">
-    <p class="junction-links__description text-sm text-muted-foreground">{{ t('fields.junctionDescription') }}</p>
-
     <div data-testid="junction-box" class="overflow-hidden rounded-md border border-input bg-transparent">
       <div class="divide-y">
         <div
@@ -180,7 +177,7 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
         <p v-else-if="disabled" class="junction-links__empty px-3 py-2 text-sm italic text-muted-foreground">{{ t('fields.noItems') }}</p>
 
         <!-- The last row of the box: adding is part of the field, not a section of its own. -->
-        <div v-if="!disabled" data-testid="junction-add">
+        <div v-if="!disabled" data-testid="junction-add" class="p-3">
           <RelationPicker
             ref="picker"
             :relation="relation"

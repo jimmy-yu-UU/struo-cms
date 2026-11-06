@@ -8,6 +8,8 @@
 
 ### Added
 
+- `[CmsRelation(HelpText = "...")]` sets one help line for a relation. `/api/schema` carries it as the relation's
+  `helpText` (`null` when unset) and the admin shows it under the relation input, for every interface.
 - The user list has a Login lock column: one query per page and one button per account. It reads Not locked
   (disabled), Unlock (m:ss) for a caller who can clear the lock and confirms first, or a disabled Locked
   (m:ss); the time counts down each second, and the page is queried again when a lock runs out.
@@ -15,8 +17,8 @@
 ### Changed
 
 - In the admin UI, the links editor of a `TagSelect` relation whose junction has payload fields or a
-  `SortField` is one field: a description above a single bordered box with a header row, one row per link
-  and, as its last row, an "Add {target}…" control. Rows stack on a narrow screen, and the first row's up
+  `SortField` is one field: a single bordered box with a header row, one row per link and, as its last
+  row, an outline "Add {target}" button; the generic description line above it is gone. Rows stack on a narrow screen, and the first row's up
   and the last row's down are greyed out.
 
 ### Upgrade notes

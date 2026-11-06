@@ -41,6 +41,20 @@ public class RelationSchemaTests(ApiFactory factory)
         relationNames.Should().NotContain("gallery");
     }
 
+    // A relation's help text travels like a field's: camelCase `helpText`, null when the attribute leaves it unset.
+    [Fact]
+    public async Task A_relations_help_text_is_in_the_schema_and_null_when_unset()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var body = await (await client.GetAsync("/api/schema/fxArticle")).Content.ReadAsStringAsync();
+
+        using var doc = JsonDocument.Parse(body);
+        var relations = doc.RootElement.GetProperty("data").GetProperty("relations").EnumerateArray()
+            .ToDictionary(r => r.GetProperty("name").GetString()!);
+        relations["tags"].GetProperty("helpText").GetString().Should().Be("Pick the tags that describe this article.");
+        relations["category"].GetProperty("helpText").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
     [Fact]
     public async Task Category_schema_includes_self_referencing_tree()
     {

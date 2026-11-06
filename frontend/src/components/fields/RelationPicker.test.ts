@@ -721,37 +721,44 @@ describe('RelationPicker', () => {
 
   // ---- the inline add row of the junction links editor (addLabel) ----
 
-  it('renders the add row: a borderless box whose trigger reads the label, with no chips and no chevron', async () => {
+  it('renders the add control as a normal outline button, auto width, with a plus and the label and no chips or chevron', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
-    const w = multiple({ modelValue: ['c1'], showChips: false, addLabel: 'Add Tag…' })
+    const w = multiple({ modelValue: ['c1'], showChips: false, addLabel: 'Add Tag' })
     await flushPromises()
 
     const box = w.get('[data-slot="combobox-anchor"]')
     expect(box.classes()).not.toContain('border')
-    expect(box.classes()).not.toContain('border-input')
-    const trigger = w.get('[data-slot="combobox-trigger"]')
-    expect(trigger.text()).toBe('Add Tag…')
-    expect(trigger.find('svg.lucide-chevrons-up-down').exists()).toBe(false)
+    expect(box.classes()).not.toContain('w-full')
+    const button = w.get('[data-testid="relation-add"]')
+    expect(button.element.tagName).toBe('BUTTON')
+    expect(button.attributes('type')).toBe('button')
+    expect(button.attributes('aria-label')).toBe('Add Tag')
+    expect(button.classes()).toContain('border')
+    expect(button.classes()).toContain('h-9')
+    expect(button.text()).toBe('Add Tag')
+    expect(button.find('svg.lucide-plus').exists()).toBe(true)
+    expect(button.find('svg.lucide-chevrons-up-down').exists()).toBe(false)
     expect(w.findAll('[data-testid="relation-chip"]')).toHaveLength(0)
   })
 
   it('opens the add row from a click and from the keyboard, and toggles targets from the menu', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
-    const w = multiple({ modelValue: [], showChips: false, addLabel: 'Add Tag…' })
+    const w = multiple({ modelValue: [], showChips: false, addLabel: 'Add Tag' })
     await flushPromises()
 
-    await w.get('[data-slot="combobox-trigger"]').trigger('click')
+    const button = () => w.get('[data-testid="relation-add"]')
+    await button().trigger('click')
     await flushPromises()
-    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('open')
+    expect(button().attributes('data-state')).toBe('open')
     await w.findAll('[role="option"]')[1].trigger('click')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['c2']])
 
-    await w.get('[data-slot="combobox-trigger"]').trigger('click')
+    await button().trigger('click')
     await flushPromises()
-    await w.get('[data-slot="combobox-trigger"]').trigger('keydown', { key: 'ArrowDown' })
+    await button().trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
-    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('open')
+    expect(button().attributes('data-state')).toBe('open')
   })
 })

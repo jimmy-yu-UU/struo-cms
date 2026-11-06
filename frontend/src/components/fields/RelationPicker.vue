@@ -30,7 +30,7 @@ const props = withDefaults(defineProps<{
   showChips?: boolean
   // Returns a reason when an option cannot be chosen; the option is then disabled and carries it as a tooltip.
   optionHint?: (raw: Record<string, unknown>) => string | null
-  // multiple only. Renders the picker as an inline "add" row (a borderless row reading `+ label`) for a
+  // multiple only. Renders the picker as one outline button reading `+ label` that opens the menu, for a
   // host that draws the box itself, as the junction links editor does; the menu works the same.
   addLabel?: string
 }>(), { showChips: true, optionHint: undefined, addLabel: undefined })
@@ -141,11 +141,11 @@ function onBoxClick(): void {
   if (!props.disabled) menuOpen.value = !menuOpen.value
 }
 
-// The field box: bordered and growing with its chips, or, as an add row, a plain full-width row.
+// The field box: bordered and growing with its chips, or, as an add button, just the button's own width.
 const multipleBoxClass = computed(() => {
   const cursor = props.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
   return props.addLabel
-    ? `flex w-full items-center px-3 py-2 text-sm hover:bg-accent/40 ${cursor}`
+    ? 'inline-flex w-auto'
     : `border-input flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1 text-sm ${cursor}`
 })
 
@@ -266,23 +266,26 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
               </button>
             </Badge>
           </template>
+          <ComboboxTrigger v-if="addLabel" as-child :aria-label="addLabel" @keydown.down.prevent="openMenu">
+            <Button type="button" variant="outline" data-testid="relation-add" class="cursor-pointer" :disabled="disabled">
+              <Plus />{{ addLabel }}
+            </Button>
+          </ComboboxTrigger>
           <ComboboxTrigger
-            :aria-label="addLabel ?? multipleAccessibleName"
+            v-else
+            :aria-label="multipleAccessibleName"
             class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left disabled:cursor-not-allowed"
             @keydown.down.prevent="openMenu"
           >
-            <span v-if="addLabel" class="flex items-center gap-2 text-muted-foreground">
-              <Plus class="size-4 shrink-0" />{{ addLabel }}
-            </span>
-            <span v-else :class="multipleSelected.length ? '' : 'text-muted-foreground'">
+            <span :class="multipleSelected.length ? '' : 'text-muted-foreground'">
               {{ showChips
                 ? (multipleSelected.length ? '' : relation.label)
                 : (multipleSelected.length ? t('fields.selectedCount', { n: multipleSelected.length }) : relation.label) }}
             </span>
-            <ChevronsUpDown v-if="!addLabel" class="size-4 shrink-0 opacity-50" />
+            <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
           </ComboboxTrigger>
         </ComboboxAnchor>
-        <ComboboxList class="w-(--reka-combobox-trigger-width)">
+        <ComboboxList :align="addLabel ? 'start' : 'center'" :class="addLabel ? 'w-72 max-w-[calc(100vw-2rem)]' : 'w-(--reka-combobox-trigger-width)'">
           <ComboboxInput :model-value="search" :placeholder="t('fields.searchOptions')" @update:model-value="(v) => (search = String(v ?? ''))" />
           <ComboboxEmpty>{{ loading ? t('common.loading') : t('fields.noOptions') }}</ComboboxEmpty>
           <ComboboxViewport>

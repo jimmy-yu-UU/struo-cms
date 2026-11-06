@@ -130,6 +130,7 @@ defineExpose({ activeLocale })
           :exclude-id="rel.selfReferencing ? itemId : undefined"
           :option-hint="optionHintFor(rel.name)"
         />
+        <FieldDescription v-if="rel.helpText">{{ rel.helpText }}</FieldDescription>
         <FieldError v-if="errors[rel.name]" role="alert">{{ errors[rel.name] }}</FieldError>
       </Field>
     </section>
