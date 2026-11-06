@@ -6,8 +6,6 @@
 
 - In the admin item editor, a text-like field that is `null` on the server and left empty stays
   `null` when you save other fields. A field you clear saves as an empty string.
-- The collection list shows no New button, and `user` no create dialog, until the collection's schema
-  has loaded, so a collection that is not creatable never shows either.
 
 ## 0.26.0 — 2026-11-05
 
