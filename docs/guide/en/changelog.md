@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.28.0
+## 0.28.0 — 2026-11-07
 
 - The seeded `public` role cannot be deleted, even by a super-admin (`409` `CONFLICT`). It is protected like
   a super-admin role: a caller who is not a super-admin gets `403` when updating, restoring or reverting it,
