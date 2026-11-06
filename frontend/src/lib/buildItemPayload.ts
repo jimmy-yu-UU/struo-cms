@@ -38,6 +38,11 @@ function serializeLinks(rel: RelationMeta, links: RelationLink[], options: Build
   })
 }
 
+// A text-like field the server holds as null and the form still shows as '' goes back as null.
+function nullIfLoadedNull(value: unknown, loadedNullNames: string[] | undefined, fieldName: string): unknown {
+  return value === '' && loadedNullNames?.includes(fieldName) ? null : value
+}
+
 export function buildItemPayload(
   meta: CollectionMeta,
   model: FormModel,
@@ -51,7 +56,8 @@ export function buildItemPayload(
   for (const f of shared) {
     // The registry's serialize owns per-type coercion — e.g. file/image '' -> null so a
     // nullable Guid FK never serialises "" (Postgres 22P02 -> 500). See fieldTypes/registry.ts.
-    const v = getFieldType(f.interface).serialize(model.shared[f.name], f)
+    let v = getFieldType(f.interface).serialize(model.shared[f.name], f)
+    if (mode === 'update') v = nullIfLoadedNull(v, model.loadedNulls?.shared, f.name)
     if (mode === 'update' || !isEmpty(v)) payload[f.name] = v
   }
 
@@ -70,7 +76,10 @@ export function buildItemPayload(
       continue
     }
     const entry: Record<string, unknown> = {}
-    for (const f of translatable) entry[f.name] = getFieldType(f.interface).serialize(values[f.name], f)
+    const nulls = mode === 'update' ? model.loadedNulls?.translations[loc.code] : undefined
+    for (const f of translatable) {
+      entry[f.name] = nullIfLoadedNull(getFieldType(f.interface).serialize(values[f.name], f), nulls, f.name)
+    }
     translations[loc.code] = entry
   }
   const relations = model.relations ?? {}

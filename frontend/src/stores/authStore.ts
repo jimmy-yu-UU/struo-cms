@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { apiClient, ApiError } from '../api/apiClient'
 import { i18n } from '../i18n'
-import { useToast } from '../composables/useToast'
 import type { CollectionPermission } from '../types/schema'
 
 export type CurrentUser = {
@@ -73,7 +72,7 @@ export const useAuthStore = defineStore('auth', {
       this.loggingOut = false
     },
     // Only a 401 means "no session". Any other failure leaves the current user in place and flags
-    // connectionError; a signed-in user also gets a notice (boot has no shell to show one in).
+    // connectionError.
     async fetchCurrentUser(): Promise<void> {
       try {
         this.user = await apiClient.get<CurrentUser>('/auth/me')
@@ -85,9 +84,6 @@ export const useAuthStore = defineStore('auth', {
           return
         }
         this.connectionError = true
-        if (this.user) {
-          useToast().add({ severity: 'error', summary: i18n.global.t('errors.serverUnreachable') })
-        }
       }
     },
   },
