@@ -19,6 +19,13 @@
   See [Chapter 12](12-rest-conventions.md) and [Chapter 14](14-graphql.md).
 - `Api:MaxJsonBodyBytes`, the JSON body cap above. It must be greater than 0, or startup fails.
 
+### Fixed
+
+- In the admin item editor, a text-like field that is `null` on the server and left empty stays
+  `null` when you save other fields. A field you clear saves as an empty string.
+- The API image upgrades its OS packages at build time, so fixes the base image has not picked up
+  yet, such as the `apt` one, are in every build.
+
 ## 0.26.0 — 2026-11-05
 
 ::: danger Breaking

@@ -175,3 +175,40 @@ describe('buildItemPayload junction links', () => {
     expect(p.tags).toEqual([{ id: 't3', note: '', weight: null }])
   })
 })
+
+describe('buildItemPayload fields loaded as null', () => {
+  const loadedNulls = { shared: ['status'], translations: { en: ['title'] } }
+  const base = (over: Partial<FormModel>): FormModel =>
+    ({ shared: { status: '' }, translations: { en: { title: '' }, 'zh-TW': { title: '' } }, relations: {}, ...over })
+
+  it('sends a shared field loaded as null and still empty as null', () => {
+    const p = buildItemPayload(meta, base({ loadedNulls }), locales, 'update')
+    expect(p.status).toBeNull()
+  })
+  it('sends a shared field the user cleared (loaded non-null) as an empty string', () => {
+    const p = buildItemPayload(meta, base({ loadedNulls: { shared: [], translations: {} } }), locales, 'update')
+    expect(p.status).toBe('')
+  })
+  it('keeps a typed value for a field loaded as null', () => {
+    const p = buildItemPayload(meta, base({ shared: { status: 'draft' }, loadedNulls }), locales, 'update')
+    expect(p.status).toBe('draft')
+  })
+  it('leaves a new item unchanged', () => {
+    const p = buildItemPayload(meta, base({ shared: { status: '' }, loadedNulls }), locales, 'create')
+    expect('status' in p).toBe(false)
+  })
+  it('sends a translation field loaded as null and still empty as null; a cleared one stays empty', () => {
+    const multi: CollectionMeta = { ...meta, fields: [...meta.fields, field('summary', { translatable: true, sort: 5 })] }
+    const model = base({
+      translations: { en: { title: '', summary: '' }, 'zh-TW': { title: '' } },
+      loadedNulls: { shared: [], translations: { en: ['title'] } },
+    })
+    // a sibling with content makes the locale sent; `title` was null, `summary` was cleared by the user
+    const withContent = { ...model, translations: { ...model.translations, en: { title: '', summary: 'x' } } }
+    const p = buildItemPayload(multi, withContent, locales, 'update')
+    expect(p.translations).toEqual({ en: { title: null, summary: 'x' } })
+    const cleared = { ...withContent, loadedNulls: { shared: [], translations: {} } }
+    const q = buildItemPayload(multi, cleared, locales, 'update')
+    expect(q.translations).toEqual({ en: { title: '', summary: 'x' } })
+  })
+})

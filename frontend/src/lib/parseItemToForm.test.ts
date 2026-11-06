@@ -112,3 +112,15 @@ describe('parseItemToForm junction links', () => {
     expect(blankItemForm(articleMeta, junctionLocales, resolve).relations.tags).toEqual([])
   })
 })
+
+describe('parseItemToForm loadedNulls', () => {
+  it('records fields the item carried as null while the form value stays empty', () => {
+    const item = { id: '1', status: null, translations: { en: { title: null } } }
+    const model = parseItemToForm(meta, item, locales)
+    expect(model.shared.status).toBe('')
+    expect(model.loadedNulls).toEqual({ shared: ['status'], translations: { en: ['title'] } })
+  })
+  it('records nothing for a blank form', () => {
+    expect(blankItemForm(meta, locales).loadedNulls).toEqual({ shared: [], translations: {} })
+  })
+})

@@ -317,6 +317,25 @@ describe('CollectionListView', () => {
     expect((w.vm as any).canCreate).toBe(false)
   })
 
+  it.each(['file', 'user'])('offers no create entry on %s while the schema is still loading', async (collection) => {
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    mockRoute.params.name = collection
+    let resolveSchema!: (v: unknown) => void
+    const pending = new Promise((resolve) => { resolveSchema = resolve })
+    vi.mocked(schemaApi.getAll).mockReturnValue(pending as ReturnType<typeof schemaApi.getAll>)
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+    const w = mountView()
+    await flushPromises()
+    expect((w.vm as any).canCreate).toBe(false)
+    expect(w.text()).not.toContain('New')
+    expect(w.findComponent(CreateUserDialog).exists()).toBe(false)
+    resolveSchema([{ name: collection, label: collection, defaultDisplayField: 'status', creatable: true, fields: [], relations: [] }])
+    await flushPromises()
+    expect((w.vm as any).canCreate).toBe(true)
+    expect(w.text()).toContain('New')
+  })
+
   it('shows the New button on file when the schema says creatable is true', async () => {
     seedCollection('file', true)
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }

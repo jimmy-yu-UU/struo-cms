@@ -3,6 +3,7 @@ import type { FormModel, RelationLink } from '../types/itemForm'
 import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
 import { getFieldType } from './fieldTypes/registry'
+import { loadedNullsOf } from './loadedNulls'
 import { usesLinksEditor, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
 
 // A deep-expanded M2M target row -> one RelationLink. `_junction` is absent when the junction
@@ -48,7 +49,7 @@ export function parseItemToForm(
     }
   }
   const version = typeof item.version === 'number' ? item.version : undefined
-  return { shared: sharedModel, translations, relations, version }
+  return { shared: sharedModel, translations, relations, version, loadedNulls: loadedNullsOf(meta, item, locales) }
 }
 
 export function blankItemForm(meta: CollectionMeta, locales: LanguageInfo[], resolveCollection?: ResolveCollection): FormModel {
