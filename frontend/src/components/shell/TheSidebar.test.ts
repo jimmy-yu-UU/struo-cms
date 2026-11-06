@@ -178,4 +178,13 @@ describe('TheSidebar', () => {
     expect(wrapper.text()).toContain(`v${packageVersion}`)
     expect(sidebarSource).not.toMatch(/\bv\d+\.\d+\.\d+\b/)
   })
+
+  it('footer links Struo CMS to the GitHub repository in a new tab', () => {
+    const link = mountSidebar().get('[data-slot="sidebar-footer"] a')
+    expect(link.text()).toBe('Struo CMS')
+    expect(link.attributes('href')).toBe('https://github.com/jimmy-yu-UU/struo-cms')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toContain('noopener')
+    expect(link.attributes('rel')).toContain('noreferrer')
+  })
 })

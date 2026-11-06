@@ -18,6 +18,7 @@ import SidebarNavItem from './SidebarNavItem.vue'
 import BrandMark from './BrandMark.vue'
 
 const UNGROUPED = 'General'
+const REPOSITORY_URL = 'https://github.com/jimmy-yu-UU/struo-cms'
 
 const auth = useAuthStore()
 const schema = useSchemaStore()
@@ -194,7 +195,13 @@ watch(() => route.path, () => {
 
     <SidebarFooter>
       <p class="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-        v{{ appVersion }} · {{ t('shell.version') }}
+        v{{ appVersion }} ·
+        <a
+          :href="REPOSITORY_URL"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >Struo CMS</a>
       </p>
     </SidebarFooter>
   </Sidebar>

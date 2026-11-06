@@ -20,6 +20,7 @@
   `SortField` is one field: a single bordered box with a header row, one row per link and, as its last
   row, an outline "Add {target}" button; the generic description line above it is gone. Rows stack on a narrow screen, and the first row's up
   and the last row's down are greyed out.
+- The admin sidebar footer shows the version and "Struo CMS", which links to the GitHub repository.
 
 ### Upgrade notes
 

@@ -57,7 +57,6 @@ export default {
     openMenu: 'Open navigation menu',
     mainNav: 'Main navigation',
     brandHome: 'Back to dashboard',
-    version: 'Admin console',
     mobileNav: 'Sidebar',
     mobileNavDescription: 'Displays the mobile sidebar.',
   },

@@ -57,7 +57,6 @@ export default {
     openMenu: '開啟導覽選單',
     mainNav: '主導覽',
     brandHome: '回到儀表板',
-    version: '管理後台',
     mobileNav: '側邊欄',
     mobileNavDescription: '顯示行動版側邊欄。',
   },
