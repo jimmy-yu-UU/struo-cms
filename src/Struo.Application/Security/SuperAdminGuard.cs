@@ -40,6 +40,11 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
     public async Task<bool> IsSuperAdminRoleAsync(Guid roleId, CancellationToken ct = default) =>
         (await directory.SuperAdminRoleIdsAsync([roleId], ct)).Contains(roleId);
 
+    /// <summary>Takes a row lock on every super-admin role until the transaction ends. A write that reads
+    /// super-admin membership calls it first, so that concurrent writes of that kind run one after the other
+    /// and each reads what the previous one committed.</summary>
+    public Task LockSuperAdminRolesAsync(CancellationToken ct = default) => directory.LockSuperAdminRolesAsync(ct);
+
     /// <summary>The accounts among <paramref name="emails"/> that belong to a super-admin role.</summary>
     public Task<IReadOnlySet<string>> SuperAdminEmailsAsync(
         IReadOnlyCollection<string> emails, CancellationToken ct = default) =>
@@ -73,7 +78,7 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
     public async Task EnsureActiveSuperAdminAsync(CancellationToken ct = default)
     {
         // The role rows are locked first, so a concurrent transaction that also removes a super-admin waits
-        // here until this one commits and then counts what this one left.
+        // here until this one commits; the count that follows is a locking read of the latest rows.
         await directory.LockSuperAdminRolesAsync(ct);
         if ((await directory.ActiveSuperAdminUserIdsAsync(ct)).Count == 0)
             throw new ConflictException(

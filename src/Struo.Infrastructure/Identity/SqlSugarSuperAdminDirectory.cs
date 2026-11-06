@@ -10,10 +10,11 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
     {
         if (userIds.Count == 0) return new HashSet<Guid>();
         var ids = userIds.ToList();
-        var found = await db.Queryable<UserRole, Role>((ur, r) => ur.RoleId == r.Id)
-            .Where((ur, r) => r.IsSuperAdmin && ids.Contains(ur.UserId))
-            .Select((ur, r) => ur.UserId)
-            .ToListAsync(ct);
+        var roleIds = await Locked(db.Queryable<Role>().Where(r => r.IsSuperAdmin).Select(r => r.Id)).ToListAsync(ct);
+        if (roleIds.Count == 0) return new HashSet<Guid>();
+
+        var found = await Locked(db.Queryable<UserRole>().Where(ur => roleIds.Contains(ur.RoleId) && ids.Contains(ur.UserId))
+            .Select(ur => ur.UserId)).ToListAsync(ct);
         return found.ToHashSet();
     }
 
@@ -47,12 +48,26 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
         await db.Updateable<Role>().SetColumns(r => r.Version == r.Version).Where(r => r.IsSuperAdmin)
             .ExecuteCommandAsync(ct);
 
+    // Inside a transaction each read is a locking read (FOR UPDATE, or UPDLOCK on SQL Server), so it sees the
+    // latest committed rows even where the transaction's snapshot is older (REPEATABLE READ on InnoDB), and a
+    // concurrent change waits. SQLite has a single writer and needs no lock; outside a transaction a plain read
+    // is all there is.
     public async Task<IReadOnlySet<Guid>> ActiveSuperAdminUserIdsAsync(CancellationToken ct = default)
     {
-        var found = await db.Queryable<User, UserRole, Role>((u, ur, r) => u.Id == ur.UserId && ur.RoleId == r.Id)
-            .Where((u, ur, r) => r.IsSuperAdmin && u.IsActive)
-            .Select((u, ur, r) => u.Id)
-            .ToListAsync(ct);
-        return found.ToHashSet();
+        var roleIds = await Locked(db.Queryable<Role>().Where(r => r.IsSuperAdmin).Select(r => r.Id)).ToListAsync(ct);
+        if (roleIds.Count == 0) return new HashSet<Guid>();
+
+        var memberIds = await Locked(db.Queryable<UserRole>().Where(ur => roleIds.Contains(ur.RoleId))
+            .Select(ur => ur.UserId)).ToListAsync(ct);
+        if (memberIds.Count == 0) return new HashSet<Guid>();
+
+        var active = await Locked(db.Queryable<User>().Where(u => memberIds.Contains(u.Id) && u.IsActive)
+            .Select(u => u.Id)).ToListAsync(ct);
+        return active.ToHashSet();
     }
+
+    private ISugarQueryable<T> Locked<T>(ISugarQueryable<T> query) =>
+        db.Ado.IsAnyTran() && db.CurrentConnectionConfig.DbType != DbType.Sqlite
+            ? query.TranLock(DbLockType.Wait)
+            : query;
 }

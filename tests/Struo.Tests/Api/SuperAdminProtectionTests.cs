@@ -608,4 +608,82 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             "mutation { updateUser(id: \"" + plain.Id + "\", input: { roles: [\"" + ordinary + "\"] }) { id } }");
         allowed.TryGetProperty("errors", out _).Should().BeFalse(allowed.ToString());
     }
+
+    // ---------------------------------------------------------------- two concurrent deactivations
+
+    public sealed class PauseGate
+    {
+        public Guid PauseUserId { get; set; }
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    // Runs after the core user interceptor, inside the write transaction: the write of `PauseUserId` holds
+    // its locks and stays uncommitted until the test releases it.
+    public sealed class PauseInTransactionInterceptor(PauseGate gate) : Struo.Application.Query.IItemWriteInterceptor
+    {
+        public bool AppliesTo(string collection) => collection == "user";
+
+        public async Task InTransactionAsync(Struo.Application.Query.ItemWriteContext context, CancellationToken ct)
+        {
+            if (context.Operation != Struo.Application.Query.ItemWriteOperation.Update
+                || !Guid.TryParse(context.Id, out var id) || id != gate.PauseUserId) return;
+            gate.Reached.TrySetResult();
+            await gate.Release.Task;
+        }
+    }
+
+    // Two super-admins deactivate each other at the same moment. The second transaction fixes its snapshot
+    // while the first still holds the super-admin role rows, then waits for them; once the first commits,
+    // its count must see that commit, or both writes pass and no active super-admin is left.
+    [LiveOnlyFact("it needs two concurrent transactions, which SQLite's single writer cannot give")]
+    public async Task Two_super_admins_deactivating_each_other_at_once_leave_one_active()
+    {
+        var first = await SeedUserAsync(superAdmin: true);
+        var second = await SeedUserAsync(superAdmin: true);
+        var others = await WithDbAsync(db => db.Queryable<User, UserRole, Role>((u, ur, r) => u.Id == ur.UserId && ur.RoleId == r.Id)
+            .Where((u, ur, r) => r.IsSuperAdmin && u.IsActive && u.Id != first.Id && u.Id != second.Id)
+            .Select((u, ur, r) => u.Id).ToListAsync());
+        await WithDbAsync(db => db.Updateable<User>().SetColumns(u => u.IsActive == false)
+            .Where(u => others.Contains(u.Id)).ExecuteCommandAsync());
+        var gate = new PauseGate { PauseUserId = second.Id };
+        try
+        {
+            using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(services =>
+            {
+                services.AddSingleton(gate);
+                services.AddScoped<Struo.Application.Query.IItemWriteInterceptor, PauseInTransactionInterceptor>();
+            }));
+            async Task<HttpClient> SignInAsync(string email)
+            {
+                var client = host.CreateClient();
+                client.DefaultRequestHeaders.Add(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName, "1");
+                (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "pw-123456" })).EnsureSuccessStatusCode();
+                return client;
+            }
+            using var clientOfFirst = await SignInAsync(first.Email);
+            using var clientOfSecond = await SignInAsync(second.Email);
+
+            var firstDeactivatesSecond = Put(clientOfFirst, $"/api/items/user/{second.Id}", new { isActive = false });
+            await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var secondDeactivatesFirst = Put(clientOfSecond, $"/api/items/user/{first.Id}", new { isActive = false });
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            gate.Release.SetResult();
+            var responses = await Task.WhenAll(firstDeactivatesSecond, secondDeactivatesFirst);
+
+            responses.Select(r => (int)r.StatusCode).Order().Should().Equal(new[] { 200, 409 },
+                string.Join(" | ", await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()))));
+            var active = await WithDbAsync(db => db.Queryable<User>().Where(u => u.Id == first.Id || u.Id == second.Id)
+                .Where(u => u.IsActive).CountAsync());
+            active.Should().Be(1);
+        }
+        finally
+        {
+            gate.Release.TrySetResult();
+            await WithDbAsync(db => db.Updateable<User>().SetColumns(u => u.IsActive == true)
+                .Where(u => others.Contains(u.Id)).ExecuteCommandAsync());
+            await WithDbAsync(db => db.Updateable<User>().SetColumns(u => u.IsActive == false)
+                .Where(u => u.Id == first.Id || u.Id == second.Id).ExecuteCommandAsync());
+        }
+    }
 }

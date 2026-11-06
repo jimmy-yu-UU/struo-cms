@@ -19,3 +19,14 @@ public sealed class SqliteOnlyTheoryAttribute : TheoryAttribute
         if (TestBackend.IsLive) Skip = $"SQLite-only: {reason}";
     }
 }
+
+/// <summary>A <see cref="FactAttribute"/> that is skipped on SQLite, for a test that needs two concurrent
+/// transactions a single-writer database cannot offer.</summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class LiveOnlyFactAttribute : FactAttribute
+{
+    public LiveOnlyFactAttribute(string reason)
+    {
+        if (!TestBackend.IsLive) Skip = $"Live-only: {reason}";
+    }
+}

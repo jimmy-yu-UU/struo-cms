@@ -50,6 +50,9 @@ internal sealed class ItemWriteHooks(ItemWriteContext? initialContext, IReadOnly
 
     public Task BeforeWriteAsync(CancellationToken ct) => RunAsync(i => i.BeforeWriteAsync(Context, ct));
 
+    public Task InTransactionBeforeWriteAsync(CancellationToken ct) =>
+        RunAsync(i => i.InTransactionBeforeWriteAsync(Context, ct));
+
     public Task InTransactionAsync(CancellationToken ct) => RunAsync(i => i.InTransactionAsync(Context, ct));
 
     // The write is committed by now: a disconnecting caller must not skip these.

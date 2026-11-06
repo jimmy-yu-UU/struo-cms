@@ -190,6 +190,7 @@ public sealed class ItemService(
         object createdId = null!;
         await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             created = await repository.CreateAsync(collection, entity, ct);
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
@@ -354,6 +355,7 @@ public sealed class ItemService(
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
@@ -424,6 +426,7 @@ public sealed class ItemService(
             // row) records nothing.
             var softDeletedNow = await repository.InTransactionAsync(async () =>
             {
+                await trashHooks.InTransactionBeforeWriteAsync(ct);
                 await this.purge.CheckRestrictAsync(collection, id, ct);
                 var trashedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
                 if (trashedNow)
@@ -445,6 +448,7 @@ public sealed class ItemService(
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(async () =>
         {
+            await purgeHooks.InTransactionBeforeWriteAsync(ct);
             var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
             if (purged) await purgeHooks.InTransactionAsync(ct);
             return purged;
@@ -517,6 +521,7 @@ public sealed class ItemService(
         // row (or one restored by a concurrent request first) is a no-op: no Version bump, no revision.
         var restoredNow = entity is ISoftDeletable && await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             var r = await repository.RestoreAsync(collection, id, ct);
             if (r)
             {

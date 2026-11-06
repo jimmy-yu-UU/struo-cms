@@ -155,9 +155,11 @@ Both rules sit in the application layer that every write path shares, so the ite
 
 The same layer re-checks the outcome inside the write transaction: when a caller who is not a super-admin
 writes a user, the write is rolled back with `403` if it changed whether that user belongs to a super-admin
-role, whatever shape the body had. Before the last-member count, the super-admin role rows are locked, so two
-super-admins who deactivate each other at the same moment cannot both pass it. A body that names the same
-property twice is refused on every item write (`400` `BAD_USER_INPUT`).
+role, whatever shape the body had. Everything these rules read about membership is read inside that
+transaction, after the super-admin role rows are locked, and the last-member count is a locking read of the
+latest rows; two super-admins who deactivate each other at the same moment therefore cannot both pass it.
+A body that names the same top-level property twice is refused on item create and update (`400`
+`BAD_USER_INPUT`), as [Chapter 13](13-rest-endpoints.md) says.
 
 ### What a grant on `user` or `role` delegates
 

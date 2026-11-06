@@ -38,7 +38,8 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
     private const string RoleId = "RoleId";
     private const string UserId = "UserId";
 
-    // The users of the write in flight that belonged to a super-admin role before it.
+    // The users of the write in flight that belonged to a super-admin role before it; read inside the
+    // transaction, after the super-admin role rows are locked.
     private IReadOnlySet<Guid> superAdminBefore = new HashSet<Guid>();
 
     public bool AppliesTo(string collection) =>
@@ -46,6 +47,15 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
 
     public async Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
     {
+        await guard.RequireForRolesAsync(
+            JunctionRowReader.Ids(registry, context, RoleId), "change the members of a super-admin role", ct);
+        foreach (var userId in JunctionRowReader.Ids(registry, context, UserId))
+            await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
+    }
+
+    public async Task InTransactionBeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    {
+        await guard.LockSuperAdminRolesAsync(ct);
         await guard.RequireForRolesAsync(
             JunctionRowReader.Ids(registry, context, RoleId), "change the members of a super-admin role", ct);
         var users = JunctionRowReader.Ids(registry, context, UserId);

@@ -27,11 +27,12 @@ public sealed class UserWriteInterceptor(
     private const string IsActiveField = "isActive";
 
     // Users that were an active super-admin before the write in flight, so the transaction can check that
-    // someone still is afterwards. Filled by BeforeWrite, consumed by InTransaction.
+    // someone still is afterwards. Filled and consumed inside the write transaction.
     private readonly HashSet<Guid> activeSuperAdminsBefore = [];
 
     // For a caller who is not a super-admin: the users of the write in flight that belonged to a super-admin
-    // role before it. The transaction compares it with the state the write left.
+    // role before it (none: the transaction refuses a super-admin target). It is compared with the state the
+    // write left.
     private readonly Dictionary<Guid, IReadOnlySet<Guid>> superAdminBefore = [];
 
     public bool AppliesTo(string collection) =>
@@ -43,19 +44,35 @@ public sealed class UserWriteInterceptor(
         await NormalizeEmailAsync(context, ct);
     }
 
+    // The early answer, before a transaction is opened; the transaction repeats it on locked, current rows.
     private async Task GuardSuperAdminsAsync(ItemWriteContext context, CancellationToken ct)
     {
         if (context.Operation == ItemWriteOperation.Create || !Guid.TryParse(context.Id, out var userId)) return;
 
         await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
         if (context.Operation is ItemWriteOperation.Update or ItemWriteOperation.Revert)
+            await guard.RequireForRolesAsync(RequestedRoleIds(context), "assign a super-admin role", ct);
+    }
+
+    // Everything a rule reads about super-admin membership is read here, inside the transaction, after the
+    // super-admin role rows are locked: the state read is the state the write changes.
+    public async Task InTransactionBeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    {
+        if (context.Operation == ItemWriteOperation.Create || !Guid.TryParse(context.Id, out var userId)) return;
+
+        var update = context.Operation is ItemWriteOperation.Update or ItemWriteOperation.Revert;
+        var couldRemove = CouldRemoveFromSuperAdmins(context);
+        if (!couldRemove && !(update && !guard.CallerIsSuperAdmin)) return;
+
+        await guard.LockSuperAdminRolesAsync(ct);
+        await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
+        if (update)
         {
             await guard.RequireForRolesAsync(RequestedRoleIds(context), "assign a super-admin role", ct);
             superAdminBefore[userId] = await guard.SuperAdminStatusBeforeAsync([userId], ct);
         }
 
-        if (!CouldRemoveFromSuperAdmins(context)) return;
-        if (await guard.IsActiveSuperAdminAsync(userId, ct)) activeSuperAdminsBefore.Add(userId);
+        if (couldRemove && await guard.IsActiveSuperAdminAsync(userId, ct)) activeSuperAdminsBefore.Add(userId);
     }
 
     private static bool CouldRemoveFromSuperAdmins(ItemWriteContext context) =>
