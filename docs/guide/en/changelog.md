@@ -8,13 +8,9 @@
 
 ### Added
 
-- `POST api/login-locks/query` takes one to 100 emails and answers, in request order, `{ email, locked,
-  retryAfterSeconds, clearable }` for each; `clearable` is `false` for a super-admin account when the
-  caller is not a super-admin.
-- The user list has a Login lock column: one query per page, a badge with the time left on a locked
-  account and, for a caller with write on `user`, an Unlock button that asks for confirmation.
-- `ISuperAdminDirectory` and `SuperAdminGuard`, the application-layer seam every write path uses for the
-  super-admin rules; the `userRole` and `permission` collections have write interceptors.
+- The user list has a Login lock column: one query per page and one button per account. It reads Not locked
+  (disabled), Unlock (m:ss) for a caller who can clear the lock and confirms first, or a disabled Locked
+  (m:ss); the time counts down each second, and the page is queried again when a lock runs out.
 
 ### Changed
 

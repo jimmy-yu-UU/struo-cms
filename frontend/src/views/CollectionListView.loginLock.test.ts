@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { reactive } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -22,8 +22,13 @@ const i18n = createI18n({
         trashNotice: 'Trash', deletedAt: 'Deleted at', emptyTrash: 'Trash is empty',
       },
       loginLocks: {
-        column: 'Login lock', lockedFor: 'Locked, ends in {time}', durationSeconds: '{n} s',
-        durationMinutes: '{n} min', unlock: 'Unlock', unlocking: 'Unlocking…', unlockLabel: 'Unlock {email}',
+        column: 'Login lock', notLocked: 'Not locked', unlockWithTime: 'Unlock ({time})',
+        lockedWithTime: 'Locked ({time})', unlocking: 'Unlocking…',
+        lockedTip: 'Locked; unlocks automatically in {time}', tooltipWithReason: '{tip}. {reason}',
+        spokenSeconds: '{s} s', spokenMinutes: '{m} min {s} s', spokenHours: '{h} h {m} min {s} s',
+        readOnlyHint: 'Write permission on users is needed to clear a lock.',
+        ariaNotLocked: '{email} is not locked', ariaLocked: '{email} is locked, {time} left',
+        ariaUnlock: 'Unlock {email}, {time} left',
         unavailable: 'Unavailable', unavailableHint: 'The lock state could not be loaded.',
         superAdminOnly: 'Only a super-admin can clear this lock.', confirmHeader: 'Clear login lock',
         confirmMessage: 'Clear the login lock on {email}?', unlocked: 'Lock cleared', unlockFailed: 'Failed to clear the lock',
@@ -103,6 +108,8 @@ const WRITER: Grant = { read: true, write: true, delete: true }
 
 describe('CollectionListView login lock column', () => {
   beforeEach(() => {
+    // Only the interval and the clock: flushPromises keeps its real scheduler.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     setActivePinia(createPinia())
     vi.clearAllMocks()
     confirmRequire.mockReset()
@@ -110,6 +117,18 @@ describe('CollectionListView login lock column', () => {
     vi.mocked(itemsApi.list).mockResolvedValue({ data: ROWS, total: ROWS.length })
     answerQuery({ 'locked@struo.test': lock('locked@struo.test', true, true, 90) })
   })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // The tooltip sits on the span around the button, because a disabled button receives no pointer events.
+  const tipOf = (button: { element: Element }) => button.element.parentElement!.getAttribute('title')
+
+  const tick = async (ms: number) => {
+    vi.advanceTimersByTime(ms)
+    await flushPromises()
+  }
 
   it('shows the column to a super-admin and queries once with the emails of the page', async () => {
     seed('user', { superAdmin: true })
@@ -157,53 +176,156 @@ describe('CollectionListView login lock column', () => {
     expect(loginLocksApi.query).not.toHaveBeenCalled()
   })
 
-  it('shows a dash when not locked and the remaining time, rounded up to minutes, when locked', async () => {
+  it('shows one disabled Not locked button for every account that is not locked', async () => {
     seed('user', { superAdmin: true })
     const w = mountView()
     await flushPromises()
 
-    expect(w.findAll('[data-testid="lock-none"]')).toHaveLength(2)
-    const badge = w.get('[data-testid="lock-badge"]')
-    expect(badge.text()).toBe('Locked, ends in 2 min')
+    const none = w.findAll('[data-testid="lock-none"]')
+    expect(none).toHaveLength(2)
+    expect(none[0].text()).toBe('Not locked')
+    expect(none[0].attributes('disabled')).toBeDefined()
+    expect(none[0].attributes('aria-label')).toBe('free@struo.test is not locked')
   })
 
-  it('shows seconds under a minute', async () => {
-    seed('user', { superAdmin: true })
-    answerQuery({ 'locked@struo.test': lock('locked@struo.test', true, true, 45) })
-    const w = mountView()
-    await flushPromises()
-
-    expect(w.get('[data-testid="lock-badge"]').text()).toBe('Locked, ends in 45 s')
-  })
-
-  it('hides the Unlock button from a caller without write on user', async () => {
-    seed('user', { superAdmin: false, grants: { read: true, write: false, delete: false } })
-    const w = mountView()
-    await flushPromises()
-
-    expect(w.find('[data-testid="lock-badge"]').exists()).toBe(true)
-    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(false)
-  })
-
-  it('shows an enabled Unlock button to a caller with write on user', async () => {
+  it('shows an enabled warning Unlock button with the time left for a lock the caller can clear', async () => {
     seed('user', { superAdmin: false, grants: WRITER })
     const w = mountView()
     await flushPromises()
 
     const button = w.get('[data-testid="lock-unlock"]')
+    expect(button.text()).toBe('Unlock (1:30)')
     expect(button.attributes('disabled')).toBeUndefined()
-    expect(button.attributes('aria-label')).toBe('Unlock locked@struo.test')
+    expect(button.classes().join(' ')).toContain('border-warning')
+    expect(tipOf(button)).toBe('Locked; unlocks automatically in 1 min 30 s')
+    expect(button.attributes('aria-label')).toBe('Unlock locked@struo.test, 1:30 left')
+    expect(w.find('[data-testid="lock-badge"]').exists()).toBe(false)
   })
 
-  it('disables Unlock with a tooltip when the lock is not clearable by the caller', async () => {
+  it('shows a disabled Locked button, with the reason, to a caller without write on user', async () => {
+    seed('user', { superAdmin: false, grants: { read: true, write: false, delete: false } })
+    const w = mountView()
+    await flushPromises()
+
+    const button = w.get('[data-testid="lock-locked"]')
+    expect(button.text()).toBe('Locked (1:30)')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(tipOf(button)).toBe(
+      'Locked; unlocks automatically in 1 min 30 s. Write permission on users is needed to clear a lock.')
+    expect(button.attributes('aria-label')).toBe('locked@struo.test is locked, 1:30 left')
+    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(false)
+  })
+
+  it('shows a disabled Locked button when the lock is not clearable by the caller', async () => {
     seed('user', { superAdmin: false, grants: WRITER })
     answerQuery({ 'locked@struo.test': lock('locked@struo.test', true, false, 90) })
     const w = mountView()
     await flushPromises()
 
-    const button = w.get('[data-testid="lock-unlock"]')
+    const button = w.get('[data-testid="lock-locked"]')
+    expect(button.text()).toBe('Locked (1:30)')
     expect(button.attributes('disabled')).toBeDefined()
-    expect(button.attributes('title')).toBe('Only a super-admin can clear this lock.')
+    expect(tipOf(button)).toBe(
+      'Locked; unlocks automatically in 1 min 30 s. Only a super-admin can clear this lock.')
+  })
+
+  it('formats the time as m:ss, and as h:mm:ss from an hour on', async () => {
+    seed('user', { superAdmin: true })
+    answerQuery({
+      'free@struo.test': lock('free@struo.test', true, true, 5),
+      'locked@struo.test': lock('locked@struo.test', true, true, 1800),
+      'root@struo.test': lock('root@struo.test', true, true, 3725),
+    })
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.findAll('[data-testid="lock-unlock"]').map((b) => b.text()))
+      .toEqual(['Unlock (0:05)', 'Unlock (30:00)', 'Unlock (1:02:05)'])
+    expect(tipOf(w.findAll('[data-testid="lock-unlock"]')[2]))
+      .toBe('Locked; unlocks automatically in 1 h 2 min 5 s')
+  })
+
+  it('counts down once a second from the time the query returned', async () => {
+    seed('user', { superAdmin: true })
+    const w = mountView()
+    await flushPromises()
+
+    await tick(1000)
+    expect(w.get('[data-testid="lock-unlock"]').text()).toBe('Unlock (1:29)')
+    await tick(29000)
+    expect(w.get('[data-testid="lock-unlock"]').text()).toBe('Unlock (1:00)')
+    expect(tipOf(w.get('[data-testid="lock-unlock"]'))).toBe('Locked; unlocks automatically in 1 min 0 s')
+  })
+
+  it('queries the page once when rows reach zero, and the button turns into Not locked', async () => {
+    seed('user', { superAdmin: true })
+    answerQuery({
+      'locked@struo.test': lock('locked@struo.test', true, true, 2),
+      'root@struo.test': lock('root@struo.test', true, true, 2),
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(loginLocksApi.query).toHaveBeenCalledTimes(1)
+    answerQuery({})
+
+    await tick(1000)
+    expect(loginLocksApi.query).toHaveBeenCalledTimes(1)
+    await tick(1000)
+    expect(loginLocksApi.query).toHaveBeenCalledTimes(2)
+    await tick(5000)
+    expect(loginLocksApi.query).toHaveBeenCalledTimes(2)
+    expect(w.findAll('[data-testid="lock-none"]')).toHaveLength(3)
+    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(false)
+  })
+
+  it('runs one timer only while a row is locked, and stops it on unmount', async () => {
+    seed('user', { superAdmin: true })
+    const w = mountView()
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(1)
+
+    w.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('runs no timer when nothing is locked', async () => {
+    seed('user', { superAdmin: true })
+    answerQuery({})
+    mountView()
+    await flushPromises()
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stops the timer as soon as the page or the filter changes, until the new page is queried', async () => {
+    seed('user', { superAdmin: true })
+    const w = mountView()
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(1)
+
+    let finish!: (value: { data: typeof ROWS; total: number }) => void
+    vi.mocked(itemsApi.list).mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    ;(w.vm as unknown as { onFilterApply: (spec: object) => void }).onFilterApply({})
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(0)
+
+    finish({ data: ROWS, total: ROWS.length })
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('stops the timer when a lock is cleared and nothing else is locked', async () => {
+    seed('user', { superAdmin: true })
+    vi.mocked(loginLocksApi.clear).mockResolvedValue(undefined)
+    const w = mountView()
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(1)
+    answerQuery({})
+
+    await w.get('[data-testid="lock-unlock"]').trigger('click')
+    await flushPromises()
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('disables the row delete for an account the caller cannot clear', async () => {
@@ -233,7 +355,25 @@ describe('CollectionListView login lock column', () => {
     expect(loginLocksApi.clear).toHaveBeenCalledWith('locked@struo.test')
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: 'Lock cleared' }))
     expect(loginLocksApi.query).toHaveBeenCalledTimes(2)
-    expect(w.find('[data-testid="lock-badge"]').exists()).toBe(false)
+    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(false)
+    expect(w.findAll('[data-testid="lock-none"]')).toHaveLength(3)
+  })
+
+  it('shows Unlocking while the lock is being cleared', async () => {
+    seed('user', { superAdmin: true })
+    let finish!: () => void
+    vi.mocked(loginLocksApi.clear).mockReturnValue(new Promise<void>((resolve) => { finish = resolve }))
+    const w = mountView()
+    await flushPromises()
+
+    await w.get('[data-testid="lock-unlock"]').trigger('click')
+    await flushPromises()
+
+    const button = w.get('[data-testid="lock-unlock"]')
+    expect(button.text()).toBe('Unlocking…')
+    expect(button.attributes('disabled')).toBeDefined()
+    finish()
+    await flushPromises()
   })
 
   it('does nothing when the confirmation is cancelled', async () => {
@@ -262,10 +402,10 @@ describe('CollectionListView login lock column', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
       severity: 'error', summary: 'Failed to clear the lock', detail: expect.stringContaining('trace-1'),
     }))
-    expect(w.find('[data-testid="lock-badge"]').exists()).toBe(true)
+    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(true)
   })
 
-  it('keeps the list when the query fails and marks the column unavailable', async () => {
+  it('keeps the list when the query fails and marks the column unavailable, with no button and no timer', async () => {
     seed('user', { superAdmin: true })
     vi.mocked(loginLocksApi.query).mockRejectedValue(new Error('down'))
     const w = mountView()
@@ -273,9 +413,12 @@ describe('CollectionListView login lock column', () => {
 
     expect(w.text()).toContain('locked@struo.test')
     expect(w.findAll('[data-testid="lock-unavailable"]')).toHaveLength(ROWS.length)
-    expect(w.find('[data-testid="lock-badge"]').exists()).toBe(false)
+    expect(w.find('[data-testid="lock-unlock"]').exists()).toBe(false)
+    expect(w.find('[data-testid="lock-none"]').exists()).toBe(false)
     expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
   })
+
   it('disables the row delete of a super-admin role and of the public role, with the reason as tooltip', async () => {
     seed('role', { superAdmin: false, grants: WRITER })
     vi.mocked(itemsApi.list).mockResolvedValue({

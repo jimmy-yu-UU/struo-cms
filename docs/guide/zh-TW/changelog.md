@@ -8,12 +8,8 @@
 
 ### 新增
 
-- `POST api/login-locks/query` 收一到 100 個 email，依請求順序為每一個回答 `{ email, locked,
-  retryAfterSeconds, clearable }`；目標是超級管理員帳號、而呼叫端不是超級管理員時，`clearable` 為 `false`。
-- 使用者清單多了「登入鎖定」欄：每頁一次查詢，被鎖定的帳號顯示剩餘時間的標記；持有 `user` 寫入授權的人
-  還會看到「解除鎖定」按鈕，按下會先確認。
-- `ISuperAdminDirectory` 與 `SuperAdminGuard`：每條寫入路徑共用的應用層介面，套用超級管理員的規則；
-  `userRole` 與 `permission` 集合也有了寫入攔截器。
+- 使用者清單多了「登入鎖定」欄：每頁一次查詢，每個帳號一顆按鈕：停用的「未鎖定」、能解除的呼叫端看到
+  「解除鎖定 (m:ss)」（按下會先確認），否則是停用的「已鎖定 (m:ss)」；時間每秒倒數，鎖定到期時會再查詢該頁。
 
 ### 變更
 

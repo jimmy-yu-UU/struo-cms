@@ -91,7 +91,8 @@ test('a role with write on the user collection lets its user clear an account lo
     await unlocker.getByRole('button', { name: `Unlock ${VICTIM_EMAIL}` }).click()
     await unlocker.getByRole('alertdialog', { name: 'Clear login lock' }).getByRole('button', { name: 'Confirm' }).click()
     await expect(unlocker.getByText('Lock cleared')).toBeVisible()
-    await expect(unlocker.getByRole('button', { name: `Unlock ${VICTIM_EMAIL}` })).toHaveCount(0)
+    // The row turns into a disabled Not locked button once the list is queried again.
+    await expect(unlocker.getByRole('button', { name: `${VICTIM_EMAIL} is not locked` })).toBeDisabled()
 
     const after = await anonymous.post(`${API}/api/auth/login`, {
       data: { email: VICTIM_EMAIL, password: ACCOUNT_PASSWORD }, headers: CSRF,

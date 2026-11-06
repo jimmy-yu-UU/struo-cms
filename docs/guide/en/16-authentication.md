@@ -275,11 +275,14 @@ SSO sign-in is unaffected.
 A lock ends by itself when the window ends. A caller with write on the `user` collection can end it
 sooner through `DELETE api/login-locks?email=…`, and a caller with read on `user` can see which accounts
 are locked through `POST api/login-locks/query`; see [Chapter 13](13-rest-endpoints.md). The admin UI
-does the same in the Login lock column of the user list: a locked account shows a badge with the time
-left and, for a caller with write on `user`, an Unlock button that asks for confirmation. Clearing a
-lock does not change the password. Only a super-admin can clear the lock on a super-admin account: the
-endpoint answers `403` to anyone else, the query reports such an account as not `clearable`, and the
-Unlock button is disabled with a note.
+does the same in the Login lock column of the user list, which shows one button per account. It reads
+Not locked and is disabled when the account is not locked. For a locked account it shows the time left as
+`m:ss` (`h:mm:ss` from an hour on), counting down every second: the button is Unlock (m:ss) for a caller who
+can clear the lock and asks for confirmation, and a disabled Locked (m:ss) for one who cannot, with a
+tooltip that gives the reason. When a lock runs out the page is queried once more, so the button turns
+into Not locked. Clearing a lock does not change the password. Only a super-admin can clear the lock on a
+super-admin account: the endpoint answers `403` to anyone else, and the query reports such an account as
+not `clearable`.
 
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It

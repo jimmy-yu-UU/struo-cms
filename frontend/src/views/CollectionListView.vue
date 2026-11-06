@@ -2,7 +2,7 @@
 <!-- No route-params watcher: AppShell's keyed <router-view> remounts this view on a collection
      switch (see AppShell.vue's :key="route.path" comment). -->
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Plus, Pencil, Eye, Trash2, Undo2 } from '@lucide/vue'
@@ -27,6 +27,7 @@ import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
 import { primitiveText } from '../lib/primitiveText'
+import { formatClock } from '../lib/formatClock'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { CreatedUser } from '@/api/usersApi'
@@ -119,17 +120,50 @@ const filterFields = computed<FilterField[]>(() => {
 })
 
 // ---- login lock column (user collection) ----
-// One batch query per loaded page. A failing query leaves the list as it is and marks the column
-// unavailable.
+// One batch query per loaded page. Each row shows one button: Not locked, Unlock (m:ss) for a lock the caller
+// can clear, or Locked (m:ss) when it cannot. A failing query leaves the list as it is and marks the column
+// unavailable. While any row is locked a single page-level timer ticks once a second; the time left is the
+// queried retryAfterSeconds minus the time since the query returned, and when a row reaches zero the page is
+// queried once more, whether one row or several expired in that tick.
 const showLockColumn = computed(() => isUserCollection.value && mode.value === 'active' && canRead.value)
 const lockStates = ref<Record<string, LoginLockState>>({})
 const lockFailed = ref(false)
+const lockLoaded = ref(false)
+const lockQueriedAt = ref(0)
+const lockNow = ref(Date.now())
 const unlockingEmail = ref<string | null>(null)
 const lockLoad = createLatestWins()
+const anyLocked = computed(() => Object.values(lockStates.value).some((state) => state.locked))
+let lockTimer: ReturnType<typeof setInterval> | undefined
+let expiryQueryPending = false
 
 function emailOf(row: Row): string {
   return primitiveText(row.email)
 }
+
+function secondsLeft(state: LoginLockState): number {
+  return Math.max(0, state.retryAfterSeconds - Math.floor((lockNow.value - lockQueriedAt.value) / 1000))
+}
+
+function tickLocks(): void {
+  lockNow.value = Date.now()
+  if (expiryQueryPending) return
+  if (!Object.values(lockStates.value).some((state) => state.locked && secondsLeft(state) <= 0)) return
+  expiryQueryPending = true
+  void loadLocks().finally(() => { expiryQueryPending = false })
+}
+
+function stopLockTimer(): void {
+  if (lockTimer === undefined) return
+  clearInterval(lockTimer)
+  lockTimer = undefined
+}
+
+watch(anyLocked, (locked) => {
+  if (!locked) stopLockTimer()
+  else lockTimer ??= setInterval(tickLocks, 1000)
+}, { flush: 'sync' })
+onBeforeUnmount(stopLockTimer)
 
 async function loadLocks(): Promise<void> {
   const token = lockLoad.next()
@@ -137,24 +171,32 @@ async function loadLocks(): Promise<void> {
   const emails = showLockColumn.value ? rows.value.map(emailOf).filter((e) => e !== '') : []
   if (emails.length === 0) {
     lockStates.value = {}
+    lockLoaded.value = true
     return
   }
   try {
     const states = await loginLocksApi.query(emails)
     if (!lockLoad.isCurrent(token)) return
+    lockQueriedAt.value = Date.now()
+    lockNow.value = lockQueriedAt.value
     lockStates.value = Object.fromEntries(states.map((s) => [s.email, s]))
+    lockLoaded.value = true
   } catch {
     if (!lockLoad.isCurrent(token)) return
     lockStates.value = {}
     lockFailed.value = true
+    lockLoaded.value = true
   }
 }
 
-// Seconds under a minute, minutes (rounded up) from a minute on.
-function lockRemaining(seconds: number): string {
-  return seconds < 60
-    ? t('loginLocks.durationSeconds', { n: seconds })
-    : t('loginLocks.durationMinutes', { n: Math.ceil(seconds / 60) })
+// Whole seconds as words for a tooltip: 59 s, 9 min 59 s, 1 h 2 min 5 s.
+function spokenTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return t('loginLocks.spokenHours', { h, m, s })
+  if (m > 0) return t('loginLocks.spokenMinutes', { m, s })
+  return t('loginLocks.spokenSeconds', { s })
 }
 
 // A super-admin account is the one a caller who is not a super-admin cannot clear; the same flag marks
@@ -187,26 +229,39 @@ async function onUnlock(row: Row): Promise<void> {
   }
 }
 
+// A disabled button gets no pointer events, so a tooltip lives on the span around it.
 function lockCell(row: Row) {
   if (lockFailed.value) {
     return h('span', { class: 'text-muted-foreground', title: t('loginLocks.unavailableHint'), 'data-testid': 'lock-unavailable' },
       t('loginLocks.unavailable'))
   }
-  const state = lockStates.value[emailOf(row)]
-  if (!state?.locked) return h('span', { class: 'text-muted-foreground', 'data-testid': 'lock-none' }, '—')
-  const parts = [h(Badge, { variant: 'outline', class: 'border-warning bg-warning/10', 'data-testid': 'lock-badge' },
-    () => t('loginLocks.lockedFor', { time: lockRemaining(state.retryAfterSeconds) }))]
-  if (canWrite.value) {
-    const busy = unlockingEmail.value === emailOf(row)
-    parts.push(h(Button, {
-      variant: 'outline', size: 'sm', 'data-testid': 'lock-unlock',
-      disabled: !state.clearable || busy,
-      title: state.clearable ? undefined : t('loginLocks.superAdminOnly'),
-      'aria-label': t('loginLocks.unlockLabel', { email: emailOf(row) }),
-      onClick: () => onUnlock(row),
-    }, () => (busy ? t('loginLocks.unlocking') : t('loginLocks.unlock'))))
+  if (!lockLoaded.value) return h('span', { class: 'text-muted-foreground', 'data-testid': 'lock-pending' }, '…')
+  const email = emailOf(row)
+  const state = lockStates.value[email]
+  if (!state?.locked) {
+    return h(Button, {
+      variant: 'outline', size: 'sm', disabled: true, class: 'text-muted-foreground', 'data-testid': 'lock-none',
+      'aria-label': t('loginLocks.ariaNotLocked', { email }),
+    }, () => t('loginLocks.notLocked'))
   }
-  return h('div', { class: 'flex items-center gap-2' }, parts)
+
+  const left = secondsLeft(state)
+  const clock = formatClock(left)
+  const tip = t('loginLocks.lockedTip', { time: spokenTime(left) })
+  if (canWrite.value && state.clearable) {
+    const busy = unlockingEmail.value === email
+    return h('span', { class: 'inline-flex', title: tip }, [h(Button, {
+      variant: 'outline', size: 'sm', class: 'border-warning bg-warning/10', 'data-testid': 'lock-unlock',
+      disabled: busy,
+      'aria-label': t('loginLocks.ariaUnlock', { email, time: clock }),
+      onClick: () => onUnlock(row),
+    }, () => (busy ? t('loginLocks.unlocking') : t('loginLocks.unlockWithTime', { time: clock })))])
+  }
+  const reason = canWrite.value ? t('loginLocks.superAdminOnly') : t('loginLocks.readOnlyHint')
+  return h('span', { class: 'inline-flex', title: t('loginLocks.tooltipWithReason', { tip, reason }) }, [h(Button, {
+    variant: 'outline', size: 'sm', disabled: true, class: 'border-warning bg-warning/10', 'data-testid': 'lock-locked',
+    'aria-label': t('loginLocks.ariaLocked', { email, time: clock }),
+  }, () => t('loginLocks.lockedWithTime', { time: clock }))])
 }
 
 function actionButtons(row: Row) {
@@ -314,6 +369,8 @@ async function loadItems(): Promise<void> {
   }
   loading.value = true
   error.value = ''
+  lockStates.value = {}
+  lockLoaded.value = false
   try {
     const sort = toSortParam(tableState.value.sort)
     await langStore.load()
