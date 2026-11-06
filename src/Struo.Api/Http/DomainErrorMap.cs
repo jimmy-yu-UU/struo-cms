@@ -22,11 +22,13 @@ public static class DomainErrorMap
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
     /// yields <see cref="ErrorCodes.Forbidden"/>. A <see cref="StruoDomainException"/> (a fork's own error) is matched first and surfaces
     /// its own code and message. Mapped domain exceptions surface their
-    /// client-safe <see cref="System.Exception.Message"/> verbatim. Two cases carry a fixed message
-    /// instead, because the exception's own text names internals:
+    /// client-safe <see cref="System.Exception.Message"/> verbatim. Three cases carry a fixed message
+    /// instead. Two because the exception's own text names internals:
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
     /// host) and a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
-    /// constraint, index or column). Any other unmapped type collapses to
+    /// constraint, index or column). The third is Kestrel's own 413 <c>BadHttpRequestException</c>, an
+    /// over-limit request body, which maps to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
+    /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
     /// </summary>
@@ -44,6 +46,8 @@ public static class DomainErrorMap
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
+                (ErrorCodes.PayloadTooLarge, "Request body is too large."),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),

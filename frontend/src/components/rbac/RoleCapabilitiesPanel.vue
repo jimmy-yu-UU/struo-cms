@@ -5,6 +5,7 @@ import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { rbacApi, type CapabilityEntry } from '../../api/rbacApi'
+import { traceIdDetail } from '../../api/apiClient'
 
 // The Role form's system capabilities: the catalog from GET /capabilities, one checkbox each, saved
 // as a full-replace PUT of the ticked codes. Independent of the permission matrix's own save. The
@@ -78,8 +79,8 @@ async function save(): Promise<boolean> {
     baseline.value = snapshot(saved)
     toast.add({ severity: 'success', summary: t('rbac.capabilitiesSaved'), life: 3000 })
     return true
-  } catch {
-    toast.add({ severity: 'error', summary: t('rbac.capabilitiesSaveFailed'), life: 5000 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('rbac.capabilitiesSaveFailed'), detail: traceIdDetail(e), life: 5000 })
     return false
   } finally {
     saving.value = false

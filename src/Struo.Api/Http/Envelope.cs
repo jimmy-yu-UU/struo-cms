@@ -13,7 +13,9 @@ public sealed record ErrorBody(
     string Code,
     string Message,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<ValidationDetail>? Details = null);
+    IReadOnlyList<ValidationDetail>? Details = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TraceId = null);
 
 public sealed record MetaInfo(
     long Total, int Limit, int Offset,
@@ -41,6 +43,7 @@ public static class Envelope
 {
     public static SuccessEnvelope Success(object? data, MetaInfo? meta = null) => new(true, data, meta);
 
-    public static ErrorEnvelope Error(string code, string message, IReadOnlyList<ValidationDetail>? details = null) =>
-        new(false, new ErrorBody(code, message, details));
+    public static ErrorEnvelope Error(
+        string code, string message, IReadOnlyList<ValidationDetail>? details = null, string? traceId = null) =>
+        new(false, new ErrorBody(code, message, details, traceId));
 }

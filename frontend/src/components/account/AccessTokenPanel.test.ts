@@ -292,6 +292,16 @@ describe('AccessTokenPanel', () => {
       expect(usersApi.getAccessTokenInfo).toHaveBeenCalledTimes(1)
     })
 
+    it('adds the trace id to a generate failure toast', async () => {
+      vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(NO_TOKEN)
+      vi.mocked(usersApi.generateAccessToken).mockRejectedValue(new ApiError(500, 'boom', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+      const w = mountPanel()
+      await flushPromises()
+      await button(w, en.accessToken.generate)!.trigger('click')
+      await flushPromises()
+      expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: en.accessToken.generateFailed, detail: 'Trace ID: abc123' }))
+    })
+
     it('toasts a revoke failure and keeps the token details', async () => {
       vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(HAS_TOKEN)
       vi.mocked(usersApi.revokeAccessToken).mockRejectedValue(new ApiError(403, 'no', 'FORBIDDEN'))

@@ -229,6 +229,9 @@ $ GET /api/items/article?sort=tags.name
 HTTP_STATUS:400
 ```
 
+本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
+見[第 12 章](12-rest-conventions.md#回應信封)。
+
 `sort=category.name` 這種多對一路徑則正常回應 200。
 
 `NULL` 排在哪裡交給資料庫決定，程式不會送 `NULLS FIRST`／`NULLS LAST`：SQLite、SQL Server 與

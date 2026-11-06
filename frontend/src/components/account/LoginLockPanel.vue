@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/composables/useToast'
 import { loginLocksApi, type LoginLockState } from '../../api/loginLocksApi'
-import { ApiError } from '../../api/apiClient'
+import { ApiError, traceIdDetail } from '../../api/apiClient'
 import { createLatestWins } from '../../lib/latestWins'
 
 // Shows whether password sign-in for one email is locked and lets the holder of login.unlock (or a
@@ -63,7 +63,7 @@ async function onUnlock(): Promise<void> {
     const key = e instanceof ApiError && e.status === 403
       ? 'loginLocks.superAdminOnly'
       : errorKeyFor(e, 'loginLocks.unlockFailed')
-    toast.add({ severity: 'error', summary: t(key), life: 3500 })
+    toast.add({ severity: 'error', summary: t(key), detail: traceIdDetail(e), life: 3500 })
   } finally {
     busy.value = false
   }

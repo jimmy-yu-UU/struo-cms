@@ -32,6 +32,9 @@ $ GET /api/items/article?fields=category.name
 HTTP_STATUS:400
 ```
 
+本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
+見[第 12 章](12-rest-conventions.md#回應信封)。
+
 `category.name` 整條被拒絕，不是被忽略、也不是只投影 `category`。
 
 `fields=` 只在清單與 `POST .../query` 這兩個讀取動作上生效。單筆讀取

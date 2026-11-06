@@ -301,6 +301,18 @@ it). The same list decides which absolute `returnUrl` values OIDC sign-in accept
 [Chapter 16](16-authentication.md). Hosting the admin SPA on a static host is covered in
 [Chapter 20](20-deployment.md).
 
+## Api
+
+| Key | Type | Default |
+|---|---|---|
+| `Api:MaxJsonBodyBytes` | integer | `4194304` (4 MB) |
+
+`MaxJsonBodyBytes` caps the body of a JSON request: every REST endpoint that takes JSON, and `POST
+/graphql`. A larger body is answered with `413` and the error code `PAYLOAD_TOO_LARGE`; see
+[Chapter 12](12-rest-conventions.md). The value must be greater than 0, or startup fails. File
+uploads are not JSON and are capped by `Struo:Files:MaxUploadBytes` instead, so raising this key is
+never needed for a large upload.
+
 ## Query
 
 | Key | Type | Default |
@@ -730,6 +742,10 @@ applies to it rather than relying on the defaults: a tenant where the provider h
 
 Two sinks are configured by default: the console, and a daily-rolling `logs/struo-.log`
 (`shared: true`).
+
+Both sinks print the request's trace id before each message. It is the id an error response carries
+as `traceId`, so a caller's report finds the log lines of that request; see
+[Chapter 12](12-rest-conventions.md).
 
 This section isn't bound to a custom options class; Serilog's own configuration reader parses it
 directly. Serilog builds its two loggers once each, at startup, so changing a level requires

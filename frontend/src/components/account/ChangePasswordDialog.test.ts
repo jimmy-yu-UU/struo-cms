@@ -218,6 +218,14 @@ describe('ChangePasswordDialog', () => {
     }
   })
 
+  it('adds the trace id to the toast of a server fault', async () => {
+    vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountDialog('other-id')
+    await flushPromises()
+    await fillAndSubmit(w, ['newpassword1', 'newpassword1'])
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: en.password.failed, detail: 'Trace ID: abc123' }))
+  })
+
   it('shows the wait time on a 429', async () => {
     vi.spyOn(usersApi, 'changePassword').mockRejectedValue(new ApiError(429, 'x', 'TOO_MANY_REQUESTS', undefined, 30))
     const w = mountDialog('other-id')

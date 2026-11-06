@@ -17,7 +17,7 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
         var authenticated = httpContext.User.Identity?.IsAuthenticated == true;
         var (status, body) = Map(exception, authenticated, logger);
         httpContext.Response.StatusCode = status;
-        await httpContext.Response.WriteAsJsonAsync(Envelope.Error(body.Code, body.Message, body.Details), cancellationToken);
+        await httpContext.Response.WriteAsJsonAsync(Envelope.Error(body.Code, body.Message, body.Details, RequestTraceId.For(httpContext)), cancellationToken);
         return true;
     }
 

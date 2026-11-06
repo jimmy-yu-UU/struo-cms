@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
+import { traceIdDetail } from '../../api/apiClient'
 
 // The Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
@@ -84,8 +85,8 @@ async function save(): Promise<boolean> {
     baseline.value = JSON.stringify(grants.value)
     toast.add({ severity: 'success', summary: t('rbac.saved'), life: 3000 })
     return true
-  } catch {
-    toast.add({ severity: 'error', summary: t('rbac.saveFailed'), life: 5000 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('rbac.saveFailed'), detail: traceIdDetail(e), life: 5000 })
     return false
   } finally {
     saving.value = false

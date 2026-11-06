@@ -48,6 +48,8 @@ internal static class StruoCmsPipeline
         // AuthenticationFailureEnvelopeTests. It stays INSIDE Serilog request logging (so the handled 500
         // is what gets logged) and INSIDE CORS (so the error response still carries CORS headers).
         app.UseExceptionHandler();
+        // Inside the exception handler so an over-limit body is answered with the error envelope.
+        app.UseMiddleware<JsonBodyLimitMiddleware>();
         app.UseMiddleware<Struo.Api.Auth.SessionRotationMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();

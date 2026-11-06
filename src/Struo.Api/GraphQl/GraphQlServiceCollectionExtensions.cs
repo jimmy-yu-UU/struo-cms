@@ -89,6 +89,9 @@ public static class GraphQlServiceCollectionExtensions
             .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
             .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
             .AddMaxExecutionDepthRule(limits.MaxExecutionDepth, skipIntrospectionFields: true)
+            // Stamps extensions.traceId on every error, including the validation errors the error filter never sees.
+            .UseRequest(TraceIdResultMiddleware.Create)
+            .UseDefaultPipeline()
             // Static cost analysis is the alias-amplification defense. HotChocolate 16.6.0's
             // validation rule set has no dedicated alias/operation-count rule (checked directly
             // against the HotChocolate.Validation 16.6.0 assembly), so every aliased selection

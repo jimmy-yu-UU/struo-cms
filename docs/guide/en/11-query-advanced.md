@@ -35,6 +35,9 @@ $ GET /api/items/article?fields=category.name
 HTTP_STATUS:400
 ```
 
+The error examples in this manual leave out `traceId`, which every error response carries; see
+[Chapter 12](12-rest-conventions.md#the-response-envelope).
+
 The whole `category.name` path is rejected — it isn't silently dropped, and it doesn't fall back to
 projecting just `category`.
 

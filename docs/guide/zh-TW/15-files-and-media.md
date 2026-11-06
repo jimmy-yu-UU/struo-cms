@@ -192,6 +192,9 @@ $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 HTTP_STATUS:404
 ```
 
+本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
+見[第 12 章](12-rest-conventions.md#回應信封)。
+
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}

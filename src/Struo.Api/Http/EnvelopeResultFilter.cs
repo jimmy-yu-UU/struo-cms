@@ -15,17 +15,24 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
 {
     public void OnResultExecuting(ResultExecutingContext context)
     {
-        if (BuildEnvelope(context.Result) is { } replacement) context.Result = replacement;
+        if (BuildEnvelope(context.Result, RequestTraceId.For(context.HttpContext)) is { } replacement) context.Result = replacement;
     }
 
     public void OnResultExecuted(ResultExecutedContext context) { }
 
-    /// <summary>Returns the replacement result, or <c>null</c> to leave the result untouched.</summary>
-    public static IActionResult? BuildEnvelope(IActionResult result)
+    /// <summary>
+    /// Returns the replacement result, or <c>null</c> to leave the result untouched. Every error envelope it
+    /// builds, and any that lacks a trace id, carries <paramref name="traceId"/>.
+    /// </summary>
+    public static IActionResult? BuildEnvelope(IActionResult result, string? traceId = null)
     {
         switch (result)
         {
-            // Already an envelope (Fail helper / validation factory) — idempotent no-op.
+            // An error envelope from the Fail helper lacks a trace id; stamp it. Anything else already
+            // enveloped is an idempotent no-op.
+            case ObjectResult { Value: ErrorEnvelope { Error.TraceId: null } fail } stamped when traceId is not null:
+                return new ObjectResult(fail with { Error = fail.Error with { TraceId = traceId } })
+                { StatusCode = stamped.StatusCode };
             case ObjectResult { Value: ErrorEnvelope }:
             case ObjectResult { Value: SuccessEnvelope }:
                 return null;
@@ -51,7 +58,7 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
                 var status = obj.StatusCode ?? StatusCodes.Status200OK;
                 return status is >= 200 and < 300
                     ? new ObjectResult(Envelope.Success(obj.Value)) { StatusCode = obj.StatusCode }
-                    : new ObjectResult(Envelope.Error(ErrorCodes.ForStatus(status), Message(obj.Value, status)))
+                    : new ObjectResult(Envelope.Error(ErrorCodes.ForStatus(status), Message(obj.Value, status), traceId: traceId))
                     { StatusCode = status };
             }
 
@@ -61,7 +68,7 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
 
             // Bare error status result (no body), e.g. NotFound() / StatusCode(4xx).
             case StatusCodeResult { StatusCode: >= 400 and < 600 } scr:
-                return new ObjectResult(Envelope.Error(ErrorCodes.ForStatus(scr.StatusCode), DefaultMessage(scr.StatusCode)))
+                return new ObjectResult(Envelope.Error(ErrorCodes.ForStatus(scr.StatusCode), DefaultMessage(scr.StatusCode), traceId: traceId))
                 { StatusCode = scr.StatusCode };
 
             // FileResult / RedirectResult / ChallengeResult / EmptyResult / SignIn / SignOut / bare 2xx → untouched.

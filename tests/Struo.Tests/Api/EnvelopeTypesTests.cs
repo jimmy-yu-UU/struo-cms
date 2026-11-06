@@ -55,4 +55,18 @@ public class EnvelopeTypesTests
             Envelope.Error("VALIDATION", "bad", new[] { new ValidationDetail("email", "required") }), Web);
         json.Should().Contain("\"details\":[{\"field\":\"email\",\"message\":\"required\"}]");
     }
+
+    [Fact]
+    public void Error_includes_trace_id_when_present()
+    {
+        var json = JsonSerializer.Serialize(Envelope.Error("BAD_USER_INPUT", "nope", traceId: "abc123"), Web);
+        json.Should().Contain("\"traceId\":\"abc123\"");
+    }
+
+    [Fact]
+    public void Error_omits_trace_id_when_null()
+    {
+        var json = JsonSerializer.Serialize(Envelope.Error("BAD_USER_INPUT", "nope"), Web);
+        json.Should().NotContain("traceId");
+    }
 }

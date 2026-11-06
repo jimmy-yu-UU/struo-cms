@@ -75,6 +75,8 @@ export default {
     connectionBody: '伺服器沒有回應。請檢查網路連線後再試一次。',
     tooManyRequests: '嘗試次數過多,請稍後再試。',
     tooManyRequestsWithWait: '嘗試次數過多,請於 {seconds} 秒後再試。',
+    traceIdSuffix: '(追蹤碼:{id})',
+    traceIdLine: '追蹤碼:{id}',
   },
   password: {
     changeTitle: '變更密碼',

@@ -64,7 +64,8 @@ internal static class StruoCmsRateLimiting
             _ => "Too many requests. Please try again later.",
         };
         await context.HttpContext.Response.WriteAsJsonAsync(
-            Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.TooManyRequests, message),
+            Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.TooManyRequests, message,
+                traceId: Struo.Api.Http.RequestTraceId.For(context.HttpContext)),
             cancellationToken: ct);
     }
 

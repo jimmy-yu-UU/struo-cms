@@ -5,7 +5,7 @@ import { Dialog, DialogScrollContent, DialogHeader, DialogTitle, DialogDescripti
 import { Button } from '@/components/ui/button'
 import PasswordInput from '@/components/form/PasswordInput.vue'
 import { usersApi } from '@/api/usersApi'
-import { ApiError } from '@/api/apiClient'
+import { ApiError, traceIdDetail } from '@/api/apiClient'
 import { generatePassword } from '@/lib/passwordGenerator'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import { useAuthStore } from '@/stores/authStore'
@@ -137,7 +137,7 @@ function handleFailure(e: unknown): void {
       return
     }
     default:
-      toast.add({ severity: 'error', summary: t('password.failed'), life: 3500 })
+      toast.add({ severity: 'error', summary: t('password.failed'), detail: traceIdDetail(e), life: 3500 })
   }
 }
 </script>

@@ -2,6 +2,21 @@
 
 ## 0.27.0 — 2026-11-06
 
+::: danger 破壞性變更
+- JSON 請求 body 超過 `Api:MaxJsonBodyBytes`（預設 4 MB）時，回 `413`，錯誤代碼 `PAYLOAD_TOO_LARGE`。
+  範圍是每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳仍由 `Struo:Files:MaxUploadBytes` 限制。
+  會送出大於 4 MB 的 JSON body 的用戶端，必須調高這個鍵（`Api__MaxJsonBodyBytes`）。見
+  [第 4 章](04-configuration.md)與[第 12 章](12-rest-conventions.md)。
+:::
+
+### 新增
+
+- 每個 REST 錯誤信封帶 `error.traceId`，每則 GraphQL 錯誤帶 `extensions.traceId`：該請求的 trace id，
+  請求日誌與該請求記下的錯誤日誌記的是同一個 id。主控台與檔案兩個日誌 sink 都在每則訊息前印出它。
+  後台在伺服器錯誤（`5xx`）時顯示它，位置是錯誤訊息，以及錯誤 toast 的細節行。見
+  [第 12 章](12-rest-conventions.md)與[第 14 章](14-graphql.md)。
+- `Api:MaxJsonBodyBytes`，即上述的 JSON body 上限。值必須大於 0，否則啟動失敗。
+
 ### 修正
 
 - 後台項目編輯器中，伺服器上為 `null` 且保持空白的文字類欄位，在你儲存其他欄位時仍保持 `null`。

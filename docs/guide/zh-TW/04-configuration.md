@@ -256,6 +256,16 @@ systemd 之類會從別的目錄啟動行程時，這點會影響快取實際落
 OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication.md)。把後台放在靜態託管服務的做法見
 [第 20 章](20-deployment.md)。
 
+## Api
+
+| 鍵 | 型別 | 預設值 |
+|---|---|---|
+| `Api:MaxJsonBodyBytes` | 整數 | `4194304`（4 MB） |
+
+`MaxJsonBodyBytes` 限制 JSON 請求的 body：每個收 JSON 的 REST 端點，以及 `POST /graphql`。body 超過時回
+`413`，錯誤代碼 `PAYLOAD_TOO_LARGE`，見[第 12 章](12-rest-conventions.md)。值必須大於 0，否則啟動失敗。
+檔案上傳不是 JSON，改由 `Struo:Files:MaxUploadBytes` 限制，所以大檔上傳從來不必調高這個鍵。
+
 ## Query
 
 | 鍵 | 型別 | 預設值 |
@@ -630,6 +640,9 @@ user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <�
 | `Serilog:WriteTo` | 陣列 | 見下文 |
 
 預設兩個 sink：主控台，以及每日輪替的 `logs/struo-.log`（`shared: true`）。
+
+兩個 sink 都在每則訊息前印出該請求的 trace id。它就是錯誤回應裡的 `traceId`，所以呼叫端回報的 id 可以找到
+該請求的日誌行，見[第 12 章](12-rest-conventions.md)。
 
 這個區段不綁自訂選項類別，直接交給 Serilog 自己的設定讀取器解析。兩個 logger 都在啟動時建立
 一次，所以改等級要重開行程；`WriteTo` 讀進來之前的最初幾行，只會寫到主控台。

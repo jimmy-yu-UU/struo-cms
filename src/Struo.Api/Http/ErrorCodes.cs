@@ -22,8 +22,10 @@ public static class ErrorCodes
     // OnRejected callback, and AuthController.Login's per-account ILoginAttemptThrottle writes it
     // directly when a throttled login is rejected before authentication even runs.
     public const string TooManyRequests = "TOO_MANY_REQUESTS";
-    // A lying/streaming upload whose actual bytes exceed FileStorageOptions.MaxUploadBytes
-    // even though the declared Content-Length passed the up-front check.
+    // Two producers: a lying/streaming file upload whose actual bytes exceed
+    // FileStorageOptions.MaxUploadBytes even though the declared Content-Length passed the up-front
+    // check, and a JSON request body (REST or /graphql) over ApiOptions.MaxJsonBodyBytes, declared or
+    // streamed (JsonBodyLimitMiddleware). Kestrel's own 413 for an over-limit body maps here too.
     public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 
     // "Your current password is wrong" on PUT /api/users/{id}/password. Deliberately NOT 401/

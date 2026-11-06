@@ -14,11 +14,15 @@
 失敗時是：
 
 ```json
-{ "success": false, "error": { "code": "…", "message": "…", "details": … } }
+{ "success": false, "error": { "code": "…", "message": "…", "details": …, "traceId": "…" } }
 ```
 
 `details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯、翻譯值無效（型別不對、違反格式規則或超過
 `MaxLength`）、翻譯 locale 重複所產生的 `BAD_USER_INPUT` 上才會出現，其餘代碼一律不帶這個鍵。
+`traceId` 出現在每一個錯誤回應上。它是該請求的 trace id，32 個十六進位字元；伺服器的請求日誌，以及該
+請求記下的任何錯誤日誌，記的都是同一個 id，所以從回應抄下來的 id 可以找到對應的日誌行；主控台與檔案兩個
+sink 都把它印在訊息前面。本手冊的範例都省略了它。
+
 `meta` 也一樣，只在清單這種分頁結果上才會出現，單筆讀取、建立與更新都完全省略這個鍵，而不是送一個
 `null`。有 `meta` 時，除了分頁資訊，還可能多兩個鍵：`facets` 與 `aggregate`，一樣是請求要求了才出現，
 兩者互不影響。
@@ -88,7 +92,7 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `VALIDATION` | 400 | 模型繫結或資料註記驗證失敗 |
 | `INTERNAL_SERVER_ERROR` | 500 | 未歸類的例外，訊息一律遮罩 |
 | `TOO_MANY_REQUESTS` | 429 | 登入或改密碼觸發流量限制 |
-| `PAYLOAD_TOO_LARGE` | 413 | 上傳的實際位元組超過設定上限 |
+| `PAYLOAD_TOO_LARGE` | 413 | 檔案上傳超過其上限，或 JSON body 超過 `Api:MaxJsonBodyBytes` |
 | `INVALID_CURRENT_PASSWORD` | 400 | 自助改密碼時目前密碼錯誤 |
 | `NO_LOCAL_PASSWORD` | 400 | 帳號是外部 OIDC 建的，沒有本地密碼 |
 | `ACCOUNT_INACTIVE` | 401 | 密碼正確，但帳號已被停用 |
@@ -108,8 +112,16 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
   `Struo:Files:ImageTransform:QueueTimeoutSeconds` 內沒有呼叫端能用的轉換名額空出來時回傳；回應帶
   `Retry-After` 標頭，值就是那個秒數（見[第 15 章](15-files-and-media.md)）。
 
-`PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的傳超過上限的位元
-組，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERVER_ERROR` 只出現在真正未處理的錯誤上。
+`PAYLOAD_TOO_LARGE` 與 `SEARCH_UNAVAILABLE` 在一般環境下不容易觸發，前者需要真的送出超過上限的上傳或
+JSON body，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERVER_ERROR` 只出現在真正未處理的錯誤上。
+
+### JSON body 大小
+
+body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 4 章](04-configuration.md)）。範圍包含
+每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳是 multipart、不是 JSON，沿用自己的上限
+`Struo:Files:MaxUploadBytes`。body 超過上限時回 `413`，信封裡的代碼是 `PAYLOAD_TOO_LARGE`。請求若宣告
+的 `Content-Length` 就超過上限，會在讀 body 之前直接拒絕；沒有宣告長度的 body 則在讀過上限的那一刻被截斷。
+`/graphql` 同樣回 `413`，但用它自己的形狀，見[第 14 章](14-graphql.md)。
 
 ### 自己的錯誤代碼
 

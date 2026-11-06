@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import PasswordInput from '@/components/form/PasswordInput.vue'
 import { usersApi, type CreatedUser } from '@/api/usersApi'
-import { ApiError } from '@/api/apiClient'
+import { ApiError, traceIdDetail } from '@/api/apiClient'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import { useAppConfigStore } from '@/stores/appConfigStore'
 import { useToast } from '@/composables/useToast'
@@ -99,7 +99,7 @@ function handleFailure(e: unknown): void {
       return
     }
   }
-  toast.add({ severity: 'error', summary: t('createUser.failed'), life: 3500 })
+  toast.add({ severity: 'error', summary: t('createUser.failed'), detail: traceIdDetail(e), life: 3500 })
 }
 </script>
 

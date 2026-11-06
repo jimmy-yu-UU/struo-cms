@@ -75,6 +75,8 @@ export default {
     connectionBody: 'The server did not answer. Check your connection and try again.',
     tooManyRequests: 'Too many attempts. Please try again later.',
     tooManyRequestsWithWait: 'Too many attempts. Please try again in {seconds} seconds.',
+    traceIdSuffix: ' (Trace ID: {id})',
+    traceIdLine: 'Trace ID: {id}',
   },
   password: {
     changeTitle: 'Change password',

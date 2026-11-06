@@ -7,6 +7,7 @@ export type ApiErrorBody = {
   code?: string
   message: string
   details?: ValidationDetail[]
+  traceId?: string
 }
 
 // The Error thrown by apiClient on any non-2xx response.
@@ -20,12 +21,15 @@ export class ApiError extends Error {
   // error envelope on purpose: ErrorBody.details is a {field,message} list, so a scalar delay has
   // no honest place in it.
   readonly retryAfterSeconds?: number
+  // The id the server logged for this request; quote it to find the entry in the server log.
+  readonly traceId?: string
   constructor(
     status: number,
     message: string,
     code?: string,
     details?: ValidationDetail[],
     retryAfterSeconds?: number,
+    traceId?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -33,7 +37,21 @@ export class ApiError extends Error {
     this.code = code
     this.details = details
     this.retryAfterSeconds = retryAfterSeconds
+    this.traceId = traceId
   }
+}
+
+// A server fault (5xx) is the only error a user cannot act on, so it is the only one that shows the
+// trace id.
+function showsTraceId(status: number, traceId: string | undefined): traceId is string {
+  return status >= 500 && !!traceId
+}
+
+// The localized trace line for a toast whose summary is a fixed string; undefined for any other error.
+export function traceIdDetail(e: unknown): string | undefined {
+  return e instanceof ApiError && showsTraceId(e.status, e.traceId)
+    ? i18n.global.t('errors.traceIdLine', { id: e.traceId })
+    : undefined
 }
 
 // CSRF: the API rejects cookie-authenticated mutations that lack this header (OWASP custom-header
@@ -114,12 +132,16 @@ export class ApiClient {
         retryAfterRaw !== null && /^\d+$/.test(retryAfterRaw.trim())
           ? Number(retryAfterRaw.trim())
           : undefined
+      const message = errBody?.message ?? i18n.global.t('common.requestFailed', { status: res.status })
       throw new ApiError(
         res.status,
-        errBody?.message ?? i18n.global.t('common.requestFailed', { status: res.status }),
+        showsTraceId(res.status, errBody?.traceId)
+          ? message + i18n.global.t('errors.traceIdSuffix', { id: errBody.traceId })
+          : message,
         errBody?.code,
         errBody?.details,
         retryAfterSeconds,
+        errBody?.traceId,
       )
     }
 

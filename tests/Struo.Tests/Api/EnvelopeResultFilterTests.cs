@@ -72,4 +72,41 @@ public class EnvelopeResultFilterTests
         obj.StatusCode.Should().Be(409);
         obj.Value.Should().BeOfType<ErrorEnvelope>().Which.Error.Code.Should().Be("CONFLICT");
     }
+
+    [Fact]
+    public void Error_envelope_without_trace_id_is_stamped_with_the_given_one()
+    {
+        var original = new ObjectResult(Envelope.Error("VALIDATION", "x")) { StatusCode = 400 };
+
+        var res = EnvelopeResultFilter.BuildEnvelope(original, "trace-1");
+
+        var obj = res.Should().BeOfType<ObjectResult>().Subject;
+        obj.StatusCode.Should().Be(400);
+        var error = obj.Value.Should().BeOfType<ErrorEnvelope>().Subject.Error;
+        error.Code.Should().Be("VALIDATION");
+        error.TraceId.Should().Be("trace-1");
+    }
+
+    [Fact]
+    public void Error_envelope_that_already_has_a_trace_id_is_left_untouched()
+    {
+        var original = new ObjectResult(Envelope.Error("VALIDATION", "x", traceId: "kept")) { StatusCode = 400 };
+        EnvelopeResultFilter.BuildEnvelope(original, "trace-1").Should().BeNull();
+    }
+
+    [Fact]
+    public void Bare_status_errors_carry_the_given_trace_id()
+    {
+        var bare = EnvelopeResultFilter.BuildEnvelope(new NotFoundResult(), "trace-2");
+        bare.Should().BeOfType<ObjectResult>().Which.Value.Should().BeOfType<ErrorEnvelope>()
+            .Which.Error.TraceId.Should().Be("trace-2");
+
+        var withBody = EnvelopeResultFilter.BuildEnvelope(new ObjectResult("boom") { StatusCode = 409 }, "trace-3");
+        withBody.Should().BeOfType<ObjectResult>().Which.Value.Should().BeOfType<ErrorEnvelope>()
+            .Which.Error.TraceId.Should().Be("trace-3");
+    }
+
+    [Fact]
+    public void Success_results_are_unaffected_by_a_trace_id() =>
+        EnvelopeResultFilter.BuildEnvelope(new OkObjectResult(Envelope.Success("x")), "trace-4").Should().BeNull();
 }

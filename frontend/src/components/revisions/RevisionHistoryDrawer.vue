@@ -9,7 +9,7 @@ import RevisionSnapshotView from './RevisionSnapshotView.vue'
 import { revisionOperationLabel } from '../../lib/revisionOperation'
 import { formatRevisionTime } from '../../lib/formatRevisionTime'
 import { createLatestWins } from '../../lib/latestWins'
-import { ApiError } from '../../api/apiClient'
+import { ApiError, traceIdDetail } from '../../api/apiClient'
 import { itemsApi, type RevisionInfo, type RevisionDetail } from '../../api/itemsApi'
 
 const props = defineProps<{
@@ -107,7 +107,7 @@ async function onRevert(n: number): Promise<void> {
       emit('update:visible', false)
       emit('conflict')
     } else {
-      toast.add({ severity: 'error', summary: t('revisions.revertFailed'), life: 3500 })
+      toast.add({ severity: 'error', summary: t('revisions.revertFailed'), detail: traceIdDetail(e), life: 3500 })
     }
   } finally {
     reverting.value = false

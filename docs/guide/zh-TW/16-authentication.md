@@ -177,6 +177,9 @@ $ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
 HTTP_STATUS:401
 ```
 
+本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
+見[第 12 章](12-rest-conventions.md#回應信封)。
+
 這次示範沒有帶任何工作階段 cookie，所以最後一步看到的只是「失效的 token → 匿名 → 401」：壞掉的
 bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒有對匿名開放讀取，授權規則見
 [第 17 章：角色與權限](17-roles-and-permissions.md)。
