@@ -76,7 +76,8 @@ public sealed class FxArticle : AuditableEntity, ISoftDeletable
     public FxCategory? Category { get; set; }
 
     [Navigate(typeof(FxArticleTag), nameof(FxArticleTag.ArticleId), nameof(FxArticleTag.TagId))]
-    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(FxArticleTag.Sort))]
+    [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}", SortField = nameof(FxArticleTag.Sort),
+        HelpText = "Pick the tags that describe this article.")]
     [SugarColumn(IsIgnore = true)]
     public List<FxTag> Tags { get; set; } = [];
 }

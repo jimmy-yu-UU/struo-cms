@@ -17,7 +17,6 @@ const router = createRouter({
         { path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue') },
         { path: 'media', name: 'media', component: () => import('../views/MediaLibraryView.vue') },
         { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
-        { path: 'login-locks', name: 'login-locks', component: () => import('../views/LoginLocksView.vue') },
         { path: 'collections/:name', name: 'collection-list', component: () => import('../views/CollectionListView.vue') },
         { path: 'collections/:name/new', name: 'collection-create', component: () => import('../views/ItemFormView.vue') },
         { path: 'collections/:name/:id', name: 'collection-item', component: () => import('../views/ItemFormView.vue') },

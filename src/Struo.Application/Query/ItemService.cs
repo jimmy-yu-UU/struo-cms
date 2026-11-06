@@ -174,6 +174,7 @@ public sealed class ItemService(
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
+        JsonBodyUtil.RequireUniqueProperties(body);
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
@@ -189,6 +190,7 @@ public sealed class ItemService(
         object createdId = null!;
         await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             created = await repository.CreateAsync(collection, entity, ct);
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
@@ -219,6 +221,7 @@ public sealed class ItemService(
         // permission checks and before deserializing.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
+        JsonBodyUtil.RequireUniqueProperties(body);
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
@@ -352,6 +355,7 @@ public sealed class ItemService(
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
@@ -422,6 +426,7 @@ public sealed class ItemService(
             // row) records nothing.
             var softDeletedNow = await repository.InTransactionAsync(async () =>
             {
+                await trashHooks.InTransactionBeforeWriteAsync(ct);
                 await this.purge.CheckRestrictAsync(collection, id, ct);
                 var trashedNow = await repository.SoftDeleteAsync(collection, id, DateTime.UtcNow, actor, ct);
                 if (trashedNow)
@@ -443,6 +448,7 @@ public sealed class ItemService(
         var changes = new ItemChangeSet();
         var existed = await repository.InTransactionAsync(async () =>
         {
+            await purgeHooks.InTransactionBeforeWriteAsync(ct);
             var purged = await this.purge.PurgeCoreAsync(collection, id, new HashSet<(string Collection, string Id)>(), changes, ct);
             if (purged) await purgeHooks.InTransactionAsync(ct);
             return purged;
@@ -515,6 +521,7 @@ public sealed class ItemService(
         // row (or one restored by a concurrent request first) is a no-op: no Version bump, no revision.
         var restoredNow = entity is ISoftDeletable && await repository.InTransactionAsync(async () =>
         {
+            await hooks.InTransactionBeforeWriteAsync(ct);
             var r = await repository.RestoreAsync(collection, id, ct);
             if (r)
             {
@@ -679,9 +686,9 @@ public sealed class ItemService(
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);
 
-    // Writes to an AdminOnly collection (user/role/permission/userRole) require a super-admin even with
-    // a per-collection write/delete grant — else a delegated grant on userRole could self-assign the
-    // super-admin role (privilege escalation). Reads stay ungated (ordinary RBAC governs them).
+    // Writes to an AdminOnly collection require a super-admin even with a per-collection write/delete
+    // grant, so a delegated grant cannot be turned into self-escalation. Reads stay ungated (ordinary
+    // RBAC governs them). The identity collections do not declare it; SuperAdminGuard covers them.
     private void RequireSuperAdminForAdminOnly(CollectionMetadata meta)
     {
         if (meta.AdminOnly && !permissions.IsSuperAdmin)

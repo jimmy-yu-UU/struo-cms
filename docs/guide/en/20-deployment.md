@@ -645,9 +645,9 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 ```
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
-`Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex` and
-`Applied 202611040000  CreateRoleCapabilities`. Without the bootstrap password the seed migration
-fails with `Auth__BootstrapAdmin__Password is required`.
+`Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex`,
+`Applied 202611040000  CreateRoleCapabilities` and `Applied 202611060000  DropRoleCapabilities`.
+Without the bootstrap password the seed migration fails with `Auth__BootstrapAdmin__Password is required`.
 Without the `migrate` step, the `api` container exits with the message shown in
 "What fails fast at startup" above.
 

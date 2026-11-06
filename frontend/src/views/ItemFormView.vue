@@ -13,8 +13,7 @@ import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
 import AccessTokenPanel from '@/components/account/AccessTokenPanel.vue'
-import LoginLockPanel from '@/components/account/LoginLockPanel.vue'
-import RoleCapabilitiesPanel from '../components/rbac/RoleCapabilitiesPanel.vue'
+import PasswordPanel from '@/components/account/PasswordPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -30,7 +29,7 @@ import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
-import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 import type { RelationMeta } from '../types/schema'
 
@@ -64,63 +63,77 @@ function canWriteJunctionFor(rel: RelationMeta): boolean {
   return canWriteJunction(rel, resolveCollection, junctionAccess.value)
 }
 
-// RBAC editors on the generic form. Gated to super-admins — a non-admin with a read
-// grant on role/user could open the form, but the matrix/preview endpoints would 403.
+// RBAC editors on the generic form. They follow the caller's grants: read on the collection shows
+// them, write on it lets them change. A super-admin account or role, and the `public` role, are a
+// super-admin's to change, so for any other caller their form, actions and role choices are disabled
+// with the reason on hover.
+const callerIsSuperAdmin = computed(() => auth.user?.isSuperAdmin === true)
 const savedRoleIsSuperAdmin = ref(false)
-// The saved role's name decides whether system capabilities are offered: the `public` role (every
-// caller holds it, anonymous ones too) cannot hold any, and the API answers 400 for it.
-const PUBLIC_ROLE_NAME = 'public'
 const savedRoleName = ref('')
+const savedRoleIsPublic = computed(() => savedRoleName.value === PUBLIC_ROLE_NAME)
 function captureSavedRole(): void {
   savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
   savedRoleName.value = String(model.shared.name ?? '')
+}
+// Whether the user being edited belongs to a super-admin role, read from its saved roles.
+const savedUserIsSuperAdmin = ref(false)
+async function captureSavedUser(userId: string): Promise<void> {
+  savedUserIsSuperAdmin.value = false
+  if (callerIsSuperAdmin.value) return
+  try {
+    const eff = await rbacApi.getEffectivePermissions(userId)
+    if (id.value === userId) savedUserIsSuperAdmin.value = eff.isSuperAdmin
+  } catch {
+    // The preview panel reports its own load failure; the API still refuses the write.
+  }
 }
 // The view owns the ONE leave guard for both the generic form and the matrix — see
 // guardLeave() below, which folds in matrix.value?.dirty alongside the form's own dirty check.
 const matrix = ref<InstanceType<typeof PermissionMatrix> | null>(null)
 // Also shown in create mode, buffered locally by the matrix (no role id to GET/PUT
 // against yet) — onSubmit's create path flushes the buffer once the role exists.
-const showMatrix = computed(
-  () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true,
-)
-// The capabilities panel needs an existing role, so it is not offered in create mode; a super-admin role
-// holds every capability already.
-const capabilitiesPanel = ref<InstanceType<typeof RoleCapabilitiesPanel> | null>(null)
-const showCapabilities = computed(
-  () => name.value === ROLE_COLLECTION && auth.user?.isSuperAdmin === true && !savedRoleIsSuperAdmin.value,
-)
-// A new role has nothing to PUT against yet and `public` cannot hold capabilities: the panel then says
-// so instead of vanishing.
-const capabilitiesUnavailable = computed<'create' | 'public' | undefined>(() => {
-  if (isCreate.value) return 'create'
-  return savedRoleName.value === PUBLIC_ROLE_NAME ? 'public' : undefined
-})
+const showMatrix = computed(() => name.value === ROLE_COLLECTION && auth.canRead(ROLE_COLLECTION))
 function rolePanelsDirty(): boolean {
-  return (matrix.value?.dirty ?? false) || (capabilitiesPanel.value?.dirty ?? false)
+  return matrix.value?.dirty ?? false
 }
-// Shared by showEffective, showResetPassword and showAccessToken below — all three gate on the exact
-// same condition (super-admin, existing user row), so it is named once here rather than duplicated
-// verbatim in three places, which would only need to drift once to disagree.
-const isSuperAdminOnExistingUser = computed(
-  () => !isCreate.value && name.value === USER_COLLECTION && auth.user?.isSuperAdmin === true,
-)
-const showEffective = computed(() => isSuperAdminOnExistingUser.value)
+const isExistingUser = computed(() => !isCreate.value && name.value === USER_COLLECTION)
+// The saved account or role is a super-admin one, or the public role, and the caller is not a super-admin.
+const isSavedRole = computed(() => !isCreate.value && name.value === ROLE_COLLECTION)
+const lockedBySuperAdmin = computed(() => !callerIsSuperAdmin.value && (
+  (isExistingUser.value && savedUserIsSuperAdmin.value)
+  || (isSavedRole.value && (savedRoleIsSuperAdmin.value || savedRoleIsPublic.value))))
+const lockedHint = computed(() => {
+  if (!lockedBySuperAdmin.value) return undefined
+  if (name.value !== ROLE_COLLECTION) return t('superAdmin.accountHint')
+  return t(savedRoleIsPublic.value ? 'superAdmin.publicRoleHint' : 'superAdmin.roleHint')
+})
+// A super-admin role and the public role cannot be deleted by anyone.
+const deleteBlockedHint = computed(() => {
+  if (isSavedRole.value && savedRoleIsSuperAdmin.value) return t('superAdmin.roleUndeletable')
+  if (isSavedRole.value && savedRoleIsPublic.value) return t('superAdmin.publicRoleUndeletable')
+  return lockedHint.value
+})
+// The Roles field offers a super-admin role only to a super-admin.
+function relationOptionHint(relation: string, raw: Record<string, unknown>): string | null {
+  const isRolesOfUser = name.value === USER_COLLECTION && relation === 'roles'
+  return isRolesOfUser && raw.isSuperAdmin === true && !callerIsSuperAdmin.value
+    ? t('superAdmin.roleOptionHint')
+    : null
+}
 // The effective-permissions preview follows the CURRENT (possibly unsaved) Roles
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
+const showEffective = computed(() => isExistingUser.value)
 const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
 
-// Administrator password-reset action, shown only where EffectivePermissionsPanel already is.
-// User's AdminOnly flag (see the RBAC-editors comment above) gates writes only — Create/Update/Delete
-// in ItemService — not reads, so a non-super-admin holding an ordinary read grant on `user` can still
-// reach this form. This guard is therefore load-bearing, not a redundant belt-and-braces check.
-const showResetPassword = computed(() => isSuperAdminOnExistingUser.value)
+// The password reset and access-token actions change a credential, so they need write on the user
+// collection (and, for a super-admin account, a super-admin caller); the token's state needs read.
+const canManageCredentials = computed(() => canWrite.value && !lockedBySuperAdmin.value)
+const showResetPassword = computed(() => isExistingUser.value && canWrite.value)
 const resetPasswordOpen = ref(false)
-// The access-token panel reads and mutates a credential, so it has the same audience.
-const showAccessToken = computed(() => isSuperAdminOnExistingUser.value)
-const savedUserEmail = ref('')
-// The login-lock panel reads the lock of the user's SAVED email, captured on load: an email still being
-// typed would query a different, half-written address on every keystroke.
-const showLoginLock = computed(() => isSuperAdminOnExistingUser.value && savedUserEmail.value !== '')
+const showAccessToken = computed(() => isExistingUser.value)
+// The sections under the form share one wrapper, so they get the same rhythm and a rule above them.
+const hasPanels = computed(
+  () => showMatrix.value || showEffective.value || showAccessToken.value || showResetPassword.value)
 // A password change revokes the token server-side; the panel re-reads its state through its exposed
 // `reload` rather than being re-keyed, which would also discard an open issued-token dialog.
 const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
@@ -150,7 +163,6 @@ function captureBaseline(): void {
 
 function setModel(next: FormModel): void {
   model.shared = next.shared
-  savedUserEmail.value = name.value === USER_COLLECTION ? String(next.shared.email ?? '').trim() : ''
   model.translations = next.translations
   model.relations = next.relations
   model.loadedNulls = next.loadedNulls
@@ -187,6 +199,7 @@ async function init(): Promise<void> {
       // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
       if (name.value === ROLE_COLLECTION)
         captureSavedRole()
+      if (name.value === USER_COLLECTION) void captureSavedUser(id.value!)
     } catch (e) {
       if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
       else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
@@ -231,11 +244,6 @@ async function onSubmit(): Promise<void> {
       const ok = await matrix.value.save()
       if (!ok) return
     }
-    // Same for the system capabilities: a failed PUT keeps the user here with the panel still dirty.
-    if (!isCreate.value && name.value === ROLE_COLLECTION && capabilitiesPanel.value?.dirty) {
-      const ok = await capabilitiesPanel.value.save()
-      if (!ok) return
-    }
     // Role create — the matrix has no role id to PUT against until now, so it only buffers
     // toggles locally. Flush that buffer against the id the create just returned. On failure, the
     // role itself DID get created: warn and route to its edit page (where the matrix can retry)
@@ -254,7 +262,7 @@ async function onSubmit(): Promise<void> {
           // baseline stale would make the unified leave guard block the very navigation this
           // failure path performs.
           matrix.value?.markFlushed()
-          router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          void router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
           return
         }
       }
@@ -268,7 +276,7 @@ async function onSubmit(): Promise<void> {
     }
     // Note: the form itself was already re-baselined above (right after the create/update calls),
     // before either matrix flush — no second captureBaseline() needed here.
-    router.push({ name: 'collection-list', params: { name: name.value } })
+    void router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
       // Optimistic-lock clash: only this specific code means "someone else changed the
@@ -369,7 +377,7 @@ async function onDelete(): Promise<void> {
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
-    router.push({ name: 'collection-list', params: { name: name.value } })
+    void router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
   }
@@ -377,7 +385,7 @@ async function onDelete(): Promise<void> {
 
 function onCancel(): void {
   // Routes back — naturally intercepted by the leave guard below, so no extra prompt here.
-  router.push({ name: 'collection-list', params: { name: name.value } })
+  void router.push({ name: 'collection-list', params: { name: name.value } })
 }
 
 // Warn before navigating away (SPA route change) with unsaved edits. Registered
@@ -413,7 +421,6 @@ onBeforeRouteUpdate(async (to, from) => {
 function onBeforeUnload(e: BeforeUnloadEvent): void {
   if (isDirty(baseline.value, model) || rolePanelsDirty()) {
     e.preventDefault()
-    e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
@@ -440,10 +447,12 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
           <Button v-if="!isCreate && meta.revisions" type="button" variant="ghost" @click="showHistory = true">
             <History class="size-4" />{{ t('revisions.open') }}
           </Button>
-          <Button v-if="!isCreate && canDelete" type="button" variant="destructive" @click="onDelete">
+          <Button v-if="!isCreate && canDelete" type="button" variant="destructive"
+                  :disabled="deleteBlockedHint !== undefined" :title="deleteBlockedHint" @click="onDelete">
             {{ t('itemForm.delete') }}
           </Button>
-          <Button v-if="canWrite" type="button" :disabled="submitting" @click="onSubmit">{{ saveLabel }}</Button>
+          <Button v-if="canWrite" type="button" :disabled="submitting || lockedBySuperAdmin" :title="lockedHint"
+                  @click="onSubmit">{{ saveLabel }}</Button>
         </template>
       </PageHeader>
 
@@ -465,6 +474,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         <Button type="button" variant="outline" size="sm" @click="onReverted">{{ t('itemForm.reloadLatest') }}</Button>
       </div>
 
+      <p v-if="lockedHint" class="mb-4 rounded-md border px-4 py-3 text-sm text-muted-foreground" role="note">
+        {{ lockedHint }}
+      </p>
+
       <ItemForm
         :meta="meta"
         :item-id="id"
@@ -472,30 +485,26 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :locales="langStore.languages"
         :errors="errors"
         :server-error="serverError"
-        :disabled="!canWrite"
+        :disabled="!canWrite || lockedBySuperAdmin"
+        :relation-option-hint="relationOptionHint"
         @submit="onSubmit"
       />
 
-      <PermissionMatrix
-        v-if="showMatrix"
-        ref="matrix"
-        :role-id="idStr"
-        :is-super-admin-role="savedRoleIsSuperAdmin"
-        :create-mode="isCreate"
-      />
-      <RoleCapabilitiesPanel v-if="showCapabilities" ref="capabilitiesPanel" :role-id="idStr"
-                             :unavailable="capabilitiesUnavailable" />
-      <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
-      <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr" />
-      <LoginLockPanel v-if="showLoginLock" :email="savedUserEmail" heading class="mt-6" />
-
-      <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
-           ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
-           kept anyway because ui/button injects no type of its own — if this control were ever
-           re-parented inside a <form>, an untyped button would silently start submitting it. -->
-      <Button v-if="showResetPassword" type="button" variant="outline" @click="resetPasswordOpen = true">
-        {{ t('password.resetTitle') }}
-      </Button>
+      <div v-if="hasPanels" class="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 border-t pt-8">
+        <PermissionMatrix
+          v-if="showMatrix"
+          ref="matrix"
+          :role-id="idStr"
+          :is-super-admin-role="savedRoleIsSuperAdmin"
+          :create-mode="isCreate"
+          :readonly="!canWrite || lockedBySuperAdmin"
+        />
+        <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
+        <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"
+                       @reset="resetPasswordOpen = true" />
+        <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr"
+                          :manageable="canManageCredentials" :disabled-hint="lockedHint" />
+      </div>
       <ChangePasswordDialog
         v-if="showResetPassword"
         v-model:open="resetPasswordOpen"

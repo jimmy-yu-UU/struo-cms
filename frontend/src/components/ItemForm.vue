@@ -19,6 +19,8 @@ const props = defineProps<{
   serverError?: string
   disabled?: boolean
   itemId?: string
+  // Returns a reason when an option of the named relation cannot be chosen.
+  relationOptionHint?: (relation: string, raw: Record<string, unknown>) => string | null
 }>()
 // The form edits the parent's draft object in place; declaring it as a model makes that
 // two-way contract explicit to consumers.
@@ -27,6 +29,10 @@ const emit = defineEmits<{ (e: 'submit'): void }>()
 const { t } = useI18n()
 
 const fields = computed(() => splitFields(props.meta))
+function optionHintFor(relation: string): ((raw: Record<string, unknown>) => string | null) | undefined {
+  const hint = props.relationOptionHint
+  return hint ? (raw) => hint(relation, raw) : undefined
+}
 const defaultCode = computed(() => props.locales.find((l) => l.isDefault)?.code ?? props.locales[0]?.code ?? '')
 const activeLocale = ref(props.locales[0]?.code ?? '')
 // Dots only carry information when there is more than one locale AND translatable fields exist.
@@ -96,7 +102,7 @@ defineExpose({ activeLocale })
           <Field v-for="f in fields.translatable" :key="f.name" class="field">
             <div class="lbl-row flex items-center gap-2">
               <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && (loc.isDefault || localeFilled(loc.code))" class="text-destructive ml-0.5">*</span></FieldLabel>
-              <Badge variant="secondary" class="tr-badge">{{ t('itemForm.translatableBadge') }}</Badge>
+              <Badge variant="secondary" class="tr-badge" :title="t('itemForm.translatableBadgeHint')">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
             <FieldInput :id="translatableFieldId(f.name, loc.code)" :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
             <FieldError v-if="fieldError(loc.code, f.name)" role="alert">{{ fieldError(loc.code, f.name) }}</FieldError>
@@ -122,7 +128,9 @@ defineExpose({ activeLocale })
           :disabled="disabled"
           :parent-id="itemId"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
+          :option-hint="optionHintFor(rel.name)"
         />
+        <FieldDescription v-if="rel.helpText">{{ rel.helpText }}</FieldDescription>
         <FieldError v-if="errors[rel.name]" role="alert">{{ errors[rel.name] }}</FieldError>
       </Field>
     </section>

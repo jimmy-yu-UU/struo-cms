@@ -44,8 +44,12 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 `400` `INVALID_VERSION`（[第 12 章](12-rest-conventions.md)）。
 
 要求 `deleted=` 非預設模式時，單筆讀取跟清單一樣需要刪除授權，不只是讀取授權；未知集合一律 404。
-寫入或刪除 `permission`、`role`、`roleCapability`、`user`、`userRole` 這五個內建集合，以及任何被 fork 標成
-`AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
+寫入或刪除任何被 fork 標成 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
+內建的 `user`、`role`、`permission`、`userRole` 是一般集合：兩個隱藏的 junction 沿用 `user` 與 `role` 的
+授權，碰到超級管理員帳號或角色、或 `public` 角色的寫入，則不讓不是超級管理員的呼叫端做
+（[第 17 章](17-roles-and-permissions.md)）。
+JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `400` `BAD_USER_INPUT`；只有大小寫不同的名稱
+是不同的屬性。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
 `BAD_USER_INPUT`，訊息是點出集合名稱的通用句子，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。
@@ -100,16 +104,18 @@ height, status, folderId }`；multipart 形狀本身不對會被直接擋下—�
 
 | 方法與路徑 | 權限 | 用途 |
 |---|---|---|
-| `POST api/users` | 超級管理員 | 建立使用者，回 201 |
-| `PUT api/users/{id}/password` | 超級管理員或本人 | 改密碼，本人需驗證目前密碼 |
-| `POST api/users/{id}/access-token` | 超級管理員 | 核發存取權杖，只顯示一次 |
-| `GET api/users/{id}/access-token` | 超級管理員 | 讀取權杖的核發與最後使用時間 |
-| `DELETE api/users/{id}/access-token` | 超級管理員 | 撤銷存取權杖 |
-| `GET api/users/{id}/effective-permissions` | 超級管理員 | 預覽有效權限，支援 `?roles=` |
+| `POST api/users` | `user` 的寫入 | 建立使用者，回 `201` |
+| `PUT api/users/{id}/password` | `user` 的寫入，或本人 | 改密碼，本人需驗證目前密碼 |
+| `POST api/users/{id}/access-token` | `user` 的寫入 | 核發存取權杖，只顯示一次 |
+| `GET api/users/{id}/access-token` | `user` 的讀取 | 讀取權杖的核發與最後使用時間 |
+| `DELETE api/users/{id}/access-token` | `user` 的寫入 | 撤銷存取權杖 |
+| `GET api/users/{id}/effective-permissions` | `user` 的讀取 | 預覽有效權限，支援 `?roles=` |
 
 建立使用者回 `201`，`Location` 指向 `api/items/user/{id}`——那裡才是使用者列真正的讀取路由；
 body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 email（`409 CONFLICT`）都會被擋
-下。
+下。沒有授權的呼叫端得到 `403` `Write permission on the user collection is required.`（兩個 `GET` 則是
+`Read permission …`）。重設超級管理員帳號的密碼、核發或撤銷它的權杖，不是超級管理員的呼叫端會被擋下：
+`403` `Only a super-admin can …`。
 
 改密碼是除了登入之外唯一有流量限制的端點，依呼叫端自己的 user id 分流；成功後會撤銷該使用者其他
 的工作階段與權杖，撤銷失敗回報 `SESSION_REVOCATION_FAILED`，而不是悄悄吞掉，因為密碼本身已經改成功。核
@@ -126,50 +132,52 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 
 | 方法與路徑 | 權限 | 用途 |
 |---|---|---|
-| `GET api/roles/{id}/permissions` | 超級管理員 | 讀該角色目前的授權列 |
-| `PUT api/roles/{id}/permissions` | 超級管理員 | 整組覆寫該角色的授權 |
-| `GET api/roles/{id}/capabilities` | 超級管理員 | 讀該角色的系統權限代碼 |
-| `PUT api/roles/{id}/capabilities` | 超級管理員 | 整組覆寫該角色的系統權限代碼 |
+| `GET api/roles/{id}/permissions` | `role` 的讀取 | 讀該角色目前的授權列 |
+| `PUT api/roles/{id}/permissions` | `role` 的寫入 | 整組覆寫該角色的授權 |
 
 `GET` 依集合名稱排序回傳 `{ collection, canRead, canWrite, canDelete }` 陣列，角色不存在就是
 404。`PUT` 是整組覆寫，不是逐筆合併——三個旗標都是 false 的那一列根本不會被存，回應也只會看到真
 的還留著的列；body 如果不是 JSON 陣列、有重複集合、或點名不存在的集合，都會被擋下，集合名稱的大
-小寫會被統一。角色本身是一般集合，`POST api/items/role` 就能建立一筆新角色。
+小寫會被統一。
 
-`GET .../capabilities` 依代碼排序回傳該角色的系統權限代碼字串陣列，角色不存在就是 404。
-`PUT .../capabilities` 收 JSON 代碼陣列並整組覆寫：空陣列就是全部移除，重複的代碼只算一次，回應是
-實際存下的陣列。body 不是字串的 JSON 陣列、角色是 `public`（它不能持有系統權限，不論送什麼），或有任何代碼不在
-`GET api/capabilities` 回傳的清單內（`Unknown capabilities: …`），都回 `400`，而且什麼都不會寫入。系統權限是什麼，見
-[第 17 章](17-roles-and-permissions.md)。
-
-## Capabilities `api/capabilities`
-
-| 方法與路徑 | 權限 | 用途 |
-|---|---|---|
-| `GET api/capabilities` | 超級管理員 | 列出角色可被授予的系統權限 |
-
-回傳 `{ code, labelKey, descriptionKey }` 的陣列，先是核心的系統權限，接著是 fork 註冊的。兩個鍵都是
-i18n 鍵，顯示的文字由後台提供。
+沒有授權的呼叫端得到 `403` `Read permission on the role collection is required.` 或 `Write permission on the
+role collection is required.`。寫入超級管理員角色或 `public` 角色的授權，不是超級管理員的呼叫端會被擋下：
+`403` `Only a super-admin can change the grants of a super-admin role.`
+（`… of the public role.`）。角色本身是
+一般集合，`POST api/items/role` 就能建立一筆新角色，但 `isSuperAdmin` 旗標設不進去：帶著它的 body 會被接受，
+欄位則被忽略。`public` 角色任何人都不能刪除：`409` `CONFLICT`。
 
 ## Login locks `api/login-locks`
 
 | 方法與路徑 | 權限 | 用途 |
 |---|---|---|
-| `GET api/login-locks?email=…` | 超級管理員或 `login.unlock` | 讀某個帳號的登入是否被鎖定 |
-| `DELETE api/login-locks?email=…` | 超級管理員或 `login.unlock` | 解除鎖定，回 `204` |
+| `POST api/login-locks/query` | `user` 的讀取 | 讀最多 100 個帳號的登入是否被鎖定 |
+| `DELETE api/login-locks?email=…` | `user` 的寫入 | 解除鎖定，回 `204` |
 
-`GET` 回傳 `{ locked, retryAfterSeconds }`：帳號在目前視窗內已把依帳號的登入嘗試額度用光時，
-`locked` 為 `true`，`retryAfterSeconds` 是視窗還剩的秒數，沒鎖定時為 `0`。讀取不會算一次嘗試。
-email 依登入的做法去頭尾空白並轉小寫。`email` 缺少、空白或過長（超過 255 字元）回 `400`，
-沒有權限的呼叫端不論送什麼 email 都是 `403`。
+`POST` 收 `{ "emails": [...] }`，一到 100 個位址，每個都不能空白、最長 255 字元；其他情況回 `400`
+`BAD_USER_INPUT`，沒有 `user` 讀取授權的呼叫端回 `403`。它依送出的順序，每個位址回一筆，同一個位址送兩次
+就回兩次：
 
-答案不取決於這個 email 有沒有對應的帳號：沒有帳號的位址得到相同的狀態碼與相同的 body 形狀，
-`DELETE` 對它也回 `204`。唯一的例外是不是超級管理員的呼叫端對超級管理員帳號（不論啟用與否）送
-`DELETE`：回 `403` 與 `Only a super-admin can clear the lock on a super-admin account.`，鎖定維持不變。
-用 cookie 登入的 `DELETE` 跟其他寫入一樣要帶 CSRF 標頭。每次 `DELETE` 會寫一行 `Information` 記錄，
-內容是呼叫端的使用者 id 與目標使用者 id，找不到帳號時則註明沒有這個帳號；被拒絕的那次則寫一行
-`Warning`，以 id 註明呼叫端與目標。API 不會記錄 email，但 email 在網址裡，所以 API 前面的存取記錄
-（例如反向代理的）會留下它；必須讓 email 不進那些記錄的維運人員，要過濾 `login-locks` 路徑。
+```text
+$ POST /api/login-locks/query
+body:
+{"emails":["admin@admin.com","nobody@example.com"]}
+{"success":true,"data":[{"email":"admin@admin.com","locked":false,"retryAfterSeconds":0,"clearable":true},{"email":"nobody@example.com","locked":false,"retryAfterSeconds":0,"clearable":true}]}
+```
+
+帳號在目前視窗內已把依帳號的登入嘗試額度用光時，`locked` 為 `true`，`retryAfterSeconds` 是視窗還剩的秒數，
+沒鎖定時為 `0`。`clearable` 在目標是超級管理員帳號、而呼叫端不是超級管理員時為 `false`，其餘為 `true`。
+email 依登入的做法去頭尾空白並轉小寫，回應的項目則照送出的原樣回傳。讀取不會算一次嘗試。整份清單的帳號
+只用一次查詢找出，節流則對每個不重複的位址問一次。`email` 放在 body 而不在網址裡，所以不會進存取記錄。
+
+`DELETE` 需要 `user` 的寫入授權，沒有就是 `403`；`email` 缺少、空白或過長（超過 255 字元）回 `400`。
+答案不取決於這個 email 有沒有對應的帳號：沒有帳號的位址得到與已知帳號相同的形狀，`DELETE` 對它也回
+`204`。唯一的例外是不是超級管理員的呼叫端對超級管理員帳號（不論啟用與否）送 `DELETE`：回 `403` 與
+`Only a super-admin can clear the lock on a super-admin account.`，鎖定維持不變。用 cookie 登入的 `DELETE`
+跟其他寫入一樣要帶 CSRF 標頭。每次 `DELETE` 會寫一行 `Information` 記錄，內容是呼叫端的使用者 id 與目標
+使用者 id，找不到帳號時則註明沒有這個帳號；被拒絕的那次則寫一行 `Warning`，以 id 註明呼叫端與目標。API
+不會記錄 email，但 `DELETE` 把 email 放在網址裡，所以 API 前面的存取記錄（例如反向代理的）會留下它；必須
+讓 email 不進那些記錄的維運人員，要過濾 `login-locks` 路徑。沒有只查單一位址的 `GET`。
 見[第 16 章](16-authentication.md)與[第 17 章](17-roles-and-permissions.md)。
 
 ## Languages `api/languages`
@@ -207,7 +215,7 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 |---|---|---|
 | `POST api/auth/login` | 匿名 | 登入，設定工作階段 cookie |
 | `POST api/auth/logout` | 登入 | 登出，回 204 |
-| `GET api/auth/me` | 登入 | 讀目前登入者的身分、權限與系統權限 |
+| `GET api/auth/me` | 登入 | 讀目前登入者的身分與權限 |
 | `GET api/auth/login/oidc/{provider}` | 匿名 | 導向指定的 OIDC 提供者 |
 
 登入 body 是 `{ email, password }`，成功回 `200` 附 `{ id }` 並設定工作階段 cookie，失敗回
@@ -223,7 +231,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Wed, 04 Nov 2026 05:40:08 GMT
+Date: Fri, 06 Nov 2026 06:17:45 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -232,19 +240,17 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706"}}
+{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{},"capabilities":["login.unlock"]}}
+{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
 這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，
-並多一個 `secure`。
-`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡；`capabilities` 則列出
-清單裡定義的所有系統權限，其他人列的是自己的角色持有的代碼。
+並多一個 `secure`。`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，
 `?returnUrl=` 只有在是站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時才沿用，否則改用 `Oidc:ReturnUrlDefault`；

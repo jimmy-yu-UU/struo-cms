@@ -63,15 +63,11 @@ async function onLogout(): Promise<void> {
         </span>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <!-- Self-service password change lives here, not on the User edit form: reads of an
-           AdminOnly collection are still ordinary RBAC, so a role that happens to hold a read
-           grant on `user` can open that form anyway — but no ordinary role is normally granted
-           one, and even a role that does hold it still sees no reset action there, since that
-           action carries its own explicit super-admin guard (ItemFormView.vue). This dropdown is
-           the only route every signed-in user reliably has to change their own password. A future
-           "tidy" that moves this onto the User form would silently remove that route for everyone
-           but super
-           admins. -->
+      <!-- Self-service password change lives here, not on the User edit form: that form needs read
+           on `user`, which no ordinary role is normally granted, and its reset action needs write
+           on `user` (ItemFormView.vue). This dropdown is the only route every signed-in user reliably
+           has to change their own password. A future "tidy" that moves this onto the User form would
+           silently remove that route for everyone without those grants. -->
       <DropdownMenuItem v-if="auth.user" @select="passwordDialogOpen = true">
         <KeyRound class="size-4" aria-hidden="true" />
         {{ t('password.changeTitle') }}

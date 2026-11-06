@@ -50,6 +50,13 @@ internal sealed class ItemWriteHooks(ItemWriteContext? initialContext, IReadOnly
 
     public Task BeforeWriteAsync(CancellationToken ct) => RunAsync(i => i.BeforeWriteAsync(Context, ct));
 
+    // The core-only step that runs first inside the transaction (see IInTransactionPreWrite).
+    public async Task InTransactionBeforeWriteAsync(CancellationToken ct)
+    {
+        foreach (var interceptor in interceptors.OfType<IInTransactionPreWrite>())
+            await interceptor.BeforeWriteInTransactionAsync(Context, ct);
+    }
+
     public Task InTransactionAsync(CancellationToken ct) => RunAsync(i => i.InTransactionAsync(Context, ct));
 
     // The write is committed by now: a disconnecting caller must not skip these.

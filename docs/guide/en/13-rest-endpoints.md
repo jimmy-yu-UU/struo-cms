@@ -50,11 +50,15 @@ The complete semantics of filtering, sorting, projection and pagination are left
 On a collection that carries a `version`, an update body's `version` must be an integer, an integer
 string, `null`, or absent; any other value is a `400` `INVALID_VERSION` ([Chapter 12](12-rest-conventions.md)).
 
-Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
-grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing
-to or deleting from the five built-in collections `permission`, `role`, `roleCapability`, `user` and
-`userRole`, or any junction a fork has marked `AdminOnly`, additionally requires the caller to be a
-super-admin — a delegated collection grant doesn't count.
+Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read grant —
+for a single-item read as much as for a list; an unknown collection is always a 404. Writing to or
+deleting from any junction a fork has marked `AdminOnly` additionally requires the caller to be a
+super-admin — a delegated collection grant doesn't count. The built-in `user`, `role`, `permission` and
+`userRole` are ordinary collections: the two hidden junctions follow the grant of `user` and `role`, and
+a write that touches a super-admin account or role, or the `public` role, is refused to a caller who is
+not a super-admin ([Chapter 17](17-roles-and-permissions.md)). A JSON body that names the same top-level
+property twice is a `400` `BAD_USER_INPUT` on create and update; names that differ only in casing are
+different properties.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
@@ -118,16 +122,19 @@ Delete and restore both need a `file` delete grant, and both return `204` or `40
 
 | Method and path | Permission | Purpose |
 |---|---|---|
-| `POST api/users` | Super-admin | Create a user, returns `201` |
-| `PUT api/users/{id}/password` | Super-admin or the user themself | Change password; self-service proves the current one |
-| `POST api/users/{id}/access-token` | Super-admin | Issue an access token, shown only once |
-| `GET api/users/{id}/access-token` | Super-admin | Read the token's issue and last-use times |
-| `DELETE api/users/{id}/access-token` | Super-admin | Revoke the access token |
-| `GET api/users/{id}/effective-permissions` | Super-admin | Preview effective permissions, supports `?roles=` |
+| `POST api/users` | Write on `user` | Create a user, returns `201` |
+| `PUT api/users/{id}/password` | Write on `user`, or the user themself | Change password; self-service proves the current one |
+| `POST api/users/{id}/access-token` | Write on `user` | Issue an access token, shown only once |
+| `GET api/users/{id}/access-token` | Read on `user` | Read the token's issue and last-use times |
+| `DELETE api/users/{id}/access-token` | Write on `user` | Revoke the access token |
+| `GET api/users/{id}/effective-permissions` | Read on `user` | Preview effective permissions, supports `?roles=` |
 
 Creating a user returns `201`, with `Location` pointing at `api/items/user/{id}` — that's the
 actual read route for the user row; the body is `{ id, email, name }`. A blank email, a password
-the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected.
+the password rules reject, or a duplicate email (`409 CONFLICT`) are all rejected. A caller without the
+grant gets `403` `Write permission on the user collection is required.` (`Read permission …` for the two
+`GET`s). Resetting the password of a super-admin account, and issuing or revoking its token, are
+refused to a caller who is not a super-admin: `403` `Only a super-admin can …`.
 
 Changing password is the only rate-limited endpoint besides login, partitioned by the caller's own
 user id; success revokes that user's other sessions and their access token, and a revocation
@@ -148,10 +155,8 @@ the error message is `Items cannot be created in collection 'user' through the g
 
 | Method and path | Permission | Purpose |
 |---|---|---|
-| `GET api/roles/{id}/permissions` | Super-admin | Read the role's current grant rows |
-| `PUT api/roles/{id}/permissions` | Super-admin | Overwrite the whole set of grants |
-| `GET api/roles/{id}/capabilities` | Super-admin | Read the role's system capability codes |
-| `PUT api/roles/{id}/capabilities` | Super-admin | Overwrite the whole set of capability codes |
+| `GET api/roles/{id}/permissions` | Read on `role` | Read the role's current grant rows |
+| `PUT api/roles/{id}/permissions` | Write on `role` | Overwrite the whole set of grants |
 
 `GET` returns a `{ collection, canRead, canWrite, canDelete }` array ordered by collection name, and
 a nonexistent role is a `404`. `PUT` overwrites the whole set rather than merging row by row — a row
@@ -159,47 +164,51 @@ where all three flags are false is never stored at all, and the response only sh
 genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
 or names a collection that doesn't exist, and collection-name casing is normalized.
 
-`GET .../capabilities` returns the role's capability codes as a sorted array of strings, and a
-nonexistent role is a `404`. `PUT .../capabilities` takes a JSON array of codes and overwrites the whole
-set; an empty array removes them all, a repeated code counts once, and the response is the stored array.
-The request is rejected with `400` when the body isn't a JSON array of strings, when the role is
-`public` (it cannot hold capabilities, whatever the set), or when any code is outside the list
-`GET api/capabilities` returns (`Unknown capabilities: …`), and then nothing is written. [Chapter 17](17-roles-and-permissions.md) covers what a capability is.
-
-A role is itself an ordinary collection, so `POST api/items/role` creates a new one.
-
-## Capabilities `api/capabilities`
-
-| Method and path | Permission | Purpose |
-|---|---|---|
-| `GET api/capabilities` | Super-admin | List the system capabilities a role can be given |
-
-It returns an array of `{ code, labelKey, descriptionKey }`, the core capabilities followed by any
-a fork registered. The two keys are i18n keys; the admin UI supplies the text.
+A caller without the grant gets `403` `Read permission on the role collection is required.` or `Write
+permission on the role collection is required.`. Writing the grants of a super-admin role or of the
+`public` role is refused to a caller who is not a super-admin: `403` `Only a super-admin can change the
+grants of a super-admin role.` (`… of the public role.`). A role is itself an ordinary collection, so
+`POST api/items/role` creates a new one. The `isSuperAdmin` flag cannot be set through it; a body that
+carries it is accepted and the field is ignored. The `public` role cannot be deleted by anyone: `409`
+`CONFLICT`.
 
 ## Login locks `api/login-locks`
 
 | Method and path | Permission | Purpose |
 |---|---|---|
-| `GET api/login-locks?email=…` | Super-admin or `login.unlock` | Read whether an account's login is locked |
-| `DELETE api/login-locks?email=…` | Super-admin or `login.unlock` | Clear the lock, returns `204` |
+| `POST api/login-locks/query` | Read on `user` | Read whether up to 100 accounts' logins are locked |
+| `DELETE api/login-locks?email=…` | Write on `user` | Clear the lock, returns `204` |
 
-The `GET` returns `{ locked, retryAfterSeconds }`: `locked` is `true` when the account has used up its
-per-account login attempts for the current window, and `retryAfterSeconds` is the time left in that
-window, `0` when not locked. Reading never counts as an attempt. The email is trimmed and lowercased
-the way login does it. A missing, blank or over-long (more than 255 characters) `email` returns
-`400`, and a caller without the permission gets `403`, whatever the email.
+The `POST` takes `{ "emails": [...] }`, one to 100 addresses, each non-blank and at most 255 characters;
+anything else returns `400` `BAD_USER_INPUT`, and a caller without read on `user` gets `403`. It answers
+one entry per address, in the order sent, so an address sent twice is answered twice:
 
-The answer does not depend on whether an account with that email exists: an address with no account
-gets the same status and the same body shape, and `DELETE` returns `204` for it too. The one exception
-is a `DELETE` for a super-admin account, active or not, by a caller who is not a super-admin: it returns
-`403` with `Only a super-admin can clear the lock on a super-admin account.` and leaves the lock. A
-cookie-signed-in `DELETE` needs the CSRF header like any other mutation. Each `DELETE` writes one
-`Information` log line with the caller's user id and the target user id, or a note that no such account
-exists; a refused one writes a `Warning` line naming the caller and the target by id. The API never logs
-the email, but the email is part of the URL, so access logs in front of the API, such as a reverse
-proxy's, record it. An operator who must keep emails out of those logs filters the `login-locks` path.
-See [Chapter 16](16-authentication.md) and [Chapter 17](17-roles-and-permissions.md).
+```text
+$ POST /api/login-locks/query
+body:
+{"emails":["admin@admin.com","nobody@example.com"]}
+{"success":true,"data":[{"email":"admin@admin.com","locked":false,"retryAfterSeconds":0,"clearable":true},{"email":"nobody@example.com","locked":false,"retryAfterSeconds":0,"clearable":true}]}
+```
+
+`locked` is `true` when the account has used up its per-account login attempts for the current window,
+and `retryAfterSeconds` is the time left in that window, `0` when not locked. `clearable` is `false` for a
+super-admin account when the caller is not a super-admin, and `true` otherwise. The email is trimmed and
+lowercased the way login does it, and the entry echoes it as sent. Reading never counts as an attempt. The
+accounts are looked up in one query for the whole list, and the throttle is asked once per distinct address.
+The `email` travels in the body, not in the URL, so it stays out of access logs.
+
+The `DELETE` needs write on `user`; without it the answer is `403`, and a missing, blank or over-long
+(more than 255 characters) `email` returns `400`. The answer does not depend on whether an account with
+that email exists: an address with no account is answered in the same shape as a known one, and `DELETE`
+returns `204` for it too. The one exception is a `DELETE` for a super-admin account, active or not, by a
+caller who is not a super-admin: it returns `403` with `Only a super-admin can clear the lock on a
+super-admin account.` and leaves the lock. A cookie-signed-in `DELETE` needs the CSRF header like any
+other mutation. Each `DELETE` writes one `Information` log line with the caller's user id and the target
+user id, or a note that no such account exists; a refused one writes a `Warning` line naming the caller
+and the target by id. The API never logs the email, but the `DELETE` carries it in the URL, so access
+logs in front of the API, such as a reverse proxy's, record it. An operator who must keep emails out of
+those logs filters the `login-locks` path. There is no single-address `GET`. See [Chapter
+16](16-authentication.md) and [Chapter 17](17-roles-and-permissions.md).
 
 ## Languages `api/languages`
 
@@ -238,7 +247,7 @@ the New button.
 |---|---|---|
 | `POST api/auth/login` | Anonymous | Log in, sets the session cookie |
 | `POST api/auth/logout` | Signed in | Log out, returns `204` |
-| `GET api/auth/me` | Signed in | Read the caller's identity, permissions, capabilities |
+| `GET api/auth/me` | Signed in | Read the caller's identity and permissions |
 | `GET api/auth/login/oidc/{provider}` | Anonymous | Redirect to that OIDC provider |
 
 The login body is `{ email, password }`; success returns `200` with `{ id }` and sets the session
@@ -255,7 +264,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Wed, 04 Nov 2026 05:40:08 GMT
+Date: Fri, 06 Nov 2026 06:17:45 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -264,20 +273,18 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706"}}
+{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a1a512-17a0-7f6a-81be-8a89cc03e706","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{},"capabilities":["login.unlock"]}}
+{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie`'s value is long and elided here; what matters is that the header itself appears,
 carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a Development host; where the
 cookie is always `Secure`, the name is `__Host-struo.session` and `secure` is added. `me` returns an
-empty `permissions` for a super-admin, because every grant is already implied by that identity, and
-lists in `capabilities` every capability the catalog defines; for anyone else it lists the codes their
-roles hold.
+empty `permissions` for a super-admin, because every grant is already implied by that identity.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
 disabled provider, and a `302` redirect to that provider when it is enabled, with

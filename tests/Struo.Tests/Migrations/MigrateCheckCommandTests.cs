@@ -75,7 +75,7 @@ public sealed class MigrateCheckCommandTests : IDisposable
 
         err.Should().BeEmpty();
         code.Should().Be(MigrationCli.Failure);
-        output.Should().Contain("mchkb_users: table does not exist").And.Contain("12 error(s)");
+        output.Should().Contain("mchkb_users: table does not exist").And.Contain("11 error(s)");
         using var scope = sp.CreateScope();
         scope.ServiceProvider.GetRequiredService<ISqlSugarClient>().DbMaintenance.GetTableInfoList(false)
             .Should().BeEmpty();

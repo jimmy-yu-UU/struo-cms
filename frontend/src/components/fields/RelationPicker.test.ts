@@ -136,7 +136,7 @@ describe('RelationPicker', () => {
     await flushPromises() // mount: loadOptions (empty) + ensureSelectedLabels settle
     const disp = (w.vm as any).displayOptions
     expect(disp).toHaveLength(1)
-    expect(disp[0]).toEqual({ id: 'c9', label: 'Archived', raw: {} })
+    expect(disp[0]).toEqual({ id: 'c9', label: 'Archived', raw: { id: 'c9', name: 'Archived' } })
   })
 
   it('ignores a stale load that resolves after a newer one (latest-wins)', async () => {
@@ -433,6 +433,29 @@ describe('RelationPicker', () => {
     expect(before).toEqual(['c1'])
   })
 
+  it('disables an option the hint refuses, with the reason as its tooltip, and still selects the others', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({
+      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Root' }], total: 2,
+    })
+    const w = mount(RelationPicker, {
+      props: {
+        relation, modelValue: [], multiple: true,
+        optionHint: (raw: Record<string, unknown>) => (raw.name === 'Root' ? 'Not for you' : null),
+      },
+      global: live,
+    })
+    await flushPromises()
+    await open(w)
+    const options = w.findAll('[role="option"]')
+    expect(options[0].attributes('data-disabled')).toBeUndefined()
+    expect(options[1].attributes('data-disabled')).toBeDefined()
+    expect(options[1].attributes('title')).toBe('Not for you')
+
+    await options[0].trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([['c1']])
+  })
+
   it('removes a value via its chip remove button on the multi-select branch', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({
@@ -444,6 +467,123 @@ describe('RelationPicker', () => {
     expect(removeTech.attributes('type')).toBe('button')
     await removeTech.trigger('click')
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['c2']])
+  })
+
+  // ---- chips live inside the field box, one trigger, one menu ----
+
+  const twoTags = { data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }, { id: 'c3', name: 'Root' }], total: 3 }
+  const multiple = (props: Record<string, unknown> = {}) => mount(RelationPicker, {
+    props: { relation: { ...relation, interface: 'tagSelect', kind: 'manyToMany' }, modelValue: [], multiple: true, ...props },
+    global: live,
+  })
+
+  it('renders the selected values as chips inside the field box, beside the one trigger', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1', 'c2'] })
+    await flushPromises()
+
+    const box = w.get('[data-slot="combobox-anchor"]')
+    const chips = box.findAll('[data-testid="relation-chip"]')
+    expect(chips.map((c) => c.text())).toEqual(['Tech', 'Widget'])
+    expect(box.findAll('[data-slot="combobox-trigger"]')).toHaveLength(1)
+    expect(w.findAll('[data-testid="relation-chip"]')).toHaveLength(2)
+    // The chips wrap and the box grows with them, instead of a fixed-height one-line trigger.
+    expect(box.classes()).toContain('flex-wrap')
+  })
+
+  it('shows the placeholder only while nothing is selected', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: [] })
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').text()).toBe(relation.label)
+
+    await w.setProps({ modelValue: ['c1'] })
+    expect(w.get('[data-slot="combobox-trigger"]').text()).not.toContain(relation.label)
+    expect(w.get('[data-slot="combobox-anchor"]').text()).toContain('Tech')
+  })
+
+  it('removes only the clicked chip, emits the remaining model, and does not open the menu', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1', 'c2'] })
+    await flushPromises()
+
+    await w.get('[aria-label="Remove Tech"]').trigger('click')
+    await flushPromises()
+
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['c2']])
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('closed')
+    expect(w.find('[role="option"]').exists()).toBe(false)
+  })
+
+  it('opens the menu from the empty space of the box and from the keyboard', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1'] })
+    await flushPromises()
+
+    await w.get('[data-slot="combobox-anchor"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('open')
+    expect(w.findAll('[role="option"]').length).toBeGreaterThan(0)
+
+    await w.get('[data-slot="combobox-anchor"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('closed')
+
+    await w.get('[data-slot="combobox-trigger"]').trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('open')
+  })
+
+  it('still toggles a value from the menu, and marks the selected ones', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1'] })
+    await flushPromises()
+    await open(w)
+
+    const items = w.findAll('[role="option"]')
+    expect(items[0].attributes('aria-selected')).toBe('true')
+    await items[1].trigger('click')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['c1', 'c2']])
+    await items[0].trigger('click')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([[]])
+  })
+
+  it('shows a locked chip without a remove button, with the hint as its tooltip, and cannot toggle it in the menu', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({
+      modelValue: ['c1', 'c3'],
+      optionHint: (raw: Record<string, unknown>) => (raw.name === 'Root' ? 'Not for you' : null),
+    })
+    await flushPromises()
+
+    const chips = w.findAll('[data-testid="relation-chip"]')
+    expect(chips[0].find('[aria-label="Remove Tech"]').exists()).toBe(true)
+    expect(chips[1].find('button').exists()).toBe(false)
+    expect(chips[1].attributes('title')).toBe('Not for you')
+
+    await open(w)
+    const root = w.findAll('[role="option"]').find((o) => o.text().includes('Root'))!
+    await root.trigger('click')
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('shows the chips of a disabled field without remove buttons, and its menu does not open', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1'], disabled: true })
+    await flushPromises()
+
+    expect(w.findAll('[data-testid="relation-chip"]').map((c) => c.text())).toEqual(['Tech'])
+    expect(w.find('[aria-label="Remove Tech"]').exists()).toBe(false)
+    await w.get('[data-slot="combobox-anchor"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-slot="combobox-trigger"]').attributes('data-state')).toBe('closed')
   })
 
   it('reflects the incoming multi-select model on the chip row, including after the model changes', async () => {
@@ -520,7 +660,7 @@ describe('RelationPicker', () => {
       .toBe(`${relation.label}${zhTW.fields.nameListSeparator}${zhTW.fields.selectedCount.replace('{n}', '2')}`)
   })
 
-  it('genuinely disables the multi-select trigger and every chip remove button', async () => {
+  it('genuinely disables the multi-select trigger and offers no chip remove button', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({
       data: [{ id: 'c1', name: 'Tech' }], total: 1,
@@ -528,7 +668,7 @@ describe('RelationPicker', () => {
     const w = mountPicker({ multiple: true, modelValue: ['c1'], disabled: true }, live)
     await flushPromises()
     expect(w.get('[data-slot="combobox-trigger"]').attributes('disabled')).toBe('')
-    expect(w.get('[aria-label="Remove Tech"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[aria-label="Remove Tech"]').exists()).toBe(false)
   })
 
   // reka's resetSearchTerm() takes the `multiple` branch here (rootContext.multiple.value is true
@@ -577,5 +717,48 @@ describe('RelationPicker', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // ---- the inline add row of the junction links editor (addLabel) ----
+
+  it('renders the add control as a normal outline button, auto width, with a plus and the label and no chips or chevron', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: ['c1'], showChips: false, addLabel: 'Add Tag' })
+    await flushPromises()
+
+    const box = w.get('[data-slot="combobox-anchor"]')
+    expect(box.classes()).not.toContain('border')
+    expect(box.classes()).not.toContain('w-full')
+    const button = w.get('[data-testid="relation-add"]')
+    expect(button.element.tagName).toBe('BUTTON')
+    expect(button.attributes('type')).toBe('button')
+    expect(button.attributes('aria-label')).toBe('Add Tag')
+    expect(button.classes()).toContain('border')
+    expect(button.classes()).toContain('h-9')
+    expect(button.text()).toBe('Add Tag')
+    expect(button.find('svg.lucide-plus').exists()).toBe(true)
+    expect(button.find('svg.lucide-chevrons-up-down').exists()).toBe(false)
+    expect(w.findAll('[data-testid="relation-chip"]')).toHaveLength(0)
+  })
+
+  it('opens the add row from a click and from the keyboard, and toggles targets from the menu', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue(twoTags)
+    const w = multiple({ modelValue: [], showChips: false, addLabel: 'Add Tag' })
+    await flushPromises()
+
+    const button = () => w.get('[data-testid="relation-add"]')
+    await button().trigger('click')
+    await flushPromises()
+    expect(button().attributes('data-state')).toBe('open')
+    await w.findAll('[role="option"]')[1].trigger('click')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['c2']])
+
+    await button().trigger('click')
+    await flushPromises()
+    await button().trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(button().attributes('data-state')).toBe('open')
   })
 })

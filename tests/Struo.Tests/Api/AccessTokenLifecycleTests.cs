@@ -106,13 +106,16 @@ public class AccessTokenLifecycleTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Info_is_admin_only_and_404_for_unknown_user()
+    public async Task Info_needs_read_on_user_and_is_404_for_unknown_user()
     {
-        var (editor, editorId) = await _factory.CreateEditorClientAsync(["user"], []);
-        (await _factory.CreateClient().GetAsync($"/api/users/{editorId}/access-token")).StatusCode
-            .Should().Be(HttpStatusCode.Unauthorized, "an anonymous caller is rejected before any admin check");
-        (await editor.GetAsync($"/api/users/{editorId}/access-token")).StatusCode
-            .Should().Be(HttpStatusCode.Forbidden, "even a user with read access on `user` is not an admin");
+        var (noGrant, noGrantId) = await _factory.CreateEditorClientAsync([], []);
+        var (reader, readerId) = await _factory.CreateEditorClientAsync(["user"], []);
+        (await _factory.CreateClient().GetAsync($"/api/users/{readerId}/access-token")).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized, "an anonymous caller is rejected before any grant check");
+        (await noGrant.GetAsync($"/api/users/{noGrantId}/access-token")).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden, "a caller without read on `user` is refused");
+        (await reader.GetAsync($"/api/users/{readerId}/access-token")).StatusCode
+            .Should().Be(HttpStatusCode.OK, "read on `user` shows the token state");
 
         var admin = await _factory.CreateAuthenticatedClientAsync();
         (await admin.GetAsync($"/api/users/{Guid.CreateVersion7()}/access-token")).StatusCode

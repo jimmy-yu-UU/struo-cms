@@ -313,4 +313,21 @@ describe('AccessTokenPanel', () => {
       expect(w.text()).toContain(formatDateTime(HAS_TOKEN.createdAt))
     })
   })
+
+  it('keeps the state readable but disables the actions when it is not manageable', async () => {
+    vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(HAS_TOKEN)
+    const w = mount(AccessTokenPanel, {
+      props: { userId: 'u1', manageable: false, disabledHint: 'Not for you' },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await flushPromises()
+
+    expect(w.text()).toContain(formatDateTime('2026-10-01T08:30:00Z'))
+    for (const label of ['Regenerate', 'Revoke']) {
+      const b = w.findAll('button').find((x) => x.text() === label)
+      expect(b, label).toBeDefined()
+      expect(b!.attributes('disabled'), label).toBeDefined()
+      expect(b!.attributes('title'), label).toBe('Not for you')
+    }
+  })
 })

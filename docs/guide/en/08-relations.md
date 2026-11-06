@@ -98,7 +98,7 @@ metadata is always the PascalCase CLR property name; no attribute member can ove
 
 ## `[CmsRelation]` options
 
-Every `[CmsRelation]` setting is a named parameter; there is no constructor. The first four decide
+Every `[CmsRelation]` setting is a named parameter; there is no constructor. The first five decide
 display and target picking:
 
 | Member | CLR type | Default | Effect |
@@ -107,6 +107,7 @@ display and target picking:
 | `DisplayTemplate` | `string?` | `null` | `{Field}` template; falls back to id when unresolved |
 | `PickerQuery` | `string?` | `null` | saved to metadata; not read by the admin SPA |
 | `SortField` | `string?` | `null` | many-to-many only; the junction's sort column |
+| `HelpText` | `string?` | `null` | help line under the input, for any `Interface` |
 
 The last two decide write and delete behavior:
 
@@ -150,8 +151,9 @@ fails; the requirement is writability, not a particular interface — `UserRole`
 A junction collection can carry `Hidden` too, and it behaves exactly like a collection-level
 `Hidden` ([Chapter 5: Defining Collections](05-collections.md)): it only removes the junction
 collection from the admin sidebar. It still appears fully in `/api/schema`, in the RBAC permission
-matrix, and in the generated GraphQL schema. `UserRole` additionally carries `AdminOnly = true`,
-which the sample's `ArticleTag` does not — so the two differ in who can write to them.
+matrix, and in the generated GraphQL schema. The framework's own `UserRole` is the exception to the
+matrix: it follows the grant of `user` and has no row of its own ([Chapter 17](17-roles-and-permissions.md)),
+while the sample's `ArticleTag` is granted like any collection.
 
 The relation's own schema entry names the junction collection, its payload field names, and its
 sort field, which is how a caller discovers that it also needs a separate write grant on the
@@ -330,13 +332,26 @@ the admin SPA wires each one to its own input component:
 
 `TagSelect` is a plain multi-value tag picker when the relation's junction has no visible payload
 and no `SortField`; as soon as either is true, it becomes a per-row links editor instead. In the
-links editor, each selected target gets its own row, showing:
+links editor, one bordered box holds the whole field; say what the extra fields mean with `HelpText`, which
+shows under it like any relation's help line. Its header row names the columns: the order (only with a `SortField`), the
+target collection's label, one column per visible payload field, and remove. Each selected target is one
+row, showing:
 
+- reorder controls, which appear only when the relation declares a `SortField`; the first row's up and the
+  last row's down are greyed out and inactive
+- the target's display text
 - that link's visible payload fields, rendered with the same field-type registry the item form uses
 - a remove button
-- reorder controls, which appear only when the relation declares a `SortField`
 
-The dropdown underneath only adds and removes members.
+On a narrow screen a row stacks: the target on top, the payload inputs under it with their own labels, and
+the buttons in a compact row. The last row of the box is the add control, an outline button reading "Add {target}", which opens the
+dropdown; it only adds members (removing is the row's button), and the chosen targets append as new rows.
+With nothing linked, the box holds only that row. A read-only field shows the rows without it, and with no
+buttons active.
+
+In the plain picker the selected values show as chips inside the field box, each with a remove button,
+and a click on the empty part of the box opens the list of targets; a value the caller may not change
+shows as a chip without a remove button.
 
 Authorization has three tiers:
 

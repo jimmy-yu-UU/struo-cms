@@ -3,16 +3,17 @@ import { apiClient } from './apiClient'
 import { loginLocksApi } from './loginLocksApi'
 
 vi.mock('./apiClient', () => ({
-  apiClient: { get: vi.fn(), delete: vi.fn() },
+  apiClient: { post: vi.fn(), delete: vi.fn() },
 }))
 
 describe('loginLocksApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('get reads the lock state with the email URL-encoded', async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({ locked: false, retryAfterSeconds: 0 })
-    await loginLocksApi.get('a+b@x.test')
-    expect(apiClient.get).toHaveBeenCalledWith('/login-locks?email=a%2Bb%40x.test')
+  it('query POSTs the emails and returns the entries as answered', async () => {
+    const answer = [{ email: 'a@x.test', locked: true, retryAfterSeconds: 90, clearable: false }]
+    vi.mocked(apiClient.post).mockResolvedValue(answer)
+    await expect(loginLocksApi.query(['a@x.test'])).resolves.toEqual(answer)
+    expect(apiClient.post).toHaveBeenCalledWith('/login-locks/query', { emails: ['a@x.test'] })
   })
 
   it('clear DELETEs the lock with the email URL-encoded', async () => {

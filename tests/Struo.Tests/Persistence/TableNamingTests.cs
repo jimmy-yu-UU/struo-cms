@@ -40,8 +40,8 @@ public sealed class TableNamingTests
     }
 
     [Fact]
-    public void Twelve_framework_entities_exactly()
+    public void Eleven_framework_entities_exactly()
     {
-        FrameworkEntityTypes.All.Count.Should().Be(12);
+        FrameworkEntityTypes.All.Count.Should().Be(11);
     }
 }

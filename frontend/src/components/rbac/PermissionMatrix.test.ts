@@ -17,12 +17,13 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean } = {}) {
+function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean; readonly?: boolean } = {}) {
   return mount(PermissionMatrix, {
     props: {
       roleId: props.roleId ?? 'r1',
       isSuperAdminRole: props.isSuperAdminRole ?? false,
       createMode: props.createMode ?? false,
+      readonly: props.readonly ?? false,
     },
     global: { plugins: [i18n] },
   })
@@ -256,5 +257,39 @@ describe('PermissionMatrix', () => {
     expect(vm.currentEntries()).toEqual([
       { collection: 'article', canRead: true, canWrite: true, canDelete: false },
     ])
+  })
+
+  it('gives the hidden junctions no row: they follow the grant of the collection that owns them', async () => {
+    useSchemaStore().collections = [
+      { name: 'user', label: 'User', group: 'System', fields: [], relations: [] },
+      { name: 'userRole', label: 'UserRole', group: 'System', hidden: true, fields: [], relations: [] },
+      { name: 'permission', label: 'Permission', group: 'System', hidden: true, fields: [], relations: [] },
+      { name: 'file', label: 'File', group: 'System', hidden: true, fields: [], relations: [] },
+    ] as any
+    const w = mountMatrix()
+    await flushPromises()
+    const labels = w.findAll('td.col-name').map((c) => c.text())
+    expect(labels).toEqual(['File', 'User'])
+  })
+
+  it('leaves user and role grantable for every right when they are not adminOnly', async () => {
+    useSchemaStore().collections = [
+      { name: 'user', label: 'User', group: 'System', fields: [], relations: [] },
+    ] as any
+    const w = mountMatrix()
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes).toHaveLength(3)
+    expect(boxes.every((b) => b.attributes('disabled') === undefined)).toBe(true)
+  })
+
+  it('in read-only mode disables every checkbox and offers no Save', async () => {
+    seedSchema()
+    const w = mountMatrix({ readonly: true })
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes).toHaveLength(6)
+    expect(boxes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+    expect(w.text()).not.toContain('Save permissions')
   })
 })

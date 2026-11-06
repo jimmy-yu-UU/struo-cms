@@ -2,7 +2,7 @@
 <!-- No route-params watcher: AppShell's keyed <router-view> remounts this view on a collection
      switch (see AppShell.vue's :key="route.path" comment). -->
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Plus, Pencil, Eye, Trash2, Undo2 } from '@lucide/vue'
@@ -19,12 +19,17 @@ import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { useConfirm } from '@/composables/useConfirm'
 import { itemsApi } from '../api/itemsApi'
+import { loginLocksApi, type LoginLockState } from '../api/loginLocksApi'
+import { traceIdDetail } from '../api/apiClient'
+import { useToast } from '@/composables/useToast'
 import { selectListColumns, type ColumnDef as ListColumn } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
+import { primitiveText } from '../lib/primitiveText'
+import { formatClock } from '../lib/formatClock'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
-import { LANGUAGE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { CreatedUser } from '@/api/usersApi'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
@@ -37,6 +42,7 @@ const auth = useAuthStore()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
 const confirm = useConfirm()
+const toast = useToast()
 const { t } = useI18n()
 
 const name = computed(() => route.params.name as string)
@@ -44,14 +50,12 @@ const meta = computed(() => schema.get(name.value))
 const canRead = computed(() => auth.canRead(name.value))
 const canWrite = computed(() => auth.canWrite(name.value))
 const canDelete = computed(() => auth.canDelete(name.value))
-// Users are created through a dialog backed by POST /api/users (super-admin only), not the generic
-// item form, so `user` is creatable for super-admins alone.
+// Users are created through a dialog backed by POST /api/users (write on the user collection), not the
+// generic item form, so `user` is creatable whatever `creatable` says.
 const isUserCollection = computed(() => name.value === USER_COLLECTION)
 // Nothing is creatable until the collection's meta has loaded: `creatable` is unknown before then.
 const canCreate = computed(() => !!meta.value && canWrite.value && (
-  isUserCollection.value
-    ? auth.user?.isSuperAdmin === true
-    : meta.value.creatable !== false
+  isUserCollection.value || meta.value.creatable !== false
 ))
 const createUserOpen = ref(false)
 const mode = ref<'active' | 'trash'>('active')
@@ -80,14 +84,15 @@ function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
 function tagSeverity(v: unknown): 'success' | 'secondary' {
-  const s = String(v ?? '').toLowerCase()
+  const s = primitiveText(v).toLowerCase()
   if (s === 'published') return 'success'
   return 'secondary'
 }
 function formatDeletedAt(v: unknown): string {
-  if (v == null || v === '') return ''
-  const d = new Date(String(v))
-  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString()
+  const raw = primitiveText(v)
+  if (raw === '') return ''
+  const d = new Date(raw)
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
 }
 
 // Fields FilterBuilder can offer: the display columns first, then every searchable field that did
@@ -114,6 +119,151 @@ const filterFields = computed<FilterField[]>(() => {
   return [...listed, ...searchableOnly]
 })
 
+// ---- login lock column (user collection) ----
+// One batch query per loaded page. Each row shows one button: Not locked, Unlock (m:ss) for a lock the caller
+// can clear, or Locked (m:ss) when it cannot. A failing query leaves the list as it is and marks the column
+// unavailable. While any row is locked a single page-level timer ticks once a second; the time left is the
+// queried retryAfterSeconds minus the time since the query returned, and when a row reaches zero the page is
+// queried once more, whether one row or several expired in that tick.
+const showLockColumn = computed(() => isUserCollection.value && mode.value === 'active' && canRead.value)
+const lockStates = ref<Record<string, LoginLockState>>({})
+const lockFailed = ref(false)
+const lockLoaded = ref(false)
+const lockQueriedAt = ref(0)
+const lockNow = ref(Date.now())
+const unlockingEmail = ref<string | null>(null)
+const lockLoad = createLatestWins()
+const anyLocked = computed(() => Object.values(lockStates.value).some((state) => state.locked))
+let lockTimer: ReturnType<typeof setInterval> | undefined
+let expiryQueryPending = false
+
+function emailOf(row: Row): string {
+  return primitiveText(row.email)
+}
+
+function secondsLeft(state: LoginLockState): number {
+  return Math.max(0, state.retryAfterSeconds - Math.floor((lockNow.value - lockQueriedAt.value) / 1000))
+}
+
+function tickLocks(): void {
+  lockNow.value = Date.now()
+  if (expiryQueryPending) return
+  if (!Object.values(lockStates.value).some((state) => state.locked && secondsLeft(state) <= 0)) return
+  expiryQueryPending = true
+  void loadLocks().finally(() => { expiryQueryPending = false })
+}
+
+function stopLockTimer(): void {
+  if (lockTimer === undefined) return
+  clearInterval(lockTimer)
+  lockTimer = undefined
+}
+
+watch(anyLocked, (locked) => {
+  if (!locked) stopLockTimer()
+  else lockTimer ??= setInterval(tickLocks, 1000)
+}, { flush: 'sync' })
+onBeforeUnmount(stopLockTimer)
+
+async function loadLocks(): Promise<void> {
+  const token = lockLoad.next()
+  lockFailed.value = false
+  const emails = showLockColumn.value ? rows.value.map(emailOf).filter((e) => e !== '') : []
+  if (emails.length === 0) {
+    lockStates.value = {}
+    lockLoaded.value = true
+    return
+  }
+  try {
+    const states = await loginLocksApi.query(emails)
+    if (!lockLoad.isCurrent(token)) return
+    lockQueriedAt.value = Date.now()
+    lockNow.value = lockQueriedAt.value
+    lockStates.value = Object.fromEntries(states.map((s) => [s.email, s]))
+    lockLoaded.value = true
+  } catch {
+    if (!lockLoad.isCurrent(token)) return
+    lockStates.value = {}
+    lockFailed.value = true
+    lockLoaded.value = true
+  }
+}
+
+// Whole seconds as words for a tooltip: 59 s, 9 min 59 s, 1 h 2 min 5 s.
+function spokenTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return t('loginLocks.spokenHours', { h, m, s })
+  if (m > 0) return t('loginLocks.spokenMinutes', { m, s })
+  return t('loginLocks.spokenSeconds', { s })
+}
+
+// A super-admin account is the one a caller who is not a super-admin cannot clear; the same flag marks
+// the row whose delete is refused to that caller.
+function isProtectedRow(row: Row): boolean {
+  return lockStates.value[emailOf(row)]?.clearable === false
+}
+
+// A super-admin role and the public role cannot be deleted by anyone; the reason, when the row is one.
+function undeletableRoleHint(row: Row): string | undefined {
+  if (name.value !== ROLE_COLLECTION) return undefined
+  if (row.isSuperAdmin === true) return t('superAdmin.roleUndeletable')
+  return row.name === PUBLIC_ROLE_NAME ? t('superAdmin.publicRoleUndeletable') : undefined
+}
+
+async function onUnlock(row: Row): Promise<void> {
+  const email = emailOf(row)
+  if (unlockingEmail.value !== null) return
+  const header = t('loginLocks.confirmHeader')
+  if (!(await confirm.require({ header, message: t('loginLocks.confirmMessage', { email }), severity: 'danger' }))) return
+  unlockingEmail.value = email
+  try {
+    await loginLocksApi.clear(email)
+    toast.add({ severity: 'success', summary: t('loginLocks.unlocked'), life: 3000 })
+    await loadLocks()
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('loginLocks.unlockFailed'), detail: traceIdDetail(e), life: 3500 })
+  } finally {
+    unlockingEmail.value = null
+  }
+}
+
+// A disabled button gets no pointer events, so a tooltip lives on the span around it.
+function lockCell(row: Row) {
+  if (lockFailed.value) {
+    return h('span', { class: 'text-muted-foreground', title: t('loginLocks.unavailableHint'), 'data-testid': 'lock-unavailable' },
+      t('loginLocks.unavailable'))
+  }
+  if (!lockLoaded.value) return h('span', { class: 'text-muted-foreground', 'data-testid': 'lock-pending' }, '…')
+  const email = emailOf(row)
+  const state = lockStates.value[email]
+  if (!state?.locked) {
+    return h(Button, {
+      variant: 'outline', size: 'sm', disabled: true, class: 'text-muted-foreground', 'data-testid': 'lock-none',
+      'aria-label': t('loginLocks.ariaNotLocked', { email }),
+    }, () => t('loginLocks.notLocked'))
+  }
+
+  const left = secondsLeft(state)
+  const clock = formatClock(left)
+  const tip = t('loginLocks.lockedTip', { time: spokenTime(left) })
+  if (canWrite.value && state.clearable) {
+    const busy = unlockingEmail.value === email
+    return h('span', { class: 'inline-flex', title: tip }, [h(Button, {
+      variant: 'outline', size: 'sm', class: 'border-warning bg-warning/10', 'data-testid': 'lock-unlock',
+      disabled: busy,
+      'aria-label': t('loginLocks.ariaUnlock', { email, time: clock }),
+      onClick: () => onUnlock(row),
+    }, () => (busy ? t('loginLocks.unlocking') : t('loginLocks.unlockWithTime', { time: clock })))])
+  }
+  const reason = canWrite.value ? t('loginLocks.superAdminOnly') : t('loginLocks.readOnlyHint')
+  return h('span', { class: 'inline-flex', title: t('loginLocks.tooltipWithReason', { tip, reason }) }, [h(Button, {
+    variant: 'outline', size: 'sm', disabled: true, class: 'border-warning bg-warning/10', 'data-testid': 'lock-locked',
+    'aria-label': t('loginLocks.ariaLocked', { email, time: clock }),
+  }, () => t('loginLocks.lockedWithTime', { time: clock }))])
+}
+
 function actionButtons(row: Row) {
   const buttons = []
   if (mode.value === 'active') {
@@ -126,7 +276,10 @@ function actionButtons(row: Row) {
     if (canDelete.value) {
       buttons.push(h(Button, {
         variant: 'ghost', size: 'icon', 'data-testid': 'row-delete',
-        title: t('collectionList.delete'), 'aria-label': t('collectionList.delete'),
+        disabled: isProtectedRow(row) || undeletableRoleHint(row) !== undefined,
+        title: undeletableRoleHint(row)
+          ?? (isProtectedRow(row) ? t('superAdmin.deleteAccountHint') : t('collectionList.delete')),
+        'aria-label': t('collectionList.delete'),
         onClick: () => onDelete(row),
       }, () => h(Trash2, { class: 'size-4 text-destructive' })))
     }
@@ -181,6 +334,14 @@ const tableColumns = computed<DataTableColumn<Row>[]>(() => {
     })
   }
 
+  if (showLockColumn.value) {
+    cols.push({
+      id: 'loginLock',
+      header: t('loginLocks.column'),
+      cell: ({ row }) => lockCell(row.original),
+    })
+  }
+
   if (canRead.value || canDelete.value) {
     cols.push({
       id: 'actions',
@@ -208,6 +369,8 @@ async function loadItems(): Promise<void> {
   }
   loading.value = true
   error.value = ''
+  lockStates.value = {}
+  lockLoaded.value = false
   try {
     const sort = toSortParam(tableState.value.sort)
     await langStore.load()
@@ -222,11 +385,13 @@ async function loadItems(): Promise<void> {
     if (!listLoad.isCurrent(token)) return
     rows.value = res.data
     total.value = res.total
+    void loadLocks()
   } catch (e) {
     if (!listLoad.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('common.loadFailed')
     rows.value = []
     total.value = 0
+    lockStates.value = {}
   } finally {
     // Only the current load may clear the spinner; a stale response must not
     // turn off the spinner of the newer request still in flight.
@@ -236,29 +401,29 @@ async function loadItems(): Promise<void> {
 
 function onTableState(next: DataTableState): void {
   tableState.value = next
-  loadItems()
+  void loadItems()
 }
 function onPageChange(page: number): void {
   tableState.value = { ...tableState.value, page }
-  loadItems()
+  void loadItems()
 }
 function onPageSizeChange(pageSize: number): void {
   // An offset computed against the OLD page size is meaningless against the new one (e.g. page 3
   // at 25/page starts at row 75; at 100/page that's off the end of the result set) -- always
   // return to the first page when the size changes.
   tableState.value = { ...tableState.value, page: 0, pageSize }
-  loadItems()
+  void loadItems()
 }
 function onFilterApply(spec: FilterSpec): void {
   filters.value = spec
   // A new filter invalidates the current offset.
   tableState.value = { ...tableState.value, page: 0 }
-  loadItems()
+  void loadItems()
 }
 
 function onEdit(row: Row): void {
-  const rid = row.id
-  if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
+  const rid = primitiveText(row.id)
+  if (rid !== '') void router.push({ name: 'collection-item', params: { name: name.value, id: rid } })
 }
 
 function onNew(): void {
@@ -266,18 +431,18 @@ function onNew(): void {
     createUserOpen.value = true
     return
   }
-  router.push({ name: 'collection-create', params: { name: name.value } })
+  void router.push({ name: 'collection-create', params: { name: name.value } })
 }
 
 // The edit page replaces this view, so there is no list to refresh before navigating.
 function onUserCreated(created: CreatedUser): void {
-  router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
+  void router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
 }
 
 function setMode(m: 'active' | 'trash'): void {
   mode.value = m
   tableState.value = { ...tableState.value, page: 0 }
-  loadItems()
+  void loadItems()
 }
 function onModeToggle(value: unknown): void {
   // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again
@@ -324,7 +489,7 @@ onMounted(loadItems)
 
 defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
   canWrite, canCreate, createUserOpen, onUserCreated, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
-  error, cellValue, tableState, filters })
+  error, cellValue, tableState, filters, lockStates, lockFailed, onUnlock })
 </script>
 
 <template>

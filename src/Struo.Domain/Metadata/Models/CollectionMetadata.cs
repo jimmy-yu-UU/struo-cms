@@ -10,8 +10,8 @@ public sealed record CollectionMetadata
 
     /// <summary>
     /// When true, generic-CRUD writes (create/update/delete) require a super-admin regardless of
-    /// per-collection RBAC grants. Guards the identity/authorization tables against privilege
-    /// escalation. See <c>CmsCollectionAttribute.AdminOnly</c>.
+    /// per-collection RBAC grants. Guards a collection whose writes could escalate a caller's
+    /// privilege. See <c>CmsCollectionAttribute.AdminOnly</c>.
     /// </summary>
     public bool AdminOnly { get; init; }
 

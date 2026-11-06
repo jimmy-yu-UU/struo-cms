@@ -48,7 +48,7 @@ that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wron
 account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.` — the two
 are deliberately indistinguishable. Success returns `200` with `{ id }` and no other fields.
 
-`POST /api/users` creates a user, and only a super-admin can call it: success returns `201` with a
+`POST /api/users` creates a user and needs write on the `user` collection: success returns `201` with a
 body of `{ id, email, name }`, and `Location` points at `/api/items/user/{id}` — the generic item
 route, since there's no dedicated `GET /api/users/{id}`. The generic `POST /api/items/user` refuses
 to create a user (`400`), because only this endpoint hashes the password and applies the password
@@ -60,29 +60,31 @@ in the `Auth` section of [Chapter 4: Configuration Reference](04-configuration.m
 user's email through `PUT /api/items/user/{id}` checks the address as sent, before it is trimmed and
 lowercased, so `" A@b.co "` is a `400` there.
 
-The admin UI calls this endpoint from the "New" button on the user list, shown to super-admins only.
-The dialog asks for an email, an optional display name, and a password typed twice; it takes no
+The admin UI calls this endpoint from the "New" button on the user list, shown to callers with write on
+`user`. The dialog asks for an email, an optional display name, and a password typed twice; it takes no
 roles, so assign them on the new user's page, which opens once the user is created.
 
-Changing a password goes through `PUT /api/users/{id}/password`: the caller is either a
-super-admin, or the account owner supplying `currentPassword` — the owner's own change always
-verifies the current password, a super-admin's change never does.
+Changing a password goes through `PUT /api/users/{id}/password`: the caller is either the account
+owner supplying `currentPassword`, or a caller with write on `user` resetting someone else's password. The
+owner's own change always verifies the current password; a reset never does.
 
-A wrong current password returns `400` `INVALID_CURRENT_PASSWORD`; a non-admin trying to change
-someone else's password returns `403` `Admin role required.`; a new password that violates the
-policy returns `400` with a field-level message.
+A wrong current password returns `400` `INVALID_CURRENT_PASSWORD`; changing someone else's password
+without write on `user` returns `403` `Write permission on the user collection is required.`; resetting the
+password of a super-admin account as a caller who is not a super-admin returns `403` `Only a super-admin can
+reset the password of a super-admin account.`; a new password that violates the policy returns `400` with a
+field-level message.
 
 When the owner calls for an account that only ever logged in through OIDC and never set a local
 password, the request is stopped before the current-password check even runs: `400`
-`NO_LOCAL_PASSWORD`. A super-admin can still set a local password on such an account. Across the
-whole identity surface, this is the only endpoint that lets a non-super-admin write.
+`NO_LOCAL_PASSWORD`. A caller allowed to reset the password can still set a local password on such an
+account. Changing your own password is the one identity write that needs no grant.
 
 The admin SPA surfaces this endpoint in two places: an ordinary user changes their own password
-from the account menu in the app shell, and a super-admin sees a reset action on the user form —
-which most callers never reach, since an ordinary role isn't usually granted read on `user`.
+from the account menu in the app shell, and a caller with write on `user` sees a reset action on the user
+form, which most callers never reach, since an ordinary role isn't usually granted read on `user`.
 
 This endpoint carries its own rate limit, partitioned by the user id of the caller making the
-change — not the target user's, and not the caller's IP: a super-admin resetting several users'
+change — not the target user's, and not the caller's IP: an administrator resetting several users'
 passwords in a row spends its own quota, and never locks out the accounts it's changing. The
 configuration keys are in the `RateLimiting` section of
 [Chapter 4: Configuration Reference](04-configuration.md).
@@ -175,11 +177,11 @@ were on after you sign in again.
 
 ## Bearer tokens
 
-A bearer token is a separately issued, long-lived credential for a given user, and only a
-super-admin can issue one, through `POST /api/users/{id}/access-token`. It appears in the response
-only once, at issue time, and only its hash is kept afterward. The raw value is 256 bits of random
-data, base64url-encoded with padding stripped; what's stored is its uppercase hexadecimal SHA-256
-digest.
+A bearer token is a separately issued, long-lived credential for a given user. A caller with write on
+`user` can issue one, through `POST /api/users/{id}/access-token`, and only a super-admin can issue one
+for a super-admin account. It appears in the response only once, at issue time, and only its hash is
+kept afterward. The raw value is 256 bits of random data, base64url-encoded with padding stripped;
+what's stored is its uppercase hexadecimal SHA-256 digest.
 
 A token never expires on its own — it stays valid until it's revoked
 (`DELETE /api/users/{id}/access-token`), the user's password is changed, or a new one is issued
@@ -192,20 +194,21 @@ the account itself is deactivated, authentication fails regardless of whether th
 otherwise still valid, and this flag is re-checked on every request.
 
 Each user has at most one token. Changing a password revokes that user's sessions and the token,
-whether the owner or a super-admin changes it, so an integration that authenticates with the token
+whether the owner or an administrator changes it, so an integration that authenticates with the token
 needs a newly issued one afterwards.
 
-A super-admin editing a user in the admin UI can issue, regenerate or revoke the token in the
-"Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke
-button. The raw token is shown only once, in the dialog that opens after it is issued, with a copy
-button; closing the dialog discards it for good. Regenerating and revoking ask for confirmation
-first, because the old token stops working immediately. The section also lists when the token was
-issued and last used, and the same data is available from `GET /api/users/{id}/access-token`, which
-returns `{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with no token both are `null`,
-and a token that has not been used since it was issued has only `lastUsedAt` as `null`. The
-last-used time is written at most once a minute, so it can trail the latest request: it is enough to
-spot a token nobody has used for a long time, not a real-time activity log. The response never
-contains the token or its hash.
+A caller with write on `user` editing a user in the admin UI can issue, regenerate or revoke the token
+in the "Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke
+button; a caller with read only sees the state, and for a super-admin account the buttons are disabled
+unless the caller is a super-admin. The raw token is shown only once, in the dialog that opens after it
+is issued, with a copy button; closing the dialog discards it for good. Regenerating and revoking ask
+for confirmation first, because the old token stops working immediately. The section also lists when the
+token was issued and last used, and the same data is available from `GET /api/users/{id}/access-token`,
+which needs read on `user` and returns `{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with
+no token both are `null`, and a token that has not been used since it was issued has only `lastUsedAt`
+as `null`. The last-used time is written at most once a minute, so it can trail the latest request: it
+is enough to spot a token nobody has used for a long time, not a real-time activity log. The response
+never contains the token or its hash.
 
 A token stays valid until it is revoked, so for an automation give it a dedicated account and assign
 that account a role with the least permissions it needs, rather than issuing the token for a
@@ -269,13 +272,17 @@ Counting every attempt has a cost: whoever knows an account's email can use up i
 that account locked out of password sign-in until the window ends. This is a deliberate trade-off;
 SSO sign-in is unaffected.
 
-A lock ends by itself when the window ends. A super-admin, or a caller whose role holds the
-`login.unlock` capability, can end it sooner through `DELETE api/login-locks?email=…`, and read it with
-`GET`; see [Chapter 13](13-rest-endpoints.md). The admin UI does the same on its Login locks page, for a
-super-admin or a holder of `login.unlock`, and on a user's edit page, for a super-admin. Clearing a lock
-does not change the password. A holder of `login.unlock` who is not a super-admin cannot clear the lock
-on a super-admin account: the endpoint answers `403`, the Login locks page says so, and only a
-super-admin can clear it.
+A lock ends by itself when the window ends. A caller with write on the `user` collection can end it
+sooner through `DELETE api/login-locks?email=…`, and a caller with read on `user` can see which accounts
+are locked through `POST api/login-locks/query`; see [Chapter 13](13-rest-endpoints.md). The admin UI
+does the same in the Login lock column of the user list, which shows one button per account. It reads
+Not locked and is disabled when the account is not locked. For a locked account it shows the time left as
+`m:ss` (`h:mm:ss` from an hour on), counting down every second: the button is Unlock (m:ss) for a caller who
+can clear the lock and asks for confirmation, and a disabled Locked (m:ss) for one who cannot, with a
+tooltip that gives the reason. When a lock runs out the page is queried once more, so the button turns
+into Not locked. Clearing a lock does not change the password. Only a super-admin can clear the lock on a
+super-admin account: the endpoint answers `403` to anyone else, and the query reports such an account as
+not `clearable`.
 
 A process-wide concurrency cap (`RateLimiting:LoginConcurrency`) bounds how many logins verify a
 password at once: 4 run, 32 more wait, and the rest get the same `429` with `Retry-After`. It
@@ -325,8 +332,8 @@ partition key is the account, not the caller's IP.
 When the locked account is the only administrator, a lock that ends by itself in a few minutes is
 still a locked door. There are three ways to open it sooner:
 
-- Another super-admin clears it, as described above. A holder of `login.unlock` cannot, because the
-  lock is on a super-admin account.
+- Another super-admin clears it, as described above. A caller who only has write on `user` cannot,
+  because the lock is on a super-admin account.
 - Sign in with SSO, when an OIDC provider is enabled. The per-account count applies to password
   sign-in only.
 - Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.

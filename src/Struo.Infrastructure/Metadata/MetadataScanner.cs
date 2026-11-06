@@ -631,6 +631,7 @@ public static class MetadataScanner
                 PickerQuery = rel.PickerQuery,
                 OnDelete = rel.OnDelete,
                 Editable = rel.Editable,
+                HelpText = rel.HelpText,
                 SelfReferencing = target == type,
                 JunctionCollection = junctionCollection,
                 SortField = kind == RelationKind.ManyToMany && rel.SortField is not null ? Camel(rel.SortField) : null

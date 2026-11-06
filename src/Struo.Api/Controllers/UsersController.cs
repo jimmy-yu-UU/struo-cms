@@ -23,17 +23,24 @@ public sealed record ChangePasswordRequest(string NewPassword, string? CurrentPa
 public sealed class UsersController(
     IUserAccountStore accounts, IPasswordHasher hasher, IUserCredentialStore store,
     ICurrentPermissions permissions, ICurrentUserAccessor currentUser,
-    IOptions<PasswordPolicyOptions> passwordPolicy) : ControllerBase
+    IOptions<PasswordPolicyOptions> passwordPolicy, SuperAdminGuard superAdmins) : ControllerBase
 {
-    private ObjectResult? RequireAdmin() =>
-        permissions.Current.IsSuperAdmin
+    private ObjectResult? RequireWrite() =>
+        permissions.Current.CanWrite(UserCollection.Name)
             ? null
-            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, "Admin role required.");
+            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
+                "Write permission on the user collection is required.");
+
+    private ObjectResult? RequireRead() =>
+        permissions.Current.CanRead(UserCollection.Name)
+            ? null
+            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
+                "Read permission on the user collection is required.");
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest body, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireWrite() is { } denied) return denied;
         if (string.IsNullOrWhiteSpace(body.Email))
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Email is required.");
         if (PasswordPolicy.Validate(body.Password, passwordPolicy.Value) is { } policyError)
@@ -66,7 +73,10 @@ public sealed class UsersController(
         var isSelf = currentUser.GetCurrentUserId() is { } me && me == id;
         if (!isSelf)
         {
-            if (RequireAdmin() is { } denied) return denied; // changing another user → admin only
+            // Changing another user needs write on the user collection, and a super-admin account's
+            // password is a super-admin's to reset.
+            if (RequireWrite() is { } denied) return denied;
+            await superAdmins.RequireForUserAsync(id, "reset the password of a super-admin account", ct);
         }
         else
         {
@@ -115,7 +125,8 @@ public sealed class UsersController(
     [HttpPost("{id:guid}/access-token")]
     public async Task<IActionResult> GenerateToken(Guid id, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireWrite() is { } denied) return denied;
+        await superAdmins.RequireForUserAsync(id, "issue a token for a super-admin account", ct);
         var (token, hash) = AccessTokenHasher.Generate();
         var updated = await accounts.SetAccessTokenAsync(
             id, hash, currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
@@ -131,7 +142,7 @@ public sealed class UsersController(
     [HttpGet("{id:guid}/access-token")]
     public async Task<IActionResult> GetTokenInfo(Guid id, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireRead() is { } denied) return denied;
         var info = await accounts.FindAccessTokenInfoAsync(id, ct);
         if (info is null)
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
@@ -141,7 +152,8 @@ public sealed class UsersController(
     [HttpDelete("{id:guid}/access-token")]
     public async Task<IActionResult> RevokeToken(Guid id, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireWrite() is { } denied) return denied;
+        await superAdmins.RequireForUserAsync(id, "revoke the token of a super-admin account", ct);
         var updated = await accounts.ClearAccessTokenAsync(
             id, currentUser.GetCurrentUserId(), DateTime.UtcNow, ct);
         return updated ? NoContent() : NotFound();
@@ -160,7 +172,7 @@ public sealed class UsersController(
         [FromServices] SchemaService schema,
         CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireRead() is { } denied) return denied;
         if (!await accounts.ExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
 

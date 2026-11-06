@@ -73,7 +73,7 @@ Applied 202610080100  CreateBlogSchema
 ```
 
 `MigrateOnStartup` 設成 `true` 的話，API 啟動時會自己套用它。再啟動之後，`GET /api/schema`
-會列出十二個集合：範例加的四個集合（`article`、`articleTag`、`category`、`tag`）會跟八個框架
+會列出十一個集合：範例加的四個集合（`article`、`articleTag`、`category`、`tag`）會跟七個框架
 集合一起出現；`ArticleTranslation` 是 sidecar，不是獨立集合。`articleTag` 雖然在後台側欄裡被
 `Hidden` 藏起來，`/api/schema` 仍然會列出它。
 
@@ -116,8 +116,8 @@ public sealed class Article : AuditableEntity, ISoftDeletable
 `ArticleTag` 的兩個外鍵。
 
 兩個關聯：`Category`（多對一 `Dropdown`，`OnDelete = SetNull`）與 `Tags`（透過 `ArticleTag`
-junction 的多對多 `TagSelect`，用 `[CmsRelation(SortField = nameof(ArticleTag.Sort))]` 排
-序，表單上能就地編輯每個標籤的 `Note` 跟順序）；兩種關聯介面的運作方式見
+junction 的多對多 `TagSelect`，用 `[CmsRelation(SortField = nameof(ArticleTag.Sort), HelpText = ...)]` 排
+序，表單上能就地編輯每個標籤的 `Note` 跟順序，說明文字解釋那個備註）；兩種關聯介面的運作方式見
 [第 8 章：關聯](08-relations.md)。標題與內文不在 `Article` 上，而是放在下面的翻譯 sidecar。
 
 ### `ArticleTranslation.cs`
@@ -247,11 +247,12 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-04 05:39:48Z  CreateCoreSchema
-202610080001   Applied   2026-11-04 05:39:48Z  SeedCoreData
-202611030000   Applied   2026-11-04 05:39:48Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-04 05:39:48Z  CreateRoleCapabilities
-4 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
+202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
+202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
+5 applied, 0 pending, 0 orphaned
 ```
 
 移除完，依序跑這三道指令，確認乾淨：

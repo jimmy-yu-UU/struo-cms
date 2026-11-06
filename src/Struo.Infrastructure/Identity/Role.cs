@@ -9,7 +9,7 @@ namespace Struo.Infrastructure.Identity;
 /// <see cref="IsSuperAdmin"/> short-circuits all permission checks (allow-all).</summary>
 [SugarTable("roles")]
 [SugarIndex("ux_{table}_name", nameof(Name), OrderByType.Asc, true)]
-[CmsCollection("Role", Group = "System", DefaultDisplayField = nameof(Name), AdminOnly = true)]
+[CmsCollection("Role", Group = "System", DefaultDisplayField = nameof(Name))]
 public sealed class Role : AuditableEntity
 {
     [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
@@ -17,7 +17,7 @@ public sealed class Role : AuditableEntity
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = "";
 
-    [CmsField(Label = "Super Admin", Interface = FieldInterface.Boolean, Sort = 2)]
+    [CmsField(Label = "Super Admin", Interface = FieldInterface.Boolean, ReadOnly = true, Sort = 2)]
     public bool IsSuperAdmin { get; set; }
 
     [SugarColumn(IsNullable = true)]

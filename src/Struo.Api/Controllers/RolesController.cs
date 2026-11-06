@@ -16,20 +16,27 @@ public sealed record RolePermissionEntry(string Collection, bool CanRead, bool C
 [Route("api/roles")]
 [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
 public sealed class RolesController(
-    IPermissionGrantStore grants, IRoleCapabilityStore capabilities, SystemCapabilityCatalog catalog,
-    IMetadataProvider metadata, ICurrentPermissions permissions) : ControllerBase
+    IPermissionGrantStore grants, IMetadataProvider metadata, ICurrentPermissions permissions,
+    SuperAdminGuard superAdmins) : ControllerBase
 {
     private const string RoleNotFound = "Role not found.";
 
-    private ObjectResult? RequireAdmin() =>
-        permissions.Current.IsSuperAdmin
+    private ObjectResult? RequireRead() =>
+        permissions.Current.CanRead(RbacCollections.Role)
             ? null
-            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, "Admin role required.");
+            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
+                "Read permission on the role collection is required.");
+
+    private ObjectResult? RequireWrite() =>
+        permissions.Current.CanWrite(RbacCollections.Role)
+            ? null
+            : ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden,
+                "Write permission on the role collection is required.");
 
     [HttpGet("{id:guid}/permissions")]
     public async Task<IActionResult> GetPermissions(Guid id, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireRead() is { } denied) return denied;
         if (!await grants.RoleExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
@@ -48,12 +55,13 @@ public sealed class RolesController(
     public async Task<IActionResult> PutPermissions(
         Guid id, [FromBody] List<RolePermissionEntry>? body, CancellationToken ct)
     {
-        if (RequireAdmin() is { } denied) return denied;
+        if (RequireWrite() is { } denied) return denied;
         if (body is null)
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
                 "Body must be a JSON array of permission entries.");
         if (!await grants.RoleExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
+        await superAdmins.RequireToChangeRolesAsync([id], grants: true, ct);
 
         // Duplicates checked on the raw body (an all-false duplicate still signals a client bug).
         var dupes = body.GroupBy(e => e.Collection, StringComparer.OrdinalIgnoreCase)
@@ -80,47 +88,6 @@ public sealed class RolesController(
 
         return Ok(rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList());
     }
-
-    [HttpGet("{id:guid}/capabilities")]
-    public async Task<IActionResult> GetCapabilities(Guid id, CancellationToken ct)
-    {
-        if (RequireAdmin() is { } denied) return denied;
-        if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
-
-        return Ok(Sorted(await capabilities.ListAsync(id, ct)));
-    }
-
-    /// <summary>Full-replace of the role's system capability codes. The <c>public</c> role (every caller holds it,
-    /// anonymous ones too) is a <c>400</c> for any set, empty included. A code outside
-    /// <see cref="SystemCapabilityCatalog"/> is a <c>400</c> and nothing is written; a repeated code
-    /// counts once.</summary>
-    [HttpPut("{id:guid}/capabilities")]
-    public async Task<IActionResult> PutCapabilities(
-        Guid id, [FromBody] List<string?>? body, CancellationToken ct)
-    {
-        if (RequireAdmin() is { } denied) return denied;
-        if (body is null)
-            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                "Body must be a JSON array of capability codes.");
-        if (!await grants.RoleExistsAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
-
-        if (await capabilities.IsPublicRoleAsync(id, ct))
-            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                "The public role cannot hold capabilities.");
-
-        var unknown = body.Where(c => c is null || !catalog.IsKnown(c)).Select(c => c ?? "").Distinct().ToList();
-        if (unknown.Count > 0)
-            return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                $"Unknown capabilities: {string.Join(", ", unknown)}.");
-
-        var codes = Sorted(body.Select(c => c!).Distinct(StringComparer.Ordinal).ToList());
-        await capabilities.ReplaceAsync(id, codes, ct);
-        return Ok(codes);
-    }
-
-    private static List<string> Sorted(IEnumerable<string> codes) => codes.Order(StringComparer.Ordinal).ToList();
 
     private static RolePermissionEntry ToEntry(PermissionGrant g) =>
         new(g.Collection, g.CanRead, g.CanWrite, g.CanDelete);

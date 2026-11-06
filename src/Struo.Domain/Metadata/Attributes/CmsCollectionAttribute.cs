@@ -17,9 +17,9 @@ public sealed class CmsCollectionAttribute(string label) : Attribute
 
     /// <summary>
     /// When true, writes (create/update/delete) through the generic CRUD path require a super-admin,
-    /// regardless of any per-collection RBAC grant. Used for the identity/authorization tables
-    /// (user/role/permission/userRole) so a delegated write grant cannot be turned into
-    /// self-escalation (e.g. inserting a userRole row that assigns oneself the super-admin role).
+    /// regardless of any per-collection RBAC grant, so a delegated write grant cannot be turned into
+    /// self-escalation. The framework's identity collections do not declare it: a grant on them is
+    /// delegable, and <c>SuperAdminGuard</c> keeps super-admin accounts and roles out of reach.
     /// Reads remain governed by ordinary RBAC.
     /// </summary>
     public bool AdminOnly { get; set; }

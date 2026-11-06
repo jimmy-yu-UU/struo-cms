@@ -38,6 +38,7 @@ export type RelationMeta = {
   junctionCollection?: string | null // camelCase name of the M2M junction when it is itself a [CmsCollection]
   junctionPayloadFields?: string[] | null // camelCase payload field names on that junction, hidden ones included
   sortField?: string | null // camelCase junction column that orders the targets ([CmsRelation(SortField)])
+  helpText?: string | null // one help line shown under the relation input ([CmsRelation(HelpText)])
 }
 
 export type CollectionMeta = {

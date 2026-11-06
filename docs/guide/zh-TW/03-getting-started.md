@@ -109,18 +109,19 @@ dotnet run --project src/Struo.Api -- migrate
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[13:38:24 INF] Beginning Transaction
-[13:38:24 INF] Rolling back transaction
-[13:38:24 INF] VersionMigration migrating
-[13:38:24 INF] Beginning Transaction
+[14:14:17 INF] Beginning Transaction
+[14:14:17 INF] Rolling back transaction
+[14:14:17 INF] VersionMigration migrating
+[14:14:17 INF] Beginning Transaction
 …
-[13:38:24 INF] Committing Transaction
-[13:38:24 INF] 202611040000: CreateRoleCapabilities migrated
-[13:38:24 INF] => 0.0015054s
+[14:14:17 INF] Committing Transaction
+[14:14:17 INF] 202611060000: DropRoleCapabilities migrated
+[14:14:17 INF] => 0.0021538s
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
 Applied 202611040000  CreateRoleCapabilities
+Applied 202611060000  DropRoleCapabilities
 ```
 
 這一步不能省：複製過來的設定檔把 `Database:MigrateOnStartup` 設成 `false`，資料庫還有待套用的

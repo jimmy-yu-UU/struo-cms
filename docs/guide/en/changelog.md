@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.28.0
+
+- The seeded `public` role cannot be deleted, even by a super-admin (`409` `CONFLICT`). It is protected like
+  a super-admin role: a caller who is not a super-admin gets `403` when updating, restoring or reverting it,
+  changing its permission grants, or naming a role `public`, even with a grant on `role`.
+
+### Added
+
+- `[CmsRelation(HelpText = "...")]` sets one help line for a relation. `/api/schema` carries it as the relation's
+  `helpText` (`null` when unset) and the admin shows it under the relation input, for every interface.
+- The user list has a Login lock column: one query per page and one button per account. It reads Not locked
+  (disabled), Unlock (m:ss) for a caller who can clear the lock and confirms first, or a disabled Locked
+  (m:ss); the time counts down each second, and the page is queried again when a lock runs out.
+
+### Changed
+
+- In the admin UI, the links editor of a `TagSelect` relation whose junction has payload fields or a
+  `SortField` is one field: a single bordered box with a header row, one row per link and, as its last
+  row, an outline "Add {target}" button; the generic description line above it is gone. Rows stack on a narrow screen, and the first row's up
+  and the last row's down are greyed out.
+- The admin sidebar footer shows the version and "Struo CMS", which links to the GitHub repository.
+
+### Upgrade notes
+
+A role that held `login.unlock` loses it with the table. To keep the same people able to clear login
+locks, give their role read and write on `user` in the permission matrix; that also lets them manage
+ordinary accounts, as [Chapter 17](17-roles-and-permissions.md) describes. The lock on a super-admin
+account stays a super-admin's to clear.
+
 ## 0.27.0 — 2026-11-06
 
 ::: danger Breaking

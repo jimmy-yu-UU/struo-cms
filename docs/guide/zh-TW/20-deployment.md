@@ -522,7 +522,8 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 ```
 
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData`、
-`Applied 202611030000  AddLanguageCodeUniqueIndex` 與 `Applied 202611040000  CreateRoleCapabilities`。沒有 bootstrap 密碼的話，植入 migration 會以
+`Applied 202611030000  AddLanguageCodeUniqueIndex`、`Applied 202611040000  CreateRoleCapabilities` 與
+`Applied 202611060000  DropRoleCapabilities`。沒有 bootstrap 密碼的話，植入 migration 會以
 `Auth__BootstrapAdmin__Password is required` 失敗。
 少了 `migrate` 這一步，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 

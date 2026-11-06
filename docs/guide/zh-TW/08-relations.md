@@ -84,7 +84,7 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 
 ## `[CmsRelation]` 選項
 
-`[CmsRelation]` 的每個設定都是具名參數，沒有建構子。前四個決定怎麼顯示、怎麼挑目標：
+`[CmsRelation]` 的每個設定都是具名參數，沒有建構子。前五個決定怎麼顯示、怎麼挑目標：
 
 | 成員 | CLR 型別 | 預設值 | 效果 |
 |---|---|---|---|
@@ -92,6 +92,7 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 | `DisplayTemplate` | `string?` | `null` | `{欄位}` 樣板，解析不出來退回 id |
 | `PickerQuery` | `string?` | `null` | 存進 metadata，後台目前沒有讀取 |
 | `SortField` | `string?` | `null` | 僅多對多；junction 的排序欄 |
+| `HelpText` | `string?` | `null` | 輸入框下方的一行說明，任何 `Interface` 皆可 |
 
 後兩個決定寫入與刪除時的行為：
 
@@ -127,10 +128,10 @@ writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items cre
 store empty keys.`
 
 跟集合層的 `Hidden`（見[第 5 章：定義集合](05-collections.md)）一樣，只讓它從後台側邊欄消失：它仍然
-完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。`UserRole` 另外掛了
-`AdminOnly = true`，範例的 `ArticleTag` 沒有，兩者誰能寫入因此不同。關聯的 schema 項目會點名
-junction collection、它的 payload 欄位名稱與排序欄位，這是呼叫端發現「還需要 junction collection 自
-己的寫入授權」的方式。
+完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。框架自己的 `UserRole` 是權限表的例外：
+它沿用 `user` 的授權，沒有自己的列（見[第 17 章](17-roles-and-permissions.md)），範例的 `ArticleTag` 則跟
+一般集合一樣另外授權。關聯的 schema 項目會點名 junction collection、它的 payload 欄位名稱與排序欄位，這是
+呼叫端發現「還需要 junction collection 自己的寫入授權」的方式。
 
 範例的 `ArticleTag` 就是這樣一個 junction collection：
 
@@ -272,13 +273,22 @@ relation '{name}' on '{collection}' in path '{path}'.`
 - `TagSelect`：依 junction 是否帶可見 payload 或 `SortField` 分成兩種樣子，見下段。
 
 `TagSelect` 在關聯的 junction 沒有可見 payload、也沒有 `SortField` 時，是單純的多值標籤選擇器；只要
-兩者有一個成立，就換成逐列的連結編輯器。逐列編輯器裡，對每個已選目標各顯示一列，內容是：
+兩者有一個成立，就換成逐列的連結編輯器。逐列編輯器裡，整個欄位放在同一個有框線的方塊裡；要說明附加欄位的意思，用 `HelpText`，
+它會像任何關聯的說明一樣顯示在方塊下方。方塊的標題列依序是順序（只有
+宣告 `SortField` 才有）、目標集合的標籤、每個可見 payload 欄位各一欄、移除。每個已選目標是一列，內容是：
 
+- 只有宣告 `SortField` 才會出現的排序按鈕；第一列的上移與最後一列的下移會變灰、不能按
+- 目標的顯示文字
 - 那個連結可見的 payload 欄位（用跟項目表單相同的欄位型別 registry 渲染）
 - 一個移除按鈕
-- 只有宣告 `SortField` 才會出現的排序控制
 
-底下的下拉框只負責新增與移除成員。
+窄螢幕上一列會直向堆疊：目標在最上面，payload 輸入框在下面並附上各自的標籤，按鈕排成緊湊的一行。方塊的
+最後一列是新增控制項，一顆外框按鈕「新增 {目標}」，點開就是下拉框；它只負責新增成員（移除是各列自己的按鈕），選到的目標
+會以新的一列加在後面。沒有任何連結時，方塊裡只有這一列。唯讀的欄位只顯示各列，不顯示新增那一列，按鈕也都不
+能按。
+
+單純的選擇器把已選的值當成標籤顯示在欄位框裡，每個標籤有移除按鈕，點欄位框的空白處會打開目標清單；
+呼叫端不能變更的值，標籤沒有移除按鈕。
 
 授權分三級：
 

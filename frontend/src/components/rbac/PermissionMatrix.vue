@@ -7,13 +7,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 import { traceIdDetail } from '../../api/apiClient'
+import { GOVERNED_JUNCTIONS } from '../../lib/frameworkCollections'
 
 // The Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
 // createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
 // submit reads currentEntries() and PUTs them itself once the role exists.
-const props = withDefaults(defineProps<{ roleId: string; isSuperAdminRole: boolean; createMode?: boolean }>(), {
-  createMode: false,
+// `readonly` shows the grants without letting them change (a caller who can read roles but not write them).
+const props = withDefaults(defineProps<{
+  roleId: string; isSuperAdminRole: boolean; createMode?: boolean; readonly?: boolean
+}>(), {
+  createMode: false, readonly: false,
 })
 
 const { t } = useI18n()
@@ -28,9 +32,10 @@ const loadFailed = ref(false)
 const saving = ref(false)
 
 // Every collection is a row — including hidden ones (grants on `file` etc. still matter for
-// API consumers). AdminOnly rows keep Read grantable; writes are super-admin-only by design.
+// API consumers) — except the hidden junctions, which follow the collection that owns them. A
+// collection a fork marks AdminOnly keeps Read grantable; its writes stay super-admin-only.
 const rows = computed(() =>
-  [...schema.collections].sort(
+  schema.collections.filter((c) => !GOVERNED_JUNCTIONS.includes(c.name)).sort(
     (a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.label.localeCompare(b.label),
   ),
 )
@@ -141,17 +146,17 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox :model-value="grantFor(c.name).read"
+                <Checkbox :model-value="grantFor(c.name).read" :disabled="readonly"
                           :aria-label="`${c.label} — ${t('rbac.colRead')}`"
                           @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly"
+                <Checkbox :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly"
                           :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
                           @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly"
+                <Checkbox :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly"
                           :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
                           @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>
@@ -159,7 +164,7 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
           </tbody>
         </table>
       </div>
-      <div v-if="!createMode" class="matrix-actions">
+      <div v-if="!createMode && !readonly" class="matrix-actions">
         <Button type="button" :disabled="!dirty || saving" @click="save">{{ saveLabel }}</Button>
       </div>
     </template>
@@ -167,9 +172,9 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
 </template>
 
 <style scoped>
-.permission-matrix { display: grid; gap: 12px; margin-top: 24px; }
+.permission-matrix { display: grid; gap: 12px; }
 .matrix-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.matrix-scroll { overflow-x: auto; }
+.matrix-scroll { overflow-x: auto; position: relative; }
 .matrix-table { border-collapse: collapse; min-width: 480px; }
 .matrix-table th, .matrix-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }
 .matrix-table .col-name { text-align: left; }

@@ -14,6 +14,9 @@ public sealed record RelationMetadata
     public string? PickerQuery { get; init; }
     public OnDelete OnDelete { get; init; }
     public bool Editable { get; init; }
+
+    /// <summary>The help line declared on the relation (<c>[CmsRelation(HelpText = ...)]</c>); null when unset.</summary>
+    public string? HelpText { get; init; }
     public bool SelfReferencing { get; init; }
 
     /// <summary>camelCase name of the junction collection when the M2M junction type is itself a

@@ -65,6 +65,7 @@ vi.mock('vue-router', () => ({
 vi.mock('../api/itemsApi', () => ({
   itemsApi: { list: vi.fn(), remove: vi.fn(), restore: vi.fn() },
 }))
+vi.mock('../api/loginLocksApi', () => ({ loginLocksApi: { query: vi.fn().mockResolvedValue([]), clear: vi.fn() } }))
 vi.mock('../api/schemaApi', () => ({
   schemaApi: { getAll: vi.fn(), get: vi.fn() },
 }))
@@ -345,14 +346,20 @@ describe('CollectionListView', () => {
     expect((w.vm as any).canCreate).toBe(true)
   })
 
-  it('hides the New button on user for a non-super-admin with a write grant', async () => {
+  it('shows the New button on user to a caller with a write grant, and hides it without one', async () => {
     seedCollection('user', false)
     useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions: { user: { read: true, write: true } } } as any
     const w = mountView()
     await flushPromises()
     expect((w.vm as any).canWrite).toBe(true)
-    expect(w.text()).not.toContain('New')
-    expect((w.vm as any).canCreate).toBe(false)
+    expect(w.text()).toContain('New')
+    expect((w.vm as any).canCreate).toBe(true)
+
+    useAuthStore().user = { id: 'u3', isSuperAdmin: false, permissions: { user: { read: true, write: false } } } as any
+    const readOnly = mountView()
+    await flushPromises()
+    expect(readOnly.text()).not.toContain('New')
+    expect((readOnly.vm as any).canCreate).toBe(false)
   })
 
   it('shows New on user for a super-admin and opens the create-user dialog instead of the item form', async () => {

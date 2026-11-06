@@ -1,12 +1,8 @@
 namespace Struo.Application.Security;
 
-/// <summary>Folds raw role/permission/capability rows into an <see cref="EffectivePermissions"/> snapshot.</summary>
+/// <summary>Folds raw role/permission rows into an <see cref="EffectivePermissions"/> snapshot.</summary>
 public static class PermissionResolver
 {
-    /// <summary>Name of the role every caller holds, anonymous ones included. It never contributes a
-    /// capability, whichever store produced the rows.</summary>
-    public const string PublicRoleName = "public";
-
     public static EffectivePermissions Resolve(RolePermissionData data)
     {
         if (data.Roles.Any(r => r.IsSuperAdmin))
@@ -21,11 +17,6 @@ public static class PermissionResolver
             byCollection[p.Collection] =
                 (cur.Read || p.CanRead, cur.Write || p.CanWrite, cur.Delete || p.CanDelete);
         }
-        var publicRoleIds = data.Roles.Where(r => r.Name == PublicRoleName).Select(r => r.Id).ToHashSet();
-        var capabilities = data.Capabilities
-            .Where(c => !publicRoleIds.Contains(c.RoleId))
-            .Select(c => c.Capability)
-            .ToHashSet(StringComparer.Ordinal);
-        return new EffectivePermissions(isSuperAdmin: false, byCollection, capabilities);
+        return new EffectivePermissions(isSuperAdmin: false, byCollection);
     }
 }

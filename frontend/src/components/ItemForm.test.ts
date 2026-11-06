@@ -9,7 +9,8 @@ import type { FormModel } from '../types/itemForm'
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
-    translatableBadge: 'Translatable',
+    translatableBadge: 'Per language',
+    translatableBadgeHint: 'One value per language.',
     localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: 'has errors',
   } } },
 })
@@ -109,6 +110,25 @@ describe('ItemForm', () => {
   it('renders no dots when there is only one locale', () => {
     const w = mountForm({ meta, model, locales: [{ code: 'en', name: 'English', isDefault: true }], errors: {} })
     expect(w.findAll('.dot')).toHaveLength(0)
+  })
+  it('shows a relation\'s help text under its input, and nothing when the relation has none', () => {
+    const rel = { label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect', editable: true, selfReferencing: false }
+    const relMeta: CollectionMeta = {
+      name: 'article', label: 'Article', defaultDisplayField: null,
+      fields: [field('status', { sort: 1 })],
+      relations: [
+        { ...rel, name: 'tags', helpText: 'Pick the tags.' },
+        { ...rel, name: 'topics', label: 'Topics', helpText: null },
+        { ...rel, name: 'authors', label: 'Authors' },
+      ],
+    }
+    const relModel: FormModel = { shared: { status: 'draft' }, translations: {}, relations: { tags: [], topics: [], authors: [] } }
+    const w = mountForm({ meta: relMeta, model: relModel, locales: [], errors: {} }, { RelationInput: true })
+    const fields = w.findAll('.relations .field')
+    expect(fields).toHaveLength(3)
+    expect(fields[0].get('[data-slot="field-description"]').text()).toBe('Pick the tags.')
+    expect(fields[1].find('[data-slot="field-description"]').exists()).toBe(false)
+    expect(fields[2].find('[data-slot="field-description"]').exists()).toBe(false)
   })
   it('renders a RelationInput per relation in the shared section', () => {
     const relMeta: CollectionMeta = {
@@ -312,5 +332,13 @@ describe('ItemForm per-locale errors', () => {
     const { default: zh } = await import('../locales/zh-TW')
     for (const cat of [en, zh] as unknown as Array<{ itemForm: Record<string, string> }>)
       expect(cat.itemForm.tabHasErrors).toBeTruthy()
+  })
+
+  it('labels a translatable field with a per-language badge that carries its explanation as a tooltip', () => {
+    const w = mountForm({ meta, locales, model, errors: {} })
+
+    const badge = w.get('.tr-badge')
+    expect(badge.text()).toBe('Per language')
+    expect(badge.attributes('title')).toBe('One value per language.')
   })
 })

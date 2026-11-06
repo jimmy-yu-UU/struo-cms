@@ -19,6 +19,18 @@ namespace Struo.Tests.Query;
 
 public sealed class ItemServicePermissionTests : IDisposable
 {
+    // A collection that declares AdminOnly, as a fork's may; the identity collections do not.
+    [SqlSugar.SugarTable("fx_vaults")]
+    [Struo.Domain.Metadata.Attributes.CmsCollection("Vault", AdminOnly = true)]
+    public sealed class FxVault : Struo.Domain.Auditing.AuditableEntity
+    {
+        [SqlSugar.SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Struo.Domain.Metadata.Attributes.CmsField(
+            Label = "Name", Interface = Struo.Domain.Metadata.Enums.FieldInterface.Text, Required = true, Sort = 1)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     // A permission service that denies reads on a specific collection.
     private sealed class DenyReadPermissions : IPermissionService
     {
@@ -106,6 +118,7 @@ public sealed class ItemServicePermissionTests : IDisposable
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.Role>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Identity.UserRole>();
+        db.CodeFirst.InitTables<FxVault>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
@@ -116,7 +129,7 @@ public sealed class ItemServicePermissionTests : IDisposable
             typeof(FxArticle), typeof(FxCategory), typeof(FxTag),
             typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Identity.User),
             typeof(Struo.Infrastructure.Identity.Role), typeof(Struo.Infrastructure.Identity.UserRole),
-            typeof(Struo.Infrastructure.Files.MediaFolder),
+            typeof(Struo.Infrastructure.Files.MediaFolder), typeof(FxVault),
         };
         var collections = MetadataScanner.ScanTypes(scanTypes);
         var provider = new CachedMetadataProvider(collections);
@@ -130,6 +143,7 @@ public sealed class ItemServicePermissionTests : IDisposable
             ["user"]     = typeof(Struo.Infrastructure.Identity.User),
             ["role"]     = typeof(Struo.Infrastructure.Identity.Role),
             ["userRole"] = typeof(Struo.Infrastructure.Identity.UserRole),
+            ["fxVault"]  = typeof(FxVault),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -197,15 +211,15 @@ public sealed class ItemServicePermissionTests : IDisposable
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
-    // H3: an AdminOnly collection (user) rejects create/update/delete from a non-super-admin,
+    // H3: an AdminOnly collection (fxVault) rejects create/update/delete from a non-super-admin,
     // even though the caller holds a write/delete grant on every collection. Prevents a delegated
     // grant on the identity tables from being escalated into super-admin.
     [Fact]
     public async Task AdminOnly_create_denied_for_non_superadmin_with_write_grant()
     {
         var svc = BuildService(new GrantAllNonSuperAdmin());
-        using var body = System.Text.Json.JsonDocument.Parse("""{"email":"x@y.z","isActive":true}""");
-        var act = async () => await svc.CreateAsync("user", body.RootElement);
+        using var body = System.Text.Json.JsonDocument.Parse("""{"name":"x"}""");
+        var act = async () => await svc.CreateAsync("fxVault", body.RootElement);
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -214,7 +228,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new GrantAllNonSuperAdmin());
         using var body = System.Text.Json.JsonDocument.Parse("""{"isActive":false}""");
-        var act = async () => await svc.UpdateAsync("user", System.Guid.NewGuid().ToString(), body.RootElement);
+        var act = async () => await svc.UpdateAsync("fxVault", System.Guid.NewGuid().ToString(), body.RootElement);
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -222,7 +236,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     public async Task AdminOnly_delete_denied_for_non_superadmin_with_delete_grant()
     {
         var svc = BuildService(new GrantAllNonSuperAdmin());
-        var act = async () => await svc.DeleteAsync("user", System.Guid.NewGuid().ToString());
+        var act = async () => await svc.DeleteAsync("fxVault", System.Guid.NewGuid().ToString());
         await act.Should().ThrowAsync<PermissionDeniedException>();
     }
 
@@ -232,7 +246,7 @@ public sealed class ItemServicePermissionTests : IDisposable
     {
         var svc = BuildService(new SuperAdminPermissions());
         using var body = System.Text.Json.JsonDocument.Parse("""{"name":"editors"}""");
-        var created = await svc.CreateAsync("role", body.RootElement);
+        var created = await svc.CreateAsync("fxVault", body.RootElement);
         created["id"].Should().NotBeNull();
     }
 

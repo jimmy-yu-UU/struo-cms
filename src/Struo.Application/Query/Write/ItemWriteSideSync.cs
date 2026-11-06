@@ -262,9 +262,8 @@ public sealed class ItemWriteSideSync(
 
         foreach (var desc in descs)
         {
-            // Only sync when the relation key is present in the request body.
-            if (!body.TryGetProperty(desc.RelationName, out var idsElem)) continue;
-            if (idsElem.ValueKind != JsonValueKind.Array) continue;
+            // Only sync when the relation key is present in the request body as an array.
+            if (!JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out var idsElem)) continue;
 
             var hasObjectElement = idsElem.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object);
             var (junctionMeta, payloadNames) = EnsureJunctionPayloadGrant(desc, hasObjectElement);
