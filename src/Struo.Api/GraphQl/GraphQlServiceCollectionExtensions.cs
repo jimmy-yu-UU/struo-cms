@@ -96,6 +96,8 @@ public static class GraphQlServiceCollectionExtensions
             // under N aliases costs ~N× and is rejected before any resolver (and thus any DB call)
             // runs. This complements the max-execution-depth rule and the accepted-absent rate
             // limiting.
+            .UseRequest(TraceIdResultMiddleware.Create)
+            .UseDefaultPipeline()
             .AddCostAnalyzer()
             .ModifyCostOptions(o =>
             {

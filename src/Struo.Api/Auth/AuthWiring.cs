@@ -164,7 +164,8 @@ public static class AuthWiring
     {
         ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
         return ctx.Response.WriteAsJsonAsync(
-            Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required."),
+            Envelope.Error(Struo.Api.Http.ErrorCodes.Unauthorized, "Authentication required.",
+                traceId: Struo.Api.Http.RequestTraceId.For(ctx.HttpContext)),
             EnvelopeJsonOptionsHolder.Instance);
     }
 
@@ -172,7 +173,8 @@ public static class AuthWiring
     {
         ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
         return ctx.Response.WriteAsJsonAsync(
-            Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden."),
+            Envelope.Error(Struo.Api.Http.ErrorCodes.Forbidden, "Forbidden.",
+                traceId: Struo.Api.Http.RequestTraceId.For(ctx.HttpContext)),
             EnvelopeJsonOptionsHolder.Instance);
     }
 

@@ -152,7 +152,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   the `email` column length) exits 2. It never echoes the email.
 - **Outbound JSON is camelCase** everywhere (`JsonSerializerDefaults.Web`).
 - **The unified response envelope** wraps every REST response: `{success, data, meta?}` or
-  `{success:false, error:{code, message, details?}}` (`src/Struo.Api/Http/Envelope.cs`,
+  `{success:false, error:{code, message, details?, traceId?}}` (`src/Struo.Api/Http/Envelope.cs`,
   `EnvelopeResultFilter.cs`).
 - **Metadata is scanned once at startup and cached** in a singleton `IMetadataProvider` — the scan
   itself never re-runs per request (`MetadataScanner.Scan`, called from `AddStruoMetadata`).

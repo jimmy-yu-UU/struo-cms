@@ -44,6 +44,8 @@ public static class DomainErrorMap
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
+                (ErrorCodes.PayloadTooLarge, "Request body is too large."),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),

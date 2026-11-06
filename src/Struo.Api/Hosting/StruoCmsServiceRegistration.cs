@@ -39,7 +39,8 @@ internal static class StruoCmsServiceRegistration
                     .ToList();
                 return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
                     Struo.Api.Http.Envelope.Error(Struo.Api.Http.ErrorCodes.Validation,
-                        "One or more validation errors occurred.", details));
+                        "One or more validation errors occurred.", details,
+                        Struo.Api.Http.RequestTraceId.For(ctx.HttpContext)));
             };
         });
 
@@ -69,6 +70,10 @@ internal static class StruoCmsServiceRegistration
 
     internal static void AddStruoOptions(this IServiceCollection services)
     {
+        services.AddOptions<Struo.Application.Configuration.ApiOptions>()
+            .BindConfiguration(Struo.Application.Configuration.ApiOptions.SectionName)
+            .Validate(o => o.MaxJsonBodyBytes > 0, "Api:MaxJsonBodyBytes must be greater than 0.")
+            .ValidateOnStart();
         services.AddOptions<Struo.Application.Configuration.BrandingOptions>()
             .BindConfiguration(Struo.Application.Configuration.BrandingOptions.SectionName);
         // Config-bound tuning for the per-client-IP login rate limiter in StruoCmsRateLimiting (defaults:
