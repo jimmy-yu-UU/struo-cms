@@ -47,10 +47,11 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // Users are created through a dialog backed by POST /api/users (super-admin only), not the generic
 // item form, so `user` is creatable for super-admins alone.
 const isUserCollection = computed(() => name.value === USER_COLLECTION)
-const canCreate = computed(() => canWrite.value && (
+// Nothing is creatable until the collection's meta has loaded: `creatable` is unknown before then.
+const canCreate = computed(() => !!meta.value && canWrite.value && (
   isUserCollection.value
     ? auth.user?.isSuperAdmin === true
-    : meta.value?.creatable !== false
+    : meta.value.creatable !== false
 ))
 const createUserOpen = ref(false)
 const mode = ref<'active' | 'trash'>('active')
