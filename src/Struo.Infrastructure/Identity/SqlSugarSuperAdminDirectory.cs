@@ -60,7 +60,7 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
     // A typed update that leaves every column as it is: the database still locks the matched rows, on every
     // backend, until the transaction ends.
     public async Task LockSuperAdminRolesAsync(CancellationToken ct = default) =>
-        await db.Updateable<Role>().SetColumns(r => r.Version == r.Version).Where(r => r.IsSuperAdmin)
+        await db.Updateable<Role>().SetColumns(r => new Role { Version = r.Version }).Where(r => r.IsSuperAdmin)
             .ExecuteCommandAsync(ct);
 
     // Inside a transaction each read is a locking read (FOR UPDATE, or UPDLOCK on SQL Server), so it sees the

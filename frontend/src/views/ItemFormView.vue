@@ -258,7 +258,7 @@ async function onSubmit(): Promise<void> {
           // baseline stale would make the unified leave guard block the very navigation this
           // failure path performs.
           matrix.value?.markFlushed()
-          router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          void router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
           return
         }
       }
@@ -272,7 +272,7 @@ async function onSubmit(): Promise<void> {
     }
     // Note: the form itself was already re-baselined above (right after the create/update calls),
     // before either matrix flush — no second captureBaseline() needed here.
-    router.push({ name: 'collection-list', params: { name: name.value } })
+    void router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
       // Optimistic-lock clash: only this specific code means "someone else changed the
@@ -373,7 +373,7 @@ async function onDelete(): Promise<void> {
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
-    router.push({ name: 'collection-list', params: { name: name.value } })
+    void router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
   }
@@ -381,7 +381,7 @@ async function onDelete(): Promise<void> {
 
 function onCancel(): void {
   // Routes back — naturally intercepted by the leave guard below, so no extra prompt here.
-  router.push({ name: 'collection-list', params: { name: name.value } })
+  void router.push({ name: 'collection-list', params: { name: name.value } })
 }
 
 // Warn before navigating away (SPA route change) with unsaved edits. Registered
@@ -417,7 +417,6 @@ onBeforeRouteUpdate(async (to, from) => {
 function onBeforeUnload(e: BeforeUnloadEvent): void {
   if (isDirty(baseline.value, model) || rolePanelsDirty()) {
     e.preventDefault()
-    e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))

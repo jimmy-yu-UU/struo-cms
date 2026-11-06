@@ -85,7 +85,7 @@ function activeCollection(): string | null {
 }
 
 function go(to: { name: string; params?: Record<string, string> }): void {
-  router.push(to)
+  void router.push(to)
   // On mobile the sidebar is a Sheet overlaying the content; leaving it open after a
   // navigation would hide the page the user just asked for.
   if (isMobile.value) setOpenMobile(false)

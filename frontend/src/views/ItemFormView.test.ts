@@ -805,6 +805,8 @@ describe('ItemFormView', () => {
     const dirty = { preventDefault: vi.fn(), returnValue: undefined } as unknown as Event
     handler(dirty)
     expect((dirty as unknown as { preventDefault: ReturnType<typeof vi.fn> }).preventDefault).toHaveBeenCalled()
+    // The deprecated returnValue is left alone: preventDefault alone raises the browser's prompt.
+    expect((dirty as unknown as { returnValue?: unknown }).returnValue).toBeUndefined()
   })
 
   it('renders the page-head title from i18n in edit mode', async () => {

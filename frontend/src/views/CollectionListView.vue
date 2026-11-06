@@ -26,6 +26,7 @@ import { selectListColumns, type ColumnDef as ListColumn } from '../lib/selectLi
 import { formatCell } from '../lib/formatCell'
 import { deleteKindFor, deleteConfirm, purgeConfirm } from '../lib/deleteAction'
 import { createLatestWins } from '../lib/latestWins'
+import { primitiveText } from '../lib/primitiveText'
 import { pickTranslated, type TranslationMap } from '../lib/pickTranslated'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { CreatedUser } from '@/api/usersApi'
@@ -82,14 +83,15 @@ function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
 function tagSeverity(v: unknown): 'success' | 'secondary' {
-  const s = String(v ?? '').toLowerCase()
+  const s = primitiveText(v).toLowerCase()
   if (s === 'published') return 'success'
   return 'secondary'
 }
 function formatDeletedAt(v: unknown): string {
-  if (v == null || v === '') return ''
-  const d = new Date(String(v))
-  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString()
+  const raw = primitiveText(v)
+  if (raw === '') return ''
+  const d = new Date(raw)
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleString()
 }
 
 // Fields FilterBuilder can offer: the display columns first, then every searchable field that did
@@ -126,7 +128,7 @@ const unlockingEmail = ref<string | null>(null)
 const lockLoad = createLatestWins()
 
 function emailOf(row: Row): string {
-  return String(row.email ?? '')
+  return primitiveText(row.email)
 }
 
 async function loadLocks(): Promise<void> {
@@ -342,29 +344,29 @@ async function loadItems(): Promise<void> {
 
 function onTableState(next: DataTableState): void {
   tableState.value = next
-  loadItems()
+  void loadItems()
 }
 function onPageChange(page: number): void {
   tableState.value = { ...tableState.value, page }
-  loadItems()
+  void loadItems()
 }
 function onPageSizeChange(pageSize: number): void {
   // An offset computed against the OLD page size is meaningless against the new one (e.g. page 3
   // at 25/page starts at row 75; at 100/page that's off the end of the result set) -- always
   // return to the first page when the size changes.
   tableState.value = { ...tableState.value, page: 0, pageSize }
-  loadItems()
+  void loadItems()
 }
 function onFilterApply(spec: FilterSpec): void {
   filters.value = spec
   // A new filter invalidates the current offset.
   tableState.value = { ...tableState.value, page: 0 }
-  loadItems()
+  void loadItems()
 }
 
 function onEdit(row: Row): void {
-  const rid = row.id
-  if (rid != null) router.push({ name: 'collection-item', params: { name: name.value, id: String(rid) } })
+  const rid = primitiveText(row.id)
+  if (rid !== '') void router.push({ name: 'collection-item', params: { name: name.value, id: rid } })
 }
 
 function onNew(): void {
@@ -372,18 +374,18 @@ function onNew(): void {
     createUserOpen.value = true
     return
   }
-  router.push({ name: 'collection-create', params: { name: name.value } })
+  void router.push({ name: 'collection-create', params: { name: name.value } })
 }
 
 // The edit page replaces this view, so there is no list to refresh before navigating.
 function onUserCreated(created: CreatedUser): void {
-  router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
+  void router.push({ name: 'collection-item', params: { name: USER_COLLECTION, id: created.id } })
 }
 
 function setMode(m: 'active' | 'trash'): void {
   mode.value = m
   tableState.value = { ...tableState.value, page: 0 }
-  loadItems()
+  void loadItems()
 }
 function onModeToggle(value: unknown): void {
   // reka's single-type ToggleGroup emits undefined when the pressed item is clicked again

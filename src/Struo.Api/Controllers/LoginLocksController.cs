@@ -84,7 +84,7 @@ public sealed class LoginLocksController(
             catch (PermissionDeniedException refused)
             {
                 logger.LogWarning(
-                    "Login lock clear refused for {ActorId}: target {TargetUserId} is a super-admin", actor, target.Id);
+                    refused, "Login lock clear refused for {ActorId}: target {TargetUserId} is a super-admin", actor, target.Id);
                 return ApiResults.Fail(StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, refused.Message);
             }
         }

@@ -81,7 +81,7 @@ public sealed class UserWriteInterceptor(
 
     // The role ids the body assigns, as bare ids or as objects carrying an `id`; anything else is left to the
     // relation sync's own validation.
-    private static IReadOnlyCollection<Guid> RequestedRoleIds(ItemWriteContext context)
+    private static List<Guid> RequestedRoleIds(ItemWriteContext context)
     {
         if (context.Body is not { } body || !JsonBodyUtil.TryGetRelationArray(body, RolesField, out var roles)) return [];
 

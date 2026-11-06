@@ -611,6 +611,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
 
     // ---------------------------------------------------------------- two concurrent deactivations
 
+    private static readonly int[] ExpectedStatuses = [200, 409];
+
     public sealed class PauseGate
     {
         public Guid PauseUserId { get; set; }
@@ -705,7 +707,7 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             gate.Release.SetResult();
             var responses = await Task.WhenAll(firstDeactivatesSecond, secondDeactivatesFirst);
 
-            responses.Select(r => (int)r.StatusCode).Order().Should().Equal(new[] { 200, 409 },
+            responses.Select(r => (int)r.StatusCode).Order().Should().Equal(ExpectedStatuses,
                 string.Join(" | ", await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()))));
             var active = await WithDbAsync(db => db.Queryable<User>().Where(u => u.Id == first.Id || u.Id == second.Id)
                 .Where(u => u.IsActive).CountAsync());

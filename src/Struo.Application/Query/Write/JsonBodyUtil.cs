@@ -33,9 +33,9 @@ internal static class JsonBodyUtil
     {
         if (body.ValueKind != JsonValueKind.Object) return;
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var property in body.EnumerateObject())
-            if (!seen.Add(property.Name))
-                throw new QueryException($"The request body names the property '{property.Name}' more than once.");
+        var repeated = body.EnumerateObject().Select(p => p.Name).FirstOrDefault(name => !seen.Add(name));
+        if (repeated is not null)
+            throw new QueryException($"The request body names the property '{repeated}' more than once.");
     }
 
     /// <summary>
