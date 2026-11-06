@@ -43,6 +43,8 @@
 
 ### Changed
 
+- A JSON body that names the same top-level property twice is refused with `400` `BAD_USER_INPUT` on the
+  item create and update paths.
 - The Login locks page, the lock panel on the user form and the System capabilities section of the role
   form are removed from the admin UI.
 - The admin UI follows the grants: the permission matrix is read-only without write on `role`, the

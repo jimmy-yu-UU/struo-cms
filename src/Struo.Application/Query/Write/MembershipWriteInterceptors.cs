@@ -38,6 +38,9 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
     private const string RoleId = "RoleId";
     private const string UserId = "UserId";
 
+    // The users of the write in flight that belonged to a super-admin role before it.
+    private IReadOnlySet<Guid> superAdminBefore = new HashSet<Guid>();
+
     public bool AppliesTo(string collection) =>
         string.Equals(collection, RbacCollections.UserRole, StringComparison.OrdinalIgnoreCase);
 
@@ -45,12 +48,16 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
     {
         await guard.RequireForRolesAsync(
             JunctionRowReader.Ids(registry, context, RoleId), "change the members of a super-admin role", ct);
-        foreach (var userId in JunctionRowReader.Ids(registry, context, UserId))
+        var users = JunctionRowReader.Ids(registry, context, UserId);
+        foreach (var userId in users)
             await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
+        superAdminBefore = await guard.SuperAdminStatusBeforeAsync(users, ct);
     }
 
     public async Task InTransactionAsync(ItemWriteContext context, CancellationToken ct)
     {
+        await guard.EnsureSuperAdminStatusUnchangedAsync(
+            superAdminBefore, JunctionRowReader.Ids(registry, context, UserId), ct);
         if (context.Operation == ItemWriteOperation.Create) return;
         if (JunctionRowReader.Before(registry, context, RoleId) is not { } roleId
             || !await guard.IsSuperAdminRoleAsync(roleId, ct)) return;

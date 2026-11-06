@@ -174,6 +174,7 @@ public sealed class ItemService(
         // object and throws an unhandled InvalidOperationException (-> 500). Reject it here as a 400.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
+        JsonBodyUtil.RequireUniqueProperties(body);
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
@@ -219,6 +220,7 @@ public sealed class ItemService(
         // permission checks and before deserializing.
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
+        JsonBodyUtil.RequireUniqueProperties(body);
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);

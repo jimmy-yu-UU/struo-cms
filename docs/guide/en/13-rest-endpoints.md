@@ -57,6 +57,8 @@ super-admin — a delegated collection grant doesn't count. The built-in `user`,
 `userRole` are ordinary collections: the two hidden junctions follow the grant of `user` and `role`, and a
 write that touches a super-admin account or role is refused to a caller who is not a super-admin
 ([Chapter 17](17-roles-and-permissions.md)).
+A JSON body that names the same top-level property twice is a `400` `BAD_USER_INPUT` on create and update;
+names that differ only in casing are different properties.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's

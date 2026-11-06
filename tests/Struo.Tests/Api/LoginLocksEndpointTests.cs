@@ -460,6 +460,8 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         public Task<IReadOnlySet<Guid>> SuperAdminRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default) =>
             inner.SuperAdminRoleIdsAsync(roleIds, ct);
 
+        public Task LockSuperAdminRolesAsync(CancellationToken ct = default) => inner.LockSuperAdminRolesAsync(ct);
+
         public Task<IReadOnlySet<Guid>> ActiveSuperAdminUserIdsAsync(CancellationToken ct = default) =>
             inner.ActiveSuperAdminUserIdsAsync(ct);
     }

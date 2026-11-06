@@ -18,6 +18,10 @@ public interface ISuperAdminDirectory
     /// <summary>The ids among <paramref name="roleIds"/> of roles flagged <c>IsSuperAdmin</c>.</summary>
     Task<IReadOnlySet<Guid>> SuperAdminRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default);
 
+    /// <summary>Takes a row lock on every super-admin role until the surrounding transaction ends, so two
+    /// transactions that each count the active members before changing them run one after the other.</summary>
+    Task LockSuperAdminRolesAsync(CancellationToken ct = default);
+
     /// <summary>The ids of the active accounts that belong to at least one super-admin role.</summary>
     Task<IReadOnlySet<Guid>> ActiveSuperAdminUserIdsAsync(CancellationToken ct = default);
 }

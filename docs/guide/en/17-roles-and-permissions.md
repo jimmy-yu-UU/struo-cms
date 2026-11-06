@@ -153,6 +153,12 @@ a super-admin role.`, and nothing is written.
 Both rules sit in the application layer that every write path shares, so the item endpoints, the
 `users` and `roles` controllers and GraphQL all apply them, and each path is covered by a test.
 
+The same layer re-checks the outcome inside the write transaction: when a caller who is not a super-admin
+writes a user, the write is rolled back with `403` if it changed whether that user belongs to a super-admin
+role, whatever shape the body had. Before the last-member count, the super-admin role rows are locked, so two
+super-admins who deactivate each other at the same moment cannot both pass it. A body that names the same
+property twice is refused on every item write (`400` `BAD_USER_INPUT`).
+
 ### What a grant on `user` or `role` delegates
 
 The holder of write on `user` can assign any ordinary role to any ordinary account, and the holder of

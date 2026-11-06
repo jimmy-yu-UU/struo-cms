@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,7 +64,11 @@ public class SuperAdminProtectionTests(ApiFactory factory)
 
     // A non-super-admin caller with the given grants. Delete is its own flag, set on the collections named
     // in `delete` (each must also appear in `read` or `write`).
-    private async Task<HttpClient> CallerAsync(string[] read, string[] write, string[]? delete = null)
+    private async Task<HttpClient> CallerAsync(string[] read, string[] write, string[]? delete = null) =>
+        (await CallerWithIdAsync(read, write, delete)).Client;
+
+    private async Task<(HttpClient Client, Guid Id)> CallerWithIdAsync(
+        string[] read, string[] write, string[]? delete = null)
     {
         var (email, password, userId) = await factory.SeedEditorAsync(read, write);
         if (delete is { Length: > 0 })
@@ -77,7 +83,7 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName, "1");
         (await client.PostAsJsonAsync("/api/auth/login", new { email, password })).EnsureSuccessStatusCode();
-        return client;
+        return (client, userId);
     }
 
     private Task<HttpClient> UserManagerAsync() => CallerAsync(["user", "role"], ["user"], ["user"]);
@@ -412,5 +418,194 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{second.Id}", new { isActive = false }), HttpStatusCode.OK);
         await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{second.Id}", new { isActive = true }), HttpStatusCode.OK);
         await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { isActive = false }), HttpStatusCode.OK);
+    }
+
+    // ---------------------------------------------------------------- crafted bodies
+
+    private static Task<HttpResponseMessage> PutRaw(HttpClient c, string path, string json) =>
+        c.PutAsync(path, new StringContent(json, Encoding.UTF8, "application/json"));
+
+    private async Task<bool> IsSuperAdminAsync(Guid userId)
+    {
+        var superRole = await SuperRoleIdAsync();
+        return await WithDbAsync(db =>
+            db.Queryable<UserRole>().Where(ur => ur.UserId == userId && ur.RoleId == superRole).AnyAsync());
+    }
+
+    // The role-assignment guard and the relation sync must read the same `roles` property: a body that
+    // names it twice, or in two casings, must never reach a super-admin role through a caller with only
+    // write on `user`.
+    [Fact]
+    public async Task A_duplicate_roles_key_cannot_assign_a_super_admin_role()
+    {
+        var superRole = await SuperRoleIdAsync();
+        var (manager, ownId) = await CallerWithIdAsync(["user", "role"], ["user"], ["user"]);
+
+        var resp = await PutRaw(manager, $"/api/items/user/{ownId}", "{\"roles\":[],\"roles\":[\"" + superRole + "\"]}");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, await resp.Content.ReadAsStringAsync());
+        (await IsSuperAdminAsync(ownId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_roles_key_repeated_in_another_casing_cannot_assign_a_super_admin_role()
+    {
+        var superRole = await SuperRoleIdAsync();
+        var (manager, ownId) = await CallerWithIdAsync(["user", "role"], ["user"], ["user"]);
+
+        var resp = await PutRaw(manager, $"/api/items/user/{ownId}", "{\"Roles\":[],\"roles\":[\"" + superRole + "\"]}");
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden, await resp.Content.ReadAsStringAsync());
+        (await IsSuperAdminAsync(ownId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_roles_key_in_a_different_casing_alone_never_changes_the_super_admin_status()
+    {
+        var superRole = await SuperRoleIdAsync();
+        var (manager, ownId) = await CallerWithIdAsync(["user", "role"], ["user"], ["user"]);
+
+        var resp = await PutRaw(manager, $"/api/items/user/{ownId}", "{\"Roles\":[\"" + superRole + "\"]}");
+
+        ((int)resp.StatusCode).Should().BeLessThan(500);
+        (await IsSuperAdminAsync(ownId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_body_that_names_a_property_twice_is_a_400_on_every_item_write()
+    {
+        var plain = await SeedUserAsync(superAdmin: false);
+        using var manager = await CallerAsync(["user", "role"], ["user", "role"]);
+
+        var create = await manager.PostAsync("/api/items/role",
+            new StringContent("{\"name\":\"first\",\"name\":\"second\"}", Encoding.UTF8, "application/json"));
+        create.StatusCode.Should().Be(HttpStatusCode.BadRequest, await create.Content.ReadAsStringAsync());
+        (await create.Content.ReadAsStringAsync()).Should().Contain("BAD_USER_INPUT");
+
+        var update = await PutRaw(manager, $"/api/items/user/{plain.Id}", "{\"name\":\"a\",\"name\":\"b\"}");
+        update.StatusCode.Should().Be(HttpStatusCode.BadRequest, await update.Content.ReadAsStringAsync());
+
+        // Names that differ only in casing are two properties, not a duplicate.
+        var cased = await PutRaw(manager, $"/api/items/user/{plain.Id}", "{\"name\":\"a\",\"Name\":\"b\"}");
+        ((int)cased.StatusCode).Should().BeLessThan(500);
+        cased.StatusCode.Should().NotBe(HttpStatusCode.BadRequest, await cased.Content.ReadAsStringAsync());
+    }
+
+    // ---------------------------------------------------------------- email match
+
+    [Fact]
+    public async Task A_super_admin_stored_with_a_mixed_case_email_is_not_clearable_for_another_caller()
+    {
+        var superRole = await SuperRoleIdAsync();
+        var id = Guid.CreateVersion7();
+        var stored = $"Root-{id:N}@Struo.Test";
+        await WithDbAsync(async db =>
+        {
+            await db.Insertable(new User { Id = id, Email = stored, Password = "x", IsActive = true }).ExecuteCommandAsync();
+            return await db.Insertable(new UserRole { Id = Guid.CreateVersion7(), UserId = id, RoleId = superRole }).ExecuteCommandAsync();
+        });
+        using var manager = await CallerAsync(["user"], ["user"]);
+
+        var resp = await manager.PostAsJsonAsync("/api/login-locks/query", new { emails = new[] { stored.ToLowerInvariant() } });
+        var entry = (await DataAsync(resp)).EnumerateArray().Single();
+
+        entry.GetProperty("clearable").GetBoolean().Should().BeFalse();
+    }
+
+    // ---------------------------------------------------------------- serialised last-member check
+
+    public class RecordingProxy : DispatchProxy
+    {
+        public object Inner { get; set; } = null!;
+        public List<string> Calls { get; set; } = [];
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            lock (Calls) Calls.Add(targetMethod!.Name);
+            return targetMethod.Invoke(Inner, args);
+        }
+    }
+
+    // Two super-admins deactivating each other at once must not both pass the count: the check takes a
+    // row lock on the super-admin roles before it counts, so the second transaction waits for the first.
+    [Fact]
+    public async Task The_last_member_check_locks_the_super_admin_roles_before_it_counts()
+    {
+        var second = await SeedUserAsync(superAdmin: true);
+        var calls = new List<string>();
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(services =>
+            services.AddScoped<ISuperAdminDirectory>(sp =>
+            {
+                var proxy = DispatchProxy.Create<ISuperAdminDirectory, RecordingProxy>();
+                var recording = (RecordingProxy)(object)proxy;
+                recording.Inner = new SqlSugarSuperAdminDirectory(sp.GetRequiredService<ISqlSugarClient>());
+                recording.Calls = calls;
+                return proxy;
+            })));
+        await factory.EnsureAdminSeededAsync();
+        using var admin = host.CreateClient();
+        admin.DefaultRequestHeaders.Add(Struo.Api.Auth.CsrfProtectionMiddleware.HeaderName, "1");
+        (await admin.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+        lock (calls) calls.Clear();
+
+        await ShouldBeAsync(Put(admin, $"/api/items/user/{second.Id}", new { isActive = false }), HttpStatusCode.OK);
+
+        string[] seen;
+        lock (calls) seen = calls.ToArray();
+        var lockAt = Array.FindIndex(seen, c => c.Contains("Lock", StringComparison.Ordinal));
+        var countAt = Array.FindLastIndex(seen, c => c == "ActiveSuperAdminUserIdsAsync");
+        lockAt.Should().BeGreaterThanOrEqualTo(0, string.Join(",", seen));
+        lockAt.Should().BeLessThan(countAt, string.Join(",", seen));
+    }
+
+    // ---------------------------------------------------------------- GraphQL
+
+    private static async Task<JsonElement> GraphQlAsync(HttpClient c, string query) =>
+        JsonDocument.Parse(await (await c.PostAsJsonAsync("/graphql", new { query })).Content.ReadAsStringAsync()).RootElement;
+
+    private static string FirstError(JsonElement result) =>
+        result.TryGetProperty("errors", out var errors) ? errors[0].GetProperty("message").GetString() ?? "" : "";
+
+    [Fact]
+    public async Task Graphql_cannot_delete_a_super_admin_role()
+    {
+        var superRole = await SuperRoleIdAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
+
+        var result = await GraphQlAsync(admin, "mutation { deleteRole(id: \"" + superRole + "\", purge: true) }");
+
+        FirstError(result).Should().Contain("super-admin role cannot be deleted");
+        (await WithDbAsync(db => db.Queryable<Role>().Where(r => r.Id == superRole).AnyAsync())).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Graphql_cannot_remove_the_last_active_super_admin()
+    {
+        await using var sole = await BecomeSoleSuperAdminAsync();
+
+        var result = await GraphQlAsync(sole.Client,
+            "mutation { updateUser(id: \"" + sole.Id + "\", input: { isActive: false }) { id } }");
+
+        FirstError(result).Should().Contain("At least one active account");
+        (await WithDbAsync(async db => (await db.Queryable<User>().Where(u => u.Id == sole.Id).FirstAsync()).IsActive)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Graphql_role_assignment_follows_the_same_rules()
+    {
+        var plain = await SeedUserAsync(superAdmin: false);
+        var superRole = await SuperRoleIdAsync();
+        var ordinary = await NormalRoleAsync();
+        using var manager = await UserManagerAsync();
+
+        var refused = await GraphQlAsync(manager,
+            "mutation { updateUser(id: \"" + plain.Id + "\", input: { roles: [\"" + superRole + "\"] }) { id } }");
+        FirstError(refused).Should().Contain("Only a super-admin");
+        (await IsSuperAdminAsync(plain.Id)).Should().BeFalse();
+
+        var allowed = await GraphQlAsync(manager,
+            "mutation { updateUser(id: \"" + plain.Id + "\", input: { roles: [\"" + ordinary + "\"] }) { id } }");
+        allowed.TryGetProperty("errors", out _).Should().BeFalse(allowed.ToString());
     }
 }

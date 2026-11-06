@@ -12,6 +12,33 @@ namespace Struo.Application.Query;
 internal static class JsonBodyUtil
 {
     /// <summary>
+    /// The array a body carries under <paramref name="relationName"/>, read exactly as the relation sync reads
+    /// it: the exact name, the last occurrence when it repeats, and only when the value is an array. The guard
+    /// that decides who may assign a role and the sync that assigns it both call this, so they cannot disagree.
+    /// </summary>
+    internal static bool TryGetRelationArray(JsonElement body, string relationName, out JsonElement array)
+    {
+        array = default;
+        return body.ValueKind == JsonValueKind.Object
+               && body.TryGetProperty(relationName, out array)
+               && array.ValueKind == JsonValueKind.Array;
+    }
+
+    /// <summary>
+    /// Refuses (400) a body that names a top-level property more than once. Two readers of a repeated name
+    /// can pick different occurrences, so the item write path accepts no such body. Names that differ only
+    /// in casing are different properties.
+    /// </summary>
+    internal static void RequireUniqueProperties(JsonElement body)
+    {
+        if (body.ValueKind != JsonValueKind.Object) return;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in body.EnumerateObject())
+            if (!seen.Add(property.Name))
+                throw new QueryException($"The request body names the property '{property.Name}' more than once.");
+    }
+
+    /// <summary>
     /// Serialises <paramref name="source"/> as UTF-8 JSON with any top-level key in
     /// <paramref name="keysToRemove"/> omitted. Returns the raw bytes so the caller can
     /// parse them into a <c>using</c>-scoped <see cref="JsonDocument"/> and avoid a pool leak.

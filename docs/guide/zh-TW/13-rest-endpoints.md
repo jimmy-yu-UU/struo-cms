@@ -48,6 +48,8 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 內建的 `user`、`role`、`permission`、`userRole` 是一般集合：兩個隱藏的 junction 沿用 `user` 與 `role` 的
 授權，碰到超級管理員帳號或角色的寫入，則不讓不是超級管理員的呼叫端做
 （[第 17 章](17-roles-and-permissions.md)）。
+JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `400` `BAD_USER_INPUT`；只有大小寫不同的名稱
+是不同的屬性。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
 `BAD_USER_INPUT`，訊息是點出集合名稱的通用句子，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。

@@ -30,6 +30,10 @@ public sealed class UserWriteInterceptor(
     // someone still is afterwards. Filled by BeforeWrite, consumed by InTransaction.
     private readonly HashSet<Guid> activeSuperAdminsBefore = [];
 
+    // For a caller who is not a super-admin: the users of the write in flight that belonged to a super-admin
+    // role before it. The transaction compares it with the state the write left.
+    private readonly Dictionary<Guid, IReadOnlySet<Guid>> superAdminBefore = [];
+
     public bool AppliesTo(string collection) =>
         string.Equals(collection, UserCollection.Name, StringComparison.OrdinalIgnoreCase);
 
@@ -45,7 +49,10 @@ public sealed class UserWriteInterceptor(
 
         await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
         if (context.Operation is ItemWriteOperation.Update or ItemWriteOperation.Revert)
+        {
             await guard.RequireForRolesAsync(RequestedRoleIds(context), "assign a super-admin role", ct);
+            superAdminBefore[userId] = await guard.SuperAdminStatusBeforeAsync([userId], ct);
+        }
 
         if (!CouldRemoveFromSuperAdmins(context)) return;
         if (await guard.IsActiveSuperAdminAsync(userId, ct)) activeSuperAdminsBefore.Add(userId);
@@ -59,13 +66,10 @@ public sealed class UserWriteInterceptor(
     // relation sync's own validation.
     private static IReadOnlyCollection<Guid> RequestedRoleIds(ItemWriteContext context)
     {
-        if (context.Body is not { ValueKind: JsonValueKind.Object } body) return [];
-        var key = body.EnumerateObject().FirstOrDefault(
-            p => string.Equals(p.Name, RolesField, StringComparison.OrdinalIgnoreCase));
-        if (key.Value.ValueKind != JsonValueKind.Array) return [];
+        if (context.Body is not { } body || !JsonBodyUtil.TryGetRelationArray(body, RolesField, out var roles)) return [];
 
         var ids = new List<Guid>();
-        foreach (var element in key.Value.EnumerateArray())
+        foreach (var element in roles.EnumerateArray())
         {
             var raw = element.ValueKind == JsonValueKind.Object && element.TryGetProperty("id", out var id) ? id : element;
             if (raw.ValueKind == JsonValueKind.String && Guid.TryParse(raw.GetString(), out var roleId)) ids.Add(roleId);
@@ -94,9 +98,15 @@ public sealed class UserWriteInterceptor(
 
     public async Task InTransactionAsync(ItemWriteContext context, CancellationToken ct)
     {
-        if (!Guid.TryParse(context.Id, out var userId) || !activeSuperAdminsBefore.Remove(userId)) return;
+        if (!Guid.TryParse(context.Id, out var userId)) return;
 
-        await guard.EnsureActiveSuperAdminAsync(ct);
+        // The relations are synchronized by now: whatever the body looked like, a caller who is not a
+        // super-admin must not have changed who belongs to a super-admin role.
+        if (superAdminBefore.Remove(userId, out var before))
+            await guard.EnsureSuperAdminStatusUnchangedAsync(before, [userId], ct);
+
+        if (activeSuperAdminsBefore.Remove(userId))
+            await guard.EnsureActiveSuperAdminAsync(ct);
     }
 
     // Runs once a delete took effect (a user row is never soft-deleted, so every delete is a purge); it stays

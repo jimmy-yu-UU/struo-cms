@@ -49,10 +49,32 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
     public async Task<bool> IsActiveSuperAdminAsync(Guid userId, CancellationToken ct = default) =>
         (await directory.ActiveSuperAdminUserIdsAsync(ct)).Contains(userId);
 
+    /// <summary>The users among <paramref name="userIds"/> who belong to a super-admin role, for a caller who
+    /// is not a super-admin; empty for a super-admin, who needs no post-condition.</summary>
+    public async Task<IReadOnlySet<Guid>> SuperAdminStatusBeforeAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken ct = default) =>
+        CallerIsSuperAdmin || userIds.Count == 0
+            ? new HashSet<Guid>()
+            : await directory.SuperAdminUserIdsAsync(userIds, ct);
+
+    /// <summary>Throws (403) when a caller who is not a super-admin changed whether any of
+    /// <paramref name="userIds"/> belongs to a super-admin role, whatever the request body looked like. Called
+    /// inside the write transaction after the relations are synchronized, so the write rolls back.</summary>
+    public async Task EnsureSuperAdminStatusUnchangedAsync(
+        IReadOnlySet<Guid> before, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default)
+    {
+        if (CallerIsSuperAdmin || userIds.Count == 0) return;
+        var after = await directory.SuperAdminUserIdsAsync(userIds, ct);
+        if (!after.SetEquals(before)) throw Refusal("assign or remove a super-admin role");
+    }
+
     /// <summary>Throws a conflict (409) when no active account belongs to a super-admin role. Called after
     /// a write that could have removed the last one, inside its transaction, so the write rolls back.</summary>
     public async Task EnsureActiveSuperAdminAsync(CancellationToken ct = default)
     {
+        // The role rows are locked first, so a concurrent transaction that also removes a super-admin waits
+        // here until this one commits and then counts what this one left.
+        await directory.LockSuperAdminRolesAsync(ct);
         if ((await directory.ActiveSuperAdminUserIdsAsync(ct)).Count == 0)
             throw new ConflictException(
                 "At least one active account must remain in a super-admin role.");
