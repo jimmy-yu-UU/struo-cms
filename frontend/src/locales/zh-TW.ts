@@ -386,7 +386,7 @@ export default {
     junctionDescription: '每個項目的附加欄位記錄在這條關聯上，不屬於任何一方。',
     junctionOrder: '順序',
     junctionRemoveHeader: '移除',
-    junctionAdd: '新增{target}',
+    junctionAdd: '新增{target}…',
     noItems: '沒有項目',
     itemCount: '{count} 項',
     relatedLoadFailed: '載入關聯項目失敗。',

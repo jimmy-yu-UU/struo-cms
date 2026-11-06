@@ -153,11 +153,25 @@ describe('JunctionLinksEditor', () => {
     expect(w.findComponent(RelationPicker).props('disabled')).toBe(true)
   })
 
-  it('shows the empty message when there are no links', async () => {
+  it('shows only the add row when there are no links', async () => {
     setup()
     const w = mountEditor({ modelValue: [] })
     await flushPromises()
-    expect(w.find('.junction-links__empty').text()).toBe(en.fields.noItems)
+
+    const box = w.get('[data-testid="junction-box"]')
+    expect(box.findAll('.junction-link')).toHaveLength(0)
+    expect(box.find('[data-testid="junction-add"]').exists()).toBe(true)
+    expect(w.find('.junction-links__empty').exists()).toBe(false)
+  })
+
+  it('says so in the box when a read-only field has no links', async () => {
+    setup()
+    const w = mountEditor({ modelValue: [], disabled: true })
+    await flushPromises()
+
+    expect(w.find('[data-testid="junction-add"]').exists()).toBe(false)
+    expect(w.get('.junction-links__empty').text()).toBe(en.fields.noItems)
+    expect(w.get('[data-testid="junction-box"]').element.contains(w.get('.junction-links__empty').element)).toBe(true)
   })
 
   // ---- the links list: description, header, rows, a separate add picker ----
@@ -200,7 +214,6 @@ describe('JunctionLinksEditor', () => {
     const empty = mountEditor({ modelValue: [] })
     await flushPromises()
     expect(empty.find('[data-testid="junction-header"]').exists()).toBe(false)
-    expect(empty.find('.junction-links__empty').exists()).toBe(true)
   })
 
   it('gives every row one payload input per visible field, and stacks the row on a narrow screen', async () => {
@@ -216,16 +229,35 @@ describe('JunctionLinksEditor', () => {
     }
   })
 
-  it('keeps the add picker apart from the rows, labelled with the target', async () => {
+  it('is one field: a single bordered box holds the header, the rows and the add row', async () => {
     setup()
     const w = mountEditor()
     await flushPromises()
 
-    const add = w.get('[data-testid="junction-add"]')
-    expect(add.text()).toContain('Add Tag')
-    expect(add.findComponent(RelationPicker).exists()).toBe(true)
-    expect(w.get('ul').findComponent(RelationPicker).exists()).toBe(false)
-    expect(add.classes()).toContain('border-t')
+    const box = w.get('[data-testid="junction-box"]')
+    expect(box.classes()).toContain('border')
+    expect(box.classes()).toContain('rounded-md')
+    expect(box.find('[data-testid="junction-header"]').exists()).toBe(true)
+    expect(box.findAll('.junction-link')).toHaveLength(2)
+    const adds = w.findAll('[data-testid="junction-add"]')
+    expect(adds).toHaveLength(1)
+    expect(box.element.contains(adds[0].element)).toBe(true)
+    // The add row is the last row of the box, and no separate section or rule sits apart from the rows.
+    expect(box.get('[data-testid="junction-add"]').element.nextElementSibling).toBeNull()
+    expect(adds[0].classes()).not.toContain('border-t')
+    expect(w.findAll('.border-t')).toHaveLength(0)
+  })
+
+  it('ends the box with an inline add row, labelled with the target, that hands over to the picker', async () => {
+    setup()
+    const w = mountEditor()
+    await flushPromises()
+
+    const picker = w.get('[data-testid="junction-add"]').getComponent(RelationPicker)
+    expect(picker.props('addLabel')).toBe('Add Tag…')
+    expect(picker.props('showChips')).toBe(false)
+    picker.vm.$emit('update:modelValue', ['t1', 't2', 't3'])
+    expect(idsOf(w)).toEqual(['t1', 't2', 't3'])
   })
 
   it('disables the first row up and the last row down, as greyed buttons without a forbidden cursor', async () => {

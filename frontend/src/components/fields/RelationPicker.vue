@@ -8,7 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import TreeSelect from '@/components/form/TreeSelect.vue'
-import { Check, ChevronsUpDown, X } from '@lucide/vue'
+import { Check, ChevronsUpDown, Plus, X } from '@lucide/vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
@@ -30,7 +30,10 @@ const props = withDefaults(defineProps<{
   showChips?: boolean
   // Returns a reason when an option cannot be chosen; the option is then disabled and carries it as a tooltip.
   optionHint?: (raw: Record<string, unknown>) => string | null
-}>(), { showChips: true, optionHint: undefined })
+  // multiple only. Renders the picker as an inline "add" row (a borderless row reading `+ label`) for a
+  // host that draws the box itself, as the junction links editor does; the menu works the same.
+  addLabel?: string
+}>(), { showChips: true, optionHint: undefined, addLabel: undefined })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 const { t } = useI18n()
@@ -138,6 +141,14 @@ function onBoxClick(): void {
   if (!props.disabled) menuOpen.value = !menuOpen.value
 }
 
+// The field box: bordered and growing with its chips, or, as an add row, a plain full-width row.
+const multipleBoxClass = computed(() => {
+  const cursor = props.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+  return props.addLabel
+    ? `flex w-full items-center px-3 py-2 text-sm hover:bg-accent/40 ${cursor}`
+    : `border-input flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1 text-sm ${cursor}`
+})
+
 function openMenu(): void {
   if (!props.disabled) menuOpen.value = true
 }
@@ -230,8 +241,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
         <!-- The field box. The chips sit in it beside the one trigger, as siblings, never inside it: a remove
              control nested in the trigger button would be invalid HTML with real focus and click hazards. -->
         <ComboboxAnchor
-          class="border-input flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1 text-sm"
-          :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+          :class="multipleBoxClass"
           @click.self="onBoxClick"
         >
           <template v-if="showChips">
@@ -257,16 +267,19 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
             </Badge>
           </template>
           <ComboboxTrigger
-            :aria-label="multipleAccessibleName"
+            :aria-label="addLabel ?? multipleAccessibleName"
             class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left disabled:cursor-not-allowed"
             @keydown.down.prevent="openMenu"
           >
-            <span :class="multipleSelected.length ? '' : 'text-muted-foreground'">
+            <span v-if="addLabel" class="flex items-center gap-2 text-muted-foreground">
+              <Plus class="size-4 shrink-0" />{{ addLabel }}
+            </span>
+            <span v-else :class="multipleSelected.length ? '' : 'text-muted-foreground'">
               {{ showChips
                 ? (multipleSelected.length ? '' : relation.label)
                 : (multipleSelected.length ? t('fields.selectedCount', { n: multipleSelected.length }) : relation.label) }}
             </span>
-            <ChevronsUpDown class="size-4 shrink-0 opacity-50" />
+            <ChevronsUpDown v-if="!addLabel" class="size-4 shrink-0 opacity-50" />
           </ComboboxTrigger>
         </ComboboxAnchor>
         <ComboboxList class="w-(--reka-combobox-trigger-width)">

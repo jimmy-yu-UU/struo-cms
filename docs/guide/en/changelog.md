@@ -15,18 +15,9 @@
 ### Changed
 
 - In the admin UI, the links editor of a `TagSelect` relation whose junction has payload fields or a
-  `SortField` is a list with a description, a header row, one row per link and a separate "Add" section;
-  rows stack on a narrow screen, and the first row's up and the last row's down are greyed out.
-- The badge on a translatable field reads "Per language" (`多語系`) and explains itself in a tooltip.
-- In the admin UI, the values of a plain `TagSelect` relation (a user's roles, the sample's tags) show as chips
-  inside the field box instead of in a row above it; each chip has a remove button, and a value the caller
-  may not change has none.
-- The Login locks page, the lock panel on the user form and the System capabilities section of the role
-  form are removed from the admin UI.
-- The admin UI follows the grants: the permission matrix is read-only without write on `role`, the
-  create-user action and the password and token actions need write on `user`, and the form, actions and
-  role choices that concern a super-admin account or role are disabled for a caller who is not a
-  super-admin, with the reason on hover.
+  `SortField` is one field: a description above a single bordered box with a header row, one row per link
+  and, as its last row, an "Add {target}…" control. Rows stack on a narrow screen, and the first row's up
+  and the last row's down are greyed out.
 
 ### Upgrade notes
 

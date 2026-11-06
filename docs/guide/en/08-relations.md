@@ -331,9 +331,10 @@ the admin SPA wires each one to its own input component:
 
 `TagSelect` is a plain multi-value tag picker when the relation's junction has no visible payload
 and no `SortField`; as soon as either is true, it becomes a per-row links editor instead. In the
-links editor, a one-line note says the extra fields belong to the link itself, and a header row names the
-columns: the order (only with a `SortField`), the target collection's label, one column per visible
-payload field, and remove. Each selected target is one row, showing:
+links editor, a one-line note above the field says the extra fields belong to the link itself, and one
+bordered box holds the rest. Its header row names the columns: the order (only with a `SortField`), the
+target collection's label, one column per visible payload field, and remove. Each selected target is one
+row, showing:
 
 - reorder controls, which appear only when the relation declares a `SortField`; the first row's up and the
   last row's down are greyed out and inactive
@@ -342,9 +343,10 @@ payload field, and remove. Each selected target is one row, showing:
 - a remove button
 
 On a narrow screen a row stacks: the target on top, the payload inputs under it with their own labels, and
-the buttons in a compact row. Below the list, a separate "Add {target}" section holds the dropdown, which
-only adds members (removing is the row's button); a read-only field shows the rows without it, and with
-no buttons active. When nothing is linked, the list says so.
+the buttons in a compact row. The last row of the box is the add control, "Add {target}…", which opens the
+dropdown; it only adds members (removing is the row's button), and the chosen targets append as new rows.
+With nothing linked, the box holds only that row. A read-only field shows the rows without it, and with no
+buttons active.
 
 In the plain picker the selected values show as chips inside the field box, each with a remove button,
 and a click on the empty part of the box opens the list of targets; a value the caller may not change

@@ -386,7 +386,7 @@ export default {
     junctionDescription: 'Extra fields on each row belong to the link itself, not to either side.',
     junctionOrder: 'Order',
     junctionRemoveHeader: 'Remove',
-    junctionAdd: 'Add {target}',
+    junctionAdd: 'Add {target}…',
     noItems: 'No items',
     itemCount: '{count} item | {count} items',
     relatedLoadFailed: 'Failed to load related items.',
