@@ -14,7 +14,7 @@ database tables, APIs, and admin screens, so that infrastructure work is not you
   schema, query DSL, and the admin form screens. Change it in one place and all five interfaces
   update.
 - **REST API**: every response uses the same envelope. Success is `{success, data, meta?}`; failure
-  is `{success:false, error:{code, message, details?}}`. Callers don't have to guess the shape.
+  is `{success:false, error:{code, message, details?, traceId?}}`. Callers don't have to guess the shape.
 - **GraphQL API**: the schema is generated from the same collection metadata as REST, so both APIs
   expose the same data shape.
 - **Query DSL**: every filter, sort, and relation path is validated against metadata before it

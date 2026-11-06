@@ -13,7 +13,7 @@ fork 之後，你在自己的專案裡宣告內容集合，StruoCMS 把它們變
 - **集合引擎**：一個 C# entity 宣告，同時驅動資料表結構、REST 端點、GraphQL schema、查詢 DSL，
   以及後台的表單畫面——改一個地方，五個介面一起更新。
 - **REST API**：每個回應都包在同一個信封格式裡：成功時是 `{success, data, meta?}`，失敗時是
-  `{success:false, error:{code, message, details?}}`，呼叫端不用猜回應長什麼樣子。
+  `{success:false, error:{code, message, details?, traceId?}}`，呼叫端不用猜回應長什麼樣子。
 - **GraphQL API**：schema 由和 REST 同一份集合 metadata 產生，兩邊看到的是同一套資料形狀。
 - **查詢 DSL**：每一個篩選條件、排序與關聯路徑，都會先對照 metadata 驗證過，才組出 SQL，寫錯
   欄位名稱在組 SQL 之前就會被擋下來。

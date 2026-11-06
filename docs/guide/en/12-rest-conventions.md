@@ -107,7 +107,7 @@ means the same thing on both protocols:
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
 | `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
-| `PAYLOAD_TOO_LARGE` | 413 | A file upload over its cap, or a JSON body over `Api:MaxJsonBodyBytes` |
+| `PAYLOAD_TOO_LARGE` | 413 | Upload or JSON body over its cap |
 | `INVALID_CURRENT_PASSWORD` | 400 | Wrong current password on self-service change |
 | `NO_LOCAL_PASSWORD` | 400 | External OIDC account, no local password |
 | `ACCOUNT_INACTIVE` | 401 | Correct password, deactivated account |
