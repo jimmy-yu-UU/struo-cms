@@ -322,9 +322,8 @@ describe('CollectionListView', () => {
     useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
     mockRoute.params.name = collection
     let resolveSchema!: (v: unknown) => void
-    vi.mocked(schemaApi.getAll).mockReturnValue(
-      new Promise((resolve) => { resolveSchema = resolve }) as ReturnType<typeof schemaApi.getAll>,
-    )
+    const pending = new Promise((resolve) => { resolveSchema = resolve })
+    vi.mocked(schemaApi.getAll).mockReturnValue(pending as ReturnType<typeof schemaApi.getAll>)
     vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
     const w = mountView()
     await flushPromises()

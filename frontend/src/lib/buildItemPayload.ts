@@ -51,7 +51,8 @@ export function buildItemPayload(
   for (const f of shared) {
     // The registry's serialize owns per-type coercion — e.g. file/image '' -> null so a
     // nullable Guid FK never serialises "" (Postgres 22P02 -> 500). See fieldTypes/registry.ts.
-    const v = getFieldType(f.interface).serialize(model.shared[f.name], f)
+    let v = getFieldType(f.interface).serialize(model.shared[f.name], f)
+    if (mode === 'update' && v === '' && model.loadedNulls?.shared.includes(f.name)) v = null
     if (mode === 'update' || !isEmpty(v)) payload[f.name] = v
   }
 
@@ -70,7 +71,11 @@ export function buildItemPayload(
       continue
     }
     const entry: Record<string, unknown> = {}
-    for (const f of translatable) entry[f.name] = getFieldType(f.interface).serialize(values[f.name], f)
+    const nulls = mode === 'update' ? model.loadedNulls?.translations[loc.code] : undefined
+    for (const f of translatable) {
+      const v = getFieldType(f.interface).serialize(values[f.name], f)
+      entry[f.name] = v === '' && nulls?.includes(f.name) ? null : v
+    }
     translations[loc.code] = entry
   }
   const relations = model.relations ?? {}

@@ -23,6 +23,7 @@ import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
+import { nullsAfterSave } from '../lib/loadedNulls'
 import { validateItem } from '../lib/validateItem'
 import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
@@ -152,6 +153,7 @@ function setModel(next: FormModel): void {
   savedUserEmail.value = name.value === USER_COLLECTION ? String(next.shared.email ?? '').trim() : ''
   model.translations = next.translations
   model.relations = next.relations
+  model.loadedNulls = next.loadedNulls
   // Carry the optimistic-concurrency token so update payloads echo it. Without this
   // the version chain breaks at the view layer and the optimistic lock silently degrades to
   // last-write-wins. On create, next.version is undefined and stays undefined.
@@ -219,6 +221,7 @@ async function onSubmit(): Promise<void> {
     // Editing the Language collection changes which locale tabs every other form shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
     if (name.value === ROLE_COLLECTION) captureSavedRole()
+    model.loadedNulls = nullsAfterSave(meta.value, model.loadedNulls, payload, langStore.languages)
     captureBaseline() // form saved successfully: clear its own dirty flag before the matrix flush
     // One form Save also flushes a dirty permission matrix, so the user only has to click
     // Save once. The matrix flush runs AFTER the form is already baselined above: if the matrix's

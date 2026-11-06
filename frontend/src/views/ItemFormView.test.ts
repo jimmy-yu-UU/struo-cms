@@ -315,6 +315,25 @@ describe('ItemFormView', () => {
     expect(upd).toHaveBeenCalledWith('article', '5', expect.objectContaining({ version: 3 }))
   })
 
+  it('saves a text field loaded as null as null until the user types, then as typed or cleared text', async () => {
+    routeParams = { name: 'article', id: '5' }
+    const { schema } = setupStores()
+    const optional = { ...meta, fields: [{ ...meta.fields[0], required: false }] }
+    schema.get = vi.fn().mockReturnValue(optional) as never
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: null, translations: {}, version: 1 })
+    const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 2 })
+    const w = mountView()
+    await w.vm.init()
+    await (w.vm as any).onSubmit()
+    expect(upd.mock.calls[0][2]).toHaveProperty('status', null)
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect(upd.mock.calls[1][2]).toHaveProperty('status', 'draft')
+    ;(w.vm as any).model.shared.status = ''
+    await (w.vm as any).onSubmit()
+    expect(upd.mock.calls[2][2]).toHaveProperty('status', '')
+  })
+
   it('recovers from 409 VERSION_CONFLICT: refreshes version, flags conflict, preserves edits, then re-saves', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
