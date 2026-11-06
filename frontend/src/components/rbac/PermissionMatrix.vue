@@ -172,9 +172,9 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
 </template>
 
 <style scoped>
-.permission-matrix { display: grid; gap: 12px; margin-top: 24px; }
+.permission-matrix { display: grid; gap: 12px; }
 .matrix-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.matrix-scroll { overflow-x: auto; }
+.matrix-scroll { overflow-x: auto; position: relative; }
 .matrix-table { border-collapse: collapse; min-width: 480px; }
 .matrix-table th, .matrix-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }
 .matrix-table .col-name { text-align: left; }

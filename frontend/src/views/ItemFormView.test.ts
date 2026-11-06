@@ -8,6 +8,7 @@ import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '../components/account/ChangePasswordDialog.vue'
 import AccessTokenPanel from '../components/account/AccessTokenPanel.vue'
+import PasswordPanel from '../components/account/PasswordPanel.vue'
 import JunctionLinksEditor from '../components/fields/JunctionLinksEditor.vue'
 import { itemsApi } from '../api/itemsApi'
 import { usersApi } from '../api/usersApi'
@@ -117,7 +118,7 @@ const i18n = createI18n({
       publicRoleHint: 'Public role: only a super-admin can change it.',
       publicRoleUndeletable: 'The public role cannot be deleted.',
     },
-    password: { resetTitle: 'Reset password' },
+    password: { resetTitle: 'Reset password', sectionTitle: 'Password', sectionDescription: 'Set a new password.' },
     accessToken: { title: 'Access token', none: 'No token' },
   } },
 })
@@ -1255,6 +1256,32 @@ describe('ItemFormView', () => {
     expect(w.findComponent(ChangePasswordDialog).exists()).toBe(true)
     expect(w.findComponent(AccessTokenPanel).props('manageable')).toBe(true)
     expect(isDisabled(buttonByText(w, 'Save'))).toBe(false)
+  })
+
+  it('puts the reset-password button in its own Password section, beside the token section, at its natural width', async () => {
+    const w = await mountUserEdit({ user: { read: true, write: true, delete: false } })
+
+    const panel = w.findComponent(PasswordPanel)
+    expect(panel.exists()).toBe(true)
+    expect(panel.get('h2').text()).toBe('Password')
+    const button = panel.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Reset password')
+    expect(button).toBeDefined()
+    expect(button!.classes()).not.toContain('w-full')
+    expect(button!.element.parentElement!.classList.contains('inline-flex')).toBe(true)
+
+    // The two credential sections sit side by side under the form, in one wrapper that spaces every panel.
+    const sections = Array.from(w.get('.border-t').element.children)
+    const names = sections.map((e) => e.className)
+    expect(names.findIndex((n) => n.includes('password-panel')) + 1).toBe(names.findIndex((n) => n.includes('access-token')))
+  })
+
+  it('keeps the reason note above the form, not between the panels', async () => {
+    const w = await mountUserEdit({ user: { read: true, write: true, delete: true } }, true)
+
+    const note = w.get('[role="note"]')
+    const form = w.findComponent({ name: 'ItemForm' })
+    expect(note.element.compareDocumentPosition(form.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(w.get('.border-t').element.contains(note.element)).toBe(false)
   })
 
   it('shows a read-only caller the token state and the effective permissions but no reset action', async () => {

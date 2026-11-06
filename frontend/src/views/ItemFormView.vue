@@ -13,6 +13,7 @@ import PermissionMatrix from '../components/rbac/PermissionMatrix.vue'
 import EffectivePermissionsPanel from '../components/rbac/EffectivePermissionsPanel.vue'
 import ChangePasswordDialog from '@/components/account/ChangePasswordDialog.vue'
 import AccessTokenPanel from '@/components/account/AccessTokenPanel.vue'
+import PasswordPanel from '@/components/account/PasswordPanel.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useSchemaStore } from '../stores/schemaStore'
 import { useLanguageStore } from '../stores/languageStore'
@@ -130,6 +131,9 @@ const canManageCredentials = computed(() => canWrite.value && !lockedBySuperAdmi
 const showResetPassword = computed(() => isExistingUser.value && canWrite.value)
 const resetPasswordOpen = ref(false)
 const showAccessToken = computed(() => isExistingUser.value)
+// The sections under the form share one wrapper, so they get the same rhythm and a rule above them.
+const hasPanels = computed(
+  () => showMatrix.value || showEffective.value || showAccessToken.value || showResetPassword.value)
 // A password change revokes the token server-side; the panel re-reads its state through its exposed
 // `reload` rather than being re-keyed, which would also discard an open issued-token dialog.
 const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
@@ -470,6 +474,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         <Button type="button" variant="outline" size="sm" @click="onReverted">{{ t('itemForm.reloadLatest') }}</Button>
       </div>
 
+      <p v-if="lockedHint" class="mb-4 rounded-md border px-4 py-3 text-sm text-muted-foreground" role="note">
+        {{ lockedHint }}
+      </p>
+
       <ItemForm
         :meta="meta"
         :item-id="id"
@@ -482,28 +490,21 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         @submit="onSubmit"
       />
 
-      <p v-if="lockedHint" class="mb-3 text-sm text-muted-foreground" role="note">{{ lockedHint }}</p>
-
-      <PermissionMatrix
-        v-if="showMatrix"
-        ref="matrix"
-        :role-id="idStr"
-        :is-super-admin-role="savedRoleIsSuperAdmin"
-        :create-mode="isCreate"
-        :readonly="!canWrite || lockedBySuperAdmin"
-      />
-      <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
-      <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr"
-                        :manageable="canManageCredentials" :disabled-hint="lockedHint" />
-
-      <!-- type="button" is defensive, not load-bearing here: this button is a sibling of
-           ItemForm, entirely outside its <form> element, so it has no form to submit today. It is
-           kept anyway because ui/button injects no type of its own — if this control were ever
-           re-parented inside a <form>, an untyped button would silently start submitting it. -->
-      <Button v-if="showResetPassword" type="button" variant="outline" :disabled="lockedBySuperAdmin"
-              :title="lockedHint" @click="resetPasswordOpen = true">
-        {{ t('password.resetTitle') }}
-      </Button>
+      <div v-if="hasPanels" class="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 border-t pt-8">
+        <PermissionMatrix
+          v-if="showMatrix"
+          ref="matrix"
+          :role-id="idStr"
+          :is-super-admin-role="savedRoleIsSuperAdmin"
+          :create-mode="isCreate"
+          :readonly="!canWrite || lockedBySuperAdmin"
+        />
+        <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
+        <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"
+                       @reset="resetPasswordOpen = true" />
+        <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr"
+                          :manageable="canManageCredentials" :disabled-hint="lockedHint" />
+      </div>
       <ChangePasswordDialog
         v-if="showResetPassword"
         v-model:open="resetPasswordOpen"

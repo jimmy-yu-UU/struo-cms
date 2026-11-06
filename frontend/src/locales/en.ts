@@ -78,6 +78,8 @@ export default {
     traceIdLine: 'Trace ID: {id}',
   },
   password: {
+    sectionTitle: 'Password',
+    sectionDescription: 'Set a new password for this account. Its sessions and access token are revoked.',
     changeTitle: 'Change password',
     changeDescription: 'Enter your current password, then choose a new one.',
     resetTitle: 'Reset password',

@@ -157,7 +157,7 @@ defineExpose({ reload })
 </template>
 
 <style scoped>
-.access-token { display: grid; gap: 8px; margin-top: 24px; }
+.access-token { display: grid; gap: 12px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
 .times { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
 .times dt { color: var(--muted-foreground); }

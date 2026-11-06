@@ -91,9 +91,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.effective-permissions { display: grid; gap: 12px; margin-top: 24px; }
+.effective-permissions { display: grid; gap: 12px; }
 .panel-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
-.panel-scroll { overflow-x: auto; }
+/* Positioned, so the absolutely placed .sr-only labels inside the table are clipped with it and cannot widen the page. */
+.panel-scroll { overflow-x: auto; position: relative; }
 .panel-table { border-collapse: collapse; min-width: 480px; }
 .panel-table th, .panel-table td { padding: 8px 16px; text-align: center; border-bottom: 1px solid var(--border); }
 .panel-table .col-name { text-align: left; }
