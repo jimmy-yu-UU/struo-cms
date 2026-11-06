@@ -12,6 +12,9 @@ The root `Dockerfile` makes three choices, each with a cost a fork may not want 
 - **curl in the runtime stage, for `HEALTHCHECK` only.** The `aspnet` base image has neither curl nor
   wget, so the runtime stage installs curl with `apt-get`. The cost is attack surface: one more
   binary and its libraries in the image.
+- **`apt-get upgrade` before the curl install.** Ubuntu publishes package fixes before the upstream
+  image is rebuilt, so every build upgrades the OS packages. The cost is that two builds of the same
+  commit can differ in OS packages, and the layer is larger.
 - **`VOLUME ["/app/App_Data"]`.** Without a mount, files written by the `local` backend (default root
   `App_Data/uploads`) live in an anonymous volume. It survives `docker rm` without `-v`, but a replacement
   container does not see it. The cost is that a derived image cannot remove the declaration.
