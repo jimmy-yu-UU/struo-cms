@@ -10,8 +10,8 @@ import { traceIdDetail } from '../../api/apiClient'
 import { formatDateTime } from '../../lib/formatDateTime'
 import { createLatestWins } from '../../lib/latestWins'
 
-// Shows when a user's access token was issued and last used, and lets a super-admin generate,
-// regenerate or revoke it. The last-used time is written by the API at most once a minute, so the
+// Shows when a user's access token was issued and last used, and lets a caller with write on user
+// generate, regenerate or revoke it. The last-used time is written by the API at most once a minute, so the
 // hint says it can trail the latest request. A freshly issued token is held in `issuedToken` only
 // while its dialog is open: the server keeps just the hash, and dismissing the dialog clears it.
 // `manageable` false keeps the state readable and disables the actions; `disabledHint` says why.

@@ -679,9 +679,9 @@ public sealed class ItemService(
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);
 
-    // Writes to an AdminOnly collection (user/role/permission/userRole) require a super-admin even with
-    // a per-collection write/delete grant — else a delegated grant on userRole could self-assign the
-    // super-admin role (privilege escalation). Reads stay ungated (ordinary RBAC governs them).
+    // Writes to an AdminOnly collection require a super-admin even with a per-collection write/delete
+    // grant, so a delegated grant cannot be turned into self-escalation. Reads stay ungated (ordinary
+    // RBAC governs them). The identity collections do not declare it; SuperAdminGuard covers them.
     private void RequireSuperAdminForAdminOnly(CollectionMetadata meta)
     {
         if (meta.AdminOnly && !permissions.IsSuperAdmin)

@@ -18,24 +18,24 @@ export type AccessTokenInfo = {
 export type CreatedUser = { id: string; email: string; name?: string | null }
 
 export const usersApi = {
-  // POST /api/users (super-admin only): the one endpoint that hashes the password and applies the
+  // POST /api/users (write on user): the one endpoint that hashes the password and applies the
   // password policy when a user row is created. 409 CONFLICT = email already in use.
   create(body: CreateUserBody): Promise<CreatedUser> {
     return apiClient.post<CreatedUser>('/users', body)
   },
 
-  // GET /api/users/{id}/access-token (super-admin only): issue and last-use times, never the token.
+  // GET /api/users/{id}/access-token (read on user): issue and last-use times, never the token.
   getAccessTokenInfo(userId: string): Promise<AccessTokenInfo> {
     return apiClient.get<AccessTokenInfo>(`/users/${userId}/access-token`)
   },
 
-  // POST /api/users/{id}/access-token (super-admin only): issues a token, replacing any previous one.
+  // POST /api/users/{id}/access-token (write on user): issues a token, replacing any previous one.
   // The raw value is in this response only; the server keeps just its hash.
   generateAccessToken(userId: string): Promise<{ token: string }> {
     return apiClient.post<{ token: string }>(`/users/${userId}/access-token`)
   },
 
-  // DELETE /api/users/{id}/access-token (super-admin only): returns 204, no body.
+  // DELETE /api/users/{id}/access-token (write on user): returns 204, no body.
   revokeAccessToken(userId: string): Promise<void> {
     return apiClient.delete<void>(`/users/${userId}/access-token`)
   },
