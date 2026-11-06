@@ -1,10 +1,34 @@
 # 版本紀錄
 
-## 0.28.0
+## 0.28.0 — 2026-11-07
 
+::: danger 破壞性變更
+- 系統權限整套移除。`ISystemCapabilitySource`、`IRoleCapabilityStore`、`SystemCapabilities`、
+  `SystemCapabilityCatalog`、`RoleCapability` entity、`EffectivePermissions.HasCapability`，以及
+  `IRolePermissionStore` 與 `RolePermissionData` 上與系統權限有關的成員都不存在了；`GET api/capabilities`、
+  `GET`/`PUT api/roles/{id}/capabilities` 與 `GET api/auth/me` 的 `capabilities` 欄位也一併移除。核心
+  migration `DropRoleCapabilities`（`202611060000`）會刪掉 `role_capabilities` 表與表內所有資料；
+  `migrate` 或 `Database:MigrateOnStartup` 會套用它。註冊過來源或呼叫過 `HasCapability` 的 fork，必須改成
+  對某個集合的授權來表達這個權限。
+- `GET api/login-locks?email=…` 移除。要讀登入鎖定，用 `POST api/login-locks/query`，需要 `user` 集合的
+  讀取授權；`DELETE api/login-locks?email=…` 需要 `user` 的寫入授權。`login.unlock` 系統權限不再存在。
+- `user`、`role`、`permission`、`userRole` 是一般集合：不再宣告 `AdminOnly`。權限矩陣可以授予角色 `user`
+  與 `role` 的讀取、寫入或刪除，原本只有超級管理員能用的端點改為接受這些授權：`POST api/users`、重設別人的
+  密碼、核發與撤銷存取權杖（`user` 的寫入），讀取權杖狀態與 `effective-permissions`（`user` 的讀取），以及
+  角色權限端點（`role` 的讀取與寫入）。`userRole` 沿用 `user` 的授權，`permission` 沿用 `role` 的；兩者都沒有
+  矩陣的列，存在這兩個名稱底下的授權會被忽略。不是超級管理員的呼叫端，對超級管理員帳號或角色、以及指派
+  超級管理員角色，一律得到 `403`。見[第 17 章](17-roles-and-permissions.md)與
+  [第 13 章](13-rest-endpoints.md)。
+- `Role.IsSuperAdmin` 唯讀。沒有任何請求能設定或取消它：帶著它的 body 會被接受，欄位則被忽略。內建的
+  `admin` 角色就是超級管理員角色，透過 API 建立的角色不可能是。
+- 超級管理員角色不能被刪除（`409` `CONFLICT`），超級管理員角色裡最後一個啟用中的帳號，不能被移出角色、
+  停用或刪除（`409` `CONFLICT`），寫入會被回復。`AdminOnly` 屬性仍保留給 fork 用在自己的集合上。
 - 內建的 `public` 角色任何人都不能刪除，超級管理員也一樣（`409` `CONFLICT`）。它比照超級管理員角色保護：
   不是超級管理員的呼叫端，更新、復原或還原它、變更它的權限授權，或把角色命名為 `public`，即使持有 `role`
-  的授權也得到 `403`。
+  的授權也得到 `403`。原本讓非超級管理員編輯公開授權的部署，必須把這項工作交給超級管理員。
+- JSON body 的頂層屬性出現同一個名稱兩次時，項目的建立與更新路徑回 `400` `BAD_USER_INPUT`；送過這種 body
+  的用戶端，必須讓每個屬性只出現一次。
+:::
 
 ### 新增
 
