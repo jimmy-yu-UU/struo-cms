@@ -98,6 +98,16 @@ describe('LoginLockPanel', () => {
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', summary: en.loginLocks.superAdminOnly }))
   })
 
+  it('adds the trace id to a failed unlock toast', async () => {
+    vi.mocked(loginLocksApi.get).mockResolvedValue({ locked: true, retryAfterSeconds: 120 })
+    vi.mocked(loginLocksApi.clear).mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountPanel()
+    await flushPromises()
+    await unlockButton(w)!.trigger('click')
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: en.loginLocks.unlockFailed, detail: 'Trace ID: abc123' }))
+  })
+
   it('reports a failed unlock and keeps the button', async () => {
     vi.mocked(loginLocksApi.get).mockResolvedValue({ locked: true, retryAfterSeconds: 120 })
     vi.mocked(loginLocksApi.clear).mockRejectedValue(new ApiError(500, 'x'))

@@ -94,6 +94,13 @@ describe('CreateUserDialog', () => {
     expect(w.emitted('created')).toBeUndefined()
   })
 
+  it('adds the trace id to the toast of a server fault', async () => {
+    vi.mocked(usersApi.create).mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountDialog()
+    await fillAndSubmit(w, ['a@b.c', '', 'longenough1', 'longenough1'])
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: en.createUser.failed, detail: 'Trace ID: abc123' }))
+  })
+
   it('toasts an unexpected failure', async () => {
     vi.mocked(usersApi.create).mockRejectedValue(new Error('boom'))
     const w = mountDialog()

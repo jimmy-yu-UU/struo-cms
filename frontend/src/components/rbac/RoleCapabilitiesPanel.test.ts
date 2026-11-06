@@ -4,6 +4,7 @@ import { createI18n } from 'vue-i18n'
 import en from '../../locales/en'
 import RoleCapabilitiesPanel from './RoleCapabilitiesPanel.vue'
 import { rbacApi } from '../../api/rbacApi'
+import { ApiError } from '../../api/apiClient'
 
 vi.mock('../../api/rbacApi', () => ({
   rbacApi: { listCapabilities: vi.fn(), getRoleCapabilities: vi.fn(), putRoleCapabilities: vi.fn() },
@@ -72,6 +73,16 @@ describe('RoleCapabilitiesPanel', () => {
     await saveButton(w).trigger('click')
     await flushPromises()
     expect(rbacApi.putRoleCapabilities).toHaveBeenCalledWith('r1', [])
+  })
+
+  it('adds the trace id to a failed save toast', async () => {
+    vi.mocked(rbacApi.putRoleCapabilities).mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountPanel()
+    await flushPromises()
+    await boxes(w)[1].trigger('click')
+    await saveButton(w).trigger('click')
+    await flushPromises()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: en.rbac.capabilitiesSaveFailed, detail: 'Trace ID: abc123' }))
   })
 
   it('reports a failed save and stays dirty', async () => {

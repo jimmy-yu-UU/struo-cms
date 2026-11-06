@@ -227,6 +227,15 @@ describe('RevisionHistoryDrawer', () => {
     expect(toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
 
+  it('onRevert adds the trace id to the toast of a server fault', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+    vi.spyOn(itemsApi, 'revert').mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountDrawer()
+    await flushPromises()
+    await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', detail: 'Trace ID: abc123' }))
+  })
+
   it('onRevert toasts an error and does not emit when revert fails', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     vi.spyOn(itemsApi, 'revert').mockRejectedValue(new Error('nope'))

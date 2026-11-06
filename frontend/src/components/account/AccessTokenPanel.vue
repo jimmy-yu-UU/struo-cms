@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { usersApi, type AccessTokenInfo } from '../../api/usersApi'
+import { traceIdDetail } from '../../api/apiClient'
 import { formatDateTime } from '../../lib/formatDateTime'
 import { createLatestWins } from '../../lib/latestWins'
 
@@ -60,8 +61,8 @@ async function onGenerate(): Promise<void> {
     const { token } = await usersApi.generateAccessToken(props.userId)
     issuedToken.value = token
     await reload()
-  } catch {
-    toast.add({ severity: 'error', summary: t('accessToken.generateFailed'), life: 3500 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('accessToken.generateFailed'), detail: traceIdDetail(e), life: 3500 })
   } finally {
     busy.value = false
   }
@@ -80,8 +81,8 @@ async function onRevoke(): Promise<void> {
     await usersApi.revokeAccessToken(props.userId)
     toast.add({ severity: 'success', summary: t('accessToken.revoked'), life: 2000 })
     await reload()
-  } catch {
-    toast.add({ severity: 'error', summary: t('accessToken.revokeFailed'), life: 3500 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('accessToken.revokeFailed'), detail: traceIdDetail(e), life: 3500 })
   } finally {
     busy.value = false
   }

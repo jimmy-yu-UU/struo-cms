@@ -6,6 +6,7 @@ import en from '../../locales/en'
 import PermissionMatrix from './PermissionMatrix.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
+import { ApiError } from '../../api/apiClient'
 
 vi.mock('../../api/rbacApi', () => ({
   rbacApi: { getRolePermissions: vi.fn(), putRolePermissions: vi.fn() },
@@ -194,6 +195,17 @@ describe('PermissionMatrix', () => {
     vm.toggle('article', 'delete', true)
     await expect(vm.save()).resolves.toBe(false)
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+  })
+
+  it('save adds the trace id to the failure toast of a server fault', async () => {
+    seedSchema()
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))
+    const w = mountMatrix()
+    await flushPromises()
+    const vm: any = w.vm
+    vm.toggle('article', 'write', true)
+    await expect(vm.save()).resolves.toBe(false)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error', detail: 'Trace ID: abc123' }))
   })
 
   it('the save button carries the vendored identity, a native type="button", :disabled tracking dirty/saving, and a saving label swap', async () => {

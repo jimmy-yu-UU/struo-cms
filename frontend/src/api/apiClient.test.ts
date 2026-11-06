@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiClient, ApiError } from './apiClient'
+import { ApiClient, ApiError, traceIdDetail } from './apiClient'
 import { i18n } from '../i18n'
 
 function mockFetch(status: number, body: unknown) {
@@ -196,5 +196,46 @@ describe('ApiClient', () => {
     const err = await c.get('/whatever').catch((e) => e) as ApiError
     expect(err).toBeInstanceOf(ApiError)
     expect(err.retryAfterSeconds).toBeUndefined()
+  })
+
+  describe('trace id', () => {
+    const serverFault = (status: number, traceId?: string) =>
+      mockFetch(status, { success: false, error: { code: 'X', message: 'Server broke.', ...(traceId ? { traceId } : {}) } })
+
+    it('keeps the trace id and appends it to the message of a 5xx', async () => {
+      vi.stubGlobal('fetch', serverFault(500, 'abc123'))
+      const err = await new ApiClient('/api').get('/x').catch((e) => e) as ApiError
+      expect(err.traceId).toBe('abc123')
+      expect(err.message).toBe('Server broke. (Trace ID: abc123)')
+    })
+
+    it('appends it to the fallback message when the 5xx body has none', async () => {
+      vi.stubGlobal('fetch', mockFetch(503, { success: false, error: { traceId: 'abc123' } }))
+      const err = await new ApiClient('/api').get('/x').catch((e) => e) as ApiError
+      expect(err.message).toContain('abc123')
+      expect(err.message).toContain('503')
+    })
+
+    it('leaves a 5xx without a trace id unchanged', async () => {
+      vi.stubGlobal('fetch', serverFault(500))
+      const err = await new ApiClient('/api').get('/x').catch((e) => e) as ApiError
+      expect(err.traceId).toBeUndefined()
+      expect(err.message).toBe('Server broke.')
+    })
+
+    it('leaves a 4xx message unchanged and does not show the id', async () => {
+      vi.stubGlobal('fetch', serverFault(404, 'abc123'))
+      const err = await new ApiClient('/api').get('/x').catch((e) => e) as ApiError
+      expect(err.message).toBe('Server broke.')
+      expect(traceIdDetail(err)).toBeUndefined()
+    })
+
+    it('traceIdDetail gives the localized line for a 5xx ApiError only', () => {
+      expect(traceIdDetail(new ApiError(500, 'm', 'X', undefined, undefined, 'abc123'))).toBe('Trace ID: abc123')
+      expect(traceIdDetail(new ApiError(500, 'm'))).toBeUndefined()
+      expect(traceIdDetail(new ApiError(400, 'm', 'X', undefined, undefined, 'abc123'))).toBeUndefined()
+      expect(traceIdDetail(new Error('boom'))).toBeUndefined()
+      expect(traceIdDetail(undefined)).toBeUndefined()
+    })
   })
 })
