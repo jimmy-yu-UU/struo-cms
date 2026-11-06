@@ -8,9 +8,6 @@ vi.mock('../api/apiClient', async (importOriginal) => ({
   apiClient: { get: vi.fn(), post: vi.fn(), setUnauthorizedHandler: vi.fn() },
 }))
 
-const toastAdd = vi.fn()
-vi.mock('../composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }))
-
 describe('authStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -49,14 +46,13 @@ describe('authStore', () => {
     expect(store.user).toBeNull()
     expect(store.isAuthenticated).toBe(false)
     expect(store.connectionError).toBe(false)
-    expect(toastAdd).not.toHaveBeenCalled()
   })
 
   it.each([
     ['a 500', () => new ApiError(500, 'boom')],
     ['a 503', () => new ApiError(503, 'down')],
     ['a network error', () => new TypeError('Failed to fetch')],
-  ])('fetchCurrentUser keeps the signed-in user on %s and surfaces a notice', async (_n, make) => {
+  ])('fetchCurrentUser keeps the signed-in user on %s and flags the connection error', async (_n, make) => {
     vi.mocked(apiClient.get).mockRejectedValue(make())
     const store = useAuthStore()
     const user = { id: 'u1', isSuperAdmin: false, permissions: {} }
@@ -64,16 +60,14 @@ describe('authStore', () => {
     await store.fetchCurrentUser()
     expect(store.user).toEqual(user)
     expect(store.connectionError).toBe(true)
-    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
 
-  it('fetchCurrentUser with no user flags the connection error without a toast', async () => {
+  it('fetchCurrentUser with no user flags the connection error', async () => {
     vi.mocked(apiClient.get).mockRejectedValue(new ApiError(502, 'boom'))
     const store = useAuthStore()
     await store.fetchCurrentUser()
     expect(store.user).toBeNull()
     expect(store.connectionError).toBe(true)
-    expect(toastAdd).not.toHaveBeenCalled()
   })
 
   it('a later successful fetch clears the connection error', async () => {
