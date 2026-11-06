@@ -28,15 +28,6 @@ public interface IItemWriteInterceptor
     Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
-    /// Runs inside the write transaction, before anything is written and before the transaction has read the
-    /// row, for every operation. It is where a rule that must see a state no concurrent transaction can change
-    /// takes its locks and reads: a read made outside the transaction can be stale by the time the write runs.
-    /// A throw rolls the write back. Not called when an <see cref="ICollectionDeleteHandler"/> replaces the
-    /// delete.
-    /// </summary>
-    Task InTransactionBeforeWriteAsync(ItemWriteContext context, CancellationToken ct) => Task.CompletedTask;
-
-    /// <summary>
     /// Runs inside the write transaction, after the row, many-to-many links and translations are written
     /// and before the revision is captured. A throw rolls the whole write back. For trash, restore and
     /// purge it runs only when the row was actually trashed, restored or purged. It does not run when an

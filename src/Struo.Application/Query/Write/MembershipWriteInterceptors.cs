@@ -33,7 +33,8 @@ internal static class JunctionRowReader
 /// of a super-admin role or of a super-admin account, and the last active super-admin account cannot lose
 /// its membership (a conflict that rolls the write back).
 /// </summary>
-public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdminGuard guard) : IItemWriteInterceptor
+public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdminGuard guard)
+    : IItemWriteInterceptor, IInTransactionPreWrite
 {
     private const string RoleId = "RoleId";
     private const string UserId = "UserId";
@@ -53,7 +54,7 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
             await guard.RequireForUserAsync(userId, "change a super-admin account", ct);
     }
 
-    public async Task InTransactionBeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    async Task IInTransactionPreWrite.BeforeWriteInTransactionAsync(ItemWriteContext context, CancellationToken ct)
     {
         await guard.LockSuperAdminRolesAsync(ct);
         await guard.RequireForRolesAsync(
@@ -77,13 +78,12 @@ public sealed class UserRoleWriteInterceptor(IEntityRegistry registry, SuperAdmi
 }
 
 /// <summary>Writes to the hidden <c>permission</c> junction, governed by write on <c>role</c>; the grants
-/// of a super-admin role are a super-admin's to change.</summary>
+/// of a super-admin role and of the <c>public</c> role are a super-admin's to change.</summary>
 public sealed class PermissionWriteInterceptor(IEntityRegistry registry, SuperAdminGuard guard) : IItemWriteInterceptor
 {
     public bool AppliesTo(string collection) =>
         string.Equals(collection, RbacCollections.Permission, StringComparison.OrdinalIgnoreCase);
 
     public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct) =>
-        guard.RequireForRolesAsync(
-            JunctionRowReader.Ids(registry, context, "RoleId"), "change the grants of a super-admin role", ct);
+        guard.RequireToChangeRolesAsync(JunctionRowReader.Ids(registry, context, "RoleId"), grants: true, ct);
 }

@@ -50,15 +50,15 @@ The complete semantics of filtering, sorting, projection and pagination are left
 On a collection that carries a `version`, an update body's `version` must be an integer, an integer
 string, `null`, or absent; any other value is a `400` `INVALID_VERSION` ([Chapter 12](12-rest-conventions.md)).
 
-Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read
-grant — for a single-item read as much as for a list; an unknown collection is always a 404. Writing
-to or deleting from any junction a fork has marked `AdminOnly` additionally requires the caller to be a
+Requesting a non-default `deleted=` mode needs the collection's delete grant, not just its read grant —
+for a single-item read as much as for a list; an unknown collection is always a 404. Writing to or
+deleting from any junction a fork has marked `AdminOnly` additionally requires the caller to be a
 super-admin — a delegated collection grant doesn't count. The built-in `user`, `role`, `permission` and
-`userRole` are ordinary collections: the two hidden junctions follow the grant of `user` and `role`, and a
-write that touches a super-admin account or role is refused to a caller who is not a super-admin
-([Chapter 17](17-roles-and-permissions.md)).
-A JSON body that names the same top-level property twice is a `400` `BAD_USER_INPUT` on create and update;
-names that differ only in casing are different properties.
+`userRole` are ordinary collections: the two hidden junctions follow the grant of `user` and `role`, and
+a write that touches a super-admin account or role, or the `public` role, is refused to a caller who is
+not a super-admin ([Chapter 17](17-roles-and-permissions.md)). A JSON body that names the same top-level
+property twice is a `400` `BAD_USER_INPUT` on create and update; names that differ only in casing are
+different properties.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
@@ -165,10 +165,12 @@ genuinely remain; the request is rejected if the body isn't a JSON array, names 
 or names a collection that doesn't exist, and collection-name casing is normalized.
 
 A caller without the grant gets `403` `Read permission on the role collection is required.` or `Write
-permission on the role collection is required.`. Writing the grants of a super-admin role is refused to a
-caller who is not a super-admin: `403` `Only a super-admin can change the grants of a super-admin role.`
-A role is itself an ordinary collection, so `POST api/items/role` creates a new one. The `isSuperAdmin`
-flag cannot be set through it; a body that carries it is accepted and the field is ignored.
+permission on the role collection is required.`. Writing the grants of a super-admin role or of the
+`public` role is refused to a caller who is not a super-admin: `403` `Only a super-admin can change the
+grants of a super-admin role.` (`… of the public role.`). A role is itself an ordinary collection, so
+`POST api/items/role` creates a new one. The `isSuperAdmin` flag cannot be set through it; a body that
+carries it is accepted and the field is ignored. The `public` role cannot be deleted by anyone: `409`
+`CONFLICT`.
 
 ## Login locks `api/login-locks`
 

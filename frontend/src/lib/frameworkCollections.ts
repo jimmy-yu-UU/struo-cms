@@ -5,6 +5,9 @@ export const LANGUAGE_COLLECTION = 'language'
 export const ROLE_COLLECTION = 'role'
 export const USER_COLLECTION = 'user'
 
+// Name of the seeded role every caller holds as a permission floor (the API resolves it by this name).
+export const PUBLIC_ROLE_NAME = 'public'
+
 // Hidden junction collections that follow the grant of the collection that owns them (a role
 // assignment is a write on `user`, a role's grants a write on `role`), so they get no matrix row.
 export const GOVERNED_JUNCTIONS: readonly string[] = ['userRole', 'permission']

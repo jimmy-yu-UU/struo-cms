@@ -21,10 +21,23 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
             throw Refusal(action);
     }
 
-    /// <summary>Refuses (403) a caller who is not a super-admin when <paramref name="roleId"/> is a
-    /// super-admin role.</summary>
-    public async Task RequireForRoleAsync(Guid roleId, string action, CancellationToken ct = default) =>
-        await RequireForRolesAsync([roleId], action, ct);
+    /// <summary>Refuses (403) a caller who is not a super-admin when any of <paramref name="roleIds"/> is a
+    /// super-admin role or the <c>public</c> role. <paramref name="grants"/> says whether the change is to the
+    /// role's permission grants rather than to the role itself.</summary>
+    public async Task RequireToChangeRolesAsync(
+        IReadOnlyCollection<Guid> roleIds, bool grants, CancellationToken ct = default)
+    {
+        if (CallerIsSuperAdmin || roleIds.Count == 0) return;
+        var what = grants ? "the grants of " : "";
+        if ((await directory.SuperAdminRoleIdsAsync(roleIds, ct)).Count > 0)
+            throw Refusal($"change {what}a super-admin role");
+        if ((await directory.PublicRoleIdsAsync(roleIds, ct)).Count > 0)
+            throw Refusal($"change {what}the public role");
+    }
+
+    /// <summary>Whether <paramref name="roleId"/> is the <c>public</c> role.</summary>
+    public async Task<bool> IsPublicRoleAsync(Guid roleId, CancellationToken ct = default) =>
+        (await directory.PublicRoleIdsAsync([roleId], ct)).Contains(roleId);
 
     /// <summary>Refuses (403) a caller who is not a super-admin when any of <paramref name="roleIds"/> is a
     /// super-admin role.</summary>

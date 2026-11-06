@@ -364,18 +364,17 @@ runs inside the generic write path, so REST and GraphQL both get it, and you do 
 
 ### The contract
 
-An interceptor has `bool AppliesTo(string collection)` and four hooks. `AppliesTo` receives the
+An interceptor has `bool AppliesTo(string collection)` and three hooks. `AppliesTo` receives the
 canonical collection name, the same spelling `ISearchProvider` sees. Every hook defaults to a no-op,
 so you override only the ones you need.
 
 | Hook | Runs | A throw |
 |---|---|---|
 | `BeforeWriteAsync` | Outside the transaction, after the merge | Refuses the write |
-| `InTransactionBeforeWriteAsync` | Inside the transaction, before anything is written | Rolls everything back |
 | `InTransactionAsync` | Inside the transaction, after the row is written | Rolls everything back |
 | `AfterCommitAsync` | After the commit, before listeners are notified | Surfaces after the commit |
 
-The merge is the request body applied to the entity. `InTransactionAsync` runs after the row, the many-to-many links and the translations are written, and before the revision is captured. `InTransactionBeforeWriteAsync` is where a rule takes locks and reads state that must not change under the write, since a read made in `BeforeWriteAsync` can be stale by the time the transaction runs; a delete handler that replaces the delete skips it. All four hooks take an `ItemWriteContext`.
+The merge is the request body applied to the entity. `InTransactionAsync` runs after the row, the many-to-many links and the translations are written, and before the revision is captured. All three hooks take an `ItemWriteContext`.
 Its members:
 
 - `Operation`: `Create`, `Update`, `Revert`, `Trash`, `Restore` or `Purge`. A revert is an update that

@@ -61,7 +61,7 @@ public sealed class RolesController(
                 "Body must be a JSON array of permission entries.");
         if (!await grants.RoleExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
-        await superAdmins.RequireForRoleAsync(id, "change the grants of a super-admin role", ct);
+        await superAdmins.RequireToChangeRolesAsync([id], grants: true, ct);
 
         // Duplicates checked on the raw body (an all-false duplicate still signals a client bug).
         var dupes = body.GroupBy(e => e.Collection, StringComparer.OrdinalIgnoreCase)

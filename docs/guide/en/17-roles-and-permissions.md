@@ -130,11 +130,12 @@ that carries the flag keeps it and is treated the same, whichever migration or s
 
 A caller who is not a super-admin, even with the grant, gets `403` `FORBIDDEN` with a message that
 begins `Only a super-admin can` when the target is a super-admin account (a member of any super-admin
-role) or a super-admin role. The refused operations are:
+role), a super-admin role, or the `public` role. The refused operations are:
 
 - updating, deactivating, deleting, restoring or reverting a super-admin account;
 - resetting its password, issuing or revoking its access token, and clearing its login lock;
-- updating, restoring or reverting a super-admin role, and writing its permission grants;
+- updating, restoring or reverting a super-admin role or the `public` role, and writing the permission
+  grants of either;
 - adding a membership of a super-admin role, or removing one, by any path: the Roles field, a
   `userRole` row, GraphQL.
 
@@ -144,7 +145,9 @@ permissions. A super-admin passes all of these checks.
 ### Two rules for every caller
 
 A super-admin role cannot be deleted, softly or permanently, by anyone: `409` `CONFLICT`, `A super-admin
-role cannot be deleted.` A caller who is not a super-admin is refused first, with the `403` above.
+role cannot be deleted.` The same holds for the seeded `public` role, every caller's permission floor: `409`
+`CONFLICT`, `The public role cannot be deleted.` A caller who is not a super-admin is refused first, with
+the `403` above. The `public` role is found by its name, the way the permission floor finds it.
 
 At least one active account must stay in a super-admin role. Removing the last one from the role,
 deactivating it, or deleting it answers `409` `CONFLICT`, `At least one active account must remain in
@@ -321,11 +324,11 @@ To change a role's grants, use the role permission matrix: tick `canRead`, `canW
 write on `role` changes it. The effective-permissions preview panel on the user form updates live to
 show what the currently selected role set computes to.
 
-For a caller who is not a super-admin, the form of a super-admin account or role is disabled, with a
-note saying why, and so are its Delete, reset-password and token actions; the Roles field offers no
-super-admin role. The Super Admin checkbox of the role form is read-only for everyone, and a
-super-admin role's Delete is disabled. A super-admin role's matrix shows full access and has nothing
-to edit.
+For a caller who is not a super-admin, the form of a super-admin account or role, or of the `public`
+role, is disabled, with a note saying why, and so are its Delete, reset-password and token actions; the
+Roles field offers no super-admin role. The Super Admin checkbox of the role form is read-only for
+everyone, and the Delete of a super-admin role and of the `public` role is disabled for everyone. A
+super-admin role's matrix shows full access and has nothing to edit.
 
 A role's whole grant set is written through `PUT /api/roles/{id}/permissions`, a full overwrite
 completed in one transaction; the endpoint's own semantics are in

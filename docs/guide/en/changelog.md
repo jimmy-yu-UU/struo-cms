@@ -29,6 +29,10 @@
 - A super-admin role cannot be deleted (`409` `CONFLICT`), and the last active account in a super-admin
   role cannot be removed from it, deactivated or deleted (`409` `CONFLICT`); the write is rolled back.
   The `AdminOnly` attribute stays available to a fork for its own collections.
+- The seeded `public` role is protected like a super-admin role: only a super-admin can update, restore or
+  revert it or change its permission grants (a caller who is not one gets `403`, even with the grant on
+  `role`), and nobody can delete it (`409` `CONFLICT`). A deployment that let a non-super-admin edit the
+  public grants must give that work to a super-admin.
 - A JSON body that names the same top-level property twice is refused with `400` `BAD_USER_INPUT` on the
   item create and update paths; a client that sent such a body must send each property once.
 :::
@@ -40,8 +44,6 @@
   caller is not a super-admin.
 - The user list has a Login lock column: one query per page, a badge with the time left on a locked
   account and, for a caller with write on `user`, an Unlock button that asks for confirmation.
-- `IItemWriteInterceptor.InTransactionBeforeWriteAsync`, a fourth hook that runs inside the write
-  transaction before anything is written, with a no-op default; see [Chapter 18](18-extension-points.md).
 - `ISuperAdminDirectory` and `SuperAdminGuard`, the application-layer seam every write path uses for the
   super-admin rules; the `userRole` and `permission` collections have write interceptors.
 

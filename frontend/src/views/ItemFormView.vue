@@ -28,7 +28,7 @@ import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
-import { LANGUAGE_COLLECTION, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
+import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 import type { RelationMeta } from '../types/schema'
 
@@ -63,12 +63,16 @@ function canWriteJunctionFor(rel: RelationMeta): boolean {
 }
 
 // RBAC editors on the generic form. They follow the caller's grants: read on the collection shows
-// them, write on it lets them change. A super-admin account or role is a super-admin's to change, so
-// for any other caller its form, actions and role choices are disabled with the reason on hover.
+// them, write on it lets them change. A super-admin account or role, and the `public` role, are a
+// super-admin's to change, so for any other caller their form, actions and role choices are disabled
+// with the reason on hover.
 const callerIsSuperAdmin = computed(() => auth.user?.isSuperAdmin === true)
 const savedRoleIsSuperAdmin = ref(false)
+const savedRoleName = ref('')
+const savedRoleIsPublic = computed(() => savedRoleName.value === PUBLIC_ROLE_NAME)
 function captureSavedRole(): void {
   savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
+  savedRoleName.value = String(model.shared.name ?? '')
 }
 // Whether the user being edited belongs to a super-admin role, read from its saved roles.
 const savedUserIsSuperAdmin = ref(false)
@@ -92,16 +96,20 @@ function rolePanelsDirty(): boolean {
   return matrix.value?.dirty ?? false
 }
 const isExistingUser = computed(() => !isCreate.value && name.value === USER_COLLECTION)
-// The saved account or role is a super-admin one and the caller is not a super-admin.
+// The saved account or role is a super-admin one, or the public role, and the caller is not a super-admin.
+const isSavedRole = computed(() => !isCreate.value && name.value === ROLE_COLLECTION)
 const lockedBySuperAdmin = computed(() => !callerIsSuperAdmin.value && (
   (isExistingUser.value && savedUserIsSuperAdmin.value)
-  || (!isCreate.value && name.value === ROLE_COLLECTION && savedRoleIsSuperAdmin.value)))
-const lockedHint = computed(() => lockedBySuperAdmin.value
-  ? t(name.value === ROLE_COLLECTION ? 'superAdmin.roleHint' : 'superAdmin.accountHint')
-  : undefined)
-// A super-admin role cannot be deleted by anyone.
+  || (isSavedRole.value && (savedRoleIsSuperAdmin.value || savedRoleIsPublic.value))))
+const lockedHint = computed(() => {
+  if (!lockedBySuperAdmin.value) return undefined
+  if (name.value !== ROLE_COLLECTION) return t('superAdmin.accountHint')
+  return t(savedRoleIsPublic.value ? 'superAdmin.publicRoleHint' : 'superAdmin.roleHint')
+})
+// A super-admin role and the public role cannot be deleted by anyone.
 const deleteBlockedHint = computed(() => {
-  if (name.value === ROLE_COLLECTION && savedRoleIsSuperAdmin.value) return t('superAdmin.roleUndeletable')
+  if (isSavedRole.value && savedRoleIsSuperAdmin.value) return t('superAdmin.roleUndeletable')
+  if (isSavedRole.value && savedRoleIsPublic.value) return t('superAdmin.publicRoleUndeletable')
   return lockedHint.value
 })
 // The Roles field offers a super-admin role only to a super-admin.

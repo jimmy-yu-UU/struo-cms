@@ -349,6 +349,8 @@ export default {
     roleHint: '此角色為超級管理員角色，只有超級管理員能變更。',
     roleOptionHint: '只有超級管理員能指派超級管理員角色。',
     roleUndeletable: '超級管理員角色不能刪除。',
+    publicRoleHint: '這是 public 角色，只有超級管理員能變更。',
+    publicRoleUndeletable: 'public 角色不能刪除。',
     deleteAccountHint: '只有超級管理員能刪除超級管理員帳號。',
   },
   settings: {

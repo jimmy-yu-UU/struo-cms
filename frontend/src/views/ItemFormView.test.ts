@@ -114,6 +114,8 @@ const i18n = createI18n({
       roleHint: 'Super-admin role: only a super-admin can change it.',
       roleOptionHint: 'Only a super-admin can assign a super-admin role.',
       roleUndeletable: 'A super-admin role cannot be deleted.',
+      publicRoleHint: 'Public role: only a super-admin can change it.',
+      publicRoleUndeletable: 'The public role cannot be deleted.',
     },
     password: { resetTitle: 'Reset password' },
     accessToken: { title: 'Access token', none: 'No token' },
@@ -1306,6 +1308,7 @@ describe('ItemFormView', () => {
 
   async function mountRoleEditAs(
     permissions: Record<string, { read: boolean; write: boolean; delete: boolean }> | null, isSuperAdminRole: boolean,
+    roleName = 'root',
   ) {
     vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
     routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
@@ -1315,7 +1318,7 @@ describe('ItemFormView', () => {
       fields: [...roleMeta.fields, { ...roleMeta.fields[0], name: 'isSuperAdmin', label: 'Super admin', interface: 'checkbox', required: false }],
     })
     if (permissions) useAuthStore().user = { id: 'u2', isSuperAdmin: false, permissions }
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'root', isSuperAdmin: isSuperAdminRole })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: roleName, isSuperAdmin: isSuperAdminRole })
     const w = mountView()
     await w.vm.init()
     await flushPromises()
@@ -1339,6 +1342,25 @@ describe('ItemFormView', () => {
     const ordinary = await mountRoleEditAs(grants, false)
     expect(isDisabled(buttonByText(ordinary, 'Save'))).toBe(false)
     expect(isDisabled(buttonByText(ordinary, 'Delete'))).toBe(false)
+  })
+
+  it('locks the public role for a caller who is not a super-admin and never lets it be deleted', async () => {
+    const grants = { role: { read: true, write: true, delete: true } }
+    const other = await mountRoleEditAs(grants, false, 'public')
+    expect(other.text()).toContain('Public role: only a super-admin can change it.')
+    expect(isDisabled(buttonByText(other, 'Save'))).toBe(true)
+    expect(other.findComponent({ name: 'ItemForm' }).props('disabled')).toBe(true)
+    expect(other.findComponent(PermissionMatrix).props('readonly')).toBe(true)
+    const otherDelete = buttonByText(other, 'Delete')
+    expect(isDisabled(otherDelete)).toBe(true)
+    expect(otherDelete!.attributes('title')).toBe('The public role cannot be deleted.')
+
+    const superAdmin = await mountRoleEditAs(null, false, 'public')
+    expect(isDisabled(buttonByText(superAdmin, 'Save'))).toBe(false)
+    expect(superAdmin.findComponent(PermissionMatrix).props('readonly')).toBe(false)
+    const del = buttonByText(superAdmin, 'Delete')
+    expect(isDisabled(del)).toBe(true)
+    expect(del!.attributes('title')).toBe('The public role cannot be deleted.')
   })
 
   it('hides the reset-password action on a non-user collection', async () => {

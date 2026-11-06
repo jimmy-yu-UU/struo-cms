@@ -349,6 +349,8 @@ export default {
     roleHint: 'This is a super-admin role; only a super-admin can change it.',
     roleOptionHint: 'Only a super-admin can assign a super-admin role.',
     roleUndeletable: 'A super-admin role cannot be deleted.',
+    publicRoleHint: 'This is the public role; only a super-admin can change it.',
+    publicRoleUndeletable: 'The public role cannot be deleted.',
     deleteAccountHint: 'Only a super-admin can delete a super-admin account.',
   },
   settings: {

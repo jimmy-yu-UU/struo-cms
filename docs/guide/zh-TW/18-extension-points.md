@@ -307,17 +307,16 @@ builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 
 ### 契約
 
-攔截器有一個 `bool AppliesTo(string collection)` 和四個掛鉤。`AppliesTo` 收到的是集合的正式名稱，
+攔截器有一個 `bool AppliesTo(string collection)` 和三個掛鉤。`AppliesTo` 收到的是集合的正式名稱，
 和 `ISearchProvider` 看到的拼法相同。每個掛鉤預設都是空操作，只覆寫你要的那幾個。
 
 | 掛鉤 | 何時執行 | 丟例外 |
 |---|---|---|
 | `BeforeWriteAsync` | 交易之外，body 合併進實體之後 | 拒絕這次寫入 |
-| `InTransactionBeforeWriteAsync` | 交易之內，什麼都還沒寫之前 | 整個寫入回滾 |
 | `InTransactionAsync` | 交易之內，列、關聯與翻譯都寫完之後 | 整個寫入回滾 |
 | `AfterCommitAsync` | commit 之後、通知監聽者之前 | 在 commit 之後才浮出 |
 
-`InTransactionAsync` 在擷取版本紀錄之前執行。`InTransactionBeforeWriteAsync` 是規則取得鎖、讀取「寫入期間不能變動的狀態」的地方，因為在 `BeforeWriteAsync` 讀到的資料，到交易真的執行時可能已經過時；取代刪除的刪除處理器會跳過它。四個掛鉤都收到一個 `ItemWriteContext`，成員如下：
+`InTransactionAsync` 在擷取版本紀錄之前執行。三個掛鉤都收到一個 `ItemWriteContext`，成員如下：
 
 - `Operation`：`Create`、`Update`、`Revert`、`Trash`、`Restore` 或 `Purge`。還原版本是用過去的快照
   重做一次更新，標成 `Revert`。

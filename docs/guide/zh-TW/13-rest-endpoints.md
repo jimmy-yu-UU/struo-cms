@@ -46,7 +46,7 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 要求 `deleted=` 非預設模式時，單筆讀取跟清單一樣需要刪除授權，不只是讀取授權；未知集合一律 404。
 寫入或刪除任何被 fork 標成 `AdminOnly` 的 junction，還要求呼叫端是超級管理員，委派的集合授權不算數。
 內建的 `user`、`role`、`permission`、`userRole` 是一般集合：兩個隱藏的 junction 沿用 `user` 與 `role` 的
-授權，碰到超級管理員帳號或角色的寫入，則不讓不是超級管理員的呼叫端做
+授權，碰到超級管理員帳號或角色、或 `public` 角色的寫入，則不讓不是超級管理員的呼叫端做
 （[第 17 章](17-roles-and-permissions.md)）。
 JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `400` `BAD_USER_INPUT`；只有大小寫不同的名稱
 是不同的屬性。
@@ -141,9 +141,11 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 小寫會被統一。
 
 沒有授權的呼叫端得到 `403` `Read permission on the role collection is required.` 或 `Write permission on the
-role collection is required.`。寫入超級管理員角色的授權，不是超級管理員的呼叫端會被擋下：`403` `Only a
-super-admin can change the grants of a super-admin role.` 角色本身是一般集合，`POST api/items/role` 就能
-建立一筆新角色，但 `isSuperAdmin` 旗標設不進去：帶著它的 body 會被接受，欄位則被忽略。
+role collection is required.`。寫入超級管理員角色或 `public` 角色的授權，不是超級管理員的呼叫端會被擋下：
+`403` `Only a super-admin can change the grants of a super-admin role.`
+（`… of the public role.`）。角色本身是
+一般集合，`POST api/items/role` 就能建立一筆新角色，但 `isSuperAdmin` 旗標設不進去：帶著它的 body 會被接受，
+欄位則被忽略。`public` 角色任何人都不能刪除：`409` `CONFLICT`。
 
 ## Login locks `api/login-locks`
 

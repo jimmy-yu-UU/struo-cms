@@ -19,7 +19,7 @@ namespace Struo.Application.Query;
 public sealed class UserWriteInterceptor(
     IEntityRegistry registry, IUserSessionRevocationService sessionRevocation, SuperAdminGuard guard,
     IUserCredentialStore? credentials = null)
-    : IItemWriteInterceptor
+    : IItemWriteInterceptor, IInTransactionPreWrite
 {
     private const string EmailField = "email";
     private const string EmailProperty = "Email";
@@ -56,7 +56,7 @@ public sealed class UserWriteInterceptor(
 
     // Everything a rule reads about super-admin membership is read here, inside the transaction, after the
     // super-admin role rows are locked: the state read is the state the write changes.
-    public async Task InTransactionBeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+    async Task IInTransactionPreWrite.BeforeWriteInTransactionAsync(ItemWriteContext context, CancellationToken ct)
     {
         if (context.Operation == ItemWriteOperation.Create || !Guid.TryParse(context.Id, out var userId)) return;
 

@@ -615,6 +615,7 @@ public class SuperAdminProtectionTests(ApiFactory factory)
     {
         public Guid PauseUserId { get; set; }
         public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource SecondAtLock { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
@@ -633,9 +634,38 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         }
     }
 
-    // Two super-admins deactivate each other at the same moment. The second transaction fixes its snapshot
-    // while the first still holds the super-admin role rows, then waits for them; once the first commits,
-    // its count must see that commit, or both writes pass and no active super-admin is left.
+    // Reports the moment a second request is about to lock the super-admin roles: the first request is by then
+    // paused inside its transaction, holding that lock, so the second cannot get past this call until the first
+    // commits.
+    public sealed class SignallingDirectory(ISuperAdminDirectory inner, PauseGate gate) : ISuperAdminDirectory
+    {
+        public Task<IReadOnlySet<Guid>> SuperAdminUserIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct = default) =>
+            inner.SuperAdminUserIdsAsync(userIds, ct);
+
+        public Task<IReadOnlySet<string>> SuperAdminEmailsAsync(IReadOnlyCollection<string> emails, CancellationToken ct = default) =>
+            inner.SuperAdminEmailsAsync(emails, ct);
+
+        public Task<IReadOnlySet<Guid>> SuperAdminRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default) =>
+            inner.SuperAdminRoleIdsAsync(roleIds, ct);
+
+        public Task<IReadOnlySet<Guid>> PublicRoleIdsAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default) =>
+            inner.PublicRoleIdsAsync(roleIds, ct);
+
+        public Task LockSuperAdminRolesAsync(CancellationToken ct = default)
+        {
+            if (gate.Reached.Task.IsCompleted) gate.SecondAtLock.TrySetResult();
+            return inner.LockSuperAdminRolesAsync(ct);
+        }
+
+        public Task<IReadOnlySet<Guid>> ActiveSuperAdminUserIdsAsync(CancellationToken ct = default) =>
+            inner.ActiveSuperAdminUserIdsAsync(ct);
+    }
+
+    // Two super-admins deactivate each other at the same moment. The first request locks the super-admin roles,
+    // deactivates the second and stays uncommitted. The second request reaches its own lock call, which the
+    // database holds back until the first commits; the test releases the first only once the second has got
+    // there, and fails if it never does. The second then counts after the first's commit, sees no other active
+    // super-admin and answers 409, so exactly one of the two writes succeeds.
     [LiveOnlyFact("it needs two concurrent transactions, which SQLite's single writer cannot give")]
     public async Task Two_super_admins_deactivating_each_other_at_once_leave_one_active()
     {
@@ -653,6 +683,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             {
                 services.AddSingleton(gate);
                 services.AddScoped<Struo.Application.Query.IItemWriteInterceptor, PauseInTransactionInterceptor>();
+                services.AddScoped<ISuperAdminDirectory>(sp => new SignallingDirectory(
+                    new SqlSugarSuperAdminDirectory(sp.GetRequiredService<ISqlSugarClient>()), gate));
             }));
             async Task<HttpClient> SignInAsync(string email)
             {
@@ -667,7 +699,7 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             var firstDeactivatesSecond = Put(clientOfFirst, $"/api/items/user/{second.Id}", new { isActive = false });
             await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(30));
             var secondDeactivatesFirst = Put(clientOfSecond, $"/api/items/user/{first.Id}", new { isActive = false });
-            await Task.Delay(TimeSpan.FromSeconds(2));
+            await gate.SecondAtLock.Task.WaitAsync(TimeSpan.FromSeconds(30));
             gate.Release.SetResult();
             var responses = await Task.WhenAll(firstDeactivatesSecond, secondDeactivatesFirst);
 
@@ -685,5 +717,95 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             await WithDbAsync(db => db.Updateable<User>().SetColumns(u => u.IsActive == false)
                 .Where(u => u.Id == first.Id || u.Id == second.Id).ExecuteCommandAsync());
         }
+    }
+
+    // ---------------------------------------------------------------- the public role
+
+    private async Task<Guid> PublicRoleIdAsync() =>
+        await WithDbAsync(async db => (await db.Queryable<Role>().Where(r => r.Name == "public").FirstAsync()).Id);
+
+    // The seeded `public` role is every caller's permission floor. Like a super-admin role it is a
+    // super-admin's to change, and nobody can delete it.
+    [Fact]
+    public async Task Write_on_role_cannot_touch_the_public_role_or_its_grants()
+    {
+        var publicRole = await PublicRoleIdAsync();
+        var grantRow = await WithDbAsync(async db =>
+        {
+            var row = new Permission { Id = Guid.CreateVersion7(), RoleId = publicRole, Collection = "mediaFolder", CanRead = true };
+            await db.Insertable(row).ExecuteCommandAsync();
+            return row.Id;
+        });
+        using var manager = await RoleManagerAsync();
+        const string only = "Only a super-admin";
+
+        await ShouldBeAsync(Put(manager, $"/api/items/role/{publicRole}", new { description = "x" }), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(manager.DeleteAsync($"/api/items/role/{publicRole}?purge=true"), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(manager.DeleteAsync($"/api/items/role/{publicRole}"), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(manager.PostAsync($"/api/items/role/{publicRole}/restore", null), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(Put(manager, $"/api/roles/{publicRole}/permissions", Array.Empty<object>()), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(manager.PostAsJsonAsync("/api/items/permission",
+            new { roleId = publicRole, collection = "file", canRead = true }), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(Put(manager, $"/api/items/permission/{grantRow}", new { canRead = false }), HttpStatusCode.Forbidden, only);
+        await ShouldBeAsync(manager.DeleteAsync($"/api/items/permission/{grantRow}?purge=true"), HttpStatusCode.Forbidden, only);
+        // Reading the grants stays open to a reader.
+        await ShouldBeAsync(manager.GetAsync($"/api/roles/{publicRole}/permissions"), HttpStatusCode.OK);
+        (await WithDbAsync(db => db.Queryable<Permission>().Where(p => p.Id == grantRow).AnyAsync())).Should().BeTrue();
+
+        await WithDbAsync(db => db.Deleteable<Permission>().Where(p => p.Id == grantRow).ExecuteCommandAsync());
+    }
+
+    [Fact]
+    public async Task Without_a_grant_on_role_every_public_role_path_is_403()
+    {
+        var publicRole = await PublicRoleIdAsync();
+        using var caller = await CallerAsync([], []);
+
+        await ShouldBeAsync(Put(caller, $"/api/items/role/{publicRole}", new { description = "x" }), HttpStatusCode.Forbidden);
+        await ShouldBeAsync(caller.DeleteAsync($"/api/items/role/{publicRole}?purge=true"), HttpStatusCode.Forbidden);
+        await ShouldBeAsync(Put(caller, $"/api/roles/{publicRole}/permissions", Array.Empty<object>()), HttpStatusCode.Forbidden);
+        await ShouldBeAsync(caller.PostAsJsonAsync("/api/items/permission",
+            new { roleId = publicRole, collection = "file", canRead = true }), HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task The_public_role_cannot_be_deleted_by_anyone()
+    {
+        var publicRole = await PublicRoleIdAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
+
+        await ShouldBeAsync(admin.DeleteAsync($"/api/items/role/{publicRole}?purge=true"), HttpStatusCode.Conflict, "CONFLICT");
+        await ShouldBeAsync(admin.DeleteAsync($"/api/items/role/{publicRole}"), HttpStatusCode.Conflict, "CONFLICT");
+        (await WithDbAsync(db => db.Queryable<Role>().Where(r => r.Id == publicRole).AnyAsync())).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_super_admin_can_change_the_public_role_and_its_grants()
+    {
+        var publicRole = await PublicRoleIdAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
+        var current = await DataAsync(await admin.GetAsync($"/api/roles/{publicRole}/permissions"));
+
+        await ShouldBeAsync(Put(admin, $"/api/items/role/{publicRole}", new { description = "Anonymous callers" }), HttpStatusCode.OK);
+        await ShouldBeAsync(Put(admin, $"/api/roles/{publicRole}/permissions", current), HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Graphql_follows_the_public_role_rules()
+    {
+        var publicRole = await PublicRoleIdAsync();
+        using var manager = await RoleManagerAsync();
+        using var admin = await factory.CreateAuthenticatedClientAsync();
+
+        var refused = await GraphQlAsync(manager,
+            "mutation { updateRole(id: \"" + publicRole + "\", input: { description: \"x\" }) { id } }");
+        FirstError(refused).Should().Contain("Only a super-admin");
+
+        var refusedGrant = await GraphQlAsync(manager,
+            "mutation { createPermission(input: { roleId: \"" + publicRole + "\", collection: \"file\", canRead: true }) { id } }");
+        FirstError(refusedGrant).Should().Contain("Only a super-admin");
+
+        var undeletable = await GraphQlAsync(admin, "mutation { deleteRole(id: \"" + publicRole + "\", purge: true) }");
+        FirstError(undeletable).Should().Contain("public role cannot be deleted");
     }
 }

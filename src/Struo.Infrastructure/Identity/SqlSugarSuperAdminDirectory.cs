@@ -42,6 +42,18 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
         return found.ToHashSet();
     }
 
+    public async Task<IReadOnlySet<Guid>> PublicRoleIdsAsync(
+        IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default)
+    {
+        if (roleIds.Count == 0) return new HashSet<Guid>();
+        var ids = roleIds.ToList();
+        var found = await db.Queryable<Role>()
+            .Where(r => r.Name == SqlSugarRolePermissionStore.PublicRoleName && ids.Contains(r.Id))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+        return found.ToHashSet();
+    }
+
     // A typed update that leaves every column as it is: the database still locks the matched rows, on every
     // backend, until the transaction ends.
     public async Task LockSuperAdminRolesAsync(CancellationToken ct = default) =>

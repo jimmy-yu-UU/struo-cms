@@ -23,6 +23,9 @@
   `admin` 角色就是超級管理員角色，透過 API 建立的角色不可能是。
 - 超級管理員角色不能被刪除（`409` `CONFLICT`），超級管理員角色裡最後一個啟用中的帳號，不能被移出角色、
   停用或刪除（`409` `CONFLICT`），寫入會被回復。`AdminOnly` 屬性仍保留給 fork 用在自己的集合上。
+- 內建的 `public` 角色比照超級管理員角色保護：只有超級管理員能更新、復原或還原它，或變更它的權限授權（不是
+  超級管理員的呼叫端，即使持有 `role` 的授權也得到 `403`），任何人都不能刪除它（`409` `CONFLICT`）。原本讓
+  非超級管理員編輯公開授權的部署，必須把這項工作交給超級管理員。
 - JSON body 的頂層屬性出現同一個名稱兩次時，項目的建立與更新路徑回 `400` `BAD_USER_INPUT`；送過這種 body
   的用戶端，必須讓每個屬性只出現一次。
 :::
@@ -33,8 +36,6 @@
   retryAfterSeconds, clearable }`；目標是超級管理員帳號、而呼叫端不是超級管理員時，`clearable` 為 `false`。
 - 使用者清單多了「登入鎖定」欄：每頁一次查詢，被鎖定的帳號顯示剩餘時間的標記；持有 `user` 寫入授權的人
   還會看到「解除鎖定」按鈕，按下會先確認。
-- `IItemWriteInterceptor.InTransactionBeforeWriteAsync`：第四個掛鉤，在寫入交易之內、什麼都還沒寫之前執行，
-  預設為空操作；見[第 18 章](18-extension-points.md)。
 - `ISuperAdminDirectory` 與 `SuperAdminGuard`：每條寫入路徑共用的應用層介面，套用超級管理員的規則；
   `userRole` 與 `permission` 集合也有了寫入攔截器。
 
