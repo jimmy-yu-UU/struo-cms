@@ -232,6 +232,9 @@ $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 HTTP_STATUS:404
 ```
 
+The error examples in this manual leave out `traceId`, which every error response carries; see
+[Chapter 12](12-rest-conventions.md#the-response-envelope).
+
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}

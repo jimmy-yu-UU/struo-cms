@@ -231,6 +231,9 @@ pretty:
 }
 ```
 
+The error examples in this manual leave out `traceId`, which every error response carries; see
+[Chapter 12](12-rest-conventions.md#the-response-envelope).
+
 The same caller reading a collection it has no grant on at all, such as `tag`, is also `403`, with
 the message changed to `Read not permitted.`. Sending that same request fully anonymous is `401`
 instead — what's being distinguished is whether this particular request passed authentication,

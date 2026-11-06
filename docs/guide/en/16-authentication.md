@@ -237,6 +237,9 @@ $ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
 HTTP_STATUS:401
 ```
 
+The error examples in this manual leave out `traceId`, which every error response carries; see
+[Chapter 12](12-rest-conventions.md#the-response-envelope).
+
 This transcript carries no session cookie at all, so the last step shows only "revoked token →
 anonymous → 401": the broken bearer header degrades this request to anonymous, and this
 environment's `article` collection doesn't grant anonymous read — the authorization rule is in

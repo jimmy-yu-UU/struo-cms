@@ -278,6 +278,9 @@ $ GET /api/items/article?sort=tags.name
 HTTP_STATUS:400
 ```
 
+The error examples in this manual leave out `traceId`, which every error response carries; see
+[Chapter 12](12-rest-conventions.md#the-response-envelope).
+
 A many-to-one path such as `sort=category.name` responds normally with 200.
 
 Where `NULL` sorts is left to the database — the code never sends `NULLS FIRST`/`NULLS LAST`:
