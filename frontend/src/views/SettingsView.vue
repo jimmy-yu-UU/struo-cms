@@ -86,7 +86,6 @@ onBeforeRouteLeave(() => guardLeave())
 function onBeforeUnload(e: BeforeUnloadEvent): void {
   if (isAdmin.value && dirty.value) {
     e.preventDefault()
-    e.returnValue = '' // legacy Chrome/Firefox: a truthy returnValue triggers the prompt
   }
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))

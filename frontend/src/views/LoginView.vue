@@ -37,7 +37,7 @@ async function onSubmit() {
   submitting.value = true
   try {
     await auth.login(email.value, password.value)
-    router.push(redirectTarget ?? { name: 'dashboard' })
+    void router.push(redirectTarget ?? { name: 'dashboard' })
   } catch (e) {
     error.value = loginErrorMessage(e)
   } finally {
@@ -98,7 +98,7 @@ onMounted(() => {
     error.value = t(key ?? 'login.ssoFailed')
   }
   // Drop the one-shot params so a refresh does not show the message again; the redirect stays.
-  router.replace(redirectTarget ? { name: 'login', query: { redirect: redirectTarget } } : { name: 'login' })
+  void router.replace(redirectTarget ? { name: 'login', query: { redirect: redirectTarget } } : { name: 'login' })
 })
 
 function onSso(providerId: string) {

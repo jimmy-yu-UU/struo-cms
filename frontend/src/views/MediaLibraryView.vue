@@ -148,10 +148,10 @@ async function load(): Promise<void> {
 
 function reload(): void {
   page.value = 0
-  load()
+  void load()
 }
 
-const debouncedSearch = debounce(() => { page.value = 0; load() }, 300)
+const debouncedSearch = debounce(() => { page.value = 0; void load() }, 300)
 function onSearchInput(value: string): void {
   clearSelection()
   search.value = value
@@ -175,7 +175,7 @@ function onSort(value: MediaSort): void { clearSelection(); sort.value = value; 
 function onPageChange(nextPage: number): void {
   clearSelection()
   page.value = nextPage
-  load()
+  void load()
 }
 function onPageSizeChange(nextSize: number): void {
   // An offset computed against the OLD page size is meaningless against the new one (page 2 at
@@ -184,7 +184,7 @@ function onPageSizeChange(nextSize: number): void {
   clearSelection()
   page.value = 0
   perPage.value = nextSize
-  load()
+  void load()
 }
 // Trash rows are soft-deleted files. Opening MediaDetailDialog on a deleted row would let a
 // user press Save or Delete on it, which is nonsensical for something already in the trash.
@@ -219,7 +219,7 @@ async function loadClampingToLastValidPage(): Promise<void> {
 function onDeleted(): void {
   if (selected.value) selection.value = removeFromSelection(selection.value, 'file', selected.value.id)
   selected.value = null
-  loadClampingToLastValidPage()
+  void loadClampingToLastValidPage()
 }
 
 async function onRestore(id: string): Promise<void> {
@@ -255,8 +255,8 @@ async function loadFolders(): Promise<void> {
   }
 }
 
-function enterFolder(id: string): void { clearSelection(); currentFolderId.value = id; page.value = 0; load() }
-function goToBreadcrumb(id: string | null): void { clearSelection(); currentFolderId.value = id; page.value = 0; load() }
+function enterFolder(id: string): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
+function goToBreadcrumb(id: string | null): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
 
 async function onCreateFolder(name: string): Promise<void> {
   try {
@@ -387,8 +387,8 @@ function onCrumbDrop(ev: DragEvent, targetFolderId: string | null): void {
 function clearCrumbDropping(): void { crumbDropping.value = null }
 
 onMounted(() => {
-  loadFolders()
-  load()
+  void loadFolders()
+  void load()
   document.addEventListener('dragend', clearCrumbDropping)
 })
 onUnmounted(() => {

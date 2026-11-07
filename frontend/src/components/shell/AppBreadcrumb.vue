@@ -28,7 +28,7 @@ const crumbs = computed(() =>
 // already-aborted navigation.
 function go(event: Event, to: NonNullable<ReturnType<typeof buildBreadcrumb>[number]['to']>): void {
   event.preventDefault()
-  router.push(to)
+  void router.push(to)
 }
 </script>
 
