@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.1 — 2026-11-07
+
+### Fixed
+
+- In the admin key-value field, a value that is not a string, number or boolean shows as an empty
+  value, not `[object Object]`.
+
 ## 0.28.0 — 2026-11-07
 
 ::: danger Breaking
