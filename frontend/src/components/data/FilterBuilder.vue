@@ -40,7 +40,7 @@ function specsEqual(a: FilterSpec, b: FilterSpec): boolean {
   const aKeys = Object.keys(a)
   const bKeys = Object.keys(b)
   return aKeys.length === bKeys.length
-    && aKeys.every((k) => b[k] !== undefined && b[k].op === a[k].op && b[k].value === a[k].value)
+    && aKeys.every((k) => b[k]?.op === a[k].op && b[k]?.value === a[k].value)
 }
 // Re-hydrate when the consumer resets the filter externally (e.g. switching collection) —
 // but NOT when it merely echoes back the spec this component just emitted (the consumer
