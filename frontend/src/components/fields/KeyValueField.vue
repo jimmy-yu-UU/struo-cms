@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Plus, X } from '@lucide/vue'
+import { primitiveText } from '../../lib/primitiveText'
 import type { FieldMeta } from '../../types/schema'
 
 type Row = { key: string; value: string }
@@ -14,7 +15,7 @@ const { t } = useI18n()
 
 function toRows(v: unknown): Row[] {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
-    return Object.entries(v as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value ?? '') }))
+    return Object.entries(v as Record<string, unknown>).map(([key, value]) => ({ key, value: primitiveText(value) }))
   }
   return []
 }

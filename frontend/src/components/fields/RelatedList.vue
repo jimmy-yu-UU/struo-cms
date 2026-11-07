@@ -62,7 +62,7 @@ async function load(): Promise<void> {
 
 function onPage(p: number): void {
   page.value = p
-  load()
+  void load()
 }
 
 // DataTablePagination only fires update:page-size from its rows-per-page <select>, which
@@ -72,11 +72,11 @@ function onPage(p: number): void {
 function onPageSize(size: number): void {
   page.value = 0
   perPage.value = size
-  load()
+  void load()
 }
 
 function openItem(id: string): void {
-  router.push({ name: 'collection-item', params: { name: props.relation.targetCollection, id } })
+  void router.push({ name: 'collection-item', params: { name: props.relation.targetCollection, id } })
 }
 
 // Mirrors CollectionListView.vue's update:state handling, so a future sortable column stays a

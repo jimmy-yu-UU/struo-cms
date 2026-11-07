@@ -69,7 +69,7 @@ watch(
   () => props.modelValue,
   (v) => {
     const incoming = toIds(v)
-    if (JSON.stringify(incoming) !== JSON.stringify(currentIds())) resolve(incoming)
+    if (JSON.stringify(incoming) !== JSON.stringify(currentIds())) void resolve(incoming)
   },
 )
 onMounted(() => resolve(toIds(props.modelValue)))
