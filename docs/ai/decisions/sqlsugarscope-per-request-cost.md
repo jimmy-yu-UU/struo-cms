@@ -86,8 +86,11 @@ the key counts of the two static dictionaries read by reflection. Machine: AMD R
 
 The regression tests are `SqlSugarScopeRetentionTests` (key counts after 200 requests, readiness
 included) and `SqlSugarSingletonScopeApiTests` (concurrent GraphQL, rollbacks and audit stamping).
-A leak adds at least one key per request, so the exact-zero key-count assertion detects it at any
-request count.
+A scope built per request adds a key on every request that touches the database, and each of the
+four request shapes runs 50 times, so the exact-zero assertion catches it at this count. The count
+stays low because the PostgreSQL tests run without connection pooling
+(`pg-test-connection-pooling.md`): every request opens new physical connections, and a few thousand
+in quick succession make later connects time out.
 
 ## Unknowns
 
