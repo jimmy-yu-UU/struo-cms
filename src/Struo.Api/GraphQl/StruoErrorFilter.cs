@@ -1,6 +1,7 @@
 // src/Struo.Api/GraphQl/StruoErrorFilter.cs
 using HotChocolate;
 using HotChocolate.Execution;
+using HotChocolate.Language;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Struo.Api.Http;
@@ -45,6 +46,9 @@ public sealed class StruoErrorFilter(
         if (exception is StruoDomainException)
             return error.WithMessage(message).WithCode(code);
 
+        if (LongOverflowCode(error, exception) is { } overflowCode)
+            return error.WithMessage(LongOverflowMessage(overflowCode)).WithCode(overflowCode).WithException(null!);
+
         if (code == Http.ErrorCodes.Internal)
         {
             logger.LogError(exception, "Unhandled GraphQL resolver exception");
@@ -72,6 +76,29 @@ public sealed class StruoErrorFilter(
             ? coded
             : coded.SetExtension("details", details.Select(ToExtension).ToList());
     }
+
+    // HotChocolate's Long scalar throws, instead of reporting a coercion error, for an integer outside the
+    // 64-bit range: InvalidFormatException from a literal, FormatException from a variable. Only an error
+    // HotChocolate itself raised while coercing a Long input (it stamps `inputPath` and `fieldType`) counts,
+    // so a FormatException thrown inside a resolver stays an unhandled error. A literal also carries the
+    // `coordinate` of the field or argument; one named `version` is INVALID_VERSION, as on REST. A variable
+    // is named by the client, so its target is unknown and it is BAD_USER_INPUT.
+    private static string? LongOverflowCode(IError error, Exception exception)
+    {
+        if (exception is not (InvalidFormatException or FormatException)) return null;
+        var extensions = error.Extensions;
+        if (extensions is null || !extensions.TryGetValue("fieldType", out var fieldType) || fieldType?.ToString() != "Long"
+            || !extensions.TryGetValue("inputPath", out var inputPath) || inputPath is null)
+            return null;
+        var isLiteral = extensions.ContainsKey("coordinate");
+        var target = inputPath.ToString()?.Split('.')[^1];
+        return isLiteral && target == "version" ? Http.ErrorCodes.InvalidVersion : Http.ErrorCodes.BadUserInput;
+    }
+
+    private static string LongOverflowMessage(string code) =>
+        code == Http.ErrorCodes.InvalidVersion
+            ? "version must be an integer within the range of a 64-bit integer."
+            : "The value is outside the range of a 64-bit integer.";
 
     private static Dictionary<string, object?> ToExtension(ValidationDetail d)
     {

@@ -28,6 +28,9 @@
   answers `400` `INVALID_VERSION` and `{"Version":<stale>}` answers `409` `VERSION_CONFLICT`; before,
   both were applied without the check. A body that carries the key twice in any casing answers `400`
   `INVALID_VERSION`.
+- A GraphQL `Long` outside the 64-bit range is a client error, not `INTERNAL_SERVER_ERROR`: a literal in a
+  `version` input field or `revert<X>` argument answers `INVALID_VERSION`; a variable, or any other
+  `Long`, answers `BAD_USER_INPUT`. It is not logged as an unhandled resolver exception.
 
 ## 0.28.1 — 2026-11-07
 

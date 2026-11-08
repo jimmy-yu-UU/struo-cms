@@ -24,6 +24,9 @@
 - 更新 body 的 `version` 鍵跟其他鍵一樣不分大小寫讀取。`{"Version":"abc"}` 回 `400` `INVALID_VERSION`，
   `{"Version":<過期值>}` 回 `409` `VERSION_CONFLICT`；先前兩者都不經檢查直接寫入。同一個 body 以任何大小寫
   帶了兩次這個鍵，回 `400` `INVALID_VERSION`。
+- GraphQL 超出 64 位元範圍的 `Long` 是用戶端錯誤，不是 `INTERNAL_SERVER_ERROR`：`version` 輸入欄位或
+  `revert<X>` 引數上的字面值回 `INVALID_VERSION`；變數或其他任何 `Long` 回 `BAD_USER_INPUT`，也不會記成
+  未處理的 resolver 例外。
 
 ## 0.28.1 — 2026-11-07
 
