@@ -2,8 +2,35 @@
 
 ## 0.29.0
 
+::: danger Breaking
+- A write that would leave no active account in a super-admin role (deactivating, deleting or removing
+  the last one from the role) is refused with `409` `LAST_SUPER_ADMIN` instead of `409` `CONFLICT`, on
+  REST and GraphQL. A client that matched `CONFLICT` for this refusal must match `LAST_SUPER_ADMIN`; the
+  message is unchanged. `SuperAdminGuard.EnsureActiveSuperAdminAsync` throws the new
+  `LastSuperAdminException` instead of `ConflictException`.
+- A file upload over `Struo:Files:MaxUploadBytes` is refused with `413` `PAYLOAD_TOO_LARGE` instead of
+  `400` `BAD_USER_INPUT`, when the declared length is over the limit; streamed bytes over the limit were
+  already `413`. The error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`;
+  `ValidationDetail` gains the optional `maxBytes`, and `PayloadTooLargeException` an optional field and limit.
+  `FileService.UploadAsync` throws `PayloadTooLargeException` instead of `QueryException` for an
+  over-limit length.
+:::
+
+### Changed
+
+- The admin words both refusals from the error code, in the UI language: a refused last-super-admin
+  write shows one fixed sentence, and an upload over the limit shows the limit taken from `maxBytes`. A
+  `413` from a reverse proxy, which has no error body, shows the same sentence without the size.
+
 ### Fixed
 
+- The `version` key of an update body is read ignoring case, like every other key. `{"Version":"abc"}`
+  answers `400` `INVALID_VERSION` and `{"Version":<stale>}` answers `409` `VERSION_CONFLICT`; before,
+  both were applied without the check. A body that carries the key in two different casings answers `400`
+  `INVALID_VERSION`; the exact same name twice stays `400` `BAD_USER_INPUT`, like any repeated key.
+- A GraphQL `Long` outside the 64-bit range is a client error, not `INTERNAL_SERVER_ERROR`: a literal in a
+  `version` input field or `revert<X>` argument answers `INVALID_VERSION`; a variable, or any other
+  `Long`, answers `BAD_USER_INPUT`. It is not logged as an unhandled resolver exception.
 - Clearing every translatable field of the default locale on an item now saves: the optional fields are
   cleared instead of silently keeping their old values. Required fields still block the save.
 - The media detail dialog's conflict notice says that saving again overwrites the other change, and offers a

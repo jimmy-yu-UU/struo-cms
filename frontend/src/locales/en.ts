@@ -75,6 +75,7 @@ export default {
     tooManyRequestsWithWait: 'Too many attempts. Please try again in {seconds} seconds.',
     traceIdSuffix: ' (Trace ID: {id})',
     traceIdLine: 'Trace ID: {id}',
+    lastSuperAdmin: 'At least one active account must remain a super-admin.',
   },
   password: {
     sectionTitle: 'Password',
@@ -248,6 +249,8 @@ export default {
     reloadLatest: 'Reload latest',
     dropzone: 'Drop files here or click to upload',
     uploadFailed: 'Upload failed.',
+    uploadTooLarge: 'The file is over the size limit.',
+    uploadTooLargeWithSize: 'The file is over the size limit ({size}).',
     uploadTitle: 'Upload files',
     uploadDescription: 'Drag files here or click to browse, then upload them to this folder.',
     loadFailed: 'Failed to load media',

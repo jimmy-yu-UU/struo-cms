@@ -1,6 +1,7 @@
 import { i18n } from '../i18n'
 
-export type ValidationDetail = { field: string; message: string; locale?: string }
+// `maxBytes` is set on the detail of a PAYLOAD_TOO_LARGE error that names the size cap.
+export type ValidationDetail = { field: string; message: string; locale?: string; maxBytes?: number }
 
 // The shape of the server's error envelope body.
 export type ApiErrorBody = {

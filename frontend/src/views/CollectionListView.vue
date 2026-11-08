@@ -21,6 +21,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { itemsApi } from '../api/itemsApi'
 import { loginLocksApi, type LoginLockState } from '../api/loginLocksApi'
 import { traceIdDetail } from '../api/apiClient'
+import { writeFailureMessage } from '@/lib/apiErrorMessage'
 import { useToast } from '@/composables/useToast'
 import { selectListColumns, type ColumnDef as ListColumn } from '../lib/selectListColumns'
 import { formatCell } from '../lib/formatCell'
@@ -462,7 +463,7 @@ async function runAction(fn: () => Promise<void>): Promise<void> {
     // Mutating a Language row changes which locale tabs every other form/list shows.
     if (name.value === LANGUAGE_COLLECTION) await langStore.reload()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('common.actionFailed')
+    error.value = writeFailureMessage(e, t, 'common.actionFailed')
   }
 }
 
