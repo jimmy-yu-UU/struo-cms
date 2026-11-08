@@ -292,3 +292,12 @@ describe('buildItemPayload empty rich text', () => {
     expect(p.translations).toEqual({ en: { body: null } })
   })
 })
+
+describe('buildItemPayload non-default locale holding markup-like plain text', () => {
+  it('counts a plain text value such as <TBD> as content and sends it on create and update', () => {
+    const model: FormModel = { shared: { status: 'x' }, translations: { en: { title: 'Hi' }, 'zh-TW': { title: '<TBD>' } }, relations: {} }
+    expect((buildItemPayload(meta, model, locales, 'create').translations as any)['zh-TW']).toEqual({ title: '<TBD>' })
+    const p = buildItemPayload(meta, model, locales, 'update', { baselineTranslations: { en: { title: 'Hi' }, 'zh-TW': { title: '<TBD>' } } })
+    expect((p.translations as any)['zh-TW']).toEqual({ title: '<TBD>' })
+  })
+})
