@@ -15,6 +15,10 @@
 - Lists show placeholder rows while the first page loads instead of flashing the empty-list message.
 - The record list's actions column has a localized header, also shown in the Columns menu, and the sidebar
   toggle's screen-reader label is translated.
+- The admin's required and length checks speak the interface language, including the relation row messages.
+  A failed save moves focus to the first invalid control, switching to the language tab that holds it, or to
+  the error banner when the server reports no field. Every field type's control is marked `aria-invalid`
+  and linked to its error text.
 
 ## 0.28.1 — 2026-11-07
 

@@ -54,7 +54,7 @@ function setValue(i: number, value: string) {
 }
 </script>
 <template>
-  <div class="key-value-field flex flex-col items-start gap-2">
+  <div class="key-value-field flex flex-col items-start gap-2" role="group" :aria-label="field.label">
     <div v-for="(r, i) in rows" :key="i" class="kv-row flex w-full items-center gap-2">
       <Input
         :model-value="r.key"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, useId } from 'vue'
+import { ref, computed, watch, useId, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
@@ -57,6 +57,11 @@ const uid = useId()
 function sharedFieldId(name: string): string { return `${uid}-shared-${name}` }
 function translatableFieldId(name: string, locale: string): string { return `${uid}-translatable-${name}-${locale}` }
 function relationFieldId(name: string): string { return `${uid}-relation-${name}` }
+// One error element per error key (`name`, or `locale:name` for a non-default locale), the target of
+// the control's aria-describedby.
+function errorId(key: string): string { return `${uid}-error-${key}` }
+function invalidAttr(key: string): 'true' | undefined { return props.errors[key] ? 'true' : undefined }
+function describedByAttr(key: string): string | undefined { return props.errors[key] ? errorId(key) : undefined }
 
 function tabHasErrors(code: string): boolean {
   return localeHasErrors(props.errors, code, fields.value.translatable, defaultCode.value)
@@ -65,20 +70,76 @@ function fieldError(code: string, name: string): string | undefined {
   return props.errors[translationErrorKey(code, name, defaultCode.value)]
 }
 
+const formEl = ref<HTMLFormElement | null>(null)
+const bannerEl = ref<HTMLElement | null>(null)
+
+const FOCUSABLE = 'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), '
+  + 'button:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])'
+
+// The key of the first field holding an error, in reading order: the active locale tab's
+// translatable fields, then shared fields, then relations.
+function firstInvalidKey(): string | undefined {
+  const keys = [
+    ...fields.value.translatable.map((f) => translationErrorKey(activeLocale.value, f.name, defaultCode.value)),
+    ...fields.value.shared.map((f) => f.name),
+    ...(props.meta.relations ?? []).map((r) => r.name),
+  ]
+  return keys.find((key) => Object.hasOwn(props.errors, key))
+}
+
+// The control the field's label points at when that is focusable, else the first focusable element
+// inside the field (composite fields such as tags or key-value, whose labelled node is a wrapper).
+function focusTarget(wrapper: Element): HTMLElement | null {
+  const labelFor = wrapper.querySelector('label[for]')?.getAttribute('for')
+  const labelled = labelFor ? document.getElementById(labelFor) : null
+  if (labelled && wrapper.contains(labelled) && labelled.matches(FOCUSABLE)) return labelled
+  return wrapper.querySelector<HTMLElement>(FOCUSABLE)
+}
+
+function findFieldWrapper(key: string): Element | undefined {
+  const wrappers = formEl.value?.querySelectorAll('[data-field-key]') ?? []
+  return [...wrappers].find((el) => el.getAttribute('data-field-key') === key)
+}
+
+// A tab switch mounts the new panel on a later tick than the one that changed activeLocale, so the
+// wrapper is looked up again for a few ticks before giving up.
+const FOCUS_LOOKUP_TICKS = 3
+async function focusField(key: string): Promise<void> {
+  for (let tick = 0; tick < FOCUS_LOOKUP_TICKS; tick++) {
+    const wrapper = findFieldWrapper(key)
+    if (wrapper) {
+      focusTarget(wrapper)?.focus()
+      return
+    }
+    await nextTick()
+  }
+}
+
 // Surface validation errors even if the user is on another tab: jump to the first locale tab that
-// has an error, the default locale first. Errors that live outside the tabs fall back to the default tab.
-watch(() => props.errors, (e) => {
+// has an error, the default locale first, then focus the first invalid control. Errors that live
+// outside the tabs fall back to the default tab.
+watch(() => props.errors, async (e) => {
   if (Object.keys(e).length === 0) return
   const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
   activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
+  await nextTick()
+  const key = firstInvalidKey()
+  if (key !== undefined) await focusField(key)
+})
+
+// A server error with no field errors has no control to focus, so the banner takes focus.
+watch(() => props.serverError, async (message) => {
+  if (!message || Object.keys(props.errors).length > 0) return
+  await nextTick()
+  bannerEl.value?.focus()
 })
 
 defineExpose({ activeLocale })
 </script>
 
 <template>
-  <form class="item-form grid max-w-[860px] gap-[18px]" @submit.prevent="emit('submit')">
-    <p v-if="serverError" class="error text-destructive m-0" role="alert">{{ serverError }}</p>
+  <form ref="formEl" class="item-form grid max-w-[860px] gap-[18px]" @submit.prevent="emit('submit')">
+    <p v-if="serverError" ref="bannerEl" class="error text-destructive m-0" role="alert" tabindex="-1">{{ serverError }}</p>
 
     <Tabs v-if="fields.translatable.length" v-model="activeLocale">
       <TabsList>
@@ -99,27 +160,50 @@ defineExpose({ activeLocale })
       </TabsList>
       <TabsContent v-for="loc in locales" :key="loc.code" :value="loc.code" class="grid gap-[18px]">
         <template v-if="loc.code === activeLocale">
-          <Field v-for="f in fields.translatable" :key="f.name" class="field">
+          <Field
+            v-for="f in fields.translatable"
+            :key="f.name"
+            class="field"
+            :data-field-key="translationErrorKey(loc.code, f.name, defaultCode)"
+          >
             <div class="lbl-row flex items-center gap-2">
               <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && (loc.isDefault || localeFilled(loc.code))" class="text-destructive ml-0.5">*</span></FieldLabel>
               <Badge variant="secondary" class="tr-badge" :title="t('itemForm.translatableBadgeHint')">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
-            <FieldInput :id="translatableFieldId(f.name, loc.code)" :field="f" v-model="model.translations[loc.code][f.name]" :disabled="disabled" />
-            <FieldError v-if="fieldError(loc.code, f.name)" role="alert">{{ fieldError(loc.code, f.name) }}</FieldError>
+            <FieldInput
+              :id="translatableFieldId(f.name, loc.code)"
+              :field="f"
+              v-model="model.translations[loc.code][f.name]"
+              :disabled="disabled"
+              :aria-invalid="invalidAttr(translationErrorKey(loc.code, f.name, defaultCode))"
+              :aria-describedby="describedByAttr(translationErrorKey(loc.code, f.name, defaultCode))"
+            />
+            <FieldError
+              v-if="fieldError(loc.code, f.name)"
+              :id="errorId(translationErrorKey(loc.code, f.name, defaultCode))"
+              role="alert"
+            >{{ fieldError(loc.code, f.name) }}</FieldError>
           </Field>
         </template>
       </TabsContent>
     </Tabs>
 
-    <Field v-for="f in fields.shared" :key="f.name" class="field">
+    <Field v-for="f in fields.shared" :key="f.name" class="field" :data-field-key="f.name">
       <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
-      <FieldInput :id="sharedFieldId(f.name)" :field="f" v-model="model.shared[f.name]" :disabled="disabled" />
+      <FieldInput
+        :id="sharedFieldId(f.name)"
+        :field="f"
+        v-model="model.shared[f.name]"
+        :disabled="disabled"
+        :aria-invalid="invalidAttr(f.name)"
+        :aria-describedby="describedByAttr(f.name)"
+      />
       <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
-      <FieldError v-if="errors[f.name]" role="alert">{{ errors[f.name] }}</FieldError>
+      <FieldError v-if="errors[f.name]" :id="errorId(f.name)" role="alert">{{ errors[f.name] }}</FieldError>
     </Field>
 
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
-      <Field v-for="rel in meta.relations" :key="rel.name" class="field">
+      <Field v-for="rel in meta.relations" :key="rel.name" class="field" :data-field-key="rel.name">
         <FieldLabel :for="relationFieldId(rel.name)">{{ rel.label }}</FieldLabel>
         <RelationInput
           :id="relationFieldId(rel.name)"
@@ -129,9 +213,11 @@ defineExpose({ activeLocale })
           :parent-id="itemId"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
           :option-hint="optionHintFor(rel.name)"
+          :aria-invalid="invalidAttr(rel.name)"
+          :aria-describedby="describedByAttr(rel.name)"
         />
         <FieldDescription v-if="rel.helpText">{{ rel.helpText }}</FieldDescription>
-        <FieldError v-if="errors[rel.name]" role="alert">{{ errors[rel.name] }}</FieldError>
+        <FieldError v-if="errors[rel.name]" :id="errorId(rel.name)" role="alert">{{ errors[rel.name] }}</FieldError>
       </Field>
     </section>
   </form>

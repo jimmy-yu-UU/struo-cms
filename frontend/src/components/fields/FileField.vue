@@ -7,6 +7,6 @@ defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 const isImage = computed(() => props.field.interface === 'image')
 </script>
 <template>
-  <FilePicker :model-value="(modelValue as string | null)" :image="isImage" :disabled="disabled"
+  <FilePicker role="group" :aria-label="field.label" :model-value="(modelValue as string | null)" :image="isImage" :disabled="disabled"
     @update:model-value="(v: string | null) => $emit('update:modelValue', v)" />
 </template>

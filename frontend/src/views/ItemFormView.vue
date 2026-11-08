@@ -210,7 +210,7 @@ async function init(): Promise<void> {
 
 async function onSubmit(): Promise<void> {
   if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor)
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
   if (Object.keys(errors.value).length > 0) return
   submitting.value = true
   serverError.value = ''

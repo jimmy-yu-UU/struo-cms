@@ -24,6 +24,8 @@ const props = defineProps<{
   label?: string
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
+// Root is a renderless Popover, so attributes (id, aria-*) are re-bound onto the trigger button.
+defineOptions({ inheritAttrs: false })
 const { t } = useI18n()
 
 const open = ref(false)
@@ -99,6 +101,7 @@ function select(key: string | null): void {
         <form @submit.prevent>.
       -->
       <Button
+        v-bind="$attrs"
         type="button"
         variant="outline"
         :disabled="disabled"

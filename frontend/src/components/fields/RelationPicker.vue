@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, useAttrs, type StyleValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem,
@@ -35,6 +35,14 @@ const props = withDefaults(defineProps<{
   addLabel?: string
 }>(), { showChips: true, optionHint: undefined, addLabel: undefined })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+// RelationInput's id, aria-invalid and aria-describedby are re-bound onto the one trigger that
+// renders; class and style stay on the root element.
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
+function controlAttrs(): Record<string, unknown> {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+}
 
 const { t } = useI18n()
 const schema = useSchemaStore()
@@ -220,7 +228,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
 </script>
 
 <template>
-  <div class="relation-picker">
+  <div class="relation-picker" :class="attrs.class" :style="attrs.style as StyleValue">
     <p v-if="loadError" class="error" role="alert">{{ loadError }}</p>
 
     <!-- form/TreeSelect.vue is layout-neutral (`w-full`, no ceiling) so its other caller
@@ -228,6 +236,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
          the 480px cap the other three branches below carry is applied here, at this consumer. -->
     <div v-if="tree" class="w-full max-w-[480px]">
       <TreeSelect
+        v-bind="controlAttrs()"
         :model-value="modelValue == null ? null : String(modelValue)"
         :nodes="treeNodes"
         :label="relation.label"
@@ -266,13 +275,14 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
               </button>
             </Badge>
           </template>
-          <ComboboxTrigger v-if="addLabel" as-child :aria-label="addLabel" @keydown.down.prevent="openMenu">
+          <ComboboxTrigger v-if="addLabel" v-bind="controlAttrs()" as-child :aria-label="addLabel" @keydown.down.prevent="openMenu">
             <Button type="button" variant="outline" data-testid="relation-add" class="cursor-pointer" :disabled="disabled">
               <Plus />{{ addLabel }}
             </Button>
           </ComboboxTrigger>
           <ComboboxTrigger
             v-else
+            v-bind="controlAttrs()"
             :aria-label="multipleAccessibleName"
             class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left disabled:cursor-not-allowed"
             @keydown.down.prevent="openMenu"
@@ -312,6 +322,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
       <Combobox class="flex-1" :model-value="singleSelected" :disabled="disabled" @update:model-value="onChange">
         <ComboboxAnchor class="w-full">
           <ComboboxTrigger
+            v-bind="controlAttrs()"
             :aria-label="singleAccessibleName"
             class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >

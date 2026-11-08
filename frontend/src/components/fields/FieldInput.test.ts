@@ -142,17 +142,16 @@ describe('FieldInput', () => {
       expect(byId.attributes('role')).toBe('spinbutton')
     })
 
-    // DateField's root is a plain <div> wrapping two separate controls (a date trigger button and
-    // a time <input>); the id lands on that div, which is not itself a labelable element — the
-    // for/id pairing is inert here, which is exactly why DateField carries its own aria-label.
-    it('lands only on a non-labelable wrapper for a date field', () => {
+    // DateField's root is a plain <div> wrapping two separate controls; the id is re-bound onto the
+    // first one, the date trigger button, so the label's for/id pairing reaches a real control.
+    it('lands on the date trigger button for a date field', () => {
       const w = mount(FieldInput, {
         props: { field: field({ interface: 'date' }), modelValue: null, id: 'my-id' },
         global: { plugins: [i18n] },
       })
       const byId = w.find('#my-id')
       expect(byId.exists()).toBe(true)
-      expect(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']).not.toContain(byId.element.tagName)
+      expect(byId.element.tagName).toBe('BUTTON')
     })
   })
 })

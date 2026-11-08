@@ -29,7 +29,7 @@ function setLabel(i: number, v: string) {
 }
 </script>
 <template>
-  <div class="flex flex-col items-start gap-2">
+  <div class="flex flex-col items-start gap-2" role="group" :aria-label="field.label">
     <div v-for="(it, i) in items" :key="i" class="tag-row flex w-full items-center gap-2">
       <Input
         :model-value="it.value"

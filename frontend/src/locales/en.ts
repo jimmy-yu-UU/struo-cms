@@ -67,6 +67,12 @@ export default {
     member: 'Member',
     logoutIncomplete: 'You were signed out here, but the server could not confirm it. If this is a shared computer, close the browser.',
   },
+  validation: {
+    required: '{label} is required.',
+    maxLength: '{label} must be at most {max} characters.',
+    rowRequired: '{relation} › {label} is required (row {row}).',
+    rowMaxLength: '{relation} › {label} must be at most {max} characters (row {row}).',
+  },
   errors: {
     serverUnreachable: 'Cannot reach the server. Your session has not changed.',
     connectionTitle: 'Cannot reach the server',

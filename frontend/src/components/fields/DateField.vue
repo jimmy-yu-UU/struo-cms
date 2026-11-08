@@ -6,6 +6,10 @@ import { Input } from '@/components/ui/input'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+// FieldInput dispatches id, aria-invalid and aria-describedby as plain attributes onto whatever this
+// component renders as its root. Disabling automatic fallthrough and re-binding `$attrs` by hand
+// keeps them landing on the real control that ItemForm's <FieldLabel :for> pairs with.
+defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 const { t } = useI18n()
 
@@ -75,6 +79,7 @@ function onTime(raw: string): void {
   <div class="flex flex-wrap items-center gap-2">
     <DatePicker
       v-if="showDate"
+      v-bind="$attrs"
       :model-value="current"
       :disabled="disabled"
       :label="field.label"
@@ -82,6 +87,7 @@ function onTime(raw: string): void {
     />
     <Input
       v-if="withTime"
+      v-bind="showDate ? {} : $attrs"
       type="time"
       :model-value="timeText"
       :disabled="disabled"

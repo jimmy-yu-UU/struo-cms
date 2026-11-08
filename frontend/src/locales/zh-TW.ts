@@ -67,6 +67,12 @@ export default {
     member: '一般使用者',
     logoutIncomplete: '已在此處登出,但伺服器未能確認。若這是共用電腦,請關閉瀏覽器。',
   },
+  validation: {
+    required: '{label}為必填。',
+    maxLength: '{label}不可超過 {max} 個字元。',
+    rowRequired: '{relation} › {label}為必填（第 {row} 列）。',
+    rowMaxLength: '{relation} › {label}不可超過 {max} 個字元（第 {row} 列）。',
+  },
   errors: {
     serverUnreachable: '無法連線到伺服器,登入狀態未受影響。',
     connectionTitle: '無法連線到伺服器',
