@@ -19,6 +19,8 @@
   A failed save moves focus to the first invalid control, switching to the language tab that holds it, or to
   the error banner when the server reports no field. Every field type's control is marked `aria-invalid`
   and linked to its error text.
+- The Chinese login messages say "電子郵件" instead of "Email"; a wrong email and a wrong password still give one
+  identical sentence.
 
 ## 0.28.1 — 2026-11-07
 

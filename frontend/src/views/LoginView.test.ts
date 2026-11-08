@@ -81,7 +81,7 @@ describe('LoginView', () => {
     await wrapper.find('input[type="password"]').setValue('bad')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((r) => setTimeout(r, 0))
-    expect(wrapper.text()).toContain('Email 或密碼不正確。') // t('login.invalidCredentials')
+    expect(wrapper.text()).toContain('電子郵件或密碼不正確。') // t('login.invalidCredentials')
     expect(wrapper.text()).not.toContain('Invalid credentials.') // never the server's raw prose
   })
 
@@ -127,9 +127,9 @@ describe('LoginView', () => {
   it.each([
     ['external_login_failed', '外部登入失敗,請再試一次。'],
     ['external_login_denied', '外部登入已取消或遭拒絕。'],
-    ['external_login_NoEmail', '外部帳號未提供 Email,無法登入。'],
-    ['external_login_EmailNotVerified', '外部帳號的 Email 尚未驗證,無法登入。'],
-    ['external_login_DomainNotAllowed', '此 Email 網域不在允許的範圍內。'],
+    ['external_login_NoEmail', '外部帳號未提供電子郵件,無法登入。'],
+    ['external_login_EmailNotVerified', '外部帳號的電子郵件尚未驗證,無法登入。'],
+    ['external_login_DomainNotAllowed', '此電子郵件網域不在允許的範圍內。'],
     ['external_login_TenantNotAllowed', '此組織租用戶不在允許的範圍內。'],
     ['external_login_Inactive', '此帳號已停用,請聯絡管理者。'],
   ])('shows the localized message for ?error=%s', async (code, message) => {
