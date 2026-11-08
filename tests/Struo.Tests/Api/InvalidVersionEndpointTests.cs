@@ -131,6 +131,54 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
             .GetProperty("error").GetProperty("code").GetString().Should().Be("VERSION_CONFLICT");
     }
 
+    [Theory]
+    [InlineData("Version")]
+    [InlineData("VERSION")]
+    public async Task Rest_update_with_an_unparseable_version_under_another_casing_is_400_INVALID_VERSION(string key)
+    {
+        var (client, id, _) = await CreateArticleAsync();
+
+        var resp = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json($"{{\"status\":\"published\",\"{key}\":\"abc\"}}"));
+
+        var body = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        Root(body).GetProperty("error").GetProperty("code").GetString().Should().Be("INVALID_VERSION");
+        (await GetAsync(client, id)).GetProperty("status").GetString().Should().Be("draft");
+    }
+
+    [Fact]
+    public async Task Rest_update_with_a_stale_version_under_another_casing_is_409_VERSION_CONFLICT()
+    {
+        var (client, id, version) = await CreateArticleAsync();
+        (await client.PutAsJsonAsync($"/api/items/fxArticle/{id}", new { status = "published", version }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var stale = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json($"{{\"status\":\"draft\",\"Version\":{version}}}"));
+
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+        Root(await stale.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("VERSION_CONFLICT");
+        (await GetAsync(client, id)).GetProperty("status").GetString().Should().Be("published");
+    }
+
+    [Theory]
+    [InlineData("{\"status\":\"published\",\"version\":@@,\"Version\":@@}")]
+    [InlineData("{\"status\":\"published\",\"version\":@@,\"VERSION\":9}")]
+    public async Task Rest_update_with_the_version_key_twice_is_400_INVALID_VERSION(string template)
+    {
+        var (client, id, version) = await CreateArticleAsync();
+
+        var resp = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json(template.Replace("@@", version.ToString())));
+
+        var body = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        Root(body).GetProperty("error").GetProperty("code").GetString().Should().Be("INVALID_VERSION");
+        (await GetAsync(client, id)).GetProperty("status").GetString().Should().Be("draft");
+    }
+
     [Fact]
     public async Task Rest_create_ignores_a_version_key()
     {
