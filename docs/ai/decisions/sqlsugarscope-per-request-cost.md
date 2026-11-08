@@ -84,8 +84,13 @@ worktree and not committed. Retention is `GC.GetTotalMemory(true)` after three f
 the key counts of the two static dictionaries read by reflection. Machine: AMD Ryzen 9 9900X, Windows
 11, .NET 10, SqlSugarCore 5.1.4.221, HotChocolate 16.6.8, Release build.
 
-The regression tests are `SqlSugarScopeRetentionTests` (key counts after 2 000 requests, readiness
+The regression tests are `SqlSugarScopeRetentionTests` (key counts after 200 requests, readiness
 included) and `SqlSugarSingletonScopeApiTests` (concurrent GraphQL, rollbacks and audit stamping).
+A scope built per request adds a key on every request that touches the database, and each of the
+four request shapes runs 50 times, so the exact-zero assertion catches it at this count. The count
+stays low because the PostgreSQL tests run without connection pooling
+(`pg-test-connection-pooling.md`): every request opens new physical connections, and a few thousand
+in quick succession make later connects time out.
 
 ## Unknowns
 
