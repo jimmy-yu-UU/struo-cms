@@ -86,3 +86,13 @@ describe('anyHasContent', () => {
     expect(anyHasContent([], { a: 'x' })).toBe(false)
   })
 })
+
+describe('hasContent on pathological input', () => {
+  it('handles a long run of "<" without a closing ">" in linear time and treats it as content', () => {
+    const run = '<'.repeat(50_000)
+    const start = performance.now()
+    expect(hasContent(run, { interface: 'richText' })).toBe(true)
+    expect(hasContent(run)).toBe(true)
+    expect(performance.now() - start).toBeLessThan(500)
+  })
+})
