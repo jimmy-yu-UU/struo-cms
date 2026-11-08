@@ -5,6 +5,7 @@ import { Check } from '@lucide/vue'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type EffectivePermissions } from '../../api/rbacApi'
 import { createLatestWins } from '../../lib/latestWins'
+import { ApiError } from '../../api/apiClient'
 
 // Read-only preview of a user's merged grants, fed by the same resolver the backend
 // authorizes with. When roleIds is passed, the panel follows the CURRENT (possibly unsaved)
@@ -17,6 +18,7 @@ const schema = useSchemaStore()
 
 const eff = ref<EffectivePermissions | null>(null)
 const loadFailed = ref(false)
+const forbidden = ref(false)
 
 const rows = computed(() => {
   if (!eff.value) return []
@@ -29,14 +31,16 @@ const reloadGuard = createLatestWins()
 async function reload(): Promise<void> {
   const token = reloadGuard.next()
   loadFailed.value = false
+  forbidden.value = false
   try {
     const next = props.roleIds !== undefined
       ? await rbacApi.getEffectivePermissions(props.userId, props.roleIds)
       : await rbacApi.getEffectivePermissions(props.userId)
     if (!reloadGuard.isCurrent(token)) return
     eff.value = next
-  } catch {
+  } catch (e) {
     if (!reloadGuard.isCurrent(token)) return
+    forbidden.value = e instanceof ApiError && e.code === 'FORBIDDEN'
     loadFailed.value = true
     eff.value = null
   }
@@ -64,7 +68,8 @@ onBeforeUnmount(() => {
     <h2 class="panel-title">{{ t('rbac.effectiveTitle') }}</h2>
     <p v-if="props.roleIds !== undefined" class="hint text-muted-foreground text-[0.9rem]">{{ t('rbac.effectivePreviewHint') }}</p>
 
-    <p v-if="loadFailed" class="notice text-muted-foreground">{{ t('rbac.effectiveLoadFailed') }}</p>
+    <p v-if="forbidden" class="notice text-muted-foreground">{{ t('rbac.effectiveForbidden') }}</p>
+    <p v-else-if="loadFailed" class="notice text-muted-foreground">{{ t('rbac.effectiveLoadFailed') }}</p>
     <p v-else-if="eff?.isSuperAdmin" class="notice text-muted-foreground">{{ t('rbac.effectiveSuperAdmin') }}</p>
     <p v-else-if="eff && rows.length === 0" class="notice text-muted-foreground">{{ t('rbac.effectiveEmpty') }}</p>
     <div v-else-if="eff" class="panel-scroll">

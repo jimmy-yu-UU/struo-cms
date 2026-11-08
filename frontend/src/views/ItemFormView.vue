@@ -123,7 +123,12 @@ function relationOptionHint(relation: string, raw: Record<string, unknown>): str
 // The effective-permissions preview follows the CURRENT (possibly unsaved) Roles
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
 const showEffective = computed(() => isExistingUser.value)
-const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
+// The server leaves a relation the caller cannot read out of the item, so without read on the role
+// collection the Roles selection is unknown rather than empty: no preview selection is passed and
+// the panel shows the user's saved roles.
+const selectedRoleIds = computed(() => (auth.canRead(ROLE_COLLECTION)
+  ? ((model.relations.roles as string[] | undefined) ?? [])
+  : undefined))
 
 // The password reset and access-token actions change a credential, so they need write on the user
 // collection (and, for a super-admin account, a super-admin caller); the token's state needs read.

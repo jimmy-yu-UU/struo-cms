@@ -1330,6 +1330,24 @@ describe('ItemFormView', () => {
     expect(w.findComponent(EffectivePermissionsPanel).exists()).toBe(true)
   })
 
+  // The server drops a relation the caller cannot read from the item, so a caller without read on
+  // `role` gets no `roles` back. An empty selection sent as `?roles=` would preview the public floor
+  // and report "no permissions" for a user who has roles; the panel reads the saved roles instead.
+  it('previews the saved roles, not an empty selection, when the caller cannot read roles', async () => {
+    const w = await mountUserEdit({ user: { read: true, write: true, delete: false } })
+    expect(w.findComponent(EffectivePermissionsPanel).props('roleIds')).toBeUndefined()
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
+  })
+
+  it('previews the live role selection when the caller can read roles', async () => {
+    const w = await mountUserEdit({
+      user: { read: true, write: true, delete: false },
+      role: { read: true, write: false, delete: false },
+    })
+    expect(w.findComponent(EffectivePermissionsPanel).props('roleIds')).toEqual([])
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', [])
+  })
+
   it('locks the form, the actions and the token panel of a super-admin account for another caller', async () => {
     const w = await mountUserEdit({ user: { read: true, write: true, delete: true } }, true)
 

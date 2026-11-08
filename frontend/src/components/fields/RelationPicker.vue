@@ -16,6 +16,7 @@ import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
 import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
+import { ApiError } from '../../api/apiClient'
 import type { RelationMeta } from '../../types/schema'
 
 const props = withDefaults(defineProps<{
@@ -84,7 +85,7 @@ async function loadOptions(): Promise<void> {
     }
   } catch (e) {
     if (!optionsLoad.isCurrent(token)) return
-    loadError.value = e instanceof Error ? e.message : t('fields.loadOptionsFailed')
+    loadError.value = e instanceof ApiError && e.code === 'FORBIDDEN' ? t('fields.loadForbidden') : t('fields.loadOptionsFailed')
   } finally {
     if (optionsLoad.isCurrent(token)) loading.value = false
   }

@@ -21,6 +21,9 @@
   and linked to its error text.
 - The Chinese login messages say "電子郵件" instead of "Email"; a wrong email and a wrong password still give one
   identical sentence.
+- On a user form, a caller without read on `role` no longer sees "No permissions" in the effective-permissions
+  panel: it shows the roles stored on the user. A relation that cannot be read says so in the interface
+  language, and the panel says when the caller lacks permission to view the result.
 
 ## 0.28.1 — 2026-11-07
 

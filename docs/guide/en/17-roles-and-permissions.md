@@ -324,7 +324,8 @@ grant of `role` and `user`, so the permission matrix has no row for them.
 To change a role's grants, use the role permission matrix: tick `canRead`, `canWrite`, and
 `canDelete` per collection, and submit the whole set in one go. Read on `role` shows the matrix and
 write on `role` changes it. The effective-permissions preview panel on the user form updates live to
-show what the currently selected role set computes to.
+show what the currently selected role set computes to. A caller without read on `role` cannot see the
+Roles selection, so the panel shows the roles stored on the user instead.
 
 For a caller who is not a super-admin, the form of a super-admin account or role, or of the `public`
 role, is disabled, with a note saying why, and so are its Delete, reset-password and token actions; the
