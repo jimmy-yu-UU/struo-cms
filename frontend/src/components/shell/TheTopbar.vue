@@ -20,7 +20,7 @@ const { t } = useI18n()
     <!-- SidebarTrigger doesn't set inheritAttrs: false and its root is <Button>, so this
          sets a localized accessible name — the vendored component only ships a hardcoded
          English "Toggle Sidebar" sr-only span. -->
-    <SidebarTrigger :aria-label="t('shell.openMenu')" />
+    <SidebarTrigger :aria-label="t('shell.openMenu')" :label="t('shell.toggleSidebar')" />
     <div class="flex-1" />
     <UiLanguageSwitcher />
     <ThemeToggle />

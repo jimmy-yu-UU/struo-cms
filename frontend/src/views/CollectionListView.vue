@@ -347,7 +347,7 @@ const tableColumns = computed<DataTableColumn<Row>[]>(() => {
   if (canRead.value || canDelete.value) {
     cols.push({
       id: 'actions',
-      header: '',
+      header: t('collectionList.actions'),
       cell: ({ row }) => h('div', { class: 'flex items-center gap-1' }, actionButtons(row.original)),
     })
   }

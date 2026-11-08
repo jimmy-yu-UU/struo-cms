@@ -48,3 +48,18 @@ describe('TheTopbar', () => {
     expect(w.find(`[aria-label="${en.user.account}"]`).exists()).toBe(true)
   })
 })
+
+describe('TheTopbar under zh-TW', () => {
+  beforeEach(() => { setActivePinia(createPinia()) })
+
+  it('gives the sidebar trigger a Chinese screen-reader label', async () => {
+    const { default: zhTW } = await import('@/locales/zh-TW')
+    const zh = createI18n({ legacy: false, locale: 'zh-TW', messages: { 'zh-TW': zhTW } })
+    const w = mount(SidebarProvider, {
+      slots: { default: () => h(TheTopbar) },
+      global: { plugins: [zh], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    const trigger = w.findAll('button')[0]
+    expect(trigger.get('.sr-only').text()).toBe('展開／收合側欄')
+  })
+})

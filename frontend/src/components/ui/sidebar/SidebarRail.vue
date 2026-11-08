@@ -3,9 +3,13 @@ import type { HTMLAttributes } from "vue"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "./utils"
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   class?: HTMLAttributes["class"]
-}>()
+  /** Accessible name and tooltip; the caller supplies the translated text. */
+  label?: string
+}>(), {
+  label: "Toggle Sidebar",
+})
 
 const { toggleSidebar } = useSidebar()
 </script>
@@ -14,9 +18,9 @@ const { toggleSidebar } = useSidebar()
   <button
     data-sidebar="rail"
     data-slot="sidebar-rail"
-    aria-label="Toggle Sidebar"
+    :aria-label="props.label"
     :tabindex="-1"
-    title="Toggle Sidebar"
+    :title="props.label"
     :class="cn(
       'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 sm:flex',
       'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',

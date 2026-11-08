@@ -99,9 +99,8 @@ function onSort(sort: SortEntry[]): void {
 }
 
 function headerLabel(columnDef: DataTableColumn<TRow>): string {
-  // Falls back to the column id when the header string is empty (e.g. CollectionListView's
-  // actions column, header: '') — that string doubles as the label a consumer reads in the
-  // column-visibility menu below, where a blank menu item would be useless.
+  // Falls back to the column id when a column's header string is empty: that string doubles as the
+  // label read in the column-visibility menu below, where a blank menu item would be useless.
   if (typeof columnDef.header === 'string' && columnDef.header !== '') return columnDef.header
   return String(columnDef.id ?? '')
 }

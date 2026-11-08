@@ -5,9 +5,13 @@ import { cn } from "@/lib/utils"
 import { Button } from '@/components/ui/button'
 import { useSidebar } from "./utils"
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   class?: HTMLAttributes["class"]
-}>()
+  /** Screen-reader text; the caller supplies the translated text. */
+  label?: string
+}>(), {
+  label: "Toggle Sidebar",
+})
 
 const { toggleSidebar } = useSidebar()
 </script>
@@ -22,6 +26,6 @@ const { toggleSidebar } = useSidebar()
     @click="toggleSidebar"
   >
     <PanelLeft />
-    <span class="sr-only">Toggle Sidebar</span>
+    <span class="sr-only">{{ props.label }}</span>
   </Button>
 </template>
