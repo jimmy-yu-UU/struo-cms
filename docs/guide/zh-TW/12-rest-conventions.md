@@ -18,7 +18,8 @@
 ```
 
 `details` 只在錯誤代碼是 `VALIDATION`，或缺必填翻譯、翻譯值無效（型別不對、違反格式規則或超過
-`MaxLength`）、翻譯 locale 重複所產生的 `BAD_USER_INPUT` 上才會出現，其餘代碼一律不帶這個鍵。
+`MaxLength`）、翻譯 locale 重複所產生的 `BAD_USER_INPUT`，以及檔案超過上傳上限的 `PAYLOAD_TOO_LARGE`
+上才會出現（後者的那一筆把上限放在 `maxBytes`），其餘代碼一律不帶這個鍵。
 `traceId` 出現在每一個錯誤回應上。它是該請求的 trace id，32 個十六進位字元；伺服器的請求日誌，以及該
 請求記下的任何錯誤日誌，記的都是同一個 id，所以從回應抄下來的 id 可以找到對應的日誌行；主控台與檔案兩個
 sink 都把它印在訊息前面。本手冊的範例都省略了它。
@@ -87,8 +88,9 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `NOT_FOUND` | 404 | 未知的集合、找不到的檔案，或其他一般 404 |
 | `CONFLICT` | 409 | 版本不符以外的衝突（見下方說明） |
 | `VERSION_CONFLICT` | 409 | 樂觀並行的 `version` 對不上 |
+| `LAST_SUPER_ADMIN` | 409 | 寫入會讓超級管理員角色裡沒有啟用中的帳號 |
 | `BAD_USER_INPUT` | 400 | 查詢參數或寫入內容有誤 |
-| `INVALID_VERSION` | 400 | 更新 body 的 `version` 不是整數 |
+| `INVALID_VERSION` | 400 | 更新 body 的 `version` 無效或重複 |
 | `VALIDATION` | 400 | 模型繫結或資料註記驗證失敗 |
 | `INTERNAL_SERVER_ERROR` | 500 | 未歸類的例外，訊息一律遮罩 |
 | `TOO_MANY_REQUESTS` | 429 | 登入或改密碼觸發流量限制 |
@@ -101,6 +103,9 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `IMAGE_TRANSFORM_BUSY` | 503 | 在佇列逾時內沒有圖片轉換名額空出來 |
 
 - `CONFLICT` 涵蓋被關聯擋下的刪除、使用者 email 重複、資料庫唯一鍵衝突，以及其他一般 409。
+- `LAST_SUPER_ADMIN` 是拒絕把超級管理員角色裡最後一個啟用中的帳號移走：停用、刪除或移出角色都算
+  （[第 17 章](17-roles-and-permissions.md)）。它跟 `CONFLICT` 一樣是 `409`，有自己的代碼，用戶端才能
+  把原因說清楚。
 - `TOO_MANY_REQUESTS` 由三個地方直接寫出，不經過上面這套錯誤對照：登入依帳號的節流、登入依呼叫端
   IP 位址的節流，以及改密碼的節流。
 - `SESSION_REVOCATION_FAILED` 代表密碼變更或使用者刪除本身已經成功，只是後續要撤銷該使用者其他
@@ -299,6 +304,9 @@ JSON 數字，或是整數字串，例如 `"3"`（數字加上可選的正負號
 更新以 `400` `INVALID_VERSION` 失敗，什麼都不會寫入：`1.5`、`3.0`、`1e3`、`"abc"`、`" 3"`、
 `true`、物件、陣列，或超出 64 位元的數字。沒有 `version` 欄的集合會忽略這個鍵，建立的
 body 也從不讀它。
+
+鍵名比對不分大小寫，所以 `Version`、`VERSION` 都會當成 `version` 讀，而且只能出現一次：同一個 body
+帶了兩次（不論大小寫）會以 `400` `INVALID_VERSION` 失敗。
 
 還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白
 衝突（見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)）。`version` 本身也不能透過建立或更新

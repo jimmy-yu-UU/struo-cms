@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.29.0
+
+::: danger Breaking
+- A write that would leave no active account in a super-admin role (deactivating, deleting or removing
+  the last one from the role) is refused with `409` `LAST_SUPER_ADMIN` instead of `409` `CONFLICT`, on
+  REST and GraphQL. A client that matched `CONFLICT` for this refusal must match `LAST_SUPER_ADMIN`; the
+  message is unchanged. `SuperAdminGuard.EnsureActiveSuperAdminAsync` throws the new
+  `LastSuperAdminException` instead of `ConflictException`.
+- A file upload over `Struo:Files:MaxUploadBytes` is refused with `413` `PAYLOAD_TOO_LARGE` instead of
+  `400` `BAD_USER_INPUT`, whether the declared length or only the streamed bytes are over the limit. The
+  error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`; `ValidationDetail`
+  gains the optional `maxBytes`, and `PayloadTooLargeException` an optional field and limit.
+  `FileService.UploadAsync` throws `PayloadTooLargeException` instead of `QueryException` for an
+  over-limit length.
+:::
+
+### Changed
+
+- The admin words both refusals from the error code, in the UI language: a refused last-super-admin
+  write shows one fixed sentence, and an upload over the limit shows the limit taken from `maxBytes`. A
+  `413` from a reverse proxy, which has no error body, shows the same sentence without the size.
+
+### Fixed
+
+- The `version` key of an update body is read ignoring case, like every other key. `{"Version":"abc"}`
+  answers `400` `INVALID_VERSION` and `{"Version":<stale>}` answers `409` `VERSION_CONFLICT`; before,
+  both were applied without the check. A body that carries the key twice in any casing answers `400`
+  `INVALID_VERSION`.
+
 ## 0.28.1 — 2026-11-07
 
 ### Fixed

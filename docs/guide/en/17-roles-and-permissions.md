@@ -152,8 +152,9 @@ role cannot be deleted.` The same holds for the seeded `public` role, every call
 the `403` above. The `public` role is found by its name, the way the permission floor finds it.
 
 At least one active account must stay in a super-admin role. Removing the last one from the role,
-deactivating it, or deleting it answers `409` `CONFLICT`, `At least one active account must remain in
-a super-admin role.`, and nothing is written.
+deactivating it, or deleting it answers `409` `LAST_SUPER_ADMIN`, `At least one active account must
+remain in a super-admin role.`, and nothing is written. GraphQL carries the same code in
+`extensions.code`.
 
 Both rules sit in the application layer that every write path shares, so the item endpoints, the
 `users` and `roles` controllers and GraphQL all apply them, and each path is covered by a test.

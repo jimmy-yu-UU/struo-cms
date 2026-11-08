@@ -1,5 +1,30 @@
 # 版本紀錄
 
+## 0.29.0
+
+::: danger 破壞性變更
+- 寫入會讓超級管理員角色裡沒有啟用中的帳號（停用、刪除，或把最後一個移出角色）時，REST 與 GraphQL
+  都改回 `409` `LAST_SUPER_ADMIN`，不再是 `409` `CONFLICT`。對這個拒絕比對 `CONFLICT` 的用戶端要改比對
+  `LAST_SUPER_ADMIN`；訊息不變。`SuperAdminGuard.EnsureActiveSuperAdminAsync` 改拋新的
+  `LastSuperAdminException`，不再拋 `ConflictException`。
+- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，不論是宣告的長度還是只有串流的位元組超過上限，都改回
+  `413` `PAYLOAD_TOO_LARGE`，不再是 `400` `BAD_USER_INPUT`。錯誤帶一筆 `details`：
+  `{"field":"file","message":"…","maxBytes":n}`；`ValidationDetail` 多了選用的 `maxBytes`，
+  `PayloadTooLargeException` 多了選用的欄位名與上限。`FileService.UploadAsync` 對超過上限的長度改拋
+  `PayloadTooLargeException`，不再拋 `QueryException`。
+:::
+
+### 變更
+
+- 後台依錯誤代碼、用介面語言說明這兩種拒絕：寫入被最後一位超級管理員規則擋下時顯示固定的一句話；上傳
+  超過上限時顯示上限，數字取自 `maxBytes`。反向代理回的 `413` 沒有錯誤 body，顯示同一句話但不帶大小。
+
+### 修正
+
+- 更新 body 的 `version` 鍵跟其他鍵一樣不分大小寫讀取。`{"Version":"abc"}` 回 `400` `INVALID_VERSION`，
+  `{"Version":<過期值>}` 回 `409` `VERSION_CONFLICT`；先前兩者都不經檢查直接寫入。同一個 body 以任何大小寫
+  帶了兩次這個鍵，回 `400` `INVALID_VERSION`。
+
 ## 0.28.1 — 2026-11-07
 
 ### 修正

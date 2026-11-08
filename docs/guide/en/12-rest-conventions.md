@@ -20,7 +20,9 @@ On failure:
 
 `details` appears only when the error code is `VALIDATION`, or on the `BAD_USER_INPUT` that a missing
 required translation, an invalid translation value (a wrong type, a format violation or a value over
-its `MaxLength`) or a duplicate translation locale produces; every other code omits the key entirely.
+its `MaxLength`) or a duplicate translation locale produces, and on the `PAYLOAD_TOO_LARGE` of a file
+over the upload limit, whose one entry carries the limit as `maxBytes`; every other code omits the key
+entirely.
 `traceId` is on every error response. It is the request's trace id, 32 hexadecimal characters, and
 the server's request log and any error entry logged for that request record the same id, so an id
 quoted from a response finds its log lines; the console and file sinks print it ahead of the message.
@@ -102,8 +104,9 @@ means the same thing on both protocols:
 | `NOT_FOUND` | 404 | An unknown collection, a missing file, or another plain 404 |
 | `CONFLICT` | 409 | A conflict other than a version mismatch (see below) |
 | `VERSION_CONFLICT` | 409 | An optimistic-concurrency `version` mismatch |
+| `LAST_SUPER_ADMIN` | 409 | A write that would leave no active super-admin |
 | `BAD_USER_INPUT` | 400 | A malformed query parameter or write body |
-| `INVALID_VERSION` | 400 | An update body's `version` is not an integer |
+| `INVALID_VERSION` | 400 | An update body's `version` is invalid or repeated |
 | `VALIDATION` | 400 | Model-binding or data-annotation failure |
 | `INTERNAL_SERVER_ERROR` | 500 | An unclassified exception, message masked |
 | `TOO_MANY_REQUESTS` | 429 | Rate limiting triggered by login or password change |
@@ -117,6 +120,9 @@ means the same thing on both protocols:
 
 - `CONFLICT` covers a delete blocked by a relation, a duplicate email, a database unique-key
   violation, and any other plain 409.
+- `LAST_SUPER_ADMIN` is the refusal to remove the last active account from a super-admin role, by
+  deactivating, deleting or unassigning it ([Chapter 17](17-roles-and-permissions.md)). It is a `409`
+  like `CONFLICT`, with its own code so a client can explain it.
 - `TOO_MANY_REQUESTS` is written directly at three sites rather than going through the error
   mapping above: the per-account login throttle, the per-caller-IP login throttle, and the
   password-change throttle.
@@ -349,6 +355,9 @@ with no fraction or exponent, within the range of a 64-bit integer, or an intege
 update with `400` `INVALID_VERSION`, and nothing is written: `1.5`, `3.0`, `1e3`, `"abc"`, `" 3"`,
 `true`, an object, an array, or a number too large for 64 bits. A collection without a `version`
 column ignores the key, and a create body never reads it.
+
+The key name is matched ignoring case, so `Version` and `VERSION` are read as `version`, and it may
+appear only once: a body that carries it twice, in any casing, fails with `400` `INVALID_VERSION`.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting
 in that snapshot never causes a needless conflict (see
