@@ -29,7 +29,7 @@
   --secondary: #f4f4f5;           /* zinc-100 */
   --secondary-foreground: #111827;
   --muted: #f4f4f5;               /* subtle SURFACE */
-  --muted-foreground: #607087;    /* subdued TEXT */
+  --muted-foreground: #5c6c82;    /* subdued TEXT */
   --accent: #f4f4f5;              /* hover surface — same literal as --muted, kept as its own hex
                                       so the two stay independently adjustable rather than reused
                                       via var(--muted) */

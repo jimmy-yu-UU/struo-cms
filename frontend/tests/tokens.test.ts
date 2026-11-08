@@ -79,6 +79,17 @@ function tokenHex(selector: string, name: string): string {
   return m[1]
 }
 
+// `--sidebar-accent`: `color-mix(in oklab, <fg>, transparent <pct>%)`, drawn over the sidebar surface.
+// Browsers blend the resulting translucent colour with the backdrop in sRGB.
+function sidebarAccentSurface(): Rgb {
+  const m = /--sidebar-accent:\s*color-mix\(in oklab,\s*(#[0-9a-fA-F]{6}),\s*transparent\s+(\d+)%\)/.exec(block(':root'))
+  if (!m) throw new Error('--sidebar-accent is no longer a transparent colour-mix')
+  const alpha = 1 - Number(m[2]) / 100
+  const fg = hexToRgb(m[1])
+  const base = sidebarSurface()
+  return [0, 1, 2].map((i) => fg[i] * alpha + base[i] * (1 - alpha)) as unknown as Rgb
+}
+
 function sidebarSurface(): Rgb {
   const m = /--sidebar:\s*color-mix\(in oklab,\s*(#[0-9a-fA-F]{6})\s+(\d+)%,\s*(#[0-9a-fA-F]{6})\)/.exec(block(':root'))
   if (!m) throw new Error('--sidebar is no longer a two-colour oklab mix')
@@ -140,6 +151,7 @@ describe('tokens.css', () => {
       muted: hexToRgb(tokenHex(':root', 'muted')),
       accent: hexToRgb(tokenHex(':root', 'accent')),
       sidebar: sidebarSurface(),
+      'sidebar-accent': sidebarAccentSurface(),
     }
     for (const [name, rgb] of Object.entries(surfaces)) {
       expect(contrast(muted, rgb), `muted-foreground on ${name}`).toBeGreaterThanOrEqual(4.5)
