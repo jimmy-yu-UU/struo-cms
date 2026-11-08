@@ -92,7 +92,7 @@ async function onSubmit(): Promise<void> {
       // the key rather than rejecting it, so it must be entirely absent, not merely falsy.
       ...(isSelf.value ? { currentPassword: currentPassword.value } : {}),
     })
-    toast.add({ severity: 'success', summary: t('password.changed'), life: 2000 })
+    toast.add({ severity: 'success', summary: t(isSelf.value ? 'password.changedSelf' : 'password.changed'), life: 2000 })
     emit('changed')
     emit('update:open', false)
   } catch (e) {

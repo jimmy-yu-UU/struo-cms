@@ -26,6 +26,8 @@
   language, and the panel says when the caller lacks permission to view the result.
 - The disabled Locked button in the user list is described to assistive technology by the reason it cannot be
   cleared, not only by a tooltip.
+- Changing a password says in its success message that the API access token is revoked, in a first-person form
+  when the user changes their own password. The Chinese notes call it "API 存取權杖".
 
 ## 0.28.1 — 2026-11-07
 
