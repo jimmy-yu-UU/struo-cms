@@ -4,6 +4,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+// FieldInput dispatches id, aria-invalid and aria-describedby as plain attributes onto whatever this
+// component renders as its root. Disabling automatic fallthrough and re-binding `$attrs` by hand
+// keeps them landing on the real control that ItemForm's <FieldLabel :for> pairs with.
+defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 const options = computed(() => props.field.options ?? [])
@@ -19,7 +23,7 @@ const current = computed(() => String(props.modelValue ?? ''))
 
 <template>
   <Select :model-value="current" :disabled="disabled" @update:model-value="(v) => emit('update:modelValue', String(v ?? ''))">
-    <SelectTrigger class="w-full max-w-[480px]" :aria-label="field.label">
+    <SelectTrigger v-bind="$attrs" class="w-full max-w-[480px]" :aria-label="field.label">
       <SelectValue :placeholder="field.label" />
     </SelectTrigger>
     <SelectContent>

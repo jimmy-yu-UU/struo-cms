@@ -2,7 +2,7 @@
 <!-- No route-params watcher: AppShell's keyed <router-view> remounts this view on a collection
      switch (see AppShell.vue's :key="route.path" comment). -->
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, h } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, h, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Plus, Pencil, Eye, Trash2, Undo2 } from '@lucide/vue'
@@ -65,7 +65,9 @@ const columns = computed(() => (meta.value ? selectListColumns(meta.value) : [])
 
 const rows = ref<Row[]>([])
 const total = ref(0)
-const loading = ref(false)
+// True from the first render: the first list request starts only after the schema has loaded, and
+// the table must not show its empty message in the meantime. loadItems clears it on every bail.
+const loading = ref(true)
 const error = ref('')
 const tableState = ref<DataTableState>({ sort: [], page: 0, pageSize: 25 })
 const filters = ref<FilterSpec>({})
@@ -259,11 +261,20 @@ function lockCell(row: Row) {
     }, () => (busy ? t('loginLocks.unlocking') : t('loginLocks.unlockWithTime', { time: clock })))])
   }
   const reason = canWrite.value ? t('loginLocks.superAdminOnly') : t('loginLocks.readOnlyHint')
-  return h('span', { class: 'inline-flex', title: t('loginLocks.tooltipWithReason', { tip, reason }) }, [h(Button, {
-    variant: 'outline', size: 'sm', disabled: true, class: 'border-warning bg-warning/10', 'data-testid': 'lock-locked',
-    'aria-label': t('loginLocks.ariaLocked', { email, time: clock }),
-  }, () => t('loginLocks.lockedWithTime', { time: clock }))])
+  // The tooltip sits on a span a keyboard or screen-reader user never reaches, so the reason, without
+  // the countdown, is also a visually hidden description the button points at.
+  const reasonId = `${lockReasonUid}-${primitiveText(row.id)}`
+  return h('span', { class: 'inline-flex', title: t('loginLocks.tooltipWithReason', { tip, reason }) }, [
+    h(Button, {
+      variant: 'outline', size: 'sm', disabled: true, class: 'border-warning bg-warning/10', 'data-testid': 'lock-locked',
+      'aria-label': t('loginLocks.ariaLocked', { email, time: clock }),
+      'aria-describedby': reasonId,
+    }, () => t('loginLocks.lockedWithTime', { time: clock })),
+    h('span', { id: reasonId, class: 'sr-only' }, reason),
+  ])
 }
+
+const lockReasonUid = `lock-reason-${useId()}`
 
 function actionButtons(row: Row) {
   const buttons = []
@@ -346,7 +357,7 @@ const tableColumns = computed<DataTableColumn<Row>[]>(() => {
   if (canRead.value || canDelete.value) {
     cols.push({
       id: 'actions',
-      header: '',
+      header: t('collectionList.actions'),
       cell: ({ row }) => h('div', { class: 'flex items-center gap-1' }, actionButtons(row.original)),
     })
   }

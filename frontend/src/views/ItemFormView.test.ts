@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
@@ -72,7 +72,14 @@ const meta = { name: 'article', label: 'Article', fields: [
 // teleport: ChangePasswordDialog's vendored Dialog renders through reka's DialogPortal (built on
 // Vue's own Teleport) once opened; stubbed the same way UserMenu.test.ts / ChangePasswordDialog.test.ts
 // stub it, so a real teleport target absent from this test's jsdom tree never drops dialog content.
-const stubs = { ItemForm: true, Button: true, RevisionHistoryDrawer: true, teleport: true }
+// The ItemForm stub exposes focusBanner, which the view calls after a save fails with a server error.
+const ItemFormStub = {
+  name: 'ItemForm',
+  props: ['meta', 'itemId', 'model', 'locales', 'errors', 'serverError', 'disabled', 'relationOptionHint'],
+  template: '<div />',
+  methods: { focusBanner: () => Promise.resolve() },
+}
+const stubs = { ItemForm: ItemFormStub, Button: true, RevisionHistoryDrawer: true, teleport: true }
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -1357,6 +1364,24 @@ describe('ItemFormView', () => {
     expect(w.findComponent(EffectivePermissionsPanel).exists()).toBe(true)
   })
 
+  // The server drops a relation the caller cannot read from the item, so a caller without read on
+  // `role` gets no `roles` back. An empty selection sent as `?roles=` would preview the public floor
+  // and report "no permissions" for a user who has roles; the panel reads the saved roles instead.
+  it('previews the saved roles, not an empty selection, when the caller cannot read roles', async () => {
+    const w = await mountUserEdit({ user: { read: true, write: true, delete: false } })
+    expect(w.findComponent(EffectivePermissionsPanel).props('roleIds')).toBeUndefined()
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
+  })
+
+  it('previews the live role selection when the caller can read roles', async () => {
+    const w = await mountUserEdit({
+      user: { read: true, write: true, delete: false },
+      role: { read: true, write: false, delete: false },
+    })
+    expect(w.findComponent(EffectivePermissionsPanel).props('roleIds')).toEqual([])
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', [])
+  })
+
   it('locks the form, the actions and the token panel of a super-admin account for another caller', async () => {
     const w = await mountUserEdit({ user: { read: true, write: true, delete: true } }, true)
 
@@ -1835,5 +1860,90 @@ describe('ItemFormView cleared locale', () => {
     expect(sentTranslations(upd, 0)['zh-TW']).toBeNull()
     await (w.vm as any).onSubmit()
     expect(sentTranslations(upd, 1)).not.toHaveProperty('zh-TW')
+  })
+})
+
+// The real ItemForm, attached to the document so focus is observable.
+describe('ItemFormView banner focus', () => {
+  const realStubs = { Button: true, RevisionHistoryDrawer: true, teleport: true }
+  let outside: HTMLButtonElement
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.restoreAllMocks()
+    confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
+    routeParams = {}
+    routeName = 'collection-item'
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
+  })
+  afterEach(() => { outside.remove() })
+
+  function mountReal() {
+    return mount(ItemFormView, {
+      attachTo: document.body,
+      global: { plugins: [i18n], stubs: realStubs, renderStubDefaultSlot: true },
+    })
+  }
+  const bannerOf = (w: ReturnType<typeof mountReal>) => w.get('form [role="alert"]').element
+
+  it('focuses the banner after a save that fails with a server error only', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    vi.spyOn(itemsApi, 'create').mockRejectedValue(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    const w = mountReal()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    await flushPromises()
+    expect(document.activeElement).toBe(bannerOf(w))
+    w.unmount()
+  })
+
+  it('focuses the banner when the conflict recovery re-fetch fails', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get')
+      .mockResolvedValueOnce({ id: '5', status: 'draft', translations: {}, version: 1 })
+      .mockRejectedValueOnce(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mountReal() // onMounted runs init
+    await flushPromises()
+    outside.focus()
+    await (w.vm as any).onSubmit()
+    await flushPromises()
+    expect((w.vm as any).serverError).toBe('Boom')
+    expect(document.activeElement).toBe(bannerOf(w))
+    w.unmount()
+  })
+
+  it('leaves focus alone when the item fails to load', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    const w = mountReal()
+    await w.vm.init()
+    await flushPromises()
+    expect((w.vm as any).serverError).toBe('Boom')
+    expect(document.activeElement).toBe(outside)
+    w.unmount()
+  })
+
+  it('leaves focus alone when a delete fails', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'draft', translations: {} })
+    vi.spyOn(itemsApi, 'remove').mockRejectedValue(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    const w = mountReal()
+    await w.vm.init()
+    await flushPromises()
+    outside.focus()
+    await (w.vm as any).onDelete()
+    await flushPromises()
+    expect((w.vm as any).serverError).toBe('Boom')
+    expect(document.activeElement).toBe(outside)
+    w.unmount()
   })
 })

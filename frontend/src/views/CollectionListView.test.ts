@@ -44,7 +44,7 @@ const i18n = createI18n({
         clearSort: 'Clear sorting', previous: 'Previous page', next: 'Next page',
         confirmDefaultHeader: 'Please confirm', confirmAccept: 'Confirm', confirmReject: 'Cancel',
         loadFailed: 'Load failed', actionFailed: 'Action failed',
-        columns: 'Columns', rowsPerPage: 'Rows per page',
+        columns: 'Columns', rowsPerPage: 'Rows per page', loading: 'Loading…',
       },
     },
   },
@@ -113,6 +113,21 @@ describe('CollectionListView', () => {
     mockRoute.params.name = 'article'
   })
   afterEach(() => { vi.useRealTimers() })
+
+  it('never shows the empty message before the first list response arrives', async () => {
+    seedSchema()
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    let resolveList: (v: { data: never[]; total: number }) => void = () => {}
+    vi.mocked(itemsApi.list).mockReturnValue(new Promise((r) => { resolveList = r }))
+    const w = mountView()
+    expect(w.text()).not.toContain('No records')
+    await flushPromises()
+    expect(w.text()).not.toContain('No records')
+    resolveList({ data: [], total: 0 })
+    await flushPromises()
+    expect(w.text()).toContain('No records')
+  })
 
   it('loads items on mount for a readable collection', async () => {
     seedSchema()

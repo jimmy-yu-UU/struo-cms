@@ -42,7 +42,15 @@ import { toFileRows } from '../../lib/toFileRow'
 
 defineOptions({ name: 'RichTextInput' })
 
-const props = defineProps<{ modelValue: string; disabled?: boolean }>()
+// id, ariaInvalid and ariaDescribedby arrive from ItemForm (through RichTextField) and are applied to
+// the contenteditable surface, the element its label points at.
+const props = defineProps<{
+  modelValue: string
+  disabled?: boolean
+  id?: string
+  ariaInvalid?: string
+  ariaDescribedby?: string
+}>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
 
 const { t, locale } = useI18n()
@@ -203,6 +211,16 @@ function onImageSelected(id: string): void {
   imageDialogOpen.value = false
 }
 
+function editorAttributes(): Record<string, string> {
+  const attributes: Record<string, string> = {
+    class: 'prose dark:prose-invert', role: 'textbox', 'aria-multiline': 'true',
+  }
+  if (props.id) attributes.id = props.id
+  if (props.ariaInvalid) attributes['aria-invalid'] = props.ariaInvalid
+  if (props.ariaDescribedby) attributes['aria-describedby'] = props.ariaDescribedby
+  return attributes
+}
+
 const editor = useEditor({
   content: absolutizeImageSrc(props.modelValue || ''),
   editable: !props.disabled,
@@ -210,7 +228,7 @@ const editor = useEditor({
   // stays full width for its border/toolbar while the content measure caps well short of it,
   // leaving the padded box wider than the editable — the @click.self handler below hands a
   // click landing in that gap off to the editor instead of leaving it dead.
-  editorProps: { attributes: { class: 'prose dark:prose-invert' } },
+  editorProps: { attributes: editorAttributes() },
   extensions: [
     StarterKit.configure({ heading: { levels: [...HEADING_LEVELS] }, underline: false, link: false }),
     // HTMLAttributes.target/rel: null, not omitted -- the Link extension's own upstream defaults
@@ -289,6 +307,10 @@ watch(locale, () => {
   const ed = editor.value
   if (!ed) return
   ed.view.dispatch(ed.state.tr)
+})
+
+watch(() => [props.id, props.ariaInvalid, props.ariaDescribedby], () => {
+  editor.value?.setOptions({ editorProps: { attributes: editorAttributes() } })
 })
 
 // Keep the editor in sync with external model changes without clobbering the cursor.

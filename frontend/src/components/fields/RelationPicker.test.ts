@@ -5,6 +5,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import RelationPicker from './RelationPicker.vue'
 import { itemsApi } from '../../api/itemsApi'
+import { ApiError } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import en from '../../locales/en'
@@ -760,5 +761,38 @@ describe('RelationPicker', () => {
     await button().trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(button().attributes('data-state')).toBe('open')
+  })
+})
+
+describe('RelationPicker load failures', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.restoreAllMocks()
+  })
+
+  async function mountFailing(error: Error) {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockRejectedValue(error)
+    const w = mountPicker({}, liveZh)
+    await flushPromises()
+    return w
+  }
+
+  it('maps a FORBIDDEN response to the localized no-permission sentence, not the server prose', async () => {
+    const w = await mountFailing(new ApiError(403, 'Read not permitted.', 'FORBIDDEN'))
+    expect(zhTW.fields.loadForbidden).toBe('無權讀取此關聯')
+    expect(w.get('[role="alert"]').text()).toBe(zhTW.fields.loadForbidden)
+    expect(w.text()).not.toContain('Read not permitted.')
+  })
+
+  it('maps any other API error to the generic localized sentence', async () => {
+    const w = await mountFailing(new ApiError(500, 'Boom from the server.', 'INTERNAL_ERROR'))
+    expect(w.get('[role="alert"]').text()).toBe(zhTW.fields.loadOptionsFailed)
+    expect(w.text()).not.toContain('Boom from the server.')
+  })
+
+  it('maps a network failure to the generic localized sentence', async () => {
+    const w = await mountFailing(new Error('Failed to fetch'))
+    expect(w.get('[role="alert"]').text()).toBe(zhTW.fields.loadOptionsFailed)
   })
 })

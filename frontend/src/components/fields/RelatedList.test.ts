@@ -178,4 +178,15 @@ describe('RelatedList', () => {
     await button.trigger('click')
     expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: 'a1' } })
   })
+
+  it('is loading from the first render, so the table never flashes its empty message', async () => {
+    setupStores()
+    let resolveList: (v: { data: never[]; total: number }) => void = () => {}
+    vi.spyOn(itemsApi, 'list').mockReturnValue(new Promise((r) => { resolveList = r }))
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    expect(w.findComponent({ name: 'DataTable' }).props('loading')).toBe(true)
+    resolveList({ data: [], total: 0 })
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTable' }).props('loading')).toBe(false)
+  })
 })

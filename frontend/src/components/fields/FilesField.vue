@@ -127,7 +127,7 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
 </script>
 
 <template>
-  <div class="files-field flex flex-col items-start gap-3">
+  <fieldset class="files-field flex flex-col items-start gap-3 border-0 p-0 m-0 min-w-0" :aria-label="field.label">
     <SortableList
       v-if="rows.length"
       :model-value="rows"
@@ -188,6 +188,6 @@ defineExpose({ openDialog, toggle, removeAt, onReorder, currentIds, resolve, sea
         </DialogFooter>
       </DialogScrollContent>
     </Dialog>
-  </div>
+  </fieldset>
 </template>
 

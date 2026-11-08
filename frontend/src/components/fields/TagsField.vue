@@ -29,7 +29,7 @@ function setLabel(i: number, v: string) {
 }
 </script>
 <template>
-  <div class="flex flex-col items-start gap-2">
+  <fieldset class="flex flex-col items-start gap-2 border-0 p-0 m-0 min-w-0" :aria-label="field.label">
     <div v-for="(it, i) in items" :key="i" class="tag-row flex w-full items-center gap-2">
       <Input
         :model-value="it.value"
@@ -65,5 +65,5 @@ function setLabel(i: number, v: string) {
       <Plus class="size-4" />
       {{ t('fields.add') }}
     </Button>
-  </div>
+  </fieldset>
 </template>

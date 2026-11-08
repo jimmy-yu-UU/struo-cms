@@ -17,6 +17,8 @@ const props = defineProps<{
   optionHint?: (raw: Record<string, unknown>) => string | null
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+// ItemForm's id, aria-invalid and aria-describedby are re-bound onto whichever control renders.
+defineOptions({ inheritAttrs: false })
 
 const schema = useSchemaStore()
 const kind = computed(() => relationInputKind(props.relation.interface))
@@ -29,27 +31,32 @@ function update(v: unknown): void { emit('update:modelValue', v) }
 <template>
   <RelationPicker
     v-if="kind === 'dropdown'"
+    v-bind="$attrs"
     :relation="relation" :model-value="modelValue" :disabled="isDisabled" :option-hint="optionHint"
     @update:model-value="update"
   />
   <JunctionLinksEditor
     v-else-if="linksEditor"
+    v-bind="$attrs"
     :relation="relation" :model-value="modelValue" :disabled="isDisabled"
     @update:model-value="update"
   />
   <RelationPicker
     v-else-if="kind === 'tagSelect'"
+    v-bind="$attrs"
     :relation="relation" :model-value="modelValue" multiple :disabled="isDisabled" :option-hint="optionHint"
     @update:model-value="update"
   />
   <RelationPicker
     v-else-if="kind === 'treeSelect'"
+    v-bind="$attrs"
     :relation="relation" :model-value="modelValue" tree :exclude-id="excludeId" :disabled="isDisabled"
     @update:model-value="update"
   />
   <RelatedList
     v-else-if="kind === 'relatedList'"
+    v-bind="$attrs"
     :relation="relation" :parent-id="parentId"
   />
-  <span v-else class="readonly-relation">{{ relation.label }} (read-only)</span>
+  <span v-else v-bind="$attrs" class="readonly-relation">{{ relation.label }} (read-only)</span>
 </template>

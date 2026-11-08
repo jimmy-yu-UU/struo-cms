@@ -21,6 +21,9 @@
 - The admin words both refusals from the error code, in the UI language: a refused last-super-admin
   write shows one fixed sentence, and an upload over the limit shows the limit taken from `maxBytes`. A
   `413` from a reverse proxy, which has no error body, shows the same sentence without the size.
+- The light theme's brand colour is darker, so white button text reaches the WCAG AA 4.5:1 contrast. Muted text is
+  darker too, so it reaches 4.5:1 on the sidebar, its hover surface, cards and muted surfaces. The dark theme is
+  unchanged.
 
 ### Fixed
 
@@ -37,6 +40,22 @@
   Reload latest button that discards the draft and loads the current file.
 - A whitespace-only value, and rich text that holds only empty paragraphs or line breaks, counts as empty for
   a required field in the admin, and an empty rich text value is saved as null.
+- Lists show placeholder rows while the first page loads instead of flashing the empty-list message.
+- The record list's actions column has a localized header, also shown in the Columns menu, and the sidebar
+  toggle's screen-reader label is translated.
+- The admin's required and length checks speak the interface language, including the relation row messages.
+  A failed save moves focus to the first invalid control, switching to the language tab that holds it, or to
+  the error banner when the server reports no field. Every field type's control is marked `aria-invalid`
+  and linked to its error text.
+- The Chinese login messages say "電子郵件" instead of "Email"; a wrong email and a wrong password still give one
+  identical sentence.
+- On a user form, a caller without read on `role` no longer sees "No permissions" in the effective-permissions
+  panel: it shows the permissions computed from the roles stored on the user. A relation that cannot be read
+  says so in the interface language, and the panel says when the caller lacks permission to view the result.
+- The disabled Locked button in the user list is described to assistive technology by the reason it cannot be
+  cleared, not only by a tooltip.
+- Changing a password says in its success message that the API access token is revoked, in a first-person form
+  when the user changes their own password. The Chinese notes call it "API 存取權杖".
 
 ## 0.28.1 — 2026-11-07
 

@@ -1,10 +1,24 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, useId, useAttrs, watch } from 'vue'
 import { Textarea } from '@/components/ui/textarea'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+// FieldInput dispatches id, aria-invalid and aria-describedby as plain attributes onto whatever this
+// component renders as its root. Disabling automatic fallthrough and re-binding `$attrs` by hand
+// keeps them landing on the real control that ItemForm's <FieldLabel :for> pairs with.
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
+const parseErrorId = `${useId()}-json-error`
+
+// The textarea is invalid for a JSON parse failure or for an error ItemForm reports on the field.
+const invalid = computed(() => error.value !== null || String(attrs['aria-invalid']) === 'true')
+const describedBy = computed(() => {
+  const ids = [String(attrs['aria-describedby'] ?? ''), error.value !== null ? parseErrorId : '']
+  const joined = ids.filter((id) => id !== '').join(' ')
+  return joined === '' ? undefined : joined
+})
 
 function pretty(v: unknown): string {
   return v === null || v === undefined ? '' : JSON.stringify(v, null, 2)
@@ -49,14 +63,16 @@ function onInput(v: string) {
 <template>
   <div class="json-field">
     <Textarea
+      v-bind="$attrs"
       :model-value="text"
       :disabled="disabled"
-      :aria-invalid="error !== null"
+      :aria-invalid="invalid"
+      :aria-describedby="describedBy"
       :aria-label="field.label"
       class="json-textarea font-mono min-h-36"
       spellcheck="false"
       @update:model-value="(v) => onInput(String(v ?? ''))"
     />
-    <small v-if="error" class="json-error text-destructive text-xs" role="alert">{{ error }}</small>
+    <small v-if="error" :id="parseErrorId" class="json-error text-destructive text-xs" role="alert">{{ error }}</small>
   </div>
 </template>

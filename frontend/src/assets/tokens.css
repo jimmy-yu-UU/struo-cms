@@ -24,12 +24,12 @@
   --card-foreground: #111827;
   --popover: #ffffff;
   --popover-foreground: #111827;
-  --primary: #0284c7;             /* sky-600 — brand */
+  --primary: #0369a1;             /* sky-700 — brand */
   --primary-foreground: #ffffff;
   --secondary: #f4f4f5;           /* zinc-100 */
   --secondary-foreground: #111827;
   --muted: #f4f4f5;               /* subtle SURFACE */
-  --muted-foreground: #64748b;    /* subdued TEXT */
+  --muted-foreground: #5c6c82;    /* subdued TEXT */
   --accent: #f4f4f5;              /* hover surface — same literal as --muted, kept as its own hex
                                       so the two stay independently adjustable rather than reused
                                       via var(--muted) */
@@ -42,7 +42,7 @@
   --warning: #d97706;
   --sidebar: color-mix(in oklab, #111827 3%, #ffffff);
   --sidebar-foreground: #111827;
-  --sidebar-primary: #0284c7;
+  --sidebar-primary: #0369a1;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: color-mix(in oklab, #111827, transparent 95%);
   --sidebar-accent-foreground: #111827;

@@ -33,7 +33,7 @@ function toggle(value: string, checked: boolean | 'indeterminate'): void {
   <!-- Checkbox renders as a <button>, so tokens.css's base-layer `button:not(:disabled)` rule
        already gives it `cursor: pointer`. Label deliberately carries no cursor utility of its own:
        it is a separate element paired only through `for`/`id`, not the interactive control itself. -->
-  <div role="group" :aria-label="field.label" class="flex flex-wrap gap-x-5 gap-y-2">
+  <fieldset :aria-label="field.label" class="flex flex-wrap gap-x-5 gap-y-2 border-0 p-0 m-0 min-w-0">
     <div v-for="(opt, i) in options" :key="opt.value" class="inline-flex items-center gap-2">
       <Checkbox
         :id="idFor(i)"
@@ -43,5 +43,5 @@ function toggle(value: string, checked: boolean | 'indeterminate'): void {
       />
       <Label :for="idFor(i)">{{ opt.label }}</Label>
     </div>
-  </div>
+  </fieldset>
 </template>

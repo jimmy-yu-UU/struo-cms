@@ -70,7 +70,7 @@ function subFieldId(rowIndex: number, name: string): string { return `${uid}-${r
 </script>
 
 <template>
-  <div class="repeater-field flex flex-col items-start gap-3">
+  <fieldset class="repeater-field flex flex-col items-start gap-3 border-0 p-0 m-0 min-w-0" :aria-label="field.label">
     <div v-for="(row, i) in rows" :key="i" class="repeater-row flex w-full gap-3 rounded-md border p-3">
       <div class="repeater-row__fields flex flex-1 flex-col gap-2">
         <div v-for="sub in subFields()" :key="sub.name" class="repeater-subfield flex flex-col gap-1">
@@ -141,5 +141,5 @@ function subFieldId(rowIndex: number, name: string): string { return `${uid}-${r
       <Plus class="size-4" />
       {{ t('fields.add') }}
     </Button>
-  </div>
+  </fieldset>
 </template>

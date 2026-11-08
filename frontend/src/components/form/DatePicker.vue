@@ -19,6 +19,8 @@ const props = defineProps<{
   label?: string
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: Date | null): void }>()
+// Root is a renderless Popover, so attributes (id, aria-*) are re-bound onto the trigger button.
+defineOptions({ inheritAttrs: false })
 const { t, locale } = useI18n()
 
 const formatter = computed(() => new DateFormatter(locale.value, { dateStyle: 'medium' }))
@@ -79,6 +81,7 @@ function onCalendarUpdate(value: DateValue | undefined): void {
            <form @submit.prevent>. Stating it directly means this Button doesn't rely on the
            merge behaviour of the component wrapping it. -->
       <Button
+        v-bind="$attrs"
         type="button"
         variant="outline"
         :disabled="disabled"

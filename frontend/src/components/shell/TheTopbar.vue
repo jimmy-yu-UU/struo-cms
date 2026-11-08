@@ -17,10 +17,10 @@ const { t } = useI18n()
        to the top of whichever ancestor actually scrolls (the document here, since nothing
        between this header and the viewport sets overflow). -->
   <header class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
-    <!-- SidebarTrigger doesn't set inheritAttrs: false and its root is <Button>, so this
-         sets a localized accessible name — the vendored component only ships a hardcoded
-         English "Toggle Sidebar" sr-only span. -->
-    <SidebarTrigger :aria-label="t('shell.openMenu')" />
+    <!-- SidebarTrigger doesn't set inheritAttrs: false and its root is <Button>, so aria-label
+         lands on the button and takes precedence over the sr-only text, making shell.openMenu this
+         button's accessible name. `label` supplies the translated sr-only text. -->
+    <SidebarTrigger :aria-label="t('shell.openMenu')" :label="t('shell.toggleSidebar')" />
     <div class="flex-1" />
     <UiLanguageSwitcher />
     <ThemeToggle />

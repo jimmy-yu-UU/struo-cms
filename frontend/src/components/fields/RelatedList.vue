@@ -23,7 +23,8 @@ const rows = ref<Row[]>([])
 const total = ref(0)
 const page = ref(0)
 const perPage = ref(10)
-const loading = ref(false)
+// True from the first render when onMounted's load will run, so the table never shows its empty message first.
+const loading = ref(Boolean(props.parentId && props.relation.foreignKey))
 const error = ref('')
 
 const targetMeta = computed(() => schema.get(props.relation.targetCollection))

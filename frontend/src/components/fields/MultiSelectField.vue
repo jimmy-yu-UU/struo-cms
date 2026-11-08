@@ -10,6 +10,10 @@ import { Check, ChevronsUpDown, X } from '@lucide/vue'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+// FieldInput dispatches id, aria-invalid and aria-describedby as plain attributes onto whatever this
+// component renders as its root. Disabling automatic fallthrough and re-binding `$attrs` by hand
+// keeps them landing on the real control that ItemForm's <FieldLabel :for> pairs with.
+defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:modelValue', v: string[]): void }>()
 const { t } = useI18n()
 
@@ -63,6 +67,7 @@ function toggleValue(value: string): void {
     <Combobox :model-value="selected" multiple :disabled="disabled">
       <ComboboxAnchor class="w-full">
         <ComboboxTrigger
+          v-bind="$attrs"
           :aria-label="triggerAccessibleName"
           class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >

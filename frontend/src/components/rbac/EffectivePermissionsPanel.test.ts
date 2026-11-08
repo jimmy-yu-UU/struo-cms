@@ -3,6 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import en from '../../locales/en'
+import zhTW from '../../locales/zh-TW'
+import { ApiError } from '../../api/apiClient'
 import EffectivePermissionsPanel from './EffectivePermissionsPanel.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi } from '../../api/rbacApi'
@@ -105,5 +107,33 @@ describe('EffectivePermissionsPanel', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('EffectivePermissionsPanel load failures', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('says the viewer lacks permission when the endpoint answers FORBIDDEN', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockRejectedValue(new ApiError(403, 'Read not permitted.', 'FORBIDDEN'))
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.text()).toContain(en.rbac.effectiveForbidden)
+    expect(w.text()).not.toContain(en.rbac.effectiveEmpty)
+    expect(w.text()).not.toContain(en.rbac.effectiveLoadFailed)
+  })
+
+  it('keeps the generic failure sentence for any other error', async () => {
+    vi.mocked(rbacApi.getEffectivePermissions).mockRejectedValue(new ApiError(500, 'Boom.', 'INTERNAL_ERROR'))
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.text()).toContain(en.rbac.effectiveLoadFailed)
+    expect(w.text()).not.toContain(en.rbac.effectiveForbidden)
+  })
+
+  it('states the zh-TW wording', () => {
+    expect(zhTW.rbac.effectiveForbidden).toBe('無法檢視有效權限（權限不足）')
   })
 })

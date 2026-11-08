@@ -9,6 +9,10 @@ import {
 import type { FieldMeta } from '../../types/schema'
 
 defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
+// FieldInput dispatches id, aria-invalid and aria-describedby as plain attributes onto whatever this
+// component renders as its root. Disabling automatic fallthrough and re-binding `$attrs` by hand
+// keeps them landing on the real control that ItemForm's <FieldLabel :for> pairs with.
+defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
 
 // reka's NumberFieldRoot emits `undefined` on `update:modelValue` when the input is cleared and
@@ -30,7 +34,7 @@ function onUpdate(v: number | undefined): void {
   >
     <NumberFieldContent>
       <NumberFieldDecrement />
-      <NumberFieldInput />
+      <NumberFieldInput v-bind="$attrs" />
       <NumberFieldIncrement />
     </NumberFieldContent>
   </NumberFieldRoot>

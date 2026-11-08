@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
@@ -124,7 +124,12 @@ function relationOptionHint(relation: string, raw: Record<string, unknown>): str
 // The effective-permissions preview follows the CURRENT (possibly unsaved) Roles
 // TagSelect selection live, via the panel's own debounced watcher — not a post-save reload.
 const showEffective = computed(() => isExistingUser.value)
-const selectedRoleIds = computed(() => (model.relations.roles as string[] | undefined) ?? [])
+// The server leaves a relation the caller cannot read out of the item, so without read on the role
+// collection the Roles selection is unknown rather than empty: no preview selection is passed and
+// the panel shows the user's saved roles.
+const selectedRoleIds = computed(() => (auth.canRead(ROLE_COLLECTION)
+  ? ((model.relations.roles as string[] | undefined) ?? [])
+  : undefined))
 
 // The password reset and access-token actions change a credential, so they need write on the user
 // collection (and, for a super-admin account, a super-admin caller); the token's state needs read.
@@ -142,6 +147,12 @@ const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
 const serverError = ref('')
+const itemForm = ref<InstanceType<typeof ItemForm> | null>(null)
+// A save that failed with a server error and no field error has no control to focus, so the banner takes focus.
+async function focusSaveBanner(): Promise<void> {
+  await nextTick()
+  await itemForm.value?.focusBanner()
+}
 const loading = ref(true)
 const submitting = ref(false)
 // ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
@@ -211,7 +222,7 @@ async function init(): Promise<void> {
 
 async function onSubmit(): Promise<void> {
   if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor)
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
   if (Object.keys(errors.value).length > 0) return
   submitting.value = true
   serverError.value = ''
@@ -300,8 +311,10 @@ async function onSubmit(): Promise<void> {
       errors.value = { ...fieldErrors }
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
+      if (Object.keys(fieldErrors).length === 0) void focusSaveBanner()
     } else {
       serverError.value = writeFailureMessage(e, t, 'common.saveFailed')
+      void focusSaveBanner()
     }
   } finally {
     submitting.value = false
@@ -323,7 +336,10 @@ async function recoverFromConflict(): Promise<void> {
     // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
     conflict.value = false
     if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
-    else serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
+    else {
+      serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
+      void focusSaveBanner()
+    }
   }
 }
 
@@ -480,6 +496,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
       </p>
 
       <ItemForm
+        ref="itemForm"
         :meta="meta"
         :item-id="id"
         :model="model"
