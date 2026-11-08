@@ -255,6 +255,10 @@ many-to-one foreign keys, many-to-many id arrays, and a typed translation list; 
 the same, plus a `version: Long`. A `null` or omitted `version` skips the comparison. GraphQL's
 `Long` type rejects a value that is not an integer, such as `1.5` or `"abc"`, before the resolver
 runs, so that rejection is a GraphQL type error rather than `INVALID_VERSION`; nothing is written.
+An integer outside the 64-bit range is a client error too: written as a literal in the `version`
+input field or the `revert<X>` argument it answers `INVALID_VERSION`, and passed as a variable, or
+written in any other `Long` position, it answers `BAD_USER_INPUT`, because a variable's error does not
+say which field it feeds. Neither is logged as a server fault.
 
 `create` and `update` convert the typed input back into the JSON body the item service already
 consumes, then re-read that row after writing, so the returned node's shape matches what a query

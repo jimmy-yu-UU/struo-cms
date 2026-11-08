@@ -27,7 +27,8 @@ internal static class JsonBodyUtil
     /// <summary>
     /// Refuses (400) a body that names a top-level property more than once. Two readers of a repeated name
     /// can pick different occurrences, so the item write path accepts no such body. Names that differ only
-    /// in casing are different properties.
+    /// in casing are different properties here; <see cref="ReadVersion"/> rejects <c>version</c> variants that
+    /// differ only in casing.
     /// </summary>
     internal static void RequireUniqueProperties(JsonElement body)
     {
@@ -122,13 +123,21 @@ internal static class JsonBodyUtil
         _ => e.GetRawText()
     };
 
-    // Reads the optimistic-concurrency token the client echoed back. Accepts a JSON integer or a
+    // Reads the optimistic-concurrency token the client echoed back. The key matches `version` ignoring
+    // case, like field matching and WithVersion, and may appear once. Accepts a JSON integer or a
     // numeric string; returns null when the property is absent or JSON null ("no version supplied")
-    // and throws InvalidVersionException for any other value.
+    // and throws InvalidVersionException for a repeated key or any other value.
     internal static long? ReadVersion(JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) return null;
-        if (!body.TryGetProperty("version", out var v)) return null;
+        JsonElement? found = null;
+        foreach (var prop in body.EnumerateObject())
+        {
+            if (!string.Equals(prop.Name, "version", StringComparison.OrdinalIgnoreCase)) continue;
+            if (found is not null) throw new InvalidVersionException("version must be supplied at most once.");
+            found = prop.Value;
+        }
+        if (found is not { } v) return null;
         return v.ValueKind switch
         {
             JsonValueKind.Null => null,

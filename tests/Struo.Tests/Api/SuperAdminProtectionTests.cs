@@ -97,6 +97,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         var text = await resp.Content.ReadAsStringAsync();
         resp.StatusCode.Should().Be(status, text);
         if (code is not null) text.Should().Contain(code);
+        if (code == "LAST_SUPER_ADMIN")
+            JsonDocument.Parse(text).RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be(code, text);
     }
 
     // ---------------------------------------------------------------- no grant
@@ -387,17 +389,47 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             (await db.Queryable<UserRole>().Where(ur => ur.UserId == sole.Id && ur.RoleId == sole.SuperRoleId).FirstAsync()).Id);
         var normalRole = await NormalRoleAsync();
 
-        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { isActive = false }), HttpStatusCode.Conflict, "CONFLICT");
-        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { roles = new[] { normalRole } }), HttpStatusCode.Conflict, "CONFLICT");
-        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { roles = Array.Empty<Guid>() }), HttpStatusCode.Conflict, "CONFLICT");
-        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/user/{sole.Id}?purge=true"), HttpStatusCode.Conflict, "CONFLICT");
-        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/userRole/{rowId}?purge=true"), HttpStatusCode.Conflict, "CONFLICT");
+        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { isActive = false }), HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { roles = new[] { normalRole } }), HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(Put(sole.Client, $"/api/items/user/{sole.Id}", new { roles = Array.Empty<Guid>() }), HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/user/{sole.Id}?purge=true"), HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/userRole/{rowId}?purge=true"), HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
 
         // Every refusal rolled back: the account is still active and still in the role.
         var state = await WithDbAsync(async db => (
             (await db.Queryable<User>().Where(u => u.Id == sole.Id).FirstAsync()).IsActive,
             await db.Queryable<UserRole>().Where(ur => ur.UserId == sole.Id && ur.RoleId == sole.SuperRoleId).AnyAsync()));
         state.Should().Be((true, true));
+    }
+
+    [Fact]
+    public async Task The_last_active_super_admin_refusals_carry_LAST_SUPER_ADMIN_on_the_remaining_paths()
+    {
+        await using var sole = await BecomeSoleSuperAdminAsync();
+        var rowId = await WithDbAsync(async db =>
+            (await db.Queryable<UserRole>().Where(ur => ur.UserId == sole.Id && ur.RoleId == sole.SuperRoleId).FirstAsync()).Id);
+        var normalRole = await NormalRoleAsync();
+
+        // The membership row moved to another role, and deleted without purge.
+        await ShouldBeAsync(Put(sole.Client, $"/api/items/userRole/{rowId}", new { roleId = normalRole }),
+            HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/userRole/{rowId}"),
+            HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+        await ShouldBeAsync(sole.Client.DeleteAsync($"/api/items/user/{sole.Id}"),
+            HttpStatusCode.Conflict, "LAST_SUPER_ADMIN");
+    }
+
+    [Fact]
+    public async Task The_last_active_super_admin_refusal_status_is_409_with_the_English_message()
+    {
+        await using var sole = await BecomeSoleSuperAdminAsync();
+
+        var resp = await Put(sole.Client, $"/api/items/user/{sole.Id}", new { isActive = false });
+
+        var error = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement.GetProperty("error");
+        resp.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        error.GetProperty("code").GetString().Should().Be("LAST_SUPER_ADMIN");
+        error.GetProperty("message").GetString().Should().Be("At least one active account must remain in a super-admin role.");
     }
 
     [Fact]
@@ -588,6 +620,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
             "mutation { updateUser(id: \"" + sole.Id + "\", input: { isActive: false }) { id } }");
 
         FirstError(result).Should().Contain("At least one active account");
+        result.GetProperty("errors")[0].GetProperty("extensions").GetProperty("code").GetString()
+            .Should().Be("LAST_SUPER_ADMIN");
         (await WithDbAsync(async db => (await db.Queryable<User>().Where(u => u.Id == sole.Id).FirstAsync()).IsActive)).Should().BeTrue();
     }
 

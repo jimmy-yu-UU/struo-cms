@@ -94,7 +94,7 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
         if (!after.SetEquals(before)) throw Refusal("assign or remove a super-admin role");
     }
 
-    /// <summary>Throws a conflict (409) when no active account belongs to a super-admin role. Called after
+    /// <summary>Throws <see cref="LastSuperAdminException"/> (409) when no active account belongs to a super-admin role. Called after
     /// a write that could have removed the last one, inside its transaction, so the write rolls back.</summary>
     public async Task EnsureActiveSuperAdminAsync(CancellationToken ct = default)
     {
@@ -102,7 +102,7 @@ public sealed class SuperAdminGuard(IPermissionService permissions, ISuperAdminD
         // here until this one commits; the count that follows is a locking read of the latest rows.
         await directory.LockSuperAdminRolesAsync(ct);
         if ((await directory.ActiveSuperAdminUserIdsAsync(ct)).Count == 0)
-            throw new ConflictException(
+            throw new LastSuperAdminException(
                 "At least one active account must remain in a super-admin role.");
     }
 

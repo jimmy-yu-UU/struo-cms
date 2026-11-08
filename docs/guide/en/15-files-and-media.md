@@ -115,12 +115,13 @@ A malformed request shape is rejected outright, always `400`/`BAD_USER_INPUT`:
 
 Size gets two independent checks. The caller's own declared `Content-Length` is compared first
 against `Struo:Files:MaxUploadBytes` (the key itself is in
-[Chapter 4: Configuration Reference](04-configuration.md)); over the limit is `400`,
-`File exceeds the maximum size of {n} bytes.`.
+[Chapter 4: Configuration Reference](04-configuration.md)); over the limit is `413`/`PAYLOAD_TOO_LARGE`,
+`File exceeds the maximum size of {n} bytes.`, and `error.details` holds one entry,
+`{"field":"file","message":"…","maxBytes":n}`, that carries the limit.
 
 If the caller under-reports the size and then streams more bytes than declared, the
-buffering stream's own copy of that same cap catches it, this time as `413`/`PAYLOAD_TOO_LARGE`,
-with the same message — never a file that gets silently truncated instead. This buffer has a 64 KB
+buffering stream's own copy of that same cap catches it, with the same `413`/`PAYLOAD_TOO_LARGE`, message
+and details — never a file that gets silently truncated instead. This buffer has a 64 KB
 in-memory threshold; past that it spills to a temp file, so several large uploads running at once
 don't each hold a full cap's worth in memory.
 

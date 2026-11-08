@@ -67,7 +67,7 @@ public sealed class FileService(
     {
         if (length <= 0) throw new QueryException("Empty file.");
         if (length > fileOptions.MaxUploadBytes)
-            throw new QueryException($"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.");
+            throw TooLarge();
         if (fileOptions.AllowedContentTypes.Length > 0 &&
             !fileOptions.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             throw new QueryException($"Content type '{contentType}' is not allowed.");
@@ -121,10 +121,12 @@ public sealed class FileService(
         }
         catch (IOException ex) when (ex.Message.Contains("Buffer limit", StringComparison.OrdinalIgnoreCase))
         {
-            throw new PayloadTooLargeException(
-                $"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.");
+            throw TooLarge();
         }
     }
+
+    private PayloadTooLargeException TooLarge() => new(
+        $"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.", "file", fileOptions.MaxUploadBytes);
 
     // Shortens the stem so the name fits the column and keeps its extension; an extension that
     // alone fills the column is cut with the rest of the name.

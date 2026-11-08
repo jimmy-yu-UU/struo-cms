@@ -85,6 +85,29 @@ describe('ApiClient', () => {
     expect(err.code).toBeUndefined()
   })
 
+  it('turns a 413 with a non-JSON body into an ApiError carrying the status and no code', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 413, ok: false, headers: { get: () => null },
+      json: async () => { throw new Error('not json') }, text: async () => '<html>413 Request Entity Too Large</html>',
+    } as unknown as Response))
+    const err = await new ApiClient('/api').postForm('/files', new FormData()).catch((e) => e) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(413)
+    expect(err.code).toBeUndefined()
+    expect(err.details).toBeUndefined()
+  })
+
+  it('carries the limit detail of a PAYLOAD_TOO_LARGE envelope', async () => {
+    vi.stubGlobal('fetch', mockFetch(413, {
+      success: false,
+      error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds the maximum size of 64 bytes.', details: [{ field: 'file', message: 'x', maxBytes: 64 }] },
+    }))
+    const err = await new ApiClient('/api').postForm('/files', new FormData()).catch((e) => e) as ApiError
+    expect(err.status).toBe(413)
+    expect(err.code).toBe('PAYLOAD_TOO_LARGE')
+    expect(err.details?.[0].maxBytes).toBe(64)
+  })
+
   it('words the generic failure message in the UI locale', async () => {
     i18n.global.locale.value = 'zh-TW'
     try {

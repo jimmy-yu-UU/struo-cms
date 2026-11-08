@@ -128,7 +128,8 @@ RBAC 的資料模型落在三個集合上：使用者本身、角色，以及逐
 是用名稱找到的，跟權限下限找到它的方式一樣。
 
 超級管理員角色裡至少要留一個啟用中的帳號。把最後一個移出角色、停用它或刪除它，都回 `409`
-`CONFLICT`，`At least one active account must remain in a super-admin role.`，而且什麼都不會寫入。
+`LAST_SUPER_ADMIN`，`At least one active account must remain in a super-admin role.`，而且什麼都不會寫入。
+GraphQL 在 `extensions.code` 帶同一個代碼。
 
 兩條規則都在每條寫入路徑共用的應用層，所以項目端點、`users` 與 `roles` 控制器和 GraphQL 都套用，每條
 路徑也都有測試涵蓋。

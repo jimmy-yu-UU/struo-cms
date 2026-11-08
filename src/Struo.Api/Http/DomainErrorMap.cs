@@ -42,6 +42,7 @@ public static class DomainErrorMap
             FileBlobNotFoundException => (ErrorCodes.NotFound, exception.Message),
             ConcurrencyConflictException => (ErrorCodes.VersionConflict, exception.Message),
             InvalidVersionException => (ErrorCodes.InvalidVersion, exception.Message),
+            LastSuperAdminException => (ErrorCodes.LastSuperAdmin, exception.Message),
             ConflictException => (ErrorCodes.Conflict, exception.Message),
             RelationConflictException => (ErrorCodes.Conflict, exception.Message),
             QueryException => (ErrorCodes.BadUserInput, exception.Message),
@@ -55,14 +56,18 @@ public static class DomainErrorMap
         };
 
     /// <summary>
-    /// The field-level details a <see cref="QueryException"/> carries, or null when
-    /// <paramref name="exception"/> has none. Shared by REST (<c>error.details</c>) and GraphQL
+    /// The field-level details a <see cref="QueryException"/> carries, or the limit a
+    /// <see cref="PayloadTooLargeException"/> names, or null when <paramref name="exception"/> has none. Shared by REST (<c>error.details</c>) and GraphQL
     /// (the <c>details</c> error extension).
     /// </summary>
-    public static IReadOnlyList<ValidationDetail>? DetailsFor(Exception exception) =>
-        exception is QueryException { Details: { Count: > 0 } details }
-            ? details.Select(d => new ValidationDetail(d.Field, d.Message, d.Locale)).ToList()
-            : null;
+    public static IReadOnlyList<ValidationDetail>? DetailsFor(Exception exception) => exception switch
+    {
+        QueryException { Details: { Count: > 0 } details } =>
+            details.Select(d => new ValidationDetail(d.Field, d.Message, d.Locale)).ToList(),
+        PayloadTooLargeException { Field: { } field, MaxBytes: { } maxBytes } =>
+            [new ValidationDetail(field, exception.Message, null, maxBytes)],
+        _ => null,
+    };
 
     /// <summary>
     /// Fixed client-facing message for <see cref="ErrorCodes.SearchUnavailable"/>. Never the
@@ -99,6 +104,7 @@ public static class DomainErrorMap
         ErrorCodes.NotFound => StatusCodes.Status404NotFound,
         ErrorCodes.Conflict => StatusCodes.Status409Conflict,
         ErrorCodes.VersionConflict => StatusCodes.Status409Conflict,
+        ErrorCodes.LastSuperAdmin => StatusCodes.Status409Conflict,
         ErrorCodes.BadUserInput => StatusCodes.Status400BadRequest,
         ErrorCodes.InvalidVersion => StatusCodes.Status400BadRequest,
         ErrorCodes.Validation => StatusCodes.Status400BadRequest,

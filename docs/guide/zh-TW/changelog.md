@@ -2,12 +2,36 @@
 
 ## 0.29.0
 
+::: danger 破壞性變更
+- 寫入會讓超級管理員角色裡沒有啟用中的帳號（停用、刪除，或把最後一個移出角色）時，REST 與 GraphQL
+  都改回 `409` `LAST_SUPER_ADMIN`，不再是 `409` `CONFLICT`。對這個拒絕比對 `CONFLICT` 的用戶端要改比對
+  `LAST_SUPER_ADMIN`；訊息不變。`SuperAdminGuard.EnsureActiveSuperAdminAsync` 改拋新的
+  `LastSuperAdminException`，不再拋 `ConflictException`。
+- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，宣告的長度超過上限改回 `413` `PAYLOAD_TOO_LARGE`，不再是
+  `400` `BAD_USER_INPUT`；串流的位元組超過上限原本就是 `413`。錯誤帶一筆 `details`：
+  `{"field":"file","message":"…","maxBytes":n}`；`ValidationDetail` 多了選用的 `maxBytes`，
+  `PayloadTooLargeException` 多了選用的欄位名與上限。`FileService.UploadAsync` 對超過上限的長度改拋
+  `PayloadTooLargeException`，不再拋 `QueryException`。
+:::
+
+### 變更
+
+- 後台依錯誤代碼、用介面語言說明這兩種拒絕：寫入被最後一位超級管理員規則擋下時顯示固定的一句話；上傳
+  超過上限時顯示上限，數字取自 `maxBytes`。反向代理回的 `413` 沒有錯誤 body，顯示同一句話但不帶大小。
+- 淺色主題的品牌色加深，白字按鈕的對比度達到 WCAG AA 的 4.5:1；次要文字也另外加深，在側邊欄與其懸停底色、卡片與淡色底上同樣達到 4.5:1。深色主題不變。
+
 ### 修正
 
+- 更新 body 的 `version` 鍵跟其他鍵一樣不分大小寫讀取。`{"Version":"abc"}` 回 `400` `INVALID_VERSION`，
+  `{"Version":<過期值>}` 回 `409` `VERSION_CONFLICT`；先前兩者都不經檢查直接寫入。同一個 body 以兩種不同
+  大小寫各帶一次這個鍵，回 `400` `INVALID_VERSION`；完全相同的名稱出現兩次，跟任何重複的鍵一樣仍是 `400`
+  `BAD_USER_INPUT`。
+- GraphQL 超出 64 位元範圍的 `Long` 是用戶端錯誤，不是 `INTERNAL_SERVER_ERROR`：`version` 輸入欄位或
+  `revert<X>` 引數上的字面值回 `INVALID_VERSION`；變數或其他任何 `Long` 回 `BAD_USER_INPUT`，也不會記成
+  未處理的 resolver 例外。
 - 清空項目預設語系的所有可翻譯欄位現在會儲存：選填欄位會被清除，不會默默保留舊值。必填欄位仍會擋下儲存。
 - 媒體詳細資料對話框的衝突提示說明再次儲存會覆寫他人的變更，並提供「重新載入最新版本」按鈕，捨棄草稿並載入目前的檔案。
 - 後台的必填檢查會把只有空白的值、以及只有空段落或換行的富文字視為空值，空的富文字會以 null 儲存。
-- 淺色主題的品牌色加深，白字按鈕的對比度達到 WCAG AA 的 4.5:1；次要文字也另外加深，在側邊欄與其懸停底色、卡片與淡色底上同樣達到 4.5:1。深色主題不變。
 - 列表在載入第一頁時顯示佔位列，不再先閃現「沒有資料」的空白提示。
 - 記錄列表的操作欄有在地化的標題，欄位選單裡也同步顯示；側邊欄切換鈕的螢幕閱讀器標籤也已翻譯。
 - 後台的必填與長度檢查改用介面語言顯示，關聯列的訊息也一樣。儲存失敗後，焦點會移到第一個有誤的控制項，必要時先切到該語言分頁；伺服器沒有指出欄位時則移到錯誤橫幅。每種欄位的控制項都標示 `aria-invalid`，並連結到對應的錯誤文字。

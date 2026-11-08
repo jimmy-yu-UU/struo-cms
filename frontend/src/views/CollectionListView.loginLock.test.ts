@@ -10,6 +10,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { loginLocksApi } from '../api/loginLocksApi'
 import { ApiError } from '../api/apiClient'
+import { catalogs } from '../locales'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
@@ -498,5 +499,30 @@ describe('CollectionListView login lock column', () => {
     await flushPromises()
 
     expect(w.get('[data-testid="row-delete"]').attributes('disabled')).toBeUndefined()
+  })
+})
+
+describe('CollectionListView last super-admin refusal', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    confirmRequire.mockReset()
+    confirmRequire.mockResolvedValue(true)
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: ROWS, total: ROWS.length })
+    vi.mocked(loginLocksApi.query).mockResolvedValue([])
+  })
+
+  it('words LAST_SUPER_ADMIN in the UI locale when a delete is refused', async () => {
+    seed('user', { superAdmin: true })
+    vi.mocked(itemsApi.remove).mockRejectedValue(
+      new ApiError(409, 'At least one active account must remain in a super-admin role.', 'LAST_SUPER_ADMIN'))
+    const zh = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'en', messages: catalogs as never })
+    const w = mount(CollectionListView, { global: { plugins: [zh] } })
+    await flushPromises()
+
+    await (w.vm as any).onPurge(ROWS[2])
+    await flushPromises()
+
+    expect(w.get('[role="alert"]').text()).toBe('至少要保留一個啟用中的超級管理員帳號。')
   })
 })

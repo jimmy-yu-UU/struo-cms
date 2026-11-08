@@ -99,12 +99,12 @@ HTTP_STATUS:201
 
 大小有兩道獨立的檢查。呼叫端自己宣告的 `Content-Length` 先被拿來跟
 `Struo:Files:MaxUploadBytes` 比對（鍵本身見[第 4 章：設定](04-configuration.md)），超過是
-`400`，`File exceeds the maximum size of {n} bytes.`。
+`413`／`PAYLOAD_TOO_LARGE`，`File exceeds the maximum size of {n} bytes.`，`error.details` 有一筆
+`{"field":"file","message":"…","maxBytes":n}`，帶著上限。
 
 呼叫端如果低報大小、實際又串進更多位元組，會被緩衝串流自己的同一道上限擋下，這次是
-`413`／`PAYLOAD_TOO_LARGE`，同一句訊息，不會有一個被靜悄悄截斷的檔案。這道緩衝有 64 KB 的
-記憶體門檻，超過就溢出到暫存檔，所以多個大檔案同時上傳，不會每一個都在記憶體裡各占滿一份
-上限。
+同樣的 `413`／`PAYLOAD_TOO_LARGE`、同一句訊息與同樣的 details，不會有一個被靜悄悄截斷的檔案。這道緩衝有 64 KB
+的記憶體門檻，超過就溢出到暫存檔，所以多個大檔案同時上傳，不會每一個都在記憶體裡各占滿一份上限。
 
 內容類型先過白名單 `Struo:Files:AllowedContentTypes`：留空代表不限制，也是編譯進去的預設
 值；隨附的 `appsettings.json` 另外列了一份清單（完整內容見[第 4 章](04-configuration.md)），
