@@ -76,15 +76,15 @@ const bannerEl = ref<HTMLElement | null>(null)
 const FOCUSABLE = 'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), '
   + 'button:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])'
 
-// The key of the first field holding an error, in reading order: the active locale tab's
-// translatable fields, then shared fields, then relations.
-function firstInvalidKey(): string | undefined {
+// The keys of the fields holding an error, in reading order: the active locale tab's translatable
+// fields, then shared fields, then relations.
+function invalidKeys(): string[] {
   const keys = [
     ...fields.value.translatable.map((f) => translationErrorKey(activeLocale.value, f.name, defaultCode.value)),
     ...fields.value.shared.map((f) => f.name),
     ...(props.meta.relations ?? []).map((r) => r.name),
   ]
-  return keys.find((key) => Object.hasOwn(props.errors, key))
+  return keys.filter((key) => Object.hasOwn(props.errors, key))
 }
 
 // The control the field's label points at when that is focusable, else the first focusable element
@@ -101,18 +101,28 @@ function findFieldWrapper(key: string): Element | undefined {
   return [...wrappers].find((el) => el.getAttribute('data-field-key') === key)
 }
 
-// A tab switch mounts the new panel on a later tick than the one that changed activeLocale, so the
-// wrapper is looked up again for a few ticks before giving up.
+// Resolves true once a control took focus. A tab switch mounts the new panel on a later tick than the
+// one that changed activeLocale, so a missing wrapper is looked up again for a few ticks; a wrapper
+// with no focusable control (a read-only field) resolves false at once.
 const FOCUS_LOOKUP_TICKS = 3
-async function focusField(key: string): Promise<void> {
+async function focusField(key: string): Promise<boolean> {
   for (let tick = 0; tick < FOCUS_LOOKUP_TICKS; tick++) {
     const wrapper = findFieldWrapper(key)
     if (wrapper) {
-      focusTarget(wrapper)?.focus()
-      return
+      const target = focusTarget(wrapper)
+      target?.focus()
+      return target !== null
     }
     await nextTick()
   }
+  return false
+}
+
+// Moves focus to the error banner. The parent calls this after a save attempt that failed with a
+// server error only, so a load or delete failure never takes focus from where the user is.
+async function focusBanner(): Promise<void> {
+  await nextTick()
+  bannerEl.value?.focus()
 }
 
 // Surface validation errors even if the user is on another tab: jump to the first locale tab that
@@ -123,18 +133,14 @@ watch(() => props.errors, async (e) => {
   const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
   activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
   await nextTick()
-  const key = firstInvalidKey()
-  if (key !== undefined) await focusField(key)
+  // An invalid field that is not rendered cannot take focus; the next one does, then the banner.
+  for (const key of invalidKeys()) {
+    if (await focusField(key)) return
+  }
+  await focusBanner()
 })
 
-// A server error with no field errors has no control to focus, so the banner takes focus.
-watch(() => props.serverError, async (message) => {
-  if (!message || Object.keys(props.errors).length > 0) return
-  await nextTick()
-  bannerEl.value?.focus()
-})
-
-defineExpose({ activeLocale })
+defineExpose({ activeLocale, focusBanner })
 </script>
 
 <template>

@@ -192,13 +192,39 @@ describe('ItemForm focus on validation errors', () => {
     expect(document.activeElement?.tagName).toBe('BUTTON')
   })
 
-  it('focuses the banner when only a server error exists', async () => {
+  it('moves focus to the banner only when the parent asks for it', async () => {
     const w = mountForm(meta, emptyModel())
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
     await w.setProps({ serverError: SERVER_MESSAGE })
     await settle()
+    expect(document.activeElement).toBe(outside)
+    await (w.vm as unknown as { focusBanner: () => Promise<void> }).focusBanner()
     const banner = w.get('[role="alert"]').element
     expect(banner.getAttribute('tabindex')).toBe('-1')
     expect(document.activeElement).toBe(banner)
+  })
+
+  it('skips an invalid field that has nothing focusable and focuses the next one', async () => {
+    const roMeta: CollectionMeta = { name: 'a', label: 'A', relations: [], fields: [
+      field('locked', { label: 'Locked', readOnly: true, sort: 1 }),
+      field('status', { label: 'Status', sort: 2 }),
+    ] }
+    const w = mountForm(roMeta, emptyModel())
+    await w.setProps({ errors: { locked: MESSAGE, status: MESSAGE } })
+    await settle()
+    expect(document.activeElement).toBe(labelTarget(w, 'status'))
+  })
+
+  it('falls back to the banner when no invalid field can take focus', async () => {
+    const roMeta: CollectionMeta = { name: 'a', label: 'A', relations: [], fields: [
+      field('locked', { label: 'Locked', readOnly: true }),
+    ] }
+    const w = mountForm(roMeta, emptyModel(), { serverError: SERVER_MESSAGE })
+    await w.setProps({ errors: { locked: MESSAGE } })
+    await settle()
+    expect(document.activeElement).toBe(w.get('[role="alert"]').element)
   })
 
   it('prefers the failing field over the banner when both are present', async () => {

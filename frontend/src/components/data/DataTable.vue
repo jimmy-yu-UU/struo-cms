@@ -217,6 +217,7 @@ watch(columnIdsSignature, () => {
             v-for="n in showSkeleton ? SKELETON_ROW_COUNT : 0"
             :key="`skeleton-${n}`"
             data-testid="data-table-skeleton-row"
+            aria-hidden="true"
             class="hover:bg-transparent"
           >
             <TableCell v-for="column in table.getVisibleLeafColumns()" :key="column.id" class="px-4 py-3">

@@ -30,9 +30,8 @@ describe('TheTopbar', () => {
     expect(first.attributes('data-sidebar')).toBe('trigger')
   })
 
-  // The vendored SidebarTrigger only ships a hardcoded English "Toggle Sidebar" sr-only span, so
-  // the sidebar trigger needs a localized accessible name via shell.openMenu, for zh-TW
-  // screen-reader users.
+  // The trigger's aria-label (shell.openMenu) takes precedence over its sr-only text, so it is the
+  // button's accessible name.
   it('carries a localized accessible name on the sidebar trigger', () => {
     const w = mountTopbar()
     const first = w.findAll('button')[0]

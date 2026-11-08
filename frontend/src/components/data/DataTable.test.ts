@@ -278,7 +278,9 @@ describe('DataTable loading and empty states', () => {
   it('shows skeleton rows, not the empty message, while loading with no rows', () => {
     const w = mountTable({ rows: [], total: 0, loading: true, emptyMessage: 'Nothing here' })
     expect(w.text()).not.toContain('Nothing here')
-    expect(w.findAll('[data-testid="data-table-skeleton-row"]').length).toBeGreaterThan(0)
+    const skeletonRows = w.findAll('[data-testid="data-table-skeleton-row"]')
+    expect(skeletonRows.length).toBeGreaterThan(0)
+    for (const row of skeletonRows) expect(row.attributes('aria-hidden')).toBe('true')
     expect(w.get('[role="status"]').text()).toContain(en.common.loading)
     expect(w.get('[data-testid="data-table-container"]').attributes('aria-busy')).toBe('true')
   })

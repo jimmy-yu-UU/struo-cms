@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
@@ -146,6 +146,12 @@ const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
 const serverError = ref('')
+const itemForm = ref<InstanceType<typeof ItemForm> | null>(null)
+// A save that failed with a server error and no field error has no control to focus, so the banner takes focus.
+async function focusSaveBanner(): Promise<void> {
+  await nextTick()
+  await itemForm.value?.focusBanner()
+}
 const loading = ref(true)
 const submitting = ref(false)
 // ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
@@ -304,8 +310,10 @@ async function onSubmit(): Promise<void> {
       errors.value = { ...fieldErrors }
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
+      if (Object.keys(fieldErrors).length === 0) void focusSaveBanner()
     } else {
       serverError.value = e instanceof Error ? e.message : t('common.saveFailed')
+      void focusSaveBanner()
     }
   } finally {
     submitting.value = false
@@ -484,6 +492,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
       </p>
 
       <ItemForm
+        ref="itemForm"
         :meta="meta"
         :item-id="id"
         :model="model"
