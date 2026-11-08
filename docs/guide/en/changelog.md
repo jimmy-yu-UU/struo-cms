@@ -10,6 +10,8 @@
   Reload latest button that discards the draft and loads the current file.
 - A whitespace-only value, and rich text that holds only empty paragraphs or line breaks, counts as empty for
   a required field in the admin, and an empty rich text value is saved as null.
+- The light theme's brand colour is darker, so white button text and muted text on the sidebar, cards and
+  muted surfaces reach the WCAG AA 4.5:1 contrast. The dark theme is unchanged.
 
 ## 0.28.1 — 2026-11-07
 
