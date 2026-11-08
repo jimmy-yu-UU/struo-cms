@@ -275,9 +275,9 @@ describe('buildItemPayload empty rich text', () => {
     expect(p.translations).toEqual({ en: { body: null } })
   })
   it('create still sends a whitespace-only optional shared value', () => {
-    const model: FormModel = { shared: { notes: '   ' , status: '  ' }, translations: { en: { body: 'x' } }, relations: {} }
-    const m2: CollectionMeta = { ...rtMeta, fields: [...rtMeta.fields, field('status')] }
-    const p = buildItemPayload(m2, { ...model, shared: { notes: '', status: '  ' } }, locales, 'create')
+    const withStatus: CollectionMeta = { ...rtMeta, fields: [...rtMeta.fields, field('status')] }
+    const model: FormModel = { shared: { notes: '', status: '  ' }, translations: { en: { body: 'x' } }, relations: {} }
+    const p = buildItemPayload(withStatus, model, locales, 'create')
     expect(p.status).toBe('  ')
   })
   it('omits empty rich text markup on create and keeps real markup unchanged', () => {
