@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.29.0
+## 0.29.0 — 2026-11-09
 
 ::: danger Breaking
 - A write that would leave no active account in a super-admin role (deactivating, deleting or removing
