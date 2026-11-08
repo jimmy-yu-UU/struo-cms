@@ -54,7 +54,7 @@ function setValue(i: number, value: string) {
 }
 </script>
 <template>
-  <div class="key-value-field flex flex-col items-start gap-2" role="group" :aria-label="field.label">
+  <fieldset class="key-value-field flex flex-col items-start gap-2 border-0 p-0 m-0 min-w-0" :aria-label="field.label">
     <div v-for="(r, i) in rows" :key="i" class="kv-row flex w-full items-center gap-2">
       <Input
         :model-value="r.key"
@@ -90,5 +90,5 @@ function setValue(i: number, value: string) {
       <Plus class="size-4" />
       {{ t('fields.add') }}
     </Button>
-  </div>
+  </fieldset>
 </template>

@@ -97,25 +97,17 @@ function focusTarget(wrapper: Element): HTMLElement | null {
 }
 
 function findFieldWrapper(key: string): Element | undefined {
-  const wrappers = formEl.value?.querySelectorAll('[data-field-key]') ?? []
-  return [...wrappers].find((el) => el.getAttribute('data-field-key') === key)
+  const wrappers = formEl.value?.querySelectorAll<HTMLElement>('[data-field-key]') ?? []
+  return [...wrappers].find((el) => el.dataset.fieldKey === key)
 }
 
-// Resolves true once a control took focus. A tab switch mounts the new panel on a later tick than the
-// one that changed activeLocale, so a missing wrapper is looked up again for a few ticks; a wrapper
-// with no focusable control (a read-only field) resolves false at once.
-const FOCUS_LOOKUP_TICKS = 3
-async function focusField(key: string): Promise<boolean> {
-  for (let tick = 0; tick < FOCUS_LOOKUP_TICKS; tick++) {
-    const wrapper = findFieldWrapper(key)
-    if (wrapper) {
-      const target = focusTarget(wrapper)
-      target?.focus()
-      return target !== null
-    }
-    await nextTick()
-  }
-  return false
+// Focuses the control of the field with this key and returns true when one took focus. A wrapper
+// that is not rendered, or that has no focusable control (a read-only field), returns false.
+function focusField(key: string): boolean {
+  const wrapper = findFieldWrapper(key)
+  const target = wrapper ? focusTarget(wrapper) : null
+  target?.focus()
+  return target !== null
 }
 
 // Moves focus to the error banner. The parent calls this after a save attempt that failed with a
@@ -132,11 +124,12 @@ watch(() => props.errors, async (e) => {
   if (Object.keys(e).length === 0) return
   const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
   activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
+  // A tab switch mounts the new panel a tick or two after the one that changed activeLocale.
   await nextTick()
-  // An invalid field that is not rendered cannot take focus; the next one does, then the banner.
-  for (const key of invalidKeys()) {
-    if (await focusField(key)) return
-  }
+  await nextTick()
+  await nextTick()
+  // An invalid field that cannot take focus is skipped; the next one does, then the banner.
+  if (invalidKeys().some(focusField)) return
   await focusBanner()
 })
 

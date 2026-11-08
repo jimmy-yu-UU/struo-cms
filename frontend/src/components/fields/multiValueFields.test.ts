@@ -194,7 +194,7 @@ describe('CheckboxGroupField', () => {
 
   it('gives the group an accessible name since the label-for-field.name pairing in ItemForm.vue does not resolve to any of these checkboxes', () => {
     const w = mount(CheckboxGroupField, { props: { field: field({ interface: 'checkboxGroup', options: twoOptions, label: 'Regions' }), modelValue: [] } })
-    expect(w.find('[role="group"][aria-label="Regions"]').exists()).toBe(true)
+    expect(w.find('fieldset[aria-label="Regions"]').exists()).toBe(true)
   })
 
   // The whole behaviour of this field is array arithmetic, so it must be driven by real clicks:

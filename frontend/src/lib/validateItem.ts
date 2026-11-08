@@ -8,7 +8,7 @@ import en from '../locales/en'
 
 // Message translator injected by the caller (the UI passes vue-i18n's `t`), so this module stays a
 // pure function with no i18n instance of its own.
-export type Translate = (key: string, params?: Record<string, unknown>) => string
+export type Translate = (key: string, params?: Record<string, string | number>) => string
 
 // Used when no translator is passed: renders the English pack's template with `{name}` params.
 const englishTranslate: Translate = (key, params = {}) => {
@@ -33,7 +33,7 @@ function firstLinkError(
   for (const [i, link] of links.entries()) {
     for (const f of fields) {
       const v = link.junction[f.name]
-      const params = { relation: rel.label, label: f.label, max: f.maxLength, row: i + 1 }
+      const params = { relation: rel.label, label: f.label, max: f.maxLength ?? '', row: i + 1 }
       if (f.required && isEmpty(v, f)) return t('validation.rowRequired', params)
       if (tooLong(f, v)) return t('validation.rowMaxLength', params)
     }
@@ -53,7 +53,7 @@ function validateFields(
   for (const f of fields) {
     if (f.required && isEmpty(values[f.name], f)) errors[keyOf(f.name)] = t('validation.required', { label: f.label })
     else if (tooLong(f, values[f.name])) {
-      errors[keyOf(f.name)] = t('validation.maxLength', { label: f.label, max: f.maxLength })
+      errors[keyOf(f.name)] = t('validation.maxLength', { label: f.label, max: f.maxLength ?? '' })
     }
   }
 }
