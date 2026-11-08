@@ -7,7 +7,9 @@ public sealed record ValidationDetail(
     string Field,
     string Message,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? Locale = null);
+    string? Locale = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? MaxBytes = null);
 
 public sealed record ErrorBody(
     string Code,

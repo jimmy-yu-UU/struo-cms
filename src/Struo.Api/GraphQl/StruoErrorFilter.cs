@@ -77,6 +77,7 @@ public sealed class StruoErrorFilter(
     {
         var item = new Dictionary<string, object?> { ["field"] = d.Field, ["message"] = d.Message };
         if (d.Locale is not null) item["locale"] = d.Locale;
+        if (d.MaxBytes is not null) item["maxBytes"] = d.MaxBytes;
         return item;
     }
 }

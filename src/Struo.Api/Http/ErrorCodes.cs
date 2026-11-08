@@ -13,6 +13,10 @@ public static class ErrorCodes
     // A `version` on an update body that is present, not null and not an integer. Exception-driven
     // only (InvalidVersionException) — ForStatus keeps 400 → BadUserInput.
     public const string InvalidVersion = "INVALID_VERSION";
+    // A write that would leave no active account in a super-admin role (SuperAdminGuard, through
+    // LastSuperAdminException): deactivating, deleting or removing from the role the last such account.
+    // Exception-driven only — ForStatus keeps 409 → Conflict.
+    public const string LastSuperAdmin = "LAST_SUPER_ADMIN";
     public const string BadUserInput = "BAD_USER_INPUT";
     public const string Validation = "VALIDATION";
     public const string Internal = "INTERNAL_SERVER_ERROR";
@@ -22,10 +26,10 @@ public static class ErrorCodes
     // OnRejected callback, and AuthController.Login's per-account ILoginAttemptThrottle writes it
     // directly when a throttled login is rejected before authentication even runs.
     public const string TooManyRequests = "TOO_MANY_REQUESTS";
-    // Two producers: a lying/streaming file upload whose actual bytes exceed
-    // FileStorageOptions.MaxUploadBytes even though the declared Content-Length passed the up-front
-    // check, and a JSON request body (REST or /graphql) over ApiOptions.MaxJsonBodyBytes, declared or
-    // streamed (JsonBodyLimitMiddleware). Kestrel's own 413 for an over-limit body maps here too.
+    // Producers: a file upload over FileStorageOptions.MaxUploadBytes, whether the declared length is
+    // over it or only the streamed bytes are (FileService; the error carries the limit as a
+    // `maxBytes` detail), and a JSON request body (REST or /graphql) over ApiOptions.MaxJsonBodyBytes,
+    // declared or streamed (JsonBodyLimitMiddleware). Kestrel's own 413 for an over-limit body maps here too.
     public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 
     // "Your current password is wrong" on PUT /api/users/{id}/password. Deliberately NOT 401/

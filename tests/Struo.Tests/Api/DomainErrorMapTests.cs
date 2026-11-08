@@ -113,6 +113,34 @@ public class DomainErrorMapTests
         message.Should().Be("too big");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LastSuperAdmin_is_LAST_SUPER_ADMIN_with_status_409_regardless_of_auth(bool authenticated)
+    {
+        var exception = new LastSuperAdminException("last one");
+        var (code, message) = DomainErrorMap.Map(exception, authenticated);
+        code.Should().Be("LAST_SUPER_ADMIN");
+        message.Should().Be("last one");
+        DomainErrorMap.StatusFor(exception, code).Should().Be(409);
+    }
+
+    // A refusal that knows the limit hands it to the client as a field-level detail.
+    [Fact]
+    public void PayloadTooLarge_with_a_limit_carries_it_as_a_detail()
+    {
+        var exception = new PayloadTooLargeException("too big", "file", 4096);
+
+        var details = DomainErrorMap.DetailsFor(exception);
+
+        details.Should().ContainSingle().Which.Should().Be(new ValidationDetail("file", "too big", null, 4096));
+        DomainErrorMap.StatusFor(exception, "PAYLOAD_TOO_LARGE").Should().Be(413);
+    }
+
+    [Fact]
+    public void PayloadTooLarge_without_a_limit_carries_no_details() =>
+        DomainErrorMap.DetailsFor(new PayloadTooLargeException("too big")).Should().BeNull();
+
     // Distinguishable from a plain unmapped/masked failure: the password/user-delete write already
     // succeeded, so the caller (and the SPA) need a signal that specifically means "the write went
     // through, but some sessions might still be alive" rather than the generic masked 500.

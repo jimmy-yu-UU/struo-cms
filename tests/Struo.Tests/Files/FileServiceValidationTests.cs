@@ -26,12 +26,15 @@ public class FileServiceValidationTests
     }
 
     [Fact]
-    public async Task Upload_over_cap_throws()
+    public async Task Upload_over_the_declared_length_cap_throws_PayloadTooLarge_carrying_the_limit()
     {
         var opts = new FileStorageOptions { MaxUploadBytes = 4 };
         var svc = new FileService(null!, new FileStorageServices(new NoopStorage(), new NoopImages(), opts), new FileServiceCollaborators(null!, null!, null!));
         var act = async () => await svc.UploadAsync(new MemoryStream(new byte[10]), "x.bin", "application/octet-stream", 10);
-        await act.Should().ThrowAsync<QueryException>();
+        var thrown = (await act.Should().ThrowAsync<PayloadTooLargeException>()).Which;
+        thrown.MaxBytes.Should().Be(4);
+        thrown.Field.Should().Be("file");
+        thrown.Message.Should().Be("File exceeds the maximum size of 4 bytes.");
     }
 
     [Fact]
@@ -54,6 +57,8 @@ public class FileServiceValidationTests
         var actualBytes = new byte[10_000]; // far beyond MaxUploadBytes
         var act = async () => await svc.UploadAsync(
             new MemoryStream(actualBytes), "x.bin", "application/octet-stream", length: 50 /* declared, under cap */);
-        await act.Should().ThrowAsync<PayloadTooLargeException>();
+        var thrown = (await act.Should().ThrowAsync<PayloadTooLargeException>()).Which;
+        thrown.MaxBytes.Should().Be(100);
+        thrown.Field.Should().Be("file");
     }
 }
