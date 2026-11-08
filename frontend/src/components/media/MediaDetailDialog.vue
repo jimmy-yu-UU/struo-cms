@@ -310,7 +310,10 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             <span class="flex-1">{{ $t('media.saveConflict') }}</span>
             <Button type="button" variant="outline" size="sm" :disabled="loading" @click="load()">{{ $t('media.reloadLatest') }}</Button>
           </div>
-          <p v-if="error" class="md-error" role="alert">{{ error }}</p>
+          <div v-if="error" class="md-error flex items-center gap-3" role="alert">
+            <span class="flex-1">{{ error }}</span>
+            <Button v-if="raw === null && !loading" type="button" variant="outline" size="sm" @click="load()">{{ $t('media.reloadLatest') }}</Button>
+          </div>
         </div>
       </div>
 

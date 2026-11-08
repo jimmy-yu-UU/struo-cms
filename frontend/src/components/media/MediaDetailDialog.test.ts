@@ -658,14 +658,14 @@ describe('MediaDetailDialog', () => {
       expect(sentTranslations(update, 0)['zh-TW']).toBeNull()
     })
 
-    it('sends an emptied default locale as per-field nulls, never as null itself', async () => {
+    it('sends an emptied default locale as an entry with its serialized values, never as null', async () => {
       const { update, vm, w } = await open()
       vm.activeLocale = 'en'
       await w.vm.$nextTick()
       vm.setField('title', '')
       vm.setField('alt', '')
       await vm.onSave()
-      expect(sentTranslations(update, 0).en).toEqual({ title: null, alt: null })
+      expect(sentTranslations(update, 0).en).toEqual({ title: '', alt: '' })
       expect(sentTranslations(update, 0)['zh-TW']).not.toBeNull()
     })
   })
@@ -740,6 +740,22 @@ describe('MediaDetailDialog save conflict', () => {
     await flushPromises()
     expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({ version: 5 }))
     expect(sentTranslations(update, 1).en).toEqual({ title: 'Server', alt: 'S' })
+  })
+
+  it('keeps a retry available when the reload fails, and a retry restores the form', async () => {
+    const { w, vm, get } = await mountConflicted()
+    get.mockRejectedValueOnce(new Error('network down'))
+    await w.get('.md-conflict button').trigger('click')
+    await flushPromises()
+    expect(w.get('.md-error').text()).toContain('network down')
+    const retry = w.get('.md-error button')
+    expect(retry.text()).toBe('Reload latest')
+    get.mockResolvedValue({ ...item, version: 6, translations: { en: { title: 'Again', alt: 'A' }, 'zh-TW': { title: '', alt: '' } } } as never)
+    await retry.trigger('click')
+    await flushPromises()
+    expect(w.find('.md-error').exists()).toBe(false)
+    expect(vm.model.translations.en.title).toBe('Again')
+    expect(vm.model.version).toBe(6)
   })
 
   it('a reload that resolves after the file switched does not touch the new file', async () => {

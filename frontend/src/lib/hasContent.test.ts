@@ -20,6 +20,9 @@ describe('hasContent', () => {
     ['self-closed br', '<p><br/></p>'],
     ['several empty paragraphs', '<p></p><p><br></p><p> </p>'],
     ['paragraph with attributes', '<p style="text-align: center"></p>'],
+    ['paragraph with nbsp', '<p>&nbsp;</p>'],
+    ['empty heading', '<h2></h2>'],
+    ['nested empty list', '<ul><li><p></p></li></ul>'],
   ])('treats %s as no content', (_n, v) => {
     expect(hasContent(v)).toBe(false)
   })
@@ -36,6 +39,7 @@ describe('hasContent', () => {
     ['rich text with text', '<p>hi</p>'],
     ['rich text with image only', '<p><img src="/a.png"></p>'],
     ['rich text with a rule', '<hr>'],
+    ['heading with text', '<h2>t</h2>'],
   ])('treats %s as content', (_n, v) => {
     expect(hasContent(v)).toBe(true)
   })

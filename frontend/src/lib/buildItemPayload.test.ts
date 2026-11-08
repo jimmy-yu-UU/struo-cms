@@ -221,13 +221,19 @@ describe('buildItemPayload (update, default locale cleared)', () => {
   ]}
   const baselineTranslations = { en: { title: 'Hi', summary: 'S' }, 'zh-TW': { title: '嗨', summary: '' } }
 
-  it('sends null per translatable field when the default locale is emptied, never the locale itself as null', () => {
+  it('sends the same per-field values as a partial clear when the default locale is emptied, never the locale itself as null', () => {
     const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' }, 'zh-TW': { title: '嗨', summary: '' } }, relations: {} }
     const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations })
     expect(p.translations).toEqual({
-      en: { title: null, summary: null },
+      en: { title: '', summary: '' },
       'zh-TW': { title: '嗨', summary: '' },
     })
+  })
+  it('keeps a field loaded as null as null when the default locale is emptied', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' }, 'zh-TW': { title: '嗨', summary: '' } }, relations: {},
+      loadedNulls: { shared: [], translations: { en: ['summary'] } } }
+    const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations })
+    expect((p.translations as any).en).toEqual({ title: '', summary: null })
   })
   it('sends no entry for the default locale when it was empty at baseline and still is', () => {
     const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' } }, relations: {} }
@@ -262,6 +268,17 @@ describe('buildItemPayload empty rich text', () => {
     const p = buildItemPayload(rtMeta, model, locales, 'update', { baselineTranslations: { en: { body: '<p>x</p>' } } })
     expect(p.notes).toBeNull()
     expect(p.translations).toEqual({ en: { body: null } })
+  })
+  it('serializes a fully cleared default-locale rich text field as null', () => {
+    const model: FormModel = { shared: {}, translations: { en: { body: '<p></p>' } }, relations: {} }
+    const p = buildItemPayload(rtMeta, model, locales, 'update', { baselineTranslations: { en: { body: '<p>x</p>' } } })
+    expect(p.translations).toEqual({ en: { body: null } })
+  })
+  it('create still sends a whitespace-only optional shared value', () => {
+    const model: FormModel = { shared: { notes: '   ' , status: '  ' }, translations: { en: { body: 'x' } }, relations: {} }
+    const m2: CollectionMeta = { ...rtMeta, fields: [...rtMeta.fields, field('status')] }
+    const p = buildItemPayload(m2, { ...model, shared: { notes: '', status: '  ' } }, locales, 'create')
+    expect(p.status).toBe('  ')
   })
   it('omits empty rich text markup on create and keeps real markup unchanged', () => {
     const model: FormModel = { shared: { notes: '<p></p>' }, translations: { en: { body: '<p>x</p>' } }, relations: {} }

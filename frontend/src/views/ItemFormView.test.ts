@@ -332,7 +332,7 @@ describe('ItemFormView', () => {
       readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false }
     const loaded = { id: '5', status: 'published', version: 2, translations: { en: { title: 'Hi' } } }
 
-    it('sends the optional translatable fields as null, never the default locale as null', async () => {
+    it('sends the cleared optional translatable fields in the entry, never the default locale as null', async () => {
       routeParams = { name: 'article', id: '5' }
       const { schema } = setupStores()
       schema.get = vi.fn().mockReturnValue({ ...meta, fields: [meta.fields[0], titleField] }) as never
@@ -343,7 +343,7 @@ describe('ItemFormView', () => {
       ;(w.vm as any).model.translations.en.title = ''
       await (w.vm as any).onSubmit()
       expect(upd).toHaveBeenCalledTimes(1)
-      expect((upd.mock.calls[0][2] as any).translations).toEqual({ en: { title: null } })
+      expect((upd.mock.calls[0][2] as any).translations).toEqual({ en: { title: '' } })
     })
 
     it('blocks the save while a required translatable field is cleared', async () => {

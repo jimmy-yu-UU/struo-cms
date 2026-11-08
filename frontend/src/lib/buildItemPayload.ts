@@ -3,10 +3,14 @@ import type { FormModel, RelationLink } from '../types/itemForm'
 import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
 import { getFieldType } from './fieldTypes/registry'
-import { isEmpty } from './fieldTypes/types'
 import { localeIsSent } from './translationErrors'
 import { anyHasContent } from './hasContent'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
+
+// Create omits a value that is unset or '' only; a whitespace-only value is still the user's input.
+function isUnset(v: unknown): boolean {
+  return v === undefined || v === null || v === ''
+}
 
 function camel(s: string): string {
   return s.length ? s[0].toLowerCase() + s.slice(1) : s
@@ -16,7 +20,9 @@ export type BuildItemPayloadOptions = {
   resolveCollection?: ResolveCollection
   canWriteJunction?: (rel: RelationMeta) => boolean
   // Translations as of the form's baseline (see formDirty.baselineTranslations). On update, a
-  // non-default locale with content there and none now is sent as null so the server deletes it.
+  // non-default locale with content there and none now is sent as null so the server deletes it; the
+  // default locale in that state is sent as an entry of its serialized field values, since the server
+  // never deletes it.
   baselineTranslations?: Record<string, Record<string, unknown>>
 }
 
@@ -58,7 +64,7 @@ export function buildItemPayload(
     // nullable Guid FK never serialises "" (Postgres 22P02 -> 500). See fieldTypes/registry.ts.
     let v = getFieldType(f.interface).serialize(model.shared[f.name], f)
     if (mode === 'update') v = nullIfLoadedNull(v, model.loadedNulls?.shared, f.name)
-    if (mode === 'update' || !isEmpty(v)) payload[f.name] = v
+    if (mode === 'update' || !isUnset(v)) payload[f.name] = v
   }
 
   const defaultCode = locales.find((l) => l.isDefault)?.code
@@ -69,13 +75,15 @@ export function buildItemPayload(
     const isDefault = loc.code === defaultCode
     // create: always send default locale; else only when it has content.
     // update: send locales the user filled; a non-default locale the user emptied goes as null, and an
-    // emptied default locale (which the server never deletes) goes as null per translatable field.
+    // emptied default locale goes as an entry (never null) so its optional fields are cleared.
     if (mode === 'create' && !isDefault && !hasContent) continue
     if (mode === 'update' && !hasContent) {
       const hadContent = anyHasContent(translatable, options.baselineTranslations?.[loc.code] ?? {})
       if (!hadContent) continue
-      translations[loc.code] = isDefault ? Object.fromEntries(translatable.map((f) => [f.name, null])) : null
-      continue
+      if (!isDefault) {
+        translations[loc.code] = null
+        continue
+      }
     }
     const entry: Record<string, unknown> = {}
     const nulls = mode === 'update' ? model.loadedNulls?.translations[loc.code] : undefined
