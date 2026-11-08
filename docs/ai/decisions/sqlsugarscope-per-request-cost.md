@@ -84,8 +84,10 @@ worktree and not committed. Retention is `GC.GetTotalMemory(true)` after three f
 the key counts of the two static dictionaries read by reflection. Machine: AMD Ryzen 9 9900X, Windows
 11, .NET 10, SqlSugarCore 5.1.4.221, HotChocolate 16.6.8, Release build.
 
-The regression tests are `SqlSugarScopeRetentionTests` (key counts after 2 000 requests, readiness
+The regression tests are `SqlSugarScopeRetentionTests` (key counts after 200 requests, readiness
 included) and `SqlSugarSingletonScopeApiTests` (concurrent GraphQL, rollbacks and audit stamping).
+A leak adds at least one key per request, so the exact-zero key-count assertion detects it at any
+request count.
 
 ## Unknowns
 

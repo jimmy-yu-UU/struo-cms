@@ -15,7 +15,7 @@ namespace Struo.Tests.Persistence;
 [Collection(SqlSugarStaticStateCollection.Name)]
 public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private const int Requests = 2000;
+    private const int Requests = 200;
     private const string MultiRootQuery =
         "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
 
