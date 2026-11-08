@@ -357,7 +357,8 @@ update with `400` `INVALID_VERSION`, and nothing is written: `1.5`, `3.0`, `1e3`
 column ignores the key, and a create body never reads it.
 
 The key name is matched ignoring case, so `Version` and `VERSION` are read as `version`, and it may
-appear only once: a body that carries it twice, in any casing, fails with `400` `INVALID_VERSION`.
+appear only once: a body that carries it in two different casings fails with `400` `INVALID_VERSION`,
+and the exact same name twice is refused like any repeated key, with `400` `BAD_USER_INPUT`.
 
 A revert strips `version` from the snapshot before applying it, so a stale version number sitting
 in that snapshot never causes a needless conflict (see

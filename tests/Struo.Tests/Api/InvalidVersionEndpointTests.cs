@@ -180,6 +180,20 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Rest_update_with_the_exact_same_version_name_twice_is_400_BAD_USER_INPUT()
+    {
+        var (client, id, version) = await CreateArticleAsync();
+
+        var resp = await client.PutAsync($"/api/items/fxArticle/{id}",
+            Json($"{{\"status\":\"published\",\"version\":{version},\"version\":{version}}}"));
+
+        var body = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        Root(body).GetProperty("error").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        (await GetAsync(client, id)).GetProperty("status").GetString().Should().Be("draft");
+    }
+
+    [Fact]
     public async Task Rest_create_ignores_a_version_key()
     {
         var client = await factory.CreateAuthenticatedClientAsync();

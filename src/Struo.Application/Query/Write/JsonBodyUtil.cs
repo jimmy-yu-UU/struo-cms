@@ -27,7 +27,8 @@ internal static class JsonBodyUtil
     /// <summary>
     /// Refuses (400) a body that names a top-level property more than once. Two readers of a repeated name
     /// can pick different occurrences, so the item write path accepts no such body. Names that differ only
-    /// in casing are different properties.
+    /// in casing are different properties here; <see cref="ReadVersion"/> rejects <c>version</c> variants that
+    /// differ only in casing.
     /// </summary>
     internal static void RequireUniqueProperties(JsonElement body)
     {

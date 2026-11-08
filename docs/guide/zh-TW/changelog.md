@@ -7,8 +7,8 @@
   都改回 `409` `LAST_SUPER_ADMIN`，不再是 `409` `CONFLICT`。對這個拒絕比對 `CONFLICT` 的用戶端要改比對
   `LAST_SUPER_ADMIN`；訊息不變。`SuperAdminGuard.EnsureActiveSuperAdminAsync` 改拋新的
   `LastSuperAdminException`，不再拋 `ConflictException`。
-- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，不論是宣告的長度還是只有串流的位元組超過上限，都改回
-  `413` `PAYLOAD_TOO_LARGE`，不再是 `400` `BAD_USER_INPUT`。錯誤帶一筆 `details`：
+- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，宣告的長度超過上限改回
+  `413` `PAYLOAD_TOO_LARGE`，不再是 `400` `BAD_USER_INPUT`；串流的位元組超過上限原本就是 `413`。錯誤帶一筆 `details`：
   `{"field":"file","message":"…","maxBytes":n}`；`ValidationDetail` 多了選用的 `maxBytes`，
   `PayloadTooLargeException` 多了選用的欄位名與上限。`FileService.UploadAsync` 對超過上限的長度改拋
   `PayloadTooLargeException`，不再拋 `QueryException`。
@@ -22,8 +22,9 @@
 ### 修正
 
 - 更新 body 的 `version` 鍵跟其他鍵一樣不分大小寫讀取。`{"Version":"abc"}` 回 `400` `INVALID_VERSION`，
-  `{"Version":<過期值>}` 回 `409` `VERSION_CONFLICT`；先前兩者都不經檢查直接寫入。同一個 body 以任何大小寫
-  帶了兩次這個鍵，回 `400` `INVALID_VERSION`。
+  `{"Version":<過期值>}` 回 `409` `VERSION_CONFLICT`；先前兩者都不經檢查直接寫入。同一個 body 以兩種不同
+  大小寫各帶一次這個鍵，回 `400` `INVALID_VERSION`；完全相同的名稱出現兩次，跟任何重複的鍵一樣仍是 `400`
+  `BAD_USER_INPUT`。
 - GraphQL 超出 64 位元範圍的 `Long` 是用戶端錯誤，不是 `INTERNAL_SERVER_ERROR`：`version` 輸入欄位或
   `revert<X>` 引數上的字面值回 `INVALID_VERSION`；變數或其他任何 `Long` 回 `BAD_USER_INPUT`，也不會記成
   未處理的 resolver 例外。

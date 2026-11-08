@@ -9,8 +9,8 @@
   message is unchanged. `SuperAdminGuard.EnsureActiveSuperAdminAsync` throws the new
   `LastSuperAdminException` instead of `ConflictException`.
 - A file upload over `Struo:Files:MaxUploadBytes` is refused with `413` `PAYLOAD_TOO_LARGE` instead of
-  `400` `BAD_USER_INPUT`, whether the declared length or only the streamed bytes are over the limit. The
-  error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`; `ValidationDetail`
+  `400` `BAD_USER_INPUT`, when the declared length is over the limit; streamed bytes over the limit were
+  already `413`. The error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`; `ValidationDetail`
   gains the optional `maxBytes`, and `PayloadTooLargeException` an optional field and limit.
   `FileService.UploadAsync` throws `PayloadTooLargeException` instead of `QueryException` for an
   over-limit length.
@@ -26,8 +26,8 @@
 
 - The `version` key of an update body is read ignoring case, like every other key. `{"Version":"abc"}`
   answers `400` `INVALID_VERSION` and `{"Version":<stale>}` answers `409` `VERSION_CONFLICT`; before,
-  both were applied without the check. A body that carries the key twice in any casing answers `400`
-  `INVALID_VERSION`.
+  both were applied without the check. A body that carries the key in two different casings answers `400`
+  `INVALID_VERSION`; the exact same name twice stays `400` `BAD_USER_INPUT`, like any repeated key.
 - A GraphQL `Long` outside the 64-bit range is a client error, not `INTERNAL_SERVER_ERROR`: a literal in a
   `version` input field or `revert<X>` argument answers `INVALID_VERSION`; a variable, or any other
   `Long`, answers `BAD_USER_INPUT`. It is not logged as an unhandled resolver exception.
