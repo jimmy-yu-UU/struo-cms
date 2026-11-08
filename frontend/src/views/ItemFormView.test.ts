@@ -327,6 +327,40 @@ describe('ItemFormView', () => {
     expect(upd.mock.calls[2][2]).toHaveProperty('status', '')
   })
 
+  describe('clearing the default locale on update', () => {
+    const titleField = { name: 'title', label: 'Title', interface: 'text', required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: true, sort: 2, isSystem: false }
+    const loaded = { id: '5', status: 'published', version: 2, translations: { en: { title: 'Hi' } } }
+
+    it('sends the optional translatable fields as null, never the default locale as null', async () => {
+      routeParams = { name: 'article', id: '5' }
+      const { schema } = setupStores()
+      schema.get = vi.fn().mockReturnValue({ ...meta, fields: [meta.fields[0], titleField] }) as never
+      vi.spyOn(itemsApi, 'get').mockResolvedValue(loaded)
+      const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 3 })
+      const w = mountView()
+      await w.vm.init()
+      ;(w.vm as any).model.translations.en.title = ''
+      await (w.vm as any).onSubmit()
+      expect(upd).toHaveBeenCalledTimes(1)
+      expect((upd.mock.calls[0][2] as any).translations).toEqual({ en: { title: null } })
+    })
+
+    it('blocks the save while a required translatable field is cleared', async () => {
+      routeParams = { name: 'article', id: '5' }
+      const { schema } = setupStores()
+      schema.get = vi.fn().mockReturnValue({ ...meta, fields: [meta.fields[0], { ...titleField, required: true }] }) as never
+      vi.spyOn(itemsApi, 'get').mockResolvedValue(loaded)
+      const upd = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 3 })
+      const w = mountView()
+      await w.vm.init()
+      ;(w.vm as any).model.translations.en.title = '  '
+      await (w.vm as any).onSubmit()
+      expect(upd).not.toHaveBeenCalled()
+      expect((w.vm as any).errors.title).toMatch(/required/i)
+    })
+  })
+
   function setupOptionalStatus() {
     const { schema } = setupStores()
     const optional = { ...meta, fields: [{ ...meta.fields[0], required: false }] }

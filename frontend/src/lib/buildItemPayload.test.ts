@@ -212,3 +212,66 @@ describe('buildItemPayload fields loaded as null', () => {
     expect(q.translations).toEqual({ en: { title: '', summary: 'x' } })
   })
 })
+
+describe('buildItemPayload (update, default locale cleared)', () => {
+  const optMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('title', { translatable: true }),
+    field('summary', { translatable: true }),
+  ]}
+  const baselineTranslations = { en: { title: 'Hi', summary: 'S' }, 'zh-TW': { title: '嗨', summary: '' } }
+
+  it('sends null per translatable field when the default locale is emptied, never the locale itself as null', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' }, 'zh-TW': { title: '嗨', summary: '' } }, relations: {} }
+    const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations })
+    expect(p.translations).toEqual({
+      en: { title: null, summary: null },
+      'zh-TW': { title: '嗨', summary: '' },
+    })
+  })
+  it('sends no entry for the default locale when it was empty at baseline and still is', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' } }, relations: {} }
+    const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations: { en: { title: '', summary: '' } } })
+    expect(p.translations).toBeUndefined()
+  })
+  it('leaves an untouched default locale payload unchanged', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: 'Hi', summary: 'S' }, 'zh-TW': { title: '嗨', summary: '' } }, relations: {} }
+    const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations })
+    expect(p.translations).toEqual({ en: { title: 'Hi', summary: 'S' }, 'zh-TW': { title: '嗨', summary: '' } })
+  })
+  it('still sends a non-default locale emptied since baseline as null', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: 'Hi', summary: 'S' }, 'zh-TW': { title: '', summary: '' } }, relations: {} }
+    const p = buildItemPayload(optMeta, model, locales, 'update', { baselineTranslations })
+    expect(p.translations).toEqual({ en: { title: 'Hi', summary: 'S' }, 'zh-TW': null })
+  })
+  it('create mode keeps sending the default locale with its serialized values', () => {
+    const model: FormModel = { shared: {}, translations: { en: { title: '', summary: '' } }, relations: {} }
+    const p = buildItemPayload(optMeta, model, locales, 'create')
+    expect(p.translations).toEqual({ en: { title: '', summary: '' } })
+  })
+})
+
+describe('buildItemPayload empty rich text', () => {
+  const rtMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('notes', { interface: 'richText' }),
+    field('body', { interface: 'richText', translatable: true }),
+  ]}
+  it('serializes empty rich text markup as null on update, shared and translatable', () => {
+    const model: FormModel = { shared: { notes: '<p></p>' }, translations: { en: { body: '<p><br></p>' } }, relations: {} }
+    const p = buildItemPayload(rtMeta, model, locales, 'update', { baselineTranslations: { en: { body: '<p>x</p>' } } })
+    expect(p.notes).toBeNull()
+    expect(p.translations).toEqual({ en: { body: null } })
+  })
+  it('omits empty rich text markup on create and keeps real markup unchanged', () => {
+    const model: FormModel = { shared: { notes: '<p></p>' }, translations: { en: { body: '<p>x</p>' } }, relations: {} }
+    const p = buildItemPayload(rtMeta, model, locales, 'create')
+    expect('notes' in p).toBe(false)
+    expect(p.translations).toEqual({ en: { body: '<p>x</p>' } })
+  })
+  it('sends null for an empty translatable rich text on create for the default locale', () => {
+    const model: FormModel = { shared: {}, translations: { en: { body: '<p></p>' } }, relations: {} }
+    const p = buildItemPayload(rtMeta, model, locales, 'create')
+    expect(p.translations).toEqual({ en: { body: null } })
+  })
+})

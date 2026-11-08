@@ -68,11 +68,13 @@ export function buildItemPayload(
     const hasContent = localeIsSent(translatable, values)
     const isDefault = loc.code === defaultCode
     // create: always send default locale; else only when it has content.
-    // update: send locales the user filled, and null for a non-default locale the user emptied.
+    // update: send locales the user filled; a non-default locale the user emptied goes as null, and an
+    // emptied default locale (which the server never deletes) goes as null per translatable field.
     if (mode === 'create' && !isDefault && !hasContent) continue
     if (mode === 'update' && !hasContent) {
       const hadContent = anyHasContent(translatable, options.baselineTranslations?.[loc.code] ?? {})
-      if (hadContent && !isDefault) translations[loc.code] = null
+      if (!hadContent) continue
+      translations[loc.code] = isDefault ? Object.fromEntries(translatable.map((f) => [f.name, null])) : null
       continue
     }
     const entry: Record<string, unknown> = {}

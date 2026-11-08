@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.29.0
+
+### Fixed
+
+- Clearing every translatable field of the default locale on an item now saves: the optional fields are
+  cleared instead of silently keeping their old values. Required fields still block the save.
+- The media detail dialog's conflict notice says that saving again overwrites the other change, and offers a
+  Reload latest button that discards the draft and loads the current file.
+- A whitespace-only value, and rich text that holds only empty paragraphs or line breaks, counts as empty for
+  a required field in the admin, and an empty rich text value is saved as null.
+
 ## 0.28.1 — 2026-11-07
 
 ### Fixed

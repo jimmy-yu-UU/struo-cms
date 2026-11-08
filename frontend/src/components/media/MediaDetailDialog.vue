@@ -302,7 +302,14 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             </div>
           </label>
 
-          <p v-if="conflict" class="md-conflict" role="alert">{{ $t('media.saveConflict') }}</p>
+          <div
+            v-if="conflict"
+            class="md-conflict flex items-center gap-3 rounded-md border border-warning bg-warning/10 px-3 py-2 text-foreground"
+            role="alert"
+          >
+            <span class="flex-1">{{ $t('media.saveConflict') }}</span>
+            <Button type="button" variant="outline" size="sm" :disabled="loading" @click="load()">{{ $t('media.reloadLatest') }}</Button>
+          </div>
           <p v-if="error" class="md-error" role="alert">{{ error }}</p>
         </div>
       </div>
@@ -339,7 +346,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 .md-url { display: flex; gap: 6px; align-items: center; }
 .md-hint { display: block; margin: 0; font-size: .75rem; }
 .md-unsaved { color: var(--warn); }
-.md-conflict { margin: 0; color: var(--warn); font-size: .85rem; }
+.md-conflict { margin: 0; font-size: .85rem; }
 .md-error { margin: 0; color: var(--danger); font-size: .85rem; }
 @media (max-width: 640px) { .md-grid { grid-template-columns: 1fr; } }
 </style>
