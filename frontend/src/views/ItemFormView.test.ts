@@ -1875,6 +1875,23 @@ describe('ItemFormView banner focus', () => {
     w.unmount()
   })
 
+  it('focuses the banner when the conflict recovery re-fetch fails', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get')
+      .mockResolvedValueOnce({ id: '5', status: 'draft', translations: {}, version: 1 })
+      .mockRejectedValueOnce(new ApiError(500, 'Boom', 'INTERNAL_SERVER_ERROR'))
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'Conflict', 'VERSION_CONFLICT'))
+    const w = mountReal() // onMounted runs init
+    await flushPromises()
+    outside.focus()
+    await (w.vm as any).onSubmit()
+    await flushPromises()
+    expect((w.vm as any).serverError).toBe('Boom')
+    expect(document.activeElement).toBe(bannerOf(w))
+    w.unmount()
+  })
+
   it('leaves focus alone when the item fails to load', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()

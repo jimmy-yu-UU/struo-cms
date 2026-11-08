@@ -335,7 +335,10 @@ async function recoverFromConflict(): Promise<void> {
     // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
     conflict.value = false
     if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
-    else serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
+    else {
+      serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
+      void focusSaveBanner()
+    }
   }
 }
 
