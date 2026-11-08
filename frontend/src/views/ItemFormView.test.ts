@@ -19,6 +19,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { languagesApi } from '../api/languagesApi'
 import { rbacApi } from '../api/rbacApi'
 import type { ConfirmRequest } from '@/composables/useConfirm'
+import { catalogs } from '../locales'
 
 // PermissionMatrix / EffectivePermissionsPanel are mounted for real (not stubbed)
 // so the reload/existence assertions below exercise the actual components; stub only their API.
@@ -260,6 +261,32 @@ describe('ItemFormView', () => {
     ;(w.vm as any).model.shared.status = 'draft'
     await (w.vm as any).onSubmit()
     expect((w.vm as any).serverError).toBe('First hidden problem.; Second hidden problem.')
+  })
+
+  it('words LAST_SUPER_ADMIN on save in the UI locale, never from the server prose', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {} })
+    vi.spyOn(itemsApi, 'update').mockRejectedValue(
+      new ApiError(409, 'At least one active account must remain in a super-admin role.', 'LAST_SUPER_ADMIN'))
+    const zh = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'en', messages: catalogs as never })
+    const w = mount(ItemFormView, { global: { plugins: [zh], stubs, renderStubDefaultSlot: true } })
+    await w.vm.init()
+    await (w.vm as any).onSubmit()
+    expect((w.vm as any).serverError).toBe('至少要保留一個啟用中的超級管理員帳號。')
+  })
+
+  it('words LAST_SUPER_ADMIN on delete in the UI locale', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'published', translations: {} })
+    vi.spyOn(itemsApi, 'remove').mockRejectedValue(
+      new ApiError(409, 'At least one active account must remain in a super-admin role.', 'LAST_SUPER_ADMIN'))
+    const zh = createI18n({ legacy: false, locale: 'zh-TW', fallbackLocale: 'en', messages: catalogs as never })
+    const w = mount(ItemFormView, { global: { plugins: [zh], stubs, renderStubDefaultSlot: true } })
+    await w.vm.init()
+    await (w.vm as any).onDelete()
+    expect((w.vm as any).serverError).toBe('至少要保留一個啟用中的超級管理員帳號。')
   })
 
   it('falls back to serverError banner when the error has no details', async () => {

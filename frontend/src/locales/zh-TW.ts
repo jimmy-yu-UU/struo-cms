@@ -75,6 +75,7 @@ export default {
     tooManyRequestsWithWait: '嘗試次數過多,請於 {seconds} 秒後再試。',
     traceIdSuffix: '(追蹤碼:{id})',
     traceIdLine: '追蹤碼:{id}',
+    lastSuperAdmin: '至少要保留一個啟用中的超級管理員帳號。',
   },
   password: {
     sectionTitle: '密碼',
@@ -247,6 +248,8 @@ export default {
     saveConflict: '此檔案已被他人變更,請重新開啟以取得最新版本。',
     dropzone: '拖放檔案到這裡,或點擊上傳',
     uploadFailed: '上傳失敗。',
+    uploadTooLarge: '檔案超過上限。',
+    uploadTooLargeWithSize: '檔案超過上限（{size}）。',
     uploadTitle: '上傳檔案',
     uploadDescription: '將檔案拖放到這裡,或點擊瀏覽,然後上傳到此資料夾。',
     loadFailed: '載入媒體失敗',

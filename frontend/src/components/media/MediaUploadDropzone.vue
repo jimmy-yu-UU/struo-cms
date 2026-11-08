@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { filesApi, type FileMeta } from '../../api/filesApi'
+import { uploadTooLargeMessage } from '@/lib/apiErrorMessage'
 
 const props = defineProps<{ folderId?: string | null }>()
 const emit = defineEmits<{ (e: 'uploaded', meta: FileMeta): void; (e: 'done'): void }>()
@@ -22,7 +23,10 @@ async function uploadFiles(files: File[]): Promise<void> {
         emit('uploaded', meta)
       } catch (e) {
         row.state = 'error'
-        row.error = e instanceof Error ? e.message : t('media.uploadFailed')
+        const tooLarge = uploadTooLargeMessage(e)
+        row.error = tooLarge
+          ? t(tooLarge.key, tooLarge.params ?? {})
+          : e instanceof Error ? e.message : t('media.uploadFailed')
         rows.value = [...rows.value] // trigger reactivity
       }
     }),

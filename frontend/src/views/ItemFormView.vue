@@ -20,6 +20,7 @@ import { useLanguageStore } from '../stores/languageStore'
 import { itemsApi } from '../api/itemsApi'
 import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
+import { writeFailureMessage } from '@/lib/apiErrorMessage'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { nullsAfterSave } from '../lib/loadedNulls'
@@ -300,7 +301,7 @@ async function onSubmit(): Promise<void> {
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
     } else {
-      serverError.value = e instanceof Error ? e.message : t('common.saveFailed')
+      serverError.value = writeFailureMessage(e, t, 'common.saveFailed')
     }
   } finally {
     submitting.value = false
@@ -379,7 +380,7 @@ async function onDelete(): Promise<void> {
     captureBaseline() // item is gone: nothing to lose, so leaving must not prompt
     void router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
-    serverError.value = e instanceof Error ? e.message : t('common.deleteFailed')
+    serverError.value = writeFailureMessage(e, t, 'common.deleteFailed')
   }
 }
 
