@@ -8,6 +8,8 @@ import { filesApi } from '../../api/filesApi'
 import { ApiError } from '../../api/apiClient'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
+import zhTW from '../../locales/zh-TW'
+import en from '../../locales/en'
 
 const confirmRequire = vi.fn<(req: unknown) => Promise<boolean>>(() => Promise.resolve(true))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }))
@@ -22,7 +24,7 @@ const i18n = createI18n({
     fieldTitle: 'Title', fieldAlt: 'Alt text', fileUrl: 'File URL',
     copyUrl: 'Copy URL', urlCopied: 'URL copied', copyFailed: 'Could not copy URL',
     statusPublished: 'Published', statusPublishedHint: 'Anyone with the link', statusDraftHint: 'Writers only', statusUnsaved: 'Not saved yet',
-    save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', saveFailed: 'Save failed',
+    save: 'Save', saving: 'Saving…', delete: 'Delete file', saveConflict: 'Changed elsewhere', reloadLatest: 'Reload latest', saveFailed: 'Save failed',
     colSize: 'Size', colDimensions: 'Dimensions', colUploaded: 'Uploaded',
     folderField: 'Folder', folderUncategorized: 'Uncategorized',
   }, confirm: {
@@ -76,7 +78,7 @@ const item = {
 
 type MountFile = { id: string; fileName: string; contentType: string; size: number } | null
 
-function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}) {
+function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}, plugin: typeof i18n = i18n) {
   return mount(MediaDetailDialog, {
     props: {
       file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 },
@@ -85,7 +87,7 @@ function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelet
       ...overrides,
     },
     global: {
-      plugins: [i18n],
+      plugins: [plugin],
       // reka's portal wrapper is itself named Teleport and collides with VTU's stub, dropping the
       // whole dialog body. Nothing here asserts against document.body, so the in-tree render is fine.
       stubs: { teleport: true },
@@ -656,15 +658,128 @@ describe('MediaDetailDialog', () => {
       expect(sentTranslations(update, 0)['zh-TW']).toBeNull()
     })
 
-    it('never sends null for the default locale', async () => {
+    it('sends an emptied default locale as an entry with its serialized values, never as null', async () => {
       const { update, vm, w } = await open()
       vm.activeLocale = 'en'
       await w.vm.$nextTick()
       vm.setField('title', '')
       vm.setField('alt', '')
       await vm.onSave()
-      expect(sentTranslations(update, 0)).not.toHaveProperty('en')
+      expect(sentTranslations(update, 0).en).toEqual({ title: '', alt: '' })
       expect(sentTranslations(update, 0)['zh-TW']).not.toBeNull()
     })
+  })
+})
+
+describe('MediaDetailDialog save conflict', () => {
+  type ConflictVm = {
+    model: { version?: number; translations: Record<string, Record<string, unknown>> }
+    conflict: boolean
+    onSave: () => Promise<void>
+    setField: (n: string, v: string) => void
+  }
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((res) => { resolve = res })
+    return { promise, resolve }
+  }
+  const fileB = { id: 'f2', fileName: 'b.png', contentType: 'image/png', size: 2048 }
+  const itemB = { ...item, id: 'f2', fileName: 'b.png', version: 7, translations: { en: { title: 'Bee', alt: 'B image' }, 'zh-TW': { title: '', alt: '' } } }
+  const conflictErr = () => new ApiError(409, 'conflict', 'VERSION_CONFLICT')
+  const realI18n = (locale: 'en' | 'zh-TW') => createI18n({
+    legacy: false, locale, fallbackLocale: 'en', messages: { en, 'zh-TW': zhTW } as never,
+  }) as unknown as typeof i18n
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.restoreAllMocks()
+    seedStores()
+  })
+
+  async function mountConflicted(plugin: typeof i18n = i18n) {
+    const get = vi.spyOn(itemsApi, 'get')
+      .mockResolvedValueOnce(item as never)
+      .mockResolvedValue({ ...item, version: 5, translations: { en: { title: 'Server', alt: 'S' }, 'zh-TW': { title: '', alt: '' } } } as never)
+    const update = vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(conflictErr()).mockResolvedValue({} as never)
+    const w = mountDialog({}, plugin)
+    await flushPromises()
+    const vm = w.vm as unknown as ConflictVm
+    vm.setField('title', 'Mine')
+    await vm.onSave()
+    await flushPromises()
+    return { w, vm, get, update }
+  }
+
+  it('shows the overwrite notice (zh-TW) with a reload button after a 409', async () => {
+    const { w } = await mountConflicted(realI18n('zh-TW'))
+    const notice = w.get('.md-conflict')
+    expect(notice.text()).toContain(zhTW.media.saveConflict)
+    expect(zhTW.media.saveConflict).toContain('覆寫')
+    expect(notice.get('button').text()).toBe(zhTW.media.reloadLatest)
+  })
+
+  it('states the overwrite and the reload option in English', () => {
+    expect(en.media.saveConflict).toMatch(/overwrite/i)
+    expect(en.media.saveConflict).toMatch(/reload/i)
+    expect(en.media.reloadLatest).toBeTruthy()
+  })
+
+  it('Reload latest discards the draft, adopts the refetched copy and clears conflict and dirty state', async () => {
+    const { w, vm, get, update } = await mountConflicted()
+    expect(vm.conflict).toBe(true)
+    expect(vm.model.translations.en.title).toBe('Mine')
+    await w.get('.md-conflict button').trigger('click')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(3)
+    expect(vm.conflict).toBe(false)
+    expect(vm.model.translations.en.title).toBe('Server')
+    expect(vm.model.version).toBe(5)
+    expect(w.find('.md-conflict').exists()).toBe(false)
+    // clean again: a save sends the server copy unchanged at the refetched version
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({ version: 5 }))
+    expect(sentTranslations(update, 1).en).toEqual({ title: 'Server', alt: 'S' })
+  })
+
+  it('keeps a retry available when the reload fails, and a retry restores the form', async () => {
+    const { w, vm, get } = await mountConflicted()
+    get.mockRejectedValueOnce(new Error('network down'))
+    await w.get('.md-conflict button').trigger('click')
+    await flushPromises()
+    expect(w.get('.md-error').text()).toContain('network down')
+    const retry = w.get('.md-error button')
+    expect(retry.text()).toBe('Reload latest')
+    get.mockResolvedValue({ ...item, version: 6, translations: { en: { title: 'Again', alt: 'A' }, 'zh-TW': { title: '', alt: '' } } } as never)
+    await retry.trigger('click')
+    await flushPromises()
+    expect(w.find('.md-error').exists()).toBe(false)
+    expect(vm.model.translations.en.title).toBe('Again')
+    expect(vm.model.version).toBe(6)
+  })
+
+  it('a reload that resolves after the file switched does not touch the new file', async () => {
+    const reload = deferred<typeof item>()
+    const { w, vm } = await mountConflicted()
+    vi.spyOn(itemsApi, 'get').mockImplementation(((_c: string, id: string) =>
+      id === 'f2' ? Promise.resolve({ ...itemB }) : reload.promise) as never)
+    void w.get('.md-conflict button').trigger('click')
+    await flushPromises()
+    await w.setProps({ file: fileB })
+    await flushPromises()
+    reload.resolve({ ...item, version: 99 })
+    await flushPromises()
+    expect(vm.model.version).toBe(7)
+    expect(vm.model.translations.en.title).toBe('Bee')
+  })
+
+  it('saving again after a 409 without reloading still overwrites with the adopted version', async () => {
+    const { vm, update } = await mountConflicted()
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({
+      version: 5,
+      translations: expect.objectContaining({ en: expect.objectContaining({ title: 'Mine' }) }),
+    }))
   })
 })

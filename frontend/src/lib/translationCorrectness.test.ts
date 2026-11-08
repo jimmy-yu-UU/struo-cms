@@ -73,11 +73,14 @@ describe('update: clearing a non-default locale', () => {
       { baselineTranslations: baseline({ en: { title: 'Hi' }, 'zh-TW': { title: '', tagList: [] } }) })
     expect(Object.keys(p.translations as object)).toEqual(['en'])
   })
-  it('never sends null for the default locale', () => {
+  it('sends the emptied default locale as an entry of serialized values, never as null', () => {
     const model = blankItemForm(meta, locales)
     model.translations['zh-TW'].title = 'zh'
     const p = buildItemPayload(meta, model, locales, 'update', { baselineTranslations: baseline(loaded) })
-    expect(Object.keys(p.translations as object)).toEqual(['zh-TW'])
+    const t = p.translations as Record<string, unknown>
+    expect(Object.keys(t)).toEqual(['en', 'zh-TW'])
+    expect(t.en).not.toBeNull()
+    expect(t.en).toEqual(expect.objectContaining({ title: '', tagList: [], attrs: {}, body: null }))
   })
   it('sends the new content, not null, when the locale still has content', () => {
     const model = blankItemForm(meta, locales)

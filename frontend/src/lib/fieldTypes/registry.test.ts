@@ -209,3 +209,23 @@ describe('list column wording follows the UI locale', () => {
     expect(fmt([{ x: 1 }, { x: 2 }], rep)).toBe('2 項')
   })
 })
+
+describe('richText serialize', () => {
+  const rt = field({ interface: 'richText' })
+  it('maps empty markup and blank strings to null', () => {
+    for (const v of ['', '   ', '<p></p>', '<p><br></p>', '<p style="x"> </p>', null, undefined])
+      expect(registry.richText.serialize(v, rt)).toBeNull()
+  })
+  it('keeps real markup unchanged', () => {
+    expect(registry.richText.serialize('<p>x</p>', rt)).toBe('<p>x</p>')
+  })
+})
+
+describe('repeater blank rows with rich text sub-fields', () => {
+  it('drops rows whose sub-fields are only whitespace or empty rich text markup', () => {
+    const rt = { name: 'faqs', interface: 'repeater',
+      fields: [{ name: 'question', interface: 'text' }, { name: 'answer', interface: 'richText' }] } as never
+    const rows = [{ question: 'keep', answer: '<p></p>' }, { question: ' ', answer: '<p><br></p>' }]
+    expect(registry.repeater.serialize(rows, rt)).toEqual([{ question: 'keep', answer: '<p></p>' }])
+  })
+})

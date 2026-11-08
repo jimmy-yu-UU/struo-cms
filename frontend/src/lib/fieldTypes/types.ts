@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import type { FieldMeta } from '../../types/schema'
+import { isBlankMarkup } from '../hasContent'
 
 // Mirrors backend Struo.Domain.Metadata.Enums.FieldInterface (camelCase).
 // Adding a backend interface requires adding it here AND giving it a component in registry.ts.
@@ -39,6 +40,12 @@ export interface FieldTypeDef {
   validate?(value: unknown, field: FieldMeta): string | null
 }
 
-export function isEmpty(v: unknown): boolean {
-  return v === undefined || v === null || v === ''
+/**
+ * The single "is this value empty" predicate for required checks: undefined, null and strings that are blank after
+ * trimming. For a rich text field, markup with no content (empty paragraphs, line breaks) is empty too.
+ */
+export function isEmpty(v: unknown, field?: { interface: string }): boolean {
+  if (v === undefined || v === null) return true
+  if (typeof v !== 'string') return false
+  return field?.interface === 'richText' ? isBlankMarkup(v) : v.trim() === ''
 }
