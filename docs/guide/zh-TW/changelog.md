@@ -7,8 +7,8 @@
   都改回 `409` `LAST_SUPER_ADMIN`，不再是 `409` `CONFLICT`。對這個拒絕比對 `CONFLICT` 的用戶端要改比對
   `LAST_SUPER_ADMIN`；訊息不變。`SuperAdminGuard.EnsureActiveSuperAdminAsync` 改拋新的
   `LastSuperAdminException`，不再拋 `ConflictException`。
-- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，宣告的長度超過上限改回
-  `413` `PAYLOAD_TOO_LARGE`，不再是 `400` `BAD_USER_INPUT`；串流的位元組超過上限原本就是 `413`。錯誤帶一筆 `details`：
+- 檔案上傳超過 `Struo:Files:MaxUploadBytes` 時，宣告的長度超過上限改回 `413` `PAYLOAD_TOO_LARGE`，不再是
+  `400` `BAD_USER_INPUT`；串流的位元組超過上限原本就是 `413`。錯誤帶一筆 `details`：
   `{"field":"file","message":"…","maxBytes":n}`；`ValidationDetail` 多了選用的 `maxBytes`，
   `PayloadTooLargeException` 多了選用的欄位名與上限。`FileService.UploadAsync` 對超過上限的長度改拋
   `PayloadTooLargeException`，不再拋 `QueryException`。
