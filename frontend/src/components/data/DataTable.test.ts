@@ -273,3 +273,29 @@ describe('toSortParam', () => {
     expect(toSortParam([])).toBeUndefined()
   })
 })
+
+describe('DataTable loading and empty states', () => {
+  it('shows skeleton rows, not the empty message, while loading with no rows', () => {
+    const w = mountTable({ rows: [], total: 0, loading: true, emptyMessage: 'Nothing here' })
+    expect(w.text()).not.toContain('Nothing here')
+    expect(w.findAll('[data-testid="data-table-skeleton-row"]').length).toBeGreaterThan(0)
+    expect(w.get('[role="status"]').text()).toContain(en.common.loading)
+    expect(w.get('[data-testid="data-table-container"]').attributes('aria-busy')).toBe('true')
+  })
+
+  it('keeps the rows and dims them under the overlay while loading with rows', () => {
+    const w = mountTable({ loading: true, emptyMessage: 'Nothing here' })
+    expect(w.text()).toContain('Alpha')
+    expect(w.find('[data-testid="data-table-skeleton-row"]').exists()).toBe(false)
+    expect(w.get('table').classes()).toContain('opacity-50')
+    expect(w.find('[role="status"]').exists()).toBe(true)
+  })
+
+  it('shows the empty message once loaded with no rows', () => {
+    const w = mountTable({ rows: [], total: 0, loading: false, emptyMessage: 'Nothing here' })
+    expect(w.text()).toContain('Nothing here')
+    expect(w.find('[data-testid="data-table-skeleton-row"]').exists()).toBe(false)
+    expect(w.find('[role="status"]').exists()).toBe(false)
+    expect(w.get('[data-testid="data-table-container"]').attributes('aria-busy')).toBe('false')
+  })
+})

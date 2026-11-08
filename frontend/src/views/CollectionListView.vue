@@ -64,7 +64,9 @@ const columns = computed(() => (meta.value ? selectListColumns(meta.value) : [])
 
 const rows = ref<Row[]>([])
 const total = ref(0)
-const loading = ref(false)
+// True from the first render: the first list request starts only after the schema has loaded, and
+// the table must not show its empty message in the meantime. loadItems clears it on every bail.
+const loading = ref(true)
 const error = ref('')
 const tableState = ref<DataTableState>({ sort: [], page: 0, pageSize: 25 })
 const filters = ref<FilterSpec>({})

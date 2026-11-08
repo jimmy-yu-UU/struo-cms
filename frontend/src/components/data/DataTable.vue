@@ -72,6 +72,11 @@ const emit = defineEmits<{ 'update:state': [DataTableState] }>()
 
 const { t } = useI18n()
 
+// Rows shown as placeholders while the first load has no data yet.
+const SKELETON_ROW_COUNT = 3
+const showSkeleton = computed(() => Boolean(props.loading) && props.rows.length === 0)
+const showEmpty = computed(() => !props.loading && props.rows.length === 0)
+
 // EVERY manual* flag matters. Miss one and TanStack re-derives that dimension from the
 // single page it was handed — the table animates, but shows the wrong rows.
 const table = useTable({
@@ -176,12 +181,13 @@ watch(columnIdsSignature, () => {
       <div
         v-if="props.loading"
         role="status"
-        class="absolute inset-0 z-10 flex items-center justify-center bg-background/60"
+        class="absolute inset-0 z-10 flex items-center justify-center"
+        :class="showSkeleton ? undefined : 'bg-background/60'"
       >
         <span class="sr-only">{{ t('common.loading') }}</span>
-        <Skeleton class="h-9 w-9 rounded-full" />
+        <Skeleton v-if="!showSkeleton" class="h-9 w-9 rounded-full" />
       </div>
-      <Table :class="props.loading ? 'opacity-50' : undefined">
+      <Table :class="props.loading && !showSkeleton ? 'opacity-50' : undefined">
         <TableHeader>
           <!-- Header row carries no hover fill of its own -- that's a body-row-only cue. -->
           <TableRow class="hover:bg-transparent">
@@ -208,7 +214,17 @@ watch(columnIdsSignature, () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow v-if="props.rows.length === 0" class="hover:bg-transparent">
+          <TableRow
+            v-for="n in showSkeleton ? SKELETON_ROW_COUNT : 0"
+            :key="`skeleton-${n}`"
+            data-testid="data-table-skeleton-row"
+            class="hover:bg-transparent"
+          >
+            <TableCell v-for="column in table.getVisibleLeafColumns()" :key="column.id" class="px-4 py-3">
+              <Skeleton class="h-4 w-full" />
+            </TableCell>
+          </TableRow>
+          <TableRow v-if="showEmpty" class="hover:bg-transparent">
             <!--
               getVisibleLeafColumns(), not getAllLeafColumns(): once columns can hide, the colspan
               must shrink with them or the empty-state cell would visually overhang past the

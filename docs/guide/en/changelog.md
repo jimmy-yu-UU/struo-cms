@@ -12,6 +12,7 @@
   a required field in the admin, and an empty rich text value is saved as null.
 - The light theme's brand colour is darker, so white button text and muted text on the sidebar, cards and
   muted surfaces reach the WCAG AA 4.5:1 contrast. The dark theme is unchanged.
+- Lists show placeholder rows while the first page loads instead of flashing the empty-list message.
 
 ## 0.28.1 — 2026-11-07
 
