@@ -62,6 +62,10 @@ describe('validateItem junction links', () => {
     const long = { ...base, relations: { tags: [{ id: 't1', junction: { note: 'toolong', weight: 1 } }] } }
     expect(validateItem(articleMeta, long, 'en', resolve)).toEqual({ tags: 'Tags › note must be at most 5 characters (row 1).' })
   })
+  it('treats a whitespace-only required junction value as missing', () => {
+    const m = { ...base, relations: { tags: [{ id: 't1', junction: { note: '   ', weight: 1 } }] } }
+    expect(validateItem(articleMeta, m, 'en', resolve)).toEqual({ tags: 'Tags › note is required (row 1).' })
+  })
   it('passes valid links and ignores id[] relations and calls without a resolver', () => {
     const ok = { ...base, relations: { tags: [{ id: 't1', junction: { note: 'ok', weight: null } }], roles: ['r1'] } }
     expect(validateItem(articleMeta, ok, 'en', resolve)).toEqual({})
@@ -106,5 +110,37 @@ describe('validateItem per-locale translations', () => {
     ], relations: [] }
     expect(validateItem(lenMeta, fm({ en: { title: 'ok' }, fr: { title: 'toolong' } }), 'en'))
       .toEqual({ 'fr:title': 'Title must be at most 3 characters.' })
+  })
+})
+
+describe('validateItem blank values', () => {
+  const m = (over: Partial<FieldMeta>): CollectionMeta => ({ name: 'article', label: 'Article', relations: [],
+    fields: [field('f', { label: 'F', ...over })] })
+  const run = (meta: CollectionMeta, v: unknown) =>
+    validateItem(meta, { shared: { f: v }, translations: { en: {} }, relations: {} }, 'en')
+
+  it('flags a whitespace-only required text value', () => {
+    expect(run(m({ required: true }), '   ').f).toMatch(/required/i)
+  })
+  it('does not flag a whitespace-only optional text value', () => {
+    expect(run(m({}), '   ')).toEqual({})
+  })
+  it.each(['<p></p>', '<p><br></p>', '<p> </p><br/>'])('flags required rich text %s', (v) => {
+    expect(run(m({ interface: 'richText', required: true }), v).f).toMatch(/required/i)
+  })
+  it('accepts required rich text with content', () => {
+    expect(run(m({ interface: 'richText', required: true }), '<p>x</p>')).toEqual({})
+  })
+  it('keeps numbers and booleans, including 0 and false, as filled', () => {
+    expect(run(m({ interface: 'number', required: true }), 0)).toEqual({})
+    expect(run(m({ interface: 'boolean', required: true }), false)).toEqual({})
+  })
+  it('a plain text field containing literal paragraph markup is not blank', () => {
+    expect(run(m({ required: true }), '<p></p>')).toEqual({})
+  })
+  it('applies the same rule to a required translatable rich text field', () => {
+    const meta = m({ interface: 'richText', required: true, translatable: true })
+    const errs = validateItem(meta, { shared: {}, translations: { en: { f: '<p></p>' } }, relations: {} }, 'en')
+    expect(errs.f).toMatch(/required/i)
   })
 })

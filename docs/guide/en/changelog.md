@@ -10,8 +10,8 @@
   `LastSuperAdminException` instead of `ConflictException`.
 - A file upload over `Struo:Files:MaxUploadBytes` is refused with `413` `PAYLOAD_TOO_LARGE` instead of
   `400` `BAD_USER_INPUT`, when the declared length is over the limit; streamed bytes over the limit were
-  already `413`. The error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`; `ValidationDetail`
-  gains the optional `maxBytes`, and `PayloadTooLargeException` an optional field and limit.
+  already `413`. The error carries one `details` entry, `{"field":"file","message":"…","maxBytes":n}`;
+  `ValidationDetail` gains the optional `maxBytes`, and `PayloadTooLargeException` an optional field and limit.
   `FileService.UploadAsync` throws `PayloadTooLargeException` instead of `QueryException` for an
   over-limit length.
 :::
@@ -31,6 +31,12 @@
 - A GraphQL `Long` outside the 64-bit range is a client error, not `INTERNAL_SERVER_ERROR`: a literal in a
   `version` input field or `revert<X>` argument answers `INVALID_VERSION`; a variable, or any other
   `Long`, answers `BAD_USER_INPUT`. It is not logged as an unhandled resolver exception.
+- Clearing every translatable field of the default locale on an item now saves: the optional fields are
+  cleared instead of silently keeping their old values. Required fields still block the save.
+- The media detail dialog's conflict notice says that saving again overwrites the other change, and offers a
+  Reload latest button that discards the draft and loads the current file.
+- A whitespace-only value, and rich text that holds only empty paragraphs or line breaks, counts as empty for
+  a required field in the admin, and an empty rich text value is saved as null.
 
 ## 0.28.1 — 2026-11-07
 

@@ -21,6 +21,8 @@ import RepeaterField from '../../components/fields/RepeaterField.vue'
 import { i18n } from '../../i18n'
 import { formatDateTime } from '../formatDateTime'
 import { toDisplayString } from '../toDisplayString'
+import { isBlankMarkup } from '../hasContent'
+import { isEmpty } from './types'
 
 type ListColumn = FieldTypeDef['listColumn']
 const asString: ListColumn = { format: (v) => toDisplayString(v) }
@@ -158,10 +160,7 @@ const asItemCount: ListColumn = {
 function isBlankRow(row: unknown, subFields: FieldMeta[]): boolean {
   if (!row || typeof row !== 'object') return true
   const r = row as Record<string, unknown>
-  return subFields.every((f) => {
-    const val = r[f.name]
-    return val === null || val === undefined || (typeof val === 'string' && val.trim() === '')
-  })
+  return subFields.every((f) => isEmpty(r[f.name], f))
 }
 
 const repeaterDef: FieldTypeDef = {
@@ -208,7 +207,10 @@ export const registry: Record<FieldInterface, FieldTypeDef> = {
   code: def({ component: TextareaField }),
   // richText is the only field whose component pulls in TipTap/ProseMirror, the
   // largest dependency in the SPA, so it alone is loaded on demand.
-  richText: def({ component: defineAsyncComponent(() => import('../../components/fields/RichTextField.vue')) }),
+  richText: def({
+    component: defineAsyncComponent(() => import('../../components/fields/RichTextField.vue')),
+    serialize: (v) => (v == null || (typeof v === 'string' && isBlankMarkup(v)) ? null : v),
+  }),
   number: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),
   slider: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),
   rating: def({ component: NumberField, serialize: emptyToNull, listColumn: asString }),

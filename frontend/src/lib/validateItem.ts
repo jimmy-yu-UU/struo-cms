@@ -1,12 +1,9 @@
 import type { CollectionMeta, FieldMeta, RelationMeta } from '../types/schema'
 import type { FormModel, RelationLink } from '../types/itemForm'
+import { isEmpty } from './fieldTypes/types'
 import { splitFields } from './splitFields'
 import { localeIsSent, translationErrorKey } from './translationErrors'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
-
-function isEmpty(v: unknown): boolean {
-  return v === undefined || v === null || v === ''
-}
 
 function tooLong(f: { maxLength?: number | null }, v: unknown): boolean {
   return typeof v === 'string' && f.maxLength != null && v.length > f.maxLength
@@ -18,7 +15,7 @@ function firstLinkError(rel: RelationMeta, links: RelationLink[], fields: FieldM
   for (const [i, link] of links.entries()) {
     for (const f of fields) {
       const v = link.junction[f.name]
-      if (f.required && isEmpty(v)) return `${rel.label} › ${f.label} is required (row ${i + 1}).`
+      if (f.required && isEmpty(v, f)) return `${rel.label} › ${f.label} is required (row ${i + 1}).`
       if (tooLong(f, v)) return `${rel.label} › ${f.label} must be at most ${f.maxLength} characters (row ${i + 1}).`
     }
   }
@@ -34,7 +31,7 @@ function validateFields(
   keyOf: (name: string) => string = (name) => name,
 ): void {
   for (const f of fields) {
-    if (f.required && isEmpty(values[f.name])) errors[keyOf(f.name)] = `${f.label} is required.`
+    if (f.required && isEmpty(values[f.name], f)) errors[keyOf(f.name)] = `${f.label} is required.`
     else if (tooLong(f, values[f.name])) errors[keyOf(f.name)] = `${f.label} must be at most ${f.maxLength} characters.`
   }
 }
