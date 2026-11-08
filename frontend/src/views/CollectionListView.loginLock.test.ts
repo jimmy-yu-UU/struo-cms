@@ -229,6 +229,59 @@ describe('CollectionListView login lock column', () => {
       'Locked; unlocks automatically in 1 min 30 s. Only a super-admin can clear this lock.')
   })
 
+  // The reason is also exposed to assistive technology: the tooltip sits on a span, which a keyboard
+  // or screen-reader user never reaches. The countdown stays out of it, so it is never read twice.
+  describe('reason for a locked, non-clearable button', () => {
+    const reasonOf = (w: ReturnType<typeof mountView>, button: { attributes: (k: string) => string | undefined }) => {
+      const id = button.attributes('aria-describedby')
+      expect(id).toBeTruthy()
+      return w.get(`#${id}`)
+    }
+
+    it('describes the button of a read-only caller with the read-only hint alone', async () => {
+      seed('user', { superAdmin: false, grants: { read: true, write: false, delete: false } })
+      const w = mountView()
+      await flushPromises()
+      const button = w.get('[data-testid="lock-locked"]')
+      const reason = reasonOf(w, button)
+      expect(reason.text()).toBe('Write permission on users is needed to clear a lock.')
+      expect(reason.classes()).toContain('sr-only')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.classes().join(' ')).not.toContain('cursor-not-allowed')
+    })
+
+    it('describes a non-clearable lock with the super-admin-only reason alone', async () => {
+      seed('user', { superAdmin: false, grants: WRITER })
+      answerQuery({ 'locked@struo.test': lock('locked@struo.test', true, false, 90) })
+      const w = mountView()
+      await flushPromises()
+      const reason = reasonOf(w, w.get('[data-testid="lock-locked"]'))
+      expect(reason.text()).toBe('Only a super-admin can clear this lock.')
+      expect(reason.text()).not.toMatch(/\d:\d\d/)
+    })
+
+    it('gives every locked row its own description id', async () => {
+      seed('user', { superAdmin: false, grants: { read: true, write: false, delete: false } })
+      answerQuery({
+        'free@struo.test': lock('free@struo.test', true, true, 30),
+        'locked@struo.test': lock('locked@struo.test', true, true, 90),
+      })
+      const w = mountView()
+      await flushPromises()
+      const ids = w.findAll('[data-testid="lock-locked"]').map((b) => b.attributes('aria-describedby'))
+      expect(ids).toHaveLength(2)
+      expect(new Set(ids).size).toBe(2)
+      expect(w.findAll('.sr-only').filter((el) => ids.includes(el.attributes('id')))).toHaveLength(2)
+    })
+
+    it('adds no description to the clearable Unlock button', async () => {
+      seed('user', { superAdmin: true })
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid="lock-unlock"]').attributes('aria-describedby')).toBeUndefined()
+    })
+  })
+
   it('formats the time as m:ss, and as h:mm:ss from an hour on', async () => {
     seed('user', { superAdmin: true })
     answerQuery({

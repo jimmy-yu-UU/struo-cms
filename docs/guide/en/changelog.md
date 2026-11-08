@@ -24,6 +24,8 @@
 - On a user form, a caller without read on `role` no longer sees "No permissions" in the effective-permissions
   panel: it shows the roles stored on the user. A relation that cannot be read says so in the interface
   language, and the panel says when the caller lacks permission to view the result.
+- The disabled Locked button in the user list is described to assistive technology by the reason it cannot be
+  cleared, not only by a tooltip.
 
 ## 0.28.1 — 2026-11-07
 
