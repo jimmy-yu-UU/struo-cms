@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## 0.29.1 — 2026-11-09
+
+### 修正
+
+- 在 PostgreSQL 上（`STRUO_TEST_BACKEND=PostgreSQL`），`SqlSugarScopeRetentionTests` 可以通過。
+  它送 200 個請求，數量少到不開 pooling 的測試連線不會撞上連線逾時。
+
 ## 0.29.0 — 2026-11-09
 
 ::: danger 破壞性變更

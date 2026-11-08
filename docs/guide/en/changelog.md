@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.1 — 2026-11-09
+
+### Fixed
+
+- On PostgreSQL (`STRUO_TEST_BACKEND=PostgreSQL`), `SqlSugarScopeRetentionTests` passes. It drives
+  200 requests, few enough that the unpooled test connections stay clear of connect timeouts.
+
 ## 0.29.0 — 2026-11-09
 
 ::: danger Breaking
