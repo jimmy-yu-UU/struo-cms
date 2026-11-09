@@ -195,6 +195,7 @@ public class SubqueryPushdownTests : IDisposable
         var ids = await _h.QueryIdsAsync(new ComparisonFilter("properties.code", QueryOperator.Contains, "bulk"));
         ids.Should().BeEquivalentTo([cross]);
     }
+
     [Fact]
     public async Task Soft_deleted_related_rows_stay_excluded_even_when_outer_includes_trash()
     {

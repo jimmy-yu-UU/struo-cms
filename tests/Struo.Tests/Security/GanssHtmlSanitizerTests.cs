@@ -186,7 +186,7 @@ public class GanssHtmlSanitizerTests
     [InlineData("<a href=\"vbscript:msgbox(1)\">x</a>")]
     [InlineData("<a href=\"   javascript:alert(1)\">x</a>")]
     [InlineData("<a href=\"%6Aavascript:alert(1)\">x</a>")]
-    [InlineData("<a href=\"java script:alert(1)\">x</a>")]
+    [InlineData("<a href=\"java\0script:alert(1)\">x</a>")]
     public void Neutralizes_obfuscated_dangerous_href_schemes(string html)
     {
         var clean = _s.Sanitize(html);

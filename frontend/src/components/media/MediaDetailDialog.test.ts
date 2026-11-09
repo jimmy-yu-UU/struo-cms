@@ -710,10 +710,13 @@ describe('MediaDetailDialog save conflict', () => {
     expect(notice.get('button').text()).toBe(zhTW.media.reloadLatest)
   })
 
-  it('states the overwrite and the reload option in English', () => {
-    expect(en.media.saveConflict).toMatch(/overwrite/i)
-    expect(en.media.saveConflict).toMatch(/reload/i)
-    expect(en.media.reloadLatest).toBeTruthy()
+  it('states the overwrite and the reload option in English', async () => {
+    const { w } = await mountConflicted(realI18n('en'))
+    const notice = w.get('.md-conflict')
+    expect(notice.text()).toContain(en.media.saveConflict)
+    expect(notice.text()).toMatch(/overwrite/i)
+    expect(notice.text()).toMatch(/reload/i)
+    expect(notice.get('button').text()).toBe(en.media.reloadLatest)
   })
 
   it('Reload latest discards the draft, adopts the refetched copy and clears conflict and dirty state', async () => {
