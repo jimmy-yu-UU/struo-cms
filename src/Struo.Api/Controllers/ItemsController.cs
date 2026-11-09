@@ -1,4 +1,5 @@
 // src/Struo.Api/Controllers/ItemsController.cs
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -140,9 +141,23 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
     [HttpPost("{id}/revisions/{revisionNumber:long}/revert")]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
     public async Task<IActionResult> Revert(string collection, string id, long revisionNumber,
-        [FromQuery] long? version, CancellationToken ct)
+        CancellationToken ct)
     {
-        var reverted = await items.RevertAsync(collection, id, revisionNumber, version, ct);
+        var reverted = await items.RevertAsync(collection, id, revisionNumber, ReadVersionQuery(), ct);
         return reverted is null ? NotFound() : Ok(reverted);
+    }
+
+    // The optimistic-concurrency token of a revert, read from the raw query so that an empty value is
+    // distinguishable from an absent one: absent means last-write-wins, anything present that is not a
+    // single integer string (empty, "abc", "1.5", "1e2", out of range, repeated) is INVALID_VERSION, the
+    // same code and the same accepted forms as an update body's `version`.
+    private long? ReadVersionQuery()
+    {
+        if (!Request.Query.TryGetValue("version", out var values)) return null;
+        if (values.Count != 1)
+            throw new InvalidVersionException("version must be supplied at most once.");
+        return long.TryParse(values[0], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n)
+            ? n
+            : throw new InvalidVersionException("version must be an integer.");
     }
 }
