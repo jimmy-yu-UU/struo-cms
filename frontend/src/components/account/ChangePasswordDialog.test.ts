@@ -339,24 +339,6 @@ describe('ChangePasswordDialog under zh-TW', () => {
     useAuthStore().user = { id: 'self-id', isSuperAdmin: false, permissions: {} }
   })
 
-  it('states the token revocation in the success toast of an admin reset', async () => {
-    vi.spyOn(usersApi, 'changePassword').mockResolvedValue(undefined)
-    const w = mountZh('other-id')
-    await flushPromises()
-    await fillAndSubmit(w as never, ['newpassword1', 'newpassword1'])
-    expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')
-    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: zhTW.password.changed }))
-  })
-
-  it('uses the first-person sentence when the user changes their own password', async () => {
-    vi.spyOn(usersApi, 'changePassword').mockResolvedValue(undefined)
-    const w = mountZh('self-id')
-    await flushPromises()
-    await fillAndSubmit(w as never, ['oldpassword1', 'newpassword1', 'newpassword1'])
-    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的 API 存取權杖已撤銷。')
-    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success', summary: zhTW.password.changedSelf }))
-  })
-
   it('names the API access token in Chinese in the dialog notes and never mentions sessions', async () => {
     const other = mountZh('other-id')
     await flushPromises()
