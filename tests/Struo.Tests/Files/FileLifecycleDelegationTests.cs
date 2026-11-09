@@ -58,7 +58,15 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     }
 
     private sealed record Host(
-        WebApplicationFactory<Program> Factory, HttpClient Client, RecordingStorage Storage, ListLogger<FileService> Log);
+        WebApplicationFactory<Program> Factory, HttpClient Client, RecordingStorage Storage, ListLogger<FileService> Log)
+        : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            await Factory.DisposeAsync();
+        }
+    }
 
     private async Task<Host> CreateHostAsync()
     {
@@ -123,7 +131,7 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     [Fact]
     public async Task Generic_trash_of_the_logo_file_clears_the_logo_reference()
     {
-        var h = await CreateHostAsync();
+        await using var h = await CreateHostAsync();
         var (id, _) = await UploadAsync(h, "logo-trash.txt");
         await SetLogoAsync(h, id);
         try
@@ -139,7 +147,7 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     [Fact]
     public async Task Generic_trash_of_an_already_trashed_file_is_still_success()
     {
-        var h = await CreateHostAsync();
+        await using var h = await CreateHostAsync();
         var (id, _) = await UploadAsync(h, "twice.txt");
 
         (await h.Client.DeleteAsync($"/api/items/file/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -150,7 +158,7 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     [Fact]
     public async Task Generic_purge_removes_blob_translations_row_and_logo_reference()
     {
-        var h = await CreateHostAsync();
+        await using var h = await CreateHostAsync();
         var (id, key) = await UploadAsync(h, "purge-generic.txt");
         await SetLogoAsync(h, id);
         (await TranslationCountAsync(h, id)).Should().BeGreaterThan(0);
@@ -170,7 +178,7 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     [Fact]
     public async Task GraphQl_delete_of_a_file_cleans_up_like_the_media_library()
     {
-        var h = await CreateHostAsync();
+        await using var h = await CreateHostAsync();
         var (id, key) = await UploadAsync(h, "purge-graphql.txt");
         await SetLogoAsync(h, id);
         try
@@ -193,7 +201,7 @@ public sealed class FileLifecycleDelegationTests(ApiFactory factory)
     [Fact]
     public async Task Failing_blob_delete_keeps_purge_successful_and_logs_the_key()
     {
-        var h = await CreateHostAsync();
+        await using var h = await CreateHostAsync();
         var (id, key) = await UploadAsync(h, "purge-throws.txt");
         h.Storage.ThrowOnDelete = true;
 

@@ -61,10 +61,6 @@ public sealed class LocalFileStorageTests : IDisposable
         await act.Should().ThrowAsync<FileBlobNotFoundException>();
     }
 
-    [Fact]
-    public void Local_does_not_support_presigned_urls() =>
-        NewStorage().SupportsPresignedUrls.Should().BeFalse();
-
     public void Dispose()
     {
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);

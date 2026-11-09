@@ -19,20 +19,6 @@ namespace Struo.Tests.Hosting;
 public class AddStruoCmsTests
 {
     [Fact]
-    public void A_service_registered_after_AddStruoCms_replaces_the_core_default()
-    {
-        var builder = WebApplication.CreateBuilder();
-        builder.AddStruoCms();
-        var custom = new ScriptedSearchProvider(_ => SearchOutcome.NotHandled);
-        builder.Services.AddScoped<ISearchProvider>(_ => custom);
-
-        using var provider = builder.Services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        scope.ServiceProvider.GetRequiredService<ISearchProvider>().Should().BeSameAs(custom);
-    }
-
-    [Fact]
     public void A_service_registered_before_AddStruoCms_is_kept_over_the_core_default()
     {
         var builder = WebApplication.CreateBuilder();

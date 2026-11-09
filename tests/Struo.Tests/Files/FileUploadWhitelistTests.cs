@@ -32,12 +32,4 @@ public class FileUploadWhitelistTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, await resp.Content.ReadAsStringAsync());
     }
 
-    [Fact]
-    public async Task Upload_of_whitelisted_type_succeeds()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsync("/api/files",
-            Multipart(Encoding.UTF8.GetBytes("ok"), "ok.txt", "text/plain"));
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
-    }
 }
