@@ -68,7 +68,8 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
         var console = LogOnce(Config(), logs, "hello-text");
 
         console.Should().MatchRegex(TextLine());
-        var file = Directory.GetFiles(logs, "struo-*.log").Should().ContainSingle().Subject;
+        var file = Directory.GetFiles(logs).Should().ContainSingle().Subject;
+        Path.GetFileName(file).Should().MatchRegex(@"^struo-\d{8}\.log$");
         File.ReadAllText(file).Should().Contain("hello-text").And.MatchRegex(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [+-]\d{2}:\d{2} \[INF\]");
     }
 
@@ -120,6 +121,93 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
     }
 
     [Fact]
+    public void With_both_built_in_sinks_off_nothing_is_written_by_them_and_an_extra_sink_still_loads()
+    {
+        var extra = Path.Combine(_root, "extra", "extra-.log");
+
+        var console = LogOnce(Config(
+                ("Struo:Logging:ConsoleEnabled", "false"),
+                ("Struo:Logging:FileEnabled", "false"),
+                ("Serilog:WriteTo:0:Name", "File"),
+                ("Serilog:WriteTo:0:Args:path", extra)),
+            Path.Combine(_root, "logs"), "hello-only-extra");
+
+        console.Should().BeEmpty();
+        Directory.Exists(Path.Combine(_root, "logs")).Should().BeFalse();
+        File.ReadAllText(Directory.GetFiles(Path.GetDirectoryName(extra)!, "extra-*.log").Should().ContainSingle().Subject)
+            .Should().Contain("hello-only-extra");
+    }
+
+    [Fact]
+    public void The_console_is_on_by_default_and_the_file_stays_on_when_only_the_console_is_off()
+    {
+        var logs = Path.Combine(_root, "logs");
+
+        var console = LogOnce(Config(("Struo:Logging:ConsoleEnabled", "false")), logs, "hello-file-only");
+
+        console.Should().BeEmpty();
+        File.ReadAllText(Directory.GetFiles(logs).Should().ContainSingle().Subject).Should().Contain("hello-file-only");
+    }
+
+    [Theory]
+    [InlineData("5")]
+    [InlineData("-1")]
+    public void An_undefined_numeric_ConsoleFormat_fails_like_an_unknown_name(string value)
+    {
+        var act = () => LogOnce(Config(("Struo:Logging:ConsoleFormat", value)), Path.Combine(_root, "logs"), "x");
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain("ConsoleFormat");
+    }
+
+    [Fact]
+    public void A_leftover_override_of_the_old_second_entry_without_a_Name_fails_startup()
+    {
+        var act = () => LogOnce(Config(("Serilog:WriteTo:1:Args:path", "x/y-.log")), Path.Combine(_root, "logs"), "x");
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain("Serilog:WriteTo:1:Name");
+    }
+
+    [Fact]
+    public void Json_carries_the_trace_id_as_the_at_tr_property()
+    {
+        using var activity = new System.Diagnostics.Activity("request").Start();
+
+        var console = LogOnce(Config(("Struo:Logging:ConsoleFormat", "Json"), ("Struo:Logging:FileEnabled", "false")),
+            Path.Combine(_root, "logs"), "hello-trace");
+
+        JsonDocument.Parse(console.Trim()).RootElement.GetProperty("@tr").GetString()
+            .Should().Be(activity.TraceId.ToHexString());
+    }
+
+    [Fact]
+    public void The_file_sink_is_shared_so_two_processes_can_write_the_same_day_file()
+    {
+        var logs = Path.Combine(_root, "logs");
+        using var provider = new ServiceCollection().BuildServiceProvider();
+        var config = Config(("Struo:Logging:ConsoleEnabled", "false"));
+
+        using var first = StruoCmsLogging.Configure(new LoggerConfiguration(), config, provider, logs).CreateLogger();
+        using var second = StruoCmsLogging.Configure(new LoggerConfiguration(), config, provider, logs).CreateLogger();
+        first.Information("from-first");
+        second.Information("from-second");
+        (first as IDisposable)!.Dispose();
+        (second as IDisposable)!.Dispose();
+
+        var text = File.ReadAllText(Directory.GetFiles(logs).Should().ContainSingle().Subject);
+        text.Should().Contain("from-first").And.Contain("from-second");
+    }
+
+    // The templates are the ones the shipped appsettings.json carried before the sinks moved into code.
+    [Fact]
+    public void The_template_constants_equal_the_templates_the_shipped_appsettings_used_to_carry()
+    {
+        StruoCmsLogging.ConsoleOutputTemplate.Should().Be(
+            "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj} <s:{SourceContext}>{NewLine}{Exception}");
+        StruoCmsLogging.FileOutputTemplate.Should().Be(
+            "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}");
+    }
+
+    [Fact]
     public void The_shipped_Serilog_section_holds_the_minimum_level_and_no_sinks()
     {
         var path = Path.Combine(RepoRoot.Find(), "src", "Struo.Api", "appsettings.json");
@@ -132,7 +220,7 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
     }
 
     [Fact]
-    public void The_shipped_Struo_Logging_defaults_are_Text_with_the_file_on()
+    public void The_shipped_Struo_Logging_defaults_are_Text_with_both_sinks_on()
     {
         var path = Path.Combine(RepoRoot.Find(), "src", "Struo.Api", "appsettings.json");
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
@@ -141,5 +229,6 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
 
         logging.GetProperty("ConsoleFormat").GetString().Should().Be("Text");
         logging.GetProperty("FileEnabled").GetBoolean().Should().BeTrue();
+        logging.GetProperty("ConsoleEnabled").GetBoolean().Should().BeTrue();
     }
 }

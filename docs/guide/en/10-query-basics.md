@@ -315,8 +315,9 @@ A larger `offset` is rejected with a 400, in REST, `POST .../query` and GraphQL 
 exceeds the maximum of 100000; narrow the result set with filters instead of paging deeper.`. A
 nested list's `offset` inside `deep` has the same cap.
 
-A non-numeric value such as `limit=abc` isn't an error — it's treated exactly as if `limit` were
-missing, and clamped to the default the same way: `GET /api/items/article?limit=abc` responds
+A non-numeric value such as `limit=abc`, or one beyond the 32-bit integer range such as
+`limit=99999999999`, isn't an error — it's treated exactly as if `limit` were missing, and clamped to
+the default the same way: `GET /api/items/article?limit=abc` responds
 with a `meta` of `{"total":3,"limit":25,"offset":0}` — `limit` falls back to the default 25,
 rather than the request being rejected.
 

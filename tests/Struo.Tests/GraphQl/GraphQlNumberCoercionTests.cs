@@ -4,7 +4,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SqlSugar;
+using Struo.Application.Configuration;
 using Struo.Tests.Support;
 using Xunit;
 using FileEntity = Struo.Infrastructure.Files.File;
@@ -238,18 +240,19 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
         (await RestFileIdsAsync(client, $"filter[size][_lt]={Large}")).Should().Contain(small).And.NotContain(big);
     }
 
-    // REST has no Int coercion: an oversized limit is accepted and clamped to the page cap, where
-    // GraphQL answers BAD_USER_INPUT for the same value.
+    // REST does not refuse a limit it cannot parse as a 32-bit integer: it reads it as missing and
+    // pages with the configured default, where GraphQL answers BAD_USER_INPUT for the same value.
     [Fact]
-    public async Task Rest_limit_beyond_the_Int_range_is_clamped_not_refused()
+    public async Task Rest_limit_beyond_the_Int_range_falls_back_to_the_default_limit()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
+        var defaultLimit = factory.Services.GetRequiredService<IOptions<StruoQueryOptions>>().Value.DefaultLimit;
 
         var resp = await client.GetAsync("/api/items/fxArticle?limit=99999999999");
 
         var body = await resp.Content.ReadAsStringAsync();
         resp.StatusCode.Should().Be(HttpStatusCode.OK, body.Length > 300 ? body[..300] : body);
-        Root(body).GetProperty("meta").GetProperty("limit").GetInt64().Should().BeLessThan(99999999999);
+        Root(body).GetProperty("meta").GetProperty("limit").GetInt32().Should().Be(defaultLimit);
     }
 
     [Theory]

@@ -18,7 +18,13 @@ public sealed class LoggingOptions
 {
     public const string SectionName = "Struo:Logging";
 
-    /// <summary><c>Text</c> (the default) or <c>Json</c>; matched ignoring case, any other value fails startup.</summary>
+    /// <summary>
+    /// Whether the Console sink is added. Default <c>true</c>; a fork that turns both built-in sinks off
+    /// keeps its own under <c>Serilog:WriteTo</c>.
+    /// </summary>
+    public bool ConsoleEnabled { get; set; } = true;
+
+    /// <summary><c>Text</c> (the default) or <c>Json</c>; matched ignoring case, any other value, a number included, fails startup.</summary>
     public ConsoleLogFormat ConsoleFormat { get; set; } = ConsoleLogFormat.Text;
 
     /// <summary>

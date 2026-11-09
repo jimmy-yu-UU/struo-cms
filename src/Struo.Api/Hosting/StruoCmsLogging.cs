@@ -34,12 +34,20 @@ internal static class StruoCmsLogging
     {
         var options = configuration.GetSection(LoggingOptions.SectionName).Get<LoggingOptions>() ?? new LoggingOptions();
 
+        // The binder turns a number into an enum value without checking it is a member.
+        if (!Enum.IsDefined(options.ConsoleFormat))
+            throw new InvalidOperationException(
+                $"{LoggingOptions.SectionName}:ConsoleFormat must be one of: {string.Join(", ", Enum.GetNames<ConsoleLogFormat>())}.");
+
         logger.ReadFrom.Configuration(configuration).ReadFrom.Services(services);
 
-        if (options.ConsoleFormat == ConsoleLogFormat.Json)
-            logger.WriteTo.Console(new RenderedCompactJsonFormatter());
-        else
-            logger.WriteTo.Console(outputTemplate: ConsoleOutputTemplate);
+        if (options.ConsoleEnabled)
+        {
+            if (options.ConsoleFormat == ConsoleLogFormat.Json)
+                logger.WriteTo.Console(new RenderedCompactJsonFormatter());
+            else
+                logger.WriteTo.Console(outputTemplate: ConsoleOutputTemplate);
+        }
 
         if (options.FileEnabled)
         {
