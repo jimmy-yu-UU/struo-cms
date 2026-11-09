@@ -29,4 +29,10 @@ public class RbacPermissionServiceTests
         svc.CanRead("article").Should().BeFalse();
     }
 
+    [Fact]
+    public void ReadableFields_returns_every_field()
+    {
+        var svc = new RbacPermissionService(new CurrentPermissions());
+        svc.ReadableFields("article", ["title", "body"]).Should().BeEquivalentTo(["title", "body"]);
+    }
 }

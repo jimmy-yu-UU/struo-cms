@@ -64,4 +64,16 @@ public class UserRolesRelationTests(ApiFactory factory)
             .First(r => r.GetProperty("name").GetString() == "roles");
         roles.GetProperty("targetCollection").GetString().Should().Be("role");
     }
+
+    [Fact]
+    public async Task NonAdmin_cannot_write_user_roles()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var roleId = await CreateRoleAsync(admin, $"batch-b-{Guid.NewGuid():N}");
+        var userId = await CreateUserAsync(admin);
+
+        var (editor, _) = await factory.CreateEditorClientAsync(readCollections: [], writeCollections: []);
+        var resp = await editor.PutAsJsonAsync($"/api/items/user/{userId}", new { roles = new[] { roleId } });
+        ((int)resp.StatusCode).Should().Be(403);
+    }
 }
