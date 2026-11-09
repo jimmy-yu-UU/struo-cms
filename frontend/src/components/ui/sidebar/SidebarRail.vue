@@ -3,13 +3,11 @@ import type { HTMLAttributes } from "vue"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "./utils"
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   class?: HTMLAttributes["class"]
   /** Accessible name and tooltip; the caller supplies the translated text. */
-  label?: string
-}>(), {
-  label: "Toggle Sidebar",
-})
+  label: string
+}>()
 
 const { toggleSidebar } = useSidebar()
 </script>

@@ -1,10 +1,7 @@
 // Requires: seeded bootstrap admin (same as items.spec.ts / collections.spec.ts) with write+delete
-// grants on `article`, plus AT LEAST ONE `category` row and ONE `tag` row already present in the
-// database — the sample blog collection ships no seed data for these, so create one of each via the
-// authenticated API before running this spec live, e.g.:
-//
-//   POST /api/items/category   { "name": "E2E Category" }
-//   POST /api/items/tag        { "name": "E2E Tag" }
+// grants on `article`, `category` and `tag`. Every category and tag a test needs is created through
+// the authenticated API with a stamped name and purged in afterEach, so the database needs no seed
+// rows.
 //
 // See frontend/e2e/README.md for the full live-gate prerequisites (API on :5221, seeded admin, etc).
 // CI runs neither `pnpm e2e:sample` nor this spec: the `sample` project needs the Blog sample opted
@@ -20,6 +17,20 @@ const PASSWORD = e2ePassword()
 // Caller passes a unique value per run so create-then-delete is self-cleaning
 // even if two runs overlap (e.g. CI + a local run against the same DB).
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
+
+// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
+// Rows this spec creates; purged in afterEach, newest first so a row that references another goes first.
+let navCreated: { collection: string; id: string }[] = []
+
+// Creates a `category` or `tag` row through the API and returns its name, which is also its option
+// label in the relation pickers (DisplayTemplate = "{Name}"). Needs a logged-in page.
+async function createNamed(page: Page, collection: 'category' | 'tag', name: string): Promise<string> {
+  const res = await page.request.post(`${API}/api/items/${collection}`, { data: { name }, headers: { 'X-Struo-CSRF': '1' } })
+  expect(res.ok()).toBe(true)
+  navCreated.push({ collection, id: String((await res.json()).data.id) })
+  return name
+}
 
 async function login(page: Page): Promise<void> {
   await page.goto('/')
@@ -79,91 +90,6 @@ async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Pro
   await page.getByRole('option', { name: optionLabel }).click()
 }
 
-// Open a relation picker and click its first option, returning that option's label. RelationPicker
-// loads its options asynchronously (onMounted loadOptions() -> API), which makes two things race:
-//   1. The overlay can pop open before any option exists — worst in edit mode, where the form is
-//      interactable the instant it loads (create mode hides the race behind the time spent filling
-//      Status/Title/Body). Verified live: the Category picker (single) / Tags picker (multiple)
-//      render 19/13 options once the fetch resolves; the only failure mode is interacting before it does.
-//   2. When the options DO arrive the list re-renders and the overlay repositions, so a click on a
-//      pre-captured option hits a detached/moving element ("element is not stable" / "detached").
-// So open (or re-open) AND read-label AND click as one retried unit, re-grabbing the option each
-// attempt. Options are scoped to THIS picker's own overlay type — never page-wide getByRole('option')
-// — because a fast preceding interaction (e.g. chooseStatus's Select) can leave another overlay
-// momentarily open and a page-level query would resolve to its options (observed: Status "Draft").
-async function pickFirstFromPicker(
-  page: Page,
-  field: ReturnType<typeof fieldByLabel>,
-): Promise<string> {
-  // RelationPicker.vue's single- and multi-select branches both render the same vendored
-  // ComboboxTrigger button (data-slot="combobox-trigger") — its accessible name changes with the
-  // current selection (a plain label when empty, "<label>: <value>" or a "<label>, N selected"
-  // string once something is picked), so the stable data-slot hook is used instead of getByRole
-  // name matching.
-  //
-  // The options list is NOT scoped by the shared data-slot="combobox-list" attribute alone: every
-  // Combobox on this form (Regions' MultiSelectField, plus this picker's OWN sibling field) renders
-  // that same attribute, and reka's Presence keeps a CLOSING list mounted through its exit
-  // animation (ComboboxList.vue's `data-[state=closed]:fade-out-0`), so a page-wide query can still
-  // resolve into a different, still-fading list from the field picked immediately before this one.
-  // reka's trigger instead renders `aria-controls` pointing at its OWN content's id (and that id
-  // never changes across opens/closes — verified in reka-ui's compiled ComboboxTrigger.js /
-  // ComboboxContentImpl.js), so resolving the list by that id pins it to this exact field
-  // regardless of what else is open or animating elsewhere on the page. Items keep role="option"
-  // (reka's underlying ListboxItem sets it unconditionally), same as the plain Select's overlay.
-  const trigger = field.locator('[data-slot="combobox-trigger"]')
-  // Dismiss any stray overlay, THEN wait for every combobox-list on the page (not just this
-  // field's) to actually finish unmounting — not merely start its closing animation — before
-  // reopening. Without this barrier, a preceding picker's still-fading list satisfies a
-  // visibility check for a few hundred ms after Escape, exactly the window the next picker's first
-  // retry attempt runs in.
-  await page.keyboard.press('Escape')
-  await expect(page.locator('[data-slot="combobox-list"]')).toHaveCount(0)
-  let label = ''
-  await expect(async () => {
-    // Reopen only when THIS trigger reports itself closed (its own data-state, set from the same
-    // open/close boolean the click handler toggles) — not by probing the list's presence, which
-    // the barrier above already guarantees is gone, and which (were it probed here) would only
-    // ever describe THIS field's list, because the overlay below is id-scoped rather than page-wide.
-    if ((await trigger.getAttribute('data-state')) !== 'open') await trigger.click()
-    // Read aria-controls AFTER the open-check/click, every attempt, never before: reka's
-    // ComboboxContent.js only generates the id the first time its content actually mounts
-    // (`rootContext.contentId ||= useId(...)`), so on a field whose overlay has never opened yet
-    // the trigger's aria-controls is still "" — reading it once outside this retried block would
-    // permanently pin an empty selector for the rest of the function's life.
-    const listId = await trigger.getAttribute('aria-controls')
-    const overlay = page.locator(`#${listId}`)
-    const option = overlay.locator('[role="option"]').first()
-    await expect(option).toBeVisible({ timeout: 1000 })
-    label = ((await option.textContent()) ?? '').trim()
-    await option.click({ timeout: 2000 })
-  }).toPass({ timeout: 20000 })
-  return label
-}
-
-// Article.Category is [CmsRelation(Interface = RelationInterface.Dropdown)] -> RelationPicker's
-// single-select Combobox branch. The exact seeded category name isn't known to this spec (see
-// top-of-file seeding note), so pick by position and capture the chosen category's label
-// (DisplayTemplate = "{Name}") — the RelatedList assertion opens THIS category rather than
-// guessing a "first row" (dropdown option order and category list row order need not agree in a
-// populated DB).
-async function pickFirstCategory(page: Page): Promise<string> {
-  return pickFirstFromPicker(page, fieldByLabel(page, 'Category'))
-}
-
-// Article.Tags is [CmsRelation(Interface = RelationInterface.TagSelect)] -> RelationPicker's
-// `multiple` Combobox branch. Selecting an option does NOT close the overlay (multi-select
-// semantics), so press Escape afterwards to close it and commit the selection, as a real user
-// would. Returns the toggled tag's label so callers can assert the chip that RelationPicker.vue
-// renders outside the trigger (unaffected by the overlay closing) — without that assertion,
-// a helper that silently read a different field's list (the bug this id-scoping fixes) would
-// still report a label and leave the suite green while never touching the Tags picker at all.
-async function pickFirstTag(page: Page): Promise<string> {
-  const label = await pickFirstFromPicker(page, fieldByLabel(page, 'Tags'))
-  await page.keyboard.press('Escape')
-  return label
-}
-
 // Search filters apply on an explicit press (or Enter), never on keystroke.
 async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
   await page.getByRole('button', { name: 'Add condition' }).click()
@@ -203,6 +129,12 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // fields (Title/Body live under the first — default-locale — Tabs panel,
   // which is active by default per ItemForm.vue's `activeLocale` ref).
   const title = `E2E Relation Title ${STAMP}-${Date.now()}`
+  // Category and tag rows for this run; the pickers need no pre-existing rows.
+  const firstCategory = await createNamed(page, 'category', `E2E Category A ${STAMP}-${Date.now()}`)
+  const secondCategory = await createNamed(page, 'category', `E2E Category B ${STAMP}-${Date.now()}`)
+  const tagName = await createNamed(page, 'tag', `E2E Tag ${STAMP}-${Date.now()}`)
+  // The pickers load their options when the form mounts, so open the form after the rows exist.
+  await page.reload()
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
@@ -214,11 +146,11 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await page.keyboard.type('E2E relations body content.')
 
   // Relations section: pick a Category (single-select Combobox) and a Tag (multi-select Combobox).
-  await pickFirstCategory(page)
-  const tagName = await pickFirstTag(page)
+  await pickOptionByLabel(page, fieldByLabel(page, 'Category'), firstCategory)
+  await pickOptionByLabel(page, fieldByLabel(page, 'Tags'), tagName)
   // RelationPicker.vue's multi-select branch renders each selection as a Badge chip inside the field
   // box, beside the trigger, so this is visible regardless of the overlay's open/closed state and proves
-  // the click actually landed on Tags' own list (see pickFirstTag's doc comment).
+  // the click actually landed on Tags' own list.
   await expect(fieldByLabel(page, 'Tags').getByText(tagName, { exact: true })).toBeVisible()
 
   const created = page.waitForResponse((r) =>
@@ -237,14 +169,15 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // actually landed on the saved record, not only in the form's local reactive state.
   await expect(fieldByLabel(page, 'Tags').getByText(tagName, { exact: true })).toBeVisible()
 
-  // Re-pick the category (exercises changing a Dropdown relation that already has a value —
+  // Switch to the second category (exercises changing a Dropdown relation that already has a value —
   // RelationPicker's ensureSelectedLabels() must have resolved the current selection's label before
-  // this click). Capture the assigned category's name to drive the RelatedList assertion below.
-  const categoryName = await pickFirstCategory(page)
-  // Only one tag is seeded, so re-picking it here toggles it OFF (add/remove use the same
-  // click path in RelationPicker.vue's toggleValue()) — assert the chip is gone to prove this
-  // removal, not just the earlier addition, actually reached the Tags picker.
-  await pickFirstTag(page)
+  // this click). It is the category the RelatedList assertion below opens.
+  const categoryName = secondCategory
+  await pickOptionByLabel(page, fieldByLabel(page, 'Category'), categoryName)
+  // Picking the linked tag again toggles it OFF (add/remove use the same click path in
+  // RelationPicker.vue's toggleValue()) — assert the chip is gone to prove this removal, not just the
+  // earlier addition, actually reached the Tags picker.
+  await pickOptionByLabel(page, fieldByLabel(page, 'Tags'), tagName)
   await expect(fieldByLabel(page, 'Tags').getByText(tagName, { exact: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Save' }).click()
@@ -278,12 +211,8 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
 
-// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
-const API = process.env.E2E_API ?? 'http://localhost:5221'
-// Rows this test creates; purged in afterEach. The seeded category is NOT purged (it pre-exists).
-let navCreated: { collection: string; id: string }[] = []
 test.afterEach(async ({ page }) => {
-  for (const c of navCreated) {
+  for (const c of [...navCreated].reverse()) {
     await page.request
       .delete(`${API}/api/items/${c.collection}/${c.id}?purge=true`, { headers: { 'X-Struo-CSRF': '1' } })
       .catch(() => undefined)
@@ -305,14 +234,19 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
 
   // Create an article assigned to a category so that category's Articles RelatedList has a row.
   const title = `E2E Nav Article ${STAMP}`
+  const categoryName = await createNamed(page, 'category', `E2E Nav Category ${STAMP}-${Date.now()}`)
   await page.goto('/collections/article/new')
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
   await body.click()
   await page.keyboard.type('E2E nav body content.')
-  const categoryName = await pickFirstCategory(page)
+  await pickOptionByLabel(page, fieldByLabel(page, 'Category'), categoryName)
+  const created = page.waitForResponse((r) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/items/article')
   await page.getByRole('button', { name: 'Save' }).click()
+  // Recorded right after the save so a later failure still purges the article, and with it the category.
+  navCreated.push({ collection: 'article', id: String((await (await created).json()).data.id) })
   await expect(page).toHaveURL(/\/collections\/article$/)
 
   // Open the assigned category; wait for its form + Articles RelatedList row to load.
@@ -342,12 +276,15 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
-
-  navCreated.push({ collection: 'article', id: page.url().match(/\/collections\/article\/([^/]+)$/)![1] })
 })
 
-// Like pickFirstFromPicker but clicks the option with THIS label (needed to select a specific
-// second tag without toggling the first one back off). Same retry/scoping reasoning as above.
+// Opens a relation picker (single or multiple Combobox) and clicks the option with THIS label.
+// RelationPicker loads its options asynchronously and the list re-renders when they arrive, so open,
+// find and click run as one retried unit. The options list is resolved through the trigger's own
+// `aria-controls` id, never a page-wide `combobox-list` query: every Combobox on the form renders
+// that data-slot and reka keeps a closing list mounted through its exit animation, so a page-wide
+// query can resolve into another field's still-fading list. aria-controls is read after the
+// open-check on every attempt because reka only generates the id once its content first mounts.
 async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLabel>, label: string): Promise<void> {
   const trigger = field.locator('[data-slot="combobox-trigger"]')
   await page.keyboard.press('Escape')
@@ -369,13 +306,8 @@ async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLab
 // a row and a reorder both survive Save and a fresh reload.
 test('junction links editor: tag Note and order survive save + reload', async ({ page }) => {
   await login(page)
-  const csrf = { headers: { 'X-Struo-CSRF': '1' } }
-  const tagA = `E2E Link A ${STAMP}`
-  const tagB = `E2E Link B ${STAMP}`
-  for (const name of [tagA, tagB]) {
-    const res = await page.request.post(`${API}/api/items/tag`, { data: { name }, ...csrf })
-    navCreated.push({ collection: 'tag', id: String((await res.json()).data.id) })
-  }
+  const tagA = await createNamed(page, 'tag', `E2E Link A ${STAMP}-${Date.now()}`)
+  const tagB = await createNamed(page, 'tag', `E2E Link B ${STAMP}-${Date.now()}`)
 
   const title = `E2E Junction Title ${STAMP}`
   await page.goto('/collections/article/new')
@@ -392,8 +324,9 @@ test('junction links editor: tag Note and order survive save + reload', async ({
   await expect(rowLabels).toHaveText([tagA, tagB])
   const rowA = tags.locator('.junction-link', { has: page.getByText(tagA, { exact: true }) })
   await rowA.getByLabel('Note').fill(`note ${STAMP}`)
-  // Move A below B: the arrows are SortableList's, rendered as siblings of the row content in its <li>.
-  await rowA.locator('xpath=ancestor::li[1]').getByTestId('move-down').click()
+  // Move A below B: `.junction-link` is the <li> SortableList renders for each row, and the move
+  // arrows sit inside it.
+  await rowA.getByTestId('move-down').click()
   await expect(rowLabels).toHaveText([tagB, tagA])
 
   await page.getByRole('button', { name: 'Save' }).click()

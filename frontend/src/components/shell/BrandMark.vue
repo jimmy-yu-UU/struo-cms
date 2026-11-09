@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useAppConfigStore } from '@/stores/appConfigStore'
 
-const { brandName, brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore())
+const { brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore())
 </script>
 
 <template>
@@ -10,7 +10,7 @@ const { brandName, brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore(
     v-if="brandLogoUrl"
     class="size-8 flex-none rounded-md object-contain"
     :src="brandLogoUrl"
-    :alt="brandName"
+    alt=""
   />
   <span
     v-else

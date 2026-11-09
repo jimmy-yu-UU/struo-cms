@@ -57,12 +57,12 @@ export default {
     openMenu: '開啟導覽選單',
     toggleSidebar: '展開／收合側欄',
     mainNav: '主導覽',
-    brandHome: '回到儀表板',
+    brandHomeHint: '，回到儀表板',
     mobileNav: '側邊欄',
     mobileNavDescription: '顯示行動版側邊欄。',
   },
   user: {
-    account: '帳戶',
+    accountMenuHint: '，帳戶選單',
     superAdmin: '超級管理員',
     member: '一般使用者',
     logoutIncomplete: '已在此處登出,但伺服器未能確認。若這是共用電腦,請關閉瀏覽器。',
@@ -86,7 +86,7 @@ export default {
   },
   password: {
     sectionTitle: '密碼',
-    sectionDescription: '為此帳號設定新密碼；它的工作階段與存取權杖會被撤銷。',
+    sectionDescription: '為此帳號設定新密碼；它的工作階段與 API 存取權杖會被撤銷。',
     changeTitle: '變更密碼',
     changeDescription: '輸入目前的密碼,然後設定新密碼。',
     resetTitle: '重設密碼',

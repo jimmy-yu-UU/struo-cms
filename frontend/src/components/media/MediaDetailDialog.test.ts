@@ -667,6 +667,7 @@ describe('MediaDetailDialog save conflict', () => {
   type ConflictVm = {
     model: { version?: number; translations: Record<string, Record<string, unknown>> }
     conflict: boolean
+    loading: boolean
     onSave: () => Promise<void>
     setField: (n: string, v: string) => void
   }
@@ -728,20 +729,53 @@ describe('MediaDetailDialog save conflict', () => {
     expect(sentTranslations(update, 1).en).toEqual({ title: 'Server', alt: 'S' })
   })
 
-  it('keeps a retry available when the reload fails, and a retry restores the form', async () => {
+  it('keeps the draft and the form populated while the reload is in flight', async () => {
+    const { w, vm, get } = await mountConflicted()
+    const pending = deferred<typeof item>()
+    get.mockReturnValue(pending.promise as never)
+    await w.get('.md-conflict button').trigger('click')
+    await flushPromises()
+    expect(vm.loading).toBe(true)
+    expect(vm.model.translations.en.title).toBe('Mine')
+    expect((w.get('input').element as HTMLInputElement).value).toBe('Mine')
+    expect(w.find('.md-conflict').exists()).toBe(true)
+    pending.resolve({ ...item, version: 8, translations: { en: { title: 'Fresh', alt: 'F' }, 'zh-TW': { title: '', alt: '' } } })
+    await flushPromises()
+    expect(vm.model.translations.en.title).toBe('Fresh')
+    expect(vm.model.version).toBe(8)
+    expect(vm.conflict).toBe(false)
+  })
+
+  it('keeps the draft, the conflict notice and a retry when the reload fails, and a retry restores the form', async () => {
     const { w, vm, get } = await mountConflicted()
     get.mockRejectedValueOnce(new Error('network down'))
     await w.get('.md-conflict button').trigger('click')
     await flushPromises()
     expect(w.get('.md-error').text()).toContain('network down')
-    const retry = w.get('.md-error button')
+    expect(vm.model.translations.en.title).toBe('Mine')
+    expect(vm.conflict).toBe(true)
+    const retry = w.get('.md-conflict button')
     expect(retry.text()).toBe('Reload latest')
     get.mockResolvedValue({ ...item, version: 6, translations: { en: { title: 'Again', alt: 'A' }, 'zh-TW': { title: '', alt: '' } } } as never)
     await retry.trigger('click')
     await flushPromises()
     expect(w.find('.md-error').exists()).toBe(false)
+    expect(w.find('.md-conflict').exists()).toBe(false)
     expect(vm.model.translations.en.title).toBe('Again')
     expect(vm.model.version).toBe(6)
+  })
+
+  it('switching to another file still clears the form before the new file arrives', async () => {
+    const { w, vm } = await mountConflicted()
+    const pending = deferred<typeof itemB>()
+    vi.spyOn(itemsApi, 'get').mockReturnValue(pending.promise as never)
+    await w.setProps({ file: fileB })
+    await flushPromises()
+    expect(vm.model.translations).toEqual({})
+    expect(vm.conflict).toBe(false)
+    pending.resolve({ ...itemB })
+    await flushPromises()
+    expect(vm.model.translations.en.title).toBe('Bee')
   })
 
   it('a reload that resolves after the file switched does not touch the new file', async () => {

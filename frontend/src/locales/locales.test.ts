@@ -30,6 +30,11 @@ describe('locale packs', () => {
     expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
 
+  it('names the API access token in the password section description in both locales', () => {
+    expect(zhTW.password.sectionDescription).toBe('為此帳號設定新密碼；它的工作階段與 API 存取權杖會被撤銷。')
+    expect(catalogs.en.password.sectionDescription).toBe('Set a new password for this account. Its sessions and API access token are revoked.')
+  })
+
   // The zh-TW password-change toasts name the API access token; the wording is a maintainer ruling.
   it('pins the zh-TW password-change toast wording to the ruled sentences', () => {
     expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')

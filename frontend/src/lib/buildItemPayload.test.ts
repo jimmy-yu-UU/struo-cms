@@ -296,3 +296,31 @@ describe('buildItemPayload non-default locale holding markup-like plain text', (
     expect((p.translations as any)['zh-TW']).toEqual({ title: '<TBD>' })
   })
 })
+
+describe('buildItemPayload non-default locale left with only blank collection elements', () => {
+  const faqMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+    field('id', { isSystem: true }),
+    field('tags', { interface: 'multiSelect', translatable: true }),
+    field('props', { interface: 'keyValue', translatable: true }),
+    field('faqs', { interface: 'repeater', translatable: true, fields: [field('q'), field('a')] }),
+    field('docs', { interface: 'files', translatable: true }),
+  ]}
+  const baseline = { en: { tags: ['x'] }, 'zh-TW': { tags: ['x'], props: { a: 'b' }, faqs: [{ q: 'q', a: 'a' }], docs: ['id-1'] } }
+  const blank = { tags: [''], props: { '': 'x' }, faqs: [{ q: '', a: '' }], docs: [''] }
+
+  it('sends null for the locale instead of an entry of empty collections', () => {
+    const model: FormModel = { shared: {}, translations: { en: { tags: ['x'], props: {}, faqs: [], docs: [] }, 'zh-TW': blank }, relations: {} }
+    const p = buildItemPayload(faqMeta, model, locales, 'update', { baselineTranslations: baseline })
+    expect((p.translations as any)['zh-TW']).toBeNull()
+  })
+  it('sends nothing for a locale that was empty at baseline and holds only blank elements', () => {
+    const model: FormModel = { shared: {}, translations: { en: { tags: ['x'], props: {}, faqs: [], docs: [] }, 'zh-TW': blank }, relations: {} }
+    const p = buildItemPayload(faqMeta, model, locales, 'update', { baselineTranslations: { en: baseline.en, 'zh-TW': blank } })
+    expect((p.translations as any)['zh-TW']).toBeUndefined()
+  })
+  it('omits the locale on create', () => {
+    const model: FormModel = { shared: {}, translations: { en: { tags: ['x'], props: {}, faqs: [], docs: [] }, 'zh-TW': blank }, relations: {} }
+    const p = buildItemPayload(faqMeta, model, locales, 'create')
+    expect((p.translations as any)['zh-TW']).toBeUndefined()
+  })
+})
