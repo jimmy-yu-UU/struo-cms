@@ -5,6 +5,10 @@ import { e2ePassword } from '../credentials'
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = e2ePassword()
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
+// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
+
+let createdId: string | undefined
 
 async function login(page: Page): Promise<void> {
   await page.goto('/')
@@ -39,9 +43,18 @@ async function searchByField(page: Page, fieldLabel: string, value: string): Pro
   await page.getByRole('button', { name: 'Search' }).click()
 }
 
+// Purges the row whether the test left it active, in the trash or already purged.
+test.afterEach(async ({ page }) => {
+  if (!createdId) return
+  await page.request
+    .delete(`${API}/api/items/article/${createdId}?purge=true`, { headers: { 'X-Struo-CSRF': '1' } })
+    .catch(() => undefined)
+  createdId = undefined
+})
+
 test('soft-delete an article, see it in trash, restore, then purge', async ({ page }) => {
   await login(page)
-  const title = `E2E Trash ${STAMP}`
+  const title = `E2E Trash ${STAMP}-${Date.now()}`
 
   // Create.
   await page.goto('/collections/article')
@@ -49,7 +62,10 @@ test('soft-delete an article, see it in trash, restore, then purge', async ({ pa
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is a non-required RichText (TipTap) field — skip it; Title is the only required translatable field.
+  const created = page.waitForResponse((r) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/items/article')
   await page.getByRole('button', { name: 'Save' }).click()
+  createdId = String((await (await created).json()).data.id)
   await expect(page).toHaveURL(/\/collections\/article$/)
 
   // Populated dev DB → the new row may not be on list page 1. Title is searchable, so

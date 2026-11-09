@@ -202,7 +202,7 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // Shared field (Status, a Select) + default-locale required translatable
   // fields (Title/Body live under the first — default-locale — Tabs panel,
   // which is active by default per ItemForm.vue's `activeLocale` ref).
-  const title = `E2E Relation Title ${STAMP}`
+  const title = `E2E Relation Title ${STAMP}-${Date.now()}`
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
@@ -221,7 +221,10 @@ test('create, edit relations, verify RelatedList, then delete an article', async
   // the click actually landed on Tags' own list (see pickFirstTag's doc comment).
   await expect(fieldByLabel(page, 'Tags').getByText(tagName, { exact: true })).toBeVisible()
 
+  const created = page.waitForResponse((r) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/items/article')
   await page.getByRole('button', { name: 'Save' }).click()
+  navCreated.push({ collection: 'article', id: String((await (await created).json()).data.id) })
 
   // Back on the list; the new row is present BY ITS TRANSLATED TITLE — Title is a translatable
   // scalar field so selectListColumns() includes it as a column, and the row renders the resolved

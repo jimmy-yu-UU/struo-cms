@@ -107,6 +107,15 @@ async function contentStatus(page: Page, id: string): Promise<number> {
   return res.status()
 }
 
+// Rows of the file collection matching this id, trashed ones included. Empty only once the row is
+// truly gone, which a 404 on /content cannot tell apart from a trashed file.
+async function fileRowCount(page: Page, id: string): Promise<number> {
+  const qs = new URLSearchParams({ deleted: 'with', 'filter[id][_eq]': id }).toString()
+  const res = await page.request.get(`${API}/api/items/file?${qs}`)
+  expect(res.ok(), `GET file rows for ${id} -> ${res.status()}`).toBeTruthy()
+  return ((await res.json()).data as unknown[]).length
+}
+
 test.afterEach(async ({ page }) => {
   if (!uploadedFileId) return
   await page.request
@@ -153,12 +162,14 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
 
   await switchMode(page, 'Trash')
   await expect(trashTile(page, fileName)).toBeVisible()
+  expect(await fileRowCount(page, uploadedFileId)).toBe(1)
   await trashTile(page, fileName).getByRole('button', { name: 'Delete permanently', exact: true }).click()
   await expect(page.getByRole('alertdialog', { name: 'Delete permanently' })).toHaveCount(1)
   await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
   await expect(trashTile(page, fileName)).toHaveCount(0)
 
-  // Purged: gone from Trash and content stays 404 (not merely "excluded from reads" but truly gone).
+  // Purged: the row no longer exists even when trashed rows are included, and content stays 404.
+  expect(await fileRowCount(page, uploadedFileId)).toBe(0)
   expect(await contentStatus(page, uploadedFileId)).toBe(404)
   uploadedFileId = undefined
 })
