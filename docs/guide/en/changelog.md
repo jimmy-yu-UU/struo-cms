@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.30.0
+
+### Changed
+
+- A live test whose backend has no connection configured, and a Redis or S3 test without its
+  environment variables, shows as skipped instead of passing, and the skip reason names the missing
+  variable or setting key. `Struo.Tests.Support` adds `LiveBackendFact`, `LiveBackendTheory` and
+  `EnvironmentFact` for a fork's own live tests, and `LiveSkip` for the skip reasons they use.
+
 ## 0.29.2 — 2026-11-09
 
 ### Changed

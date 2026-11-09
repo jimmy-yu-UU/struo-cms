@@ -1,5 +1,13 @@
 # 版本紀錄
 
+## 0.30.0
+
+### 變更
+
+- 後端沒有設定連線的實機測試，以及沒有設定環境變數的 Redis、S3 測試，改為顯示略過而不是通過，略過
+  原因會寫明缺的環境變數或設定鍵。`Struo.Tests.Support` 新增 `LiveBackendFact`、`LiveBackendTheory`
+  與 `EnvironmentFact`，供 fork 自己的實機測試使用，並新增 `LiveSkip` 提供它們用的略過原因。
+
 ## 0.29.2 — 2026-11-09
 
 ### 變更
