@@ -86,7 +86,7 @@ export default {
   },
   password: {
     sectionTitle: '密碼',
-    sectionDescription: '為此帳號設定新密碼；它的工作階段與存取權杖會被撤銷。',
+    sectionDescription: '為此帳號設定新密碼；它的工作階段與 API 存取權杖會被撤銷。',
     changeTitle: '變更密碼',
     changeDescription: '輸入目前的密碼,然後設定新密碼。',
     resetTitle: '重設密碼',
