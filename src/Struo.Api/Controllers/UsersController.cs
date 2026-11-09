@@ -200,7 +200,7 @@ public sealed class UsersController(
     }
 
     // Hypothetical preview of an unsaved role selection. Empty -> public floor.
-    private async Task<(RolePermissionData? Data, IActionResult? Error)> LoadHypotheticalAsync(
+    private static async Task<(RolePermissionData? Data, IActionResult? Error)> LoadHypotheticalAsync(
         IRolePermissionStore rolePermissions, string roles, CancellationToken ct)
     {
         var parts = roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
