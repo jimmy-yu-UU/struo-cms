@@ -21,6 +21,8 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     /// <summary>The message of every over-limit request body, JSON or Kestrel's own.</summary>
     internal const string TooLargeMessage = "Request body is too large.";
 
+    private const string UnreadableMessage = "The request body could not be read.";
+
     private const int BufferChunkBytes = 81920;
 
     private readonly long _limit = options.Value.MaxJsonBodyBytes;
@@ -48,14 +50,14 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         {
             context.Request.Body = new LimitedReadStream(context.Request.Body, _limit);
         }
-        else if (context.Request.ContentLength is null)
+        else if (context.Request.ContentLength is null && CanHaveBody(context))
         {
             // GraphQL turns a failed body read into its own transport error, so the cap is checked
             // before it reads: a GraphQL body is at most the cap, which is small.
-            var buffered = await ReadWithinLimitAsync(context);
+            var (buffered, failureStatus) = await ReadWithinLimitAsync(context);
             if (buffered is null)
             {
-                await WriteGraphQlErrorAsync(context);
+                await WriteGraphQlErrorAsync(context, failureStatus);
                 return;
             }
             context.Request.Body = buffered;
@@ -63,8 +65,14 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         await next(context);
     }
 
-    // The whole body, or null once it passes the cap (including Kestrel's own 413 for the same cap).
-    private async Task<MemoryStream?> ReadWithinLimitAsync(HttpContext context)
+    // A GET or HEAD, or a request the server already knows has no body, is passed on unread.
+    private static bool CanHaveBody(HttpContext context) =>
+        context.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody
+            ?? !(HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method));
+
+    // The whole body, or the HTTP status of why it could not be read: 413 once it passes the cap
+    // (including Kestrel's own 413 for the same cap), or the status of any other bad request.
+    private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
         var buffer = new MemoryStream();
         var chunk = new byte[BufferChunkBytes];
@@ -73,28 +81,29 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
             int read;
             while ((read = await context.Request.Body.ReadAsync(chunk, context.RequestAborted)) > 0)
             {
-                if (buffer.Length + read > _limit) return null;
+                if (buffer.Length + read > _limit) return (null, StatusCodes.Status413PayloadTooLarge);
                 buffer.Write(chunk, 0, read);
             }
         }
-        catch (BadHttpRequestException e) when (e.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        catch (BadHttpRequestException e)
         {
-            return null;
+            return (null, e.StatusCode);
         }
         buffer.Position = 0;
-        return buffer;
+        return (buffer, 0);
     }
 
     // /graphql reports transport errors as { errors: [...] }, not as the REST envelope.
-    private static Task WriteGraphQlErrorAsync(HttpContext context)
+    private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge)
     {
-        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+        context.Response.StatusCode = status;
+        var tooLarge = status == StatusCodes.Status413PayloadTooLarge;
         var error = new Dictionary<string, object?>
         {
-            ["message"] = TooLargeMessage,
+            ["message"] = tooLarge ? TooLargeMessage : UnreadableMessage,
             ["extensions"] = new Dictionary<string, object?>
             {
-                ["code"] = ErrorCodes.PayloadTooLarge,
+                ["code"] = tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,
                 ["traceId"] = RequestTraceId.For(context),
             },
         };
@@ -119,15 +128,12 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
 
 /// <summary>
 /// Read-only stream that throws <see cref="PayloadTooLargeException"/> once more than <c>limit</c> bytes have
-/// been read, and flags <see cref="Exceeded"/>. Kestrel, when it enforces the same limit through
-/// <c>IHttpMaxRequestBodySizeFeature</c>, throws its own 413 first; that one is flagged and rethrown, so
-/// the feature stays as a guard and <see cref="Exceeded"/> is set either way.
+/// been read. Kestrel, when it enforces the same limit through <c>IHttpMaxRequestBodySizeFeature</c>, throws
+/// its own 413 first; that one passes through unchanged and maps to the same error.
 /// </summary>
 public sealed class LimitedReadStream(Stream inner, long limit) : Stream
 {
     private long _read;
-
-    public bool Exceeded { get; private set; }
 
     public override bool CanRead => true;
     public override bool CanSeek => false;
@@ -139,43 +145,19 @@ public sealed class LimitedReadStream(Stream inner, long limit) : Stream
         set => throw new NotSupportedException();
     }
 
-    public override int Read(byte[] buffer, int offset, int count)
-    {
-        try
-        {
-            return Count(inner.Read(buffer, offset, count));
-        }
-        catch (BadHttpRequestException e) when (IsTooLarge(e))
-        {
-            Exceeded = true;
-            throw;
-        }
-    }
+    public override int Read(byte[] buffer, int offset, int count) =>
+        Count(inner.Read(buffer, offset, count));
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
 
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return Count(await inner.ReadAsync(buffer, cancellationToken));
-        }
-        catch (BadHttpRequestException e) when (IsTooLarge(e))
-        {
-            Exceeded = true;
-            throw;
-        }
-    }
-
-    private static bool IsTooLarge(BadHttpRequestException e) =>
-        e.StatusCode == StatusCodes.Status413PayloadTooLarge;
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+        Count(await inner.ReadAsync(buffer, cancellationToken));
 
     private int Count(int read)
     {
         _read += read;
         if (_read <= limit) return read;
-        Exceeded = true;
         throw new PayloadTooLargeException(JsonBodyLimitMiddleware.TooLargeMessage);
     }
 
