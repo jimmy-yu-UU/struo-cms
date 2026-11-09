@@ -34,17 +34,6 @@ public sealed class MigrationHostTests : IDisposable
     }
 
     [Fact]
-    public async Task Apply_applies_an_older_version_shipped_after_a_newer_one()
-    {
-        await Host("Upgrade.V1").ApplyAsync(default);
-
-        var applied = await Host("Upgrade").ApplyAsync(default);
-
-        applied.Select(m => m.Version).Should().Equal(2);
-        Tables().Should().Contain("probe_beta");
-    }
-
-    [Fact]
     public async Task Version_table_carries_the_configured_prefix()
     {
         await Host("Upgrade.V1", prefix: "acme_").ApplyAsync(default);

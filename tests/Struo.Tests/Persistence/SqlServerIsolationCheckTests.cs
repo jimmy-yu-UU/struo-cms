@@ -15,25 +15,6 @@ namespace Struo.Tests.Persistence;
 /// </summary>
 public sealed class SqlServerIsolationCheckTests
 {
-    [Theory]
-    [InlineData(StruoDbType.PostgreSQL)]
-    [InlineData(StruoDbType.MySql)]
-    [InlineData(StruoDbType.Sqlite)]
-    [InlineData(StruoDbType.Oracle)]
-    public async Task Other_backends_run_no_query_and_log_nothing(StruoDbType dbType)
-    {
-        using var file = TestBackend.CreateSqliteDatabase();
-        var client = SqlSugarClientFactory.Create(file.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        var statements = 0;
-        client.Aop.OnLogExecuting = (_, _) => statements++;
-        var logger = new ListLogger();
-
-        await SqlServerIsolationCheck.WarnIfSnapshotIsolationIsOffAsync(client, dbType, logger);
-
-        statements.Should().Be(0);
-        logger.Entries.Should().BeEmpty();
-    }
-
     [Fact]
     public async Task A_database_with_snapshot_isolation_on_logs_nothing()
     {

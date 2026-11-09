@@ -72,4 +72,25 @@ public sealed class MigrationLockLiveTests
         }
         finally { Cleanup(db, conn, prefix); }
     }
+
+    [Theory, MemberData(nameof(Backends))]
+    public async Task Disposing_a_lock_twice_releases_it_once_and_it_can_be_taken_again(string backend)
+    {
+        var (_, db, connection) = LiveBackend.Get(backend);
+        if (connection is not { } conn) return;
+        LiveDatabases.GuardDisposable(conn);
+        EnsureDatabase(db, conn);
+        var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
+
+        var gate = await MigrationLock.AcquireAsync(db, conn, prefix, TimeSpan.FromSeconds(5), default);
+        await gate.DisposeAsync();
+        var disposeAgain = async () => await gate.DisposeAsync();
+        await disposeAgain.Should().NotThrowAsync();
+
+        var reacquire = async () =>
+        {
+            await using var second = await MigrationLock.AcquireAsync(db, conn, prefix, TimeSpan.FromSeconds(1), default);
+        };
+        await reacquire.Should().NotThrowAsync("the first dispose released the lock");
+    }
 }

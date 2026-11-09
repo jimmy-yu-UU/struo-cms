@@ -75,8 +75,10 @@ public sealed class UtcInstantColumnTests : IDisposable
         var columns = _client.EntityMaintenance.GetEntityInfo<UtcInstantRow>().Columns;
 
         foreach (var name in new[] { nameof(UtcInstantRow.At), nameof(UtcInstantRow.MaybeAt) })
-            (columns.Single(c => c.PropertyName == name).SqlParameterDbType as Type)?.Name
-                .Should().Be(ZoneAwareBackend ? "UtcInstantConverter" : null);
+        {
+            var converter = (columns.Single(c => c.PropertyName == name).SqlParameterDbType as Type)?.Name;
+            converter.Should().Be(ZoneAwareBackend ? "UtcInstantConverter" : null);
+        }
     }
 
     // Read through a client without the factory's column conventions. The driver's own reading is the
@@ -172,21 +174,18 @@ public sealed class UtcInstantColumnTests : IDisposable
         ShouldBeInstant((await ReadAsync(id)).At, Instant);
     }
 
-    [Fact]
+    [ZoneAwareOnlyFact("a Local write is only converted by the zone-aware column converter")]
     public async Task Local_write_lands_at_its_instant_on_postgresql_and_sql_server()
     {
-        if (!ZoneAwareBackend) return;
-
         var id = await InsertAsync(Instant.ToLocalTime());
 
         ShouldBeInstant((await ReadAsync(id)).At, Instant);
     }
 
     // SQL Server keeps 100 ns ticks in datetimeoffset(7); PostgreSQL keeps microseconds.
-    [Fact]
+    [ZoneAwareOnlyFact("the other backends do not keep sub-millisecond instants")]
     public async Task Sub_millisecond_precision_survives()
     {
-        if (!ZoneAwareBackend) return;
         var precise = Instant.AddTicks(TestBackend.Current == TestBackendKind.SqlServer ? 1_234_567 : 1_234_560);
 
         var id = await InsertAsync(precise);

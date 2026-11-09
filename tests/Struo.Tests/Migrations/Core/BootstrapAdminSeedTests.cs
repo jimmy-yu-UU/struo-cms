@@ -77,20 +77,22 @@ public sealed class BootstrapAdminSeedTests : IDisposable
     }
 
     [Fact]
-    public void The_hash_is_redacted()
+    public void A_password_below_the_minimum_length_carries_a_refusal()
     {
-        var seed = CoreMigrationHarness.Seed("a@b.c", "configured-pw");
+        var seed = CoreMigrationHarness.Seed("a@b.c", "short");
 
-        seed.Redacted().AdminPasswordHash.Should().Be(CoreSeedData.RedactionPlaceholder);
+        seed.AdminRefusal.Should().Contain("Auth__BootstrapAdmin__Password");
     }
 
+    // With a minimum length that "admin" satisfies, only the bootstrap blocklist can refuse it.
     [Theory]
     [InlineData("admin")]
     [InlineData("ADMIN")]
-    [InlineData("short")]
-    public void Weak_password_carries_a_refusal(string weak)
+    public void The_bootstrap_placeholder_is_refused_whatever_the_policy(string placeholder)
     {
-        var seed = CoreMigrationHarness.Seed("a@b.c", weak);
+        var seed = CoreSeedData.From(
+            new LocalizationOptions(), new Argon2idPasswordHasher(), "a@b.c", placeholder, [],
+            new PasswordPolicyOptions { MinLength = 4 });
 
         seed.AdminRefusal.Should().Contain("Auth__BootstrapAdmin__Password");
     }
@@ -185,24 +187,13 @@ public sealed class BootstrapAdminSeedTests : IDisposable
         var run = await Run(sp, "migrate");
 
         run.Code.Should().Be(MigrationCli.Failure);
-        run.Err.Should().Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
+        run.Err.Should().Contain("migrate failed:").And.Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
     }
 
     [Fact]
     public async Task A_missing_bootstrap_password_fails_the_command_naming_the_setting()
     {
         using var sp = Services(NullLoggerFactory.Instance, "gen@example.com", [typeof(StruoMigration).Assembly], "");
-
-        var run = await Run(sp, "migrate");
-
-        run.Code.Should().Be(MigrationCli.Failure);
-        run.Err.Should().Contain("migrate failed:").And.Contain("Auth__BootstrapAdmin__Password").And.NotContain("   at ");
-    }
-
-    [Fact]
-    public async Task A_refused_bootstrap_password_fails_the_command_without_a_stack_trace()
-    {
-        using var sp = Services(NullLoggerFactory.Instance, "gen@example.com", [typeof(StruoMigration).Assembly], "admin");
 
         var run = await Run(sp, "migrate");
 

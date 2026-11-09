@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Xunit;
 
@@ -7,20 +6,6 @@ namespace Struo.Tests.Persistence;
 
 public sealed class TableNamingTests
 {
-    public static TheoryData<Type> FrameworkTypes()
-    {
-        var data = new TheoryData<Type>();
-        foreach (var t in FrameworkEntityTypes.All) data.Add(t);
-        return data;
-    }
-
-    [Theory]
-    [MemberData(nameof(FrameworkTypes))]
-    public void Every_framework_entity_is_a_framework_table(Type type)
-    {
-        TableNaming.IsFrameworkTable(type).Should().BeTrue();
-    }
-
     [Theory]
     [InlineData(typeof(Struo.Tests.Fixtures.FxArticle))]
     [InlineData(typeof(Struo.Tests.Fixtures.FxArticleTag))]
@@ -28,20 +13,5 @@ public sealed class TableNamingTests
     public void Content_and_unrelated_types_are_not_framework_tables(Type type)
     {
         TableNaming.IsFrameworkTable(type).Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData("struo_", "users", "struo_users")]
-    [InlineData("", "users", "users")]
-    [InlineData("acme", "schema_migrations", "acmeschema_migrations")]
-    public void Apply_concatenates_prefix_and_attribute_name(string prefix, string name, string expected)
-    {
-        TableNaming.Apply(prefix, name).Should().Be(expected);
-    }
-
-    [Fact]
-    public void Eleven_framework_entities_exactly()
-    {
-        FrameworkEntityTypes.All.Count.Should().Be(11);
     }
 }

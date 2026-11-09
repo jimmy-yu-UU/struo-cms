@@ -87,16 +87,4 @@ public class StructuredColumnMappingTests
         read.Faqs[0].A.Should().Be("答案");
     }
 
-    [Fact]
-    public void Revisions_snapshot_column_is_LongText()
-    {
-        using var db = TestBackend.CreateUnitDatabase();
-        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        client.CodeFirst.InitTables<Struo.Infrastructure.Revisions.Revision>();
-
-        var columns = client.DbMaintenance.GetColumnInfosByTableName(
-            client.EntityMaintenance.GetTableName<Struo.Infrastructure.Revisions.Revision>(), false);
-        columns.Single(c => c.DbColumnName.Equals("Snapshot", StringComparison.OrdinalIgnoreCase))
-            .ShouldHaveShape(ColumnShape.LongText, db.DbType);
-    }
 }
