@@ -242,7 +242,11 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await body.click()
   await page.keyboard.type('E2E nav body content.')
   await pickOptionByLabel(page, fieldByLabel(page, 'Category'), categoryName)
+  const created = page.waitForResponse((r) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/items/article')
   await page.getByRole('button', { name: 'Save' }).click()
+  // Recorded right after the save so a later failure still purges the article, and with it the category.
+  navCreated.push({ collection: 'article', id: String((await (await created).json()).data.id) })
   await expect(page).toHaveURL(/\/collections\/article$/)
 
   // Open the assigned category; wait for its form + Articles RelatedList row to load.
@@ -272,8 +276,6 @@ test('dirty form + RelatedList row click prompts unsaved guard, then remounts to
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/collections\/article\/[^/]+$/)
   await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
-
-  navCreated.push({ collection: 'article', id: page.url().match(/\/collections\/article\/([^/]+)$/)![1] })
 })
 
 // Opens a relation picker (single or multiple Combobox) and clicks the option with THIS label.
@@ -304,13 +306,8 @@ async function pickOptionByLabel(page: Page, field: ReturnType<typeof fieldByLab
 // a row and a reorder both survive Save and a fresh reload.
 test('junction links editor: tag Note and order survive save + reload', async ({ page }) => {
   await login(page)
-  const csrf = { headers: { 'X-Struo-CSRF': '1' } }
-  const tagA = `E2E Link A ${STAMP}`
-  const tagB = `E2E Link B ${STAMP}`
-  for (const name of [tagA, tagB]) {
-    const res = await page.request.post(`${API}/api/items/tag`, { data: { name }, ...csrf })
-    navCreated.push({ collection: 'tag', id: String((await res.json()).data.id) })
-  }
+  const tagA = await createNamed(page, 'tag', `E2E Link A ${STAMP}-${Date.now()}`)
+  const tagB = await createNamed(page, 'tag', `E2E Link B ${STAMP}-${Date.now()}`)
 
   const title = `E2E Junction Title ${STAMP}`
   await page.goto('/collections/article/new')
