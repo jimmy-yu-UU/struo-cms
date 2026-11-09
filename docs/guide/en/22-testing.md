@@ -261,8 +261,8 @@ the snapshot instead of verifying it. The full rules are in `schema/README.md`.
 This gate is `pnpm build` from `docs/`, in three parts: first `vitepress build`, which resolves
 every chapter link; then `check-rendered-chapters.mjs`, confirming every chapter actually
 rendered content rather than an empty page; last `check-table-width.mjs`, which blocks tables
-over four columns and cells over 60 display width. If any of the three parts fails, `pnpm build`
-fails.
+over four columns and cells over 60 display width, where each CJK character counts as 2. If any of
+the three parts fails, `pnpm build` fails.
 
 `pnpm test` from the same directory runs the guard scripts' own unit tests, with the command
 `node --test "scripts/**/*.test.mjs"`; CI runs this step, but it's a step, not a gate.

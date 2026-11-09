@@ -214,8 +214,8 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 
 這道關卡是 `docs/` 底下的 `pnpm build`，分三段：先是 `vitepress build`，解析每一個章
 節連結；接著 `check-rendered-chapters.mjs`，確認每一章都真的渲染出內容，不是空頁；最後
-`check-table-width.mjs`，擋下超過四欄的表格，以及顯示寬度超過 60 的儲存格。三段有一段沒
-過，`pnpm build` 就算失敗。
+`check-table-width.mjs`，擋下超過四欄的表格，以及顯示寬度超過 60 的儲存格，每個 CJK 字元
+算 2。三段有一段沒過，`pnpm build` 就算失敗。
 
 同一個目錄下的 `pnpm test` 跑的是守衛腳本自己的單元測試，指令是
 `node --test "scripts/**/*.test.mjs"`；CI 會跑這一步，但它是步驟，不是關卡。

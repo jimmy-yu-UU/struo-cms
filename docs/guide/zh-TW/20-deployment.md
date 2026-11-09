@@ -47,6 +47,8 @@ API 自己不會改這個設定。migration 步驟之後它會讀一次旗標，
 
 PostgreSQL 在正式環境要設 `SSL Mode=VerifyFull`：驅動程式會加密連線，並驗證伺服器的憑證與主機名稱。
 伺服器的憑證來自私有 CA 或託管服務自己的 CA 時，再加上 `Root Certificate=/path/to/ca.crt`。
+`VerifyCA` 只驗證憑證、不比對主機名稱。在 Production，`SSL Mode` 不是 `VerifyCA` 也不是 `VerifyFull`
+時，啟動會依下面的說明記一則警告；該用的值是 `VerifyFull`。
 
 `SSL Mode=Require` 只加密，不驗證憑證，擋不住中間人。就算加上 `Root Certificate`，也還是不驗證。
 `SSL Mode=Disable` 是明文，只在私有網路裡、而且伺服器接受非 TLS 連線時才用。
@@ -274,6 +276,43 @@ sink，按日期滾動、允許同時被多個行程共享讀寫，檔名長成 
 設定在啟動時建立一次，`Serilog:*` 改了要重開行程才生效，`appsettings.json` 的檔案監看不會讓
 它們生效；`UseSerilog` 同時讀 `IConfiguration` 與 DI 容器，透過 DI 註冊的 enricher 也會被撿
 起來一併生效。
+
+### Production：Console 輸出 JSON
+
+容器平台收的是標準輸出，所以 Production 通常要 Console 一個事件一行 JSON，並且不寫日誌檔。
+`Serilog:WriteTo` 是陣列，設定來源按位置合併：覆寫可以改某一項的設定，但不能刪掉任何一項，而且
+Console 那項的 `outputTemplate` 會壓過旁邊設的 `formatter`。所以內建的兩項改成 `Debug` sink（只寫給
+掛上的偵錯器），再用第三項放輸出 JSON 的 Console。寫在 `appsettings.Production.json`：
+
+```json
+{
+  "Serilog": {
+    "WriteTo": [
+      { "Name": "Debug" },
+      { "Name": "Debug" },
+      {
+        "Name": "Console",
+        "Args": {
+          "formatter": "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
+        }
+      }
+    ]
+  }
+}
+```
+
+同樣的覆寫改用環境變數：
+
+```
+Serilog__WriteTo__0__Name=Debug
+Serilog__WriteTo__1__Name=Debug
+Serilog__WriteTo__2__Name=Console
+Serilog__WriteTo__2__Args__formatter=Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact
+```
+
+這個 formatter 隨 `Serilog.AspNetCore` 一起帶進來，不用另外安裝。兩種寫法的結果都是 Console 輸出
+精簡 JSON（`@t` 時間戳、`@m` 套好參數的訊息、`@l` 等級，Information 時省略），而且不會建立
+`logs/` 目錄。
 
 ## 兩個容器映像
 

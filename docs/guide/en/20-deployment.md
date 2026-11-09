@@ -57,7 +57,9 @@ warning does not stop startup, and no other backend runs the check.
 
 On PostgreSQL, set `SSL Mode=VerifyFull` in production: the driver encrypts the connection and
 validates the server's certificate and host name. When the certificate comes from a private CA or
-from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`.
+from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`. `VerifyCA` validates the
+certificate without checking the host name. In Production, startup warns, as described below, when
+`SSL Mode` is neither `VerifyCA` nor `VerifyFull`; `VerifyFull` is the value to use.
 
 `SSL Mode=Require` only encrypts. It does not validate the certificate, so it does not stop a
 man-in-the-middle. Setting `Root Certificate` does not change that. `SSL Mode=Disable` is
@@ -345,6 +347,45 @@ The configuration is built once at startup; changing `Serilog:*` needs a process
 effect, and `appsettings.json`'s file-watching doesn't make them live. `UseSerilog` reads both
 `IConfiguration` and the DI container, so an enricher registered through DI is picked up and takes
 effect too.
+
+### Production: JSON on the console
+
+A container platform collects standard output, so a Production deployment usually wants one JSON
+line per event on the Console and no log file. `Serilog:WriteTo` is an array, and configuration
+merges arrays by position: an override can change the settings of an entry, but it cannot remove
+one, and the Console entry's `outputTemplate` wins over a `formatter` set beside it. So the two
+shipped entries become the `Debug` sink, which writes only to an attached debugger, and a third
+entry carries the JSON Console. In `appsettings.Production.json`:
+
+```json
+{
+  "Serilog": {
+    "WriteTo": [
+      { "Name": "Debug" },
+      { "Name": "Debug" },
+      {
+        "Name": "Console",
+        "Args": {
+          "formatter": "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
+        }
+      }
+    ]
+  }
+}
+```
+
+The same override as environment variables:
+
+```
+Serilog__WriteTo__0__Name=Debug
+Serilog__WriteTo__1__Name=Debug
+Serilog__WriteTo__2__Name=Console
+Serilog__WriteTo__2__Args__formatter=Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact
+```
+
+The formatter ships with `Serilog.AspNetCore`, so nothing needs installing. With either form the
+Console prints compact JSON (`@t` timestamp, `@m` rendered message, `@l` level when not
+Information) and no `logs/` directory is created.
 
 ## The two container images
 
