@@ -3,9 +3,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using SqlSugar;
-using Struo.Infrastructure.Identity;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -17,20 +14,6 @@ public class PasswordChangeRevokesAccessTokenTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
-
-    // The shared admin's password rate-limit bucket (5 per 60 s) is used by many other classes, so the
-    // administrator-reset path acts as its own super-admin, which has a bucket of its own.
-    private async Task<HttpClient> CreateOwnSuperAdminClientAsync()
-    {
-        var (client, adminId) = await _factory.CreateEditorClientAsync([], []);
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        var roleIds = await db.Queryable<UserRole>().Where(ur => ur.UserId == adminId)
-            .Select(ur => ur.RoleId).ToListAsync();
-        await db.Updateable<Role>().SetColumns(r => r.IsSuperAdmin == true)
-            .Where(r => roleIds.Contains(r.Id)).ExecuteCommandAsync();
-        return client;
-    }
 
     private async Task<HttpClient> IssueBearerClientAsync(HttpClient admin, Guid userId)
     {
@@ -54,7 +37,7 @@ public class PasswordChangeRevokesAccessTokenTests(ApiFactory factory)
     [Fact]
     public async Task Admin_password_change_revokes_the_users_access_token()
     {
-        var admin = await CreateOwnSuperAdminClientAsync();
+        var (admin, _) = await _factory.CreateOwnSuperAdminClientAsync();
         var (_, userId) = await _factory.CreateEditorClientAsync([], []);
         var bearer = await IssueBearerClientAsync(admin, userId);
 

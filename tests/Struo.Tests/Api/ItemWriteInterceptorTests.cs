@@ -106,7 +106,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task Every_operation_runs_every_hook_for_every_interceptor_in_registration_order()
     {
-        var (_, client, script) = await HostAsync("fxArticle", "A", "B");
+        var (host, client, script) = await HostAsync("fxArticle", "A", "B");
+        using var hostScope = host;
 
         var id = await CreateArticleAsync(client);
         Sequence(script).Should().Equal(AllHooks(ItemWriteOperation.Create));
@@ -145,7 +146,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_second_trash_of_a_trashed_row_runs_AfterCommit_with_Changed_false()
     {
-        var (_, client, script) = await HostAsync();
+        var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var id = await CreateArticleAsync(client);
         script.Calls.Clear();
         (await client.DeleteAsync($"/api/items/fxArticle/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -161,7 +163,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_restore_of_a_live_row_runs_AfterCommit_with_Changed_false()
     {
-        var (_, client, script) = await HostAsync();
+        var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var id = await CreateArticleAsync(client);
         script.Calls.Clear();
 
@@ -174,7 +177,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task Update_and_revert_see_the_stored_row_in_Existing_and_the_merged_row_in_Entity()
     {
-        var (_, client, script) = await HostAsync();
+        var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var id = await CreateArticleAsync(client);
         script.Calls.Single(c => c.Hook == "BeforeWrite").HasExisting.Should().BeFalse();
         script.Calls.Clear();
@@ -197,7 +201,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_QueryException_from_BeforeWrite_surfaces_as_400()
     {
-        var (_, client, script) = await HostAsync();
+        var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         script.ThrowIn = "BeforeWrite";
         script.ThrowQueryException = true;
 
@@ -211,6 +216,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task An_InTransaction_throw_rolls_back_a_trash()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var id = await CreateArticleAsync(client);
         var before = await CountsAsync(host);
         script.ThrowIn = "InTransaction";
@@ -225,7 +231,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task An_interceptor_that_does_not_apply_to_the_collection_is_never_called()
     {
-        var (_, client, script) = await HostAsync("fxCategory");
+        var (host, client, script) = await HostAsync("fxCategory");
+        using var hostScope = host;
 
         await CreateArticleAsync(client);
 
@@ -235,7 +242,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_BeforeWrite_mutation_of_the_entity_is_persisted()
     {
-        var (_, client, script) = await HostAsync();
+        var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         script.MutateStatus = true;
 
         var id = await CreateArticleAsync(client, new { status = "draft", translations = new { en = new { title = "m" } } });
@@ -269,6 +277,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task An_InTransaction_throw_rolls_back_the_row_junctions_translations_and_revision_on_create()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var tag = await CreateTagAsync(client);
         var before = await CountsAsync(host);
         script.ThrowIn = "InTransaction";
@@ -284,6 +293,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task An_InTransaction_throw_rolls_back_an_update()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var tag = await CreateTagAsync(client);
         var id = await CreateArticleAsync(client, new
         {
@@ -307,6 +317,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task A_StruoDomainException_from_BeforeWrite_surfaces_as_its_own_status_on_REST()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         script.ThrowIn = "BeforeWrite";
         var before = await CountsAsync(host);
 
@@ -322,7 +333,8 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task A_StruoDomainException_from_BeforeWrite_surfaces_with_its_code_on_GraphQL()
     {
-        var (_, client, script) = await HostAsync("fxCategory");
+        var (host, client, script) = await HostAsync("fxCategory");
+        using var hostScope = host;
         script.ThrowIn = "BeforeWrite";
 
         var response = await client.PostAsJsonAsync("/graphql",
@@ -339,6 +351,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task An_AfterCommit_throw_propagates_but_the_row_stays_committed()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var before = await CountsAsync(host);
         script.ThrowIn = "AfterCommit";
 
@@ -356,12 +369,13 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     {
         var script = new Script { ThrowIn = "AfterCommit" };
         var listener = new RecordingItemChangeListener();
-        var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+        using var host = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
         {
             s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "fxArticle", script));
             s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("B", "fxArticle", script));
             s.AddSingleton<Struo.Application.Changes.IItemChangeListener>(listener);
-        })).CreateClient();
+        }));
+        var client = host.CreateClient();
         await factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login",
@@ -379,6 +393,7 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     public async Task A_cascaded_purge_does_not_invoke_the_interceptor_of_the_affected_children()
     {
         var (host, client, script) = await HostAsync();
+        using var hostScope = host;
         var category = await client.PostAsJsonAsync("/api/items/fxCategory", new { name = "cascade-" + Guid.NewGuid().ToString("N")[..6] });
         var categoryId = Root(await category.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
         var articleId = await CreateArticleAsync(client, new
@@ -412,8 +427,9 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     [Fact]
     public async Task BeforeWrite_runs_before_the_Required_check_so_an_interceptor_can_fill_a_required_field()
     {
-        var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
-            s.AddScoped<IItemWriteInterceptor, FillNameInterceptor>())).CreateClient();
+        using var host = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+            s.AddScoped<IItemWriteInterceptor, FillNameInterceptor>()));
+        var client = host.CreateClient();
         await factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login",
@@ -448,11 +464,12 @@ public class ItemWriteInterceptorTests(ApiFactory factory)
     {
         var script = new Script();
         var calls = new List<string>();
-        var client = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+        using var host = factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
         {
             s.AddScoped<IItemWriteInterceptor>(_ => new ScriptedInterceptor("A", "fxCategory", script));
             s.AddScoped<ICollectionDeleteHandler>(_ => new RecordingDeleteHandler(calls));
-        })).CreateClient();
+        }));
+        var client = host.CreateClient();
         await factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login",

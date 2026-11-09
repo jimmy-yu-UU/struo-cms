@@ -188,6 +188,23 @@ public class StruoApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// A logged-in super-admin of its own: an editor whose role is flagged super-admin. The password
+    /// rate-limit bucket partitions by the acting user, so a test that changes passwords through this
+    /// client does not spend the shared admin's bucket.
+    /// </summary>
+    public async Task<(HttpClient client, Guid userId)> CreateOwnSuperAdminClientAsync()
+    {
+        var (client, userId) = await CreateEditorClientAsync([], []);
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var roleIds = await db.Queryable<UserRole>().Where(ur => ur.UserId == userId)
+            .Select(ur => ur.RoleId).ToListAsync();
+        await db.Updateable<Role>().SetColumns(r => r.IsSuperAdmin == true)
+            .Where(r => roleIds.Contains(r.Id)).ExecuteCommandAsync();
+        return (client, userId);
+    }
+
+    /// <summary>
     /// Seeds a fresh user with NO role and a password, logs them in, and returns the client + id.
     /// For verifying the RBAC "public floor" (role-less authenticated user gets public permissions).
     /// </summary>

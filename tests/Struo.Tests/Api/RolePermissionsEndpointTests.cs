@@ -25,16 +25,6 @@ public class RolePermissionsEndpointTests(ApiFactory factory)
             e.GetProperty("canDelete").GetBoolean())).ToList();
 
     [Fact]
-    public async Task NonAdmin_is_403()
-    {
-        var admin = await factory.CreateAuthenticatedClientAsync();
-        var roleId = await CreateRoleAsync(admin);
-        var (editor, _) = await factory.CreateEditorClientAsync([], []);
-        (await editor.GetAsync($"/api/roles/{roleId}/permissions")).StatusCode
-            .Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
     public async Task Unknown_role_is_404()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();

@@ -18,23 +18,31 @@ public class ForwardedHeadersTests
 {
     private static readonly IPAddress Client = IPAddress.Parse("10.1.2.3");
 
-    private static async Task<TestServer> StartAsync(Dictionary<string, string?> settings)
+    private static async Task<WebApplication> StartAsync(Dictionary<string, string?> settings)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Services.AddStruoForwardedHeaders(builder.Configuration);
         var app = builder.Build();
-        app.UseStruoForwardedHeaders();
-        app.Run(ctx => ctx.Response.WriteAsync(
-            $"{ctx.Request.Scheme}|{ctx.Connection.RemoteIpAddress}|{ctx.Request.Host}"));
-        await app.StartAsync();
-        return app.GetTestServer();
+        try
+        {
+            app.UseStruoForwardedHeaders();
+            app.Run(ctx => ctx.Response.WriteAsync(
+                $"{ctx.Request.Scheme}|{ctx.Connection.RemoteIpAddress}|{ctx.Request.Host}"));
+            await app.StartAsync();
+            return app;
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
     }
 
-    private static async Task<string> ObserveAsync(TestServer server, IPAddress source)
+    private static async Task<string> ObserveAsync(WebApplication app, IPAddress source)
     {
-        var ctx = await server.SendAsync(c =>
+        var ctx = await app.GetTestServer().SendAsync(c =>
         {
             c.Connection.RemoteIpAddress = source;
             c.Request.Headers["X-Forwarded-Proto"] = "https";
@@ -49,42 +57,42 @@ public class ForwardedHeadersTests
     [Fact]
     public async Task Disabled_ignores_forwarded_headers()
     {
-        using var server = await StartAsync(new() { ["ForwardedHeaders:Enabled"] = "false" });
-        (await ObserveAsync(server, Client)).Should().Be("http|10.1.2.3|internal");
+        await using var app = await StartAsync(new() { ["ForwardedHeaders:Enabled"] = "false" });
+        (await ObserveAsync(app, Client)).Should().Be("http|10.1.2.3|internal");
     }
 
     [Fact]
     public async Task Enabled_honours_headers_from_a_known_proxy()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "true",
             ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
         });
-        (await ObserveAsync(server, Client)).Should().Be("https|203.0.113.9|cms.example.com:8443");
+        (await ObserveAsync(app, Client)).Should().Be("https|203.0.113.9|cms.example.com:8443");
     }
 
     [Fact]
     public async Task Enabled_honours_headers_from_a_known_network()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "true",
             ["ForwardedHeaders:KnownNetworks:0"] = "10.0.0.0/8",
         });
-        (await ObserveAsync(server, Client)).Should().Be("https|203.0.113.9|cms.example.com:8443");
+        (await ObserveAsync(app, Client)).Should().Be("https|203.0.113.9|cms.example.com:8443");
     }
 
     [Fact]
     public async Task Enabled_ignores_headers_from_an_untrusted_source()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "true",
             ["ForwardedHeaders:KnownProxies:0"] = "10.9.9.9",
             ["ForwardedHeaders:KnownNetworks:0"] = "192.168.0.0/16",
         });
-        (await ObserveAsync(server, Client)).Should().Be("http|10.1.2.3|internal");
+        (await ObserveAsync(app, Client)).Should().Be("http|10.1.2.3|internal");
     }
 
     [Theory]
@@ -113,26 +121,26 @@ public class ForwardedHeadersTests
     [Fact]
     public async Task ForwardLimit_defaults_to_one_hop()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "true",
             ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
             ["ForwardedHeaders:KnownProxies:1"] = "10.1.2.4",
         });
-        (await ObserveChainAsync(server, Client, "203.0.113.9, 10.1.2.4")).Should().Be("10.1.2.4");
+        (await ObserveChainAsync(app, Client, "203.0.113.9, 10.1.2.4")).Should().Be("10.1.2.4");
     }
 
     [Fact]
     public async Task ForwardLimit_two_resolves_the_client_behind_two_known_proxies()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "true",
             ["ForwardedHeaders:ForwardLimit"] = "2",
             ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
             ["ForwardedHeaders:KnownProxies:1"] = "10.1.2.4",
         });
-        (await ObserveChainAsync(server, Client, "203.0.113.9, 10.1.2.4")).Should().Be("203.0.113.9");
+        (await ObserveChainAsync(app, Client, "203.0.113.9, 10.1.2.4")).Should().Be("203.0.113.9");
     }
 
     [Theory]
@@ -150,9 +158,9 @@ public class ForwardedHeadersTests
             .Should().Contain("ForwardedHeaders:ForwardLimit");
     }
 
-    private static async Task<string> ObserveChainAsync(TestServer server, IPAddress source, string forwardedFor)
+    private static async Task<string> ObserveChainAsync(WebApplication app, IPAddress source, string forwardedFor)
     {
-        var ctx = await server.SendAsync(c =>
+        var ctx = await app.GetTestServer().SendAsync(c =>
         {
             c.Connection.RemoteIpAddress = source;
             c.Request.Headers["X-Forwarded-For"] = forwardedFor;
@@ -164,11 +172,11 @@ public class ForwardedHeadersTests
     [Fact]
     public async Task Invalid_entries_are_ignored_while_disabled()
     {
-        using var server = await StartAsync(new()
+        await using var app = await StartAsync(new()
         {
             ["ForwardedHeaders:Enabled"] = "false",
             ["ForwardedHeaders:KnownProxies:0"] = "not-an-ip",
         });
-        (await ObserveAsync(server, Client)).Should().Be("http|10.1.2.3|internal");
+        (await ObserveAsync(app, Client)).Should().Be("http|10.1.2.3|internal");
     }
 }

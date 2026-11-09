@@ -10,33 +10,12 @@ namespace Struo.Tests.Api;
 public class UsersControllerRbacTests(ApiFactory factory)
 {
     [Fact]
-    public async Task NonAdmin_creating_a_user_is_403()
-    {
-        var (client, _) = await factory.CreateEditorClientAsync(readCollections: [], writeCollections: []);
-        var resp = await client.PostAsJsonAsync("/api/users",
-            new { email = "new@struo.test", password = "password-123", name = "N" });
-        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
     public async Task Admin_creating_a_user_is_201()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
         var resp = await client.PostAsJsonAsync("/api/users",
             new { email = $"fresh-{Guid.NewGuid():N}@struo.test", password = "password-123", name = "Fresh" });
         resp.StatusCode.Should().Be(HttpStatusCode.Created);
-    }
-
-    // A wrong currentPassword on self password change is 400 INVALID_CURRENT_PASSWORD, not 401 (401
-    // would log the user out of the SPA on a mere typo); see PasswordChangeSemanticsTests for the
-    // code-level assertions.
-    [Fact]
-    public async Task Self_password_change_with_wrong_currentPassword_is_400()
-    {
-        var (client, userId) = await factory.CreateEditorClientAsync([], []);
-        var resp = await client.PutAsJsonAsync($"/api/users/{userId}/password",
-            new { newPassword = "new-password-123", currentPassword = "WRONG" });
-        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]

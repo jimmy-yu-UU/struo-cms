@@ -51,7 +51,7 @@ public class ConfigEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Config_reflects_configured_branding()
     {
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Branding:Name"] = "Acme Docs",
@@ -69,7 +69,7 @@ public class ConfigEndpointTests(ApiFactory factory)
     [Fact]
     public async Task Config_lists_enabled_oidc_providers_in_Order_without_secrets()
     {
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Oidc:Providers:microsoft:Enabled"] = "true",

@@ -82,11 +82,20 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
         var data = (await admin.GetFromJsonAsync<JsonElement>($"/api/users/{userId}/effective-permissions"))
             .GetProperty("data");
         data.GetProperty("isSuperAdmin").GetBoolean().Should().BeFalse();
-        foreach (var p in data.GetProperty("permissions").EnumerateObject())
+        var permissions = data.GetProperty("permissions");
+        AssertPublicReadFloorPresent(permissions);
+        foreach (var p in permissions.EnumerateObject())
         {
             p.Value.GetProperty("write").GetBoolean().Should().BeFalse("public floor is read-only");
             p.Value.GetProperty("delete").GetBoolean().Should().BeFalse();
         }
+    }
+
+    // The public floor itself must be present: an empty map would pass every per-entry check below it.
+    private static void AssertPublicReadFloorPresent(JsonElement permissions)
+    {
+        permissions.GetProperty("fxArticle").GetProperty("read").GetBoolean().Should().BeTrue();
+        permissions.GetProperty("fxCategory").GetProperty("read").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
@@ -132,7 +141,9 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
                 $"/api/users/{userId}/effective-permissions?roles="))
             .GetProperty("data");
         data.GetProperty("isSuperAdmin").GetBoolean().Should().BeFalse();
-        foreach (var p in data.GetProperty("permissions").EnumerateObject())
+        var permissions = data.GetProperty("permissions");
+        AssertPublicReadFloorPresent(permissions);
+        foreach (var p in permissions.EnumerateObject())
         {
             p.Value.GetProperty("write").GetBoolean().Should().BeFalse("public floor is read-only");
         }

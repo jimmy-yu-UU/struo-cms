@@ -29,7 +29,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task Login_beyond_permit_limit_returns_429_with_error_envelope()
     {
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 // RateLimiting:Login now defaults to disabled (per-account throttling is the
@@ -64,7 +64,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task Login_beyond_permit_limit_sets_retry_after_header()
     {
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["RateLimiting:Login:Enabled"] = "true",
@@ -85,7 +85,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
     {
         // A tiny PermitLimit on the "login" policy must not affect other auth endpoints —
         // EnableRateLimiting("login") is applied to the Login action only.
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["RateLimiting:Login:Enabled"] = "true",
@@ -121,7 +121,7 @@ public class AuthLoginRateLimitTests(ApiFactory factory)
         // above using the same value) must NOT produce a 429 here. Every attempt should reach the
         // controller and fail auth normally (401), proving per-IP limiting is fully delegated
         // elsewhere (e.g. edge/ingress) for this deployment.
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["RateLimiting:Login:Enabled"] = "false",

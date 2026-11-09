@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Changes;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -22,21 +23,22 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
 
-    private async Task<(HttpClient Client, RecordingItemChangeListener A, RecordingItemChangeListener B)> HostAsync()
+    private async Task<(WebApplicationFactory<Program> Host, HttpClient Client, RecordingItemChangeListener A, RecordingItemChangeListener B)> HostAsync()
     {
         var a = new RecordingItemChangeListener();
         var b = new RecordingItemChangeListener();
-        var client = _factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+        var host = _factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
         {
             s.AddSingleton<IItemChangeListener>(a);
             s.AddSingleton<IItemChangeListener>(b);
-        })).CreateClient();
+        }));
+        var client = host.CreateClient();
         await _factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         var login = await client.PostAsJsonAsync("/api/auth/login",
             new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword });
         login.StatusCode.Should().Be(HttpStatusCode.OK, await login.Content.ReadAsStringAsync());
-        return (client, a, b);
+        return (host, client, a, b);
     }
 
     private static async Task<string> IdOf(HttpResponseMessage r) =>
@@ -46,7 +48,8 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     [Fact]
     public async Task Rest_create_trash_and_purge_reach_every_registered_listener_once_each()
     {
-        var (client, a, b) = await HostAsync();
+        var (host, client, a, b) = await HostAsync();
+        using var hostScope = host;
 
         var created = await client.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "u5b-" + Guid.NewGuid().ToString("N")[..8] });
@@ -77,7 +80,8 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     [Fact]
     public async Task Graphql_mutations_raise_the_same_changes()
     {
-        var (client, a, b) = await HostAsync();
+        var (host, client, a, b) = await HostAsync();
+        using var hostScope = host;
 
         var created = await client.PostAsJsonAsync("/api/items/fxCategory",
             new { name = "u5b-gql-" + Guid.NewGuid().ToString("N")[..8] });
@@ -104,7 +108,8 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     [Fact]
     public async Task Rest_file_upload_reaches_every_registered_listener_once()
     {
-        var (client, a, b) = await HostAsync();
+        var (host, client, a, b) = await HostAsync();
+        using var hostScope = host;
 
         // application/octet-stream is not in FileStorageOptions.AllowedContentTypes (appsettings.json);
         // text/plain is, and matches the multipart pattern other Files tests already use.
@@ -124,8 +129,9 @@ public class ItemChangeListenerApiTests(ApiFactory factory)
     public async Task A_listener_that_throws_does_not_change_the_response()
     {
         var bad = new RecordingItemChangeListener { OnCall = _ => throw new InvalidOperationException("index down") };
-        var client = _factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
-            s.AddSingleton<IItemChangeListener>(bad))).CreateClient();
+        using var host = _factory.WithWebHostBuilder(h => h.ConfigureServices(s =>
+            s.AddSingleton<IItemChangeListener>(bad)));
+        var client = host.CreateClient();
         await _factory.EnsureAdminSeededAsync();
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login",

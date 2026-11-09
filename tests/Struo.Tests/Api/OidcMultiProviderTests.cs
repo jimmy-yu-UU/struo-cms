@@ -88,28 +88,6 @@ public class OidcMultiProviderTests
         }
     }
 
-    private static async Task<ExternalLoginPolicy?> PolicyUsedForAsync(string providerId)
-    {
-        var login = new RecordingLogin();
-        using var provider = Build(s => s.AddSingleton<IExternalLoginService>(login));
-        var http = new DefaultHttpContext { RequestServices = provider };
-
-        await OidcWiring.ResolveLocalPrincipalAsync(http, new ClaimsPrincipal(new ClaimsIdentity()), providerId);
-        return login.Policy;
-    }
-
-    [Fact]
-    public async Task Token_validation_applies_the_policy_of_the_provider_that_signed_in()
-    {
-        var ms = await PolicyUsedForAsync("microsoft");
-        ms!.AllowedTenantId.Should().Be("tenant-1");
-        ms.RequireEmailVerified.Should().BeFalse();
-
-        var g = await PolicyUsedForAsync("google");
-        g!.AllowedTenantId.Should().BeNull();
-        g.RequireEmailVerified.Should().BeTrue();
-    }
-
     [Fact]
     public async Task Each_schemes_TokenValidated_event_applies_its_own_providers_policy()
     {

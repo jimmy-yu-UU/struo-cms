@@ -8,6 +8,7 @@ using Struo.Application.Search;
 using Struo.Domain.Query;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -19,8 +20,8 @@ public class SearchProviderApiTests(ApiFactory factory)
     private static async Task<JsonDocument> Json(HttpResponseMessage r) => JsonDocument.Parse(await r.Content.ReadAsStringAsync());
 
     // Derived host sharing the base factory's SQLite database; last registration wins for ISearchProvider.
-    private HttpClient HostWith(ISearchProvider provider) =>
-        _factory.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton(provider))).CreateClient();
+    private WebApplicationFactory<Program> HostWith(ISearchProvider provider) =>
+        _factory.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton(provider)));
 
     // FacetSeed's only draft article is "Gamma", so a status filter identifies it without depending on
     // the translations projection shape.
@@ -44,7 +45,9 @@ public class SearchProviderApiTests(ApiFactory factory)
     {
         var (cat, gammaId) = await SeedAsync();
         var provider = new ScriptedSearchProvider(_ => SearchOutcome.Candidates([gammaId]));
-        var r = await HostWith(provider).GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=zzz&facets=status");
+        using var host = HostWith(provider);
+        using var client = host.CreateClient();
+        var r = await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=zzz&facets=status");
         r.StatusCode.Should().Be(HttpStatusCode.OK, await r.Content.ReadAsStringAsync());
         var root = (await Json(r)).RootElement;
         root.GetProperty("meta").GetProperty("total").GetInt64().Should().Be(1);
@@ -58,7 +61,8 @@ public class SearchProviderApiTests(ApiFactory factory)
     public async Task Not_handled_keeps_the_like_search_on_rest()
     {
         var (cat, _) = await SeedAsync();
-        var client = HostWith(new ScriptedSearchProvider(_ => SearchOutcome.NotHandled));
+        using var host = HostWith(new ScriptedSearchProvider(_ => SearchOutcome.NotHandled));
+        using var client = host.CreateClient();
         var r = (await Json(await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=Alpha"))).RootElement;
         r.GetProperty("meta").GetProperty("total").GetInt64().Should().Be(1);
     }
@@ -67,7 +71,8 @@ public class SearchProviderApiTests(ApiFactory factory)
     public async Task Search_unavailable_is_503_with_the_fixed_message_on_rest()
     {
         var (cat, _) = await SeedAsync();
-        var client = HostWith(new ScriptedSearchProvider(_ => throw new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+        using var host = HostWith(new ScriptedSearchProvider(_ => throw new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+        using var client = host.CreateClient();
         var r = await client.GetAsync($"/api/items/fxArticle?filter[categoryId][_eq]={cat}&search=zzz");
         r.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
         var body = await r.Content.ReadAsStringAsync();

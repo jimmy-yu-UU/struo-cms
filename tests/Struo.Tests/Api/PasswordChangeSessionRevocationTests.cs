@@ -63,7 +63,7 @@ public class PasswordChangeSessionRevocationTests(ApiFactory factory)
     [Fact]
     public async Task Admin_reset_revokes_every_existing_session_for_the_target_user()
     {
-        var admin = await factory.CreateAuthenticatedClientAsync();
+        var (admin, _) = await factory.CreateOwnSuperAdminClientAsync();
         var (email, password, userId) = await SeedUserAsync();
         var browser = await LoginAsAsync(email, password);
 
@@ -90,28 +90,4 @@ public class PasswordChangeSessionRevocationTests(ApiFactory factory)
         (await browserB.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>A password change revokes the user's bearer access token along with their cookie
-    /// sessions; <c>PasswordChangeRevokesAccessTokenTests</c> covers both change paths in detail.</summary>
-    [Fact]
-    public async Task Password_change_revokes_the_users_bearer_access_token()
-    {
-        var admin = await factory.CreateAuthenticatedClientAsync();
-        var (email, password, userId) = await SeedUserAsync();
-
-        var gen = await admin.PostAsync($"/api/users/{userId}/access-token", null);
-        gen.StatusCode.Should().Be(HttpStatusCode.OK);
-        var token = (await gen.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>())
-            .GetProperty("data").GetProperty("token").GetString()!;
-
-        var bearerClient = factory.CreateClient();
-        bearerClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        (await bearerClient.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var change = await admin.PutAsJsonAsync($"/api/users/{userId}/password",
-            new { newPassword = "new-session-pw-456" });
-        change.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        (await bearerClient.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
 }

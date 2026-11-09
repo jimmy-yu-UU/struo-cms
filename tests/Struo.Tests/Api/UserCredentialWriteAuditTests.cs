@@ -64,7 +64,7 @@ public class UserCredentialWriteAuditTests(ApiFactory factory)
     [Fact]
     public async Task Admin_password_change_stamps_audit_fields_and_bumps_version()
     {
-        var admin = await _factory.CreateAuthenticatedClientAsync();
+        var (admin, adminId) = await _factory.CreateOwnSuperAdminClientAsync();
         var targetId = await SeedTargetUserAsync("initial-pw-123456");
         var before = await LoadAsync(targetId);
 
@@ -76,7 +76,7 @@ public class UserCredentialWriteAuditTests(ApiFactory factory)
         var after = await LoadAsync(targetId);
         after.Version.Should().Be(before.Version + 1, "a credential change must advance the optimistic-lock token");
         after.UpdatedAt.Should().BeAfter(before.UpdatedAt, "the change must be timestamped");
-        after.UpdatedBy.Should().Be(_factory.AdminUserId, "the acting admin must be recorded");
+        after.UpdatedBy.Should().Be(adminId, "the acting admin must be recorded");
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class UserCredentialWriteAuditTests(ApiFactory factory)
     {
         // The end-to-end point of the version bump: after an out-of-band credential change, a client
         // still holding the pre-change version must be told to reload rather than silently winning.
-        var admin = await _factory.CreateAuthenticatedClientAsync();
+        var (admin, _) = await _factory.CreateOwnSuperAdminClientAsync();
         var targetId = await SeedTargetUserAsync("stale-write-pw-123456");
 
         var read = await admin.GetAsync($"/api/items/user/{targetId}");

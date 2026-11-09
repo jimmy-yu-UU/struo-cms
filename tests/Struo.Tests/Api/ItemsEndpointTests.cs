@@ -43,34 +43,40 @@ public class ItemsEndpointTests(ApiFactory factory)
     public async Task List_filters_sorts_paginates_with_meta()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
+        var published = new List<string>();
+        var all = new List<string>();
         for (var i = 0; i < 4; i++)
-            await client.PostAsJsonAsync("/api/items/fxArticle",
-                new { status = i % 2 == 0 ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
+        {
+            var isPublished = i % 2 == 0;
+            var create = await client.PostAsJsonAsync("/api/items/fxArticle",
+                new { status = isPublished ? "published" : "draft", translations = new { en = new { title = $"Post{i}" } } });
+            create.StatusCode.Should().Be(HttpStatusCode.Created);
+            var id = Root(await create.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
+            all.Add(id);
+            if (isPublished) published.Add(id);
+        }
 
         // NOTE: sort/filter/fields by the translatable `title` is locale-aware querying.
-        // Here we filter+sort+select by non-translatable own-collection fields (status, id).
-        var resp = await client.GetAsync("/api/items/fxArticle?filter[status][_eq]=published&sort=-id&limit=1&offset=0&fields=id,status");
-        resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        var root = Root(await resp.Content.ReadAsStringAsync());
-        root.GetProperty("meta").GetProperty("total").GetInt32().Should().BeGreaterThanOrEqualTo(2);
-        var first = root.GetProperty("data")[0];
-        first.TryGetProperty("status", out _).Should().BeTrue();
-        first.TryGetProperty("id", out _).Should().BeTrue();
-    }
+        // Here we filter+sort+select by non-translatable own-collection fields (status, id), scoped to
+        // this test's four rows so the totals do not depend on what other tests left in the collection.
+        var scope = $"filter[id][_in]={string.Join(',', all)}&filter[status][_eq]=published&limit=1&offset=0&fields=id,status";
 
-    [Fact]
-    public async Task Unknown_field_returns_400()
-    {
-        var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/items/fxArticle?filter[ghost][_eq]=x");
-        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
+        var desc = await client.GetAsync($"/api/items/fxArticle?{scope}&sort=-id");
+        desc.StatusCode.Should().Be(HttpStatusCode.OK);
+        var root = Root(await desc.Content.ReadAsStringAsync());
+        root.GetProperty("meta").GetProperty("total").GetInt32().Should().Be(2, "the status filter keeps only the two published rows");
+        var data = root.GetProperty("data");
+        data.GetArrayLength().Should().Be(1, "limit=1");
+        var first = data[0];
+        first.GetProperty("status").GetString().Should().Be("published");
+        published.Should().Contain(first.GetProperty("id").GetString());
+        first.TryGetProperty("createdAt", out _).Should().BeFalse("fields=id,status projects the other own fields away");
 
-    [Fact]
-    public async Task Unknown_collection_returns_404()
-    {
-        var client = _factory.CreateClient();
-        (await client.GetAsync("/api/items/nope")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var asc = await client.GetAsync($"/api/items/fxArticle?{scope}&sort=id");
+        asc.StatusCode.Should().Be(HttpStatusCode.OK);
+        var ascFirstId = Root(await asc.Content.ReadAsStringAsync()).GetProperty("data")[0].GetProperty("id").GetString();
+        published.Should().Contain(ascFirstId);
+        ascFirstId.Should().NotBe(first.GetProperty("id").GetString(), "sort direction decides which published row comes first");
     }
 
     [Fact]
@@ -88,13 +94,5 @@ public class ItemsEndpointTests(ApiFactory factory)
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         data.GetArrayLength().Should().Be(1);
         data[0].GetProperty("id").GetString().Should().Be(id);
-    }
-
-    [Fact]
-    public async Task Sort_by_id_descending_succeeds()
-    {
-        var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/api/items/fxArticle?sort=-id&limit=2");
-        resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Struo.Application.Security;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -46,17 +47,17 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
             throw new InvalidOperationException("credential store unreachable");
     }
 
-    private HttpClient CreateClientWithFailingAuthentication() =>
+    private WebApplicationFactory<Program> HostWithFailingAuthentication() =>
         _factory
             .WithWebHostBuilder(b => b.ConfigureServices(s =>
                 // Last registration wins for the single-service resolve the bearer handler performs.
-                s.AddScoped<IUserCredentialStore, ThrowingCredentialStore>()))
-            .CreateClient();
+                s.AddScoped<IUserCredentialStore, ThrowingCredentialStore>()));
 
     [Fact]
     public async Task Exception_during_authentication_is_wrapped_in_the_error_envelope()
     {
-        var client = CreateClientWithFailingAuthentication();
+        using var host = HostWithFailingAuthentication();
+        using var client = host.CreateClient();
         // The Adaptive policy scheme forwards to the Bearer handler on the strength of this header
         // alone, so the throwing store is reached inside UseAuthentication — before routing or MVC.
         var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping");
@@ -82,7 +83,8 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
     {
         // Same host: a cookie-less, header-less request never enters the bearer handler, so it must
         // still succeed. Guards against "fixing" the above by short-circuiting all authentication.
-        var client = CreateClientWithFailingAuthentication();
+        using var host = HostWithFailingAuthentication();
+        using var client = host.CreateClient();
 
         var response = await client.GetAsync("/api/ping");
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Struo.Api.Auth;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -18,7 +19,7 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public class EnvironmentGateTests(ApiFactory factory)
 {
-    private HttpClient CreateClient(string environment, string? key = null, string? value = null) =>
+    private WebApplicationFactory<Program> CreateHost(string environment, string? key = null, string? value = null) =>
         factory
             .WithWebHostBuilder(b =>
             {
@@ -26,8 +27,7 @@ public class EnvironmentGateTests(ApiFactory factory)
                 if (key is not null)
                     b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(
                         new Dictionary<string, string?> { [key] = value }));
-            })
-            .CreateClient();
+            });
 
     [Theory]
     [InlineData("Development", HttpStatusCode.OK)]
@@ -36,7 +36,8 @@ public class EnvironmentGateTests(ApiFactory factory)
     [InlineData("UAT", HttpStatusCode.NotFound)]
     public async Task OpenApi_is_served_only_in_Development_by_default(string environment, HttpStatusCode expected)
     {
-        using var client = CreateClient(environment);
+        using var host = CreateHost(environment);
+        using var client = host.CreateClient();
 
         var response = await client.GetAsync("/openapi/v1.json");
 
@@ -48,7 +49,8 @@ public class EnvironmentGateTests(ApiFactory factory)
     [InlineData("Development", "false", HttpStatusCode.NotFound)]
     public async Task OpenApi_Enabled_overrides_the_environment(string environment, string enabled, HttpStatusCode expected)
     {
-        using var client = CreateClient(environment, "OpenApi:Enabled", enabled);
+        using var host = CreateHost(environment, "OpenApi:Enabled", enabled);
+        using var client = host.CreateClient();
 
         var response = await client.GetAsync("/openapi/v1.json");
 
@@ -72,7 +74,8 @@ public class EnvironmentGateTests(ApiFactory factory)
     [InlineData("UAT", true)]
     public async Task Session_cookie_is_Secure_unless_the_environment_is_Development(string environment, bool secure)
     {
-        using var client = CreateClient(environment);
+        using var host = CreateHost(environment);
+        using var client = host.CreateClient();
 
         var setCookie = await LoginSetCookieAsync(client);
 
@@ -82,7 +85,8 @@ public class EnvironmentGateTests(ApiFactory factory)
     [Fact]
     public async Task RequireSecure_false_removes_Secure_in_Staging()
     {
-        using var client = CreateClient("Staging", "Auth:Cookie:RequireSecure", "false");
+        using var host = CreateHost("Staging", "Auth:Cookie:RequireSecure", "false");
+        using var client = host.CreateClient();
 
         var setCookie = await LoginSetCookieAsync(client);
 
@@ -92,7 +96,8 @@ public class EnvironmentGateTests(ApiFactory factory)
     [Fact]
     public async Task RequireSecure_true_adds_Secure_in_Development()
     {
-        using var client = CreateClient("Development", "Auth:Cookie:RequireSecure", "true");
+        using var host = CreateHost("Development", "Auth:Cookie:RequireSecure", "true");
+        using var client = host.CreateClient();
 
         var setCookie = await LoginSetCookieAsync(client);
 

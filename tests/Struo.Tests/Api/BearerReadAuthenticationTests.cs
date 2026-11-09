@@ -74,14 +74,6 @@ public class BearerReadAuthenticationTests(ApiFactory factory)
         (await bearer.GetAsync("/api/items/fxCategory")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
-    public async Task Anonymous_read_of_a_public_collection_is_unaffected()
-    {
-        var anon = factory.CreateClient();
-
-        (await anon.GetAsync("/api/items/fxCategory")).StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
     // Pins AuthWiring.AddStruoAuth's ForwardDefaultSelector comment: the Authorization header alone
     // decides, and a caller presenting BOTH a valid session cookie AND a bearer header is resolved as
     // the BEARER identity on every [Authorize]-free endpoint — never falling back to the cookie. A

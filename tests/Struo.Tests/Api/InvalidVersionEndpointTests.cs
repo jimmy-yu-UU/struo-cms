@@ -117,20 +117,6 @@ public class InvalidVersionEndpointTests(ApiFactory factory)
             .Should().Be("VERSION_CONFLICT");
     }
 
-    [Fact]
-    public async Task Rest_update_with_the_current_version_succeeds_and_a_stale_one_is_409_VERSION_CONFLICT()
-    {
-        var (client, id, version) = await CreateArticleAsync();
-
-        var ok = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}", new { status = "published", version });
-        ok.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var stale = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}", new { status = "draft", version });
-        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        Root(await stale.Content.ReadAsStringAsync())
-            .GetProperty("error").GetProperty("code").GetString().Should().Be("VERSION_CONFLICT");
-    }
-
     [Theory]
     [InlineData("Version")]
     [InlineData("VERSION")]

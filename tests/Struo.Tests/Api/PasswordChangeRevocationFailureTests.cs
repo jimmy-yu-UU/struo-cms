@@ -71,7 +71,7 @@ public class PasswordChangeRevocationFailureTests(ApiFactory factory)
     public async Task Revocation_failure_is_surfaced_as_a_distinct_error_but_the_password_is_still_changed()
     {
         var (email, password, userId) = await SeedUserOnBaseFactoryAsync();
-        var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
             s.AddScoped<IUserSessionRevocationService, ThrowingRevocationService>()));
         var client = await LoginOnAsync(host, email, password);
 
@@ -99,7 +99,7 @@ public class PasswordChangeRevocationFailureTests(ApiFactory factory)
     {
         var (email, password, userId) = await SeedUserOnBaseFactoryAsync();
         var spy = new SpyRevocationService();
-        var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
             s.AddSingleton<IUserSessionRevocationService>(spy)));
         var client = await LoginOnAsync(host, email, password);
 

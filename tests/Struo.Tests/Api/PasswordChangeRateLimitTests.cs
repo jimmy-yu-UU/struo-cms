@@ -75,7 +75,7 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task Attempts_beyond_the_permit_limit_return_429_with_the_error_envelope()
     {
-        var host = Host(permitLimit: "2");
+        using var host = Host(permitLimit: "2");
         var (client, userId) = await CreateEditorClientOnAsync(host, [], []);
 
         (await AttemptAsync(client, userId)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -101,7 +101,7 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task Two_different_users_do_not_share_a_bucket()
     {
-        var host = Host(permitLimit: "1");
+        using var host = Host(permitLimit: "1");
         var (clientA, userA) = await CreateEditorClientOnAsync(host, [], []);
         var (clientB, userB) = await CreateEditorClientOnAsync(host, [], []);
 
@@ -115,7 +115,7 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task With_the_limiter_disabled_no_attempt_is_ever_429()
     {
-        var host = Host(permitLimit: "1", enabled: "false");
+        using var host = Host(permitLimit: "1", enabled: "false");
         var (client, userId) = await CreateEditorClientOnAsync(host, [], []);
 
         for (var i = 0; i < 4; i++)
@@ -134,7 +134,7 @@ public class PasswordChangeRateLimitTests(ApiFactory factory)
     [Fact]
     public async Task The_password_policy_does_not_limit_other_endpoints()
     {
-        var host = Host(permitLimit: "1");
+        using var host = Host(permitLimit: "1");
         var client = await CreateAuthenticatedClientOnAsync(host);
 
         for (var i = 0; i < 4; i++)

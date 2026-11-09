@@ -80,7 +80,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     [Fact]
     public async Task Failed_logins_past_permit_limit_return_429_with_envelope_and_retry_after()
     {
-        var f = Host(permitLimit: 3);
+        using var f = Host(permitLimit: 3);
         var client = f.CreateClient();
         var email = FreshEmail("spammed");
 
@@ -104,7 +104,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     [Fact]
     public async Task Nonexistent_email_and_wrong_password_produce_identical_shape_even_once_throttled()
     {
-        var f = Host(permitLimit: 2);
+        using var f = Host(permitLimit: 2);
         var (realUserEmail, _, _) = await _factory.SeedEditorAsync([], []);
         var unknownEmail = FreshEmail("nobody");
 
@@ -143,7 +143,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     [Fact]
     public async Task A_successful_login_resets_the_counter()
     {
-        var f = Host(permitLimit: 3);
+        using var f = Host(permitLimit: 3);
         var (email, password, _) = await _factory.SeedEditorAsync([], []);
         var client = f.CreateClient();
         // Once the login below succeeds, this client carries a session cookie, and
@@ -167,7 +167,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     [Fact]
     public async Task Throttling_is_per_account_not_shared_across_accounts()
     {
-        var f = Host(permitLimit: 1);
+        using var f = Host(permitLimit: 1);
         var client = f.CreateClient();
         var accountA = FreshEmail("account-a");
         var accountB = FreshEmail("account-b");
@@ -185,7 +185,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     [Fact]
     public async Task Disabled_throttle_never_returns_429_even_beyond_permit_limit()
     {
-        var f = Host(permitLimit: 1, enabled: false);
+        using var f = Host(permitLimit: 1, enabled: false);
         var client = f.CreateClient();
         var email = FreshEmail("unthrottled");
 
@@ -200,7 +200,7 @@ public class LoginAccountThrottleTests(ApiFactory factory)
     public async Task Blocked_requests_never_reach_the_password_hasher()
     {
         var hasher = new CountingPasswordHasher();
-        var f = Host(permitLimit: 2, hasher: hasher);
+        using var f = Host(permitLimit: 2, hasher: hasher);
         var client = f.CreateClient();
         var email = FreshEmail("spy-target");
 
