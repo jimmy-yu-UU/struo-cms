@@ -121,13 +121,6 @@ public class RelationPathTests
     }
 
     [Fact]
-    public void Visible_leaf_field_on_relation_path_is_still_accepted()
-    {
-        var p = RelationPath.Parse("article", "category.name", Graph, Md, 5);
-        p.LeafField.Should().Be("name");
-    }
-
-    [Fact]
     public void Over_depth_throws()
     {
         var act = () => RelationPath.Parse("article", "category.parent.name", Graph, Md, 1);

@@ -41,7 +41,7 @@ public class CrossRelationSortTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
         var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
         var order = data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).ToList();
-        order.IndexOf(artZ).Should().BeLessThan(order.IndexOf(artA));
+        order.Should().Equal(artZ, artA);
     }
 
     private static readonly string[] SortByChildrenNameDesc = ["-children.name"];

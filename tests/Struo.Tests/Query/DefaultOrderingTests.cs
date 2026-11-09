@@ -120,15 +120,18 @@ public sealed class DefaultOrderingTests : IDisposable
     public async Task Explicit_sort_gets_id_tiebreak_for_stable_pagination()
     {
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        for (var i = 0; i < 4; i++)
-            await SeedWithCreatedAt("Same", t0.AddSeconds(i));
+        // Random (v4) ids, so insertion order almost never matches id order and a scan-order
+        // result cannot pass for the id tie-break.
+        for (var i = 0; i < 8; i++)
+            await SeedWithCreatedAt("Same", t0.AddSeconds(i), Guid.NewGuid());
 
-        var q1 = new QueryModel(null, null, [new SortField("name", false)], 2, 0, null);
-        var q2 = new QueryModel(null, null, [new SortField("name", false)], 2, 2, null);
+        var q1 = new QueryModel(null, null, [new SortField("name", false)], 4, 0, null);
+        var q2 = new QueryModel(null, null, [new SortField("name", false)], 4, 4, null);
         var page1 = (await _repo.QueryAsync("fxCategory", q1, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
         var page2 = (await _repo.QueryAsync("fxCategory", q2, [])).Rows.Select(r => ((FxCategory)r).Id).ToList();
 
-        page1.Should().NotIntersectWith(page2, "an unstable sort would repeat/skip rows across pages");
-        page1.Concat(page2).Should().OnlyHaveUniqueItems();
+        var databaseIdOrder = await _db.Queryable<FxCategory>().OrderBy(c => c.Id).Select(c => c.Id).ToListAsync();
+
+        page1.Concat(page2).Should().Equal(databaseIdOrder);
     }
 }

@@ -183,7 +183,7 @@ public sealed class ItemServiceMultiValueTests : IDisposable
     }
 
     [Fact]
-    public async Task Update_omitting_the_required_regions_keeps_the_stored_value()
+    public async Task Update_omitting_the_required_multi_value_fields_keeps_the_stored_values()
     {
         var created = await _svc.CreateAsync("mvthing", Body(new { regions = Apac, keywords = OneKeyword }));
         var id = created["id"]!.ToString()!;
@@ -192,6 +192,7 @@ public sealed class ItemServiceMultiValueTests : IDisposable
 
         updated.Should().NotBeNull();
         ((IEnumerable<string>)updated!["regions"]!).Should().Equal("apac");
+        ((IEnumerable<TagItem>)updated["keywords"]!).Should().Equal(new TagItem("seed"));
         ((IEnumerable<string>)updated["audiences"]!).Should().Equal("b2b");
     }
 
@@ -204,20 +205,6 @@ public sealed class ItemServiceMultiValueTests : IDisposable
         var act = () => _svc.UpdateAsync("mvthing", id, Body(new { regions = Array.Empty<string>() }));
 
         await act.Should().ThrowAsync<QueryException>().WithMessage("Field 'regions' is required.");
-    }
-
-    [Fact]
-    public async Task Update_omitting_the_required_keywords_keeps_the_stored_value()
-    {
-        var created = await _svc.CreateAsync("mvthing", Body(new { regions = Apac, keywords = OneKeyword }));
-        var id = created["id"]!.ToString()!;
-
-        var updated = await _svc.UpdateAsync("mvthing", id, Body(new { audiences = B2b }));
-
-        updated.Should().NotBeNull();
-        var kws = ((IEnumerable<TagItem>)updated!["keywords"]!).ToList();
-        kws.Should().Equal(new TagItem("seed"));
-        ((IEnumerable<string>)updated["audiences"]!).Should().Equal("b2b");
     }
 
     [Fact]

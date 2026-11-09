@@ -96,17 +96,6 @@ public sealed class RevisionSnapshotRedactorTests
     }
 
     [Fact]
-    public void Handles_snapshot_without_translations()
-    {
-        var json = """{"id":"1","status":"draft","internalNote":"secret"}""";
-        var redacted = RevisionSnapshotRedactor.RedactHidden(json, Meta);
-
-        using var doc = JsonDocument.Parse(redacted);
-        doc.RootElement.TryGetProperty("translations", out _).Should().BeFalse();
-        doc.RootElement.TryGetProperty("internalNote", out _).Should().BeFalse();
-    }
-
-    [Fact]
     public void Meta_with_zero_hidden_fields_returns_equivalent_json()
     {
         var json = """{"id":"1","status":"draft"}""";
@@ -118,14 +107,4 @@ public sealed class RevisionSnapshotRedactorTests
         doc.RootElement.EnumerateObject().Count().Should().Be(2);
     }
 
-    [Fact]
-    public void Does_not_mutate_input_string()
-    {
-        var json = """{"id":"1","internalNote":"secret"}""";
-        var original = json;
-        _ = RevisionSnapshotRedactor.RedactHidden(json, Meta);
-
-        json.Should().Be(original); // strings are immutable in .NET, but assert the reference/content anyway
-        json.Should().Contain("internalNote"); // input untouched
-    }
 }

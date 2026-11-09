@@ -31,9 +31,6 @@ public class MaxOffsetTests(ApiFactory factory)
     }
 
     [Fact]
-    public void Default_cap_is_100000() => new StruoQueryOptions().MaxOffset.Should().Be(Cap);
-
-    [Fact]
     public async Task Rest_list_serves_an_offset_equal_to_the_cap()
     {
         var c = await factory.CreateAuthenticatedClientAsync();

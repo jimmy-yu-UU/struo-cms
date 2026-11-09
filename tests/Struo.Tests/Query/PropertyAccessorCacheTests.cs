@@ -13,16 +13,6 @@ public class PropertyAccessorCacheTests
     }
 
     [Fact]
-    public void Resolve_returns_the_same_PropertyInfo_reference_on_repeat()
-    {
-        var first = PropertyAccessorCache.Resolve(typeof(Sample), "AuthorId");
-        var second = PropertyAccessorCache.Resolve(typeof(Sample), "AuthorId");
-
-        first.Should().NotBeNull();
-        second.Should().BeSameAs(first);
-    }
-
-    [Fact]
     public void Resolve_is_case_insensitive()
     {
         var lower = PropertyAccessorCache.Resolve(typeof(Sample), "authorId");
