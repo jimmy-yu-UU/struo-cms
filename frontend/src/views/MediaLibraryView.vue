@@ -44,6 +44,9 @@ const confirm = useConfirm()
 
 const files = ref<FileRow[]>([])
 const total = ref(0)
+// False until a list response has supplied `total`: the count caption stays blank rather than
+// reading 0, and later refreshes keep the last total.
+const totalKnown = ref(false)
 const loading = ref(false)
 const error = ref('')
 const page = ref(0)
@@ -136,11 +139,13 @@ async function load(): Promise<void> {
     if (!mediaLoad.isCurrent(token)) return
     files.value = toFileRows(res.data)
     total.value = res.total
+    totalKnown.value = true
   } catch (e) {
     if (!mediaLoad.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
     files.value = []
     total.value = 0
+    totalKnown.value = false
   } finally {
     if (mediaLoad.isCurrent(token)) loading.value = false
   }
@@ -407,7 +412,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 
 <template>
   <section class="media-library">
-    <PageHeader :title="t('media.title')" :caption="t('media.count', { n: total })">
+    <PageHeader :title="t('media.title')" :caption="totalKnown ? t('media.count', { n: total }) : undefined">
       <template #actions>
         <Button v-if="canManageFolders" type="button" variant="outline" @click="createOpen = true">
           <FolderPlus aria-hidden="true" />

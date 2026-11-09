@@ -53,6 +53,23 @@ describe('UserMenu', () => {
     expect(text).toContain('超級管理員')
   })
 
+  // WCAG 2.5.3: no aria-label, so the name is the visible name and role followed by the
+  // screen-reader-only purpose, and the visible text is only visually hidden on narrow screens.
+  it.each([
+    ['zh-TW', '陳雅婷', '超級管理員', '，帳戶選單'],
+    ['en', 'Amy Chen', 'Super Admin', ', account menu'],
+  ] as const)('names the account button from its visible text plus the purpose in %s', (locale, name, role, hint) => {
+    i18n.global.locale.value = locale
+    useAuthStore().user = { id: 'u1', name, isSuperAdmin: true, permissions: {} }
+    const button = mountMenu().get('button')
+    expect(button.attributes('aria-label')).toBeUndefined()
+    expect(button.text()).toBe(`${name}${role}${hint}`)
+    expect(button.find('.sr-only').text()).toBe(hint)
+    const label = button.findAll('span').find((s) => s.text().includes(role) && s.classes().includes('grid'))
+    expect(label?.classes()).toContain('max-[1023px]:sr-only')
+    expect(label?.classes()).not.toContain('max-[1023px]:hidden')
+  })
+
   it('shows the member role label for a non-super-admin', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u2', name: '王小明', isSuperAdmin: false, permissions: {} }

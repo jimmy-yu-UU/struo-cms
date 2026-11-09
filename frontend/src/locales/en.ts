@@ -57,12 +57,12 @@ export default {
     openMenu: 'Open navigation menu',
     toggleSidebar: 'Toggle sidebar',
     mainNav: 'Main navigation',
-    brandHome: 'Back to dashboard',
+    brandHomeHint: ', back to dashboard',
     mobileNav: 'Sidebar',
     mobileNavDescription: 'Displays the mobile sidebar.',
   },
   user: {
-    account: 'Account',
+    accountMenuHint: ', account menu',
     superAdmin: 'Super Admin',
     member: 'Member',
     logoutIncomplete: 'You were signed out here, but the server could not confirm it. If this is a shared computer, close the browser.',
@@ -86,7 +86,7 @@ export default {
   },
   password: {
     sectionTitle: 'Password',
-    sectionDescription: 'Set a new password for this account. Its sessions and access token are revoked.',
+    sectionDescription: 'Set a new password for this account. Its sessions and API access token are revoked.',
     changeTitle: 'Change password',
     changeDescription: 'Enter your current password, then choose a new one.',
     resetTitle: 'Reset password',

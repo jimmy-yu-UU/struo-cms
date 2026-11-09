@@ -174,7 +174,7 @@ auth cookie 才會共用。細節見 `frontend/e2e/README.md`。
 條件與帳密怎麼覆寫，見 `frontend/e2e/README.md`。
 
 `sample` 專案要跑，先照[第 23 章](23-sample-walkthrough.md)的步驟把範例啟用。用 `--list` 跑
-`sample` 這個專案會列出 8 個 spec 檔、15 個測試。
+`sample` 這個專案會列出 9 個 spec 檔、16 個測試。
 
 在 API 與資料庫都已經跑著的前提下，本機一次跑完 `frontend/` 的單元測試、build 與 `core`
 這個 e2e 專案：

@@ -98,6 +98,31 @@ const saveLabel = computed(() => (saving.value ? t('media.saving') : t('media.sa
 const loadGuard = createLatestWins()
 const recoverGuard = createLatestWins()
 
+// Parses a fetched item into the form; relations stay out of the model on purpose.
+// relations: {} is deliberate, not an oversight: this dialog does not edit any relation, but
+// `file`'s schema still declares the `folder` (manyToOne/treeSelect) relation, and
+// parseItemToForm populates `relations` by iterating meta.relations dynamically -- it would set
+// `relations.folder = null` from this non-deep response regardless (item.folder is simply
+// undefined here). buildItemPayload only skips a relation's FK when its key is ABSENT from
+// `model.relations` ("untouched -> partial update"); once parseItemToForm put the key there,
+// buildItemPayload would emit `folderId: null` on every save and silently unfile the file.
+// Forcing `relations: {}` keeps that key out entirely, so the "untouched" branch actually
+// fires. Do not "simplify" this back to spreading parseItemToForm's own `relations` output.
+function adoptItem(item: Record<string, unknown>): void {
+  raw.value = item
+  if (fileMeta.value) model.value = { ...parseItemToForm(fileMeta.value, item, locales.value), relations: {} }
+  baseline.value = snapshotModel(model.value)
+}
+
+// This dialog does not edit folder assignment (that lives in the media library's
+// drag-and-drop / "Move to…" context menu / batch move), so there is no need for `deep:
+// ['folder']` here -- the items API only projects that relation FK under `deep` expansion, and
+// nothing in this component reads item.folder or item.folderId.
+async function fetchItem(fileId: string): Promise<Record<string, unknown>> {
+  await Promise.all([schema.load(), langStore.load()])
+  return itemsApi.get('file', fileId)
+}
+
 async function load(): Promise<void> {
   if (!props.file) return
   const token = loadGuard.next()
@@ -112,27 +137,33 @@ async function load(): Promise<void> {
   conflict.value = false
   error.value = ''
   try {
-    await Promise.all([schema.load(), langStore.load()])
+    const item = await fetchItem(fileId)
     if (!loadGuard.isCurrent(token)) return
     activeLocale.value = langStore.defaultCode
-    // This dialog does not edit folder assignment (that lives in the media library's
-    // drag-and-drop / "Move to…" context menu / batch move), so there is no need for `deep:
-    // ['folder']` here -- the items API only projects that relation FK under `deep` expansion, and
-    // nothing in this component reads item.folder or item.folderId.
-    const item = await itemsApi.get('file', fileId)
+    adoptItem(item)
+  } catch (e) {
     if (!loadGuard.isCurrent(token)) return
-    raw.value = item
-    // relations: {} is deliberate, not an oversight: this dialog does not edit any relation, but
-    // `file`'s schema still declares the `folder` (manyToOne/treeSelect) relation, and
-    // parseItemToForm populates `relations` by iterating meta.relations dynamically -- it would set
-    // `relations.folder = null` from this non-deep response regardless (item.folder is simply
-    // undefined here). buildItemPayload only skips a relation's FK when its key is ABSENT from
-    // `model.relations` ("untouched -> partial update"); once parseItemToForm put the key there,
-    // buildItemPayload would emit `folderId: null` on every save and silently unfile the file.
-    // Forcing `relations: {}` keeps that key out entirely, so the "untouched" branch actually
-    // fires. Do not "simplify" this back to spreading parseItemToForm's own `relations` output.
-    if (fileMeta.value) model.value = { ...parseItemToForm(fileMeta.value, item, locales.value), relations: {} }
-    baseline.value = snapshotModel(model.value)
+    error.value = e instanceof Error ? e.message : t('media.loadFailed')
+  } finally {
+    if (loadGuard.isCurrent(token)) loading.value = false
+  }
+}
+
+// "Reload latest" after a save conflict: the draft stays in the form (inputs disabled) until the
+// fresh copy arrives, which then replaces the model and the baseline in one step. A failure keeps
+// the draft, the conflict notice and its reload button, so the user can retry or save over it.
+async function reloadAfterConflict(): Promise<void> {
+  if (!props.file) return
+  const token = loadGuard.next()
+  recoverGuard.next()
+  const fileId = props.file.id
+  loading.value = true
+  error.value = ''
+  try {
+    const item = await fetchItem(fileId)
+    if (!loadGuard.isCurrent(token)) return
+    adoptItem(item)
+    conflict.value = false
   } catch (e) {
     if (!loadGuard.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
@@ -308,7 +339,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
             role="alert"
           >
             <span class="flex-1">{{ $t('media.saveConflict') }}</span>
-            <Button type="button" variant="outline" size="sm" :disabled="loading" @click="load()">{{ $t('media.reloadLatest') }}</Button>
+            <Button type="button" variant="outline" size="sm" :disabled="loading" @click="reloadAfterConflict()">{{ $t('media.reloadLatest') }}</Button>
           </div>
           <div v-if="error" class="md-error flex items-center gap-3" role="alert">
             <span class="flex-1">{{ error }}</span>

@@ -217,9 +217,10 @@ migration" section of [Chapter 21: Schema Management and Upgrades](21-schema-and
 
 ## Running the sample's end-to-end tests
 
-`frontend/e2e/sample/` has 8 spec files (`collections`, `items`, `relations`, `revisions`,
-`trash`, `conflict`, `unsaved-guard`, `not-found`) and 15 tests; `frontend/playwright.config.ts`
-wires them into the `sample` Playwright project, run with `pnpm e2e:sample`.
+`frontend/e2e/sample/` has 9 spec files (`collections`, `items`, `relations`, `revisions`,
+`trash`, `conflict`, `revert-conflict`, `unsaved-guard`, `not-found`) and 16 tests;
+`frontend/playwright.config.ts` wires them into the `sample` Playwright project, run with
+`pnpm e2e:sample`.
 
 Running this suite needs everything `pnpm e2e` itself needs — a running API, a reachable
 database, a seeded bootstrap administrator; see [Chapter 22: Testing and CI](22-testing.md) —

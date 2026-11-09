@@ -22,7 +22,7 @@ test('browse a collection list', async ({ page }) => {
   await expect(page.getByText('Status', { exact: true })).toBeVisible()
 
   // Logout is in the UserMenu popover (no standalone `button.logout`).
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: /account menu/i }).click()
   await page.getByRole('menuitem', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
