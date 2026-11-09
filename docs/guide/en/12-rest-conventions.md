@@ -149,7 +149,9 @@ A request whose body is JSON is capped at `Api:MaxJsonBodyBytes` (default 4 MB, 
 `Struo:Files:MaxUploadBytes`. A body over the cap answers `413` with `PAYLOAD_TOO_LARGE` in the
 envelope. When the request declares a `Content-Length` over the cap, it is refused before the body is
 read; a body sent without one is cut off once it passes the cap. `/graphql` answers `413` in its own
-shape, described in [Chapter 14](14-graphql.md).
+shape, described in [Chapter 14](14-graphql.md). Every one of these paths, declared length or not,
+answers with the same fixed message, `Request body is too large.`, which names no limit; only an
+upload over `Struo:Files:MaxUploadBytes` reports its limit, as `maxBytes` in `details`.
 
 ### Your own error codes
 
@@ -365,6 +367,10 @@ in that snapshot never causes a needless conflict (see
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md)). `version` itself can never be
 set directly through a create or update body either — it's only ever used as the concurrency
 comparison value, never written into that column.
+
+A revert takes its `version` as the `?version=` query parameter. Absent means last-write-wins. A value
+that is not a single integer — empty, `abc`, `1.5`, `1e2`, `null`, beyond 64 bits, or given twice — is
+refused with `400` `INVALID_VERSION`, like an update body's `version`, and nothing is written.
 
 ## What a `POST`/`PUT` body can set
 

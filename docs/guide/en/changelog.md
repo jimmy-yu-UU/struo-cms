@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.30.0
+
+::: danger Breaking
+- A GraphQL filter on a `long` field takes `LongFilter` instead of `IntFilter`; the size of a file is the
+  core one. Its operands are `Long`, so a value above 2^31 - 1 filters instead of failing. A client that
+  declared such a filter variable as `IntFilter` must declare `LongFilter`. `LongFilter` is now a
+  reserved GraphQL type name, so a collection named `longFilter` is refused at startup.
+- `POST /api/items/{collection}/{id}/revisions/{n}/revert` answers `400` `INVALID_VERSION`, not `400`
+  `VALIDATION`, for a `?version=` that is not an integer. An empty `?version=` is refused the same way
+  instead of reading as no version; a client that sent it to mean "no version" must omit the parameter.
+- `GET /api/users/{id}/effective-permissions?roles=...`, the preview of an unsaved role selection, needs
+  write on `user` instead of read. A read-only caller gets `403` `FORBIDDEN`; the call without `?roles=`
+  still needs only read.
+:::
+
+### Changed
+
+- A GraphQL `Int`, `Long` or `Float` input that cannot be coerced is a client error with a stable code
+  instead of `INTERNAL_SERVER_ERROR` or a bare type error: a `limit`, `offset` or `revisionNumber` out of
+  the 32-bit range, and any value of the wrong kind (`"abc"`, `true`, `1.5`), answer `BAD_USER_INPUT`,
+  except a `version` literal, which answers `INVALID_VERSION`. None of them is logged as an unhandled
+  resolver exception.
+- A JSON request body over `Api:MaxJsonBodyBytes` answers `413` `PAYLOAD_TOO_LARGE` with the fixed message
+  `Request body is too large.` on every path, REST and `/graphql`, declared length or streamed. The
+  message no longer carries the limit; only a file upload over `Struo:Files:MaxUploadBytes` reports its
+  limit, as `maxBytes`.
+
 ## 0.29.2 — 2026-11-09
 
 ### Changed

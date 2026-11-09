@@ -110,7 +110,7 @@ height, status, folderId }`；multipart 形狀本身不對會被直接擋下—�
 | `POST api/users/{id}/access-token` | `user` 的寫入 | 核發存取權杖，只顯示一次 |
 | `GET api/users/{id}/access-token` | `user` 的讀取 | 讀取權杖的核發與最後使用時間 |
 | `DELETE api/users/{id}/access-token` | `user` 的寫入 | 撤銷存取權杖 |
-| `GET api/users/{id}/effective-permissions` | `user` 的讀取 | 預覽有效權限，支援 `?roles=` |
+| `GET api/users/{id}/effective-permissions` | `user` 的讀取；帶 `?roles=` 要寫入 | 預覽有效權限，支援 `?roles=` |
 
 建立使用者回 `201`，`Location` 指向 `api/items/user/{id}`——那裡才是使用者列真正的讀取路由；
 body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 email（`409 CONFLICT`）都會被擋
@@ -125,6 +125,10 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 `effective-permissions` 的 `?roles=` 可以帶一串角色 id，預覽一個還沒儲存的角色組合；帶了但是空字
 串，預覽的是公開角色的權限下限，跟完全不帶這個參數不一樣；格式錯誤或不存在的角色 id 都會被擋下，
 不會悄悄少算。
+
+`user` 的讀取也能看到使用者的角色指派與有效權限。`effective-permissions` 不帶 `?roles=` 時只需要這個
+讀取；帶了 `?roles=` 要 `user` 的寫入，因為那是為了編輯而預覽一個角色組合；只有讀取的呼叫端得到
+`403` `Write permission on the user collection is required.`。
 
 使用者的列表、更新與刪除都走通用項目 API 的 `user` 集合——建立回應的 `Location` 就是指向那裡。在
 那裡建立使用者會被 `400` 擋下，訊息是 `Items cannot be created in collection 'user' through the generic items API.`。

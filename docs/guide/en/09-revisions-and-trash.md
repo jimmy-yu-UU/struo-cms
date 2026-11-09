@@ -165,7 +165,8 @@ same update path an ordinary write uses, tagged `revert`.
 A caller can guard the revert against a concurrent edit by passing the item version it last saw
 (`?version=` over REST, the `version` argument over GraphQL). If the item has moved on since, the
 revert fails with the same `409 VERSION_CONFLICT` an update returns, and nothing is written.
-Without a version, the revert applies to whatever the item currently is.
+Without a version, the revert applies to whatever the item currently is. A `?version=` that is not an
+integer is `400` `INVALID_VERSION`, as in [Chapter 12](12-rest-conventions.md).
 
 A revert itself writes one more new `revert` revision rather than rewinding history — the
 timeline only ever accumulates forward, and undoing a revert means reverting again to an earlier
