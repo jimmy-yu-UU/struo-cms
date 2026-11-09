@@ -13,11 +13,11 @@ function mountIn(child: () => ReturnType<typeof h>) {
 }
 
 describe('vendored sidebar toggles take their label from the caller', () => {
-  it('keeps the English default when no label is passed', () => {
-    const rail = mountIn(() => h(SidebarRail)).get('[data-slot="sidebar-rail"]')
-    expect(rail.attributes('aria-label')).toBe('Toggle Sidebar')
-    expect(rail.attributes('title')).toBe('Toggle Sidebar')
-    expect(mountIn(() => h(SidebarTrigger)).get('.sr-only').text()).toBe('Toggle Sidebar')
+  it('renders the English name on the rail and the trigger when the English text is passed', () => {
+    const rail = mountIn(() => h(SidebarRail, { label: en.shell.toggleSidebar })).get('[data-slot="sidebar-rail"]')
+    expect(rail.attributes('aria-label')).toBe(en.shell.toggleSidebar)
+    expect(rail.attributes('title')).toBe(en.shell.toggleSidebar)
+    expect(mountIn(() => h(SidebarTrigger, { label: en.shell.toggleSidebar })).get('.sr-only').text()).toBe(en.shell.toggleSidebar)
   })
 
   it('renders the Chinese name on the rail', () => {
