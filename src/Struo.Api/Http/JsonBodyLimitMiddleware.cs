@@ -82,7 +82,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
             while ((read = await context.Request.Body.ReadAsync(chunk, context.RequestAborted)) > 0)
             {
                 if (buffer.Length + read > _limit) return (null, StatusCodes.Status413PayloadTooLarge);
-                buffer.Write(chunk, 0, read);
+                await buffer.WriteAsync(chunk.AsMemory(0, read), context.RequestAborted);
             }
         }
         catch (BadHttpRequestException e)

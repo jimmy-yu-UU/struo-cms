@@ -41,7 +41,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
         return Root(await resp.Content.ReadAsStringAsync());
     }
 
-    private static object WithVariable(string query, string rawJsonValue) =>
+    private static JsonElement WithVariable(string query, string rawJsonValue) =>
         JsonDocument.Parse($"{{\"query\":{JsonSerializer.Serialize(query)},\"variables\":{{\"v\":{rawJsonValue}}}}}")
             .RootElement.Clone();
 

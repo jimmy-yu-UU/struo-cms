@@ -38,7 +38,7 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
             .Build();
 
     // Builds the logger with the Console redirected, logs one line, and returns what the Console printed.
-    private string LogOnce(IConfiguration configuration, string logDirectory, string message)
+    private static string LogOnce(IConfiguration configuration, string logDirectory, string message)
     {
         var original = Console.Out;
         var captured = new StringWriter();

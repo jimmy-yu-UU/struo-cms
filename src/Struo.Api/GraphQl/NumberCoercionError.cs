@@ -50,9 +50,9 @@ internal static class NumberCoercionError
 
     private static string? ScalarOf(IReadOnlyDictionary<string, object?> extensions)
     {
-        var raw = extensions.TryGetValue("fieldType", out var fieldType) ? fieldType
-            : extensions.TryGetValue("locationType", out var locationType) ? locationType
-            : null;
+        if (!extensions.TryGetValue("fieldType", out var raw)
+            && !extensions.TryGetValue("locationType", out raw))
+            return null;
         return raw?.ToString()?.Trim('[', ']', '!');
     }
 
@@ -65,7 +65,7 @@ internal static class NumberCoercionError
                 : null;
         }
 
-        if (extensions.TryGetValue("specifiedBy", out var spec) is false
+        if (!extensions.TryGetValue("specifiedBy", out var spec)
             || spec?.ToString()?.Contains("Values-of-Correct-Type", StringComparison.Ordinal) != true)
             return null;
         if (extensions.TryGetValue("fieldName", out var fieldName)) return fieldName?.ToString();
