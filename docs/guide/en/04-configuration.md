@@ -28,9 +28,9 @@ shorten the array.
 The default `appsettings.json` fully populates five arrays: `Oidc:Providers:{id}:Scopes`,
 `Struo:Files:ImageTransform:AllowedFormats`, `Struo:Files:ImageTransform:SizeSteps`,
 `Struo:Files:ImageTransform:TransformableContentTypes` and `Struo:Files:AllowedContentTypes`; the
-first four fall back to their built-in default even if you delete them
-entirely. Array elements use an index, e.g. `Oidc__Providers__google__Scopes__0=openid`; to shorten an array, edit the
-settings file itself.
+first four fall back to their built-in default even if you delete them entirely. Array elements use
+an index, e.g. `Oidc__Providers__google__Scopes__0=openid`; to shorten an array, edit the settings
+file itself.
 
 | Key | Type | Default |
 |---|---|---|
@@ -739,17 +739,18 @@ applies to it rather than relying on the defaults: a tenant where the provider h
 | `Serilog:MinimumLevel:Default` | string | `"Information"` |
 | `Serilog:MinimumLevel:Override` | map | `{"Microsoft.AspNetCore":"Warning"}` |
 | `Serilog:WriteTo` | array | none |
+| `Struo:Logging:ConsoleEnabled` | bool | `true` |
 | `Struo:Logging:ConsoleFormat` | string | `"Text"` |
 | `Struo:Logging:FileEnabled` | bool | `true` |
 
 Two sinks are built in, added in code from `Struo:Logging`: the console, in `Text` or `Json` format,
-and a daily-rolling `logs/struo-.log` (`shared: true`) that `FileEnabled` switches off. A sink listed
-under `Serilog:WriteTo` loads on top of them. [Chapter 20](20-deployment.md) shows the Production
-setting.
+and a daily-rolling `logs/struo-.log` (`shared: true`). `ConsoleEnabled` and `FileEnabled` switch
+them off. A sink listed under `Serilog:WriteTo` loads on top of them. [Chapter 20](20-deployment.md)
+shows the Production setting.
 
-Both text formats print the request's trace id before each message. It is the id an error response carries
-as `traceId`, so a caller's report finds the log lines of that request; see
-[Chapter 12](12-rest-conventions.md).
+Both sinks print the request's trace id: the text formats before each message, `Json` as the `@tr`
+property. It is the id an error response carries as `traceId`, so a caller's report finds the log
+lines of that request; see [Chapter 12](12-rest-conventions.md).
 
 `Serilog:*` isn't bound to a custom options class; Serilog's own configuration reader parses it
 directly. Serilog builds its two loggers once each, at startup, so changing a level or a
