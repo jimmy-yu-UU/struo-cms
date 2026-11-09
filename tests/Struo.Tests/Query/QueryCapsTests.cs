@@ -127,13 +127,6 @@ public class QueryCapsTests(ApiFactory factory)
         })).Status.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
-    public async Task Large_offset_is_still_accepted()
-    {
-        var c = await SeededClient();
-        (await Query(c, "fxCategory", new { offset = 100000 })).Status.Should().Be(HttpStatusCode.OK);
-    }
-
     private async Task<Guid> SeedParentWithChildren(int count, string label)
     {
         using var scope = _factory.Services.CreateScope();

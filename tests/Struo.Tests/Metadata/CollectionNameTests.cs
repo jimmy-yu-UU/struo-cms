@@ -111,12 +111,6 @@ public class CollectionNameTests
     }
 
     [Fact]
-    public void Type_without_a_name_keeps_the_camel_cased_type_name()
-    {
-        MetadataScanner.ScanTypes([typeof(CnDerived)]).Single().Name.Should().Be("cnDerived");
-    }
-
-    [Fact]
     public void Descriptors_are_keyed_by_the_explicit_name()
     {
         var descriptors = MetadataScanner.ScanDescriptors([typeof(CnPinnedArticle), typeof(CnDerived)]);

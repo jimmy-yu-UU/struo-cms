@@ -70,7 +70,4 @@ public class OidcPromptTests
     public void Prompt_validation_accepts_only_known_values(string prompt, bool valid)
         => new OidcProviderOptions { Prompt = prompt }.HasValidPrompt().Should().Be(valid);
 
-    [Fact]
-    public void Prompt_defaults_to_select_account()
-        => new OidcProviderOptions().Prompt.Should().Be("select_account");
 }

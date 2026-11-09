@@ -23,7 +23,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Hello", body = "B-en" },
-                ["zh-TW"] = new { title = "你好", body = "B-zh" }
+                ["zh-TW"] = new { title = "你好", body = "這是中文內容，包含全形標點。" }
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
@@ -33,6 +33,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
         var tr = all.GetProperty("translations");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
+        tr.GetProperty("zh-TW").GetProperty("body").GetString().Should().Be("這是中文內容，包含全形標點。");
         all.TryGetProperty("title", out _).Should().BeFalse();
     }
 
@@ -94,9 +95,16 @@ public class TranslationReadWriteTests(ApiFactory factory)
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
-            translations = new Dictionary<string, object> { ["xx"] = new { title = "x", body = (string?)null } }
+            translations = new Dictionary<string, object>
+            {
+                // The default-locale translation is present, so only the unknown locale can be refused.
+                ["en"] = new { title = "x" },
+                ["xx"] = new { title = "x", body = (string?)null },
+            }
         });
-        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var response = await c.PostAsJsonAsync("/api/items/fxArticle", body);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Unknown or disabled locale 'xx'.");
     }
 
     [Fact]

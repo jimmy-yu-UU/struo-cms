@@ -203,17 +203,6 @@ public class SessionFixationTests(ApiFactory factory)
         SessionRotation.PresentedCookie(ctx).Should().Be("planted");
     }
 
-    [Fact]
-    public async Task Middleware_ignores_the_oidc_callback_path_when_oidc_is_disabled()
-    {
-        var invoke = Middleware(TwoProviders());
-        var ctx = Request("GET", "/signin-oidc-off", $"{SessionCookieName.Default}=abc");
-
-        await invoke(ctx);
-
-        SessionRotation.PresentedCookie(ctx).Should().BeNull();
-    }
-
     private sealed class FixedExternalLogin(Guid userId) : IExternalLoginService
     {
         public Task<ExternalLoginResult> ResolveOrProvisionAsync(

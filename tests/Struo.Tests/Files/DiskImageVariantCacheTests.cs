@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Files;
@@ -164,11 +165,9 @@ public class DiskImageVariantCacheTests
         results.Should().Contain(r => r == null);
     }
 
-    [Fact]
+    [WindowsOnlyFact("relies on Windows refusing to delete an open file")]
     public async Task An_eviction_that_cannot_delete_a_file_is_logged_and_not_thrown()
     {
-        if (!OperatingSystem.IsWindows()) return;   // relies on Windows refusing to delete an open file
-
         var root = Root();
         var logger = new CapturingLogger();
         var c = new DiskImageVariantCache(root, maxBytes: 150, logger);
@@ -183,11 +182,10 @@ public class DiskImageVariantCacheTests
         logger.Warnings.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [WindowsOnlyFact("uses a deny ACL on a subdirectory")]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public async Task A_failure_while_counting_the_existing_variants_is_logged_and_the_write_is_skipped()
     {
-        if (!OperatingSystem.IsWindows()) return;   // uses a deny ACL on a subdirectory
-
         var root = Root();
         var blocked = Directory.CreateDirectory(Path.Combine(root, "zz"));
         var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;

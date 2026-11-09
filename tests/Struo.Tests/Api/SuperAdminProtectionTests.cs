@@ -338,7 +338,8 @@ public class SuperAdminProtectionTests(ApiFactory factory)
         var root = await SeedUserAsync(superAdmin: true);
         var plain = await SeedUserAsync(superAdmin: false);
         var superRole = await SuperRoleIdAsync();
-        using var admin = await factory.CreateAuthenticatedClientAsync();
+        var (admin, _) = await factory.CreateOwnSuperAdminClientAsync();
+        using var adminClient = admin;
 
         await ShouldBeAsync(Put(admin, $"/api/items/user/{root.Id}", new { name = "renamed" }), HttpStatusCode.OK);
         await ShouldBeAsync(Put(admin, $"/api/items/user/{plain.Id}", new { roles = new[] { superRole } }), HttpStatusCode.OK);

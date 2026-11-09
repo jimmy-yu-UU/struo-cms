@@ -46,6 +46,24 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         return parent.Id;
     }
 
+    // Each child gets a CreatedAt one minute after the previous one, in the order given.
+    private async Task SeedChildrenWithCreatedAt(Guid parentId, params string[] childNames)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var i = 0; i < childNames.Length; i++)
+        {
+            var child = new FxCategory { Id = Guid.NewGuid(), Name = childNames[i], ParentId = parentId };
+            var createdAt = t0.AddMinutes(i);
+            await db.Insertable(child).ExecuteCommandAsync();
+            await db.Updateable<FxCategory>()
+                .SetColumns(x => new FxCategory { CreatedAt = createdAt, UpdatedAt = createdAt })
+                .Where(x => x.Id == child.Id)
+                .ExecuteCommandAsync();
+        }
+    }
+
     private async Task DeleteFamilies(params Guid[] parentIds)
     {
         using var scope = _factory.Services.CreateScope();
@@ -200,12 +218,7 @@ public class SingleParentWindowPushdownTests(ApiFactory factory)
         var parentId = await SeedParent("newest");
         try
         {
-            foreach (var n in new[] { "first", "second", "third", "fourth" })
-            {
-                (await c.PostAsJsonAsync("/api/items/fxCategory", new { name = n, parentId }))
-                    .StatusCode.Should().Be(HttpStatusCode.Created);
-                await Task.Delay(30);
-            }
+            await SeedChildrenWithCreatedAt(parentId, "first", "second", "third", "fourth");
             var (status, body) = await WithSmallCap(() => Query(c, "fxCategory",
                 Envelope(ParentById(parentId), new { limit = 2 })));
             status.Should().Be(HttpStatusCode.OK);

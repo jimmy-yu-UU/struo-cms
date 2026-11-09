@@ -13,18 +13,27 @@ public class FileStorageOptionsTests
         o.Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>();
     }
 
-    [Fact]
-    public void S3_backend_requires_bucket_and_credentials()
-    {
-        var o = new FileStorageOptions { Backend = "s3", S3 = new() { Endpoint = "http://x", Bucket = null } };
-        o.Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>();
-    }
+    private static FileStorageOptions.S3Options CompleteS3() =>
+        new() { Endpoint = "http://x", Bucket = "b", AccessKey = "k", SecretKey = "s" };
 
     [Fact]
-    public void Unknown_backend_throws()
+    public void S3_backend_with_every_connection_field_passes() =>
+        new FileStorageOptions { Backend = "s3", S3 = CompleteS3() }
+            .Invoking(x => x.Validate()).Should().NotThrow();
+
+    [Theory]
+    [InlineData(nameof(FileStorageOptions.S3Options.Endpoint))]
+    [InlineData(nameof(FileStorageOptions.S3Options.Bucket))]
+    [InlineData(nameof(FileStorageOptions.S3Options.AccessKey))]
+    [InlineData(nameof(FileStorageOptions.S3Options.SecretKey))]
+    public void S3_backend_requires_each_connection_field(string blankField)
     {
-        new FileStorageOptions { Backend = "azure" }
-            .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>();
+        var s3 = CompleteS3();
+        typeof(FileStorageOptions.S3Options).GetProperty(blankField)!.SetValue(s3, null);
+
+        new FileStorageOptions { Backend = "s3", S3 = s3 }
+            .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>()
+            .WithMessage("*Struo:Files:S3*");
     }
 
     [Fact]

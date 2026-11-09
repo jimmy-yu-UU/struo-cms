@@ -428,8 +428,9 @@ public sealed class PurgeIntegrityTests
         // row. The injected failure sits at the revisions step, AFTER the junction and translation
         // deletes already executed inside the SAME transaction — proving those get rolled back too,
         // not just the (never-reached) parent-row delete.
-        await Assert.ThrowsAnyAsync<Exception>(
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => h.Service.DeleteAsync("fxArticle", articleId.ToString(), purge: true));
+        Assert.StartsWith("Simulated purge failure", failure.Message);
 
         Assert.NotNull(await h.Repository.GetByIdAsync("fxArticle", articleId.ToString()));
         Assert.NotEmpty(await h.ArticleTagsByArticleAsync(articleId));

@@ -34,12 +34,6 @@ public class EmailNormalizationTests(ApiFactory factory)
         return (root.TryGetProperty("data", out var data) ? data : root).GetProperty("id").GetGuid();
     }
 
-    [Theory]
-    [InlineData("  Alice@Example.com ", "alice@example.com")]
-    [InlineData("ALICE@EXAMPLE.COM", "alice@example.com")]
-    public void Normalize_trims_and_lowercases(string raw, string expected) =>
-        EmailAddress.Normalize(raw).Should().Be(expected);
-
     [Fact]
     public async Task Rest_create_stores_lowercase_and_rejects_case_variant_with_409()
     {

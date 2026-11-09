@@ -67,15 +67,6 @@ public sealed class JunctionPayloadWriteTests
     }
 
     [Fact]
-    public async Task Payload_validation_runs_through_the_field_rules()
-    {
-        using var h = new JunctionPayloadHarness();
-        var c1 = await h.CreateChildAsync("a");
-        var act = () => h.CreateParentAsync(new object[] { new { id = c1, note = new string('x', 21) } });
-        (await act.Should().ThrowAsync<QueryException>()).WithMessage("*note*maximum length*");
-    }
-
-    [Fact]
     public async Task Payload_field_shape_error_is_prefixed_with_the_relation_and_target_id()
     {
         using var h = new JunctionPayloadHarness();

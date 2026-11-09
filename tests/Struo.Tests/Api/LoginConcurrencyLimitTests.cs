@@ -51,7 +51,7 @@ public class LoginConcurrencyLimitTests(ApiFactory factory)
     public async Task Global_concurrency_cap()
     {
         var hasher = new GatedPasswordHasher();
-        var host = Host(hasher, permitLimit: 1, queueLimit: 0);
+        using var host = Host(hasher, permitLimit: 1, queueLimit: 0);
         var (email, password, _) = await factory.SeedEditorAsync([], []);
         var first = Task.Run(() => host.CreateClient().PostAsJsonAsync("/api/auth/login", new { email, password }));
         await WaitUntilAsync(() => hasher.Entered == 1);
@@ -75,7 +75,7 @@ public class LoginConcurrencyLimitTests(ApiFactory factory)
     public async Task Disabled_cap_lets_parallel_logins_through()
     {
         var hasher = new GatedPasswordHasher();
-        var host = factory.WithWebHostBuilder(b =>
+        using var host = factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {

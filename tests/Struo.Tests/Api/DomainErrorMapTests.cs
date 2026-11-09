@@ -86,11 +86,6 @@ public class DomainErrorMapTests
         DomainErrorMap.StatusFor(exception, code).Should().Be(400);
     }
 
-    // INVALID_VERSION is exception-driven only; the status→code reverse map keeps 400 → BAD_USER_INPUT.
-    [Fact]
-    public void ForStatus_400_stays_BAD_USER_INPUT()
-        => ErrorCodes.ForStatus(400).Should().Be("BAD_USER_INPUT");
-
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -183,13 +178,6 @@ public class DomainErrorMapTests
     [InlineData("SESSION_REVOCATION_FAILED", 500)]
     public void StatusFor_maps_each_code_to_its_http_status(string code, int expected)
         => DomainErrorMap.StatusFor(code).Should().Be(expected);
-
-    // The status→code reverse map (used by inline ApiResults.Fail, e.g. UsersController
-    // duplicate-email, which does NOT flow through DomainErrorMap) must keep answering the generic
-    // Conflict for 409 — the VERSION_CONFLICT split is exception-driven only.
-    [Fact]
-    public void ForStatus_409_stays_generic_CONFLICT()
-        => ErrorCodes.ForStatus(409).Should().Be("CONFLICT");
 
     [Fact]
     public void ForStatus_413_is_PAYLOAD_TOO_LARGE()

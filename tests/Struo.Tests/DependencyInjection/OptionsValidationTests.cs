@@ -356,22 +356,19 @@ public sealed class OptionsValidationTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{Struo.Application.Configuration.DatabaseOptions.SectionName}:MigrateOnStartup"] = "true",
+                ["Database:DbType"] = "Sqlite",
+                ["Database:ConnectionString"] = "Data Source=:memory:",
+                ["Database:MigrateOnStartup"] = "true",
             })
             .Build();
 
-        var options = new Struo.Application.Configuration.DatabaseOptions();
-        config.GetSection(Struo.Application.Configuration.DatabaseOptions.SectionName).Bind(options);
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(config);
+        services.AddStruoInfrastructure();
+        using var provider = services.BuildServiceProvider();
 
-        options.MigrateOnStartup.Should().BeTrue();
-    }
-
-    [Fact]
-    public void The_removed_schema_options_no_longer_exist()
-    {
-        var properties = typeof(Struo.Application.Configuration.DatabaseOptions).GetProperties().Select(p => p.Name);
-
-        properties.Should().NotContain(["AutoSyncSchema", "MigrationsPath"]);
+        provider.GetRequiredService<IOptions<Struo.Application.Configuration.DatabaseOptions>>()
+            .Value.MigrateOnStartup.Should().BeTrue();
     }
 
     [SqliteOnlyTheory("options validation; the SQLite temp file only satisfies the required connection string")]

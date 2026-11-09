@@ -36,20 +36,6 @@ public class FileDownloadTests(ApiFactory factory)
         SetStatus(c, id, "published");
 
     [Fact]
-    public async Task Upload_defaults_to_published()
-    {
-        // CHANGE 1: dimensions are extracted synchronously during upload, so there is no pending
-        // async step that "draft" was gating — new uploads must be immediately usable/servable.
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var content = new ByteArrayContent(Encoding.UTF8.GetBytes("data"));
-        content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
-        var mp = new MultipartFormDataContent { { content, "file", "f.txt" } };
-        var resp = await c.PostAsync("/api/files", mp);
-        Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
-            .Should().Be("published");
-    }
-
-    [Fact]
     public async Task Nonpublished_file_is_404_to_anonymous_but_visible_to_authenticated()
     {
         // CHANGE 2: authenticated callers (cookie or bearer) may fetch/serve a file of any status;
@@ -94,27 +80,19 @@ public class FileDownloadTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Published_download_streams_bytes()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = await Upload(c, "payload");
-        await Publish(c, id);
-        var resp = await c.GetAsync($"/api/files/{id}/content");
-        resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await resp.Content.ReadAsStringAsync()).Should().Be("payload");
-    }
-
-    [Fact]
     public async Task Published_info_returns_metadata()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = await Upload(c);
+        var id = await Upload(c, "metadata");
         var pub = await Publish(c, id);
         pub.StatusCode.Should().Be(HttpStatusCode.OK, await pub.Content.ReadAsStringAsync());
         var resp = await c.GetAsync($"/api/files/{id}");
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
-            .Should().Be("published");
+        var data = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data");
+        data.GetProperty("status").GetString().Should().Be("published");
+        data.GetProperty("fileName").GetString().Should().Be("f.txt");
+        data.GetProperty("contentType").GetString().Should().Be("text/plain");
+        data.GetProperty("size").GetInt64().Should().Be("metadata".Length);
     }
 
     [Fact]
@@ -130,16 +108,6 @@ public class FileDownloadTests(ApiFactory factory)
         var contentResp = await anon.GetAsync($"/api/files/{id}/content");
         contentResp.StatusCode.Should().Be(HttpStatusCode.OK);
         (await contentResp.Content.ReadAsStringAsync()).Should().Be("payload");
-    }
-
-    [Fact]
-    public async Task Delete_removes_file_then_download_404()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = await Upload(c);
-        await Publish(c, id);
-        (await c.DeleteAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
-        (await c.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

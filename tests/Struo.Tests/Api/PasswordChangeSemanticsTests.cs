@@ -78,7 +78,7 @@ public class PasswordChangeSemanticsTests(ApiFactory factory)
     [Fact]
     public async Task Admin_reset_on_a_target_with_no_local_password_succeeds()
     {
-        var admin = await factory.CreateAuthenticatedClientAsync();
+        var (admin, _) = await factory.CreateOwnSuperAdminClientAsync();
         var (_, _, userId) = await factory.SeedEditorAsync([], []);
 
         // Blank the stored hash to reproduce the OIDC-JIT-provisioned shape.

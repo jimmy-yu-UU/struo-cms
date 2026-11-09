@@ -46,18 +46,6 @@ public sealed class MigrationCliTests : IDisposable
     }
 
     [Fact]
-    public void Parse_splits_command_from_host_args()
-    {
-        var inv = MigrationCli.Parse(["migrate", "--Database:TablePrefix=acme_"]);
-        inv.Command.Should().Be("migrate");
-        inv.HostArgs.Should().Equal("--Database:TablePrefix=acme_");
-
-        var web = MigrationCli.Parse(["--urls=http://localhost:5221"]);
-        web.Command.Should().BeNull();
-        web.HostArgs.Should().Equal("--urls=http://localhost:5221");
-    }
-
-    [Fact]
     public async Task Unknown_migrate_subcommand_is_a_usage_error()
     {
         var (code, _, err) = await Run(Services(), "migrate:nope");

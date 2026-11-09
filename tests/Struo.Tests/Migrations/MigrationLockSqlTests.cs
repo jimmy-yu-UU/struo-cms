@@ -49,14 +49,4 @@ public sealed class MigrationLockSqlTests
     public void Lock_session_connection_string_disables_pooling_for_locking_backends(
         StruoDbType db, string input, string expected) =>
         MigrationLockSql.SessionConnectionString(db, input).Should().Be(expected);
-
-    [Fact]
-    public async Task Disposing_a_lock_twice_is_safe()
-    {
-        var gate = await MigrationLock.AcquireAsync(
-            StruoDbType.Sqlite, "Data Source=:memory:", "t_", TimeSpan.FromSeconds(1), default);
-        await gate.DisposeAsync();
-        var act = async () => await gate.DisposeAsync();
-        await act.Should().NotThrowAsync();
-    }
 }

@@ -108,7 +108,7 @@ public class ConfigBrandingTests(ApiFactory factory)
         await SeedAsync("Ghost Logo Brand", logo);
         await DeleteFileAsync(logo); // simulate the file being deleted independently of settings
 
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Branding:LogoUrl"] = "https://cdn.example.com/fallback-logo.svg",
@@ -143,7 +143,7 @@ public class ConfigBrandingTests(ApiFactory factory)
                 .ExecuteCommandAsync();
         }
 
-        var f = _factory.WithWebHostBuilder(b =>
+        using var f = _factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Branding:LogoUrl"] = "https://cdn.example.com/fallback-logo.svg",

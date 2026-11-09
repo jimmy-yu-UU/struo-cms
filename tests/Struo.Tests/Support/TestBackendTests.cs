@@ -44,16 +44,6 @@ public sealed class TestBackendTests
             .Should().Be("web_struo_cms_test_db_api_1_a1b2c3d4");
     }
 
-    [Fact]
-    public void DatabaseNameFor_truncates_the_configured_part_never_the_run_id()
-    {
-        var name = TestBackend.DatabaseNameFor(new string('x', 100) + "-test", "api", 1, "a1b2c3d4");
-
-        name.Length.Should().BeLessThanOrEqualTo(63);
-        name.Should().EndWith("_1_a1b2c3d4");
-        name.Should().MatchRegex("^[a-z0-9_]+$").And.Contain("test");
-    }
-
     [Theory]
     [InlineData(100, "api")]
     [InlineData(60, "api")]

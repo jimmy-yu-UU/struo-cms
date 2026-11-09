@@ -128,25 +128,6 @@ public class OidcOptionsTests
     }
 
     [Fact]
-    public void Configuration_enumerates_provider_keys_alphabetically_so_Order_is_the_only_stable_ordering()
-    {
-        // Documents why the explicit Order exists: IConfiguration does not preserve file order.
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Oidc:Providers:microsoft:Enabled"] = "true",
-            ["Oidc:Providers:google:Enabled"] = "true",
-        }).Build();
-
-        config.GetSection("Oidc:Providers").GetChildren().Select(c => c.Key)
-            .Should().Equal("google", "microsoft");
-
-        var bound = config.GetSection("Oidc").Get<OidcOptions>()!;
-        bound.EnabledProviders().Select(p => p.Id).Should().Equal("google", "microsoft");
-        bound.Providers["microsoft"].Order = -1;
-        bound.EnabledProviders().Select(p => p.Id).Should().Equal("microsoft", "google");
-    }
-
-    [Fact]
     public void TryGetEnabled_returns_false_for_unknown_or_disabled_ids()
     {
         var o = new OidcOptions

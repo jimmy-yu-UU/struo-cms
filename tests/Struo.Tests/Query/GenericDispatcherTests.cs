@@ -87,15 +87,7 @@ public class GenericDispatcherTests
     {
         var act = () => new GenericDispatcher<Func<GenericDispatcherTests, int, Task<string>>>(
             typeof(GenericDispatcherTests), "Nope", [typeof(int)]);
-        act.Should().Throw<InvalidOperationException>().WithMessage("*Nope*");
-    }
-
-    [Fact]
-    public void Constructor_throws_with_the_instance_or_static_message_when_the_method_is_missing()
-    {
-        var act = () => new GenericDispatcher<Func<GenericDispatcherTests, int, Task<string>>>(
-            typeof(GenericDispatcherTests), "Nope", [typeof(int)]);
-        act.Should().Throw<InvalidOperationException>().WithMessage("*private instance or static method*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*private instance or static method*Nope*");
     }
 
     [Fact]

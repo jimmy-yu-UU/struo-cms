@@ -16,7 +16,7 @@ public class ConfigEndpointPasswordPolicyTests(ApiFactory factory)
     [Fact]
     public async Task Config_publishes_the_configured_password_minimum()
     {
-        var host = factory.WithWebHostBuilder(b =>
+        using var host = factory.WithWebHostBuilder(b =>
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Auth:Password:MinLength"] = "14",

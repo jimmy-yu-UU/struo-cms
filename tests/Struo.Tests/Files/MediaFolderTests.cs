@@ -163,10 +163,9 @@ public sealed class MediaFolderTests : IDisposable
     // A text operator is not an instant comparison: a date-prefix _starts_with matches the column's
     // text form where the backend compares it as text. PostgreSQL has no LIKE on timestamptz, and SQL
     // Server's text form of datetimeoffset is its own, so neither is asserted here.
-    [Fact]
+    [NotOnBackendFact("the column's text form is not comparable as text", TestBackendKind.PostgreSQL, TestBackendKind.SqlServer)]
     public async Task CreatedAt_starts_with_a_date_prefix_matches_as_text()
     {
-        if (TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer) return;
         var id = await CreateFolderAsync("A");
         var day = (await CreatedAtAsync(id)).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 

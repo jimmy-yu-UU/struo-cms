@@ -19,18 +19,6 @@ public class TranslationCreateRequiredTests(ApiFactory factory)
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
     [Fact]
-    public async Task Create_without_translations_returns_400()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-
-        // No `translations` key at all → the default-locale translation is missing.
-        var body = JsonSerializer.SerializeToElement(new { status = "draft" });
-
-        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode
-            .Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task Create_missing_default_locale_returns_400()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();

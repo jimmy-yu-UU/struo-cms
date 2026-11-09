@@ -101,6 +101,16 @@ internal static class FakeMetadataFixtures
                 Name = "seoOgImageId", Label = "OG Image", Interface = FieldInterface.Image,
                 Translatable = true, Sort = 11,
             },
+            new FieldMetadata
+            {
+                Name = "internalSecret", Label = "Internal Secret", Interface = FieldInterface.Text,
+                Hidden = true, Sort = 12,
+            },
+            new FieldMetadata
+            {
+                Name = "accessCode", Label = "Access Code", Interface = FieldInterface.Password,
+                Sort = 13,
+            },
         ],
         Relations =
         [

@@ -203,7 +203,7 @@ public class UnreachableRedisThrottleTests(ApiFactory factory)
     public async Task Unreachable_redis_fails_closed()
     {
         var hasher = new CountingPasswordHasher();
-        var host = factory.WithWebHostBuilder(b =>
+        using var host = factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -218,7 +218,8 @@ public class UnreachableRedisThrottleTests(ApiFactory factory)
             });
         });
 
-        var response = await host.CreateClient().PostAsJsonAsync(
+        using var client = host.CreateClient();
+        var response = await client.PostAsJsonAsync(
             "/api/auth/login", new { email = $"redis-down-{Guid.NewGuid():N}@struo.local", password = "x" });
 
         ((int)response.StatusCode).Should().BeInRange(500, 599);

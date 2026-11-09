@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -28,7 +29,7 @@ public class ForwardedHeadersPipelineTests(ApiFactory factory)
         };
     }
 
-    private HttpClient Client(bool forwardedHeaders) =>
+    private WebApplicationFactory<Program> Host(bool forwardedHeaders) =>
         factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
@@ -40,7 +41,7 @@ public class ForwardedHeadersPipelineTests(ApiFactory factory)
                 ["ForwardedHeaders:KnownProxies:0"] = "10.1.2.3",
             }));
             b.ConfigureServices(s => s.AddTransient<IStartupFilter, SetRemoteAddress>());
-        }).CreateClient();
+        });
 
     private static async Task<HttpStatusCode> LoginFromAsync(HttpClient client, string clientIp)
     {
@@ -55,7 +56,8 @@ public class ForwardedHeadersPipelineTests(ApiFactory factory)
     [Fact]
     public async Task Enabled_partitions_the_login_limiter_by_the_forwarded_client_address()
     {
-        var client = Client(forwardedHeaders: true);
+        using var host = Host(forwardedHeaders: true);
+        using var client = host.CreateClient();
 
         (await LoginFromAsync(client, "203.0.113.1")).Should().Be(HttpStatusCode.Unauthorized);
         (await LoginFromAsync(client, "203.0.113.2")).Should().Be(HttpStatusCode.Unauthorized);
@@ -65,7 +67,8 @@ public class ForwardedHeadersPipelineTests(ApiFactory factory)
     [Fact]
     public async Task Disabled_shares_one_limiter_partition_for_every_forwarded_address()
     {
-        var client = Client(forwardedHeaders: false);
+        using var host = Host(forwardedHeaders: false);
+        using var client = host.CreateClient();
 
         (await LoginFromAsync(client, "203.0.113.1")).Should().Be(HttpStatusCode.Unauthorized);
         (await LoginFromAsync(client, "203.0.113.2")).Should().Be((HttpStatusCode)429);

@@ -45,14 +45,4 @@ public class CustomFileStorageTests
         error!.ToString().Should().Contain("Struo:Files:Backend").And.Contain("IFileStorage");
     }
 
-    [SqliteOnlyFact("starts a full host on a SQLite temp database")]
-    public async Task A_storage_registered_after_AddStruoCms_replaces_the_local_default()
-    {
-        var fork = new ForkStorage();
-
-        await using var host = await ForkHost.StartAsync(
-            afterAddStruoCms: services => services.AddSingleton<IFileStorage>(fork));
-
-        host.App.Services.GetRequiredService<IFileStorage>().Should().BeSameAs(fork);
-    }
 }

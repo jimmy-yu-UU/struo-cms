@@ -29,6 +29,8 @@ public class GraphQlConcurrencySmokeTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
 
+    // Also the legitimate multi-root query that must stay under the cost analyzer's MaxFieldCost:
+    // a rejection (HC0047) shows up as an "errors" array here.
     private const string MultiRootQuery =
         "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
 

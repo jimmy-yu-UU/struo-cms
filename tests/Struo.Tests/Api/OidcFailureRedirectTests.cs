@@ -90,7 +90,8 @@ public sealed class OidcFailureRedirectTests : IDisposable
 
         http.Response.StatusCode.Should().Be(StatusCodes.Status302Found);
         http.Response.Headers.Location.ToString().Should().Be("/login?error=external_login_denied");
-        ctx.Result?.Handled.Should().BeTrue();
+        ctx.Result.Should().NotBeNull();
+        ctx.Result!.Handled.Should().BeTrue();
     }
 
     private static readonly string[] Origins = ["https://admin.example.com"];

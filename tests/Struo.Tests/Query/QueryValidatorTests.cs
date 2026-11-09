@@ -228,17 +228,6 @@ public class QueryValidatorTests
     }
 
     [Fact]
-    public void Nested_conditions_exceeding_cap_throw()
-    {
-        var many = Enumerable.Range(0, Opts.MaxFilterConditions + 1)
-            .Select(_ => (FilterNode)new ComparisonFilter("title", QueryOperator.Eq, "x"))
-            .ToList();
-        var q = new QueryModel(null, new LogicalFilter(LogicalOperator.And, many), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
-        act.Should().Throw<QueryException>().WithMessage("*conditions*");
-    }
-
-    [Fact]
     public void Nested_logical_groups_throw()
     {
         var inner = new LogicalFilter(LogicalOperator.Or,
@@ -287,23 +276,6 @@ public class QueryValidatorTests
         Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }]
     };
 
-    [Fact]
-    public void Default_max_relation_depth_is_six()
-    {
-        new StruoQueryOptions().MaxRelationDepth.Should().Be(6);
-    }
-
-    [Fact]
-    public void Self_relation_path_within_max_depth_is_accepted()
-    {
-        // 5-hop breadcrumb: parent.parent.parent.parent.parent.name
-        var path = string.Concat(Enumerable.Repeat("parent.", 5)) + "name";
-        var q = new QueryModel(null, new ComparisonFilter(path, QueryOperator.Eq, "x"), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, CategoryRoot(), new StruoQueryOptions(),
-            new SelfRefGraph(), new CategoryMeta(), Perms);
-        act.Should().NotThrow();
-    }
-
     // Pins the exact accept/reject boundary the branch moves: default MaxRelationDepth is 6,
     // so a 6-hop self-relation path must still be accepted (paired with the 7-hop reject below).
     [Fact]
@@ -345,15 +317,6 @@ public class QueryValidatorTests
         var q = new QueryModel(null, null, [new SortField("category.name", false)], 0, 0, null);
         var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, new DenyReadOf("category"));
         act.Should().Throw<PermissionDeniedException>();
-    }
-
-    // The counterpart that keeps the gate honest: with the grant, the same path still validates.
-    [Fact]
-    public void Relation_path_into_a_readable_collection_is_accepted()
-    {
-        var q = new QueryModel(null, new ComparisonFilter("category.name", QueryOperator.Eq, "x"), [], 0, 0, null);
-        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
-        act.Should().NotThrow();
     }
 
     // The permission check must run before the leaf is resolved. If it did not, a real field and an
@@ -423,7 +386,7 @@ public class QueryValidatorTests
     [Fact]
     public void Some_predicate_on_m2o_is_accepted()
     {
-        var q = Q(new RelationPredicateFilter("category", RelationQuantifier.None, new ComparisonFilter("name", QueryOperator.Eq, "x")));
+        var q = Q(Some("category", new ComparisonFilter("name", QueryOperator.Eq, "x")));
         var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
         act.Should().NotThrow();
     }

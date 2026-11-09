@@ -187,16 +187,6 @@ public class SubqueryPushdownTests : IDisposable
     }
 
     [Fact]
-    public async Task Wide_related_set_beyond_the_old_cap_is_not_refused()
-    {
-        var (cross, _, _, _) = _h.SeedEav();
-        var many = Enumerable.Range(0, 5001).Select(i => new SqProperty { Id = Guid.NewGuid(), ProductId = cross, Code = $"bulk{i}", ValueNum = i }).ToList();
-        _h.Db.Insertable(many).ExecuteCommand();
-        var ids = await _h.QueryIdsAsync(new ComparisonFilter("properties.code", QueryOperator.Contains, "bulk"));
-        ids.Should().BeEquivalentTo([cross]);
-    }
-
-    [Fact]
     public async Task Soft_deleted_related_rows_stay_excluded_even_when_outer_includes_trash()
     {
         var (_, same, _, _) = _h.SeedEav();

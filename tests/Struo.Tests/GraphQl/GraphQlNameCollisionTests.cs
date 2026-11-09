@@ -159,18 +159,26 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
         // disposes the half-started host, so what reaches the caller here is an ObjectDisposedException
         // and not the MetadataException; Schema_build_surfaces_the_collision_message covers the chain
         // that carries the collision message.
-        var host = factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
-        {
-            var original = (IMetadataProvider)services.Single(d => d.ServiceType == typeof(IMetadataProvider))
-                .ImplementationInstance!;
-            services.AddSingleton<IMetadataProvider>(
-                new SetProvider([.. original.GetCollections(), Bare("fxArticleList")]));
-        }));
+        // The control host goes through the same provider override without the extra collection, so a
+        // failure of the colliding host can only come from the collision.
+        using var control = HostWithExtraCollections();
+        var controlStart = () => { _ = control.Services; return Task.CompletedTask; };
+        await controlStart.Should().NotThrowAsync("the host starts without the colliding collection");
 
+        using var host = HostWithExtraCollections(Bare("fxArticleList"));
         var start = () => { _ = host.Services; return Task.CompletedTask; };
 
         await start.Should().ThrowAsync<Exception>();
     }
+
+    private Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> HostWithExtraCollections(
+        params CollectionMetadata[] extra) =>
+        factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+        {
+            var original = (IMetadataProvider)services.Single(d => d.ServiceType == typeof(IMetadataProvider))
+                .ImplementationInstance!;
+            services.AddSingleton<IMetadataProvider>(new SetProvider([.. original.GetCollections(), .. extra]));
+        }));
 
     private static IEnumerable<Exception> Flatten(Exception ex)
     {

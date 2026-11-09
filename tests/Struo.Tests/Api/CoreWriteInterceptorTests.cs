@@ -79,8 +79,9 @@ public class CoreWriteInterceptorTests(ApiFactory factory)
     public async Task A_failing_session_revocation_after_a_user_delete_is_a_distinct_error_and_the_delete_stays()
     {
         var userId = await SeedUserAsync();
-        var admin = await AdminOnAsync(factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
-            s.AddScoped<IUserSessionRevocationService, ThrowingRevocationService>())));
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+            s.AddScoped<IUserSessionRevocationService, ThrowingRevocationService>()));
+        var admin = await AdminOnAsync(host);
 
         var resp = await admin.DeleteAsync($"/api/items/user/{userId}");
 
@@ -100,8 +101,9 @@ public class CoreWriteInterceptorTests(ApiFactory factory)
         var plain = await SeedUserAsync();
         var flagged = await SeedUserAsync();
         var counting = new CountingRevocationService();
-        var admin = await AdminOnAsync(factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
-            s.AddSingleton<IUserSessionRevocationService>(counting))));
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+            s.AddSingleton<IUserSessionRevocationService>(counting)));
+        var admin = await AdminOnAsync(host);
 
         (await admin.DeleteAsync($"/api/items/user/{plain}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         counting.Revoked.Should().Equal(plain);

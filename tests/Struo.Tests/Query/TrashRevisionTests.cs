@@ -182,8 +182,9 @@ public sealed class TrashRevisionTests
         var before = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;
         var versionBefore = before.Version;
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => h.Service.DeleteAsync("fxArticle", articleId, purge: false));
+        Assert.StartsWith("Simulated capture failure", failure.Message);
 
         // The soft-delete stamp AND the version bump must have rolled back with the failed capture.
         var stillLive = (FxArticle)(await h.Repository.GetByIdAsync("fxArticle", articleId, DeletedFilter.With))!;

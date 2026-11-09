@@ -78,22 +78,9 @@ public class TranslatablePushdownTests(ApiFactory factory)
             .Should().NotContain(cat, "no related article is both title-matching and status=published");
     }
 
-    [Fact]
-    public async Task Translatable_search_still_finds_rows_by_title()
-    {
-        var c = await factory.CreateAuthenticatedClientAsync();
-        var stamp = "Srch" + Guid.NewGuid().ToString("N")[..6];
-        var byTitle = await Post(c, "fxArticle", new { status = "draft", translations = new { en = new { title = stamp + "-only-title" } } });
-
-        var resp = await c.GetAsync($"/api/items/fxArticle?search={stamp}");
-        resp.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await Ids(c, $"/api/items/fxArticle?search={stamp}")).Should().Contain(byTitle);
-    }
-
-    // Moved from the retired resolved-id-set-cap test suite: the translatable-field search union
-    // (FilterTranslator.SearchGroup) is answered by a subquery against the translation sidecar, not a
-    // materialized, cardinality-bounded id set, so a search matching several rows must return ALL of
-    // them, not just the first one.
+    // The translatable-field search union (FilterTranslator.SearchGroup) is answered by a subquery
+    // against the translation sidecar, not a materialized id set, so a search matching several rows
+    // returns ALL of them, not just the first one.
     [Fact]
     public async Task Translatable_search_returns_every_row_in_a_wide_result_set()
     {

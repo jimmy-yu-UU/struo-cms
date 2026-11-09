@@ -8,6 +8,7 @@ using Struo.Application.Search;
 using Struo.Domain.Query;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.GraphQl;
 
@@ -16,8 +17,8 @@ public class SearchProviderGraphQlTests(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
 
-    private HttpClient HostWith(ISearchProvider provider) =>
-        _factory.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton(provider))).CreateClient();
+    private WebApplicationFactory<Program> HostWith(ISearchProvider provider) =>
+        _factory.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton(provider)));
 
     private static async Task<JsonElement> Post(HttpClient client, string query)
     {
@@ -31,7 +32,8 @@ public class SearchProviderGraphQlTests(ApiFactory factory)
         var (seedClient, cat, _) = await FacetSeed.SeedAsync(_factory);
         var list = await Post(seedClient, $$"""{ fxArticles(filter: { categoryId: { eq: "{{cat}}" } }, sort: ["publishedAt"]) { items { id } total } }""");
         var anyId = list.GetProperty("data").GetProperty("fxArticles").GetProperty("items")[0].GetProperty("id").GetString()!;
-        var client = HostWith(new ScriptedSearchProvider(_ => SearchOutcome.Candidates([anyId])));
+        using var host = HostWith(new ScriptedSearchProvider(_ => SearchOutcome.Candidates([anyId])));
+        using var client = host.CreateClient();
         var root = await Post(client, $$"""{ fxArticles(filter: { categoryId: { eq: "{{cat}}" } }, search: "zzz") { total items { id } } }""");
         root.TryGetProperty("errors", out _).Should().BeFalse(root.GetRawText());
         root.GetProperty("data").GetProperty("fxArticles").GetProperty("total").GetInt32().Should().Be(1);
@@ -42,7 +44,8 @@ public class SearchProviderGraphQlTests(ApiFactory factory)
     public async Task Search_unavailable_is_SEARCH_UNAVAILABLE_with_fixed_message_on_graphql()
     {
         var (_, cat, _) = await FacetSeed.SeedAsync(_factory);
-        var client = HostWith(new ScriptedSearchProvider(_ => throw new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+        using var host = HostWith(new ScriptedSearchProvider(_ => throw new SearchUnavailableException("meilisearch at 10.0.0.5:7700 refused")));
+        using var client = host.CreateClient();
         var root = await Post(client, $$"""{ fxArticles(filter: { categoryId: { eq: "{{cat}}" } }, search: "zzz") { total } }""");
         root.GetRawText().Should().NotContain("10.0.0.5");
         var error = root.GetProperty("errors")[0];

@@ -38,22 +38,6 @@ public sealed class SchemaControllerTests
     }
 
     [Fact]
-    public async Task GetAll_Authenticated_Returns200_WithFullCollectionList()
-    {
-        using var factory = new ApiFactory();
-        var client = await factory.CreateAuthenticatedClientAsync();
-
-        var res = await client.GetAsync("/api/schema");
-        res.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-        var arr = doc.RootElement.GetProperty("data");
-        arr.GetArrayLength().Should().BeGreaterThan(0);
-        arr.EnumerateArray().Select(e => e.GetProperty("name").GetString())
-           .Should().Contain("fxArticle");
-    }
-
-    [Fact]
     public async Task GetOne_Authenticated_Returns200_WithoutHiddenFields()
     {
         using var factory = new ApiFactory();

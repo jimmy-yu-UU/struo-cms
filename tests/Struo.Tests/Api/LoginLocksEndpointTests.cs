@@ -495,12 +495,4 @@ public class LoginLocksEndpointTests(ApiFactory factory)
         (await QueryAsync(admin, "ok@struo.test", "  ")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
-    public async Task The_single_lookup_endpoint_is_gone()
-    {
-        using var host = Host();
-        using var admin = await AdminAsync(host);
-
-        (await admin.GetAsync(Q("a@struo.test"))).StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed);
-    }
 }

@@ -11,6 +11,7 @@ using Struo.Api.Auth;
 using Struo.Application.Configuration;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.Api;
 
@@ -24,9 +25,9 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public class DataProtectionWiringTests(ApiFactory factory)
 {
-    private IServiceProvider StartHost(string redis, string? applicationName = null)
+    private WebApplicationFactory<Program> StartHost(string redis, string? applicationName = null)
     {
-        var host = factory.WithWebHostBuilder(b =>
+        return factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) =>
             {
@@ -36,13 +37,13 @@ public class DataProtectionWiringTests(ApiFactory factory)
             });
             b.ConfigureServices(DataProtectionTestHost.RemoveKeyRingLoader);
         });
-        return host.Services;
     }
 
     [Fact]
     public void Without_Redis_no_repository_is_set_so_the_default_file_location_applies()
     {
-        var services = StartHost("");
+        using var host = StartHost("");
+        var services = host.Services;
 
         var repository = services.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository;
 
@@ -52,7 +53,8 @@ public class DataProtectionWiringTests(ApiFactory factory)
     [Fact]
     public void With_Redis_the_key_ring_is_stored_in_Redis()
     {
-        var services = StartHost("127.0.0.1:1,abortConnect=false");
+        using var host = StartHost("127.0.0.1:1,abortConnect=false");
+        var services = host.Services;
 
         var repository = services.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository;
 
@@ -64,7 +66,8 @@ public class DataProtectionWiringTests(ApiFactory factory)
     [InlineData("127.0.0.1:1,abortConnect=false")]
     public void The_application_name_defaults_to_StruoCMS(string redis)
     {
-        var services = StartHost(redis);
+        using var host = StartHost(redis);
+        var services = host.Services;
 
         services.GetRequiredService<IOptions<DataProtectionOptions>>().Value
             .ApplicationDiscriminator.Should().Be("StruoCMS");
@@ -73,7 +76,8 @@ public class DataProtectionWiringTests(ApiFactory factory)
     [Fact]
     public void The_application_name_comes_from_configuration()
     {
-        var services = StartHost("", "acme-cms");
+        using var host = StartHost("", "acme-cms");
+        var services = host.Services;
 
         services.GetRequiredService<IOptions<DataProtectionOptions>>().Value
             .ApplicationDiscriminator.Should().Be("acme-cms");

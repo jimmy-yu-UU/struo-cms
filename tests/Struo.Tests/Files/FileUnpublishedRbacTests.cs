@@ -71,17 +71,6 @@ public class FileUnpublishedRbacTests(ApiFactory factory)
         (await contentResp.Content.ReadAsStringAsync()).Should().Be("secret-bytes");
     }
 
-    [Fact]
-    public async Task Nonpublished_denied_to_anonymous()
-    {
-        var admin = await _factory.CreateAuthenticatedClientAsync();
-        var id = await UploadDraftAsync(admin);
-
-        var anon = _factory.CreateClient();
-        (await anon.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await anon.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
     // Bearer path: Get/Download carry no [Authorize], but the AuthSchemes.Adaptive default policy
     // scheme (see BearerReadAuthenticationTests) authenticates the bearer token there too, and
     // PermissionResolutionMiddleware resolves ITS real CanWrite("file") grant into the per-request

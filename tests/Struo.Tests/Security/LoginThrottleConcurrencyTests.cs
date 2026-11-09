@@ -55,7 +55,8 @@ public class LoginThrottleConcurrencyTests(ApiFactory factory)
     {
         const int limit = 10;
         var hasher = new CountingPasswordHasher();
-        var client = Host(limit, hasher).CreateClient();
+        using var host = Host(limit, hasher);
+        using var client = host.CreateClient();
         var email = FreshEmail("parallel");
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 50)
@@ -71,9 +72,9 @@ public class LoginThrottleConcurrencyTests(ApiFactory factory)
     {
         const int limit = 10;
         var hasher = new CountingPasswordHasher();
-        var host = Host(limit, hasher);
+        using var host = Host(limit, hasher);
         var (email, password, _) = await factory.SeedEditorAsync([], []);
-        var client = host.CreateClient();
+        using var client = host.CreateClient();
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
 
         for (var i = 0; i < 3; i++)

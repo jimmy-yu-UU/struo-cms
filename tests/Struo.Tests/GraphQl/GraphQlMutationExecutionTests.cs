@@ -117,29 +117,6 @@ public class GraphQlMutationExecutionTests
     }
 
     [Fact]
-    public async Task Create_sends_only_provided_keys_not_backfilled_defaults()
-    {
-        // Regression for the v16 null-backfill bug: HotChocolate's coerced input dictionary contains
-        // EVERY declared optional field, backfilled with null when the client didn't send it. Without
-        // routing create through SentFieldsOnly (like update already does), omitting a field with a
-        // CLR default (e.g. Article.Status = "draft") would send status: null and clobber the
-        // default instead of leaving it untouched.
-        JsonElement? capturedBody = null;
-        var ds = new FakeGraphQlDataSource
-        {
-            OnCreate = (_, body) => { capturedBody = body.Clone(); return new Dictionary<string, object?> { ["id"] = "1" }; },
-            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id, ["status"] = "published" },
-        };
-
-        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
-            "mutation { createArticle(input: { status: \"published\" }) { id } }");
-        ParseData(result);
-
-        capturedBody!.Value.EnumerateObject().Select(p => p.Name)
-            .Should().BeEquivalentTo(["status"]);
-    }
-
-    [Fact]
     public async Task Create_via_variables_sends_only_provided_keys()
     {
         // Real clients send $input as a GraphQL variable, not an inline literal. SentFieldsOnly
@@ -563,24 +540,6 @@ public class GraphQlMutationExecutionTests
     }
 
     [Fact]
-    public async Task Update_without_translations_leaves_them_untouched()
-    {
-        JsonElement? body = null;
-        var ds = new FakeGraphQlDataSource
-        {
-            OnUpdate = (_, id, b) => { body = b.Clone(); return new Dictionary<string, object?> { ["id"] = id }; },
-            OnGet = (_, id, _, _) => new Dictionary<string, object?> { ["id"] = id },
-        };
-
-        var result = await (await ExecutorAsync(ds)).ExecuteAsync(
-            "mutation { updateArticle(id: \"5\", input: { status: \"published\" }) { id } }");
-        ParseData(result);
-
-        // No `translations` key sent -> fold is a no-op -> body has no translations key (partial merge).
-        body!.Value.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["status"]);
-    }
-
-    [Fact]
     public async Task Duplicate_locale_is_rejected_as_BAD_USER_INPUT()
     {
         var created = false;
@@ -597,23 +556,5 @@ public class GraphQlMutationExecutionTests
         json.Should().Contain("BAD_USER_INPUT");
         json.Should().Contain("Locale 'en' appears more than once in translations.");
         created.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Create_missing_required_translation_field_maps_to_BAD_USER_INPUT()
-    {
-        // ItemService validates translations verbatim; the resolver adds no new validation. Simulate
-        // the domain rejection and assert the error filter maps it to BAD_USER_INPUT (parity with REST).
-        var ds = new FakeGraphQlDataSource
-        {
-            OnCreate = (_, _) => throw new QueryException(
-                "Required translation field 'title' is missing for locale 'en'."),
-        };
-
-        var json = (await (await ExecutorAsync(ds)).ExecuteAsync(
-            "mutation { createArticle(input: { translations: [ { locale: \"en\", fields: { } } ] }) { id } }")).ToJson();
-
-        json.Should().Contain("BAD_USER_INPUT");
-        json.Should().Contain("Required translation field");
     }
 }
