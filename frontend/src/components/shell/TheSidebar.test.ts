@@ -60,8 +60,7 @@ describe('TheSidebar', () => {
 
   it('the brand button routes to the dashboard', async () => {
     const w = mountSidebar()
-    const brandButton = w.find(`[aria-label="${en.shell.brandHome}"]`)
-    expect(brandButton.exists()).toBe(true)
+    const brandButton = w.get('[data-sidebar="header"] button')
     await brandButton.trigger('click')
     expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
@@ -69,7 +68,32 @@ describe('TheSidebar', () => {
   it('renders the configured brand name', () => {
     useAppConfigStore().brandName = 'Acme Docs'
     const w = mountSidebar()
-    expect(w.find(`[aria-label="${en.shell.brandHome}"]`).text()).toContain('Acme Docs')
+    expect(w.get('[data-sidebar="header"] button').text()).toContain('Acme Docs')
+  })
+
+  // WCAG 2.5.3: with no aria-label the name is built from the content, so it starts with the visible
+  // brand text and ends with the screen-reader-only purpose; collapsing the sidebar keeps all of it.
+  it.each([
+    ['expanded', { open: true }],
+    ['collapsed', { open: false }],
+  ])('names the brand button from its visible text plus the purpose when %s', (_n, props) => {
+    useAppConfigStore().brandName = 'Acme Docs'
+    const button = mountSidebar(props).get('[data-sidebar="header"] button')
+    expect(button.attributes('aria-label')).toBeUndefined()
+    expect(button.text()).toContain(`Acme Docs${en.shell.brandHomeHint}`)
+    expect(button.find('.sr-only').text()).toBe(en.shell.brandHomeHint)
+    expect(button.classes().concat(button.findAll('*').flatMap((e) => e.classes()))).not.toContain('hidden')
+  })
+
+  it('names the brand button in Chinese from the zh-TW hint', async () => {
+    const { default: zhTW } = await import('@/locales/zh-TW')
+    const zh = createI18n({ legacy: false, locale: 'zh-TW', messages: { 'zh-TW': zhTW } })
+    useAppConfigStore().brandName = 'Acme Docs'
+    const w = mount(SidebarProvider, {
+      slots: { default: () => h(TheSidebar) },
+      global: { plugins: [zh], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    expect(w.get('[data-sidebar="header"] button').text()).toContain('Acme Docs，回到儀表板')
   })
 
   // A text-only assertion here passes identically on a flat list or on broken nesting.

@@ -107,9 +107,10 @@ watch(() => route.path, () => {
     <SidebarHeader>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" :aria-label="t('shell.brandHome')" @click="go({ name: 'dashboard' })">
+          <SidebarMenuButton size="lg" @click="go({ name: 'dashboard' })">
             <BrandMark />
             <span class="truncate font-semibold">{{ brandName }}</span>
+            <span class="sr-only">{{ t('shell.brandHomeHint') }}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

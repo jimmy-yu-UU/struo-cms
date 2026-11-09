@@ -44,7 +44,7 @@ describe('TheTopbar', () => {
     const w = mountTopbar()
     expect(w.find(`[aria-label="${en.lang.label}"]`).exists()).toBe(true)
     expect(w.find(`[aria-label="${en.theme.toggle}"]`).exists()).toBe(true)
-    expect(w.find(`[aria-label="${en.user.account}"]`).exists()).toBe(true)
+    expect(w.text()).toContain(en.user.accountMenuHint)
   })
 })
 

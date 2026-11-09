@@ -44,15 +44,15 @@ async function onLogout(): Promise<void> {
       <button
         type="button"
         class="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2.5 hover:bg-accent"
-        :aria-label="t('user.account')"
       >
         <span class="grid size-8 place-items-center rounded-full border border-border bg-background text-muted-foreground">
           <User class="size-4" aria-hidden="true" />
         </span>
-        <span class="grid text-left leading-tight max-[1023px]:hidden">
+        <span class="grid text-left leading-tight max-[1023px]:sr-only">
           <b class="text-[0.83rem]">{{ displayName }}</b>
           <span class="text-[0.7rem] text-muted-foreground">{{ roleLabel }}</span>
         </span>
+        <span class="sr-only">{{ t('user.accountMenuHint') }}</span>
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
