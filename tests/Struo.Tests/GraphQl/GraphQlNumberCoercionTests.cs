@@ -218,6 +218,55 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
         lt.Should().Contain(small).And.NotContain(big);
     }
 
+    private static async Task<List<Guid>> RestFileIdsAsync(HttpClient client, string filter)
+    {
+        var resp = await client.GetAsync($"/api/items/file?limit=100&{filter}");
+        var body = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        return Root(body).GetProperty("data").EnumerateArray()
+            .Select(i => Guid.Parse(i.GetProperty("id").GetString()!)).ToList();
+    }
+
+    // REST parity for the LongFilter test above: the same rows come back for the same operands.
+    [Fact]
+    public async Task Rest_filters_a_long_field_with_a_value_above_the_Int_range()
+    {
+        var (client, big, small) = await SeedFilesAsync();
+
+        (await RestFileIdsAsync(client, $"filter[size][_gt]={Large}")).Should().Contain(big).And.NotContain(small);
+        (await RestFileIdsAsync(client, $"filter[size][_eq]={Large + 5}")).Should().Contain(big).And.NotContain(small);
+        (await RestFileIdsAsync(client, $"filter[size][_lt]={Large}")).Should().Contain(small).And.NotContain(big);
+    }
+
+    // REST has no Int coercion: an oversized limit is accepted and clamped to the page cap, where
+    // GraphQL answers BAD_USER_INPUT for the same value.
+    [Fact]
+    public async Task Rest_limit_beyond_the_Int_range_is_clamped_not_refused()
+    {
+        var client = await factory.CreateAuthenticatedClientAsync();
+
+        var resp = await client.GetAsync("/api/items/fxArticle?limit=99999999999");
+
+        var body = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, body.Length > 300 ? body[..300] : body);
+        Root(body).GetProperty("meta").GetProperty("limit").GetInt64().Should().BeLessThan(99999999999);
+    }
+
+    [Theory]
+    [InlineData("width: { in: [\"a\"] }")]
+    [InlineData("width: { nin: [true] }")]
+    [InlineData("width: { in: [1.5] }")]
+    [InlineData("size: { in: [\"a\"] }")]
+    [InlineData("size: { nin: [true] }")]
+    public async Task A_list_operand_of_the_wrong_kind_is_BAD_USER_INPUT(string operand)
+    {
+        var client = await factory.CreateAuthenticatedClientAsync();
+
+        var root = await PostAsync(client, new { query = $"{{ files(filter: {{ {operand} }}) {{ total }} }}" });
+
+        AssertSingleCode(root, "BAD_USER_INPUT");
+    }
+
     [Fact]
     public async Task An_int_field_still_filters_through_IntFilter()
     {

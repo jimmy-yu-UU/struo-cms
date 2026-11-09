@@ -53,7 +53,7 @@ internal static class NumberCoercionError
         var raw = extensions.TryGetValue("fieldType", out var fieldType) ? fieldType
             : extensions.TryGetValue("locationType", out var locationType) ? locationType
             : null;
-        return raw?.ToString()?.TrimEnd('!');
+        return raw?.ToString()?.Trim('[', ']', '!');
     }
 
     private static string? LiteralTarget(IReadOnlyDictionary<string, object?> extensions, bool hasException)
