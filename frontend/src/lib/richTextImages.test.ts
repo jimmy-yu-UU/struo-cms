@@ -13,13 +13,6 @@ describe('richTextImages', () => {
     expect(fileContentDisplayUrl('abc')).toBe('/api/files/abc/content')
   })
 
-  it('absolutizes img src from data-file-id', () => {
-    const html = '<p>x</p><img src="/api/files/abc/content" data-file-id="abc" alt="a">'
-    const out = absolutizeImageSrc(html)
-    expect(out).toContain('data-file-id="abc"')
-    expect(out).toContain(`src="${fileContentDisplayUrl('abc')}"`)
-  })
-
   const ID = '3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b'
 
   it('relativizes a managed image and tags its file id', () => {

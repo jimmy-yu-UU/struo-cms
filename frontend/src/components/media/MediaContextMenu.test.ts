@@ -32,7 +32,10 @@ async function openMenu(w: ReturnType<typeof mountMenu>) {
 describe('MediaContextMenu', () => {
   it('renders the slot content as the trigger element, not a wrapping element of its own', () => {
     const w = mountMenu({ kind: 'file' })
-    expect(w.find('.target').exists()).toBe(true)
+    // reka's trigger stamps data-state on whatever element it renders as; with as-child that is
+    // the slotted button itself, not a wrapper around it.
+    expect(w.find('.target').attributes('data-state')).toBeDefined()
+    expect(w.find('[data-state]').element).toBe(w.find('.target').element)
   })
 
   it('opens the menu on right-click and shows Open for a file with no move/delete grants', async () => {

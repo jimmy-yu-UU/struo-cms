@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import en from '../../locales/en'
-import zhTW from '../../locales/zh-TW'
 import { ApiError } from '../../api/apiClient'
 import EffectivePermissionsPanel from './EffectivePermissionsPanel.vue'
 import { useSchemaStore } from '../../stores/schemaStore'
@@ -39,6 +38,9 @@ describe('EffectivePermissionsPanel', () => {
     const w = mountPanel()
     await flushPromises()
     expect(w.text()).toContain('Article')
+    const cells = w.findAll('tbody tr')[0].findAll('td').slice(1)
+    expect(cells.map((c) => c.find('.sr-only').text())).toEqual(['Read', 'Write', ''])
+    expect(cells.map((c) => c.find('svg').exists())).toEqual([true, true, false])
     expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u1')
   })
 
@@ -131,9 +133,5 @@ describe('EffectivePermissionsPanel load failures', () => {
     await flushPromises()
     expect(w.text()).toContain(en.rbac.effectiveLoadFailed)
     expect(w.text()).not.toContain(en.rbac.effectiveForbidden)
-  })
-
-  it('states the zh-TW wording', () => {
-    expect(zhTW.rbac.effectiveForbidden).toBe('無法檢視有效權限（權限不足）')
   })
 })

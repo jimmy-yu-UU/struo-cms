@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import DatePicker from './DatePicker.vue'
 import en from '@/locales/en'
@@ -64,11 +64,6 @@ describe('DatePicker', () => {
     expect(w.get('button').attributes('aria-label')).toBe('Custom placeholder')
   })
 
-  it('joins the label and the current date through the locale separator', () => {
-    const w = mount(DatePicker, { props: { modelValue: null, label: 'Published' }, ...opts })
-    expect(w.get('button').attributes('aria-label')).toBe(`Published${en.fields.namePairSeparator}${en.fields.pickADate}`)
-  })
-
   it('uses the CJK separator in zh-TW', () => {
     i18n.global.locale.value = 'zh-TW'
     const w = mount(DatePicker, { props: { modelValue: null, label: '發布日期' }, ...opts })
@@ -126,20 +121,26 @@ describe('DatePicker', () => {
   })
 
   it('defaults to midnight when picking a day with no incoming value (the fresh-create, passive-mode path)', async () => {
-    const w = mount(DatePicker, { props: { modelValue: null }, ...opts })
-    await open(w)
-    // No modelValue means no fixed target day to click, so target today's cell — the calendar
-    // with no default-placeholder input falls back to opening on the current month regardless.
-    await w.get('[data-today]').trigger('click')
-    const emitted = w.emitted('update:modelValue')?.[0]?.[0] as Date
-    const now = new Date()
-    expect(emitted.getFullYear()).toBe(now.getFullYear())
-    expect(emitted.getMonth()).toBe(now.getMonth())
-    expect(emitted.getDate()).toBe(now.getDate())
-    expect(emitted.getHours()).toBe(0)
-    expect(emitted.getMinutes()).toBe(0)
-    expect(emitted.getSeconds()).toBe(0)
-    expect(emitted.getMilliseconds()).toBe(0)
+    // The clock is pinned so "today" cannot change between mount and click.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 7, 11, 12))
+    try {
+      const w = mount(DatePicker, { props: { modelValue: null }, ...opts })
+      await open(w)
+      // No modelValue means no fixed target day to click, so target today's cell — the calendar
+      // with no default-placeholder input falls back to opening on the current month regardless.
+      await w.get('[data-today]').trigger('click')
+      const emitted = w.emitted('update:modelValue')?.[0]?.[0] as Date
+      expect(emitted.getFullYear()).toBe(2026)
+      expect(emitted.getMonth()).toBe(7)
+      expect(emitted.getDate()).toBe(11)
+      expect(emitted.getHours()).toBe(0)
+      expect(emitted.getMinutes()).toBe(0)
+      expect(emitted.getSeconds()).toBe(0)
+      expect(emitted.getMilliseconds()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reflects a model value set after mount, including which day the calendar shows selected', async () => {

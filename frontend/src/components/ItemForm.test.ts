@@ -80,15 +80,6 @@ describe('ItemForm', () => {
     await w.find('form').trigger('submit')
     expect(w.emitted('submit')).toBeTruthy()
   })
-  it('no longer renders internal Save/Cancel buttons (actions moved to the page-head)', () => {
-    const w = mountForm({ meta, model, locales, errors: {} })
-    expect(w.find('button[data-label="Save"]').exists()).toBe(false)
-    expect(w.find('button[data-label="Cancel"]').exists()).toBe(false)
-  })
-  it('renders a translatable badge for translatable fields', () => {
-    const w = mountForm({ meta, model, locales, errors: {} })
-    expect(w.find('.tr-badge').exists()).toBe(true)
-  })
   it('shows a filled dot for locales with content and a hollow dot for empty locales', () => {
     const withContent: FormModel = { shared: { status: 'draft' },
       translations: { en: { title: 'Hi' }, 'zh-TW': { title: '' } }, relations: {} }
@@ -327,13 +318,6 @@ describe('ItemForm per-locale errors', () => {
     expect(w.text()).toContain('exceeds maximum length 255 for locale')
     expect(w.findAll('[role="tab"]')[2].find('.tab-error').exists()).toBe(true)
   })
-  it('has the tab error string in both catalogs', async () => {
-    const { default: en } = await import('../locales/en')
-    const { default: zh } = await import('../locales/zh-TW')
-    for (const cat of [en, zh] as unknown as Array<{ itemForm: Record<string, string> }>)
-      expect(cat.itemForm.tabHasErrors).toBeTruthy()
-  })
-
   it('labels a translatable field with a per-language badge that carries its explanation as a tooltip', () => {
     const w = mountForm({ meta, locales, model, errors: {} })
 

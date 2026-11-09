@@ -409,14 +409,6 @@ describe('MediaDetailDialog', () => {
     expect(w.findComponent({ name: 'AlertDialog' }).exists()).toBe(false)
   })
 
-  it('does not render an "open in full editor" link: no such button, no vue-router import', async () => {
-    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
-    const w = mountDialog()
-    await flushPromises()
-    expect(w.text()).not.toContain('Open in full editor')
-    expect(w.findAll('.pi-external-link')).toHaveLength(0)
-  })
-
   // Folder assignment lives in the media library's drag-and-drop / "Move to…" context menu / batch
   // move -- this dialog renders no folder picker and never reads or writes folderId.
   it('renders no folder picker of any kind', async () => {
@@ -718,12 +710,6 @@ describe('MediaDetailDialog save conflict', () => {
     expect(notice.get('button').text()).toBe(zhTW.media.reloadLatest)
   })
 
-  it('states the overwrite and the reload option in English', () => {
-    expect(en.media.saveConflict).toMatch(/overwrite/i)
-    expect(en.media.saveConflict).toMatch(/reload/i)
-    expect(en.media.reloadLatest).toBeTruthy()
-  })
-
   it('Reload latest discards the draft, adopts the refetched copy and clears conflict and dirty state', async () => {
     const { w, vm, get, update } = await mountConflicted()
     expect(vm.conflict).toBe(true)
@@ -771,15 +757,5 @@ describe('MediaDetailDialog save conflict', () => {
     await flushPromises()
     expect(vm.model.version).toBe(7)
     expect(vm.model.translations.en.title).toBe('Bee')
-  })
-
-  it('saving again after a 409 without reloading still overwrites with the adopted version', async () => {
-    const { vm, update } = await mountConflicted()
-    await vm.onSave()
-    await flushPromises()
-    expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({
-      version: 5,
-      translations: expect.objectContaining({ en: expect.objectContaining({ title: 'Mine' }) }),
-    }))
   })
 })

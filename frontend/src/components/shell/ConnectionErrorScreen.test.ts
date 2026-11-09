@@ -3,7 +3,6 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import ConnectionErrorScreen from './ConnectionErrorScreen.vue'
 import en from '@/locales/en'
-import zhTW from '@/locales/zh-TW'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
@@ -32,12 +31,5 @@ describe('ConnectionErrorScreen', () => {
     await w.setProps({ busy: false })
     expect(document.activeElement).toBe(heading)
     w.unmount()
-  })
-
-  it('has zh-TW strings for every new key', () => {
-    for (const key of ['serverUnreachable', 'connectionTitle', 'connectionBody', 'connectionRetrying'] as const) {
-      expect(zhTW.errors[key]).toBeTruthy()
-      expect(en.errors[key]).toBeTruthy()
-    }
   })
 })

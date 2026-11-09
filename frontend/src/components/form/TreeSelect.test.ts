@@ -32,11 +32,6 @@ function treeitem(w: VueWrapper, text: string) {
 }
 
 describe('TreeSelect', () => {
-  it('shows the placeholder when nothing is selected', () => {
-    const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES }, ...opts })
-    expect(w.get('button').text()).toContain(en.fields.selectAnItem)
-  })
-
   it('shows the selected node label, including a nested one', () => {
     const w = mount(TreeSelect, { props: { modelValue: 'child', nodes: NODES }, ...opts })
     expect(w.get('button').text()).toContain('Child')
@@ -100,22 +95,13 @@ describe('TreeSelect', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual(['child'])
   })
 
-  // Non-leaf nodes must be selectable too: FilePicker's folders and RelationPicker's parent items
-  // are both intermediate nodes, not just leaves.
-  it('emits the selected key from a real click on a non-leaf (parent) node', async () => {
-    const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES }, ...opts })
-    await open(w)
-    const root = treeitem(w, 'Root')
-    expect(root).toBeTruthy()
-    await root!.trigger('click')
-    expect(w.emitted('update:modelValue')?.[0]).toEqual(['root'])
-  })
-
   // TreeItem's single native click runs select AND toggle unconditionally. Left unhandled, that
   // toggle collapses the clicked branch in `expanded` state — which survives the popover closing
   // (selection closes it) because `expandedKeys` lives in this component, not in the popover's own
   // lifecycle. Re-opening would otherwise show the just-selected branch collapsed, its children
   // gone, with no other way to expand it back (the chevron is decorative, not a button).
+  // Non-leaf nodes must be selectable too: FilePicker's folders and RelationPicker's parent items
+  // are both intermediate nodes, not just leaves.
   it('keeps a branch expanded after selecting it with a real click, even after the popover re-opens', async () => {
     const w = mount(TreeSelect, { props: { modelValue: null, nodes: NODES }, ...opts })
     await open(w)

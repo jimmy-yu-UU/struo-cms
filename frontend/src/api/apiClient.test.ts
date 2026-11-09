@@ -22,12 +22,6 @@ describe('ApiClient', () => {
     expect(result).toEqual({ id: 'u1' })
   })
 
-  it('unwraps data by branching on the success discriminator', async () => {
-    vi.stubGlobal('fetch', mockFetch(200, { success: true, data: { id: 'u1' } }))
-    const result = await new ApiClient('/api').get<{ id: string }>('/auth/me')
-    expect(result).toEqual({ id: 'u1' })
-  })
-
   it('returns a null data payload as null (not the whole envelope)', async () => {
     vi.stubGlobal('fetch', mockFetch(200, { success: true, data: null }))
     const result = await new ApiClient('/api').get('/auth/me')

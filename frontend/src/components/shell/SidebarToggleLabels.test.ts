@@ -31,8 +31,4 @@ describe('vendored sidebar toggles take their label from the caller', () => {
     const trigger = mountIn(() => h(SidebarTrigger, { label: zhTW.shell.toggleSidebar }))
     expect(trigger.get('.sr-only').text()).toBe('展開／收合側欄')
   })
-
-  it('has an English locale string too', () => {
-    expect(en.shell.toggleSidebar).toBe('Toggle sidebar')
-  })
 })

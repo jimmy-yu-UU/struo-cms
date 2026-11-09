@@ -61,7 +61,7 @@ describe('RevisionHistoryDrawer', () => {
     const w = mountDrawer()
     await flushPromises()
     expect(itemsApi.listRevisions).toHaveBeenCalledWith('article', '5')
-    expect((w.vm as any).revisions).toHaveLength(2)
+    expect(w.findAll('.rev-item__op').map((e) => e.text())).toEqual(['Updated', 'Created'])
   })
 
   it('shows the empty state when there are no revisions', async () => {

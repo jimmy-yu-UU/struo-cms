@@ -7,6 +7,10 @@ const PASSWORD = e2ePassword()
 // Caller passes a unique value per run so create-then-delete is self-cleaning
 // even if two runs overlap (e.g. CI + a local run against the same DB).
 const STAMP = process.env.E2E_STAMP ?? 'e2e'
+// See conflict.spec.ts: localhost (not 127.0.0.1) so page.request carries the app's auth cookie.
+const API = process.env.E2E_API ?? 'http://localhost:5221'
+
+let createdId: string | undefined
 
 async function login(page: Page): Promise<void> {
   await page.goto('/')
@@ -91,6 +95,15 @@ async function openByTitle(page: Page, title: string): Promise<void> {
   await expect(translatableFieldByLabel(page, 'Title').locator('input')).toHaveValue(title)
 }
 
+// Purges the row whether the test left it active, in the trash or already purged.
+test.afterEach(async ({ page }) => {
+  if (!createdId) return
+  await page.request
+    .delete(`${API}/api/items/article/${createdId}?purge=true`, { headers: { 'X-Struo-CSRF': '1' } })
+    .catch(() => undefined)
+  createdId = undefined
+})
+
 test('create, edit, then delete an article', async ({ page }) => {
   await login(page)
 
@@ -103,7 +116,7 @@ test('create, edit, then delete an article', async ({ page }) => {
   // Shared field (Status, a Select) + default-locale required translatable
   // fields (Title/Body live under the first — default-locale — Tabs panel,
   // which is active by default per ItemForm.vue's `activeLocale` ref).
-  const title = `E2E Title ${STAMP}`
+  const title = `E2E Title ${STAMP}-${Date.now()}`
   await chooseStatus(page, 'Draft')
   await translatableFieldByLabel(page, 'Title').locator('input').fill(title)
   // Body is [CmsField(Interface = FieldInterface.RichText)] -> RichTextInput renders a TipTap
@@ -113,7 +126,10 @@ test('create, edit, then delete an article', async ({ page }) => {
   const body = translatableFieldByLabel(page, 'Body').locator('.ProseMirror')
   await body.click()
   await page.keyboard.type('E2E body content.')
+  const created = page.waitForResponse((r) =>
+    r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/items/article')
   await page.getByRole('button', { name: 'Save' }).click()
+  createdId = String((await (await created).json()).data.id)
 
   // Back on the list; the new row is present (Title is a scalar, non-system field so
   // selectListColumns() includes it as a column). Open it, edit the shared field, save.
@@ -123,8 +139,11 @@ test('create, edit, then delete an article', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page).toHaveURL(/\/collections\/article$/)
 
-  // Delete it.
+  // The edit was persisted: the reopened form shows the new Status.
   await openByTitle(page, title)
+  await expect(fieldByLabel(page, 'Status').getByRole('combobox')).toContainText('Published')
+
+  // Delete it.
   await page.getByRole('button', { name: 'Delete' }).click()
   // ItemFormView.vue's onDelete() resolves through the local confirmStore/ConfirmHost, which
   // defaults its accept button to common.confirm ("Confirm"); deleteConfirm() doesn't override it.

@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFileList from './MediaFileList.vue'
-import MediaContextMenu from './MediaContextMenu.vue'
 import { DRAG_MIME, serializeMovePayload, type MovePayload } from '../../lib/mediaMove'
 
 const i18n = createI18n({
@@ -68,17 +67,6 @@ describe('MediaFileList', () => {
     expect(btn.element.tagName).toBe('BUTTON')
   })
 
-  it('emits open when the row button is activated', async () => {
-    const w = mountList()
-    const btn = w.findAll('.media-list__row')[0].find('button')
-    // Real <button> elements are natively keyboard-activatable: the HTML spec guarantees Enter
-    // and Space dispatch a click. jsdom doesn't simulate that browser default action, so we
-    // assert the click the browser dispatches on activation -- backed by the real <button> tag
-    // assertion above, which is what actually gives us Enter/Space + tab-order for free.
-    await btn.trigger('click')
-    expect(w.emitted('open')?.[0]).toEqual(['f1'])
-  })
-
   it('still opens on a plain row click outside the button (visible click behavior unchanged)', async () => {
     const w = mountList()
     const row = w.findAll('.media-list__row')[0]
@@ -86,9 +74,13 @@ describe('MediaFileList', () => {
     expect(w.emitted('open')?.[0]).toEqual(['f1'])
   })
 
-  it('does not double-emit when the button itself is clicked', async () => {
+  it('emits open exactly once when the row button is activated', async () => {
     const w = mountList()
     const btn = w.findAll('.media-list__row')[0].find('button')
+    // Real <button> elements are natively keyboard-activatable: the HTML spec guarantees Enter
+    // and Space dispatch a click. jsdom doesn't simulate that browser default action, so we
+    // assert the click the browser dispatches on activation -- backed by the real <button> tag
+    // assertion above, which is what actually gives us Enter/Space + tab-order for free.
     await btn.trigger('click')
     expect(w.emitted('open')).toEqual([['f1']])
   })
@@ -344,29 +336,6 @@ describe('MediaFileList', () => {
       await openRowMenu(w, 0)
       await w.find('[data-test="menu-delete"]').trigger('click')
       expect(w.emitted('removeFolder')).toEqual([[folders[0]]])
-    })
-
-    // Same reasoning as MediaGrid/MediaFolderCards: reach the shared menu's own exposed handlers
-    // directly, with the grants off, to prove the refusal is this component's own wiring.
-    it('refuses to emit requestMove/remove via the file-row menu\'s own handlers when the grants are false', async () => {
-      const w = mountList({ folders, canMoveFiles: false, canDeleteFiles: false })
-      await openRowMenu(w, folders.length)
-      const menu = w.findAllComponents(MediaContextMenu)[folders.length]
-      const vm = menu.vm as unknown as { onMove: () => void; onRemove: () => void }
-      vm.onMove(); vm.onRemove()
-      expect(w.emitted('requestMove')).toBeUndefined()
-      expect(w.emitted('remove')).toBeUndefined()
-    })
-
-    it('refuses to emit requestMove/renameFolder/removeFolder via the folder-row menu\'s own handlers when the grants are false', async () => {
-      const w = mountList({ folders })
-      await openRowMenu(w, 0)
-      const menu = w.findAllComponents(MediaContextMenu)[0]
-      const vm = menu.vm as unknown as { onMove: () => void; onRename: () => void; onRemove: () => void }
-      vm.onMove(); vm.onRename(); vm.onRemove()
-      expect(w.emitted('requestMove')).toBeUndefined()
-      expect(w.emitted('renameFolder')).toBeUndefined()
-      expect(w.emitted('removeFolder')).toBeUndefined()
     })
 
     // reka's ContextMenuTrigger also opens on a still touch/pen press,

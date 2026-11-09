@@ -16,10 +16,15 @@ describe('PasswordInput', () => {
 
   it('reveals and re-masks on the toggle button', async () => {
     const w = mount(PasswordInput, { props: { modelValue: 'secret' }, ...opts })
+    // .lucide-* is one of the two legal Tailwind-adjacent migration proofs in this project (the
+    // other is data-slot); pin both icon identities, not just the functional type flip.
+    expect(w.get('button svg').classes()).toContain('lucide-eye')
     await w.get('button').trigger('click')
     expect(w.get('input').attributes('type')).toBe('text')
+    expect(w.get('button svg').classes()).toContain('lucide-eye-off')
     await w.get('button').trigger('click')
     expect(w.get('input').attributes('type')).toBe('password')
+    expect(w.get('button svg').classes()).toContain('lucide-eye')
   })
 
   // The toggle is icon-only, so its accessible name is the only thing a screen-reader user gets —
@@ -81,12 +86,11 @@ describe('PasswordInput', () => {
     expect(w.find('[data-slot="button"]').exists()).toBe(true)
   })
 
-  it('has distinct, non-empty toggle labels in both shipped locales', () => {
-    expect(en.login.showPassword).toBeTruthy()
-    expect(en.login.hidePassword).toBeTruthy()
-    expect(zhTW.login.showPassword).toBeTruthy()
-    expect(zhTW.login.hidePassword).toBeTruthy()
-    expect(zhTW.login.showPassword).not.toBe(en.login.showPassword)
-    expect(zhTW.login.hidePassword).not.toBe(en.login.hidePassword)
+  it('resolves the toggle label through the active locale', async () => {
+    const zhI18n = createI18n({ legacy: false, locale: 'zh-TW', messages: { 'zh-TW': zhTW } })
+    const w = mount(PasswordInput, { props: { modelValue: 'secret' }, global: { plugins: [zhI18n] } })
+    expect(w.get('button').attributes('aria-label')).toBe(zhTW.login.showPassword)
+    await w.get('button').trigger('click')
+    expect(w.get('button').attributes('aria-label')).toBe(zhTW.login.hidePassword)
   })
 })
