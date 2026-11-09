@@ -276,7 +276,7 @@ run at the repository root; `frontend` and `docs` each run inside their own subd
 `backend`: `dotnet restore`, `dotnet build --no-restore --configuration Release`,
 `dotnet test --no-build --configuration Release --verbosity normal`, running every backend test
 project. CI sets no `STRUO_TEST_*` connection and no `STRUO_TEST_BACKEND`, so it runs on SQLite
-only, so every live test is reported as skipped here.
+only, and every live test is reported as skipped here.
 
 `frontend`: inside the `frontend` directory, `pnpm install --frozen-lockfile --ignore-scripts`,
 then `pnpm test`, then `pnpm build` (`vue-tsc -b && vite build`). Beyond the unit tests, this

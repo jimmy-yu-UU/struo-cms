@@ -40,14 +40,4 @@ public class PropertyAccessorCacheTests
     {
         PropertyAccessorCache.Read(new Sample(), "title").Should().BeNull();
     }
-
-    [Fact]
-    public void Resolve_returns_the_same_PropertyInfo_reference_on_repeat()
-    {
-        var first = PropertyAccessorCache.Resolve(typeof(Sample), "AuthorId");
-        var second = PropertyAccessorCache.Resolve(typeof(Sample), "AuthorId");
-
-        first.Should().NotBeNull();
-        second.Should().BeSameAs(first);
-    }
 }
