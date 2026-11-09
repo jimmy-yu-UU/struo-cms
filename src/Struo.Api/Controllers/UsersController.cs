@@ -164,6 +164,7 @@ public sealed class UsersController(
     /// (IRolePermissionStore + PermissionResolver), so the preview is by construction identical to
     /// real authorization — including the public-role floor for every caller and the super-admin
     /// short-circuit. Projection mirrors AuthController.Me: probe each schema collection.
+    /// The stored-role query needs `user` read; the hypothetical <c>?roles=</c> preview needs `user` write.
     /// </summary>
     [HttpGet("{id:guid}/effective-permissions")]
     public async Task<IActionResult> GetEffectivePermissions(
@@ -172,7 +173,8 @@ public sealed class UsersController(
         [FromServices] SchemaService schema,
         CancellationToken ct)
     {
-        if (RequireRead() is { } denied) return denied;
+        var hypothetical = Request.Query.ContainsKey("roles");
+        if ((hypothetical ? RequireWrite() : RequireRead()) is { } denied) return denied;
         if (!await accounts.ExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
 

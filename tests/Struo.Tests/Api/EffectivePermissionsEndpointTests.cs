@@ -55,6 +55,25 @@ public class EffectivePermissionsEndpointTests(ApiFactory factory)
             .Should().Be(HttpStatusCode.NotFound);
     }
 
+    // The stored-role query needs `user` read; the hypothetical `?roles=` preview needs `user` write.
+    [Fact]
+    public async Task Roles_query_needs_user_write_while_the_stored_query_needs_only_read()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var userId = await CreateUserWithRolesAsync(admin, []);
+        var (readOnly, _) = await factory.CreateEditorClientAsync(["user"], []);
+        var (writer, _) = await factory.CreateEditorClientAsync(["user"], ["user"]);
+
+        (await readOnly.GetAsync($"/api/users/{userId}/effective-permissions")).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+        (await readOnly.GetAsync($"/api/users/{userId}/effective-permissions?roles=")).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+        (await readOnly.GetAsync($"/api/users/{userId}/effective-permissions?roles={Guid.NewGuid()}")).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+        (await writer.GetAsync($"/api/users/{userId}/effective-permissions?roles=")).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+    }
+
     // The User-form preview must OR-merge grants across roles exactly like real authz.
     [Fact]
     public async Task Multi_role_grants_are_or_merged()
