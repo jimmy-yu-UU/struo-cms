@@ -280,6 +280,8 @@ public sealed class RevisionServiceTests
         using var h = RevisionServiceHarness.Create();
         var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
         await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(category: catB, tags: [], zhTwTitle: "changed"), default); // rev2: catB, no tags, new zh-TW title
+        var edited = await h.Service.GetAsync("fxArticle", id, DeepFor("category", "tags"), null, default);
+        Assert.Equal("changed", ZhTwTitleOf(edited!));                              // the update changed the translation
 
         await h.Service.RevertAsync("fxArticle", id, 1);
         var now = await h.Service.GetAsync("fxArticle", id, DeepFor("category", "tags"), null, default);

@@ -108,7 +108,7 @@ public partial class GraphQlSchemaTests
     {
         var sdl = await BuildSdlAsync();
 
-        foreach (var block in new[] { "type Article", "input ArticleFilterInput", "input ArticleCreateInput" })
+        foreach (var block in new[] { "type Article", "input ArticleFilterInput", "input ArticleCreateInput", "input ArticleUpdateInput" })
         {
             var body = SdlBlock(sdl, block);
             body.Should().Contain("status:", $"{block} must be found and carry the visible fields");
@@ -267,5 +267,4 @@ public partial class GraphQlSchemaTests
         block.Value.Should().MatchRegex(@"facets:\s*\[FacetResult!\]!\r?\n");
         block.Value.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
     }
-
 }

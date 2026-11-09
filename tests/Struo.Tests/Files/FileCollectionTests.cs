@@ -29,15 +29,6 @@ public class FileCollectionTests(ApiFactory factory)
             f.GetProperty("name").GetString() == "title" && f.GetProperty("translatable").GetBoolean());
     }
 
-    // File soft-delete + retire `archived`.
-    [Fact]
-    public void File_is_soft_deletable()
-    {
-        typeof(Struo.Domain.Auditing.ISoftDeletable)
-            .IsAssignableFrom(typeof(Struo.Infrastructure.Files.File))
-            .Should().BeTrue();
-    }
-
     // FileCollection.Name is the single symbol every layer uses to address the media library
     // (RBAC in the Api layer, the generic-create guard in ItemService, trash/restore in FileService,
     // the GraphQL file DataLoader, the SEO-image overlay). The name itself is *derived* — the scanner

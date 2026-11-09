@@ -386,7 +386,7 @@ public class GraphQlExecutionTests
     }
 
     /// <summary>
-    /// Negative case: <see cref="StruoQueryOptions.MaxRelationDepth"/> (5) is enforced by
+    /// Negative case: <see cref="StruoQueryOptions.MaxRelationDepth"/> (6) is enforced by
     /// ItemService, which this suite's <see cref="FakeGraphQlDataSource"/> bypasses entirely (no real
     /// ItemService sits in the call path), so a client selection nested deep enough to matter here
     /// must instead be caught by HotChocolate's own <c>AddMaxExecutionDepthRule(12)</c> — added to
@@ -401,7 +401,7 @@ public class GraphQlExecutionTests
     public async Task Over_depth_nested_selection_is_rejected()
     {
         const int nestedParents = 20; // category is self-referential; comfortably past both the
-                                       // engine's MaxRelationDepth (5, unreachable here) and HotChocolate's
+                                       // engine's MaxRelationDepth (6, unreachable here) and HotChocolate's
                                        // AddMaxExecutionDepthRule(12, added to ExecutorAsync above).
         var query = "{ categories { items { " +
                     string.Concat(Enumerable.Repeat("parent { ", nestedParents)) +

@@ -1,8 +1,8 @@
 using AwesomeAssertions;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
-using Xunit;
 using Struo.Tests.Support;
+using Xunit;
 
 namespace Struo.Tests.Files;
 

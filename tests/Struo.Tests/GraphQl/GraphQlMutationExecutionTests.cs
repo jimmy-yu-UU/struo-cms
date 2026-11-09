@@ -557,5 +557,4 @@ public class GraphQlMutationExecutionTests
         json.Should().Contain("Locale 'en' appears more than once in translations.");
         created.Should().BeFalse();
     }
-
 }

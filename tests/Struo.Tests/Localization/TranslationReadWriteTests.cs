@@ -23,7 +23,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
             translations = new Dictionary<string, object>
             {
                 ["en"] = new { title = "Hello", body = "B-en" },
-                ["zh-TW"] = new { title = "你好", body = "B-zh" }
+                ["zh-TW"] = new { title = "你好", body = "這是中文內容，包含全形標點。" }
             }
         });
         var id = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
@@ -33,6 +33,7 @@ public class TranslationReadWriteTests(ApiFactory factory)
         var tr = all.GetProperty("translations");
         tr.GetProperty("en").GetProperty("title").GetString().Should().Be("Hello");
         tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("你好");
+        tr.GetProperty("zh-TW").GetProperty("body").GetString().Should().Be("這是中文內容，包含全形標點。");
         all.TryGetProperty("title", out _).Should().BeFalse();
     }
 

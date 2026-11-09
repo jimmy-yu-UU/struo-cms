@@ -38,7 +38,7 @@ Investigation 2026-10-22 on SQL Server 2025 with 16 parallel creates over 5 roun
   report, three runs).
 - With 20 000 pre-seeded rows the plan became a seek and the deadlock disappeared, so without the
   setting the failure depends on the plan: young or small tables hit it first.
-- `ConcurrentWriteDeadlockTests` is green on SQL Server with the setting on, and on MySQL, MariaDB,
+- The concurrent article-create case is green on SQL Server with the setting on, and on MySQL, MariaDB,
   PostgreSQL and SQLite. MySQL and MariaDB deadlocked on a separate InnoDB gap-lock cycle until
   translation sync stopped deleting rows (a create inserts only, an update replaces in place); PostgreSQL and SQLite were never affected.
 
@@ -52,6 +52,7 @@ The deployment owner runs it once, deliberately. Azure SQL Database has the sett
 
 ## Tests
 
+`ConcurrentWriteDeadlockTests` keeps the 16-way concurrent create burst as a regression test.
 `SqlServerIsolationCheckTests` covers a database with the setting off (one Warning naming the
 setting, the deadlock risk and the statement), on (no log), and every other backend (no query run).
 
@@ -63,4 +64,5 @@ reintroduce a deadlock with the setting on is not measured beyond the 16-way cre
 ## Referenced from
 
 - `src/Struo.Infrastructure/Persistence/SqlServerIsolationCheck.cs`
+- `tests/Struo.Tests/Concurrency/ConcurrentWriteDeadlockTests.cs`
 - `AGENTS.md` ("Invariants" and "Verification")

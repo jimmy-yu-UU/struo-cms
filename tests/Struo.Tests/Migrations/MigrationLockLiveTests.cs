@@ -6,6 +6,7 @@ using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.Extensions.Logging;
 
 namespace Struo.Tests.Migrations;
 
@@ -82,10 +83,13 @@ public sealed class MigrationLockLiveTests
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
 
-        var gate = await MigrationLock.AcquireAsync(db, conn, prefix, TimeSpan.FromSeconds(5), default);
+        var logger = new ListLogger();
+        var gate = await MigrationLock.AcquireAsync(db, conn, prefix, TimeSpan.FromSeconds(5), default, logger);
         await gate.DisposeAsync();
         var disposeAgain = async () => await gate.DisposeAsync();
         await disposeAgain.Should().NotThrowAsync();
+        logger.Entries.Should().NotContain(e => e.Level >= LogLevel.Warning,
+            "the second dispose returns before touching the released session");
 
         var reacquire = async () =>
         {

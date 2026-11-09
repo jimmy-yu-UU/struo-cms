@@ -31,5 +31,4 @@ public class FileUploadWhitelistTests(ApiFactory factory)
             Multipart([1, 2, 3], "x.bin", "application/octet-stream"));
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, await resp.Content.ReadAsStringAsync());
     }
-
 }

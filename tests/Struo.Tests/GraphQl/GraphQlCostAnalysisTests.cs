@@ -44,5 +44,4 @@ public class GraphQlCostAnalysisTests(ApiFactory factory)
         if (doc.RootElement.TryGetProperty("data", out var data))
             data.ValueKind.Should().Be(JsonValueKind.Null);
     }
-
 }

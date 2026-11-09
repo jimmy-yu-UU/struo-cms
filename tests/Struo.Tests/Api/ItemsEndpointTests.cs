@@ -70,6 +70,9 @@ public class ItemsEndpointTests(ApiFactory factory)
         var first = data[0];
         first.GetProperty("status").GetString().Should().Be("published");
         published.Should().Contain(first.GetProperty("id").GetString());
+        // Ids are time-ordered, so the later published row is the larger one (SQL Server orders uuids differently).
+        if (TestBackend.Current != TestBackendKind.SqlServer)
+            first.GetProperty("id").GetString().Should().Be(published.Max(StringComparer.Ordinal), "sort=-id puts the largest id first");
         first.TryGetProperty("createdAt", out _).Should().BeFalse("fields=id,status projects the other own fields away");
 
         var asc = await client.GetAsync($"/api/items/fxArticle?{scope}&sort=id");
