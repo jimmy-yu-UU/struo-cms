@@ -273,6 +273,7 @@ describe('DataTable loading and empty states', () => {
     expect(w.find('[data-testid="data-table-skeleton-row"]').exists()).toBe(false)
     expect(w.get('table').classes()).toContain('opacity-50')
     expect(w.find('[role="status"]').exists()).toBe(true)
+    expect(w.get('[data-testid="data-table-container"]').attributes('aria-busy')).toBe('true')
   })
 
   it('shows the empty message once loaded with no rows', () => {

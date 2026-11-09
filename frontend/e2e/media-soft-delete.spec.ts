@@ -168,7 +168,7 @@ test('media file: trash from detail dialog, restore, re-trash, purge — with se
   await page.getByRole('alertdialog', { name: 'Delete permanently' }).getByRole('button', { name: 'Confirm' }).click()
   await expect(trashTile(page, fileName)).toHaveCount(0)
 
-  // Purged: the row no longer exists even when trashed rows are included, and content stays 404.
+  // Purged: no row matches even with trashed rows included, and content stays 404.
   expect(await fileRowCount(page, uploadedFileId)).toBe(0)
   expect(await contentStatus(page, uploadedFileId)).toBe(404)
   uploadedFileId = undefined

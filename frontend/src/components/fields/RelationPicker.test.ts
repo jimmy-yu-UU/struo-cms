@@ -117,6 +117,7 @@ describe('RelationPicker', () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
     const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { plugins: [i18n], stubs } })
     await flushPromises() // mount: loadOptions (empty) + ensureSelectedLabels settle
+    expect(itemsApi.get).toHaveBeenCalledWith('category', 'c9', expect.anything())
     const disp = (w.vm as any).displayOptions
     expect(disp).toHaveLength(1)
     expect(disp[0]).toEqual({ id: 'c9', label: 'Archived', raw: { id: 'c9', name: 'Archived' } })

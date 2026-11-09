@@ -23,6 +23,7 @@ describe('appConfigStore', () => {
     await store.load()
     expect(store.brandName).toBe('B')
     expect('extra' in store.$state).toBe(false)
+    expect(store).not.toHaveProperty('extra')
   })
 
   it('load() populates state from the API', async () => {

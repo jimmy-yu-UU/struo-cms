@@ -30,6 +30,12 @@ describe('locale packs', () => {
     expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
 
+  // The zh-TW password-change toasts name the API access token; the wording is a maintainer ruling.
+  it('pins the zh-TW password-change toast wording to the ruled sentences', () => {
+    expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')
+    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的 API 存取權杖已撤銷。')
+  })
+
   // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local mirror: narrative-guard:allow: cites the specific ruling this test pins against, not a changelog date
   // every component test that asserts an accessible name built from these separators
   // reads them back off this same object, so a mutation here propagates to "expected" and
