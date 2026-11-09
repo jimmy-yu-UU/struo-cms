@@ -129,6 +129,50 @@ describe('CollectionListView', () => {
     expect(w.text()).toContain('No records')
   })
 
+  it('leaves the count caption empty until the first total arrives, then keeps the last total while refreshing', async () => {
+    seedSchema()
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    let resolveFirst: (v: { data: never[]; total: number }) => void = () => {}
+    vi.mocked(itemsApi.list).mockReturnValueOnce(new Promise((r) => { resolveFirst = r }))
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('p.text-muted-foreground').exists()).toBe(false)
+    expect(w.text()).not.toContain('0 items')
+    expect(w.text()).not.toContain('Showing 0–0 of 0')
+    resolveFirst({ data: [{ status: 'draft' }] as never[], total: 7 })
+    await flushPromises()
+    expect(w.text()).toContain('7 items')
+    expect(w.text()).toContain('Showing 1–7 of 7')
+    let resolveSecond: (v: { data: never[]; total: number }) => void = () => {}
+    vi.mocked(itemsApi.list).mockReturnValueOnce(new Promise((r) => { resolveSecond = r }))
+    const refresh = (w.vm as unknown as { loadItems: () => Promise<void> }).loadItems()
+    await flushPromises()
+    expect(w.text()).toContain('7 items')
+    expect(w.text()).not.toContain('0 items')
+    resolveSecond({ data: [{ status: 'draft' }] as never[], total: 8 })
+    await refresh
+    await flushPromises()
+    expect(w.text()).toContain('8 items')
+  })
+
+  it('blanks the count caption again when a refresh fails, instead of showing 0 beside the error', async () => {
+    seedSchema()
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValueOnce({ data: [{ status: 'draft' }] as never[], total: 7 })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('7 items')
+    vi.mocked(itemsApi.list).mockRejectedValueOnce(new Error('boom'))
+    await (w.vm as unknown as { loadItems: () => Promise<void> }).loadItems()
+    await flushPromises()
+    expect(w.text()).toContain('boom')
+    expect(w.text()).not.toContain('0 items')
+    expect(w.text()).not.toContain('7 items')
+    expect(w.text()).not.toContain('Showing 0–0 of 0')
+  })
+
   it('loads items on mount for a readable collection', async () => {
     seedSchema()
     seedLanguage()

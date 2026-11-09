@@ -4,10 +4,32 @@
 
 ### Changed
 
+- The password section on a user's page says its sessions and API access token are revoked, matching
+  the wording used elsewhere for the token.
+- The vendored sidebar `SidebarRail` and `SidebarTrigger` require a `label` prop; the English
+  default is gone. A fork that mounts either without a label fails type-checking until it passes
+  one.
+- The sidebar brand button and the account button have no `aria-label`. Their accessible name is the
+  visible text followed by a screen-reader-only purpose (", back to dashboard" and ", account menu"),
+  and the account name and role are visually hidden, not removed, on narrow screens. The
+  `shell.brandHome` and `user.account` locale keys are replaced by `shell.brandHomeHint` and
+  `user.accountMenuHint`. The configured brand logo is decorative (`alt=""`) because the brand
+  name always sits next to it as text.
 - A live test whose backend has no connection configured, and a Redis or S3 test without its
   environment variables, shows as skipped instead of passing, and the skip reason names the missing
   variable or setting key. `Struo.Tests.Support` adds `LiveBackendFact`, `LiveBackendTheory` and
   `EnvironmentFact` for a fork's own live tests, and `LiveSkip` for the skip reasons they use.
+
+### Fixed
+
+- In the admin form, a non-default language whose only content is blank collection elements (a blank
+  repeater row, a key-value pair with a blank key, an empty file id) counts as empty and is sent as
+  `null` on update, like any other empty language.
+- The collection and media list headings and the pager range stay blank until the first response
+  supplies the total, instead of reading 0, and keep the last total while a refresh is in flight.
+- In the media detail dialog, "Reload latest version" after a save conflict keeps the draft in the
+  form until the fresh copy arrives and then swaps it in at once. If the reload fails, the draft, the
+  conflict notice and its reload button stay.
 
 ## 0.29.2 — 2026-11-09
 

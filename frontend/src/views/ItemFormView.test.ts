@@ -1359,6 +1359,17 @@ describe('ItemFormView', () => {
     expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9', [])
   })
 
+  // `?roles=` is a hypothetical preview and needs write on `user`; a caller who can read roles but
+  // cannot write users cannot edit the selection either, so the panel shows the stored roles.
+  it('shows the stored roles when the caller can read roles but cannot write users', async () => {
+    const w = await mountUserEdit({
+      user: { read: true, write: false, delete: false },
+      role: { read: true, write: false, delete: false },
+    })
+    expect(w.findComponent(EffectivePermissionsPanel).props('roleIds')).toBeUndefined()
+    expect(rbacApi.getEffectivePermissions).toHaveBeenCalledWith('u9')
+  })
+
   it('locks the form, the actions and the token panel of a super-admin account for another caller', async () => {
     const w = await mountUserEdit({ user: { read: true, write: true, delete: true } }, true)
 

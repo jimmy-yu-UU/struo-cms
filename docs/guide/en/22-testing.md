@@ -214,8 +214,8 @@ the bootstrap administrator account used for login; the rest of the prerequisite
 override the login credentials are in `frontend/e2e/README.md`.
 
 For the `sample` project to run, opt the sample in first following the steps in
-[Chapter 23](23-sample-walkthrough.md); running the `sample` project with `--list` lists 8 spec
-files, 15 tests.
+[Chapter 23](23-sample-walkthrough.md); running the `sample` project with `--list` lists 9 spec
+files, 16 tests.
 
 With the API and the database both already running, run the admin SPA's unit tests, build, and
 the `core` e2e project locally in one line:

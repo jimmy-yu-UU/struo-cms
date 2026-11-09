@@ -126,8 +126,10 @@ function relationOptionHint(relation: string, raw: Record<string, unknown>): str
 const showEffective = computed(() => isExistingUser.value)
 // The server leaves a relation the caller cannot read out of the item, so without read on the role
 // collection the Roles selection is unknown rather than empty: no preview selection is passed and
-// the panel shows the user's saved roles.
-const selectedRoleIds = computed(() => (auth.canRead(ROLE_COLLECTION)
+// the panel shows the user's saved roles. The same holds without write on the user collection: the
+// server answers a `?roles=` preview only to a caller who can write users, and that caller alone can
+// change the selection.
+const selectedRoleIds = computed(() => (auth.canRead(ROLE_COLLECTION) && canWrite.value
   ? ((model.relations.roles as string[] | undefined) ?? [])
   : undefined))
 

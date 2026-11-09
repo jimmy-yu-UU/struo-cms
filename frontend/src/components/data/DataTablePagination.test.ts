@@ -35,6 +35,14 @@ describe('DataTablePagination', () => {
     expect(mountPager({ page: 2, pageSize: 25, total: 60 }).text()).toContain('Showing 51–60 of 60')
   })
 
+  it('renders no range while the total is still unknown', () => {
+    const w = mount(DataTablePagination, {
+      props: { page: 0, pageSize: 25, total: 0, ready: false },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    expect(w.text()).not.toContain('Showing')
+  })
+
   it('renders a zero range when there is nothing to show', () => {
     expect(mountPager({ page: 0, pageSize: 25, total: 0 }).text()).toContain('Showing 0–0 of 0')
   })

@@ -227,6 +227,10 @@ SqlSugar's own default for an unwidened `string` is also 255.
 `Required` always demands the field on create; on update it validates the merged entity, not the
 request body itself — details are in [Chapter 5: Defining Collections](05-collections.md).
 
+For a collection-valued field (an array or an object), `Required` means "a value was supplied": an
+empty `[]` or `{}` passes, on the frontend and the backend alike. Requiring at least one entry is a
+check the fork writes in a write interceptor.
+
 `RichText` content that sanitizes down to visually blank is converted to `null` before the
 `Required` check runs, so a document that looks like it has content in the editor can still fail
 the required check; `<img>` and `<hr>` both count as content.

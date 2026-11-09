@@ -5,13 +5,11 @@ import { cn } from "@/lib/utils"
 import { Button } from '@/components/ui/button'
 import { useSidebar } from "./utils"
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   class?: HTMLAttributes["class"]
   /** Screen-reader text; the caller supplies the translated text. */
-  label?: string
-}>(), {
-  label: "Toggle Sidebar",
-})
+  label: string
+}>()
 
 const { toggleSidebar } = useSidebar()
 </script>
