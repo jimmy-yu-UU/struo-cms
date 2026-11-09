@@ -1,16 +1,6 @@
 import type { FieldMeta } from '../types/schema'
-
-// Mirrors the backend's RichTextCleaner.IsBlankHtml: markup is blank when it has no image or rule and
-// nothing but whitespace (non-breaking spaces included) is left once the tags are removed.
-const MEDIA_TAG = /<(?:img|hr)/i
-const ANY_TAG = /<[^<>]*>/g
-const NBSP = /&nbsp;/gi
-
-/** True for a string that is empty, whitespace, or rich text markup carrying no content. */
-export function isBlankMarkup(value: string): boolean {
-  if (MEDIA_TAG.test(value)) return false
-  return value.replace(ANY_TAG, '').replace(NBSP, ' ').trim().length === 0
-}
+import { isBlankMarkup } from './blankMarkup'
+import { getFieldType } from './fieldTypes/registry'
 
 /**
  * The single "does this value have content" predicate for translations: it decides which locales are
@@ -18,6 +8,10 @@ export function isBlankMarkup(value: string): boolean {
  * content; null, blank text and empty collections are not, and neither is empty markup in a rich text
  * field (plain text fields are judged by trimming only, so a value such as "<TBD>" is content).
  * Required-field checks use `isEmpty`, which applies the same per-field rule.
+ *
+ * Without a field the judgement is structural (an array with elements is content). `anyHasContent`
+ * judges each field by its serialized value, so a collection holding only blank elements (a blank
+ * repeater row, a blank key-value key, an empty id) is no content, exactly as it is sent.
  */
 export function hasContent(value: unknown, field?: { interface: string }): boolean {
   if (value === undefined || value === null) return false
@@ -28,5 +22,5 @@ export function hasContent(value: unknown, field?: { interface: string }): boole
 }
 
 export function anyHasContent(fields: FieldMeta[], values: Record<string, unknown>): boolean {
-  return fields.some((f) => hasContent(values[f.name], f))
+  return fields.some((f) => hasContent(getFieldType(f.interface).serialize(values[f.name], f), f))
 }

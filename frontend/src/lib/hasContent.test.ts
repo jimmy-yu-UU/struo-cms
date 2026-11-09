@@ -96,3 +96,30 @@ describe('hasContent on pathological input', () => {
     expect(performance.now() - start).toBeLessThan(500)
   })
 })
+
+describe('anyHasContent judges a collection field by its serialized value', () => {
+  const sub = [f('q'), f('a')]
+  const typed = (iface: string, over: Partial<FieldMeta> = {}): FieldMeta => ({ ...f('v'), interface: iface, ...over })
+  it.each([
+    ['multiSelect [""]', typed('multiSelect'), ['']],
+    ['multiSelect whitespace', typed('multiSelect'), ['  ']],
+    ['checkboxGroup [""]', typed('checkboxGroup'), ['']],
+    ['tags with only blank values', typed('tags'), [{ value: ' ' }]],
+    ['keyValue with a blank key', typed('keyValue'), { '': 'x' }],
+    ['keyValue with a whitespace key', typed('keyValue'), { '   ': 'x' }],
+    ['repeater with one blank row', typed('repeater', { fields: sub }), [{ q: '', a: '' }]],
+    ['repeater with a blank row and an empty rich text row', typed('repeater', { fields: [f('q'), { ...f('a'), interface: 'richText' }] }), [{ q: '', a: '' }, { q: ' ', a: '<p><br></p>' }]],
+    ['files [""]', typed('files'), ['']],
+  ])('treats %s as no content', (_n, field, value) => {
+    expect(anyHasContent([field], { v: value })).toBe(false)
+  })
+  it.each([
+    ['multiSelect with an entry', typed('multiSelect'), ['a']],
+    ['keyValue with a key', typed('keyValue'), { k: '' }],
+    ['repeater with a filled row', typed('repeater', { fields: sub }), [{ q: 'x', a: '' }]],
+    ['tags with a value', typed('tags'), [{ value: 'a' }]],
+    ['files with an id', typed('files'), ['id-1']],
+  ])('treats %s as content', (_n, field, value) => {
+    expect(anyHasContent([field], { v: value })).toBe(true)
+  })
+})

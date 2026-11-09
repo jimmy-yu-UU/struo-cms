@@ -1,6 +1,6 @@
 import type { Component } from 'vue'
 import type { FieldMeta } from '../../types/schema'
-import { isBlankMarkup } from '../hasContent'
+import { isBlankMarkup } from '../blankMarkup'
 
 // Mirrors backend Struo.Domain.Metadata.Enums.FieldInterface (camelCase).
 // Adding a backend interface requires adding it here AND giving it a component in registry.ts.

@@ -21,7 +21,7 @@ import RepeaterField from '../../components/fields/RepeaterField.vue'
 import { i18n } from '../../i18n'
 import { formatDateTime } from '../formatDateTime'
 import { toDisplayString } from '../toDisplayString'
-import { isBlankMarkup } from '../hasContent'
+import { isBlankMarkup } from '../blankMarkup'
 import { isEmpty } from './types'
 
 type ListColumn = FieldTypeDef['listColumn']

@@ -144,3 +144,15 @@ describe('validateItem blank values', () => {
     expect(errs.f).toMatch(/required/i)
   })
 })
+
+describe('validateItem required collection fields', () => {
+  it('accepts an empty array and an empty object as a supplied value', () => {
+    const m: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+      field('tags', { interface: 'multiSelect', required: true }),
+      field('props', { interface: 'keyValue', required: true }),
+      field('faqs', { interface: 'repeater', required: true, fields: [field('q')] }),
+    ] }
+    const model: FormModel = { shared: { tags: [], props: {}, faqs: [] }, translations: {}, relations: {} }
+    expect(validateItem(m, model, 'en')).toEqual({})
+  })
+})

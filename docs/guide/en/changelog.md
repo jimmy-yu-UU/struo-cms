@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.30.0
+
+### Fixed
+
+- In the admin form, a non-default language whose only content is blank collection elements (a blank
+  repeater row, a key-value pair with a blank key, an empty file id) counts as empty and is sent as
+  `null` on update, like any other empty language.
+
 ## 0.29.2 — 2026-11-09
 
 ### Changed
