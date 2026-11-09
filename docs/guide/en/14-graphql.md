@@ -177,9 +177,10 @@ only lets scalar interfaces be filtered — `RichText`, `Markdown`, `Code`, `Jso
 `MultiSelect`, `CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no
 filter fields in GraphQL at all.
 
-A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`, `byte`),
-`LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter` for any other
-number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an `Int` operand may not.
+A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
+`byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`
+for any other number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an
+`Int` operand may not.
 
 A many-to-one relation contributes two fields to the filter input: its own foreign key as an
 `IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus the
@@ -253,17 +254,18 @@ REST write. Queries stay open to anonymous callers within their read grants.
 | `restore<X>` | `(id: ID!): <X>` |
 | `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
-The `locale` argument only appears on the single-item query, the list query, `create`, and
-`update` — `delete`/`restore`/`revert` all have none. A create input carries writable own fields,
-many-to-one foreign keys, many-to-many id arrays, and a typed translation list; an update input is
-the same, plus a `version: Long`. A `null` or omitted `version` skips the comparison. GraphQL's
-`Long` type rejects a value that is not a 64-bit integer before the resolver runs, and nothing is
-written. Written as a literal in the `version` input field or the `revert<X>` argument (`1.5`, `"abc"`,
-`true`, or an integer outside the 64-bit range) it answers `INVALID_VERSION`. Passed as a variable, or
-written as a literal anywhere else an `Int`, `Long` or `Float` is expected (`limit`, `offset`,
-`revisionNumber`, a filter operand), it answers `BAD_USER_INPUT`, because a variable's error does not
-say which field it feeds. The message says what the value must be and none of it is logged as a server
-fault. The HTTP status follows GraphQL's own rules, so read the code, not the status.
+The `locale` argument only appears on the single-item query, the list query, `create`, and `update`
+— `delete`/`restore`/`revert` all have none. A create input carries writable own fields, many-to-one
+foreign keys, many-to-many id arrays, and a typed translation list; an update input is the same,
+plus a `version: Long`. A `null` or omitted `version` skips the comparison. GraphQL's `Long` type
+rejects a value that is not a 64-bit integer before the resolver runs, and nothing is written.
+Written as a literal in the `version` input field or the `revert<X>` argument (`1.5`, `"abc"`,
+`true`, or an integer outside the 64-bit range) it answers `INVALID_VERSION`. Passed as a variable,
+or written as a literal anywhere else an `Int`, `Long` or `Float` is expected (`limit`, `offset`,
+`revisionNumber`, a filter operand, an element of a list operand such as `in`), it answers
+`BAD_USER_INPUT`, because a variable's error does not say which field it feeds. The message says
+what the value must be and none of it is logged as a server fault. The HTTP status follows GraphQL's
+own rules, so read the code, not the status.
 
 `create` and `update` convert the typed input back into the JSON body the item service already
 consumes, then re-read that row after writing, so the returned node's shape matches what a query

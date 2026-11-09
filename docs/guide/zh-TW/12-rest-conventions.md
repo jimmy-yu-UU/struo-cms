@@ -122,13 +122,13 @@ JSON body，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERV
 
 ### JSON body 大小
 
-body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 4 章](04-configuration.md)）。範圍包含
-每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳是 multipart、不是 JSON，沿用自己的上限
-`Struo:Files:MaxUploadBytes`。body 超過上限時回 `413`，信封裡的代碼是 `PAYLOAD_TOO_LARGE`。請求若宣告
-的 `Content-Length` 就超過上限，會在讀 body 之前直接拒絕；沒有宣告長度的 body 則在讀過上限的那一刻被截斷。
-`/graphql` 同樣回 `413`，但用它自己的形狀，見[第 14 章](14-graphql.md)。不論有沒有宣告長度，這幾條路徑
-都回同一句固定訊息 `Request body is too large.`，句子裡不帶任何上限；只有超過 `Struo:Files:MaxUploadBytes`
-的檔案上傳會在 `details` 的 `maxBytes` 回報上限。
+body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 4 章](04-configuration.md)）。範
+圍包含每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳是 multipart、不是 JSON，沿用自己的上限
+`Struo:Files:MaxUploadBytes`。body 超過上限時回 `413`，信封裡的代碼是 `PAYLOAD_TOO_LARGE`。請求若宣
+告的 `Content-Length` 就超過上限，會在讀 body 之前直接拒絕；沒有宣告長度的 body 則在讀過上限的那一刻
+被截斷。`/graphql` 同樣回 `413`，但用它自己的形狀，見[第 14 章](14-graphql.md)。不論有沒有宣告長度，
+這幾條路徑都回同一句固定訊息 `Request body is too large.`，句子裡不帶任何上限；只有超過
+`Struo:Files:MaxUploadBytes` 的檔案上傳會在 `details` 的 `maxBytes` 回報上限。
 
 ### 自己的錯誤代碼
 

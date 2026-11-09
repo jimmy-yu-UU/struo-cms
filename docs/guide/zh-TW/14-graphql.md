@@ -141,9 +141,9 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 `MultiSelect`、`CheckboxGroup`、`Tags`、`Files`、`File`、`Image`、`Repeater` 這些欄位在 GraphQL
 完全沒有篩選欄位。
 
-數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位（`long`，
-例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的運算元可以超過
-2^31 − 1，`Int` 的不行。
+數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位
+（`long`，例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的
+運算元可以超過 2^31 − 1，`Int` 的不行。
 
 多對一關聯在篩選輸入裡貢獻兩個欄位：自己的外鍵當 `IdFilter`（產生出來的純量篩選輸入型別之一，id 型
 欄位專用），加上目標型別的巢狀篩選輸入；一對多或
@@ -201,14 +201,14 @@ HTTP_STATUS:200
 | `restore<X>` | `(id: ID!): <X>` |
 | `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
-`locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都
-沒有。建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份
-再加一個 `version: Long`。`version` 為 `null` 或沒帶時不做比對。GraphQL 的 `Long` 型別會在 resolver
-執行前拒絕不是 64 位元整數的值，什麼都不會寫入。以字面值寫在 `version` 輸入欄位或 `revert<X>` 引數上
-（`1.5`、`"abc"`、`true`，或超出 64 位元範圍的整數），回 `INVALID_VERSION`。以變數傳入，或以字面值寫在
-其他任何要 `Int`、`Long` 或 `Float` 的位置（`limit`、`offset`、`revisionNumber`、篩選的運算元），回
-`BAD_USER_INPUT`，因為變數的錯誤沒有說明它餵給哪個欄位。訊息會說明這個值該是什麼，也都不會記成伺服器
-錯誤。HTTP 狀態依 GraphQL 自己的規則，所以要看代碼，不要看狀態。
+`locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都沒有。
+建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份再加一個
+`version: Long`。`version` 為 `null` 或沒帶時不做比對。GraphQL 的 `Long` 型別會在 resolver 執行前拒
+絕不是 64 位元整數的值，什麼都不會寫入。以字面值寫在 `version` 輸入欄位或 `revert<X>` 引數上（`1.5`、
+`"abc"`、`true`，或超出 64 位元範圍的整數），回 `INVALID_VERSION`。以變數傳入，或以字面值寫在其他任
+何要 `Int`、`Long` 或 `Float` 的位置（`limit`、`offset`、`revisionNumber`、篩選的運算元、`in` 這類清
+單運算元的每個元素），回 `BAD_USER_INPUT`，因為變數的錯誤沒有說明它餵給哪個欄位。訊息會說明這個值該
+是什麼，也都不會記成伺服器錯誤。HTTP 狀態依 GraphQL 自己的規則，所以要看代碼，不要看狀態。
 
 create 跟 update 把型別化的輸入轉回項目服務原本就吃的那份 JSON body，寫完之後重新讀一次那一列，讓
 回傳的節點形狀跟一個查詢會產生的一模一樣；重讀被 RBAC 擋下時，退回原始的寫入結果，不會讓一次成功的
@@ -373,8 +373,8 @@ HTTP_STATUS:400
 丟出的例外是 `200` 配代碼。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
-`PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，結果
-都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。
+`PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
+結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。
 
 第 10 章與[第 11 章](11-query-advanced.md)列的 REST 驗證訊息——未知欄位、未知關聯、超出深度——因為兩
 個協定共用同一個驗證器，在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。讀
