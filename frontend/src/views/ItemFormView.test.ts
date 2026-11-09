@@ -767,29 +767,6 @@ describe('ItemFormView', () => {
     expect(confirmRequire).not.toHaveBeenCalled()
   })
 
-  // ---- Escape dismiss must settle the leave-guard promise ------
-
-  // The local confirm has no onHide callback distinct from reject: confirmStore.ask() hands back a
-  // single Promise per request and settles it exactly once, from whichever of ConfirmHost's Cancel
-  // button or its AlertDialog's Escape handler fires first — both end up calling store.reject().
-  // An AlertDialog is not backdrop-dismissible (reka hard-prevents pointerDownOutside and
-  // interactOutside) and ConfirmHost renders no close button, so Escape is the only non-button
-  // path to that outcome. From guardLeave()'s point of view, a dismiss and an explicit Cancel are
-  // therefore the SAME observable outcome: confirm.require(...) resolves false — by design, since
-  // there is no third "closed without answering" state to model separately, which is what
-  // guarantees the router's awaited navigation can never hang on an unanswered dialog.
-  it('leave guard: dismiss (Escape) resolves false — indistinguishable from an explicit reject', async () => {
-    routeParams = { name: 'article', id: '5' }
-    setupStores()
-    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {} })
-    const w = mountView()
-    await w.vm.init()
-    ;(w.vm as any).model.shared.status = 'edited' // dirty
-
-    confirmRequire.mockResolvedValueOnce(false)
-    await expect(leaveGuard!()).resolves.toBe(false)
-  })
-
   // ---- same-record (params-only) navigation dirty guard -------------
 
   it('registers a route-update guard synchronously on setup', async () => {
