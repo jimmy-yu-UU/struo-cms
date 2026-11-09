@@ -101,6 +101,29 @@ describe('MediaLibraryView', () => {
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
   })
 
+  it('leaves the count caption empty until the first total arrives, then keeps the last total while refreshing', async () => {
+    seedUser({})
+    let resolveFirst: (v: { data: unknown; total: number }) => void = () => {}
+    const list = vi.spyOn(itemsApi, 'list').mockImplementation((collection: string) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: [] as never, total: 0 })
+      return new Promise((r) => { resolveFirst = r as typeof resolveFirst }) as never
+    })
+    const w = mountView()
+    await flushPromises()
+    const caption = () => w.findComponent({ name: 'PageHeader' }).attributes('caption')
+    expect(caption()).toBeUndefined()
+    resolveFirst({ data: rows, total: 5 })
+    await flushPromises()
+    expect(caption()).toBe('5 files')
+    list.mockImplementation((collection: string) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: [] as never, total: 0 })
+      return new Promise(() => {}) as never
+    })
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(caption()).toBe('5 files')
+  })
+
   it('shows the current type filter on the Select trigger, and follows it after mount', async () => {
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()

@@ -65,6 +65,9 @@ const columns = computed(() => (meta.value ? selectListColumns(meta.value) : [])
 
 const rows = ref<Row[]>([])
 const total = ref(0)
+// False until a list response has supplied `total`: the count caption and the pager range stay blank
+// rather than reading 0, and later refreshes keep the last total.
+const totalKnown = ref(false)
 // True from the first render: the first list request starts only after the schema has loaded, and
 // the table must not show its empty message in the meantime. loadItems clears it on every bail.
 const loading = ref(true)
@@ -397,6 +400,7 @@ async function loadItems(): Promise<void> {
     if (!listLoad.isCurrent(token)) return
     rows.value = res.data
     total.value = res.total
+    totalKnown.value = true
     void loadLocks()
   } catch (e) {
     if (!listLoad.isCurrent(token)) return
@@ -500,7 +504,7 @@ async function onRestore(row: Row): Promise<void> {
 onMounted(loadItems)
 
 defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilterApply, onEdit, onNew,
-  canWrite, canCreate, createUserOpen, onUserCreated, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, loading,
+  canWrite, canCreate, createUserOpen, onUserCreated, canDelete, mode, setMode, showTrashSwitch, onDelete, onRestore, onPurge, rows, total, totalKnown, loading,
   error, cellValue, tableState, filters, lockStates, lockFailed, onUnlock })
 </script>
 
@@ -513,7 +517,7 @@ defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilter
       <p class="notice">{{ t('collectionList.noAccess') }}</p>
     </template>
     <template v-else>
-      <PageHeader :title="meta.label" :caption="t('collectionList.count', { n: total })">
+      <PageHeader :title="meta.label" :caption="totalKnown ? t('collectionList.count', { n: total }) : undefined">
         <template #actions>
           <Button v-if="canCreate" @click="onNew">
             <Plus class="size-4" aria-hidden="true" />
@@ -562,6 +566,7 @@ defineExpose({ loadItems, onTableState, onPageChange, onPageSizeChange, onFilter
         :page="tableState.page"
         :page-size="tableState.pageSize"
         :total="total"
+        :ready="totalKnown"
         @update:page="onPageChange"
         @update:page-size="onPageSizeChange"
       />
