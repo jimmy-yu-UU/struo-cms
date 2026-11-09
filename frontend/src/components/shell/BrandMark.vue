@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useAppConfigStore } from '@/stores/appConfigStore'
 
-const { brandName, brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore())
+const { brandLogoUrl, brandInitial } = storeToRefs(useAppConfigStore())
 </script>
 
 <template>
