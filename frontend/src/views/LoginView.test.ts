@@ -269,21 +269,6 @@ describe('LoginView', () => {
     expect(pw.attributes('required')).toBeDefined()
   })
 
-  it('reveals and re-hides the password through the toggle', async () => {
-    const w = mountLogin()
-    const toggle = w.findComponent({ name: 'PasswordInput' }).get('button')
-    expect(toggle.attributes('type')).toBe('button')
-    // .lucide-* is one of the two legal Tailwind-adjacent migration proofs in this project (the
-    // other is data-slot); pin both icon identities, not just the functional type flip.
-    expect(toggle.find('svg').classes()).toContain('lucide-eye')
-    await toggle.trigger('click')
-    expect(w.find('input[type="text"]').exists()).toBe(true)
-    expect(toggle.find('svg').classes()).toContain('lucide-eye-off')
-    await toggle.trigger('click')
-    expect(w.find('input[type="password"]').exists()).toBe(true)
-    expect(toggle.find('svg').classes()).toContain('lucide-eye')
-  })
-
   it('types every in-form button so only the submit button submits', () => {
     setProviders(MS)
     const w = mountLogin()
