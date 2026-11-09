@@ -34,11 +34,10 @@ public sealed class MigrationLockLiveTests
         try { c.DbMaintenance.CreateDatabase(); } catch { /* exists or not permitted */ }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Concurrent_applies_run_each_migration_exactly_once(string backend)
     {
-        var (_, db, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, db, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
@@ -53,11 +52,10 @@ public sealed class MigrationLockLiveTests
         finally { Cleanup(db, conn, prefix); }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Apply_times_out_while_another_session_holds_the_lock(string backend)
     {
-        var (_, db, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, db, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
@@ -74,11 +72,10 @@ public sealed class MigrationLockLiveTests
         finally { Cleanup(db, conn, prefix); }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Disposing_a_lock_twice_releases_it_once_and_it_can_be_taken_again(string backend)
     {
-        var (_, db, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, db, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         EnsureDatabase(db, conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";

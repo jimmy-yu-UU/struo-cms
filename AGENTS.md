@@ -330,8 +330,8 @@ the result and compares it with what CodeFirst builds) also run on SQL Server, M
 (MariaDB on the `MySql` dialect). They
 resolve `STRUO_TEST_SQLSERVER_CONNECTION` / `Testing:SqlServerConnection`,
 `STRUO_TEST_MYSQL_CONNECTION` / `Testing:MySqlConnection` and `STRUO_TEST_MARIADB_CONNECTION` /
-`Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and return early (a pass in
-about a millisecond) when a connection is unset, so judge them by per-test duration. The
+`Testing:MariaDbConnection`, apply the same `test`-in-the-name guard, and are reported as skipped, with the
+variable that would enable them, when a connection is unset. The
 configured database must exist beforehand, for every live suite: the migration tests run in it, and
 the other suites connect to it to list and drop the databases they create. SqlSugar's
 `CreateDatabase` cannot create a SQL Server database whose name contains a hyphen.

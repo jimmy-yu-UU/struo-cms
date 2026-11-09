@@ -17,8 +17,8 @@ using Xunit;
 
 namespace Struo.Tests.Security;
 
-// Runs against a live Redis when STRUO_TEST_REDIS_CONNECTION is set and returns immediately
-// otherwise, like the live database suites — judge a pass by its duration, not its colour.
+// Runs against a live Redis when STRUO_TEST_REDIS_CONNECTION is set and is skipped otherwise,
+// like the live database suites.
 // Keys live under a per-run prefix and are deleted afterwards.
 public sealed class RedisLoginAttemptThrottleTests : IDisposable
 {
@@ -53,10 +53,9 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
             mux.GetDatabase().KeyDelete(KeyOf(email));
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task Parallel_attempts_cannot_exceed_limit()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(permitLimit: 10);
         var email = Email("parallel");
 
@@ -67,10 +66,9 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         states.Count(s => s.IsBlocked && s.RetryAfterSeconds >= 1).Should().Be(40);
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task Successful_login_resets()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(permitLimit: 10);
         var email = Email("reset");
 
@@ -83,31 +81,29 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task First_attempt_sets_the_window_ttl()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(windowSeconds: 120);
         var email = Email("ttl");
 
         await throttle.TryReserveAsync(email);
 
-        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString!);
         var ttl = await mux.GetDatabase().KeyTimeToLiveAsync(KeyOf(email));
         ttl.Should().NotBeNull();
         ttl!.Value.TotalSeconds.Should().BeInRange(1, 120);
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task Distributed_cache_entry_under_the_old_key_name_does_not_break_login()
     {
-        if (ConnectionString is null) return;
         // RedisCache stores entries as a HASH under login-throttle:<hash>; INCR on that name would be WRONGTYPE.
-        using var throttle = new RedisLoginAttemptThrottle(ConnectionString, Options.Create(
+        using var throttle = new RedisLoginAttemptThrottle(ConnectionString!, Options.Create(
             new LoginAccountRateLimitOptions { Enabled = true, PermitLimit = 10, WindowSeconds = 60 }));
         var email = Email("old-key");
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(email)));
-        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString!);
         var db = mux.GetDatabase();
         await db.HashSetAsync("login-throttle:" + hash, "data", "x");
         try
@@ -120,13 +116,12 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         }
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task Key_without_ttl_self_heals()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(permitLimit: 10, windowSeconds: 120);
         var email = Email("no-ttl");
-        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString!);
         var db = mux.GetDatabase();
         await db.StringIncrementAsync(KeyOf(email));
         (await db.KeyTimeToLiveAsync(KeyOf(email))).Should().BeNull();
@@ -136,10 +131,9 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         (await db.KeyTimeToLiveAsync(KeyOf(email))).Should().NotBeNull();
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task GetStateAsync_does_not_count_and_agrees_with_TryReserveAsync()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(permitLimit: 3, windowSeconds: 120);
         var email = Email("peek");
 
@@ -155,14 +149,13 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         state.RetryAfterSeconds.Should().BeInRange(1, 120);
         (await throttle.TryReserveAsync(email)).IsBlocked.Should().BeTrue();
 
-        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString);
+        using var mux = await ConnectionMultiplexer.ConnectAsync(ConnectionString!);
         ((long)await mux.GetDatabase().StringGetAsync(KeyOf(email))).Should().Be(4, "peeks must not have counted");
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task GetStateAsync_is_not_blocked_after_ResetAsync()
     {
-        if (ConnectionString is null) return;
         using var throttle = Throttle(permitLimit: 1);
         var email = Email("peek-reset");
         await throttle.TryReserveAsync(email);
@@ -173,10 +166,9 @@ public sealed class RedisLoginAttemptThrottleTests : IDisposable
         (await throttle.GetStateAsync(email)).IsBlocked.Should().BeFalse();
     }
 
-    [Fact]
+    [EnvironmentFact(EnvVar)]
     public async Task GetStateAsync_is_never_blocked_when_disabled()
     {
-        if (ConnectionString is null) return;
         using var throttle = new RedisLoginAttemptThrottle(ConnectionString!, Options.Create(
             new LoginAccountRateLimitOptions { Enabled = false, PermitLimit = 1, WindowSeconds = 60 }), _prefix);
 

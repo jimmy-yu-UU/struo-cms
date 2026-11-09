@@ -60,10 +60,10 @@ public sealed partial class LiveRepositoryTests
         return (repo, graph, provider);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Facet_by_uuid_fk_groups_nulls_and_orders(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, graph, md) = BuildFacetRepo();
         var cat = new FxCategory { Id = Guid.NewGuid(), Name = "Tech" };
         await repo.CreateAsync("fxCategory", cat);
@@ -78,10 +78,10 @@ public sealed partial class LiveRepositoryTests
         b[1].Should().Be(new FacetBucket(null, 1));
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Many_to_many_leaf_facet_counts_distinct_uuid_roots(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, graph, md) = BuildFacetRepo();
         var a1 = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
         var a2 = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
@@ -100,10 +100,10 @@ public sealed partial class LiveRepositoryTests
         b.Select(x => (x.Value, x.Count)).Should().Equal(("Guide", 2), ("Misc", 1));
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Translatable_leaf_facet_reads_the_sidecar(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, graph, md) = BuildFacetRepo();
         var cat = new FxCategory { Id = Guid.NewGuid(), Name = "C" };
         await repo.CreateAsync("fxCategory", cat);
@@ -118,10 +118,10 @@ public sealed partial class LiveRepositoryTests
         en.Should().Equal(new FacetBucket(null, 1));
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Aggregates_normalise_numeric_and_timestamp_types(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, _, _) = BuildFacetRepo();
         var a = new FxArticle { Id = Guid.NewGuid(), Status = "published" };
         await repo.CreateAsync("fxArticle", a);
@@ -148,18 +148,18 @@ public sealed partial class LiveRepositoryTests
         ar.Values[AggregateOp.Max]["createdAt"].Should().BeOfType<DateTime>();
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Average_has_no_integer_division_over_int_long_decimal_and_nullable_columns(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         AvgProbeAssertions.SeedAndAssert(_db);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Average_with_a_repeating_mean_is_within_a_ten_thousandth(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         AvgProbeAssertions.SeedRepeatingMeanAndAssert(_db);
     }

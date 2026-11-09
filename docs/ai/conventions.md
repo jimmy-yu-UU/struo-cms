@@ -665,7 +665,7 @@ destructive actions, the user is left with a blocked action and no working way t
   `STRUO_TEST_BACKEND` selects. An opt-in
   live repository suite (`LiveRepositoryTests`) exists specifically to catch "SQLite-green ≠
   backend-correct" bugs; it runs on each backend whose test connection is configured; an
-  unconfigured backend's rows pass without running, so judge by per-test duration. It refuses to run
+  unconfigured backend's rows are reported as skipped, naming the missing variable. It refuses to run
   against any database whose name doesn't contain `test` — see `AGENTS.md`, "Verification", for the
   connection-resolution order and the `STRUO_TEST_BACKEND` switch that moves the API test hosts and
   the unit harnesses to a live backend. Integration-style tests for the HTTP surface live under `tests/Struo.Tests/Api/`

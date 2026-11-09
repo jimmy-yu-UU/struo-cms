@@ -28,11 +28,10 @@ public sealed class CoreUserAccessTokenTests
         await AssertTokenBehaviour(harness.Db(), harness.Database.DbType);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Live_migrated_users_without_a_token_coexist_and_the_token_index_is_not_unique(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
         var db = CoreMigrationHarness.Client(dbType, conn, prefix);

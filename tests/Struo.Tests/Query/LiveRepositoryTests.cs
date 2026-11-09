@@ -23,7 +23,7 @@ namespace Struo.Tests.Query;
 /// The repository-level live suite, run on every configured live backend (PostgreSQL, SQL Server, MySQL,
 /// MariaDB) in one run. Each backend gets one fresh database for this class, created on first use and
 /// dropped at class teardown; a backend without a configured connection (env var or the Struo.Api
-/// <c>Testing:*Connection</c> keys, see <see cref="LiveDatabases"/>) is a no-op pass for that case. The point is to catch the
+/// <c>Testing:*Connection</c> keys, see <see cref="LiveDatabases"/>) is reported as skipped for that case. The point is to catch the
 /// "SQLite-green != backend-correct" class of bug (uuid vs text casts, bigint, the optimistic-concurrency
 /// compare-and-swap) before it reaches a live deploy.
 ///
@@ -52,14 +52,11 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
 
     public LiveRepositoryTests(RepositoryDatabases databases) => _databases = databases;
 
-    // xunit 2.x has no runtime Assert.Skip; when a backend isn't configured the case early-returns as a
-    // trivial pass (a no-op). It exercises the backend only when a connection is configured.
-    private bool Use(string backend)
+    // LiveBackendTheory skips a backend without a configured connection, so a running case has one.
+    private void Use(string backend)
     {
         _backend = LiveBackend.Get(backend);
-        if (string.IsNullOrWhiteSpace(_backend.Connection)) return false;
         _conn = _databases.ConnectionFor(_backend);
-        return true;
     }
 
     private bool IsPostgres => _backend.Name == "PostgreSQL";
@@ -125,10 +122,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     public void Dispose() => _db?.Dispose();
 
     // On real Postgres: non-page-aligned offset returns the exact window.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Offset_window_is_exact(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         for (var i = 0; i < 5; i++)
             await repo.CreateAsync("fxCategory", new FxCategory { Name = $"C{i}" });
@@ -140,10 +137,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // On real Postgres: compare-and-swap (WHERE id AND version=expected) rejects a stale update.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Stale_version_update_conflicts(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         var created = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "A" });
         var id = created.Id.ToString();
@@ -161,10 +158,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // uuid filter on real Postgres: filtering by the Guid PK must bind as uuid, not text (42883).
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Uuid_id_filter_round_trips(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         var created = (FxCategory)await repo.CreateAsync("fxCategory", new FxCategory { Name = "Findme" });
         var rows = await repo.QueryWhereInAsync("fxCategory", "id", [created.Id]);
@@ -183,10 +180,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // the Guid FK (uuid column) binding is the PG-specific risk (same concern as
     // Uuid_id_filter_round_trips above). Also asserts the expansion resolves the
     // correct ancestor 6 hops up the chain, not just the query count.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Six_level_selfrelation_parent_chain_is_linear_and_correct(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, graph, options) = BuildRepoWithGraph();
 
         // root -> A1 -> A2 -> A3 -> A4 -> A5 -> leaf: exactly 6 `parent` hops from leaf to root.
@@ -235,10 +232,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
 
     // U3 primitive probe on real Postgres: the wrapped IN (SELECT …) conditional at the top level of a
     // Where list, a typed one-column projection (quoted column, uuid), and an apostrophe literal.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Subquery_conditional_primitive_works(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, _, _) = BuildRepoWithGraph();
         _db!.CodeFirst.InitTables<FxArticle>();
 
@@ -265,10 +262,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // The premise is enforced, not just commented: the outer leaf's own generated parameter name,
     // built standalone exactly as it will be built inside the real combined list below, is asserted
     // equal to the inner subquery's pre-rename parameter name. Categories only — no FxArticle needed.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Subquery_conditional_parameters_do_not_collide(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
         var tech = new FxCategory { Id = Guid.NewGuid(), Name = "PgCollide Tech" };
@@ -310,10 +307,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // FxCategory.Name = 'X' leaf sits in the SAME top-level list as a wrapped subquery whose own filter
     // is ALSO FxCategory.Name = 'X' (self-referencing on Id), one level further wrapped again — proving
     // composition through Wrap works at nesting depth 2 with two distinct parameter prefixes, on PG.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Two_nesting_levels_compose_through_Wrap(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         BuildRepoWithGraph(); // establishes _db against the disposable test DB (Category only)
 
         var x = new FxCategory { Id = Guid.NewGuid(), Name = "PgNest X" };
@@ -364,10 +361,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // against PostgreSQL (uuid FK typing, lowercase quoted identifiers, no N' national-string prefix).
     // Uses SubqueryPushdownHarness's fixture types directly, InitTables'd here and DropTable'd at the
     // end (GuardDisposableDatabase refuses a non-"test" database first).
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Pushdown_some_none_and_junction(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         _db = CreateClient(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         foreach (var t in SubqueryPushdownHarness.Types) _db.CodeFirst.InitTables(t);
         // Deterministic start (FK-safe order), in case a previous run was interrupted before DropTable.
@@ -521,10 +518,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // deliberately wide sibling set at the walk-back hop is answered as a correlated
     // SQL subquery (IN (SELECT …)) on real Postgres, and querying with those conditionals returns
     // exactly the matching children.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Wide_dotted_filter_is_answered_in_sql(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, graph, options) = BuildRepoWithGraph();
 
         var stamp = "PgCapWide" + Guid.NewGuid().ToString("N")[..8];
@@ -556,10 +553,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // AGENTS.md calls out for FK typing (see Uuid_id_filter_round_trips above): a
     // long-keyed sidecar table projecting a uuid column into an outer IN (SELECT …) must still bind
     // that column as uuid, not text, on real Postgres.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Translatable_leaf_subquery_binds_uuid_fk(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, _, _) = BuildRepoWithGraph();
         _db!.CodeFirst.InitTables<FxArticle>();
         _db.CodeFirst.InitTables<FxArticleTranslation>();
@@ -602,10 +599,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // read alone. If minting silently failed to run on Postgres, the first create would insert the
     // literal zero uuid and the second would collide on the primary key and throw, never reaching the
     // final assertion below.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Create_binding_allowlist_mints_distinct_ids_for_a_repeated_client_supplied_id(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
         var meta = provider.GetCollection("fxCategory")!;
         var clientId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -629,10 +626,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // Six_level_selfrelation_parent_chain_is_linear_and_correct above — and the same risk
     // ItemServiceCreateBindingTests.Create_still_sets_a_declared_many_to_one_foreign_key already flags
     // (on SQLite) as the reason that regression guard exists.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Create_binding_allowlist_still_persists_a_declared_manytoone_fk(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var (repo, deserializer, provider) = BuildRepoWithDeserializer();
         var meta = provider.GetCollection("fxCategory")!;
 
@@ -655,10 +652,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // parameter is sent to Npgsql as text, which PG rejects against uuid/varchar columns (42804) —
     // exactly the divergence SQLite hides, since it ignores the distinction. This asserts all three
     // mutators round-trip on PG, including the null cases.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task User_credential_writes_stamp_audit_and_bump_version(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         BuildRepoWithGraph();                       // establishes _db against the disposable test DB
         _db!.CodeFirst.InitTables<Struo.Infrastructure.Identity.User>();
 
@@ -712,10 +709,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // A5: 只標 IsJson、無 [CmsField]/[ColumnShape]/ColumnDataType 的欄位，必須能容納整個清單（PG 上是 text 而非 varchar(1)）。
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Bare_IsJson_column_holds_a_list_and_round_trips(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var db = BuildRawClient();
         try
         {
@@ -742,10 +739,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     }
 
     // A6: FileTranslation 不再手寫 UniqueGroupNameList；帶 policy 的 client 建表後，必須有覆蓋 (fileid, locale) 的 UNIQUE。
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Sidecar_unique_index_is_derived_without_hand_written_attributes(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var policy = TranslationSidecarIndexPolicy.FromMetadata(
             MetadataScanner.ScanTypes([typeof(Struo.Infrastructure.Files.File), typeof(Struo.Infrastructure.Files.MediaFolder)]));
         _db = CreateClient(Guid.Empty, policy);
@@ -790,10 +787,10 @@ public sealed partial class LiveRepositoryTests : IClassFixture<RepositoryDataba
     // Alias round-tripping through its renamed column, a typed NULL succeeding (the 42804 trap this
     // whole suite exists to catch), and the duplicate-row repair keeping the lowest PK without
     // throwing.
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Junction_payload_sync_preserves_keys_and_patches_columns(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var db = BuildRawClient();
         try
         {

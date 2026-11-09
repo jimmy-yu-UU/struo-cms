@@ -10,11 +10,10 @@ namespace Struo.Tests.Migrations.Schema;
 
 public sealed class NonUnicodeStringLiveTests
 {
-    [Fact]
+    [LiveBackendFact("SqlServer")]
     public void A_CodeFirst_table_created_without_nvarchar_on_SQL_Server_is_a_warning_not_an_error()
     {
-        var (_, dbType, connection) = LiveBackend.Get("SqlServer");
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get("SqlServer").Configured();
         LiveDatabases.GuardDisposable(conn);
         var table = "chk_" + Guid.NewGuid().ToString("N")[..12];
         var db = new SqlSugarClient(new ConnectionConfig

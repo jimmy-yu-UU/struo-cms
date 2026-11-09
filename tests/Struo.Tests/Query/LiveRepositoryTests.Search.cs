@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Struo.Domain.Query;
 using Struo.Tests.Fixtures;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -24,10 +25,10 @@ public sealed partial class LiveRepositoryTests
     private static QueryModel WithCandidates(IReadOnlyList<object> ids, string search = "ignored-by-the-candidate-branch") =>
         new QueryModel(null, null, [], 100, 0, search) { SearchCandidates = ids };
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Search_candidates_bind_uuid_ids_in(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         var (a, b, _) = SeedThreeCategories();
         var r = await repo.QueryAsync("fxCategory", WithCandidates([a, b]), ["name"], null);
@@ -35,10 +36,10 @@ public sealed partial class LiveRepositoryTests
         r.Rows.Cast<FxCategory>().Select(x => x.Id).Should().BeEquivalentTo([a, b]);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Empty_search_candidates_match_nothing(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         SeedThreeCategories();
         // "u5-" collides via LIKE '%u5-%' with all four seeded names, so if a regression ever treated
@@ -50,10 +51,10 @@ public sealed partial class LiveRepositoryTests
         r.Rows.Should().BeEmpty();
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task A_thousand_search_candidates_run_in_one_statement(string backend)
     {
-        if (!Use(backend)) return;
+        Use(backend);
         var repo = BuildRepo();
         var (a, b, c) = SeedThreeCategories();
         var ids = Enumerable.Range(0, 997).Select(_ => (object)Guid.NewGuid()).Append(a).Append(b).Append(c).ToList();

@@ -17,7 +17,7 @@ namespace Struo.Tests.Health;
 /// Stops a throwaway PostgreSQL container under a warm connection pool and checks that the first readiness
 /// call afterwards is Unhealthy within the timeout. Runs only when <c>STRUO_TEST_STOP_CONTAINER</c> names a
 /// container starting with <c>struo-tr-</c> and <c>STRUO_TEST_PG_CONNECTION</c> points at that container
-/// (with <c>Pooling=true</c>, so the pool is warm); otherwise it returns early. It stops the server for
+/// (with <c>Pooling=true</c>, so the pool is warm); otherwise it is skipped. It stops the server for
 /// every test sharing it, so run it alone: <c>dotnet test --filter DbReadinessStoppedServerLiveTests</c>.
 /// </summary>
 public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
@@ -26,14 +26,13 @@ public sealed class DbReadinessStoppedServerLiveTests(ITestOutputHelper output)
     private const string ContainerPrefix = "struo-tr-";
     private const int TimeoutSeconds = 3;
 
-    [Fact]
+    [LiveBackendFact("PostgreSQL", ContainerEnvVar)]
     public async Task First_readiness_call_after_the_server_stops_is_unhealthy_within_the_timeout()
     {
-        var container = Environment.GetEnvironmentVariable(ContainerEnvVar);
-        if (string.IsNullOrWhiteSpace(container) || LiveDatabases.Postgres is null) return;
+        var container = Environment.GetEnvironmentVariable(ContainerEnvVar)!;
         container.Should().StartWith(ContainerPrefix, "only a throwaway container may be stopped");
 
-        AssertConnectionTargets(container, LiveDatabases.Postgres);
+        AssertConnectionTargets(container, LiveDatabases.Postgres!);
 
         using var database = TestBackend.CreateLiveDatabase(TestBackendKind.PostgreSQL, "readiness");
         var client = SqlSugarClientFactory.Create(
