@@ -201,9 +201,9 @@ public sealed class FaqItem
 ## 執行範例的端到端測試
 
 `frontend/e2e/sample/` 底下有 9 個 spec 檔（`collections`、`items`、`relations`、
-`revisions`、`trash`、`conflict`、`revert-conflict`、`unsaved-guard`、`not-found`）、16 個測試，
-`frontend/playwright.config.ts` 把它們接成 `sample` 這個 Playwright 專案，執行指令是
-`pnpm e2e:sample`。
+`revisions`、`trash`、`conflict`、`revert-conflict`、`unsaved-guard`、
+`not-found`）、16 個測試，`frontend/playwright.config.ts` 把它們接成 `sample` 這個
+Playwright 專案，執行指令是 `pnpm e2e:sample`。
 
 跑這組測試，除了 `pnpm e2e` 本身就要的東西（執行中的 API、可連線的資料庫、已種好的
 bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，還要把範例加進

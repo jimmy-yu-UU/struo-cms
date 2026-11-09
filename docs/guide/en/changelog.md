@@ -6,14 +6,15 @@
 
 - The password section on a user's page says its sessions and API access token are revoked, matching
   the wording used elsewhere for the token.
-- The vendored sidebar `SidebarRail` and `SidebarTrigger` require a `label` prop; the English default
-  is gone. A fork that mounts either without a label fails type-checking until it passes one.
+- The vendored sidebar `SidebarRail` and `SidebarTrigger` require a `label` prop; the English
+  default is gone. A fork that mounts either without a label fails type-checking until it passes
+  one.
 - The sidebar brand button and the account button have no `aria-label`. Their accessible name is the
   visible text followed by a screen-reader-only purpose (", back to dashboard" and ", account menu"),
   and the account name and role are visually hidden, not removed, on narrow screens. The
   `shell.brandHome` and `user.account` locale keys are replaced by `shell.brandHomeHint` and
-  `user.accountMenuHint`. The configured brand logo is decorative (`alt=""`) because the brand name
-  always sits next to it as text.
+  `user.accountMenuHint`. The configured brand logo is decorative (`alt=""`) because the brand
+  name always sits next to it as text.
 
 ### Fixed
 
