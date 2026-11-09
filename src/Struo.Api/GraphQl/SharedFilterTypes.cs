@@ -12,6 +12,7 @@ internal static class SharedFilterTypes
     private const string BooleanScalar = "Boolean";
     private const string IsNullOperator = "isNull";
     private const string FloatScalar = "Float";
+    private const string LongScalar = "Long";
     private const string DateTimeScalar = "DateTime";
 
     internal static IEnumerable<ITypeSystemMember> Build()
@@ -20,6 +21,8 @@ internal static class SharedFilterTypes
             ("contains", StringScalar), ("startsWith", StringScalar), ("endsWith", StringScalar), (IsNullOperator, BooleanScalar));
         yield return Input("IntFilter", ("eq", "Int"), ("neq", "Int"), ("in", "[Int!]"), ("nin", "[Int!]"),
             ("lt", "Int"), ("lte", "Int"), ("gt", "Int"), ("gte", "Int"), (IsNullOperator, BooleanScalar));
+        yield return Input("LongFilter", ("eq", LongScalar), ("neq", LongScalar), ("in", "[Long!]"), ("nin", "[Long!]"),
+            ("lt", LongScalar), ("lte", LongScalar), ("gt", LongScalar), ("gte", LongScalar), (IsNullOperator, BooleanScalar));
         yield return Input("FloatFilter", ("eq", FloatScalar), ("neq", FloatScalar), ("in", "[Float!]"), ("nin", "[Float!]"),
             ("lt", FloatScalar), ("lte", FloatScalar), ("gt", FloatScalar), ("gte", FloatScalar), (IsNullOperator, BooleanScalar));
         yield return Input("DateTimeFilter", ("eq", DateTimeScalar), ("neq", DateTimeScalar), ("in", "[DateTime!]"), ("nin", "[DateTime!]"),

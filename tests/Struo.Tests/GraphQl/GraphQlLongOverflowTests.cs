@@ -104,17 +104,12 @@ public class GraphQlLongOverflowTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Update_with_a_fractional_version_literal_is_not_a_server_fault()
+    public async Task Update_with_a_fractional_version_literal_is_INVALID_VERSION()
     {
         var (client, id) = await CreateArticleAsync();
         var query = $"mutation {{ updateFxArticle(id: \"{id}\", input: {{ status: \"published\", version: 1.5 }}) {{ id }} }}";
 
-        var root = await PostAsync(client, new { query });
-
-        var error = root.GetProperty("errors")[0];
-        error.TryGetProperty("extensions", out var extensions).Should().BeTrue(root.GetRawText());
-        extensions.TryGetProperty("code", out var code).Should().BeFalse(root.GetRawText());
-        error.GetProperty("message").GetString().Should().NotContain("Unexpected Execution Error");
+        AssertSingleCode(await PostAsync(client, new { query }), "INVALID_VERSION");
         await AssertRowUntouchedAsync(client, id);
     }
 }
