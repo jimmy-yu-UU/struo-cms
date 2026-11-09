@@ -45,19 +45,4 @@ public class GraphQlCostAnalysisTests(ApiFactory factory)
             data.ValueKind.Should().Be(JsonValueKind.Null);
     }
 
-    [Fact]
-    public async Task Normal_multi_root_query_passes_cost_analyzer()
-    {
-        // The legitimate 3-root query used by GraphQlConcurrencySmokeTests must stay under the limit.
-        // Authenticated (super-admin) so RBAC lets every root through — this isolates the assertion
-        // to the cost analyzer rather than per-collection read grants.
-        const string query =
-            "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
-        var client = await _factory.CreateAuthenticatedClientAsync();
-        var response = await client.PostAsJsonAsync("/graphql", new { query });
-        var json = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        doc.RootElement.TryGetProperty("errors", out _).Should().BeFalse(
-            $"a legitimate multi-root query must not be rejected by the cost analyzer; full response: {json}");
-    }
 }

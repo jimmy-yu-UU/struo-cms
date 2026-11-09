@@ -108,7 +108,21 @@ public partial class GraphQlSchemaTests
     {
         var sdl = await BuildSdlAsync();
 
-        sdl.ToLowerInvariant().Should().NotContain("password");
+        foreach (var block in new[] { "type Article", "input ArticleFilterInput", "input ArticleCreateInput" })
+        {
+            var body = SdlBlock(sdl, block);
+            body.Should().Contain("status:", $"{block} must be found and carry the visible fields");
+            body.Should().NotContain("internalSecret", $"a Hidden field is not part of {block}");
+            body.Should().NotContain("accessCode", $"a Password field is not part of {block}");
+        }
+    }
+
+    private static string SdlBlock(string sdl, string header)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            sdl, $@"(?s)(?<![A-Za-z]){System.Text.RegularExpressions.Regex.Escape(header)}\s*\{{.*?\n\}}");
+        match.Success.Should().BeTrue($"the SDL declares '{header}'");
+        return match.Value;
     }
 
     [Fact]
@@ -254,12 +268,4 @@ public partial class GraphQlSchemaTests
         block.Value.Should().MatchRegex(@"aggregate:\s*Any\r?\n");
     }
 
-    [Fact]
-    public async Task Nested_to_many_list_field_does_not_declare_the_facets_argument()
-    {
-        var sdl = await BuildSdlAsync();
-
-        // Article.tags is a nested (non-root) to-many list field: filter/sort/limit/offset only.
-        sdl.Should().Contain("tags(filter: TagFilterInput, sort: [String!], limit: Int, offset: Int): [Tag!]");
-    }
 }

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Struo.Tests.Support;
 using Xunit;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Struo.Tests.GraphQl;
 
@@ -49,7 +50,7 @@ public class SchemaExposureGateTests(ApiFactory factory)
     private const string PublicQuery = "{ languages { items { id } } }";
     private const string IntrospectionQuery = "{ __schema { queryType { name } } }";
 
-    private HttpClient CreateProductionClient(bool? exposeSchema = null) =>
+    private WebApplicationFactory<Program> CreateProductionHost(bool? exposeSchema = null) =>
         _factory
             .WithWebHostBuilder(b =>
             {
@@ -60,13 +61,13 @@ public class SchemaExposureGateTests(ApiFactory factory)
                         {
                             ["GraphQl:ExposeSchema"] = exposeSchema.Value ? "true" : "false",
                         }));
-            })
-            .CreateClient();
+            });
 
     [Fact]
     public async Task Production_closes_schema_disclosure_but_keeps_executing_queries()
     {
-        var client = CreateProductionClient();
+        using var host = CreateProductionHost();
+        using var client = host.CreateClient();
 
         // 1. The ?sdl route is gone. Measured status is 404 with an empty body; asserted exactly so a
         //    broken host (500) can never be mistaken for a blocked route.
@@ -98,7 +99,8 @@ public class SchemaExposureGateTests(ApiFactory factory)
     {
         // A fork publishing a public GraphQL API opts back in by configuration alone
         // (GraphQl__ExposeSchema=true), with no rebuild.
-        var client = CreateProductionClient(exposeSchema: true);
+        using var host = CreateProductionHost(exposeSchema: true);
+        using var client = host.CreateClient();
 
         var response = await client.GetAsync("/graphql?sdl");
 

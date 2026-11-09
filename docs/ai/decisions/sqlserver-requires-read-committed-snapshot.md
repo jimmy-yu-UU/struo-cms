@@ -38,7 +38,7 @@ Investigation 2026-10-22 on SQL Server 2025 with 16 parallel creates over 5 roun
   report, three runs).
 - With 20 000 pre-seeded rows the plan became a seek and the deadlock disappeared, so without the
   setting the failure depends on the plan: young or small tables hit it first.
-- `ConcurrentCreateDeadlockTests` is green on SQL Server with the setting on, and on MySQL, MariaDB,
+- `ConcurrentWriteDeadlockTests` is green on SQL Server with the setting on, and on MySQL, MariaDB,
   PostgreSQL and SQLite. MySQL and MariaDB deadlocked on a separate InnoDB gap-lock cycle until
   translation sync stopped deleting rows (a create inserts only, an update replaces in place); PostgreSQL and SQLite were never affected.
 

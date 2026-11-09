@@ -114,7 +114,7 @@ public class GraphQlLongOverflowTests(ApiFactory factory)
         var error = root.GetProperty("errors")[0];
         error.TryGetProperty("extensions", out var extensions).Should().BeTrue(root.GetRawText());
         extensions.TryGetProperty("code", out var code).Should().BeFalse(root.GetRawText());
-        code.ValueKind.Should().NotBe(System.Text.Json.JsonValueKind.String);
+        error.GetProperty("message").GetString().Should().NotContain("Unexpected Execution Error");
         await AssertRowUntouchedAsync(client, id);
     }
 }

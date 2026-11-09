@@ -47,12 +47,13 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
         var cat = await Post(c, "fxCategory", new { name = "GqlArgsCat-8c3b" });
-        await Post(c, "fxArticle", new
-        {
-            status = "published",
-            categoryId = cat,
-            translations = new { en = new { title = "GA-pub-8c3b" } }
-        });
+        for (var i = 0; i < 3; i++)
+            await Post(c, "fxArticle", new
+            {
+                status = "published",
+                categoryId = cat,
+                translations = new { en = new { title = $"GA-pub-8c3b-{i}" } }
+            });
         await Post(c, "fxArticle", new
         {
             status = "draft",
@@ -62,14 +63,15 @@ public class NestedListArgsExecutionTests(ApiFactory factory)
 
         var query = $$"""
         query { fxCategory(id: "{{cat}}") {
-            articles(filter: { status: { eq: "published" } }, limit: 5) { status }
+            articles(filter: { status: { eq: "published" } }, limit: 2) { status }
         } }
         """;
         var data = await PostGraphQl(c, query);
         var articles = data.GetProperty("fxCategory").GetProperty("articles");
-        articles.GetArrayLength().Should().Be(1,
-            "the draft sibling must be excluded by the nested filter, not just the published one included");
-        articles[0].GetProperty("status").GetString().Should().Be("published");
+        articles.GetArrayLength().Should().Be(2,
+            "three published rows match the filter, so only the limit can cut the result to two");
+        articles.EnumerateArray().Select(a => a.GetProperty("status").GetString())
+            .Should().OnlyContain(s => s == "published", "the draft sibling must be excluded by the nested filter");
     }
 
     [Fact]

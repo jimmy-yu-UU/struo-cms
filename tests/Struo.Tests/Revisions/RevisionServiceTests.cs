@@ -138,6 +138,14 @@ public sealed class RevisionServiceHarness : IDisposable
     /// (e.g. to move an article to a different category and clear its tags).</summary>
     public static JsonElement Body(Guid category, Guid[] tags) => BodyOf(new { categoryId = category, tags });
 
+    /// <summary>As <see cref="Body(Guid, Guid[])"/>, also replacing the zh-TW title.</summary>
+    public static JsonElement Body(Guid category, Guid[] tags, string zhTwTitle) => BodyOf(new
+    {
+        categoryId = category,
+        tags,
+        translations = new Dictionary<string, object> { ["zh-TW"] = new { title = zhTwTitle } }
+    });
+
     /// <summary>The create-article call as an un-awaited Task, so a failing capture's exception can
     /// be observed via <c>Assert.ThrowsAnyAsync</c> around the whole write.</summary>
     public Task<IReadOnlyDictionary<string, object?>> CreateArticleTask(string status) =>
@@ -271,7 +279,7 @@ public sealed class RevisionServiceTests
     {
         using var h = RevisionServiceHarness.Create();
         var (id, catA, catB, tag) = await h.SeedArticleForRevertAsync();            // rev1: category=catA, tags=[tag], zh-TW title
-        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(category: catB, tags: []), default); // rev2: catB, no tags
+        await h.Service.UpdateAsync("fxArticle", id, RevisionServiceHarness.Body(category: catB, tags: [], zhTwTitle: "changed"), default); // rev2: catB, no tags, new zh-TW title
 
         await h.Service.RevertAsync("fxArticle", id, 1);
         var now = await h.Service.GetAsync("fxArticle", id, DeepFor("category", "tags"), null, default);

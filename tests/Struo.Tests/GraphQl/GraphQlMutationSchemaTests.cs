@@ -97,10 +97,11 @@ public class GraphQlMutationSchemaTests
     {
         var sdl = await BuildSdlAsync();
         sdl.Should().Contain("updateArticle(");
-        var block = InputBlock(sdl, "ArticleUpdateInput");
-        block.Should().Contain("status: String");
-        block.Should().Contain("categoryId: ID");
-        block.Should().Contain("version: Long"); // optimistic-concurrency token, update-only
+        var create = FieldLines(InputBlock(sdl, "ArticleCreateInput"));
+        var update = FieldLines(InputBlock(sdl, "ArticleUpdateInput"));
+        create.Should().Contain("status: String").And.Contain("categoryId: ID");
+        // The optimistic-concurrency token is the one update-only field.
+        update.Should().BeEquivalentTo(create.Append("version: Long"));
     }
 
     [Fact]
@@ -149,6 +150,11 @@ public class GraphQlMutationSchemaTests
         InputBlock(sdl, "CategoryCreateInput").Should().NotContain("translations");
         sdl.Should().NotContain("CategoryTranslationInput");
     }
+
+    private static string[] FieldLines(string block) =>
+        block.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => l != "{" && !l.StartsWith('#') && !l.StartsWith('"'))
+            .ToArray();
 
     // Returns the SDL text of a single `input X { ... }` block.
     private static string InputBlock(string sdl, string typeName)
