@@ -374,9 +374,9 @@ HTTP_STATUS:400
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
-結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。body 因為其他原因讀不出來
-時，回該失敗的狀態 `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，訊息是
-`The request body could not be read.`。
+結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。以串流送出、沒有宣告長度
+的 body 因為其他原因讀不出來時，回該失敗的狀態 `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，
+訊息是 `The request body could not be read.`。
 
 第 10 章與[第 11 章](11-query-advanced.md)列的 REST 驗證訊息——未知欄位、未知關聯、超出深度——因為兩
 個協定共用同一個驗證器，在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。讀

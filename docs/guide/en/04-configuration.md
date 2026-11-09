@@ -749,8 +749,8 @@ them off. A sink listed under `Serilog:WriteTo` loads on top of them. [Chapter 2
 shows the Production setting.
 
 Both sinks print the request's trace id: the text formats before each message, `Json` as the `@tr`
-property. It is the id an error response carries as `traceId`, so a caller's report finds the log
-lines of that request; see [Chapter 12](12-rest-conventions.md).
+property when there is one. It is the id an error response carries as `traceId`, so a caller's
+report finds the log lines of that request; see [Chapter 12](12-rest-conventions.md).
 
 `Serilog:*` isn't bound to a custom options class; Serilog's own configuration reader parses it
 directly. Serilog builds its two loggers once each, at startup, so changing a level or a

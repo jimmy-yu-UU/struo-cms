@@ -460,9 +460,9 @@ resolver throws at execution time is `200` with a code.
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
 holds whether the request declared its length or streamed the body, and the message is the fixed
-`Request body is too large.`, which names no limit. A body that cannot be read for another reason
-answers with the status of that failure, `400` or `408`, and one error with `BAD_USER_INPUT` and the
-message `The request body could not be read.`.
+`Request body is too large.`, which names no limit. A streamed body (no declared length) that cannot
+be read for another reason answers with the status of that failure, `400` or `408`, and one error
+with `BAD_USER_INPUT` and the message `The request body could not be read.`.
 
 Every REST validation message listed in Chapter 10 and [Chapter 11](11-query-advanced.md) — an
 unknown field, an unknown relation, exceeding the depth cap — is stamped `BAD_USER_INPUT` on

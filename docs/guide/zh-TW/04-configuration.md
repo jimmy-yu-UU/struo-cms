@@ -646,8 +646,9 @@ user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <�
 `logs/struo-.log`（`shared: true`）。`ConsoleEnabled` 與 `FileEnabled` 可以把它們關掉。列在
 `Serilog:WriteTo` 底下的 sink 會疊加在它們之上。Production 的設定見[第 20 章](20-deployment.md)。
 
-兩個 sink 都會印出該請求的 trace id：文字格式印在每則訊息前，`Json` 則是 `@tr` 屬性。它就是錯誤回應
-裡的 `traceId`，所以呼叫端回報的 id 可以找到該請求的日誌行，見[第 12 章](12-rest-conventions.md)。
+兩個 sink 都會印出該請求的 trace id：文字格式印在每則訊息前，`Json` 則是 `@tr` 屬性（有的話才有）。
+它就是錯誤回應裡的 `traceId`，所以呼叫端回報的 id 可以找到該請求的日誌行，見
+[第 12 章](12-rest-conventions.md)。
 
 `Serilog:*` 不綁自訂選項類別，直接交給 Serilog 自己的設定讀取器解析。兩個 logger 都在啟動時建立一次，
 所以改等級或 `Struo:Logging` 的鍵要重開行程；主機的 logger 建好之前的最初幾行，只會寫到主控台。

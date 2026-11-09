@@ -279,10 +279,11 @@ Console 與 File 這兩個 sink 由主機自己依 `Struo:Logging` 加上去，�
 | `Struo:Logging:FileEnabled` | `true`、`false` | `true` |
 
 `Text` 一個事件印一行好讀的文字，trace id 在訊息前面。`Json` 一個事件印一個精簡 JSON 物件（`@t` 時間
-戳、`@m` 套好參數的訊息、`@l` 等級，Information 時省略、`@tr` trace id），日誌收集器不用寫樣式就能解
-析。格式比對不分大小寫，其他值（包含數字）會讓啟動失敗。`ConsoleEnabled` 關掉就不加 Console sink。
-`FileEnabled` 開著時，File sink 寫入 `logs/struo-.log`，按日期滾動、允許同時被多個行程共享讀寫，檔名
-長成 `struo-YYYYMMDD.log`，一天一份。關掉的話，不加檔案 sink，也不會建立 `logs/` 目錄。
+戳、`@m` 套好參數的訊息、`@l` 等級，Information 時省略、`@tr` trace id，有的話才有），日誌收集器不用
+寫樣式就能解析。格式比對不分大小寫，其他值（包含沒定義的數字，例如 `5`）會讓啟動失敗。
+`ConsoleEnabled` 關掉就不加 Console sink。 `FileEnabled` 開著時，File sink 寫入 `logs/struo-.log`，
+按日期滾動、允許同時被多個行程共享讀寫，檔名長成 `struo-YYYYMMDD.log`，一天一份。關掉的話，不加檔案
+sink，也不會建立 `logs/` 目錄。
 
 容器平台收的是標準輸出，所以 Production 通常要 Console 輸出 JSON、不寫檔案。兩個環境變數就夠：
 
@@ -292,11 +293,10 @@ Struo__Logging__FileEnabled=false
 ```
 
 列在 `Serilog:WriteTo` 底下的 sink 會疊加在這兩個內建 sink 之上，內建的兩個仍然跟著 `Struo:Logging`。
-這些鍵只管格式與開關：要自己的路徑或樣板，就把內建的 sink 關掉，再把自己的加在 `Serilog:WriteTo`。舊
-的內建項目的覆寫，也就是設定檔裡的 `Serilog:WriteTo:0`、`:1`，或環境變數 `Serilog__WriteTo__0__...`，
-都要拿掉：只設 `Args` 的會讓啟動失敗，訊息是
-`The configuration value in Serilog:WriteTo:1:Name has no 'Name' element`，設了 `Name` 的則會多加一
-個 sink。
+這些鍵只管格式與開關：要自己的路徑或樣板，就把內建的 sink 關掉，再把自己的加在 `Serilog:WriteTo`。
+`Serilog:WriteTo` 底下沒有 `Name` 的項目，例如只有 `Serilog__WriteTo__0__Args__path`，會讓啟動失敗，
+訊息是 `The configuration value in Serilog:WriteTo:<n>:Name has no 'Name' element`；有 `Name` 的項目
+則多加一個 sink。
 
 設定在啟動時建立一次，`Serilog:*` 或 `Struo:Logging:*` 改了要重開行程才生效，`appsettings.json` 的檔
 案監看不會讓它們生效；`UseSerilog` 同時讀 `IConfiguration` 與 DI 容器，透過 DI 註冊的 enricher 也會

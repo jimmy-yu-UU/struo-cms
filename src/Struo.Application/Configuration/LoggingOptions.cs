@@ -24,7 +24,7 @@ public sealed class LoggingOptions
     /// </summary>
     public bool ConsoleEnabled { get; set; } = true;
 
-    /// <summary><c>Text</c> (the default) or <c>Json</c>; matched ignoring case, any other value, a number included, fails startup.</summary>
+    /// <summary><c>Text</c> (the default) or <c>Json</c>; matched ignoring case, any other value, an undefined number such as <c>5</c> included, fails startup.</summary>
     public ConsoleLogFormat ConsoleFormat { get; set; } = ConsoleLogFormat.Text;
 
     /// <summary>

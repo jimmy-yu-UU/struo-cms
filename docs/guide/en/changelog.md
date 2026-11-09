@@ -6,12 +6,13 @@
 - The shipped `Serilog:WriteTo` entries are gone: the host adds the Console and File sinks in code,
   from the new `Struo:Logging:ConsoleEnabled` (default `true`), `Struo:Logging:ConsoleFormat`
   (`Text`, the default, or `Json`) and `Struo:Logging:FileEnabled` (default `true`). The default
-  output is unchanged. The keys cover format and on/off only. A fork that changed the console
-  template or the file path sets the matching `Enabled` key to `false` and adds its own sink under
+  output is unchanged. The keys cover format and on/off only. A fork that changed a Console
+  or File setting these keys don't cover (template, path, rolling) sets the matching `Enabled` key to
+  `false` and adds its own sink under
   `Serilog:WriteTo`, which loads on top of the built-in ones. Any `Serilog:WriteTo:0` or `:1`
   override of the old entries, in a settings file or as `Serilog__WriteTo__0__...` in the
   environment, must be removed: one that sets only `Args` stops startup with
-  `The configuration value in Serilog:WriteTo:1:Name has no 'Name' element`, and one that sets a
+  `The configuration value in Serilog:WriteTo:<n>:Name has no 'Name' element`, and one that sets a
   `Name` adds one more sink beside the built-in one.
 - A GraphQL filter on a `long` field takes `LongFilter` instead of `IntFilter`; in core this is the
   `size` field of `file`. Its operands are `Long`, so a value above 2^31 - 1 filters instead of
@@ -39,9 +40,10 @@
   message `Request body is too large.` on every path, REST and `/graphql`, declared length or
   streamed. The message no longer carries the limit; only a file upload over
   `Struo:Files:MaxUploadBytes` reports its limit, as `maxBytes`.
-- A `/graphql` request whose body cannot be read, for a reason other than its size, answers with the
-  status of that failure, `400` or `408`, and one `BAD_USER_INPUT` error with the message
-  `The request body could not be read.` instead of a REST `500`.
+- A `/graphql` request that streams its body without a declared length, and whose body cannot be read
+  for a reason other than its size, answers with the status of that failure, `400` or `408`, and one
+  `BAD_USER_INPUT` error with the message `The request body could not be read.`, instead of GraphQL's
+  own `400` error without a code.
 
 ## 0.29.2 — 2026-11-09
 

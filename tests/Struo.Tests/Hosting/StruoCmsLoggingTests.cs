@@ -139,7 +139,7 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
     }
 
     [Fact]
-    public void The_console_is_on_by_default_and_the_file_stays_on_when_only_the_console_is_off()
+    public void With_only_the_console_off_the_file_still_writes()
     {
         var logs = Path.Combine(_root, "logs");
 
@@ -197,9 +197,9 @@ public sealed partial class StruoCmsLoggingTests : IDisposable
         text.Should().Contain("from-first").And.Contain("from-second");
     }
 
-    // The templates are the ones the shipped appsettings.json carried before the sinks moved into code.
+    // The text and file templates are documented output; a change to either is a change to every log line.
     [Fact]
-    public void The_template_constants_equal_the_templates_the_shipped_appsettings_used_to_carry()
+    public void The_template_constants_are_the_documented_text_and_file_templates()
     {
         StruoCmsLogging.ConsoleOutputTemplate.Should().Be(
             "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj} <s:{SourceContext}>{NewLine}{Exception}");
