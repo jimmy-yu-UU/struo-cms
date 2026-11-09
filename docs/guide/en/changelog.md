@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.2 — 2026-11-09
+
+### Changed
+
+- The backend and frontend test suites drop tests that could not fail or that repeated another test at
+  the same layer, and strengthen the ones whose assertions missed the regression they are named for.
+  Every derived test host is disposed, and a test that does not apply to the current platform or
+  backend reports as skipped.
+
 ## 0.29.1 — 2026-11-09
 
 ### Fixed
