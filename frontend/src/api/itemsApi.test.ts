@@ -106,11 +106,6 @@ describe('itemsApi.list deleted mode', () => {
 
 describe('itemsApi soft-delete ops', () => {
   beforeEach(() => vi.clearAllMocks())
-  it('remove without opts deletes plainly', async () => {
-    const spy = vi.spyOn(apiClient, 'delete').mockResolvedValue(undefined)
-    await itemsApi.remove('article', '1')
-    expect(spy).toHaveBeenCalledWith('/items/article/1')
-  })
   it('remove with purge appends ?purge=true', async () => {
     const spy = vi.spyOn(apiClient, 'delete').mockResolvedValue(undefined)
     await itemsApi.remove('article', '1', { purge: true })

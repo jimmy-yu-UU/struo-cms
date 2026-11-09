@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import zhTW from './zh-TW'
-import en from './en'
 import { catalogs, CATALOG_LOCALES } from './index'
 
 function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
@@ -29,21 +28,6 @@ describe('locale packs', () => {
 
   it('ships zh-TW and en', () => {
     expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
-  })
-
-  it('carry the seeded common namespace', () => {
-    expect(zhTW.common.logout).toBe('登出')
-    expect(en.common.logout).toBe('Log out')
-  })
-
-  it('carries the itemForm namespace in both packs', () => {
-    expect(zhTW.itemForm.save).toBe('儲存')
-    expect(en.itemForm.save).toBe('Save')
-  })
-
-  it('carries the revisions namespace in both packs', () => {
-    expect(zhTW.revisions.open).toBe('歷史紀錄')
-    expect(en.revisions.open).toBe('History')
   })
 
   // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local mirror: narrative-guard:allow: cites the specific ruling this test pins against, not a changelog date

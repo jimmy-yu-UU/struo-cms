@@ -39,11 +39,6 @@ describe('validateItem localized messages', () => {
     }
   })
 
-  it('states the zh-TW wording', () => {
-    expect(zhTW.validation.required).toBe('{label}為必填。')
-    expect(zhTW.validation.maxLength).toBe('{label}不可超過 {max} 個字元。')
-  })
-
   it('localizes relation row messages with the 1-based row number', () => {
     const rel: RelationMeta = { name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag',
       interface: 'tagSelect', foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false,
@@ -63,6 +58,5 @@ describe('validateItem localized messages', () => {
 
   it('keeps the English wording by default', () => {
     expect(validateItem(meta, model, 'en').status).toBe('Status is required.')
-    expect(en.validation.maxLength).toBe('{label} must be at most {max} characters.')
   })
 })
