@@ -17,7 +17,7 @@ test('login → dashboard → logout', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
   // Logout is in the UserMenu popover (no standalone `button.logout`).
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: /account menu/i }).click()
   await page.getByRole('menuitem', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })

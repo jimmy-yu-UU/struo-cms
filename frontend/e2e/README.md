@@ -35,11 +35,9 @@ Both suites need, at minimum:
   (`playwright.config.ts`'s `webServer` block, `reuseExistingServer: true`), so `pnpm dev` does not
   need to be running separately, though it's fine if it already is.
 - `pnpm e2e:sample` additionally needs the Blog sample opted in (chapter 23) and whatever seed data
-  each sample spec documents inline. **`relations.spec.ts` needs one pre-existing `category` row and
-  one `tag` row** — the sample ships no seed data for either, and a freshly opted-in / freshly
-  migrated database has none, so that spec alone fails otherwise (its own header comment has the
-  exact `POST` calls to create them). Specs that create data (e.g. `items.spec.ts`) stamp their
-  records with a unique value (`E2E_STAMP`, default `e2e`) so a run is self-cleaning and safe to
+  each sample spec documents inline. `relations.spec.ts` creates its own `category` and `tag` rows
+  through the API and purges them afterwards, so it needs no seed rows. Specs that create data (e.g. `items.spec.ts`) stamp
+  their records with a unique value (`E2E_STAMP`, default `e2e`) so a run is self-cleaning and safe to
   repeat or run in parallel against a shared database — pass a unique stamp explicitly when in doubt:
 
   ```bash
