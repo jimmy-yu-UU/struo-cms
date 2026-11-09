@@ -339,53 +339,37 @@ agree.
 
 ## Logging
 
-Serilog configuration lives entirely under `Serilog:*`: one Console sink, plus a File sink writing
-to `logs/struo-.log`, rolling by date and allowing shared read/write access from multiple processes
-at once, with filenames shaped like `struo-YYYYMMDD.log`, one file per day.
+The host adds the Console and File sinks itself, from `Struo:Logging`. Levels and any further sink
+come from `Serilog:*`.
 
-The configuration is built once at startup; changing `Serilog:*` needs a process restart to take
-effect, and `appsettings.json`'s file-watching doesn't make them live. `UseSerilog` reads both
-`IConfiguration` and the DI container, so an enricher registered through DI is picked up and takes
-effect too.
+| Key | Values | Default |
+|---|---|---|
+| `Struo:Logging:ConsoleFormat` | `Text`, `Json` | `Text` |
+| `Struo:Logging:FileEnabled` | `true`, `false` | `true` |
 
-### Production: JSON on the console
+`Text` prints one readable line per event, with the trace id before the message. `Json` prints one
+compact JSON object per event (`@t` timestamp, `@m` rendered message, `@l` level when not
+Information), which a log collector parses without a pattern. The format is matched ignoring case, and
+any other value stops startup. With `FileEnabled` on, a File sink writes `logs/struo-.log`, rolling by
+date and allowing shared read/write access from multiple processes at once, with filenames shaped like
+`struo-YYYYMMDD.log`, one file per day. With it off, no file sink is added and no `logs/` directory is
+created.
 
-A container platform collects standard output, so a Production deployment usually wants one JSON
-line per event on the Console and no log file. `Serilog:WriteTo` is an array, and configuration
-merges arrays by position: an override can change the settings of an entry, but it cannot remove
-one, and the Console entry's `outputTemplate` wins over a `formatter` set beside it. So the two
-shipped entries become the `Debug` sink, which writes only to an attached debugger, and a third
-entry carries the JSON Console. In `appsettings.Production.json`:
-
-```json
-{
-  "Serilog": {
-    "WriteTo": [
-      { "Name": "Debug" },
-      { "Name": "Debug" },
-      {
-        "Name": "Console",
-        "Args": {
-          "formatter": "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
-        }
-      }
-    ]
-  }
-}
-```
-
-The same override as environment variables:
+A container platform collects standard output, so a Production deployment usually wants JSON on the
+Console and no file. Two environment variables do it:
 
 ```
-Serilog__WriteTo__0__Name=Debug
-Serilog__WriteTo__1__Name=Debug
-Serilog__WriteTo__2__Name=Console
-Serilog__WriteTo__2__Args__formatter=Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact
+Struo__Logging__ConsoleFormat=Json
+Struo__Logging__FileEnabled=false
 ```
 
-The formatter ships with `Serilog.AspNetCore`, so nothing needs installing. With either form the
-Console prints compact JSON (`@t` timestamp, `@m` rendered message, `@l` level when not
-Information) and no `logs/` directory is created.
+A sink listed under `Serilog:WriteTo` loads on top of the two built-in ones, and the built-in ones keep
+following `Struo:Logging`.
+
+The configuration is built once at startup; changing `Serilog:*` or `Struo:Logging:*` needs a process
+restart to take effect, and `appsettings.json`'s file-watching doesn't make them live. `UseSerilog`
+reads both `IConfiguration` and the DI container, so an enricher registered through DI is picked up and
+takes effect too.
 
 ## The two container images
 

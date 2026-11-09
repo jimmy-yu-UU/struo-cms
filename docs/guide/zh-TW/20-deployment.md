@@ -270,49 +270,31 @@ invariant，操作者不需要另外釘 `LANG` 或 `DOTNET_SYSTEM_GLOBALIZATION_
 
 ## 日誌
 
-Serilog 設定全部在 `Serilog:*` 底下：一個 Console sink，加一個寫入 `logs/struo-.log` 的 File
-sink，按日期滾動、允許同時被多個行程共享讀寫，檔名長成 `struo-YYYYMMDD.log`，一天一份。
+Console 與 File 這兩個 sink 由主機自己依 `Struo:Logging` 加上去，等級與其他 sink 則來自 `Serilog:*`。
 
-設定在啟動時建立一次，`Serilog:*` 改了要重開行程才生效，`appsettings.json` 的檔案監看不會讓
-它們生效；`UseSerilog` 同時讀 `IConfiguration` 與 DI 容器，透過 DI 註冊的 enricher 也會被撿
-起來一併生效。
+| 鍵 | 值 | 預設值 |
+|---|---|---|
+| `Struo:Logging:ConsoleFormat` | `Text`、`Json` | `Text` |
+| `Struo:Logging:FileEnabled` | `true`、`false` | `true` |
 
-### Production：Console 輸出 JSON
-
-容器平台收的是標準輸出，所以 Production 通常要 Console 一個事件一行 JSON，並且不寫日誌檔。
-`Serilog:WriteTo` 是陣列，設定來源按位置合併：覆寫可以改某一項的設定，但不能刪掉任何一項，而且
-Console 那項的 `outputTemplate` 會壓過旁邊設的 `formatter`。所以內建的兩項改成 `Debug` sink（只寫給
-掛上的偵錯器），再用第三項放輸出 JSON 的 Console。寫在 `appsettings.Production.json`：
-
-```json
-{
-  "Serilog": {
-    "WriteTo": [
-      { "Name": "Debug" },
-      { "Name": "Debug" },
-      {
-        "Name": "Console",
-        "Args": {
-          "formatter": "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
-        }
-      }
-    ]
-  }
-}
-```
-
-同樣的覆寫改用環境變數：
-
-```
-Serilog__WriteTo__0__Name=Debug
-Serilog__WriteTo__1__Name=Debug
-Serilog__WriteTo__2__Name=Console
-Serilog__WriteTo__2__Args__formatter=Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact
-```
-
-這個 formatter 隨 `Serilog.AspNetCore` 一起帶進來，不用另外安裝。兩種寫法的結果都是 Console 輸出
-精簡 JSON（`@t` 時間戳、`@m` 套好參數的訊息、`@l` 等級，Information 時省略），而且不會建立
+`Text` 一個事件印一行好讀的文字，trace id 在訊息前面。`Json` 一個事件印一個精簡 JSON 物件（`@t`
+時間戳、`@m` 套好參數的訊息、`@l` 等級，Information 時省略），日誌收集器不用寫樣式就能解析。格式比對不分
+大小寫，其他值會讓啟動失敗。`FileEnabled` 開著時，File sink 寫入 `logs/struo-.log`，按日期滾動、允許同時
+被多個行程共享讀寫，檔名長成 `struo-YYYYMMDD.log`，一天一份。關掉的話，不加檔案 sink，也不會建立
 `logs/` 目錄。
+
+容器平台收的是標準輸出，所以 Production 通常要 Console 輸出 JSON、不寫檔案。兩個環境變數就夠：
+
+```
+Struo__Logging__ConsoleFormat=Json
+Struo__Logging__FileEnabled=false
+```
+
+列在 `Serilog:WriteTo` 底下的 sink 會疊加在這兩個內建 sink 之上，內建的兩個仍然跟著 `Struo:Logging`。
+
+設定在啟動時建立一次，`Serilog:*` 或 `Struo:Logging:*` 改了要重開行程才生效，`appsettings.json` 的檔案監看
+不會讓它們生效；`UseSerilog` 同時讀 `IConfiguration` 與 DI 容器，透過 DI 註冊的 enricher 也會被撿起來一併
+生效。
 
 ## 兩個容器映像
 
