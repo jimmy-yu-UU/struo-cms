@@ -200,8 +200,8 @@ public sealed class FaqItem
 
 ## 執行範例的端到端測試
 
-`frontend/e2e/sample/` 底下有 8 個 spec 檔（`collections`、`items`、`relations`、
-`revisions`、`trash`、`conflict`、`unsaved-guard`、`not-found`）、15 個測試，
+`frontend/e2e/sample/` 底下有 9 個 spec 檔（`collections`、`items`、`relations`、
+`revisions`、`trash`、`conflict`、`revert-conflict`、`unsaved-guard`、`not-found`）、16 個測試，
 `frontend/playwright.config.ts` 把它們接成 `sample` 這個 Playwright 專案，執行指令是
 `pnpm e2e:sample`。
 
