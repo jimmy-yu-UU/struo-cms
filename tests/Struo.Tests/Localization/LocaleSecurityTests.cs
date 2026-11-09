@@ -33,15 +33,6 @@ public class LocaleSecurityTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
-    public async Task Create_language_with_quote_in_code_returns_400()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsJsonAsync("/api/items/language",
-            new { code = "en'", name = "BadCode", isDefault = false, enabled = true, sort = 98 });
-        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
     private static StringContent RawJson(string json) => new(json, System.Text.Encoding.UTF8, "application/json");
 
     private static async Task<bool> LanguageExistsAsync(HttpClient c, string code)

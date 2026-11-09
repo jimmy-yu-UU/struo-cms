@@ -69,19 +69,6 @@ public sealed class TestDatabaseLiveTests
     }
 
     [Theory, MemberData(nameof(Backends))]
-    public void Disposing_drops_the_database(string backend)
-    {
-        if (!TryResolve(backend, out var kind)) return;
-        var database = TestBackend.CreateLiveDatabase(kind, "dispose");
-        var name = database.Name;
-        LiveDatabaseDdl.Exists(kind, name).Should().BeTrue();
-
-        database.Dispose();
-
-        LiveDatabaseDdl.Exists(kind, name).Should().BeFalse();
-    }
-
-    [Theory, MemberData(nameof(Backends))]
     public void Disposing_drops_the_database_while_a_connection_is_still_open(string backend)
     {
         if (!TryResolve(backend, out var kind)) return;

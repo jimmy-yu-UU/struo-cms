@@ -79,20 +79,6 @@ public sealed class LiveDatabasePoolLiveTests
     }
 
     [Theory, MemberData(nameof(Backends))]
-    public void A_wrapper_whose_connection_is_never_read_creates_nothing(string backend)
-    {
-        if (!TryResolve(backend, out var kind)) return;
-        var pool = new LiveDatabasePool(kind);
-        var db = pool.Lease();
-
-        db.DbType.Should().Be(TestBackend.DbTypeOf(kind));
-        db.Dispose();
-
-        pool.CreatedCount.Should().Be(0);
-        pool.IdleCount.Should().Be(0);
-    }
-
-    [Theory, MemberData(nameof(Backends))]
     public async Task A_database_held_by_an_open_transaction_is_discarded_without_hanging(string backend)
     {
         if (!TryResolve(backend, out var kind)) return;

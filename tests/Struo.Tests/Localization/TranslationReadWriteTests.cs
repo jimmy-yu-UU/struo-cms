@@ -94,9 +94,16 @@ public class TranslationReadWriteTests(ApiFactory factory)
         var body = JsonSerializer.SerializeToElement(new
         {
             status = "draft",
-            translations = new Dictionary<string, object> { ["xx"] = new { title = "x", body = (string?)null } }
+            translations = new Dictionary<string, object>
+            {
+                // The default-locale translation is present, so only the unknown locale can be refused.
+                ["en"] = new { title = "x" },
+                ["xx"] = new { title = "x", body = (string?)null },
+            }
         });
-        (await c.PostAsJsonAsync("/api/items/fxArticle", body)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var response = await c.PostAsJsonAsync("/api/items/fxArticle", body);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Unknown or disabled locale 'xx'.");
     }
 
     [Fact]

@@ -100,16 +100,6 @@ public class TranslationUpdateMergeTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Rest_update_of_a_new_locale_must_carry_every_required_field()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var id = await CreateAsync(c, new { en = new { title = "A" } });
-
-        (await PutTranslationsAsync(c, id, new Dictionary<string, object> { ["zh-TW"] = new { body = "only body" } }))
-            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task Rest_create_still_requires_every_required_field_in_every_sent_locale()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();

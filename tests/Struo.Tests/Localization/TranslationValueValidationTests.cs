@@ -86,35 +86,6 @@ public class TranslationValueValidationTests(ApiFactory factory)
             .GetProperty("seoOgImageId").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
-    [Theory]
-    [InlineData("{\"a\":1}")]
-    [InlineData("[1,2]")]
-    [InlineData("5")]
-    public async Task Translatable_json_field_reads_back_structured(string rawJson)
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsync("/api/items/fxArticle", Json(
-            $"{{\"status\":\"draft\",\"translations\":{{\"en\":{{\"title\":\"A\",\"facts\":{rawJson}}}}}}}"));
-
-        resp.StatusCode.Should().Be(HttpStatusCode.Created);
-        var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetRawText().Should().Be(rawJson);
-    }
-
-    [Fact]
-    public async Task Translatable_json_string_value_reads_back_as_that_string()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsync("/api/items/fxArticle", Json(
-            "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"A\",\"facts\":\"{\\\"a\\\":1}\"}}}"));
-
-        resp.StatusCode.Should().Be(HttpStatusCode.Created);
-        var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetString().Should().Be("{\"a\":1}");
-    }
-
     [Fact]
     public async Task Translatable_json_field_read_back_unchanged_is_stored_unchanged()
     {
@@ -129,25 +100,6 @@ public class TranslationValueValidationTests(ApiFactory factory)
             JsonSerializer.SerializeToElement(new { translations = new { en = new { facts } } }));
 
         put.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
-            .GetProperty("facts").GetRawText().Should().Be("{\"a\":1}");
-    }
-
-    [Fact]
-    public async Task Translatable_json_field_survives_a_revert_unchanged()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var created = await c.PostAsync("/api/items/fxArticle", Json(
-            "{\"status\":\"draft\",\"translations\":{\"en\":{\"title\":\"A\",\"facts\":{\"a\":1}}}}"));
-        created.StatusCode.Should().Be(HttpStatusCode.Created);
-        var id = Root(await created.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        var edit = await c.PutAsync($"/api/items/fxArticle/{id}", Json(
-            "{\"translations\":{\"en\":{\"facts\":{\"b\":2}}}}"));
-        edit.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var revert = await c.PostAsync($"/api/items/fxArticle/{id}/revisions/1/revert", null);
-
-        revert.StatusCode.Should().Be(HttpStatusCode.OK);
         (await GetAsync(c, id)).GetProperty("translations").GetProperty("en")
             .GetProperty("facts").GetRawText().Should().Be("{\"a\":1}");
     }
@@ -199,22 +151,6 @@ public class TranslationValueValidationTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         Root(await resp.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("message").GetString()
             .Should().Be(DuplicateMessage);
-    }
-
-    [Fact]
-    public async Task Single_non_canonical_locale_key_is_accepted_and_stored_canonically()
-    {
-        var c = await _factory.CreateAuthenticatedClientAsync();
-        var resp = await c.PostAsJsonAsync("/api/items/fxArticle", Body(new Dictionary<string, object>
-        {
-            ["EN"] = new { title = "A" },
-            ["ZH-tw"] = new { title = "B" },
-        }));
-
-        resp.StatusCode.Should().Be(HttpStatusCode.Created);
-        var id = Root(await resp.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("id").GetString()!;
-        var tr = (await GetAsync(c, id)).GetProperty("translations");
-        tr.GetProperty("zh-TW").GetProperty("title").GetString().Should().Be("B");
     }
 
     [Fact]

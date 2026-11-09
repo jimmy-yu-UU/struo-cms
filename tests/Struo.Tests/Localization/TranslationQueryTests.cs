@@ -41,6 +41,19 @@ public class TranslationQueryTests(ApiFactory factory)
         data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
     }
 
+    [Fact]
+    public async Task Filter_translatable_field_with_a_multibyte_value()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var multibyte = "獨特標題-" + Guid.NewGuid().ToString("N")[..8];
+        var hit = await NewArticle(c, "Findable", multibyte);
+        await NewArticle(c, "EnOther", "ZhOther");
+
+        var env = JsonSerializer.SerializeToElement(new { filter = new Dictionary<string, object> { ["title"] = Eq(multibyte) } });
+        var data = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle/query?locale=zh-TW", env)).Content.ReadAsStringAsync()).GetProperty("data");
+        data.EnumerateArray().Select(r => r.GetProperty("id").GetString()).Should().Contain(hit).And.HaveCount(1);
+    }
+
     /// <summary>The translatable-field filter path now projects only the FK column at the SQL
     /// level instead of materializing whole translation rows. Assert it still returns EVERY matching
     /// parent — not just the first — proving the projected result set is a full, correctly-deduped
