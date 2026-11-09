@@ -12,7 +12,8 @@
   visible text followed by a screen-reader-only purpose (", back to dashboard" and ", account menu"),
   and the account name and role are visually hidden, not removed, on narrow screens. The
   `shell.brandHome` and `user.account` locale keys are replaced by `shell.brandHomeHint` and
-  `user.accountMenuHint`.
+  `user.accountMenuHint`. The configured brand logo is decorative (`alt=""`) because the brand name
+  always sits next to it as text.
 
 ### Fixed
 

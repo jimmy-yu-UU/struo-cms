@@ -9,7 +9,8 @@
   上其中之一又沒傳 `label`，型別檢查會失敗，補上即可。
 - 側欄品牌鈕與帳戶鈕不再有 `aria-label`，無障礙名稱是畫面上的文字加上只給螢幕閱讀器的用途（「，回
   到儀表板」「，帳戶選單」）；窄螢幕上帳戶名稱與角色改為視覺隱藏而不是移除。語系鍵
-  `shell.brandHome`、`user.account` 由 `shell.brandHomeHint`、`user.accountMenuHint` 取代。
+  `shell.brandHome`、`user.account` 由 `shell.brandHomeHint`、`user.accountMenuHint` 取代。設定的品牌標誌改為裝飾性（`alt=""`），因為品牌名稱
+  一律以文字顯示在旁邊。
 
 ### 修正
 
