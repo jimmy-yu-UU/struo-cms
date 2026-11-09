@@ -70,28 +70,9 @@ describe('DataTable', () => {
     })
   })
 
-  it('shows the empty message when there are no rows', () => {
-    expect(mountTable({ rows: [], total: 0, emptyMessage: 'Nothing here' }).text()).toContain('Nothing here')
-  })
-
-  it('renders a visible loading indicator when loading is true', () => {
-    expect(mountTable({ loading: true }).find('[role="status"]').exists()).toBe(true)
-  })
-
   it('renders no loading indicator when loading is false or unset', () => {
     expect(mountTable({ loading: false }).find('[role="status"]').exists()).toBe(false)
     expect(mountTable().find('[role="status"]').exists()).toBe(false)
-  })
-
-  it('keeps rendering the (stale) rows underneath the loading indicator, not a blank table', () => {
-    const w = mountTable({ loading: true })
-    expect(w.text()).toContain('Alpha')
-    expect(w.text()).toContain('Beta')
-  })
-
-  it('still marks the scroll wrapper aria-busy while loading', () => {
-    expect(mountTable({ loading: true }).find('.overflow-x-auto').attributes('aria-busy')).toBe('true')
-    expect(mountTable({ loading: false }).find('.overflow-x-auto').attributes('aria-busy')).toBe('false')
   })
 
   // The single most dangerous defect in this component: with manual* unset, TanStack would
@@ -288,6 +269,7 @@ describe('DataTable loading and empty states', () => {
   it('keeps the rows and dims them under the overlay while loading with rows', () => {
     const w = mountTable({ loading: true, emptyMessage: 'Nothing here' })
     expect(w.text()).toContain('Alpha')
+    expect(w.text()).toContain('Beta')
     expect(w.find('[data-testid="data-table-skeleton-row"]').exists()).toBe(false)
     expect(w.get('table').classes()).toContain('opacity-50')
     expect(w.find('[role="status"]').exists()).toBe(true)

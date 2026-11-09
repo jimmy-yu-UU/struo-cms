@@ -65,15 +65,6 @@ describe('FilterBuilder', () => {
     expect(w.emitted('apply')).toBeUndefined()
   })
 
-  it('emits a FilterSpec only when apply is pressed', async () => {
-    const w = mountBuilder()
-    await w.get('[data-testid="filter-add"]').trigger('click')
-    await pickOption(w, selectTriggers(w, 0)[1], 'contains')
-    await w.get('[aria-label="Value"]').setValue('hello')
-    await w.get('[data-testid="filter-apply"]').trigger('click')
-    expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_contains', value: 'hello' } })
-  })
-
   it('drops rows with an empty value so a half-typed condition never filters', async () => {
     const w = mountBuilder()
     await w.get('[data-testid="filter-add"]').trigger('click')
@@ -102,9 +93,11 @@ describe('FilterBuilder', () => {
     expect(offered).toEqual(['Status'])
   })
 
-  it('hydrates its draft from the applied spec on mount', () => {
+  it('hydrates its draft from the applied spec on mount', async () => {
     const w = mountBuilder({ status: { op: '_eq', value: 'draft' } })
     expect(w.findAll('[data-testid="filter-row"]')).toHaveLength(1)
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({ status: { op: '_eq', value: 'draft' } })
   })
 
   // Real-DOM coverage for the Enter-to-apply path: the value is typed into the plain text Input
@@ -174,19 +167,6 @@ describe('FilterBuilder', () => {
     expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_eq', value: 'hello' } })
   })
 
-  // Proves the field Select's own @update:model-value listener, not just its default: addRow
-  // defaults a fresh row to 'title' (the first free field), so re-picking 'Status' can only
-  // succeed if the trigger's real listener runs. Picking the default value back would not catch
-  // a deleted listener, since the draft would already hold that value regardless.
-  it('stores a field pick made through the real Select trigger and its listbox', async () => {
-    const w = mountBuilder()
-    await w.get('[data-testid="filter-add"]').trigger('click')
-    await pickOption(w, selectTriggers(w, 0)[0], 'Status')
-    await pickOption(w, selectTriggers(w, 0)[2], 'Draft')
-    await w.get('[data-testid="filter-apply"]').trigger('click')
-    expect(w.emitted('apply')![0][0]).toEqual({ status: { op: '_eq', value: 'draft' } })
-  })
-
   // Proves the operator Select's own @update:model-value listener: '_contains' is not the
   // default '_eq', so this can only pass if the pick actually reached the draft.
   it('stores an operator pick made through the real Select trigger and its listbox', async () => {
@@ -198,9 +178,10 @@ describe('FilterBuilder', () => {
     expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_contains', value: 'hello' } })
   })
 
-  // With an enumerated field selected the value control is a third Select, not an Input — a
-  // branch no test in this file has ever rendered before. The length assertion is the direct
-  // regression guard for that: it can only be 3 if this branch actually rendered.
+  // addRow defaults a fresh row to 'title' (the first free field), so picking 'Status' can only
+  // succeed if the field Select's own @update:model-value listener runs.
+  // With an enumerated field selected the value control is a third Select, not an Input. The
+  // length assertion can only be 3 if that branch rendered.
   it('renders and stores an enumerated value pick made through the real Select trigger', async () => {
     const w = mountBuilder()
     await w.get('[data-testid="filter-add"]').trigger('click')
