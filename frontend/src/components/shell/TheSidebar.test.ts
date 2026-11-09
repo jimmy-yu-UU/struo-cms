@@ -85,6 +85,15 @@ describe('TheSidebar', () => {
     expect(button.classes().concat(button.findAll('*').flatMap((e) => e.classes()))).not.toContain('hidden')
   })
 
+  it('names the brand button with the brand once when a logo is configured', () => {
+    const config = useAppConfigStore()
+    config.brandName = 'Acme Docs'
+    config.brandLogoUrl = 'https://cdn/logo.svg'
+    const button = mountSidebar().get('[data-sidebar="header"] button')
+    expect(button.get('img').attributes('alt')).toBe('')
+    expect(button.text()).toBe(`Acme Docs${en.shell.brandHomeHint}`)
+  })
+
   it('names the brand button in Chinese from the zh-TW hint', async () => {
     const { default: zhTW } = await import('@/locales/zh-TW')
     const zh = createI18n({ legacy: false, locale: 'zh-TW', messages: { 'zh-TW': zhTW } })

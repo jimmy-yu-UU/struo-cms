@@ -145,6 +145,7 @@ async function load(): Promise<void> {
     error.value = e instanceof Error ? e.message : t('media.loadFailed')
     files.value = []
     total.value = 0
+    totalKnown.value = false
   } finally {
     if (mediaLoad.isCurrent(token)) loading.value = false
   }

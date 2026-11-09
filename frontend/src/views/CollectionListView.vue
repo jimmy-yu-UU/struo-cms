@@ -407,6 +407,7 @@ async function loadItems(): Promise<void> {
     error.value = e instanceof Error ? e.message : t('common.loadFailed')
     rows.value = []
     total.value = 0
+    totalKnown.value = false
     lockStates.value = {}
   } finally {
     // Only the current load may clear the spinner; a stale response must not

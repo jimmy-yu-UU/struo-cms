@@ -24,7 +24,8 @@ describe('BrandMark', () => {
     const img = wrapper.find('img')
     expect(img.exists()).toBe(true)
     expect(img.attributes('src')).toBe('https://cdn/logo.svg')
-    expect(img.attributes('alt')).toBe('Acme')
+    // Decorative: the brand name is always rendered as text beside the mark.
+    expect(img.attributes('alt')).toBe('')
     expect(wrapper.find('span').exists()).toBe(false)
   })
 })

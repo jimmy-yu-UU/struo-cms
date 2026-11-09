@@ -124,6 +124,22 @@ describe('MediaLibraryView', () => {
     expect(caption()).toBe('5 files')
   })
 
+  it('blanks the count caption again when a refresh fails', async () => {
+    seedUser({})
+    const list = makeListMock([{ data: rows, total: 5 }])
+    const w = mountView()
+    await flushPromises()
+    const caption = () => w.findComponent({ name: 'PageHeader' }).attributes('caption')
+    expect(caption()).toBe('5 files')
+    list.mockImplementation((collection: string) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: [] as never, total: 0 })
+      return Promise.reject(new Error('boom')) as never
+    })
+    ;(w.vm as unknown as { setMode: (m: 'active' | 'trash') => void }).setMode('trash')
+    await flushPromises()
+    expect(caption()).toBeUndefined()
+  })
+
   it('shows the current type filter on the Select trigger, and follows it after mount', async () => {
     makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
