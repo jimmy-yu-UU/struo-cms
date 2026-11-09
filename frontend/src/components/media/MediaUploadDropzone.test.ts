@@ -38,6 +38,7 @@ describe('MediaUploadDropzone', () => {
       new File(['b'], 'bad', { type: 'image/png' }),
     ])
     expect(w.emitted('uploaded')).toHaveLength(1)
+    expect(w.emitted('done')).toHaveLength(1)
     expect(w.text()).toContain('too big')
   })
 

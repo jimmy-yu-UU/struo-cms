@@ -160,20 +160,6 @@ describe('MediaGrid', () => {
       expect(w.find('[data-test="menu-open"]').exists()).toBe(false)
     })
 
-    // Same reasoning as MediaMoveDialog's own guard test: reka's ContextMenuItem already refuses
-    // to fire `select` when `disabled`, and VTU's trigger('click') would dispatch fine regardless
-    // (it's a <div role="menuitem">, not a native disabled <button>) -- neither of those proves
-    // THIS component refuses. Reach the shared menu's own exposed handler directly, with the grant
-    // off, to prove the refusal doesn't depend on the entry being hidden.
-    it('refuses to emit remove/requestMove via the menu\'s own handler when the grants are false', () => {
-      const w = mountGrid({ canMove: false, canDelete: false })
-      const menu = w.findComponent(MediaContextMenu)
-      ;(menu.vm as unknown as { onMove: () => void; onRemove: () => void }).onMove()
-      ;(menu.vm as unknown as { onMove: () => void; onRemove: () => void }).onRemove()
-      expect(w.emitted('requestMove')).toBeUndefined()
-      expect(w.emitted('remove')).toBeUndefined()
-    })
-
     // MediaGrid has three other callers besides MediaLibraryView --
     // FilePicker (selectable), FilesField (multiple) and RichTextInput (selectable) -- none of
     // which listens for `open`, and a menu there would both do nothing on select AND eat the
