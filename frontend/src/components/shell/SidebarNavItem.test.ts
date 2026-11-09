@@ -31,11 +31,15 @@ describe('SidebarNavItem', () => {
 
   // The backend emits semantic icon names ("article"), never CSS classes.
   it('renders an svg icon for a semantic backend icon name', () => {
-    expect(mountItem({ label: 'A', icon: 'article' }).find('svg').exists()).toBe(true)
+    const w = mountItem({ label: 'A', icon: 'article' })
+    expect(w.find('.lucide-newspaper').exists()).toBe(true)
+    expect(w.find('.lucide-file').exists()).toBe(false)
   })
 
   it('renders a fallback svg icon when no icon is given', () => {
-    expect(mountItem({ label: 'A' }).find('svg').exists()).toBe(true)
+    const w = mountItem({ label: 'A' })
+    expect(w.find('.lucide-file').exists()).toBe(true)
+    expect(w.find('.lucide-newspaper').exists()).toBe(false)
   })
 
   // Sub-items need their own geometry (h-7 / px-2 + guide rail); that lives in

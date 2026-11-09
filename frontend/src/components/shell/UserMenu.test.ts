@@ -66,7 +66,9 @@ describe('UserMenu', () => {
     const auth = useAuthStore()
     auth.user = { id: 'u1', email: 'a@b.c', name: '陳雅婷', isSuperAdmin: true, permissions: {} }
     const wrapper = mountMenu()
-    expect(wrapper.find('button').text()).toContain('陳雅婷')
+    const text = wrapper.find('button').text()
+    expect(text).toContain('陳雅婷')
+    expect(text).not.toContain('a@b.c')
   })
 
   it('falls back to email when name is missing', () => {
@@ -108,6 +110,7 @@ describe('UserMenu', () => {
     schema.loaded = true
     await clickLogout()
     expect(schema.loaded).toBe(false)
+    expect(push).toHaveBeenCalledWith({ name: 'login' })
   })
 
   it('a 401 from the logout request is a silent success that still ends on login', async () => {
@@ -144,7 +147,7 @@ describe('UserMenu', () => {
     vi.spyOn(auth, 'logout').mockResolvedValue()
     const schema = useSchemaStore()
     schema.loaded = true
-    push.mockRejectedValue(new Error('chunk load failed'))
+    push.mockRejectedValueOnce(new Error('chunk load failed'))
     const handled = vi.fn()
     await clickLogout(handled)
     expect(handled).toHaveBeenCalled()
