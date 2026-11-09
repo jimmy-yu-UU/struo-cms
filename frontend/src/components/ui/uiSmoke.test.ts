@@ -15,7 +15,8 @@ describe('vendored shadcn-vue atoms', () => {
 
   it('applies the destructive variant without dropping caller classes', () => {
     const w = mount(Button, { props: { variant: 'destructive', class: 'w-full' } })
-    expect(w.attributes('class')).toContain('w-full')
+    expect(w.classes()).toContain('bg-destructive')
+    expect(w.classes()).toContain('w-full')
   })
 
   it('mounts Badge and Input', () => {

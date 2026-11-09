@@ -86,12 +86,6 @@ describe('RepeaterField', () => {
   // The row's move-up/move-down/remove controls are icon-only; without an accessible name a
   // screen reader announces only "button" for each of them. Mounted with a non-empty model so the
   // row controls actually exist — asserting over an empty list would pass vacuously.
-  it('gives the icon-only row controls accessible names', () => {
-    const w = mount(RepeaterField, { props: { field: repeater, modelValue: [{ question: 'a' }, { question: 'b' }] }, ...opts })
-    expect(w.get('.repeater-up').attributes('aria-label')).toBeTruthy()
-    expect(w.get('.repeater-remove').attributes('aria-label')).toBeTruthy()
-  })
-
   // Asserted under zh-TW (not en) because comparing against the English string alone cannot
   // distinguish a localised lookup from a hardcoded English word that happens to read back the same.
   it('resolves every control accessible name from the localised i18n pack', () => {

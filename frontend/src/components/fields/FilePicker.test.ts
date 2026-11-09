@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import FilePicker from './FilePicker.vue'
+import { Dialog } from '@/components/ui/dialog'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 
@@ -110,8 +111,11 @@ describe('FilePicker', () => {
     const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
     await (w.vm as unknown as { openDialog: () => Promise<void> }).openDialog()
     await flushPromises()
+    expect(w.findComponent(Dialog).props('open')).toBe(true)
     ;(w.vm as unknown as { onSelect: (id: string) => void }).onSelect('f1')
+    await nextTick()
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['f1'])
+    expect(w.findComponent(Dialog).props('open')).toBe(false)
   })
 
   it('falls back to showing the id when the current file is gone', async () => {
@@ -216,17 +220,6 @@ describe('FilePicker', () => {
 
   describe('folder filter', () => {
     type Vm = { openDialog: () => Promise<void>; onFolderChange: (s: string | null) => void; loadOptions: () => Promise<void>; files: unknown[]; folders: unknown[] }
-
-    it('takes a plain folder key', async () => {
-      setupStores()
-      mockList()
-      const w = mount(FilePicker, { props: { modelValue: null }, global: { plugins: [i18n], stubs } })
-      await flushPromises()
-      const vm = w.vm as unknown as { onFolderChange: (k: string | null) => void; folderSel: string }
-      vm.onFolderChange('f1')
-      await flushPromises()
-      expect(vm.folderSel).toBe('f1')
-    })
 
     it('sends no folder filter by default (__all): existing behavior unchanged', async () => {
       setupStores()

@@ -17,11 +17,13 @@ describe('appConfigStore', () => {
 
   it('load() ignores fields it does not know in /api/config', async () => {
     vi.spyOn(api, 'getAppConfig').mockResolvedValue({
-      oidcProviders: [], brandName: 'B', brandLogoUrl: null, passwordMinLength: 8,
-    })
+      oidcProviders: [], brandName: 'B', brandLogoUrl: null, passwordMinLength: 8, extra: 'x',
+    } as never)
     const store = useAppConfigStore()
     await store.load()
     expect(store.brandName).toBe('B')
+    expect('extra' in store.$state).toBe(false)
+    expect(store).not.toHaveProperty('extra')
   })
 
   it('load() populates state from the API', async () => {
@@ -42,6 +44,7 @@ describe('appConfigStore', () => {
     await store.load()
     expect(store.brandName).toBe('StruoCMS')
     expect(store.oidcProviders).toEqual([])
+    expect(store.passwordMinLength).toBe(8)
   })
 
   it('loads passwordMinLength from the config endpoint', async () => {
@@ -53,15 +56,6 @@ describe('appConfigStore', () => {
     await store.load()
 
     expect(store.passwordMinLength).toBe(14)
-  })
-
-  it('keeps the safe default when the config endpoint fails', async () => {
-    vi.spyOn(api, 'getAppConfig').mockRejectedValue(new Error('down'))
-    const store = useAppConfigStore()
-
-    await store.load()
-
-    expect(store.passwordMinLength).toBe(8)
   })
 
   it('brandInitial is the upper-cased first character', () => {

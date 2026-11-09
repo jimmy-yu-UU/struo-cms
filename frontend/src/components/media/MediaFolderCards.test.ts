@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import MediaFolderCards from './MediaFolderCards.vue'
-import MediaContextMenu from './MediaContextMenu.vue'
 import type { FolderRow } from '../../lib/folderTree'
 import { DRAG_MIME, serializeMovePayload, type MovePayload } from '../../lib/mediaMove'
 
@@ -262,19 +261,6 @@ describe('MediaFolderCards', () => {
       await openCardMenu(w, 1)
       await w.find('[data-test="menu-delete"]').trigger('click')
       expect(w.emitted('remove')).toEqual([[folders[1]]])
-    })
-
-    // Same reasoning as MediaGrid's own guard test: reach the shared menu's own exposed handlers
-    // directly, with the grants off, to prove the refusal is this component's own wiring and not
-    // just an absent DOM entry.
-    it('refuses to emit rename/requestMove/remove via the menu\'s own handlers when the grants are false', () => {
-      const w = mountCards(false)
-      const menu = w.findComponent(MediaContextMenu)
-      const vm = menu.vm as unknown as { onMove: () => void; onRename: () => void; onRemove: () => void }
-      vm.onMove(); vm.onRename(); vm.onRemove()
-      expect(w.emitted('requestMove')).toBeUndefined()
-      expect(w.emitted('rename')).toBeUndefined()
-      expect(w.emitted('remove')).toBeUndefined()
     })
 
     // reka's ContextMenuTrigger also opens on a still touch/pen press,

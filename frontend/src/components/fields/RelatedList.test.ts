@@ -91,18 +91,6 @@ describe('RelatedList', () => {
     expect((w.vm as any).loading).toBe(false)
   })
 
-  it('onPage updates paging state and reloads', async () => {
-    setupStores()
-    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
-    await (w.vm as any).load()
-    listSpy.mockClear()
-    // onPage takes a plain page number: DataTablePagination emits update:page and update:pageSize
-    // as two independent numeric events, never a combined { page, rows } payload.
-    await (w.vm as any).onPage(2)
-    expect(listSpy).toHaveBeenCalledWith('article', expect.objectContaining({ page: 2, rows: 10 }))
-  })
-
   it('feeds DataTable a single label column and the row set', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({

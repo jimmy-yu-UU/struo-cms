@@ -41,11 +41,6 @@ describe('performMove', () => {
     expect(r).toEqual({ moved: 1, skipped: 1 })
   })
 
-  it('rejects when a write fails', async () => {
-    update.mockRejectedValueOnce(new Error('boom'))
-    await expect(performMove({ files: ['f1'], folders: [] }, 'd', folders)).rejects.toThrow('boom')
-  })
-
   it('issues every write even when one rejects', async () => {
     update.mockRejectedValueOnce(new Error('boom'))
     await expect(performMove({ files: ['f1', 'f2'], folders: [] }, 'd', folders)).rejects.toThrow('boom')

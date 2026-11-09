@@ -72,25 +72,11 @@ describe('FieldInput', () => {
     expect(w.find('.stub-text').exists()).toBe(false)
   })
 
-  it('binds maxlength on text inputs when the field declares one', () => {
-    const w = mount(FieldInput, {
-      props: { field: field({ interface: 'text', maxLength: 100 }), modelValue: '' },
-    })
-    expect(w.get('input').attributes('maxlength')).toBe('100')
-  })
-
   it('omits maxlength when the field has none', () => {
     const w2 = mount(FieldInput, {
       props: { field: field({ interface: 'textarea', maxLength: null }), modelValue: '' },
     })
     expect(w2.get('textarea').attributes('maxlength')).toBeUndefined()
-  })
-
-  // ItemForm.vue generates a unique id per rendered control and needs it forwarded onto whatever
-  // FieldInput dispatches to, so its <FieldLabel for> has something to actually point at.
-  it('forwards the id prop onto the dispatched field component', () => {
-    const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '', id: 'my-id' }, global: { stubs } })
-    expect(w.get('.stub-text').attributes('id')).toBe('my-id')
   })
 
   it('renders FilePicker for image interface and relays the value', async () => {
@@ -109,12 +95,14 @@ describe('FieldInput', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['f1'])
   })
 
+  // ItemForm.vue generates a unique id per rendered control and needs it forwarded onto whatever
+  // FieldInput dispatches to, so its <FieldLabel for> has something to actually point at.
   // The dispatch-layer id lands in genuinely different places depending on the interface's
   // component: sometimes the real, focusable, labelable control (an association a screen reader
   // honours), sometimes only a wrapper div (legal HTML, but a `for` pointing at it never
   // associates with anything — that field keeps relying on its own aria-label instead). Verified
-  // against the real vendored atoms, not stubs, since the earlier stub-based test only proves the
-  // id is forwarded, not where it physically lands once it reaches reka's internals.
+  // against the real vendored atoms, not stubs, since a stub only proves the id is forwarded, not
+  // where it physically lands once it reaches reka's internals.
   describe('where the forwarded id actually lands (real atoms, not stubs)', () => {
     it('lands on the native <input> for a text field', () => {
       const w = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '', id: 'my-id' } })

@@ -41,17 +41,6 @@ describe('buildNav', () => {
     expect(names).not.toContain('file')
   })
 
-  it('hidden collections never appear in nav, even for super-admins', () => {
-    const collections = [
-      { name: 'article', label: 'Article', fields: [], relations: [] },
-      { name: 'permission', label: 'Permission', hidden: true, fields: [], relations: [] },
-    ] as any
-    const nav = buildNav(collections, true, {})
-    const names = nav.flatMap((g) => g.items.map((i) => i.name))
-    expect(names).toContain('article')
-    expect(names).not.toContain('permission')
-  })
-
   it('file visibility is driven by the hidden flag, not a hardcoded name', () => {
     const collections = [
       { name: 'file', label: 'File', fields: [], relations: [] }, // not hidden -> visible

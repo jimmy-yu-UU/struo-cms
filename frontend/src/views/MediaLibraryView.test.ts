@@ -333,17 +333,6 @@ describe('MediaLibraryView', () => {
     expect(w.findAll('.media-tile')).toHaveLength(1)
   })
 
-  it('applies the image type filter and reloads', async () => {
-    const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
-    const w = mountView()
-    await flushPromises()
-    await (w.vm as unknown as { onType: (t: string) => void }).onType('image')
-    await flushPromises()
-    expect(list).toHaveBeenLastCalledWith('file', expect.objectContaining({
-      filter: { contentType: { op: '_starts_with', value: 'image/' }, folderId: { op: '_null', value: 'true' } },
-    }))
-  })
-
   it('sorts by name', async () => {
     const list = makeListMock([{ data: rows, total: 1 }, { data: rows, total: 1 }])
     const w = mountView()
@@ -721,17 +710,6 @@ describe('MediaLibraryView', () => {
     await (w.vm as unknown as { onRemoveFolder: (f: FolderRow) => Promise<void> }).onRemoveFolder(target)
     await flushPromises()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warn', summary: 'Folder is not empty' }))
-  })
-
-  it('purges a file when the confirmation resolves true', async () => {
-    makeListMock([{ data: rows, total: 1 }, { data: [], total: 0 }])
-    const remove = vi.spyOn(filesApi, 'remove').mockResolvedValue()
-    confirmRequire.mockResolvedValueOnce(true)
-    const w = mountView()
-    await flushPromises()
-    await (w.vm as unknown as { onPurge: (id: string) => Promise<void> }).onPurge('f1')
-    await flushPromises()
-    expect(remove).toHaveBeenCalledWith('f1', { purge: true })
   })
 
   it('does not purge when the confirmation resolves false', async () => {

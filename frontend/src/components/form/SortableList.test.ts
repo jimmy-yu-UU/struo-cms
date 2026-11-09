@@ -52,12 +52,6 @@ describe('SortableList', () => {
     expect(w.findAll('[data-testid="move-down"]')[2].attributes('disabled')).toBeDefined()
   })
 
-  it('emits nothing when a boundary control is clicked', async () => {
-    const w = mountList()
-    await w.findAll('[data-testid="move-up"]')[0].trigger('click')
-    expect(w.emitted('update:modelValue')).toBeUndefined()
-  })
-
   it('disables every control when the list is disabled', () => {
     const w = mountList(ROWS, true)
     // Length assertion first: an empty findAll would make the loop below pass having asserted

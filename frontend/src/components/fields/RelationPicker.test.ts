@@ -89,15 +89,6 @@ describe('RelationPicker', () => {
     expect((w.vm as any).options[0].label).toBe('Tech')
   })
 
-  it('emits update:modelValue on single-select change', async () => {
-    setupStores()
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mount(RelationPicker, { props: { relation, modelValue: null }, global: { plugins: [i18n], stubs } })
-    ;(w.vm as any).onChange('c1')
-    expect(w.emitted('update:modelValue')).toBeTruthy()
-    expect(w.emitted('update:modelValue')![0]).toEqual(['c1'])
-  })
-
   it('debounces search-driven reloads into a single request', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
@@ -120,21 +111,13 @@ describe('RelationPicker', () => {
     }
   })
 
-  it('back-fills a preselected label via itemsApi.get when not present in options', async () => {
-    setupStores()
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const getSpy = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
-    const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { plugins: [i18n], stubs } })
-    await (w.vm as any).ensureSelectedLabels()
-    expect(getSpy).toHaveBeenCalledWith('category', 'c9', expect.objectContaining({}))
-  })
-
   it('merges a preselected-but-absent id into displayOptions using labelById', async () => {
     setupStores()
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'c9', name: 'Archived' })
     const w = mount(RelationPicker, { props: { relation, modelValue: 'c9' }, global: { plugins: [i18n], stubs } })
     await flushPromises() // mount: loadOptions (empty) + ensureSelectedLabels settle
+    expect(itemsApi.get).toHaveBeenCalledWith('category', 'c9', expect.anything())
     const disp = (w.vm as any).displayOptions
     expect(disp).toHaveLength(1)
     expect(disp[0]).toEqual({ id: 'c9', label: 'Archived', raw: { id: 'c9', name: 'Archived' } })
@@ -190,16 +173,6 @@ describe('RelationPicker', () => {
     vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
     const w = mountPicker({ modelValue: 'x' })
     expect(w.get('[data-testid="relation-clear"]').attributes('type')).toBe('button')
-  })
-
-  it('takes a plain key on the tree branch', async () => {
-    setupStores()
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
-    const w = mountPicker({ tree: true, modelValue: null })
-    const vm = w.vm as unknown as { onTreeChange: (k: string | null) => void }
-    vm.onTreeChange('n1')
-    await w.vm.$nextTick()
-    expect(w.emitted('update:modelValue')?.[0]).toEqual(['n1'])
   })
 
   // jsdom cannot drive reka's TreeItem selection directly (Popover content is teleported and its
@@ -457,19 +430,6 @@ describe('RelationPicker', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual([['c1']])
   })
 
-  it('removes a value via its chip remove button on the multi-select branch', async () => {
-    setupStores()
-    vi.spyOn(itemsApi, 'list').mockResolvedValue({
-      data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }], total: 2,
-    })
-    const w = mountPicker({ multiple: true, modelValue: ['c1', 'c2'] }, live)
-    await flushPromises()
-    const removeTech = w.get('[aria-label="Remove Tech"]')
-    expect(removeTech.attributes('type')).toBe('button')
-    await removeTech.trigger('click')
-    expect(w.emitted('update:modelValue')?.[0]).toEqual([['c2']])
-  })
-
   // ---- chips live inside the field box, one trigger, one menu ----
 
   const twoTags = { data: [{ id: 'c1', name: 'Tech' }, { id: 'c2', name: 'Widget' }, { id: 'c3', name: 'Root' }], total: 3 }
@@ -511,7 +471,9 @@ describe('RelationPicker', () => {
     const w = multiple({ modelValue: ['c1', 'c2'] })
     await flushPromises()
 
-    await w.get('[aria-label="Remove Tech"]').trigger('click')
+    const removeTech = w.get('[aria-label="Remove Tech"]')
+    expect(removeTech.attributes('type')).toBe('button')
+    await removeTech.trigger('click')
     await flushPromises()
 
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['c2']])

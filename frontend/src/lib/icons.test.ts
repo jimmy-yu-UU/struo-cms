@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LayoutGrid, Images, Settings, Trash2, Pencil, File as FileIcon, Folder, Tag, ChevronRight } from '@lucide/vue'
+import { LayoutGrid, Images, Settings, Trash2, Pencil, File as FileIcon, Folder, Tag, ChevronRight, Newspaper } from '@lucide/vue'
 import { resolveIcon } from './icons'
 
 describe('resolveIcon', () => {
@@ -16,7 +16,7 @@ describe('resolveIcon', () => {
 
   // Backend [CmsCollection(Icon = "...")] carries a semantic name, not a CSS class.
   it('resolves the semantic names the backend emits', () => {
-    expect(resolveIcon('article')).toBeDefined()
+    expect(resolveIcon('article')).toBe(Newspaper)
     expect(resolveIcon('folder')).toBe(Folder)
     expect(resolveIcon('tag')).toBe(Tag)
   })

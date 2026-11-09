@@ -14,17 +14,10 @@ describe('createLatestWins', () => {
   it('only the most recently issued token is current', () => {
     const lw = createLatestWins()
     const first = lw.next()
+    expect(lw.isCurrent(first)).toBe(true)
     const second = lw.next()
     expect(lw.isCurrent(first)).toBe(false)
     expect(lw.isCurrent(second)).toBe(true)
-  })
-
-  it('a freshly issued token is current until the next one is issued', () => {
-    const lw = createLatestWins()
-    const t = lw.next()
-    expect(lw.isCurrent(t)).toBe(true)
-    lw.next()
-    expect(lw.isCurrent(t)).toBe(false)
   })
 
   it('independent instances do not share state', () => {

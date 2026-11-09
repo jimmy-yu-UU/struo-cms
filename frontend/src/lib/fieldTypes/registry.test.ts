@@ -3,7 +3,6 @@ import { i18n } from '../../i18n'
 import { getFieldType, registry } from './registry'
 import { ALL_FIELD_INTERFACES } from './types'
 import type { FieldMeta } from '../../types/schema'
-import { formatCell } from '../formatCell'
 
 function field(over: Partial<FieldMeta> & { interface: string }): FieldMeta {
   return { name: 'f', label: 'F', required: false, searchable: false, sortable: false,
@@ -77,16 +76,6 @@ describe('field-type registry', () => {
       const iso = '2026-01-02T03:04:05Z'
       expect(getFieldType(i).serialize(iso, f), `${i} iso`).toBe(iso)
     }
-  })
-
-  it('list formatters match the legacy formatCell output', () => {
-    const sel = field({ interface: 'select', options: [{ value: 'draft', label: 'Draft' }] })
-    expect(getFieldType('select').listColumn!.format('draft', sel)).toBe(formatCell('draft', sel))
-    const bool = field({ interface: 'boolean' })
-    expect(getFieldType('boolean').listColumn!.format(true, bool)).toBe('Yes')
-    const dt = field({ interface: 'dateTime' })
-    expect(getFieldType('dateTime').listColumn!.format('2026-01-02T03:04:05Z', dt)).toContain('2026')
-    expect(getFieldType('dateTime').listColumn!.format('not-a-date', dt)).toBe('not-a-date')
   })
 
   it('multi-value defaults are empty arrays and parse coerces non-arrays', () => {

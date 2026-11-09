@@ -59,11 +59,6 @@ describe('field components (simple inputs)', () => {
     expect(w.get('textarea').attributes('maxlength')).toBe('20')
   })
 
-  it('NumberField renders a numeric input', () => {
-    const w = mount(NumberField, { props: { field: field({ interface: 'number' }), modelValue: 3 } })
-    expect(w.find('input').exists()).toBe(true)
-  })
-
   // A bare `find('input')` also passes for a hand-rolled <input>, so assert the vendored
   // composition's own data-slot hook instead.
   it('NumberField renders the vendored number-field input', () => {
@@ -304,11 +299,6 @@ describe('field components (simple inputs)', () => {
     const label = w.get('input[type="time"]').attributes('aria-label')
     expect(label).toContain('時刻')
     expect(label).not.toContain('time')
-  })
-
-  it('TextField renders a real text input', () => {
-    const w = mount(TextField, { props: { field: field({ interface: 'text' }), modelValue: 'x' } })
-    expect(w.find('input').exists()).toBe(true)
   })
 })
 

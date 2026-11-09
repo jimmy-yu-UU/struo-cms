@@ -297,8 +297,9 @@ describe('JunctionLinksEditor', () => {
 
     await orderButtons(w, 'move-up')[1].trigger('click')
     expect(idsOf(w)).toEqual(['t2', 't1'])
+    await w.setProps({ modelValue: w.emitted('update:modelValue')!.at(-1)![0] })
     await orderButtons(w, 'move-down')[0].trigger('click')
-    expect(idsOf(w)).toEqual(['t2', 't1'])
+    expect(idsOf(w)).toEqual(['t1', 't2'])
   })
 
   it('shows a disabled field read-only: no add picker, and the order and remove buttons are inactive', async () => {

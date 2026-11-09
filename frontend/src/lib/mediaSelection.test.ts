@@ -52,16 +52,6 @@ describe('toggleSelection', () => {
     expect(next.folders).not.toBe(sel.folders)
   })
 
-  it('returns fresh array references even when only one side actually changes', () => {
-    const files: string[] = []
-    const folders: string[] = []
-    const sel: MovePayload = { files, folders }
-    const next = toggleSelection(sel, 'file', 'f1')
-    // folders was untouched by this call but must still be a new array, not the same reference,
-    // per the repository's immutability rule ("new arrays and a new object every call").
-    expect(next.folders).not.toBe(folders)
-    expect(next.folders).toEqual([])
-  })
 })
 
 describe('removeFromSelection', () => {

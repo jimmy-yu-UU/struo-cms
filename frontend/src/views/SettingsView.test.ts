@@ -212,8 +212,11 @@ describe('SettingsView', () => {
   it('does not prompt for a non-admin even if the underlying refs were somehow dirty', async () => {
     // Non-admins never see the editable inputs, but the guard explicitly checks isAdmin too
     // (spec: "while dirty (and admin)") as a defensive belt-and-suspenders check.
+    seedAdmin()
+    const wrapper = mountView()
+    await wrapper.find('input').setValue('changed')
+    expect((wrapper.vm as unknown as { dirty: boolean }).dirty).toBe(true)
     useAuthStore().user = { id: '1', isSuperAdmin: false, permissions: {} } as never
-    mountView()
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
