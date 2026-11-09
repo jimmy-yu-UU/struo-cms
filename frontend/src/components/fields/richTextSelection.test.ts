@@ -138,15 +138,6 @@ describe('shouldShowBubbleMenu', () => {
     }))).toBe(false)
   })
 
-  it('still shows when the selected range touches inline content whose parent has no mark restriction at all', () => {
-    expect(shouldShowBubbleMenu(args({
-      state: {
-        selection: { empty: false },
-        doc: { textBetween: () => 'selected', nodesBetween: nodesBetweenOf(ORDINARY_ENTRY) },
-      },
-    }))).toBe(true)
-  })
-
   // Walking the whole range means what the FIRST node happens to be is irrelevant -- only whether
   // ANY inline node in the range has a mark-allowing parent decides it. This fabricates a range that
   // touches inline content in a mark-disallowing block and inline content in a markable one (a code

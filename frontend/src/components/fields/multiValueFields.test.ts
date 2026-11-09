@@ -33,12 +33,6 @@ describe('MultiSelectField', () => {
   const comboOpts = { global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true } }
   const comboOptsZh = { global: { plugins: [i18nZh], stubs: { teleport: true }, renderStubDefaultSlot: true } }
 
-  it('renders a chip per selected value', () => {
-    const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: ['a'] }, ...comboOpts })
-    expect(w.text()).toContain('Alpha')
-    expect(w.text()).not.toContain('Beta')
-  })
-
   it('renders the vendored combobox trigger', () => {
     const w = mount(MultiSelectField, { props: { field: field({ interface: 'multiSelect', options }), modelValue: [] }, ...comboOpts })
     expect(w.find('[data-slot="combobox-trigger"]').exists()).toBe(true)

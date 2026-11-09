@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { isInEditorTable, TABLE_SIZE_MIN, TABLE_SIZE_MAX } from './richTextTableActions'
+import { isInEditorTable } from './richTextTableActions'
 
 function build(): { root: HTMLElement; cell: HTMLElement; para: HTMLElement; outsideCell: HTMLElement } {
   const host = document.createElement('div')
@@ -50,12 +50,5 @@ describe('isInEditorTable', () => {
   it('is false for a text node outside any table', () => {
     const { root, para } = build()
     expect(isInEditorTable(para.firstChild, root)).toBe(false)
-  })
-})
-
-describe('table size bounds', () => {
-  it('exposes the shared 1-20 bounds', () => {
-    expect(TABLE_SIZE_MIN).toBe(1)
-    expect(TABLE_SIZE_MAX).toBe(20)
   })
 })

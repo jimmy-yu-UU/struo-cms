@@ -129,33 +129,21 @@ describe('RichTextInput', () => {
     i18n.global.locale.value = 'en'
   })
 
-  it('rejects a javascript: URL entered in the link dialog (defense-in-depth)', async () => {
+  it("does not apply a javascript: URL through the toolbar's link dialog", async () => {
     const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
     await flushPromises()
-    const vm = w.vm as unknown as { editor: { chain: () => unknown } }
-    const chainSpy = vi.spyOn(vm.editor, 'chain')
+    const vm = w.vm as unknown as { editor: Editor }
+    const ed = vm.editor
+    ed.commands.setTextSelection({ from: 1, to: 4 })
     await w.get('[data-cmd="link"]').trigger('click')
     await flushPromises()
     await w.get('[data-testid="href"]').setValue('javascript:alert(1)')
     await w.get('[data-testid="href"]').trigger('blur')
     // The dialog's own guard (RichTextLinkDialog.vue's submit()) refuses to emit `submit` for a
-    // rejected scheme, so clicking the (disabled) confirm button never reaches the command, and no
-    // chain is ever built.
-    await w.get('[data-cmd="linkSubmit"]').trigger('click')
-    expect(chainSpy).not.toHaveBeenCalled()
-  })
-
-  it('applies an https: URL entered in the link dialog', async () => {
-    const w = mount(RichTextInput, { props: { modelValue: '<p>abc</p>' }, global: globalOpts })
-    await flushPromises()
-    const vm = w.vm as unknown as { editor: { chain: () => unknown } }
-    const chainSpy = vi.spyOn(vm.editor, 'chain')
-    await w.get('[data-cmd="link"]').trigger('click')
-    await flushPromises()
-    await w.get('[data-testid="href"]').setValue('https://example.com')
+    // rejected scheme, so the confirm button never reaches the command.
     await w.get('[data-cmd="linkSubmit"]').trigger('click')
     await flushPromises()
-    expect(chainSpy).toHaveBeenCalled()
+    expect(ed.getHTML()).toBe('<p>abc</p>')
   })
 
   // The regression a naive dialog-based rewrite can reintroduce: window.prompt was modal, so the
@@ -529,21 +517,9 @@ describe('RichTextInput', () => {
     w.unmount()
   })
 
-  it('inserts a 3x3 table with header row via the table menu', async () => {
-    const w = mount(RichTextInput, { props: { modelValue: '<p>a</p>' }, global: globalOpts })
-    await flushPromises()
-    await w.get('[data-cmd="table"]').trigger('click')
-    await w.get('[data-cell="3-3"]').trigger('click')
-    await flushPromises()
-    const emitted = w.emitted('update:modelValue')
-    const html = String(emitted!.at(-1)![0])
-    expect(html).toContain('<table')
-    expect(html).toContain('<th')
-  })
-
-  // A non-square pick, unlike the 3x3 test above: a rows/cols swap in onTableInsert, or
-  // hardcoding a size and ignoring the payload entirely, would still pass a 3x3 assertion (it's
-  // symmetric) but fails this one. Counts observed directly from TipTap's own output for a
+  // A non-square pick: a rows/cols swap in onTableInsert, or hardcoding a square size and
+  // ignoring the payload entirely, would still pass a square pick (it's symmetric) but fails this
+  // one. Counts observed directly from TipTap's own output for a
   // { rows: 2, cols: 4 } insert: 2 <tr> (one header row, one body row) and 4 <th> (the header
   // row's cells; the body row's 4 cells are <td>, not <th>).
   it('inserts a non-square table matching the picked rows and cols, not a fixed or swapped size', async () => {

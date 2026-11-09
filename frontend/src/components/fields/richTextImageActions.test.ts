@@ -43,8 +43,9 @@ describe('isEditorImage', () => {
     expect(isEditorImage(img, root)).toBe(img)
   })
 
-  // Fails if this predicate is rewritten with closest(): the node view's wrapper divs would then
-  // make a click beside the image count as a click on it.
+  // Fails if this predicate is rewritten to search descendants (for example querySelector('img')):
+  // the node view's wrapper divs contain the image, so a click beside it would count as a click
+  // on it.
   it('returns null for a click on the node view\'s wrapping container, not the <img> itself', () => {
     const { root, container, wrapper } = build()
     expect(isEditorImage(container, root)).toBeNull()
