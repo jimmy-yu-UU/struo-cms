@@ -179,6 +179,18 @@ public class DomainErrorMapTests
     public void StatusFor_maps_each_code_to_its_http_status(string code, int expected)
         => DomainErrorMap.StatusFor(code).Should().Be(expected);
 
+    // The status-to-code reverse map keeps 400 on the generic code; INVALID_VERSION comes from the
+    // exception path only.
+    [Fact]
+    public void ForStatus_400_is_BAD_USER_INPUT()
+        => ErrorCodes.ForStatus(400).Should().Be("BAD_USER_INPUT");
+
+    // Inline ApiResults.Fail callers (for example the duplicate-email answer) get the generic CONFLICT;
+    // VERSION_CONFLICT comes from the exception path only.
+    [Fact]
+    public void ForStatus_409_is_generic_CONFLICT()
+        => ErrorCodes.ForStatus(409).Should().Be("CONFLICT");
+
     [Fact]
     public void ForStatus_413_is_PAYLOAD_TOO_LARGE()
         => ErrorCodes.ForStatus(413).Should().Be("PAYLOAD_TOO_LARGE");
