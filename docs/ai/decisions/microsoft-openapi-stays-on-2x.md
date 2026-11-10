@@ -13,9 +13,10 @@ Nothing in this repository touches the `Microsoft.OpenApi` API surface; the host
 
 ## Why
 
-A transitive reference takes whatever version `Microsoft.AspNetCore.OpenApi` allows, and only a direct
-reference lets the central pin choose a version above that package's own lower bound. The pin therefore
-works as a floor for security fixes in `Microsoft.OpenApi`.
+NuGet resolves a transitive dependency to the lowest version the declaring package's range permits, so
+a transitive `Microsoft.OpenApi` sits at the lower bound `Microsoft.AspNetCore.OpenApi` declares. Only a
+direct reference lets the central pin choose a version above that bound. The pin therefore works as a
+floor for security fixes in `Microsoft.OpenApi`.
 
 The 2.x ceiling comes from `Microsoft.AspNetCore.OpenApi`, which is compiled against 2.x: its nuspec for
 `net10.0` declares `Microsoft.OpenApi` as `[2.12.2, 3.0.0)`. A 3.x pin sits outside that range, and
@@ -29,15 +30,27 @@ holds `<dependency id="Microsoft.OpenApi" version="[2.12.2, 3.0.0)" exclude="Bui
 the `net10.0` group. `Directory.Packages.props` pins `Microsoft.AspNetCore.OpenApi` at 10.0.14 and
 `Microsoft.OpenApi` at 2.13.0, so the pin is inside that range.
 
-The security floor is recorded from the earlier explanation in `Directory.Packages.props`, not
-re-measured: `Microsoft.OpenApi` 2.0.0 carries advisory GHSA-v5pm-xwqc-g5wc, patched from 2.7.5.
+The security floor was not re-checked on 2026-11-10. It rests on advisory GHSA-v5pm-xwqc-g5wc:
+`Microsoft.OpenApi` 2.0.0 carries it, patched from 2.7.5.
+
+Recorded when the pin was introduced, against `Microsoft.AspNetCore.OpenApi` 10.0.10, and not
+re-measured against 10.0.14:
+
+- That version declared a bare `>= 2.0.0` dependency with no upper bound, so NuGet resolved 3.x.
+- Its own `XmlCommentGenerator` then emitted assignments to `IOpenApiMediaType.Example`, which 3.x made
+  read-only: two CS0200 errors in a generated file, verified locally and in CI.
+- Excluding the generator would trade the build error for a runtime one, because the shipped assembly is
+  compiled against 2.x.
+- Upstream's fix was to forbid 3.x rather than enable it (dotnet/aspnetcore#64317 and dotnet/aspnetcore#67930).
 
 ## Unknowns
 
 Whether the direct pin is still needed is open. `Microsoft.AspNetCore.OpenApi` 10.0.14 already requires
-2.12.2 or newer, which is above the 2.7.5 advisory fix, so a transitive resolution would also land on a
-patched version today. The pin keeps the version under the central file's control if a later
+2.12.2 or newer, which is above the 2.7.5 advisory fix, so a transitive resolution at 10.0.14 would also
+land on a patched version. The pin keeps the version under the central file's control if a later
 `Microsoft.AspNetCore.OpenApi` lowers its bound.
+
+What a 3.x pin does against the 10.0.14 nuspec range `[2.12.2, 3.0.0)` has not been tried.
 
 Whether `Microsoft.AspNetCore.OpenApi` 11.0.x ships against `Microsoft.OpenApi` 3.x is expected from
 upstream's direction and not checked. Revisit the pin and the ignore rule when the project moves to

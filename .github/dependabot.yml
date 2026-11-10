@@ -163,13 +163,13 @@ updates:
       # NuGet updates are not held up behind it.
       dotnet-tools:
         patterns: ["dotnet-sonarscanner", "dotnet-coverage"]
+        update-types: ["minor", "patch"]
       backend-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     ignore:
-      # Microsoft.OpenApi stays on 2.x on .NET 10: Microsoft.AspNetCore.OpenApi
-      # declares [2.12.2, 3.0.0) for it. Why, and when to delete this rule:
-      # docs/ai/decisions/microsoft-openapi-stays-on-2x.md
+      # Microsoft.OpenApi stays on 2.x while the project targets .NET 10. Why, and
+      # when to delete this rule: docs/ai/decisions/microsoft-openapi-stays-on-2x.md
       - dependency-name: "Microsoft.OpenApi"
         update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
