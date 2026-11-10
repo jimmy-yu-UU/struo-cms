@@ -155,6 +155,14 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     groups:
+      # The two tools in .config/dotnet-tools.json run only in the sonar-backend
+      # job, which does not run on a Dependabot pull request. Dependabot assigns
+      # a dependency to the first group whose patterns match, so this group sits
+      # ahead of backend-minor-patch: a tool update gets its own pull request,
+      # which dependabot-auto-merge.yml leaves for manual review, and the other
+      # NuGet updates are not held up behind it.
+      dotnet-tools:
+        patterns: ["dotnet-sonarscanner", "dotnet-coverage"]
       backend-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]

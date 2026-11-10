@@ -18,10 +18,16 @@ name: Dependabot auto-merge
 # standing example: correctly red, but understanding *why* took reading upstream
 # issue threads, not reading a CI log.
 #
+# A pull request that touches a tool in .config/dotnet-tools.json is left for review
+# even when it is a NuGet patch or minor. Those tools run only in the sonar-backend
+# job, which does not run on a Dependabot pull request, so the first run of an
+# updated tool happens after the merge, in the environment that holds SONAR_TOKEN.
+#
 # Note this only enables auto-merge - it does not merge. The ruleset on main still
-# has to be satisfied: backend and frontend green, and the branch up to date with
-# main (strict policy). Dependabot rebases its own branches when main moves, so a
-# pull request that goes stale resolves itself at the cost of another CI run.
+# has to be satisfied: the checks backend, frontend, e2e, docker, docs,
+# sonar-backend and sonar-frontend, and the branch up to date with main (strict
+# policy). Dependabot rebases its own branches when main moves, so a pull request
+# that goes stale resolves itself at the cost of another CI run.
 
 on: pull_request
 
@@ -53,7 +59,9 @@ jobs:
         if: >-
           steps.metadata.outputs.package-ecosystem == 'nuget' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+           steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
+          !contains(steps.metadata.outputs.dependency-names, 'dotnet-sonarscanner') &&
+          !contains(steps.metadata.outputs.dependency-names, 'dotnet-coverage')
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -66,9 +74,12 @@ jobs:
         if: >-
           !(steps.metadata.outputs.package-ecosystem == 'nuget' &&
             (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-             steps.metadata.outputs.update-type == 'version-update:semver-minor'))
+             steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
+            !contains(steps.metadata.outputs.dependency-names, 'dotnet-sonarscanner') &&
+            !contains(steps.metadata.outputs.dependency-names, 'dotnet-coverage'))
         run: |
-          echo "Left for manual review - auto-merge covers NuGet patch/minor only."
+          echo "Left for manual review - auto-merge covers NuGet patch/minor only,"
+          echo "and never a pull request that updates a dotnet tool (they run only in sonar-backend)."
           echo "  ecosystem:   ${{ steps.metadata.outputs.package-ecosystem }}"
           echo "  update type: ${{ steps.metadata.outputs.update-type }}"
           echo "  packages:    ${{ steps.metadata.outputs.dependency-names }}"
