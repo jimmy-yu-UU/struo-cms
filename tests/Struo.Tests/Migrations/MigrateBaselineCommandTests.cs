@@ -245,11 +245,10 @@ public sealed class MigrateBaselineCommandTests : IDisposable
 
     public static TheoryData<string> Backends => LiveBackend.Names();
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Baseline_joins_a_v08_database_on_every_live_backend(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
         var db = Client(dbType, conn, prefix);

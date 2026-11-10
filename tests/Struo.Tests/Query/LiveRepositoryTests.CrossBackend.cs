@@ -5,6 +5,7 @@ using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Query;
 using Struo.Tests.Fixtures;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -20,11 +21,9 @@ public sealed partial class LiveRepositoryTests
         { "PostgreSQL", "SqlServer" }, { "SqlServer", "PostgreSQL" },
     };
 
-    [Theory, MemberData(nameof(BackendPairs))]
+    [LiveBackendTheory, MemberData(nameof(BackendPairs))]
     public async Task Own_field_facet_counts_bind_on_both_backends_of_one_process(string first, string second)
     {
-        if (!LiveBackendConfigured(first) || !LiveBackendConfigured(second)) return;
-
         // SqlSugar keeps one row binder per result type and column signature for the whole process;
         // dropping the FacetRow<string> binders makes the first backend below the one that builds it.
         ReflectionInoCore<IDataReaderEntityBuilder<FacetRow<string>>>.GetInstance().RemoveAllCache();
@@ -32,9 +31,6 @@ public sealed partial class LiveRepositoryTests
         (await StatusFacet(first)).Should().Equal(new FacetBucket("published", 2), new FacetBucket("draft", 1));
         (await StatusFacet(second)).Should().Equal(new FacetBucket("published", 2), new FacetBucket("draft", 1));
     }
-
-    private static bool LiveBackendConfigured(string backend) =>
-        !string.IsNullOrWhiteSpace(Support.LiveBackend.Get(backend).Connection);
 
     private async Task<IReadOnlyList<FacetBucket>> StatusFacet(string backend)
     {

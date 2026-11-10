@@ -27,11 +27,10 @@ public sealed class CoreMigrationsLiveTests
             if (db.DbMaintenance.IsAnyTable(table, false)) db.DbMaintenance.DropTable(table);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task The_core_migrations_satisfy_the_schema_checker(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
         var db = CoreMigrationHarness.Client(dbType, conn, prefix);
@@ -45,11 +44,10 @@ public sealed class CoreMigrationsLiveTests
         finally { Drop(db, prefix); }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task The_core_migrations_build_the_schema_CodeFirst_builds(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var codeFirstPrefix = NewPrefix();
         var migratedPrefix = NewPrefix();

@@ -51,12 +51,11 @@ public sealed class StruoMigrationTypeTests
         ["MariaDb"] = ("datetime", "longtext", ("datetime", 6, 0)),
     };
 
-    [Theory, MemberData(nameof(LiveBackends))]
+    [LiveBackendTheory, MemberData(nameof(LiveBackends))]
     public async Task Shapes_resolve_to_the_live_backend_literals(string backend)
     {
-        var (_, db, connection) = LiveBackend.Get(backend);
+        var (_, db, conn) = LiveBackend.Get(backend).Configured();
         var (tz, longText, timestamp) = LiveLiterals[backend];
-        if (connection is not { } conn) return;
         LiveDatabases.GuardDisposable(conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
         var client = new SqlSugarClient(new ConnectionConfig

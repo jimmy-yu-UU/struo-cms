@@ -19,6 +19,16 @@ public sealed record LiveBackend(string Name, StruoDbType Db, string? Connection
 
     public static LiveBackend Get(string name) => All.Single(b => b.Name == name);
 
+    /// <summary>The resolved case of a backend whose connection is configured; throws when it is not.</summary>
+    /// <remarks>
+    /// Tests carry <c>LiveBackendTheory</c> or <c>LiveBackendFact</c>, which skip an unconfigured backend
+    /// before the body runs, so this is the body's way to read the connection as non-null.
+    /// </remarks>
+    public (string Name, StruoDbType Db, string Connection) Configured() =>
+        Connection is { Length: > 0 } connection
+            ? (Name, Db, connection)
+            : throw new InvalidOperationException($"{Name} is not configured; the test should have been skipped.");
+
     /// <summary>Theory data of backend names, restricted to <paramref name="names"/> when given.</summary>
     public static TheoryData<string> Names(params string[] names) =>
         new(All.Where(b => names.Length == 0 || names.Contains(b.Name)).Select(b => b.Name));

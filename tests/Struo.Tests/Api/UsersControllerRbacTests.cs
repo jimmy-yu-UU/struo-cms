@@ -10,6 +10,15 @@ namespace Struo.Tests.Api;
 public class UsersControllerRbacTests(ApiFactory factory)
 {
     [Fact]
+    public async Task NonAdmin_creating_a_user_is_403()
+    {
+        var (client, _) = await factory.CreateEditorClientAsync(readCollections: [], writeCollections: []);
+        var resp = await client.PostAsJsonAsync("/api/users",
+            new { email = "new@struo.test", password = "password-123", name = "N" });
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Admin_creating_a_user_is_201()
     {
         var client = await factory.CreateAuthenticatedClientAsync();

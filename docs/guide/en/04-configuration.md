@@ -771,8 +771,8 @@ Each connection turns on that backend's live tests: the migration tests, `LiveRe
 `TestDatabaseLiveTests`, plus `PostgresOnlyTests` on PostgreSQL. The database it names must contain
 the word `test` and must already exist, and the login needs rights to create and drop databases.
 
-Left empty, that backend's live tests return early and pass, so judge from each test's duration
-whether it really connected. The SQLite database tests are unaffected and still run.
+Left empty, that backend's live tests are reported as skipped, and the reason names the missing
+variable. The SQLite database tests are unaffected and still run.
 
 The environment variable `STRUO_TEST_BACKEND` selects the backend the tests run on: `Sqlite` (the
 default), `PostgreSQL`, `SqlServer`, `MySql` or `MariaDb`. A live backend also moves the API test

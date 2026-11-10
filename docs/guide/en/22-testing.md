@@ -67,9 +67,8 @@ A backend with a connection configured runs these suites:
 - `PostgresOnlyTests`, the tests that hold only on PostgreSQL;
 - `TestDatabaseLiveTests`, which cover creating and cleaning up the test databases themselves.
 
-When a connection is empty, every live test for that backend passes outright rather than being
-marked skipped — a green line in the test report doesn't mean it ever connected to that database.
-Judge by how long each test took.
+When a connection is empty, every live test for that backend is reported as skipped, and the skip
+reason names the environment variable or setting key that would enable it.
 
 The tests only accept a connection string whose database name contains `test` (case-insensitive);
 a name that doesn't match is refused, so the tests can't connect to a database that's actually in
@@ -277,7 +276,7 @@ run at the repository root; `frontend` and `docs` each run inside their own subd
 `backend`: `dotnet restore`, `dotnet build --no-restore --configuration Release`,
 `dotnet test --no-build --configuration Release --verbosity normal`, running every backend test
 project. CI sets no `STRUO_TEST_*` connection and no `STRUO_TEST_BACKEND`, so it runs on SQLite
-only and every live suite takes its pass-outright path here.
+only, and every live test is reported as skipped here.
 
 `frontend`: inside the `frontend` directory, `pnpm install --frozen-lockfile --ignore-scripts`,
 then `pnpm test`, then `pnpm build` (`vue-tsc -b && vite build`). Beyond the unit tests, this
@@ -369,8 +368,8 @@ CI runs `pnpm e2e`, the `core` project, in the `e2e` job, but never `pnpm e2e:sa
 `pnpm e2e:all`: the `sample` project needs the Blog sample opted in, which the shipped template
 is not. Run it locally before merging a change that touches the sample's flows.
 
-CI also never sets a `STRUO_TEST_*` connection, so the live suites always take their pass-outright
-path here, unlike locally with a real database connection wired up.
+CI also never sets a `STRUO_TEST_*` connection, so the live tests always show as skipped here, unlike
+locally with a real database connection wired up.
 
 The schema contract needs no job of its own: each side rides along inside `backend`'s
 `dotnet test` and `frontend`'s `pnpm test`.

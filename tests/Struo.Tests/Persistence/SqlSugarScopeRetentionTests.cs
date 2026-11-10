@@ -1,6 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Tests.Support;
@@ -19,6 +22,17 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
     private const string MultiRootQuery =
         "{ fxArticles { items { id } } fxCategories { items { id } } fxTags { items { id } } }";
 
+    // The readiness probe keeps its production timeout (3 seconds) by default. These tests count registry
+    // keys, not probe latency, so their hosts give a slow first connection room to finish.
+    private const string ReadinessTimeoutSeconds = "30";
+
+    private static WebApplicationFactory<Program> WithRelaxedReadiness(WebApplicationFactory<Program> host)
+        => host.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:ReadinessTimeoutSeconds"] = ReadinessTimeoutSeconds,
+            })));
+
     [Fact]
     public void ISqlSugarClient_is_one_instance_for_the_whole_host()
     {
@@ -35,7 +49,8 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
     public async Task A_mix_of_requests_adds_no_key_to_SqlSugars_static_registries()
     {
         using var admin = await factory.CreateAuthenticatedClientAsync();
-        using var anon = factory.CreateClient();
+        using var relaxed = WithRelaxedReadiness(factory);
+        using var anon = relaxed.CreateClient();
         var requests = new Func<Task<HttpResponseMessage>>[]
         {
             () => admin.GetAsync("/api/items/fxCategory"),
@@ -59,7 +74,8 @@ public sealed class SqlSugarScopeRetentionTests(ApiFactory factory) : IClassFixt
     public async Task The_readiness_check_never_registers_a_client_with_the_singleton_scope()
     {
         await using var fresh = new ApiFactory();
-        using var anon = fresh.CreateClient();
+        using var relaxed = WithRelaxedReadiness(fresh);
+        using var anon = relaxed.CreateClient();
         var (asyncBefore, threadBefore) = (SqlSugarStaticContext.AsyncKeys, SqlSugarStaticContext.ThreadKeys);
 
         await Drive([() => anon.GetAsync("/health/ready")], 200);

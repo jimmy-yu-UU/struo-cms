@@ -33,11 +33,10 @@ public sealed class IndexCatalogLiveTests
         indexes.Should().OnlyContain(i => i.Columns.All(c => string.CompareOrdinal(c, c.ToLowerInvariant()) == 0));
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Catalog_reports_unique_key_order_non_unique_and_primary_key_indexes(string backend)
     {
-        var (_, db, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, db, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var client = new SqlSugarClient(new ConnectionConfig
             { DbType = DbTypeMapper.Map(db), ConnectionString = conn, IsAutoCloseConnection = true });

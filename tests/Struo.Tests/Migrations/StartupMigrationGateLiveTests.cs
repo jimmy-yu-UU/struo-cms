@@ -33,11 +33,10 @@ public sealed class StartupMigrationGateLiveTests
         await StartupMigrationGate.RunAsync(db, host, options, isDevelopment: true, FrameworkEntityTypes.All, logger, default);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Two_gates_started_together_apply_each_core_migration_once_and_both_pass(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var prefix = "t" + Guid.NewGuid().ToString("N")[..8] + "_";
         var (first, second) = (new ListLogger(), new ListLogger());

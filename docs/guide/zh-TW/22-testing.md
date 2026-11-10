@@ -56,8 +56,8 @@
 - `PostgresOnlyTests`：只在 PostgreSQL 上成立的測試。
 - `TestDatabaseLiveTests`：測試資料庫本身的建立與清理。
 
-連線留空時，那個後端的實機測試每一個都直接判定通過，而不是標成略過——測試報告上的綠燈，不代
-表真的連過那個資料庫，要看每個測試花的時間來判斷。
+連線留空時，那個後端的實機測試每一個都會顯示為略過，略過原因寫明要設定哪個環境變數或設定鍵
+才會啟用。
 
 測試只認資料庫名稱含 `test`（大小寫不分）的連線字串，名稱對不上就拒絕連上去，免得測試接到一
 個正在用的資料庫。設定的資料庫要事先建好，登入帳號要有建立與刪除資料庫的權限：
@@ -230,7 +230,7 @@ PowerShell 下設完這個環境變數要記得清掉：它會留在同一個終
 `backend`：`dotnet restore`、`dotnet build --no-restore --configuration Release`、
 `dotnet test --no-build --configuration Release --verbosity normal`，跑每一個後端測試專
 案。CI 不設定任何 `STRUO_TEST_*` 連線，也不設 `STRUO_TEST_BACKEND`，所以這裡只跑 SQLite，每
-一組實機測試都直接判定通過。
+一個實機測試都顯示為略過。
 
 `frontend`：在 `frontend` 目錄下 `pnpm install --frozen-lockfile --ignore-scripts`，然後
 `pnpm test`，然後 `pnpm build`（`vue-tsc -b && vite build`）。單元測試之外，這個 build 還
@@ -313,8 +313,8 @@ CI 在 `e2e` job 裡跑 `pnpm e2e`，也就是 `core` 專案，但不會跑 `pnp
 `pnpm e2e:all`：`sample` 專案需要先啟用 Blog 範例，而出廠的模板沒有。改到範例相關流程的變更，
 合併前請在本機跑一次。
 
-CI 也不會設定任何 `STRUO_TEST_*` 連線，實機測試因此在這裡永遠是直接判定通過，跟本機接了真正的
-資料庫連線時不一樣。
+CI 也不會設定任何 `STRUO_TEST_*` 連線，實機測試因此在這裡永遠顯示為略過，跟本機接了真正的資料庫
+連線時不一樣。
 
 schema 契約不需要自己的 job：兩側各自搭在 `backend` 的 `dotnet test` 與 `frontend` 的
 `pnpm test` 裡。

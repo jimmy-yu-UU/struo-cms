@@ -13,11 +13,10 @@ public sealed class SchemaCheckerLiveTests
 {
     public static TheoryData<string> Backends => LiveBackend.Names();
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void A_codefirst_framework_schema_has_no_errors_and_a_dropped_unique_index_is_the_only_finding(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
 
         // The entity-info cache is keyed by prefix, so the prefix is unique per run and per backend.

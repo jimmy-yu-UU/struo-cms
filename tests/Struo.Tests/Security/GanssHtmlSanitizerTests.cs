@@ -180,13 +180,21 @@ public class GanssHtmlSanitizerTests
     [InlineData("<a href=\"JaVaScRiPt:alert(1)\">x</a>")]
     [InlineData("<a href=\"java&#09;script:alert(1)\">x</a>")]
     [InlineData("<a href=\"data:text/html,<script>alert(1)</script>\">x</a>")]
+    [InlineData("<a href=\"data:text/javascript,alert(1)\">x</a>")]
+    [InlineData("<a href=\"&#106;avascript:alert(1)\">x</a>")]
+    [InlineData("<a href=\"&#x6A;avascript:alert(1)\">x</a>")]
+    [InlineData("<a href=\"vbscript:msgbox(1)\">x</a>")]
+    [InlineData("<a href=\"   javascript:alert(1)\">x</a>")]
+    [InlineData("<a href=\"%6Aavascript:alert(1)\">x</a>")]
+    [InlineData("<a href=\"java\0script:alert(1)\">x</a>")]
     public void Neutralizes_obfuscated_dangerous_href_schemes(string html)
     {
         var clean = _s.Sanitize(html);
         // The href itself must be gone: a substring check for "javascript:" misses mixed-case and
-        // control-character spellings that a browser still resolves to the same scheme.
-        clean.Should().NotContain("href", "no dangerous link target may survive")
-             .And.NotContain("<script", "no executable payload may survive");
+        // control-character spellings that a browser still resolves to the same scheme. Both checks
+        // ignore case so an upper-case HREF or SCRIPT cannot pass.
+        clean.Should().NotContainEquivalentOf("href", "no dangerous link target may survive")
+             .And.NotContainEquivalentOf("<script", "no executable payload may survive");
     }
 
     [Fact]
