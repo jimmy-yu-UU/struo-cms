@@ -14,9 +14,9 @@ export const DESTRUCTIVE_IMAGE_ACTIONS: ReadonlySet<ImageAction> = new Set<Image
  * Deliberately DOM-only, same reasoning as isInEditorTable: it takes the event target rather than
  * the editor, so it needs no layout and is testable in jsdom.
  *
- * Unlike isInEditorTable, this must NOT walk up via closest(): the image node view wraps every
- * <img> in two container divs, so closest('img') would also match a click that landed on the
- * wrapper beside the image. Only an event target that IS the <img> counts.
+ * Only an event target that IS the <img> counts. The image node view wraps every <img> in two
+ * container divs, so a search over descendants (for example querySelector('img')) would also match
+ * a click that landed on the wrapper beside the image.
  */
 export function isEditorImage(target: EventTarget | null, root: HTMLElement): HTMLImageElement | null {
   if (!(target instanceof HTMLImageElement)) return null

@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 // Live gate: a revert that hits 409 VERSION_CONFLICT.
 //
@@ -30,9 +31,6 @@ async function login(page: Page): Promise<void> {
 function labelMatch(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
 }
-function fieldByLabel(page: Page, label: string) {
-  return page.locator('.field', { has: page.getByText(labelMatch(label)) })
-}
 // Translatable fields (Title/Body) live inside ItemForm.vue's non-lazy <Tabs>: every locale's
 // TabPanel stays mounted (only `display:none` toggled), so an unscoped `.field` match resolves to
 // one wrapper per locale (strict-mode violation). Scope to `:visible` so only the active
@@ -42,12 +40,6 @@ function translatableFieldByLabel(page: Page, label: string) {
 }
 function titleInput(page: Page) {
   return translatableFieldByLabel(page, 'Title').locator('input')
-}
-// Status is a Select (role="combobox" trigger + role="option" overlay), not a text input.
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = fieldByLabel(page, 'Status')
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 
 // Create an article via the UI, then open it so the edit form (and its version token) is loaded.

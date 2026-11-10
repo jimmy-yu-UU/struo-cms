@@ -225,8 +225,8 @@ migration" section of [Chapter 21: Schema Management and Upgrades](21-schema-and
 Running this suite needs everything `pnpm e2e` itself needs — a running API, a reachable
 database, a seeded bootstrap administrator; see [Chapter 22: Testing and CI](22-testing.md) —
 plus the sample added to `Struo:ContentAssemblies`. The full prerequisites and each spec's
-seed-data notes are in `frontend/e2e/README.md`; `relations.spec.ts` in particular needs one
-`category` row and one `tag` row already on file — the sample itself carries no seed data.
+seed-data notes are in `frontend/e2e/README.md`; `relations.spec.ts` in particular creates and
+purges its own `category` and `tag` rows through the API — the sample itself carries no seed data.
 
 ## Removing the sample completely
 

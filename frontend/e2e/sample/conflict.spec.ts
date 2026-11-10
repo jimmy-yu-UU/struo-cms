@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 // Live gate: optimistic-concurrency (version) recovery.
 //
@@ -55,9 +56,6 @@ function labelMatch(label: string): RegExp {
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }
-function fieldByLabel(page: Page, label: string) {
-  return page.locator('.field', { has: page.getByText(labelMatch(label)) })
-}
 function titleInput(page: Page) {
   return translatableFieldByLabel(page, 'Title').locator('input')
 }
@@ -68,12 +66,6 @@ async function searchByField(page: Page, fieldLabel: string, value: string): Pro
   await page.getByRole('option', { name: fieldLabel, exact: true }).click()
   await page.getByRole('textbox', { name: 'Value' }).fill(value)
   await page.getByRole('button', { name: 'Search' }).click()
-}
-// Status is a Select (role="combobox" trigger + role="option" overlay), not a text input.
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = fieldByLabel(page, 'Status')
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 
 // Create an article via the UI (known-good path), then open it so the edit form is loaded with a
