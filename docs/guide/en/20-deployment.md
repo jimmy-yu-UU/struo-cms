@@ -57,7 +57,9 @@ warning does not stop startup, and no other backend runs the check.
 
 On PostgreSQL, set `SSL Mode=VerifyFull` in production: the driver encrypts the connection and
 validates the server's certificate and host name. When the certificate comes from a private CA or
-from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`.
+from the hosting provider's own CA, add `Root Certificate=/path/to/ca.crt`. `VerifyCA` validates the
+certificate without checking the host name. In Production, startup warns, as described below, when
+`SSL Mode` is neither `VerifyCA` nor `VerifyFull`; `VerifyFull` is the value to use.
 
 `SSL Mode=Require` only encrypts. It does not validate the certificate, so it does not stop a
 man-in-the-middle. Setting `Root Certificate` does not change that. `SSL Mode=Disable` is
@@ -337,14 +339,43 @@ agree.
 
 ## Logging
 
-Serilog configuration lives entirely under `Serilog:*`: one Console sink, plus a File sink writing
-to `logs/struo-.log`, rolling by date and allowing shared read/write access from multiple processes
-at once, with filenames shaped like `struo-YYYYMMDD.log`, one file per day.
+The host adds the Console and File sinks itself, from `Struo:Logging`. Levels and any further sink
+come from `Serilog:*`.
 
-The configuration is built once at startup; changing `Serilog:*` needs a process restart to take
-effect, and `appsettings.json`'s file-watching doesn't make them live. `UseSerilog` reads both
-`IConfiguration` and the DI container, so an enricher registered through DI is picked up and takes
-effect too.
+| Key | Values | Default |
+|---|---|---|
+| `Struo:Logging:ConsoleEnabled` | `true`, `false` | `true` |
+| `Struo:Logging:ConsoleFormat` | `Text`, `Json` | `Text` |
+| `Struo:Logging:FileEnabled` | `true`, `false` | `true` |
+
+`Text` prints one readable line per event, with the trace id before the message. `Json` prints one
+compact JSON object per event (`@t` timestamp, `@m` rendered message, `@l` level when not
+Information, `@tr` trace id, when there is one), which a log collector parses without a pattern. The
+format is matched ignoring case, and any other value, an undefined number such as `5` included,
+stops startup. `ConsoleEnabled` off adds no Console sink. With `FileEnabled` on, a File sink writes
+`logs/struo-.log`, rolling by date and allowing shared read/write access from multiple processes at
+once, with filenames shaped like `struo-YYYYMMDD.log`, one file per day. With it off, no file sink
+is added and no `logs/` directory is created.
+
+A container platform collects standard output, so a Production deployment usually wants JSON on the
+Console and no file. Two environment variables do it:
+
+```
+Struo__Logging__ConsoleFormat=Json
+Struo__Logging__FileEnabled=false
+```
+
+A sink listed under `Serilog:WriteTo` loads on top of the two built-in ones, and the built-in ones
+keep following `Struo:Logging`. The keys cover format and on/off only: a path or template of your
+own means turning the built-in sink off and adding yours under `Serilog:WriteTo`. An entry under
+`Serilog:WriteTo` with no `Name`, for example only `Serilog__WriteTo__0__Args__path`, fails startup
+with `The configuration value in Serilog:WriteTo:<n>:Name has no 'Name' element`; one with a `Name`
+adds a sink.
+
+The configuration is built once at startup; changing `Serilog:*` or `Struo:Logging:*` needs a
+process restart to take effect, and `appsettings.json`'s file-watching doesn't make them live.
+`UseSerilog` reads both `IConfiguration` and the DI container, so an enricher registered through DI
+is picked up and takes effect too.
 
 ## The two container images
 

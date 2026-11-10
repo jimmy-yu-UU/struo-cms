@@ -122,11 +122,13 @@ JSON body，後者需要一個會主動失敗的搜尋提供者；`INTERNAL_SERV
 
 ### JSON body 大小
 
-body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 4 章](04-configuration.md)）。範圍包含
-每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳是 multipart、不是 JSON，沿用自己的上限
-`Struo:Files:MaxUploadBytes`。body 超過上限時回 `413`，信封裡的代碼是 `PAYLOAD_TOO_LARGE`。請求若宣告
-的 `Content-Length` 就超過上限，會在讀 body 之前直接拒絕；沒有宣告長度的 body 則在讀過上限的那一刻被截斷。
-`/graphql` 同樣回 `413`，但用它自己的形狀，見[第 14 章](14-graphql.md)。
+body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 4 章](04-configuration.md)）。範
+圍包含每個收 JSON 的 REST 端點與 `POST /graphql`；檔案上傳是 multipart、不是 JSON，沿用自己的上限
+`Struo:Files:MaxUploadBytes`。body 超過上限時回 `413`，信封裡的代碼是 `PAYLOAD_TOO_LARGE`。請求若宣
+告的 `Content-Length` 就超過上限，會在讀 body 之前直接拒絕；沒有宣告長度的 body 則在讀過上限的那一刻
+被截斷。`/graphql` 同樣回 `413`，但用它自己的形狀，見[第 14 章](14-graphql.md)。不論有沒有宣告長度，
+這幾條路徑都回同一句固定訊息 `Request body is too large.`，句子裡不帶任何上限；只有超過
+`Struo:Files:MaxUploadBytes` 的檔案上傳會在 `details` 的 `maxBytes` 回報上限。
 
 ### 自己的錯誤代碼
 
@@ -312,6 +314,10 @@ body 也從不讀它。
 還原一筆快照時，`version` 會先被拿掉才套用，避免因快照裡的舊版本號而白白
 衝突（見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)）。`version` 本身也不能透過建立或更新
 的 body 直接指定——它只會被當成並行控制的比對值，從不被寫進那一欄。
+
+還原的 `version` 走 `?version=` 查詢參數。沒帶代表後寫者贏。不是單一整數的值——空字串、`abc`、`1.5`、
+`1e2`、`null`、超出 64 位元，或帶了兩次——跟更新 body 的 `version` 一樣回 `400` `INVALID_VERSION`，
+什麼都不會寫入。
 
 ## `POST`／`PUT` 的 body 能設定什麼
 

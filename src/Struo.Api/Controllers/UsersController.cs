@@ -164,6 +164,7 @@ public sealed class UsersController(
     /// (IRolePermissionStore + PermissionResolver), so the preview is by construction identical to
     /// real authorization — including the public-role floor for every caller and the super-admin
     /// short-circuit. Projection mirrors AuthController.Me: probe each schema collection.
+    /// The stored-role query needs `user` read; the hypothetical <c>?roles=</c> preview needs `user` write.
     /// </summary>
     [HttpGet("{id:guid}/effective-permissions")]
     public async Task<IActionResult> GetEffectivePermissions(
@@ -172,7 +173,8 @@ public sealed class UsersController(
         [FromServices] SchemaService schema,
         CancellationToken ct)
     {
-        if (RequireRead() is { } denied) return denied;
+        var hypothetical = Request.Query.ContainsKey("roles");
+        if ((hypothetical ? RequireWrite() : RequireRead()) is { } denied) return denied;
         if (!await accounts.ExistsAsync(id, ct))
             return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "User not found.");
 
@@ -188,33 +190,39 @@ public sealed class UsersController(
         }
         else
         {
-            var roles = rolesValues.ToString();
-            // Hypothetical preview of an unsaved role selection. Empty -> public floor.
-            var parts = roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var ids = new List<Guid>(parts.Length);
-            foreach (var p in parts)
-            {
-                if (!Guid.TryParse(p, out var rid))
-                    return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                        $"Malformed role id: {p}");
-                ids.Add(rid);
-            }
-            data = await rolePermissions.LoadForRolesAsync(ids, ct);
-            // Unknown ids silently shrinking the preview would show grants that don't match the
-            // selection — reject instead. Skip when no ids were requested: there is nothing to
-            // validate (no id can be "missing" when none was asked for), and the empty request still
-            // gets the public floor via LoadForRolesAsync's built-in union.
-            if (ids.Count > 0)
-            {
-                var loaded = data.Roles.Select(r => r.Id).ToHashSet();
-                var missing = ids.Where(i => !loaded.Contains(i)).ToList();
-                if (missing.Count > 0)
-                    return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
-                        $"Unknown role ids: {string.Join(", ", missing)}");
-            }
+            var (loaded, error) = await LoadHypotheticalAsync(rolePermissions, rolesValues.ToString(), ct);
+            if (error is not null) return error;
+            data = loaded!;
         }
         var eff = PermissionResolver.Resolve(data);
         var map = PermissionMap.Build(eff, schema);
         return Ok(new { isSuperAdmin = eff.IsSuperAdmin, permissions = map });
+    }
+
+    // Hypothetical preview of an unsaved role selection. Empty -> public floor.
+    private static async Task<(RolePermissionData? Data, IActionResult? Error)> LoadHypotheticalAsync(
+        IRolePermissionStore rolePermissions, string roles, CancellationToken ct)
+    {
+        var parts = roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var ids = new List<Guid>(parts.Length);
+        foreach (var p in parts)
+        {
+            if (!Guid.TryParse(p, out var rid))
+                return (null, ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                    $"Malformed role id: {p}"));
+            ids.Add(rid);
+        }
+        var data = await rolePermissions.LoadForRolesAsync(ids, ct);
+        // Unknown ids silently shrinking the preview would show grants that don't match the
+        // selection — reject instead. Skip when no ids were requested: there is nothing to
+        // validate (no id can be "missing" when none was asked for), and the empty request still
+        // gets the public floor via LoadForRolesAsync's built-in union.
+        if (ids.Count == 0) return (data, null);
+        var loaded = data.Roles.Select(r => r.Id).ToHashSet();
+        var missing = ids.Where(i => !loaded.Contains(i)).ToList();
+        return missing.Count > 0
+            ? (null, ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput,
+                $"Unknown role ids: {string.Join(", ", missing)}"))
+            : (data, null);
     }
 }

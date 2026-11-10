@@ -129,7 +129,7 @@ Delete and restore both need a `file` delete grant, and both return `204` or `40
 | `POST api/users/{id}/access-token` | Write on `user` | Issue an access token, shown only once |
 | `GET api/users/{id}/access-token` | Read on `user` | Read the token's issue and last-use times |
 | `DELETE api/users/{id}/access-token` | Write on `user` | Revoke the access token |
-| `GET api/users/{id}/effective-permissions` | Read on `user` | Preview effective permissions, supports `?roles=` |
+| `GET api/users/{id}/effective-permissions` | Read on `user`; write with `?roles=` | Preview effective permissions, supports `?roles=` |
 
 Creating a user returns `201`, with `Location` pointing at `api/items/user/{id}` — that's the
 actual read route for the user row; the body is `{ id, email, name }`. A blank email, a password
@@ -148,6 +148,11 @@ The `?roles=` parameter on `effective-permissions` can carry a list of role ids,
 combination that hasn't been saved yet; passing it with an empty string previews the public role's
 permission floor, which differs from omitting the parameter entirely. A malformed or nonexistent
 role id is always rejected, never silently dropped from the count.
+
+Read on `user` also shows a user's role assignments and effective permissions. Without `?roles=` the
+endpoint needs only that read. With `?roles=` it needs write on `user`, because it previews a role
+combination for editing; a read-only caller gets `403` `Write permission on the user collection is
+required.`.
 
 Listing, updating and deleting users all go through the generic item API's `user` collection — the
 create response's `Location` points exactly there. Creating a user there is refused with `400`:

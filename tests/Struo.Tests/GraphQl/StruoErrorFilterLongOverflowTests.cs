@@ -10,8 +10,8 @@ using Xunit;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Only a Long input-coercion failure that HotChocolate itself raised becomes a client error; a
-/// FormatException from anywhere else stays an unhandled, masked, Error-logged failure.
+/// Only an Int, Long or Float input-coercion failure that HotChocolate itself raised becomes a client
+/// error; a FormatException from anywhere else stays an unhandled, masked, Error-logged failure.
 /// </summary>
 public class StruoErrorFilterLongOverflowTests
 {
@@ -24,11 +24,12 @@ public class StruoErrorFilterLongOverflowTests
             Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 
-    private static (IError Mapped, CapturingLogger Log) Run(Exception exception, params (string Key, object Value)[] extensions)
+    private static (IError Mapped, CapturingLogger Log) Run(Exception? exception, params (string Key, object Value)[] extensions)
     {
         var log = new CapturingLogger();
         var filter = new StruoErrorFilter(log, new HttpContextAccessor { HttpContext = null });
-        var builder = ErrorBuilder.New().SetMessage("original").SetException(exception);
+        var builder = ErrorBuilder.New().SetMessage("original");
+        if (exception is not null) builder.SetException(exception);
         foreach (var (key, value) in extensions) builder.SetExtension(key, value);
         return (filter.OnError(builder.Build()), log);
     }
@@ -44,11 +45,51 @@ public class StruoErrorFilterLongOverflowTests
     }
 
     [Fact]
-    public void A_FormatException_on_a_non_Long_input_stays_internal()
+    public void A_FormatException_on_a_non_numeric_input_stays_internal()
     {
-        var (mapped, _) = Run(new FormatException("x"), ("fieldType", "Int"), ("inputPath", "version"));
+        var (mapped, log) = Run(new FormatException("x"), ("fieldType", "String"), ("inputPath", "version"));
 
         mapped.Code.Should().Be("INTERNAL_SERVER_ERROR");
+        log.Levels.Should().Contain(LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData("Int", "input.offset", "Mutation.f(offset:)")]
+    [InlineData("Int", "revisionNumber", "Mutation.revertFxArticle(revisionNumber:)")]
+    [InlineData("Float", "filter.price.gt", "FloatFilter.gt")]
+    [InlineData("Long", "input.size", "FxArticleUpdateInput.size")]
+    public void A_literal_overflow_on_a_number_is_BAD_USER_INPUT_without_an_error_log(
+        string scalar, string inputPath, string coordinate)
+    {
+        var (mapped, log) = Run(new InvalidFormatException("x"),
+            ("fieldType", scalar), ("inputPath", inputPath), ("coordinate", coordinate));
+
+        mapped.Code.Should().Be("BAD_USER_INPUT");
+        mapped.Exception.Should().BeNull();
+        log.Levels.Should().NotContain(LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData("Int")]
+    [InlineData("Float")]
+    public void A_variable_overflow_on_a_number_is_BAD_USER_INPUT_without_an_error_log(string scalar)
+    {
+        var (mapped, log) = Run(new FormatException("x"), ("fieldType", scalar), ("inputPath", "l"));
+
+        mapped.Code.Should().Be("BAD_USER_INPUT");
+        mapped.Exception.Should().BeNull();
+        log.Levels.Should().NotContain(LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData("Int", "must be an integer")]
+    [InlineData("Long", "must be an integer")]
+    [InlineData("Float", "must be a number")]
+    public void The_message_follows_the_scalar_and_carries_no_framework_text(string scalar, string expected)
+    {
+        var (mapped, _) = Run(new FormatException("x"), ("fieldType", scalar), ("inputPath", "v"));
+
+        mapped.Message.Should().Contain(expected).And.NotContain("coerce").And.NotContain("original");
     }
 
     [Fact]
@@ -80,5 +121,64 @@ public class StruoErrorFilterLongOverflowTests
 
         mapped.Code.Should().Be("BAD_USER_INPUT");
         log.Levels.Should().NotContain(LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData("Long", "version", "INVALID_VERSION")]
+    [InlineData("Long", "size", "BAD_USER_INPUT")]
+    [InlineData("Int", "limit", "BAD_USER_INPUT")]
+    [InlineData("Int", "revisionNumber", "BAD_USER_INPUT")]
+    [InlineData("Float", "price", "BAD_USER_INPUT")]
+    public void A_field_literal_of_the_wrong_kind_is_coded_by_its_field_name(string scalar, string field, string code)
+    {
+        var (mapped, log) = Run(null, ("fieldName", field), ("fieldType", scalar), ("locationType", scalar),
+            ("specifiedBy", "https://spec.graphql.org/September2025/#sec-Values-of-Correct-Type"));
+
+        mapped.Code.Should().Be(code);
+        mapped.Message.Should().NotBe("original");
+        log.Levels.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("version", "INVALID_VERSION")]
+    [InlineData("revisionNumber", "BAD_USER_INPUT")]
+    [InlineData("limit", "BAD_USER_INPUT")]
+    public void An_argument_literal_of_the_wrong_kind_is_coded_by_its_argument_name(string argument, string code)
+    {
+        var (mapped, log) = Run(null, ("argument", argument), ("locationType", "Int!"),
+            ("specifiedBy", "https://spec.graphql.org/September2025/#sec-Values-of-Correct-Type"));
+
+        mapped.Code.Should().Be(code);
+        log.Levels.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Long")]
+    [InlineData("Int")]
+    [InlineData("Float")]
+    public void A_variable_of_the_wrong_kind_is_BAD_USER_INPUT_even_when_named_version(string scalar)
+    {
+        var (mapped, log) = Run(null, ("fieldType", scalar), ("inputPath", "version"));
+
+        mapped.Code.Should().Be("BAD_USER_INPUT");
+        log.Levels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_validation_error_with_no_number_scalar_keeps_no_code()
+    {
+        var (mapped, _) = Run(null, ("fieldName", "status"), ("fieldType", "String"), ("locationType", "String"),
+            ("specifiedBy", "https://spec.graphql.org/September2025/#sec-Values-of-Correct-Type"));
+
+        mapped.Code.Should().BeNull();
+        mapped.Message.Should().Be("original");
+    }
+
+    [Fact]
+    public void A_number_scalar_error_without_a_coercion_marker_keeps_no_code()
+    {
+        var (mapped, _) = Run(null, ("fieldType", "Int"));
+
+        mapped.Code.Should().BeNull();
     }
 }

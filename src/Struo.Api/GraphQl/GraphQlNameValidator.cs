@@ -26,7 +26,7 @@ internal static class GraphQlNameValidator
         "Query", "Mutation",
         "String", "Int", "Float", "Boolean", "ID", "Long", "DateTime", "Date", "UUID", "Any",
         "TagItem", SchemaTypeMapper.TagItemInputName, "Translation", "DeletedFilter", "Revision",
-        "StringFilter", "IntFilter", "FloatFilter", "DateTimeFilter", "BooleanFilter", "IdFilter",
+        "StringFilter", "IntFilter", "LongFilter", "FloatFilter", "DateTimeFilter", "BooleanFilter", "IdFilter",
         "AggregateInput", "FacetValue", "FacetResult",
     };
 

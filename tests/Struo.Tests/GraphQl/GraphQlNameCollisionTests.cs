@@ -37,6 +37,7 @@ public class GraphQlNameCollisionTests(ApiFactory factory)
     [InlineData("query", "Query")]
     [InlineData("string", "String")]
     [InlineData("tagItem", "TagItem")]
+    [InlineData("longFilter", "LongFilter")]
     public void A_collection_named_like_a_fixed_type_fails_naming_both(string collection, string typeName)
     {
         var ex = Collide(collection);

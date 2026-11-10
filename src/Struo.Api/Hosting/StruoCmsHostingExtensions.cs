@@ -32,7 +32,7 @@ public static class StruoCmsHostingExtensions
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
         builder.Host.UseSerilog((context, services, configuration) =>
-            configuration.ReadFrom.Configuration(context.Configuration).ReadFrom.Services(services));
+            StruoCmsLogging.Configure(configuration, context.Configuration, services));
 
         builder.Services.AddStruoMvc();
         var graphQl = builder.Services.AddStruoCoreServices(builder.Configuration, builder.Environment);

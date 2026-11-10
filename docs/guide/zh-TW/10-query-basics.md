@@ -259,9 +259,9 @@ MySQL／MariaDB 遞增排序時 `NULL` 排最前，PostgreSQL 排最後。
 of 100000; narrow the result set with filters instead of paging deeper.`。`deep` 裡巢狀清單的
 `offset` 受同一個上限限制。
 
-`limit=abc` 這種非數字值不會報錯，直接當成沒給處理，一樣被夾到預設值，比方說
-`GET /api/items/article?limit=abc` 回應的 `meta` 是 `{"total":3,"limit":25,"offset":0}`——`limit`
-落回預設的 25，不是拒絕請求。
+`limit=abc` 這種非數字值，或 `limit=99999999999` 這種超出 32 位元整數範圍的值，不會報錯，直接當成沒
+給處理，一樣被夾到預設值，比方說 `GET /api/items/article?limit=abc` 回應的 `meta` 是
+`{"total":3,"limit":25,"offset":0}`——`limit` 落回預設的 25，不是拒絕請求。
 
 每個清單回應都帶一個 `meta` 物件，裝著夾完之後真正生效的 `limit`／`offset`，以及 `total`——套用同
 一個 `deleted=` 模式篩完之後、分頁之前的列數，不是整張表的列數。分頁沒有游標或 keyset 形式，也沒有

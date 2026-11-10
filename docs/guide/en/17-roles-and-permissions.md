@@ -250,8 +250,11 @@ which is a different question from whether this caller could pass authentication
 
 Before saving a role selection, the user form in the admin UI needs to show what permissions that
 selection would actually grant. `GET /api/users/{id}/effective-permissions` is for that screen.
-It needs read on `user`; a signed-in caller without it gets `403` `FORBIDDEN`, `Read permission on the
-user collection is required.`.
+Without `?roles=` it needs read on `user`, the same read that shows a user's role assignments and
+effective permissions; a signed-in caller without it gets `403` `FORBIDDEN`,
+`Read permission on the user collection is required.`. With `?roles=`, which previews an unsaved
+role selection, it needs write on `user` and answers
+`Write permission on the user collection is required.` otherwise.
 
 This endpoint runs the exact same two-stage resolution as a real request: union the role grants,
 then fold. The preview's answer is computed by the same logic that computes what this user gets

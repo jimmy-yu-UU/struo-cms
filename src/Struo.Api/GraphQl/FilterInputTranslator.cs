@@ -43,8 +43,8 @@ public static class FilterInputTranslator
     private static string NumberFilter(Type? clrType)
     {
         var t = clrType is null ? null : Nullable.GetUnderlyingType(clrType) ?? clrType;
-        return (t == typeof(int) || t == typeof(short) || t == typeof(byte) || t == typeof(long))
-            ? "IntFilter" : "FloatFilter";
+        if (t == typeof(long)) return "LongFilter";
+        return (t == typeof(int) || t == typeof(short) || t == typeof(byte)) ? "IntFilter" : "FloatFilter";
     }
 
     /// <summary>Flat-only translation (no cross-relation descent). Back-compatible entry point.</summary>

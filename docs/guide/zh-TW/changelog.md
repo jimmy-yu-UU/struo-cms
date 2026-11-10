@@ -2,8 +2,40 @@
 
 ## 0.30.0
 
+::: danger 破壞性變更
+- 內建的 `Serilog:WriteTo` 項目不再出貨：主機改在程式裡加上 Console 與 File 這兩個 sink，依新的
+  `Struo:Logging:ConsoleEnabled`（預設 `true`）、`Struo:Logging:ConsoleFormat`（`Text`，預設，或
+  `Json`）與 `Struo:Logging:FileEnabled`（預設 `true`）。預設輸出不變。這些鍵只管格式與開關。改過
+  Console 或 File 這些鍵沒涵蓋的設定（樣板、路徑、滾動）的 fork，要把對應的 `Enabled` 鍵設成 `false`，
+  再把自己的 sink 加在 `Serilog:WriteTo` 底下，它會疊加在內建的之上。舊項目的 `Serilog:WriteTo:0` 或
+  `:1` 覆寫，不論在設定檔或是環境變數 `Serilog__WriteTo__0__...`，都必須拿掉：只設 `Args` 的會讓啟動
+  失敗，訊息是 `The configuration value in Serilog:WriteTo:<n>:Name has no 'Name' element`，設了
+  `Name` 的則會在內建的旁邊多加一個 sink。
+- GraphQL 對 `long` 欄位的篩選改用 `LongFilter`，不再是 `IntFilter`；核心裡是 `file` 的 `size` 欄位。
+  它的運算元是 `Long`，所以大於 2^31 - 1 的值能篩選，不會失敗。把這種篩選變數宣告成 `IntFilter` 的用
+  戶端要改宣告 `LongFilter`。`LongFilter` 是保留的 GraphQL 型別名稱，名為 `longFilter` 的集合會在啟
+  動時被拒絕。
+- `POST /api/items/{collection}/{id}/revisions/{n}/revert` 在 `?version=` 不是整數時，回 `400`
+  `INVALID_VERSION`，不再是 `400` `VALIDATION`。空的 `?version=`，以及 `version` 帶了兩次
+  （`?version=1&version=2`），同樣被拒絕；空的原本當成沒帶版本，所以靠它表示「沒帶版本」的用戶端要改
+  成不送這個參數。
+- `GET /api/users/{id}/effective-permissions?roles=...`，也就是預覽還沒儲存的角色選擇，要 `user` 的
+  寫入，不再是讀取。只有讀取的呼叫端得到 `403` `FORBIDDEN`；不帶 `?roles=` 的呼叫仍然只需要讀取。
+:::
+
 ### 變更
 
+- GraphQL 的 `Int`、`Long` 或 `Float` 輸入無法轉換時，回帶穩定代碼的用戶端錯誤，不再是
+  `INTERNAL_SERVER_ERROR` 或沒有代碼的型別錯誤：超出 32 位元範圍的 `limit`、`offset`、
+  `revisionNumber`，以及引數、篩選運算元或 `in` 這類清單運算元的元素裡任何種類不對的值（`"abc"`、
+  `true`、`1.5`），回 `BAD_USER_INPUT`；`version` 字面值例外，回 `INVALID_VERSION`。這些都不會記成未
+  處理的 resolver 例外。
+- JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，REST 與 `/graphql` 的每條路徑（宣告長度或串流送出）都
+  回 `413` `PAYLOAD_TOO_LARGE`，訊息是固定的 `Request body is too large.`。訊息不再帶上限；只有超過
+  `Struo:Files:MaxUploadBytes` 的檔案上傳會用 `maxBytes` 回報上限。
+- `/graphql` 請求以串流送 body、沒有宣告長度，而 body 因為大小以外的原因讀不出來時，回該失敗的狀態
+  `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，訊息是 `The request body could not be read.`，
+  不再是 GraphQL 自己那則沒有代碼的 `400` 錯誤。
 - 使用者頁的密碼區塊說明改為「工作階段與 API 存取權杖會被撤銷」，與其他處對權杖的用詞一致。
 - 內建的側欄 `SidebarRail` 與 `SidebarTrigger` 的 `label` 屬性改為必填，不再有英文預設。fork 若掛
   上其中之一又沒傳 `label`，型別檢查會失敗，補上即可。

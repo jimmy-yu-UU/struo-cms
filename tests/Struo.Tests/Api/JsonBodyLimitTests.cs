@@ -24,6 +24,7 @@ namespace Struo.Tests.Api;
 public class JsonBodyLimitTests(ApiFactory factory)
 {
     private const int Limit = 1024;
+    private const string TooLargeMessage = "Request body is too large.";
     private readonly ApiFactory _factory = factory;
 
     private WebApplicationFactory<Program> Host(string limit = "1024") =>
@@ -71,6 +72,15 @@ public class JsonBodyLimitTests(ApiFactory factory)
         var error = doc.RootElement.GetProperty("error");
         error.GetProperty("code").GetString().Should().Be("PAYLOAD_TOO_LARGE");
         error.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
+        AssertFixedMessage(error.GetProperty("message").GetString());
+        error.TryGetProperty("details", out _).Should().BeFalse("a JSON body cap names no limit");
+    }
+
+    // The same sentence on every path, with no number: the cap is not disclosed to an anonymous caller.
+    private static void AssertFixedMessage(string? message)
+    {
+        message.Should().Be(TooLargeMessage);
+        message.Should().NotMatchRegex(@"\d");
     }
 
     // /graphql keeps its own error shape: { errors: [{ message, extensions: { code, traceId } }] }.
@@ -82,6 +92,9 @@ public class JsonBodyLimitTests(ApiFactory factory)
         var extensions = doc.RootElement.GetProperty("errors")[0].GetProperty("extensions");
         extensions.GetProperty("code").GetString().Should().Be("PAYLOAD_TOO_LARGE");
         extensions.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
+        AssertFixedMessage(doc.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
+        doc.RootElement.GetProperty("errors").GetArrayLength().Should().Be(1, body);
+        extensions.TryGetProperty("details", out _).Should().BeFalse("a JSON body cap names no limit");
     }
 
     [Fact]

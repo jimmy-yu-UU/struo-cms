@@ -43,9 +43,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       # --ignore-scripts stops a dependency's postinstall from executing on the
-      # runner. Verified locally that the suite and the build survive it: a
-      # clean install with the flag still gives 689 passing tests and a working
-      # `pnpm build`.
+      # runner. The suite and the build survive it: a clean install with the
+      # flag still passes `pnpm test` and a working `pnpm build`.
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm test
       - run: pnpm build
@@ -423,9 +422,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       # --ignore-scripts stops a dependency's postinstall from executing on the
-      # runner. Verified locally that the suite and the build survive it: a
-      # clean install with the flag still gives 689 passing tests and a working
-      # `pnpm build`.
+      # runner. The suite and the build survive it: a clean install with the
+      # flag still passes `pnpm test` and a working `pnpm build`.
       - run: pnpm install --frozen-lockfile --ignore-scripts
       # Same suite as the `pnpm test` gate, re-run with the v8 coverage provider
       # so there is an lcov report for Sonar to import. Without a report Sonar

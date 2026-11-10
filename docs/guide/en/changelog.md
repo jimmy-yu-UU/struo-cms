@@ -2,8 +2,48 @@
 
 ## 0.30.0
 
+::: danger Breaking
+- The shipped `Serilog:WriteTo` entries are gone: the host adds the Console and File sinks in code,
+  from the new `Struo:Logging:ConsoleEnabled` (default `true`), `Struo:Logging:ConsoleFormat`
+  (`Text`, the default, or `Json`) and `Struo:Logging:FileEnabled` (default `true`). The default
+  output is unchanged. The keys cover format and on/off only. A fork that changed a Console
+  or File setting these keys don't cover (template, path, rolling) sets the matching `Enabled` key to
+  `false` and adds its own sink under
+  `Serilog:WriteTo`, which loads on top of the built-in ones. Any `Serilog:WriteTo:0` or `:1`
+  override of the old entries, in a settings file or as `Serilog__WriteTo__0__...` in the
+  environment, must be removed: one that sets only `Args` stops startup with
+  `The configuration value in Serilog:WriteTo:<n>:Name has no 'Name' element`, and one that sets a
+  `Name` adds one more sink beside the built-in one.
+- A GraphQL filter on a `long` field takes `LongFilter` instead of `IntFilter`; in core this is the
+  `size` field of `file`. Its operands are `Long`, so a value above 2^31 - 1 filters instead of
+  failing. A client that declared such a filter variable as `IntFilter` must declare `LongFilter`.
+  `LongFilter` is a reserved GraphQL type name, so a collection named `longFilter` is refused at
+  startup.
+- `POST /api/items/{collection}/{id}/revisions/{n}/revert` answers `400` `INVALID_VERSION`, not
+  `400` `VALIDATION`, for a `?version=` that is not an integer. An empty `?version=` and a `version`
+  given twice (`?version=1&version=2`) are refused the same way; an empty one used to read as no
+  version, so a client that sent it to mean "no version" must omit the parameter.
+- `GET /api/users/{id}/effective-permissions?roles=...`, the preview of an unsaved role selection,
+  needs write on `user` instead of read. A read-only caller gets `403` `FORBIDDEN`; the call without
+  `?roles=` still needs only read.
+:::
+
 ### Changed
 
+- A GraphQL `Int`, `Long` or `Float` input that cannot be coerced is a client error with a stable
+  code instead of `INTERNAL_SERVER_ERROR` or a bare type error: a `limit`, `offset` or
+  `revisionNumber` out of the 32-bit range, and any value of the wrong kind (`"abc"`, `true`, `1.5`)
+  in an argument, a filter operand or an element of a list operand such as `in`, answer
+  `BAD_USER_INPUT`, except a `version` literal, which answers `INVALID_VERSION`. None of them is
+  logged as an unhandled resolver exception.
+- A JSON request body over `Api:MaxJsonBodyBytes` answers `413` `PAYLOAD_TOO_LARGE` with the fixed
+  message `Request body is too large.` on every path, REST and `/graphql`, declared length or
+  streamed. The message no longer carries the limit; only a file upload over
+  `Struo:Files:MaxUploadBytes` reports its limit, as `maxBytes`.
+- A `/graphql` request that streams its body without a declared length, and whose body cannot be read
+  for a reason other than its size, answers with the status of that failure, `400` or `408`, and one
+  `BAD_USER_INPUT` error with the message `The request body could not be read.`, instead of GraphQL's
+  own `400` error without a code.
 - The password section on a user's page says its sessions and API access token are revoked, matching
   the wording used elsewhere for the token.
 - The vendored sidebar `SidebarRail` and `SidebarTrigger` require a `label` prop; the English

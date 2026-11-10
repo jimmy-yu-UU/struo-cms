@@ -207,8 +207,10 @@ pretty:
 ## 預覽有效權限
 
 後台的使用者表單在儲存角色選擇之前，要能先看看這樣選的話，使用者實際上會拿到什麼權限——
-`GET /api/users/{id}/effective-permissions` 就是給這個畫面用的，需要 `user` 的讀取，已登入但沒有它
-的呼叫端回 `403` `FORBIDDEN`、`Read permission on the user collection is required.`。
+`GET /api/users/{id}/effective-permissions` 就是給這個畫面用的。不帶 `?roles=` 時需要 `user` 的讀取，
+這個讀取同時讓呼叫端看到使用者的角色指派與有效權限；已登入但沒有它的呼叫端回 `403` `FORBIDDEN`、
+`Read permission on the user collection is required.`。帶 `?roles=` 預覽還沒儲存的角色選擇時，需要
+`user` 的寫入，沒有的話回 `Write permission on the user collection is required.`。
 
 它走的是跟真正請求完全一樣的兩段解析：先聯集角色的授權，再折算，所以預覽算出來的答案，跟這個使
 用者實際發出請求時算出來的答案，是同一套邏輯算出來的，不是另外維護的一份近似值；`public` 這層下
