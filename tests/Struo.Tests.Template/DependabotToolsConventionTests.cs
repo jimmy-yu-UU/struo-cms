@@ -35,11 +35,35 @@ public sealed class DependabotToolsConventionTests
         return lines.Skip(start + 1).TakeWhile(l => !l.Trim().StartsWith(EcosystemPrefix, StringComparison.Ordinal)).ToArray();
     }
 
-    private static string[] StepLines(string[] workflowLines, string stepName)
+    private static int Indent(string line) => line.Length - line.TrimStart().Length;
+
+    /// <summary>
+    /// The step's own <c>if:</c> expression, whitespace collapsed to single spaces. Only the step's
+    /// direct <c>if:</c> key counts; text in a comment or in a <c>run:</c> block does not.
+    /// </summary>
+    private static string StepCondition(string stepName)
     {
-        var start = Array.FindIndex(workflowLines, l => l.Trim() == $"- name: {stepName}");
+        var lines = Read(".github", "workflows", "dependabot-auto-merge.yml").Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var start = Array.FindIndex(lines, l => l.Trim() == $"- name: {stepName}");
         start.Should().BeGreaterThanOrEqualTo(0, $"the workflow has a step named '{stepName}'");
-        return workflowLines.Skip(start + 1).TakeWhile(l => !l.TrimStart().StartsWith("- name:", StringComparison.Ordinal)).ToArray();
+
+        var keyIndent = Indent(lines[start]) + 2;
+        var stepBody = lines.Skip(start + 1)
+            .TakeWhile(l => l.Trim().Length == 0 || Indent(l) >= keyIndent)
+            .ToArray();
+        var ifLine = Array.FindIndex(stepBody, l => Indent(l) == keyIndent && l.TrimStart().StartsWith("if:", StringComparison.Ordinal));
+        ifLine.Should().BeGreaterThanOrEqualTo(0, $"the '{stepName}' step has an if: condition");
+
+        var expression = new List<string> { stepBody[ifLine].TrimStart()["if:".Length..] };
+        expression.AddRange(stepBody.Skip(ifLine + 1).TakeWhile(l => l.Trim().Length > 0 && Indent(l) > keyIndent));
+
+        var joined = string.Join(' ', expression).Trim();
+        if (joined.StartsWith(">-", StringComparison.Ordinal))
+        {
+            joined = joined[2..];
+        }
+
+        return string.Join(' ', joined.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
     [Fact]
@@ -74,14 +98,22 @@ public sealed class DependabotToolsConventionTests
             "Dependabot assigns a dependency to the first group whose patterns match, and backend-minor-patch matches everything");
     }
 
-    [Theory]
-    [InlineData("Enable auto-merge")]
-    [InlineData("Explain why this pull request was left for review")]
-    public void Both_auto_merge_steps_test_every_dotnet_tool(string stepName)
-    {
-        var step = string.Join('\n', StepLines(Read(".github", "workflows", "dependabot-auto-merge.yml").Split('\n'), stepName));
+    private const string EnableStep = "Enable auto-merge";
+    private const string ExplainStep = "Explain why this pull request was left for review";
 
-        ToolNames().Where(tool => !step.Contains($"contains(steps.metadata.outputs.dependency-names, '{tool}')", StringComparison.Ordinal))
-            .Should().BeEmpty($"the '{stepName}' step must exclude pull requests that touch a dotnet tool");
+    [Fact]
+    public void The_enable_auto_merge_condition_excludes_every_dotnet_tool()
+    {
+        var condition = StepCondition(EnableStep);
+
+        ToolNames().Where(tool => !condition.Contains($"!contains(steps.metadata.outputs.dependency-names, '{tool}')", StringComparison.Ordinal))
+            .Should().BeEmpty($"the '{EnableStep}' condition must negate a dependency-names match for every dotnet tool; condition: {condition}");
+    }
+
+    [Fact]
+    public void The_explain_condition_is_the_exact_negation_of_the_enable_condition()
+    {
+        StepCondition(ExplainStep).Should().Be($"!({StepCondition(EnableStep)})",
+            $"the '{ExplainStep}' step must run exactly when '{EnableStep}' does not");
     }
 }
