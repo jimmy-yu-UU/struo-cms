@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 // Live gate: revision history + revert.
 //
@@ -47,12 +48,6 @@ function translatableFieldByLabel(page: Page, label: string) {
 }
 function titleInput(page: Page) {
   return translatableFieldByLabel(page, 'Title').locator('input')
-}
-// Status is a Select (role="combobox" trigger + role="option" overlay), not a text input.
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = fieldByLabel(page, 'Status')
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 
 // Create an article via the UI, then open it so the edit form (and its version token) is loaded.

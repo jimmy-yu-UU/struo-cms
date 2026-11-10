@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = e2ePassword()
@@ -24,11 +25,6 @@ function labelMatch(label: string): RegExp {
 }
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
-}
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = page.locator('.field', { has: page.getByText(labelMatch('Status')) })
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 // A DataTable row scoped by its visible title cell.
 function rowByTitle(page: Page, title: string) {

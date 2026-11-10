@@ -11,6 +11,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = e2ePassword()
@@ -78,16 +79,6 @@ function fieldByLabel(page: Page, label: string) {
 // gates were removed at once.
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
-}
-
-// Article.Status is [CmsField(Interface = FieldInterface.Select)] with
-// CmsOptions("draft:Draft", "published:Published") -> FieldInput renders SelectField.vue's
-// ui/select (a role="combobox" trigger + role="listbox"/"option" overlay), NOT a text input, so
-// it cannot be `.fill()`ed. Click the trigger, then click the option by its visible label.
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = fieldByLabel(page, 'Status')
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 
 // Search filters apply on an explicit press (or Enter), never on keystroke.

@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { type Page } from '@playwright/test'
 import { e2ePassword } from '../credentials'
+import { chooseStatus } from './chooseStatus'
 
 // Live gate: dirty-state leave guard.
 //
@@ -37,11 +38,6 @@ function fieldByLabel(page: Page, label: string) {
 }
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
-}
-async function chooseStatus(page: Page, optionLabel: 'Draft' | 'Published'): Promise<void> {
-  const field = fieldByLabel(page, 'Status')
-  await field.getByRole('combobox').click()
-  await page.getByRole('option', { name: optionLabel }).click()
 }
 // Search filters apply on an explicit press (or Enter), never on keystroke.
 async function searchByField(page: Page, fieldLabel: string, value: string): Promise<void> {
