@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.30.0
+## 0.30.0 — 2026-11-10
 
 ::: danger Breaking
 - The shipped `Serilog:WriteTo` entries are gone: the host adds the Console and File sinks in code,
