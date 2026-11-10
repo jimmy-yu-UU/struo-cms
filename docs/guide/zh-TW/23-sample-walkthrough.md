@@ -208,7 +208,8 @@ Playwright 專案，執行指令是 `pnpm e2e:sample`。
 跑這組測試，除了 `pnpm e2e` 本身就要的東西（執行中的 API、可連線的資料庫、已種好的
 bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，還要把範例加進
 `Struo:ContentAssemblies`；完整的先決條件與逐規格的種子資料備註在 `frontend/e2e/README.md`，
-其中 `relations.spec.ts` 需要先有一筆 `category`、一筆 `tag` 資料——範例本身不附種子資料。
+其中 `relations.spec.ts` 會自己透過 API 建立並清除所需的 `category` 與 `tag` 資料——
+範例本身不附種子資料。
 
 ## 完全移除範例
 
