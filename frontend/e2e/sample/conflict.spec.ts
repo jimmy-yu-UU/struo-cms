@@ -56,9 +56,6 @@ function labelMatch(label: string): RegExp {
 function translatableFieldByLabel(page: Page, label: string) {
   return page.locator('.field:visible', { has: page.getByText(labelMatch(label)) })
 }
-function fieldByLabel(page: Page, label: string) {
-  return page.locator('.field', { has: page.getByText(labelMatch(label)) })
-}
 function titleInput(page: Page) {
   return translatableFieldByLabel(page, 'Title').locator('input')
 }

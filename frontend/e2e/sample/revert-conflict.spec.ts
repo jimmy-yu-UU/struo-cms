@@ -31,9 +31,6 @@ async function login(page: Page): Promise<void> {
 function labelMatch(label: string): RegExp {
   return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*?$`)
 }
-function fieldByLabel(page: Page, label: string) {
-  return page.locator('.field', { has: page.getByText(labelMatch(label)) })
-}
 // Translatable fields (Title/Body) live inside ItemForm.vue's non-lazy <Tabs>: every locale's
 // TabPanel stays mounted (only `display:none` toggled), so an unscoped `.field` match resolves to
 // one wrapper per locale (strict-mode violation). Scope to `:visible` so only the active
