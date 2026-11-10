@@ -3,7 +3,7 @@ name: Dependabot auto-merge
 # Auto-merge is deliberately narrow: NuGet patch and minor only.
 #
 # What decides the split is not how risky a version bump sounds, it is whether
-# the gates can actually see a regression in it. The 1,012-test backend suite
+# the gates can actually see a regression in it. The backend test suite
 # exercises the code paths a NuGet dependency sits under, and the backend has no
 # visual surface - green there means something. The frontend gates do not carry
 # the same weight: vitest runs in jsdom, which performs no layout and resolves no

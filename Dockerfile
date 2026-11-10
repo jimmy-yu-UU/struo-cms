@@ -5,7 +5,7 @@
 # 2. The image applies no migrations on boot, matching the appsettings.json default
 #    (Database__MigrateOnStartup=false): run `dotnet Struo.Api.dll migrate` once against the
 #    database, or set Database__MigrateOnStartup=true.
-# 3. The runtime stage is Debian-based (aspnet:10.0), not alpine: globalization needs full ICU,
+# 3. The runtime stage is Ubuntu-based (aspnet:10.0), not alpine: globalization needs full ICU,
 #    which the alpine variant does not ship.
 #
 # COPY . . before dotnet restore (rather than copying each .csproj first to prime a

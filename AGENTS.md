@@ -420,6 +420,9 @@ stack; the `sample` project is not run by CI.
   transitive-dependency `overrides:` ranges for advisories a package hasn't picked up yet — that is the
   one place versions are legitimately hand-authored; see `frontend/pnpm-workspace.yaml` for why every
   entry there carries an upper bound.
+- Never move `Microsoft.OpenApi` to 3.x or drop its direct pin: `Microsoft.AspNetCore.OpenApi` 10.0.x
+  declares `[2.12.2, 3.0.0)` for it, so a 3.x pin runs the shipped assembly against a major it was not
+  built for. `docs/ai/decisions/microsoft-openapi-stays-on-2x.md` has the evidence and when to revisit.
 - Never add a business collection to `src/Struo.*` — new content belongs in a fork's own project (or,
   for learning/demo purposes only, the existing sample). Nothing mechanically stops this; the cost
   lands on every fork that pulls an upstream update, since it inherits business content mixed into what
