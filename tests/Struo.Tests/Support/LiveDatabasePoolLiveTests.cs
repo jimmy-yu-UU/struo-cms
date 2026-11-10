@@ -7,7 +7,7 @@ namespace Struo.Tests.Support;
 
 /// <summary>
 /// Live behaviour of <see cref="LiveDatabasePool"/>. Each case uses its own pool so the counts are
-/// deterministic, and returns early when its backend is not configured (see <see cref="LiveBackend"/>).
+/// deterministic, and is skipped when its backend is not configured (see <see cref="LiveBackend"/>).
 /// </summary>
 public sealed class LiveDatabasePoolLiveTests
 {
@@ -16,10 +16,10 @@ public sealed class LiveDatabasePoolLiveTests
 
     public static TheoryData<string> Backends => LiveBackend.Names();
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Returned_database_is_emptied_and_handed_out_again(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var pool = new LiveDatabasePool(kind);
         try
         {
@@ -44,10 +44,10 @@ public sealed class LiveDatabasePoolLiveTests
         }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void A_reused_database_shows_the_new_shape_of_a_same_named_table(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var pool = new LiveDatabasePool(kind);
         try
         {
@@ -78,10 +78,10 @@ public sealed class LiveDatabasePoolLiveTests
         }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task A_database_held_by_an_open_transaction_is_discarded_without_hanging(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var pool = new LiveDatabasePool(kind);
         try
         {
@@ -124,10 +124,10 @@ public sealed class LiveDatabasePoolLiveTests
         }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Concurrent_leases_never_share_a_database(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         const int leases = 8;
         var pool = new LiveDatabasePool(kind);
         var held = new ConcurrentBag<ITestDatabase>();
@@ -159,10 +159,10 @@ public sealed class LiveDatabasePoolLiveTests
         }
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void DropAll_drops_idle_and_leased_databases(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var pool = new LiveDatabasePool(kind);
         var leased = pool.Lease();
         string idleName;
@@ -182,12 +182,7 @@ public sealed class LiveDatabasePoolLiveTests
         pool.IdleCount.Should().Be(0);
     }
 
-    private static bool TryResolve(string backend, out TestBackendKind kind)
-    {
-        var live = LiveBackend.Get(backend);
-        kind = TestBackend.KindOf(live);
-        return live.Connection is not null;
-    }
+    private static TestBackendKind KindOf(string backend) => TestBackend.KindOf(LiveBackend.Get(backend));
 
     // The holder's connection may already be severed by the drop.
     private static void DisposeQuietly(SqlSugarClient client)

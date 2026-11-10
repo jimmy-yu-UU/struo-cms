@@ -711,6 +711,15 @@ describe('MediaDetailDialog save conflict', () => {
     expect(notice.get('button').text()).toBe(zhTW.media.reloadLatest)
   })
 
+  it('states the overwrite and the reload option in English', async () => {
+    const { w } = await mountConflicted(realI18n('en'))
+    const notice = w.get('.md-conflict')
+    expect(notice.text()).toContain(en.media.saveConflict)
+    expect(notice.text()).toMatch(/overwrite/i)
+    expect(notice.text()).toMatch(/reload/i)
+    expect(notice.get('button').text()).toBe(en.media.reloadLatest)
+  })
+
   it('Reload latest discards the draft, adopts the refetched copy and clears conflict and dirty state', async () => {
     const { w, vm, get, update } = await mountConflicted()
     expect(vm.conflict).toBe(true)
@@ -791,5 +800,15 @@ describe('MediaDetailDialog save conflict', () => {
     await flushPromises()
     expect(vm.model.version).toBe(7)
     expect(vm.model.translations.en.title).toBe('Bee')
+  })
+
+  it('saving again after a 409 without reloading still overwrites with the adopted version', async () => {
+    const { vm, update } = await mountConflicted()
+    await vm.onSave()
+    await flushPromises()
+    expect(update).toHaveBeenLastCalledWith('file', 'f1', expect.objectContaining({
+      version: 5,
+      translations: expect.objectContaining({ en: expect.objectContaining({ title: 'Mine' }) }),
+    }))
   })
 })

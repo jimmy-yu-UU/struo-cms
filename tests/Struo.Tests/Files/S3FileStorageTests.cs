@@ -3,6 +3,7 @@ using Amazon.S3;
 using AwesomeAssertions;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Files;
@@ -10,7 +11,7 @@ namespace Struo.Tests.Files;
 // Env-gated: runs a real round-trip only when MinIO/S3 connection info is provided, e.g.
 //   STRUO_S3_ENDPOINT=http://localhost:9000 STRUO_S3_BUCKET=struo
 //   STRUO_S3_ACCESS=minioadmin STRUO_S3_SECRET=minioadmin
-// Otherwise it no-ops so the default suite stays green without external infrastructure.
+// Otherwise it is skipped so the default suite stays green without external infrastructure.
 public class S3FileStorageTests
 {
     private static FileStorageOptions? FromEnv()
@@ -38,11 +39,10 @@ public class S3FileStorageTests
         catch (AmazonS3Exception e) when (e.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists") { /* idempotent */ }
     }
 
-    [Fact]
+    [EnvironmentFact("STRUO_S3_ENDPOINT", "STRUO_S3_BUCKET", "STRUO_S3_ACCESS", "STRUO_S3_SECRET")]
     public async Task Save_read_delete_and_presign()
     {
-        var opts = FromEnv();
-        if (opts is null) return; // skip when MinIO env not configured
+        var opts = FromEnv()!;
 
         await EnsureBucketAsync(opts);
 

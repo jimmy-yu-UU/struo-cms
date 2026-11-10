@@ -9,6 +9,7 @@ using Struo.Application.Security;
 using Struo.Infrastructure.Identity;
 using Struo.Infrastructure.Migrations.Commands;
 using Struo.Tests.Security;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Migrations;
@@ -193,14 +194,12 @@ public sealed class AuthUnlockCommandTests
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    [Fact]
+    [EnvironmentFact(RedisLoginAttemptThrottleTests.EnvVar)]
     public async Task Against_a_live_redis_it_clears_a_locked_account()
     {
-        if (RedisConnection is null) return;
-
         var email = $"unlock-{Guid.NewGuid():N}@struo.test";
         var options = Options.Create(new LoginAccountRateLimitOptions { Enabled = true, PermitLimit = 2, WindowSeconds = 60 });
-        using var throttle = new RedisLoginAttemptThrottle(RedisConnection, options);
+        using var throttle = new RedisLoginAttemptThrottle(RedisConnection!, options);
         try
         {
             await throttle.TryReserveAsync(email);

@@ -28,11 +28,10 @@ public sealed class CoreLanguageCodeIndexTests
         AssertDuplicateCodeRejected(harness.Db(), harness.Database.DbType);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public async Task Live_two_languages_with_the_same_code_violate_the_unique_index(string backend)
     {
-        var (_, dbType, connection) = LiveBackend.Get(backend);
-        if (connection is not { } conn) return;
+        var (_, dbType, conn) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(conn);
         var prefix = NewPrefix();
         var db = CoreMigrationHarness.Client(dbType, conn, prefix);

@@ -10,7 +10,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// The PostgreSQL-only part of the live suite: behaviour that exists only on Npgsql / PostgreSQL DDL.
-/// A no-op pass when no PostgreSQL connection is configured. Run:
+/// Skipped when no PostgreSQL connection is configured. Run:
 /// dotnet test --filter FullyQualifiedName~PostgresOnlyTests
 /// </summary>
 [Collection("LiveRepository")]
@@ -20,16 +20,15 @@ public sealed partial class PostgresOnlyTests : IClassFixture<PostgresOnlyDataba
 
     public PostgresOnlyTests(PostgresOnlyDatabases databases) => _databases = databases;
 
-    private static string? Conn => LiveBackend.Get("PostgreSQL").Connection;
+    private static string Conn => LiveBackend.Get("PostgreSQL").Configured().Connection;
 
     // Guards the pooling fix against silent removal: PgTestConnectionString's own unit tests only
     // exercise DisablePooling in isolation, so this asserts the wiring in LiveDatabases. Matched case-
     // and whitespace-insensitively like DisablePooling's own detection. Npgsql-only: the pool is
     // process-wide and outlives each test's client (see docs/ai/decisions/pg-test-connection-pooling.md).
-    [Fact]
+    [LiveBackendFact("PostgreSQL")]
     public void Resolved_connection_disables_pooling()
     {
-        if (string.IsNullOrWhiteSpace(Conn)) return;
         Conn.Should().MatchRegex(
             PoolingDisabled(),
             "LiveDatabases must route the PostgreSQL connection through " +
@@ -42,10 +41,9 @@ public sealed partial class PostgresOnlyTests : IClassFixture<PostgresOnlyDataba
     // 型別、其 dialect 的結構同步能力也與 PG 不同，所以這個主張在這個儲存庫裡只有在這裡才證得出來。
     // PostgreSQL DDL 行為，其他後端的 DROP COLUMN 語意不同，故不泛化。
     // 完整說明：docs/ai/decisions/migrations-are-the-only-schema-source.md。
-    [Fact]
+    [LiveBackendFact("PostgreSQL")]
     public void Unfiltered_InitTables_drops_a_removed_column_on_postgres()
     {
-        if (string.IsNullOrWhiteSpace(Conn)) return;
         var postgres = LiveBackend.Get("PostgreSQL");
         using var db = SqlSugarClientFactory.Create(
             new DatabaseOptions { DbType = postgres.Db, ConnectionString = _databases.ConnectionFor(postgres) },

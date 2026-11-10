@@ -671,7 +671,7 @@ user-secrets（`dotnet user-secrets set "Oidc:Providers:google:ClientSecret" <�
 另外還有 `PostgresOnlyTests`。指到的資料庫名稱要包含 `test` 字樣、而且要事先建好，登入帳號要有建立與刪除
 資料庫的權限。
 
-留空時，那個後端的實機測試直接回傳、判定通過，所以要看每個測試花的時間來判斷有沒有真的連線。
+留空時，那個後端的實機測試會顯示為略過，原因欄寫明缺的是哪個環境變數。
 SQLite 那組資料庫測試不受影響，照樣會跑。
 
 環境變數 `STRUO_TEST_BACKEND` 選測試跑在哪個後端：`Sqlite`（預設）、`PostgreSQL`、`SqlServer`、

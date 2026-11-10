@@ -26,10 +26,9 @@ public sealed class CrossProviderStartupGateLiveTests
         { TestBackendKind.PostgreSQL, TestBackendKind.MySql },
     };
 
-    [Theory, MemberData(nameof(Pairs))]
+    [LiveBackendTheory, MemberData(nameof(Pairs))]
     public async Task Both_hosts_migrate_and_pass_the_schema_check(TestBackendKind first, TestBackendKind second)
     {
-        if (!Configured(first) || !Configured(second)) return;
         var prefix = "g" + Guid.NewGuid().ToString("N")[..8] + "_";
 
         using var firstDb = Create(first);
@@ -43,9 +42,6 @@ public sealed class CrossProviderStartupGateLiveTests
             new TestCurrentUserAccessor(Guid.Empty));
         db.Queryable<Struo.Infrastructure.Localization.Language>().Count().Should().Be(2);
     }
-
-    private static bool Configured(TestBackendKind kind) =>
-        kind == TestBackendKind.Sqlite || !string.IsNullOrWhiteSpace(LiveBackend.Get(kind.ToString()).Connection);
 
     private static ITestDatabase Create(TestBackendKind kind) =>
         kind == TestBackendKind.Sqlite ? TestBackend.CreateSqliteDatabase() : TestBackend.CreateLiveDatabase(kind, "xgate");

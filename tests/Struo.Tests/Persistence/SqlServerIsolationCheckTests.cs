@@ -10,15 +10,15 @@ namespace Struo.Tests.Persistence;
 
 /// <summary>
 /// The SQL Server startup check warns once when READ_COMMITTED_SNAPSHOT is off, stays silent when it
-/// is on, and issues no query on any other backend. The live cases return early when SQL Server is
+/// is on, and issues no query on any other backend. The live cases are skipped when SQL Server is
 /// not configured (see <see cref="LiveBackend"/>).
 /// </summary>
 public sealed class SqlServerIsolationCheckTests
 {
-    [Fact]
+    [LiveBackendFact("SqlServer")]
     public async Task A_database_with_snapshot_isolation_on_logs_nothing()
     {
-        if (!TryResolve(out var kind)) return;
+        var kind = SqlServerKind();
         using var database = TestBackend.CreateLiveDatabase(kind, "rcsion");
         using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString);
         var logger = new ListLogger();
@@ -28,10 +28,10 @@ public sealed class SqlServerIsolationCheckTests
         logger.Entries.Should().BeEmpty();
     }
 
-    [Fact]
+    [LiveBackendFact("SqlServer")]
     public async Task A_database_with_snapshot_isolation_off_logs_one_warning_with_the_remedy()
     {
-        if (!TryResolve(out var kind)) return;
+        var kind = SqlServerKind();
         using var database = TestBackend.CreateLiveDatabase(kind, "rcsioff");
         LiveDatabaseDdl.DisableReadCommittedSnapshot(database.ConnectionString);
         using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString);
@@ -114,10 +114,5 @@ public sealed class SqlServerIsolationCheckTests
         logger.Entries.Should().BeEmpty();
     }
 
-    private static bool TryResolve(out TestBackendKind kind)
-    {
-        var live = LiveBackend.Get("SqlServer");
-        kind = TestBackend.KindOf(live);
-        return live.Connection is not null;
-    }
+    private static TestBackendKind SqlServerKind() => TestBackend.KindOf(LiveBackend.Get("SqlServer"));
 }

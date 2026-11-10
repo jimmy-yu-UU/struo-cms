@@ -55,6 +55,10 @@
   `shell.brandHome` and `user.account` locale keys are replaced by `shell.brandHomeHint` and
   `user.accountMenuHint`. The configured brand logo is decorative (`alt=""`) because the brand
   name always sits next to it as text.
+- A live test whose backend has no connection configured, and a Redis or S3 test without its
+  environment variables, shows as skipped instead of passing, and the skip reason names the missing
+  variable or setting key. `Struo.Tests.Support` adds `LiveBackendFact`, `LiveBackendTheory` and
+  `EnvironmentFact` for a fork's own live tests, and `LiveSkip` for the skip reasons they use.
 
 ### Fixed
 

@@ -6,7 +6,7 @@ namespace Struo.Tests.Support;
 
 /// <summary>
 /// Live lifecycle of <see cref="TestBackend.CreateLiveDatabase(TestBackendKind, string)"/>: each case
-/// returns early when its backend is not configured (see <see cref="LiveBackend"/>).
+/// is skipped when its backend is not configured (see <see cref="LiveBackend"/>).
 /// </summary>
 public sealed class TestDatabaseLiveTests
 {
@@ -15,10 +15,10 @@ public sealed class TestDatabaseLiveTests
 
     private const string DropLeftoversSwitch = "STRUO_TEST_DROP_LEFTOVERS";
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Created_database_exists_and_round_trips_a_row(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
 
         using var database = TestBackend.CreateLiveDatabase(kind, "lifecycle");
 
@@ -31,10 +31,10 @@ public sealed class TestDatabaseLiveTests
         client.Queryable<ProbeRow>().First(r => r.Id == id).Name.Should().Be("probe");
     }
 
-    [Theory, MemberData(nameof(MySqlFamily))]
+    [LiveBackendTheory, MemberData(nameof(MySqlFamily))]
     public void Created_database_stores_four_byte_characters(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         const string emoji = "😀";
 
         using var database = TestBackend.CreateLiveDatabase(kind, "charset");
@@ -46,10 +46,10 @@ public sealed class TestDatabaseLiveTests
         client.Queryable<ProbeRow>().First(r => r.Id == id).Name.Should().Be(emoji);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Same_purpose_databases_are_independent_and_disposing_one_leaves_the_other(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         using var kept = TestBackend.CreateLiveDatabase(kind, "twin");
         var dropped = TestBackend.CreateLiveDatabase(kind, "twin");
         try
@@ -68,10 +68,10 @@ public sealed class TestDatabaseLiveTests
         client.Queryable<ProbeRow>().Count().Should().Be(0);
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Disposing_drops_the_database_while_a_connection_is_still_open(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var database = TestBackend.CreateLiveDatabase(kind, "open");
         var name = database.Name;
         using var client = LiveDatabaseDdl.OpenClient(kind, database.ConnectionString, keepOpen: true);
@@ -82,10 +82,10 @@ public sealed class TestDatabaseLiveTests
         LiveDatabaseDdl.Exists(kind, name).Should().BeFalse();
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Leftover_cleanup_finds_and_drops_only_databases_the_mechanism_created(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var runId = Guid.NewGuid().ToString("N")[..8];
         var configured = TestBackend.ConfiguredDatabaseName(kind);
         var nonHexSuffix = Guid.NewGuid().ToString("N")[..7] + "z";
@@ -106,10 +106,10 @@ public sealed class TestDatabaseLiveTests
         LiveDatabaseDdl.Exists(kind, configured).Should().BeTrue();
     }
 
-    [Theory, MemberData(nameof(Backends))]
+    [LiveBackendTheory, MemberData(nameof(Backends))]
     public void Creating_a_database_whose_name_exists_throws_and_keeps_the_existing_one(string backend)
     {
-        if (!TryResolve(backend, out var kind)) return;
+        var kind = KindOf(backend);
         var configured = TestBackend.ConfiguredDatabaseName(kind);
         var name = TestBackend.DatabaseNameFor(configured, "clash", 1, Guid.NewGuid().ToString("N")[..8]);
         using var first = LiveDatabaseDdl.CreateNamed(kind, name);
@@ -135,12 +135,7 @@ public sealed class TestDatabaseLiveTests
         TestBackend.FindLeftovers(kind).Should().BeEmpty();
     }
 
-    private static bool TryResolve(string backend, out TestBackendKind kind)
-    {
-        var live = LiveBackend.Get(backend);
-        kind = TestBackend.KindOf(live);
-        return live.Connection is not null;
-    }
+    private static TestBackendKind KindOf(string backend) => TestBackend.KindOf(LiveBackend.Get(backend));
 
     [SugarTable("test_backend_probe")]
     private sealed class ProbeRow
