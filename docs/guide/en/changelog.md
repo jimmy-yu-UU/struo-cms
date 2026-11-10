@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.30.1
+
+### Changed
+
+- `Struo.Infrastructure` takes `Microsoft.Extensions.Caching.Memory` at the version in
+  `Directory.Packages.props`, like every other package.
+
 ## 0.30.0 — 2026-11-10
 
 ::: danger Breaking
