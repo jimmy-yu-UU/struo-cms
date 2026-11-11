@@ -5,8 +5,9 @@
 ### Added
 
 - `Query:MaxInValues` (default `500`, at most `900`) bounds the values of every `_in` and `_nin` in one
-  request: the root `filter`, relation predicates and `deep` filters draw from it together, and a
-  query-string list counts once per comma-separated element. A request over it is a `400`.
+  REST request or one GraphQL collection query field: the root `filter`, relation predicates and
+  `deep` filters draw from it together, and a query-string list counts once per comma-separated
+  element. A request over it is a `400`.
 - `Query:MaxRelationLinks` (default `1000`) bounds the ids one many-to-many relation accepts in a
   single write. A longer array is a `400` and nothing is written.
 
@@ -30,6 +31,9 @@
   An empty query-string value, `filter[code][_in]=`, is an empty list.
 - A text `_nin` inside an `_or` group is a `400` that says to move it to the top level or into an
   `_and`. A text `_in` inside `_or` works as before.
+- A text `_in` or `_nin` takes text elements only. A number, a boolean or an object element, or a
+  value that is not a list, is a `400` naming the field. An empty element of a query-string list on
+  a field of another type (`1,,2`, `,`) is a `400`.
 - The ids of a many-to-many write are parsed to the target's key type: a number for a `Guid` key, or
   text that is not a `Guid`, is a `400`; `1` and `"1"`, or one `Guid` in two spellings, name one id.
 
@@ -37,7 +41,9 @@
 
 - A filter that names a column and another column made of it plus trailing digits (`address` and
   `address2`) could bind one value to both: PostgreSQL returned wrong rows without an error and the
-  other backends failed with a `500`. It is a `400` that names the two columns.
+  other backends failed with a `500`. It is a `400` that names the two fields, and only when the
+  parameter names really repeat: `address` and `address2` in one query that keeps their names apart
+  still work.
 
 ### Security
 

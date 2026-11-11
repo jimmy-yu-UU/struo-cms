@@ -99,7 +99,10 @@ inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends
 
 **Empty lists, `null` and duplicates.** An empty list is no value at all: `_in` with no value
 matches no row and `_nin` with no value adds no condition. A `null` element or a nested array is
-a 400; a value repeated in a text list is bound once.
+a 400; a value repeated in a text list is bound once. A text list takes text elements only: a
+number, a boolean or an object element, or a single value that is not a list, is a 400 naming the
+field. On a field of another type, an empty element of a query-string list (`1,,2`, or a lone `,`)
+is a 400 as well.
 
 **Text lists.** `_in`/`_nin` on a text field bind each value as a parameter, so a quote, a
 backslash, a comma, the empty string and the words `null` and `[null]` are plain text that matches
@@ -108,9 +111,11 @@ inequalities must all hold at once: the request fails with a 400 that says to mo
 level or into an `_and`. A text `_in` inside `_or` is fine. Because a text `_nin` is an inequality,
 rows where the field is `NULL` never match it.
 
-**Column names that differ only by digits.** A filter that names both a column and another made of
-the same name plus trailing digits (`address` and `address2`) is a 400, because SqlSugar would give
-their parameters one name.
+**Column names that differ only by digits.** SqlSugar names a parameter after its column and a
+position, so a column and another made of the same name plus trailing digits (`address` and
+`address2`) can end up with one parameter name in one query. Such a query is a 400 that names the two
+fields, but only when the parameter names really repeat; the same two fields in a query that keeps
+their names apart work.
 
 **`_null`/`_nnull` ignore the value.** These two operators translate to a plain
 `IS NULL`/`IS NOT NULL`; the value itself is never read at all, so
@@ -176,13 +181,15 @@ own.
 **A cap on the number of conditions.** `Query:MaxFilterConditions` (default 50) counts every leaf
 comparison in the whole request — including every `_and`/`_or` branch and every quantifier's inner
 filter — and rejects the request once that cap is exceeded: `Too many filter conditions (max
-50).`. The root `filter` and every nested `deep` filter draw from that one budget. A cross-relation
+50).`. The root `filter` and every nested `deep` filter draw from that one budget; in GraphQL, each
+collection query field of an operation has its own. A cross-relation
 condition has no similar cap, because a relation condition only adds one more level of nested
 subquery; it doesn't need to be bounded the way fetching a set of ids does.
 
 **A cap on list values.** `Query:MaxInValues` (default 500) counts every value of every
 `_in`/`_nin` in the whole request, root `filter` and nested `deep` filters together, one per
-comma-separated element of a query string and one per element of an array. A request over the cap
+comma-separated element of a query string and one per element of an array. In GraphQL each
+collection query field of an operation counts on its own. A request over the cap
 is rejected with `Too many values in _in/_nin filters (max 500, Query:MaxInValues).`
 
 **Other shape errors.** An empty `filter` object is an error (`Empty filter object.`), while

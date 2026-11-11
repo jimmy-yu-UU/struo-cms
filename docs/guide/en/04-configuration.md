@@ -345,11 +345,13 @@ value, falls back to `DefaultLimit`. Exceeding `MaxFilterConditions`, `MaxFacets
 `MaxAggregates` instead throws an exception naming the limit, and the query never executes. So does
 exceeding `MaxSortFields`, which counts the fields of the top-level `sort` and of each nested list's
 `sort` separately, and `MaxDeepRelations`, which counts every relation node in one request's `deep`
-tree. `MaxFilterConditions` is one budget for the whole request: the root `filter` and every nested
-`deep` filter draw from it together.
+tree. `MaxFilterConditions` is one budget for the whole REST request: the root `filter` and every
+nested `deep` filter draw from it together. In GraphQL each collection query field of an operation
+draws its own budget.
 
-`MaxInValues` counts every value of every `_in` and `_nin` in one request: the root `filter`,
-relation predicates and every nested `deep` filter draw from it together. A query-string list counts
+`MaxInValues` counts every value of every `_in` and `_nin` in one REST request: the root `filter`,
+relation predicates and every nested `deep` filter draw from it together. In GraphQL each collection
+query field of an operation has its own count, like `MaxFilterConditions`. A query-string list counts
 once per comma-separated element and a JSON array once per element. Going over fails with a 400
 that names the limit and the key, and the query never executes. A text `_in` or `_nin` binds one
 parameter per value, and the ceiling of 900 keeps that under SQLite's expression-depth limit of

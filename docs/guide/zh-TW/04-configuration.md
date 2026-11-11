@@ -294,11 +294,11 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 `limit` 超過 `MaxLimit` 會被夾到上限，不會被拒絕；沒帶 `limit` 或給了非正值，改用
 `DefaultLimit`。超過 `MaxFilterConditions`、`MaxFacets` 或 `MaxAggregates` 則是直接丟出例
 外，訊息會點名是哪個上限，查詢在執行前就先被擋下來。`MaxSortFields` 也一樣：頂層 `sort` 與每個巢狀清單的 `sort` 各自計算欄位數；
-`MaxDeepRelations` 計算一次請求的 `deep` 樹裡所有關聯節點。`MaxFilterConditions` 是整個請求共用的一份
-額度：根層 `filter` 與每個巢狀 `deep` 篩選一起從裡面扣。
+`MaxDeepRelations` 計算一次請求的 `deep` 樹裡所有關聯節點。`MaxFilterConditions` 是整個 REST 請求共用的一份
+額度：根層 `filter` 與每個巢狀 `deep` 篩選一起從裡面扣；GraphQL 一個 operation 裡的每個集合查詢欄位各扣各的。
 
-`MaxInValues` 計算一次請求裡所有 `_in` 與 `_nin` 的值：根層 `filter`、關聯量詞與每個巢狀 `deep` 篩選
-一起從裡面扣。查詢字串的清單依逗號切開，一個元素算一個；JSON 陣列也是一個元素算一個。超過就回 400，
+`MaxInValues` 計算一次 REST 請求裡所有 `_in` 與 `_nin` 的值：根層 `filter`、關聯量詞與每個巢狀 `deep`
+篩選一起從裡面扣。GraphQL 一個 operation 裡的每個集合查詢欄位各自計算，和 `MaxFilterConditions` 一樣。查詢字串的清單依逗號切開，一個元素算一個；JSON 陣列也是一個元素算一個。超過就回 400，
 訊息點名這個上限與鍵名，查詢不會執行。文字欄位的 `_in`／`_nin` 每個值綁一個參數，上限定在 900 以內，
 是為了不碰到 SQLite 的運算式深度 1000，也低於 SQL Server 每個命令 2100 個參數。
 

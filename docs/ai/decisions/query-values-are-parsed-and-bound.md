@@ -20,10 +20,15 @@ the comparison operators on such a type keep passing the text as a bound value.
   group) and an empty `_nin` adds no condition. A null element or a nested list is a 400. A text
   `_nin` inside an `_or` group is a 400; a text `_in` there adds its equalities to the group.
 - `ConditionalTree` is not used.
-- `ParameterNames.EnsureDistinct` refuses a condition list that names a column and a column made of
-  it plus trailing digits.
-- `Query:MaxInValues` (default 500, at most 900) bounds the `_in`/`_nin` values of a request, and
-  `Query:MaxRelationLinks` (default 1000) bounds the ids of one relation in one write.
+- `ParameterNames.EnsureDistinct` renders a condition list once, on a copy and without running it
+  (`ToSql()`), when the list names a column and a column made of it plus trailing digits. The list is
+  refused only when the rendered parameters repeat a name. The check sits at the root condition list,
+  every subquery list and the id lookup that carries an extra filter.
+- `Query:MaxInValues` (default 500, at most 900) bounds the `_in`/`_nin` values of one REST request or
+  one GraphQL collection query field, and `Query:MaxRelationLinks` (default 1000) bounds the ids of one
+  relation in one write. The link count is checked before the write transaction opens.
+- A text set takes text elements only: a number, a boolean or an object element, a scalar in place of a
+  list, and an empty element of a query-string list on a typed field are each a 400.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.
@@ -41,14 +46,19 @@ names clash with a group's on the same column, and it takes its connector from i
 SqlSugar behaviours the group form has to work around:
 
 - A group's first entry carries the connector between the group and the condition before it.
-- An `Equal` whose `FieldValue` is `null` renders `IS NULL`; one whose `FieldValue` is `[null]` rewrites
-  `FieldValue` in place, so a second render of the same model differs. A list request renders twice
-  (count, then page).
+- An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the text
+  `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list request
+  renders twice (count, then page). The name check renders a copy for that reason.
 - One instance listed twice is numbered by its first position, which drops the closing parenthesis and
   repeats a parameter name.
 - An empty group renders nothing: the condition disappears, or the `AND` after it is left dangling.
 - A parameter is named after its column plus a position number with nothing between them, so a column
   and a column made of it plus digits can share a name.
+
+The name check is two steps because the clash depends on SqlSugar's numbering, which can change. A
+name comparison (a column and the same name plus digits) only decides whether to render. The rendered
+parameter list then decides: a pair such as `code` and `code1` that never lands on one name is a valid
+query. A guard test fails if SqlSugar stops repeating a name for a forced clash.
 
 `MaxInValues` stops at 900 because a text list of that size is one OR chain of that depth, and SQLite
 refuses an expression tree deeper than 1000; SQL Server allows 2100 parameters in a command.
