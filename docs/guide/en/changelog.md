@@ -7,6 +7,13 @@
 - `Struo.Infrastructure` takes `Microsoft.Extensions.Caching.Memory` at the version in
   `Directory.Packages.props`, like every other package.
 
+### Security
+
+- The `Microsoft.AspNetCore.*` and `Microsoft.Extensions.*` packages move from 10.0.14 to 10.0.15.
+  `Microsoft.AspNetCore.WebUtilities` 10.0.14 and earlier is affected by GHSA-x33c-w48q-qrgc (High),
+  an ASP.NET Core denial-of-service advisory. NuGet audit fails the restore of 0.30.0 and earlier on
+  it.
+
 ## 0.30.0 — 2026-11-10
 
 ::: danger Breaking

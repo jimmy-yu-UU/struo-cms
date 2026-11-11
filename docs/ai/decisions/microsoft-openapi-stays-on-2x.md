@@ -19,22 +19,22 @@ direct reference lets the central pin choose a version above that bound. The pin
 floor for security fixes in `Microsoft.OpenApi`.
 
 The 2.x ceiling comes from `Microsoft.AspNetCore.OpenApi`, which is compiled against 2.x: its nuspec for
-`net10.0` declares `Microsoft.OpenApi` as `[2.12.2, 3.0.0)`. A 3.x pin sits outside that range, and
+`net10.0` declares `Microsoft.OpenApi` as `[2.13.0, 3.0.0)`. A 3.x pin sits outside that range, and
 the shipped assembly would run against a major it was not built for. Dependabot's major-version
 proposal would ask for exactly that, which is what the ignore rule prevents.
 
 ## Evidence
 
-Checked 2026-11-10 in the NuGet cache: `microsoft.aspnetcore.openapi/10.0.14/microsoft.aspnetcore.openapi.nuspec`
-holds `<dependency id="Microsoft.OpenApi" version="[2.12.2, 3.0.0)" exclude="Build,Analyzers" />` in
-the `net10.0` group. `Directory.Packages.props` pins `Microsoft.AspNetCore.OpenApi` at 10.0.14 and
-`Microsoft.OpenApi` at 2.13.0, so the pin is inside that range.
+Checked 2026-11-11 in the NuGet cache: `microsoft.aspnetcore.openapi/10.0.15/microsoft.aspnetcore.openapi.nuspec`
+holds `<dependency id="Microsoft.OpenApi" version="[2.13.0, 3.0.0)" exclude="Build,Analyzers" />` in
+the `net10.0` group. `Directory.Packages.props` pins `Microsoft.AspNetCore.OpenApi` at 10.0.15 and
+`Microsoft.OpenApi` at 2.13.0, so the pin is the lowest version that range allows.
 
-The security floor was not re-checked on 2026-11-10. It rests on advisory GHSA-v5pm-xwqc-g5wc:
+The security floor was not re-checked on 2026-11-11. It rests on advisory GHSA-v5pm-xwqc-g5wc:
 `Microsoft.OpenApi` 2.0.0 carries it, patched from 2.7.5.
 
 Recorded when the pin was introduced, against `Microsoft.AspNetCore.OpenApi` 10.0.10, and not
-re-measured against 10.0.14:
+re-measured against 10.0.15:
 
 - That version declared a bare `>= 2.0.0` dependency with no upper bound, so NuGet resolved 3.x.
 - Its own `XmlCommentGenerator` then emitted assignments to `IOpenApiMediaType.Example`, which 3.x made
@@ -45,12 +45,12 @@ re-measured against 10.0.14:
 
 ## Unknowns
 
-Whether the direct pin is still needed is open. `Microsoft.AspNetCore.OpenApi` 10.0.14 already requires
-2.12.2 or newer, which is above the 2.7.5 advisory fix, so a transitive resolution at 10.0.14 would also
+Whether the direct pin is still needed is open. `Microsoft.AspNetCore.OpenApi` 10.0.15 already requires
+2.13.0 or newer, which is above the 2.7.5 advisory fix, so a transitive resolution at 10.0.15 would also
 land on a patched version. The pin keeps the version under the central file's control if a later
 `Microsoft.AspNetCore.OpenApi` lowers its bound.
 
-What a 3.x pin does against the 10.0.14 nuspec range `[2.12.2, 3.0.0)` has not been tried.
+What a 3.x pin does against the 10.0.15 nuspec range `[2.13.0, 3.0.0)` has not been tried.
 
 Whether `Microsoft.AspNetCore.OpenApi` 11.0.x ships against `Microsoft.OpenApi` 3.x is expected from
 upstream's direction and not checked. Revisit the pin and the ignore rule when the project moves to
