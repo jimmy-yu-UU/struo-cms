@@ -3,9 +3,9 @@
 # major each package was already on.
 #
 # The bound is the point. `pnpm audit --fix` emits open-ended targets like
-# ">=7.29.0", and pnpm resolves those to the newest major: undici went to 8.x
-# and brace-expansion to 5.x. Patching a vulnerability must not drag a
-# dependent across a major it has not been updated for.
+# ">=7.29.0", and pnpm resolves those to the newest major. Patching a
+# vulnerability must not drag a dependent across a major it has not been
+# updated for.
 #
 # One entry crosses a major on purpose: @tailwindcss/typography pins
 # postcss-selector-parser to exactly 6.0.10, and the advisory has no 6.x fix.
@@ -16,10 +16,4 @@
 # Re-run `pnpm audit` after editing this file, and drop entries once the
 # packages upstream have moved past them on their own.
 overrides:
-  brace-expansion@>=2.0.0 <2.1.2: '>=2.1.2 <3'
-  brace-expansion@>=2.0.0 <2.1.3: '>=2.1.3 <3'
-  brace-expansion@>=2.0.0 <2.1.4: '>=2.1.4 <3'
-  nanoid@<3.3.18: '>=3.3.18 <4'
-  postcss@<=8.5.17: '>=8.5.18 <9'
-  postcss@<=8.5.22: '>=8.5.23 <9'
   postcss-selector-parser@<7.1.6: '>=7.1.6 <8'

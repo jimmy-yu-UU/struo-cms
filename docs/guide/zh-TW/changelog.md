@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## 0.30.1
+
+### 變更
+
+- `Struo.Infrastructure` 的 `Microsoft.Extensions.Caching.Memory` 改用 `Directory.Packages.props` 裡
+  的版本，和其他套件一樣。
+
 ## 0.30.0 — 2026-11-10
 
 ::: danger 破壞性變更
