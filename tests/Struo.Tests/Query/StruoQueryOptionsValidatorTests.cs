@@ -30,6 +30,42 @@ public sealed class StruoQueryOptionsValidatorTests
     }
 
     [Fact]
+    public void Shipped_defaults_for_the_value_limits_are_500_and_1000()
+    {
+        var options = new StruoQueryOptions();
+        options.MaxInValues.Should().Be(500);
+        options.MaxRelationLinks.Should().Be(1000);
+    }
+
+    [Theory]
+    [InlineData("Query:MaxInValues", "901")]
+    [InlineData("Query:MaxInValues", "0")]
+    [InlineData("Query:MaxRelationLinks", "0")]
+    public void A_value_limit_outside_its_range_stops_startup_naming_the_key(string key, string value)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [key] = value }).Build();
+        var services = new ServiceCollection().AddSingleton<IConfiguration>(config).AddStruoData();
+        using var sp = services.BuildServiceProvider();
+
+        var act = () => sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value;
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*" + key.Split(':')[1] + "*");
+    }
+
+    [Theory]
+    [InlineData("Query:MaxInValues", "900")]
+    [InlineData("Query:MaxInValues", "1")]
+    [InlineData("Query:MaxRelationLinks", "100000")]
+    public void A_value_limit_inside_its_range_is_accepted(string key, string value)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [key] = value }).Build();
+        var services = new ServiceCollection().AddSingleton<IConfiguration>(config).AddStruoData();
+        using var sp = services.BuildServiceProvider();
+
+        sp.GetRequiredService<IOptions<StruoQueryOptions>>().Value.Should().NotBeNull();
+    }
+
+    [Fact]
     public void Startup_resolution_throws_when_default_limit_exceeds_max_limit()
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
