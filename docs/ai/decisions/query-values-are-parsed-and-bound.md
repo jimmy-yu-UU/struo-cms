@@ -88,21 +88,24 @@ Measured 2026-11-11 with the committed tests under `tests/Struo.Tests/Security/Q
 
 - A condition list with `code1` at position 1 and `code` at position 11, and one with a ten-value group
   on `code` beside `code1`, both fail on SQLite with `Must add values for the following parameters`.
-- The whole `QueryValueInjection` namespace passes on SQLite, PostgreSQL 17, MySQL 8.4 and MariaDB
-  11.8, including every supported type's set, comparison and bad-value cases, and the booleans as
-  `1`/`0` sets.
+- The whole `QueryValueInjection` namespace passes on SQLite, PostgreSQL 17, MySQL 8.4, MariaDB 11.8
+  and SQL Server 2022, including every supported type's set, comparison and bad-value cases, the
+  booleans as `1`/`0` sets and the refusal of a real name clash.
+- The whole `Struo.Tests` project on SQL Server 2022 (CU27): 3711 passed, 225 skipped, 2 failed. The
+  two failures are the duplicate language code cases that differ only in letter case, which answer
+  `409` under a case-insensitive collation and do not touch a filter. The run was inside an SDK
+  container on the container network: from the host, the connection to a throwaway SQL Server
+  container timed out at the pre-login handshake on every port and client tried.
 
 ## Unknowns
 
-- SQL Server was not run. Throwaway SQL Server 2022 and 2025 containers accepted connections inside the
-  container, but the host connection timed out at the pre-login handshake with three connection
-  strings, so nothing is measured there: the boolean `1`/`0` set, collation equality of the `=` group,
-  the 2100 parameter limit with `MaxInValues` plus the other conditions of a request, and whether the
-  name clash is refused or silently wrong.
+- On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost
+  of the group forms, collation equality of the `=` group against the inline list, or the 2100
+  parameter limit with `MaxInValues` raised towards 900 plus the other conditions of a request.
 - A fork with a text primary key sends text ids through the group form. A relation array of 1000 text
   ids is an OR chain of 1000, which SQLite refuses; lower `Query:MaxRelationLinks` there.
 - An enum column is read as its number: SqlSugar's CodeFirst creates an integer column for one, and the
-  enum tests pass on four backends with that. A fork that stores enums as text needs its own filter
+  enum tests pass on five backends with that. A fork that stores enums as text needs its own filter
   handling.
 - Oracle has no instance here.
 

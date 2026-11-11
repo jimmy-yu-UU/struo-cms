@@ -94,7 +94,9 @@ public sealed class TypedValueConditionTests : IDisposable
 
         var inModel = Conds(Db, D, "dateTimeCol", QueryOperator.In, "2026-03-05T05:06:07Z,2026-03-07T13:06:07+08:00")
             .Should().ContainSingle().Which.Should().BeOfType<ConditionalModel>().Which;
-        inModel.FieldValue.Should().Contain("2026-03-05 05:06:07").And.Contain("2026-03-07 05:06:07");
+        // SQL Server takes the ISO 8601 form with a T; the other backends take a space.
+        var separator = Db.CurrentConnectionConfig.DbType == DbType.SqlServer ? 'T' : ' ';
+        inModel.FieldValue.Should().Contain($"2026-03-05{separator}05:06:07").And.Contain($"2026-03-07{separator}05:06:07");
         inModel.ConditionalType.Should().Be(ConditionalType.In);
     }
 
