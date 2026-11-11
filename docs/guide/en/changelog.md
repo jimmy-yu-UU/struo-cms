@@ -2,10 +2,56 @@
 
 ## 0.30.1
 
+### Added
+
+- `Query:MaxInValues` (default `500`, at most `900`) bounds the values of every `_in` and `_nin` in one
+  request: the root `filter`, relation predicates and `deep` filters draw from it together, and a
+  query-string list counts once per comma-separated element. A request over it is a `400`.
+- `Query:MaxRelationLinks` (default `1000`) bounds the ids one many-to-many relation accepts in a
+  single write. A longer array is a `400` and nothing is written.
+
 ### Changed
 
 - `Struo.Infrastructure` takes `Microsoft.Extensions.Caching.Memory` at the version in
   `Directory.Packages.props`, like every other package.
+- A filter value that is not of its field's type is a `400` naming the field, for `_eq`, `_neq`, `_gt`,
+  `_gte`, `_lt`, `_lte`, `_in` and `_nin`: `abc` for an integer, a number outside the type's range,
+  `NaN` for a float, text that is not a date-time. Most of these were a `500` from the database, and
+  text that was not a date-time was compared as text. `_in` and `_nin` on a field of a type outside
+  `Guid`, `int`, `long`, `short`, `byte`, `bool`, `decimal`, `double`, `float`, `DateTime`,
+  `DateTimeOffset`, enum and `string` are a `400`. Numbers are read with a dot as the decimal
+  separator and a boolean is `true`, `false`, `1` or `0`.
+- `_in` and `_nin` on a text field bind each value as a parameter. A `""` element matches the empty
+  string, an element of a JSON array that holds a comma is one value, `null` and `[null]` are plain
+  text (`[null]` was a `500`), and a value with a backslash works on MySQL and MariaDB (it was a
+  `500`). A value repeated in the list is bound once.
+- An empty `_in` matches no row and an empty `_nin` adds no condition; an empty `_nin` on a text field
+  excluded the rows holding an empty string or `NULL`. A `null` element in either list is a `400`.
+  An empty query-string value, `filter[code][_in]=`, is an empty list.
+- A text `_nin` inside an `_or` group is a `400` that says to move it to the top level or into an
+  `_and`. A text `_in` inside `_or` works as before.
+- The ids of a many-to-many write are parsed to the target's key type: a number for a `Guid` key, or
+  text that is not a `Guid`, is a `400`; `1` and `"1"`, or one `Guid` in two spellings, name one id.
+
+### Fixed
+
+- A filter that names a column and another column made of it plus trailing digits (`address` and
+  `address2`) could bind one value to both: PostgreSQL returned wrong rows without an error and the
+  other backends failed with a `500`. It is a `400` that names the two columns.
+
+### Security
+
+- The `_in` and `_nin` filter operators wrote their values into the SQL text, so a crafted value
+  changed the statement. It applied to a number field with either operator, to a boolean field with
+  `_in`, and to a text field on MySQL and MariaDB. Any caller who can read the collection could send
+  it, anonymous callers too where a collection is public, through REST, `POST .../query` and GraphQL,
+  and inside `deep`, `_some`/`_none`, facet and aggregate filters. It could return rows that a filter
+  or soft deletion hides, read other tables, and run further statements. This was reproduced on
+  SQLite, PostgreSQL, MySQL and MariaDB; SQL Server was not tested.
+- The ids of a many-to-many write reached the same lookup when an array mixed numbers and text. The
+  caller needed write permission on the collection that declares the relation, not on the target.
+- Every release from 0.7.0, the oldest tag, is affected; the lookups date from the filter translator
+  itself. Upgrading fixes it. No configuration change closes it.
 
 ## 0.30.0 — 2026-11-10
 

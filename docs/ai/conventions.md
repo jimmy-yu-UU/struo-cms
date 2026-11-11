@@ -544,8 +544,8 @@ none is ever surfaced client-side.
   `AGENTS.md`, "Invariants", for the full enumeration (its first raw-SQL exception). Sort assembles no SQL text: `OrderByExpressionBuilder`
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`) returns typed sort-key lambdas and
   `SqlSugarItemRepository.RunQueryAsync` chains them as typed `OrderBy` calls, binding a translatable
-  sort's locale as a SQL parameter. Every filter value `ConditionalModelTranslator` renders
-  into a `ConditionalModel` (`ToFieldValue`) is formatted with `CultureInfo.InvariantCulture`, and
+  sort's locale as a SQL parameter. Every filter value `ValueConditions` renders
+  into a `ConditionalModel` is read and formatted with `CultureInfo.InvariantCulture`, and
   `AddStruoCms` sets the host process's own default culture to invariant at startup — needed
   because SqlSugar re-parses that same rendered value back with `CultureInfo.CurrentCulture`
   (keyed off `CSharpTypeName`), so the two sides must agree or a decimal/DateTime literal silently

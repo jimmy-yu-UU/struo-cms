@@ -81,6 +81,11 @@ camelCase name; every id in the array is checked against the target collection b
 runs, and an unknown id rejects the whole batch: `One or more ids in '{relation}' do not exist in
 '{target}'.`
 
+Each id is first parsed to the key type of the target, a `Guid` or a number. An id that is not of
+that type is a 400 (`One or more ids in '{relation}' are not valid.`), a JSON number and the same
+number as text name one id, and an array longer than `Query:MaxRelationLinks` (default 1000) is a
+400 that writes nothing.
+
 The sync diffs the incoming array against the junction rows already on file: rows whose target has
 disappeared are deleted, rows for new targets are added, and rows for targets that remain keep
 their original junction primary key rather than being dropped and recreated. The three cases each

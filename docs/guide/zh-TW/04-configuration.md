@@ -282,9 +282,12 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 | `Query:MaxFacetValues` | 整數 | `50` |
 | `Query:MaxAggregates` | 整數 | `10` |
 | `Query:MaxSearchCandidates` | 整數 | `1000` |
+| `Query:MaxInValues` | 整數 | `500` |
+| `Query:MaxRelationLinks` | 整數 | `1000` |
 
-十二個鍵全部都有 `[Range(1, int.MaxValue)]` 驗證，並用 `ValidateOnStart` 綁定，改成 0 或負數
-會直接讓啟動失敗；宣告以外的鍵名（例如打錯字）則會被靜靜忽略，不會報錯。
+十四個鍵都有 `[Range(1, int.MaxValue)]` 驗證，只有 `MaxInValues` 是 `[Range(1, 900)]`，並用
+`ValidateOnStart` 綁定，改成 0、負數，或把 `MaxInValues` 設到 900 以上，會直接讓啟動失敗；宣告以外
+的鍵名（例如打錯字）則會被靜靜忽略，不會報錯。
 
 `DefaultLimit` 不可大於 `MaxLimit`。`DefaultLimit` 較大時啟動會失敗，錯誤訊息同時點名這兩個鍵。
 
@@ -293,6 +296,14 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 外，訊息會點名是哪個上限，查詢在執行前就先被擋下來。`MaxSortFields` 也一樣：頂層 `sort` 與每個巢狀清單的 `sort` 各自計算欄位數；
 `MaxDeepRelations` 計算一次請求的 `deep` 樹裡所有關聯節點。`MaxFilterConditions` 是整個請求共用的一份
 額度：根層 `filter` 與每個巢狀 `deep` 篩選一起從裡面扣。
+
+`MaxInValues` 計算一次請求裡所有 `_in` 與 `_nin` 的值：根層 `filter`、關聯量詞與每個巢狀 `deep` 篩選
+一起從裡面扣。查詢字串的清單依逗號切開，一個元素算一個；JSON 陣列也是一個元素算一個。超過就回 400，
+訊息點名這個上限與鍵名，查詢不會執行。文字欄位的 `_in`／`_nin` 每個值綁一個參數，上限定在 900 以內，
+是為了不碰到 SQLite 的運算式深度 1000，也低於 SQL Server 每個命令 2100 個參數。
+
+`MaxRelationLinks` 限制一次寫入時單一多對多關聯收下的 id 數，REST 與 GraphQL 都一樣。陣列更長就回
+400，訊息點名該關聯與鍵名，什麼都不會寫入。
 
 `MaxExpandRows` 限制 `deep` 展開一頁資料時，單次關聯讀取最多讀幾列。讀到超過 `MaxExpandRows` 列就回
 400 並點名該關聯，不會截斷結果。唯一的例外是只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`：

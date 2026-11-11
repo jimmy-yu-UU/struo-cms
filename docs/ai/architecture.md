@@ -308,8 +308,8 @@ identically to sharing one:
   subsection below.
 - `AggregateQueries` (`AggregateQueries.cs`) — `AggregateAsync`; see the dedicated subsection below.
 
-`RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `TypeNameOf`,
-`TypeNameOfProperty`, `Descriptor`, `ConvertId` — used by the facade and by `WhereInQueries`,
+`RepositoryHelpers` (`RepositoryHelpers.cs`) is a static helper class — `Descriptor`, `ConvertId` — used
+by the facade and by `WhereInQueries`,
 `SoftDeleteOps`, `PurgeOps`, `ManyToManySync`, `TranslationStore`, `FacetQueries`, and
 `AggregateQueries`.
 
@@ -357,10 +357,23 @@ the collection's primary-key CLR type — see "Search providers" below) is non-n
 `CandidateConditional` builds a typed `id IN (...)` condition from it and that **replaces** the
 `LIKE` search group outright (`search` itself is not consulted in that branch); an empty candidate
 list becomes `id IS NULL` instead of an empty `IN (...)`, portably matching nothing. Both render
-through the same typed `ConditionalModelTranslator.ToSingleModel` path the query DSL's own
-comparison operators use, which SqlSugar renders as SQL **literals**, not parameters — which is
-exactly why the ids must already be parsed to the PK type before reaching this translator;
-`SearchCandidateResolver` is what guarantees that. It is `internal`, not registered in DI at all —
+through the same `ConditionalModelTranslator.ToCondition` path the query DSL's own comparison
+operators use, which hands each value to `ValueConditions`: it parses the value to the column's CLR
+type and renders the parsed value, and SqlSugar writes a number, boolean, Guid or date set into the
+SQL as a **literal**, not a parameter — which is why a value is never passed on as the text a caller
+wrote. A text set is the exception: it becomes one bound equality (or inequality) per value, in a
+`ConditionalCollections` that is never empty. `SearchCandidateResolver` still parses the ids to the PK
+type before they reach this translator.
+
+`ValueConditions` (`src/Struo.Infrastructure/Query/ValueConditions.cs`) is the only file in `src/` that
+names `ConditionalType.In` or `ConditionalType.NotIn` (`ValueConditionsConventionTests`).
+`WhereInQueries`, `ManyToManySync`, `TranslationStore` and `PurgeOps` build their id conditions through
+it as well, with the column's CLR type as the target, and a value that is not of that type is an
+`InvalidOperationException`; a request value reaches them only after `ItemWriteSideSync` parsed it to
+the target key type. The design and its limits are in
+`docs/ai/decisions/query-values-are-parsed-and-bound.md`. `ParameterNames.EnsureDistinct` refuses a
+condition list that names a column and a column made of it plus digits, and `Query:MaxInValues`
+(`QueryValidator`) bounds the list values of a request. It is `internal`, not registered in DI at all —
 `SqlSugarItemRepository` constructs it directly with
 `new FilterTranslator(db, graph, metadata, registry, options)` (four times: its own `filters` field,
 plus one separate instance each for `WhereInQueries`, `FacetQueries`, and `AggregateQueries` — see

@@ -93,8 +93,24 @@ differently:
 `Unknown operator '<token>'.`. Field names are the opposite — case-insensitive everywhere.
 
 **Accepted value shapes.** `_in`/`_nin` are a comma list in the query string and an array in JSON;
-both merge into the same SQL `IN` list. `_contains`/`_starts_with`/`_ends_with` translate to
+both are read as one list. In a query string a comma separates elements; in an array it stays
+inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends_with` translate to
 `LIKE '%v%'`, `LIKE 'v%'`, and `LIKE '%v'` respectively.
+
+**Empty lists, `null` and duplicates.** An empty list is no value at all: `_in` with no value
+matches no row and `_nin` with no value adds no condition. A `null` element or a nested array is
+a 400; a value repeated in a text list is bound once.
+
+**Text lists.** `_in`/`_nin` on a text field bind each value as a parameter, so a quote, a
+backslash, a comma, the empty string and the words `null` and `[null]` are plain text that matches
+rows holding exactly that text. A text `_nin` cannot sit inside an `_or` group, because its
+inequalities must all hold at once: the request fails with a 400 that says to move it to the top
+level or into an `_and`. A text `_in` inside `_or` is fine. Because a text `_nin` is an inequality,
+rows where the field is `NULL` never match it.
+
+**Column names that differ only by digits.** A filter that names both a column and another made of
+the same name plus trailing digits (`address` and `address2`) is a 400, because SqlSugar would give
+their parameters one name.
 
 **`_null`/`_nnull` ignore the value.** These two operators translate to a plain
 `IS NULL`/`IS NOT NULL`; the value itself is never read at all, so
@@ -111,14 +127,21 @@ Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total`
 
 **Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the
 field's real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as
-text. The conversion table covers `Guid`, `int`, `long`, `short`, `bool`, `DateTime`,
-`DateTimeOffset`, `decimal`, `double`, and `float`; `string` and any uncovered type stay a text
-comparison.
+text. The conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
+`DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number);
+`string` and any uncovered type stay a text comparison for the comparison operators, and `_in`/`_nin`
+on an uncovered type is a 400.
+
+A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
+for a float, text that is not a date — is a 400 that names the field. It never reaches the
+database. Numbers are read with a dot as the decimal separator whatever the server's locale, and a
+boolean is `true`, `false`, `1` or `0`.
 
 **Date and time fields.** On a `DateTime` field, `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`
 and `_nin` compare the value as an instant: a value with `Z` or an offset is read at the instant it
 names, and a value without a zone is UTC. The result depends on neither the database server's zone
-nor the API host's. `_contains`, `_starts_with` and `_ends_with` stay text comparisons.
+nor the API host's. Text that is not a date-time is a 400. `_contains`, `_starts_with` and
+`_ends_with` stay text comparisons.
 
 REST responses carry every `DateTime` as a UTC instant ending in `Z`. A value written with an offset
 is stored as that instant, and one written without a zone is taken as UTC: `2026-10-14T10:00:00+08:00`
@@ -156,6 +179,11 @@ filter — and rejects the request once that cap is exceeded: `Too many filter c
 50).`. The root `filter` and every nested `deep` filter draw from that one budget. A cross-relation
 condition has no similar cap, because a relation condition only adds one more level of nested
 subquery; it doesn't need to be bounded the way fetching a set of ids does.
+
+**A cap on list values.** `Query:MaxInValues` (default 500) counts every value of every
+`_in`/`_nin` in the whole request, root `filter` and nested `deep` filters together, one per
+comma-separated element of a query string and one per element of an array. A request over the cap
+is rejected with `Too many values in _in/_nin filters (max 500, Query:MaxInValues).`
 
 **Other shape errors.** An empty `filter` object is an error (`Empty filter object.`), while
 omitting the `filter` key entirely is a valid no-op.

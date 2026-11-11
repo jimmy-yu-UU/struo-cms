@@ -329,10 +329,13 @@ never needed for a large upload.
 | `Query:MaxFacetValues` | integer | `50` |
 | `Query:MaxAggregates` | integer | `10` |
 | `Query:MaxSearchCandidates` | integer | `1000` |
+| `Query:MaxInValues` | integer | `500` |
+| `Query:MaxRelationLinks` | integer | `1000` |
 
-All twelve keys carry `[Range(1, int.MaxValue)]` validation and are bound with `ValidateOnStart`;
-setting one to zero or a negative number fails startup immediately. A key name outside this list (a
-typo, say) is silently ignored, with no error.
+All fourteen keys carry `[Range(1, int.MaxValue)]` validation, except `MaxInValues`, which carries
+`[Range(1, 900)]`. They are bound with `ValidateOnStart`; setting one to zero or a negative number,
+or `MaxInValues` above 900, fails startup immediately. A key name outside this list (a typo, say)
+is silently ignored, with no error.
 
 `DefaultLimit` must not exceed `MaxLimit`. A larger `DefaultLimit` fails startup with an error that
 names both keys.
@@ -344,6 +347,17 @@ exceeding `MaxSortFields`, which counts the fields of the top-level `sort` and o
 `sort` separately, and `MaxDeepRelations`, which counts every relation node in one request's `deep`
 tree. `MaxFilterConditions` is one budget for the whole request: the root `filter` and every nested
 `deep` filter draw from it together.
+
+`MaxInValues` counts every value of every `_in` and `_nin` in one request: the root `filter`,
+relation predicates and every nested `deep` filter draw from it together. A query-string list counts
+once per comma-separated element and a JSON array once per element. Going over fails with a 400
+that names the limit and the key, and the query never executes. A text `_in` or `_nin` binds one
+parameter per value, and the ceiling of 900 keeps that under SQLite's expression-depth limit of
+1000 and SQL Server's limit of 2100 parameters per command.
+
+`MaxRelationLinks` bounds the ids one many-to-many relation accepts in a single write, in REST and
+GraphQL alike. A longer array fails with a 400 that names the relation and the key; nothing is
+written.
 
 `MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
 finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never

@@ -80,8 +80,20 @@ HTTP_STATUS:200
 **比對區分大小寫。** `_EQ` 或 `_startsWith` 會被拒絕，回 `Unknown operator '<token>'.`；欄位名稱則
 相反，到處都不分大小寫。
 
-**接受值的形狀。** `_in`／`_nin` 在查詢字串上是逗號清單、在 JSON 裡是陣列，兩者都併成同一份 SQL `IN`
-清單；`_contains`／`_starts_with`／`_ends_with` 分別轉成 `LIKE '%v%'`、`LIKE 'v%'`、`LIKE '%v'`。
+**接受值的形狀。** `_in`／`_nin` 在查詢字串上是逗號清單、在 JSON 裡是陣列，兩者都當成同一種清單讀。
+查詢字串裡逗號是元素的分隔；陣列裡逗號留在元素內，`["a,b"]` 就是一個值。
+`_contains`／`_starts_with`／`_ends_with` 分別轉成 `LIKE '%v%'`、`LIKE 'v%'`、`LIKE '%v'`。
+
+**空清單、`null` 與重複值。** 空清單等於沒有值：`_in` 沒有值就不符合任何列，`_nin` 沒有值就不加條件。
+清單裡有 `null` 元素或巢狀陣列回 400；文字清單裡重複的值只綁一次。
+
+**文字清單。** 文字欄位的 `_in`／`_nin` 把每個值綁成參數，所以引號、反斜線、逗號、空字串，以及
+`null`、`[null]` 這兩個字，都只是純文字，比對的是內容剛好等於它的列。文字欄位的 `_nin` 不能放在
+`_or` 群組裡，因為它的不等式必須同時成立：請求會回 400，訊息說明要改放根層或 `_and`；文字的 `_in`
+放在 `_or` 裡沒問題。文字 `_nin` 是不等式，欄位為 `NULL` 的列永遠不符合。
+
+**名稱只差尾端數字的欄位。** 同一個篩選裡若同時出現一個欄位，和另一個名稱是它加上尾端數字的欄位
+（`address` 與 `address2`），會回 400，因為 SqlSugar 會把它們的參數取成同一個名字。
 
 **`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值本身完全不會被
 讀，所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，
@@ -96,12 +108,17 @@ HTTP_STATUS:200
 把 `_null]=true` 換成 `_null]=false`，回傳的是同一列，`meta.total` 一樣是 1。
 
 **型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——
-`Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`bool`、
-`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float`，`string` 與未涵蓋的型別維持文字比較。
+`Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、
+`bool`、`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；
+`string` 與未涵蓋的型別，比較運算子維持文字比較，`_in`／`_nin` 則回 400。
+
+值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
+並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、
+`1` 或 `0`。
 
 **日期與時間欄位。** `DateTime` 欄位上的 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 把值當成時刻：
 帶 `Z` 或時差的值照它指的時刻比，沒有時區的值當成 UTC，結果不受資料庫伺服器與 API 主機的時區影響。
-`_contains`、`_starts_with`、`_ends_with` 仍是文字比較。
+不是日期時間的文字回 400。`_contains`、`_starts_with`、`_ends_with` 仍是文字比較。
 
 REST 回應裡每個 `DateTime` 都是以 `Z` 結尾的 UTC 時刻。寫入時帶時差的值，存成它指的那個時刻；沒有時區的值
 當成 UTC：`2026-10-14T10:00:00+08:00` 存入、讀回都是 `2026-10-14T02:00:00Z`。
@@ -132,6 +149,10 @@ POST 到 `/api/items/article/query`；三篇文章都符合——草稿那一篇
 個 `_and`／`_or` 分支，也含每個量詞內層篩選——超過就先被拒絕：
 `Too many filter conditions (max 50).` 根層 `filter` 與每個巢狀 `deep` 篩選共用這一份額度。跨關聯
 的條件沒有類似的上限，因為一個關聯條件只多一層巢狀子查詢，不需要像撈一份 id 集合那樣限制大小。
+
+**清單值上限。** `Query:MaxInValues`（預設 500）計算整個請求裡所有 `_in`／`_nin` 的值，根層 `filter` 與
+巢狀 `deep` 篩選一起算；查詢字串的清單一個逗號分隔的元素算一個，陣列一個元素算一個。超過就被拒絕：
+`Too many values in _in/_nin filters (max 500, Query:MaxInValues).`
 
 **其他形狀錯誤。** 一個空的 `filter` 物件是錯誤（`Empty filter object.`），不帶 `filter` 鍵則是合法
 的無操作；一個欄位的值必須是運算子物件，`{"status":"draft"}` 會被拒絕成

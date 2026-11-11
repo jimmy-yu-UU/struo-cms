@@ -24,7 +24,8 @@ internal sealed record OrTerms(IReadOnlyList<ConditionalModel> Models, string? N
 /// parsed to the column's CLR type with the invariant culture and rendered again from the parsed value,
 /// so text the caller wrote never reaches the SQL of a numeric, boolean, Guid or date column. A string
 /// column takes a set as a group of parameterised equalities. Text that does not parse is a
-/// <see cref="QueryException"/> naming the column, never the values.
+/// <see cref="QueryException"/> naming the column, never the values. Measurements, the SqlSugar traps
+/// and the unverified parts (SQL Server) are in docs/ai/decisions/query-values-are-parsed-and-bound.md.
 /// </summary>
 internal static class ValueConditions
 {

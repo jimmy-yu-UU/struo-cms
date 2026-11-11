@@ -55,7 +55,7 @@ lists: '<field>'.`——跟[第 10 章](10-query-basics.md)頂層 `sort=` 碰到
 to-many relations is not supported: '<path>'.` 是兩回事，一個管巢狀清單自己的排序，一個管頂層排序。
 
 巢狀 `sort` 跟頂層一樣最多 `Query:MaxSortFields` 個欄位，巢狀 `filter` 的條件也跟根層 `filter` 共用
-同一份 `Query:MaxFilterConditions` 額度。
+同一份 `Query:MaxFilterConditions` 額度，它的 `_in`／`_nin` 值則共用同一份 `Query:MaxInValues` 額度。
 
 junction 的 payload（`_junction` 鍵）[第 8 章：關聯](08-relations.md)已經介紹過，本章最後的完整
 範例會再看到一次。

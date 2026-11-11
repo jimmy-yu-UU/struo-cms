@@ -70,6 +70,10 @@ public List<Role> Roles { get; set; } = [];
 寫入時多對多接受的是目標 id 的純陣列，鍵是關聯自己的 camelCase 名稱；陣列裡每個 id 都會先確認存在於
 目標集合，不存在就整批拒絕：`One or more ids in '{relation}' do not exist in '{target}'.`
 
+每個 id 會先轉成目標主鍵的型別，也就是 `Guid` 或數字。不是該型別的 id 回 400
+（`One or more ids in '{relation}' are not valid.`），JSON 數字和同一個數字的文字寫法指的是同一個 id，
+陣列長度超過 `Query:MaxRelationLinks`（預設 1000）回 400，什麼都不寫入。
+
 同步邏輯是跟現有 junction 列做差異比對：目標消失的列刪掉，新目標的列新增，留下來的目標則保留原本的
 junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 

@@ -119,6 +119,12 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
+- **A filter or id value reaches SQL only through `ValueConditions`**
+  (`src/Struo.Infrastructure/Query/ValueConditions.cs`). It parses each value to the column's CLR
+  type with the invariant culture and renders the parsed value, so a numeric, boolean, Guid or date
+  column never takes caller text; a text set is a group of bound equalities. It is the only file that
+  names `ConditionalType.In` or `ConditionalType.NotIn` (`ValueConditionsConventionTests` fails
+  otherwise). See `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no
