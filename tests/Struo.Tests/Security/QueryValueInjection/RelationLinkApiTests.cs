@@ -143,4 +143,22 @@ public sealed class RelationLinkApiTests(ApiFactory factory) : IDisposable
         (await repo.QueryWhereInWithDeletedAsync("language", "id", ids)).Should().HaveCount(languages.Count);
         (await repo.QueryWhereInFilteredAsync("language", "id", ids, null, null)).Should().HaveCount(languages.Count);
     }
+
+    [Fact]
+    public async Task The_lookup_sites_refuse_text_that_would_parse_as_the_column_type()
+    {
+        using var scope = factory.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IItemRepository>();
+        var id = (await Db.Queryable<Language>().FirstAsync()).Id;
+        object[] asText = [id.ToString()];
+        Capture.Clear();
+
+        var a = () => repo.QueryWhereInAsync("language", "id", asText);
+        var b = () => repo.QueryWhereInWithDeletedAsync("language", "id", asText);
+        var c = () => repo.QueryWhereInFilteredAsync("language", "id", asText, null, null);
+        await a.Should().ThrowAsync<InvalidOperationException>();
+        await b.Should().ThrowAsync<InvalidOperationException>();
+        await c.Should().ThrowAsync<InvalidOperationException>();
+        Capture.Matching(id.ToString()).Should().BeEmpty();
+    }
 }
