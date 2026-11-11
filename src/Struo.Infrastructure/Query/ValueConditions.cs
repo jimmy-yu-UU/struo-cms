@@ -98,7 +98,7 @@ internal static class ValueConditions
         ],
     };
 
-    public static string? TypeName(Type clrType)
+    private static string? TypeName(Type clrType)
     {
         if (clrType.IsEnum) return TypeName(Enum.GetUnderlyingType(clrType));
         if (clrType == typeof(Guid)) return "guid";
@@ -259,13 +259,15 @@ internal static class ValueConditions
     private static QueryException Invalid(ValueTarget t, string expected) =>
         new($"Field '{t.Label}' needs {expected}.");
 
-    private static string Describe(Type t) =>
-        t.IsEnum ? "a member name or number of the enum"
-        : t == typeof(Guid) ? "a UUID"
-        : t == typeof(bool) ? "true, false, 1 or 0"
-        : t == typeof(DateTime) || t == typeof(DateTimeOffset) ? "a date-time (ISO 8601)"
-        : t == typeof(decimal) || t == typeof(double) || t == typeof(float) ? "a number"
-        : "an integer";
+    private static string Describe(Type t)
+    {
+        if (t.IsEnum) return "a member name or number of the enum";
+        if (t == typeof(Guid)) return "a UUID";
+        if (t == typeof(bool)) return "true, false, 1 or 0";
+        if (t == typeof(DateTime) || t == typeof(DateTimeOffset)) return "a date-time (ISO 8601)";
+        if (t == typeof(decimal) || t == typeof(double) || t == typeof(float)) return "a number";
+        return "an integer";
+    }
 
     // ── per-type parsing; null = the value is not of the column's type ──
 
@@ -324,7 +326,9 @@ internal static class ValueConditions
             string s when bool.TryParse(s, out var b) => b,
             _ => null,
         };
-        return parsed is not { } v ? null : forSet ? (v ? "1" : "0") : (v ? "True" : "False");
+        if (parsed is not { } v) return null;
+        if (forSet) return v ? "1" : "0";
+        return v ? "True" : "False";
     }
 
     private static string? ParseDecimal(object value)
