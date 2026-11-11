@@ -170,7 +170,7 @@ internal static class ValueConditions
             if (element is null or (IEnumerable and not string))
                 throw new QueryException($"Field '{t.Label}' takes a list of plain values; null and nested lists are not allowed.");
             var text = type == typeof(string)
-                ? (string)element
+                ? element as string ?? throw new QueryException($"Field '{t.Label}' takes a list of text values.")
                 : Format(t, element, forSet: true) ?? throw Invalid(t, Describe(type));
             // A text value repeated would be a second parameter for the same word; a listed number repeated is harmless.
             if (type != typeof(string) || seen.Add(text)) result.Add(text);
