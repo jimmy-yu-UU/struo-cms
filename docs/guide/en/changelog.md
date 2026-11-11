@@ -60,9 +60,6 @@
   caller needed write permission on the collection that declares the relation, not on the target.
 - Every release from 0.7.0, the oldest tag, is affected; the lookups date from the filter translator
   itself. Upgrading fixes it. No configuration change closes it.
-
-### Security
-
 - The `Microsoft.AspNetCore.*` and `Microsoft.Extensions.*` packages move from 10.0.14 to 10.0.15.
   `Microsoft.AspNetCore.WebUtilities` 10.0.14 and earlier is affected by GHSA-x33c-w48q-qrgc (High),
   an ASP.NET Core denial-of-service advisory. NuGet audit fails the restore of 0.30.0 and earlier on
