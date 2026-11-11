@@ -51,6 +51,12 @@
 - 從 0.7.0（最舊的 tag）起的每個版本都受影響，查詢出自篩選轉譯器本身。升級即修正，沒有設定可以
   關閉它。
 
+### 安全性
+
+- `Microsoft.AspNetCore.*` 與 `Microsoft.Extensions.*` 套件由 10.0.14 升到 10.0.15。
+  `Microsoft.AspNetCore.WebUtilities` 10.0.14 以前的版本受 GHSA-x33c-w48q-qrgc（高）影響，這是
+  ASP.NET Core 的阻斷服務公告。NuGet 稽核會因此讓 0.30.0 以前版本的還原失敗。
+
 ## 0.30.0 — 2026-11-10
 
 ::: danger 破壞性變更
