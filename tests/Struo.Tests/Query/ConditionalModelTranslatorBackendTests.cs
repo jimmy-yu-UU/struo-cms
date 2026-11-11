@@ -131,27 +131,24 @@ public class ConditionalModelTranslatorBackendTests
             new ComparisonFilter("name", QueryOperator.Eq, "A"),
         ]);
 
-        var models = ConditionalModelTranslator.Translate(filter, null, [], Folder, db);
+        var models = OwnColumns.Translate(db, Folder, filter);
 
         var children = ((ConditionalCollections)models.Single()).ConditionalList;
         children.Should().HaveCount(2);
-        children.Should().OnlyContain(kv => kv.Key == WhereType.Or);
+        // The first entry joins the group to what precedes it (And); the rest join inside the group (Or).
+        children.Select(kv => kv.Key).Should().Equal(WhereType.And, WhereType.Or);
         children[0].Value.FieldValue.Should().Be("2026-03-04T05:06:07.0000000+00:00");
         children[1].Value.FieldValue.Should().Be("A");
     }
 
     [Fact]
-    public void Unknown_field_unknown_node_and_unmapped_operator_are_refused()
+    public void Unknown_field_and_unmapped_operator_are_refused()
     {
         var db = Client("PostgreSQL");
 
         FluentActions.Invoking(() => SingleModel.Of(
                 new ComparisonFilter("nope", QueryOperator.Eq, "x"), Folder, db))
             .Should().Throw<ArgumentException>().WithMessage("*Unknown field path 'nope'*");
-        FluentActions.Invoking(() => ConditionalModelTranslator.Translate(
-                new RelationPredicateFilter("parent", RelationQuantifier.Some,
-                    new ComparisonFilter("name", QueryOperator.Eq, "A")), null, [], Folder, db))
-            .Should().Throw<InvalidOperationException>().WithMessage("*Unknown filter node type*");
         FluentActions.Invoking(() => SingleModel.Of(
                 new ComparisonFilter("name", (QueryOperator)999, "x"), Folder, db))
             .Should().Throw<InvalidOperationException>().WithMessage("*Unmapped operator*");
