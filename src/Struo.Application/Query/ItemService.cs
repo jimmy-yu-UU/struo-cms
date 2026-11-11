@@ -53,7 +53,7 @@ public sealed class ItemService(
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
     // the sibling `deserializer` field above (CS0236).
     private readonly ItemWriteSideSync writeSync =
-        new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
+        new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions, options);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);

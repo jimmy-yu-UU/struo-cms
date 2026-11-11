@@ -1,5 +1,6 @@
 // src/Struo.Application/Query/Write/ItemWriteSideSync.cs
 using System.Text.Json;
+using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query.Write;
@@ -23,7 +24,8 @@ public sealed class ItemWriteSideSync(
     RichTextCleaner richText,
     ItemDeserializer deserializer,
     IMetadataProvider metadata,
-    IPermissionService permissions)
+    IPermissionService permissions,
+    StruoQueryOptions options)
 {
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
@@ -265,6 +267,10 @@ public sealed class ItemWriteSideSync(
             // Only sync when the relation key is present in the request body as an array.
             if (!JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out var idsElem)) continue;
 
+            if (idsElem.GetArrayLength() > options.MaxRelationLinks)
+                throw new QueryException(
+                    $"'{desc.RelationName}' accepts at most {options.MaxRelationLinks} ids (Query:MaxRelationLinks).");
+
             var hasObjectElement = idsElem.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object);
             var (junctionMeta, payloadNames) = EnsureJunctionPayloadGrant(desc, hasObjectElement);
 
@@ -343,16 +349,16 @@ public sealed class ItemWriteSideSync(
     {
         switch (e.ValueKind)
         {
-            case JsonValueKind.Number when e.TryGetInt64(out var n): return JunctionLink.Bare(n);
-            case JsonValueKind.String: return JunctionLink.Bare(e.GetString() ?? string.Empty);
+            case JsonValueKind.Number when e.TryGetInt64(out var n): return JunctionLink.Bare(ParseTargetId(n, desc));
+            case JsonValueKind.String: return JunctionLink.Bare(ParseTargetId(e.GetString() ?? string.Empty, desc));
             case JsonValueKind.Object when desc.HasPayload:
             {
                 if (!e.TryGetProperty("id", out var idEl))
                     throw new QueryException($"Each object in '{desc.RelationName}' must carry an 'id'.");
                 object id = idEl.ValueKind switch
                 {
-                    JsonValueKind.Number when idEl.TryGetInt64(out var n) => n,
-                    JsonValueKind.String => idEl.GetString() ?? string.Empty,
+                    JsonValueKind.Number when idEl.TryGetInt64(out var n) => ParseTargetId(n, desc),
+                    JsonValueKind.String => ParseTargetId(idEl.GetString() ?? string.Empty, desc),
                     _ => throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid."),
                 };
                 IReadOnlyDictionary<string, object?> bound;
@@ -370,6 +376,25 @@ public sealed class ItemWriteSideSync(
             }
             default:
                 throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
+        }
+    }
+
+    // An id becomes the CLR type of the target's key (the junction's target foreign key has that type),
+    // so what reaches the repository is a Guid or a number, never request text. A JSON number and the
+    // same number as a string name one id. The error does not echo the value.
+    private static object ParseTargetId(object raw, M2MDescriptor desc)
+    {
+        var column = desc.JunctionType.GetProperty(desc.TargetFkProperty)?.PropertyType
+            ?? throw new InvalidOperationException(
+                $"Junction '{desc.JunctionType.Name}' has no property '{desc.TargetFkProperty}'.");
+        var text = Convert.ToString(raw, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        try
+        {
+            return IdParsing.ParseTo(text, column);
+        }
+        catch (QueryException)
+        {
+            throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
         }
     }
 

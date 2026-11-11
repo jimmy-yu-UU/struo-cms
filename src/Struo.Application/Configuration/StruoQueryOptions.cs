@@ -22,6 +22,19 @@ public sealed class StruoQueryOptions
     [Range(1, int.MaxValue)]
     public int MaxFilterConditions { get; set; } = 50;
 
+    /// <summary>
+    /// Upper bound on the values of every <c>_in</c> and <c>_nin</c> in one request, the root filter and every
+    /// <c>deep</c> filter together; a query-string value counts once per comma-separated element. More is a 400.
+    /// The ceiling keeps a text list under SQLite's expression-depth limit of 1000 and below SQL Server's
+    /// parameter limit of 2100.
+    /// </summary>
+    [Range(1, 900)]
+    public int MaxInValues { get; set; } = 500;
+
+    /// <summary>Upper bound on the ids one many-to-many relation accepts in a single write; more is a 400.</summary>
+    [Range(1, int.MaxValue)]
+    public int MaxRelationLinks { get; set; } = 1000;
+
     [Range(1, int.MaxValue)]
     public int MaxRelationDepth { get; set; } = 6;
 

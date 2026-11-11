@@ -65,9 +65,18 @@ internal static class ValueConditions
             : new OrTerms([ListModel(t, include, values)]);
     }
 
-    /// <summary>The same condition for a value that comes from the application, not from a request.</summary>
+    /// <summary>
+    /// The same condition for a value that comes from the application, not from a request: every element
+    /// must already be of the column's CLR type (a whole number of any width counts for a whole-number
+    /// column). A value that is not is a bug in the caller, so it is an <see cref="InvalidOperationException"/>
+    /// (a 500) and never reaches SQL; a value a request supplies must be checked by the caller first.
+    /// </summary>
     public static IConditionalModel? BuildInternal(ValueTarget t, QueryOperator op, object? value)
     {
+        foreach (var element in FilterValueList.Elements(value))
+            if (element is null || !IsTyped(t.Underlying, element))
+                throw new InvalidOperationException(
+                    $"A value for column '{t.Column}' is not a {Describe(t.Underlying)}; the caller must pass typed values.");
         try
         {
             return Build(t, op, value);
@@ -106,6 +115,12 @@ internal static class ValueConditions
     }
 
     private static bool IsSupported(Type t) => t.IsEnum || Supported.Contains(t);
+
+    private static bool IsTyped(Type column, object value) =>
+        column.IsInstanceOfType(value) || (IsWholeNumber(column) && IsWholeNumber(value.GetType()));
+
+    private static bool IsWholeNumber(Type t) =>
+        t == typeof(long) || t == typeof(int) || t == typeof(short) || t == typeof(byte);
 
     // ── operators ────────────────────────────────────────────────────────
 
