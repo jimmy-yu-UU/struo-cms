@@ -74,10 +74,9 @@ internal static class ValueConditions
     /// </summary>
     public static IConditionalModel? BuildInternal(ValueTarget t, QueryOperator op, object? value)
     {
-        foreach (var element in FilterValueList.Elements(value))
-            if (element is null || !IsTyped(t.Underlying, element))
-                throw new InvalidOperationException(
-                    $"A value for column '{t.Column}' is not a {Describe(t.Underlying)}; the caller must pass typed values.");
+        if (FilterValueList.Elements(value).Any(element => element is null || !IsTyped(t.Underlying, element)))
+            throw new InvalidOperationException(
+                $"A value for column '{t.Column}' is not a {Describe(t.Underlying)}; the caller must pass typed values.");
         try
         {
             return Build(t, op, value);
@@ -304,7 +303,7 @@ internal static class ValueConditions
         long? parsed = value switch
         {
             long or int or short or byte or sbyte or ushort or uint => Convert.ToInt64(value, CultureInfo.InvariantCulture),
-            double d when double.IsFinite(d) && d == Math.Floor(d) && Math.Abs(d) < 9.2e18 => (long)d,
+            double d when double.IsInteger(d) && Math.Abs(d) < 9.2e18 => (long)d,
             decimal m when m == decimal.Truncate(m) && Math.Abs(m) < 9.2e18m => (long)m,
             string s when long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) => n,
             _ => null,

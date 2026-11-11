@@ -23,26 +23,41 @@ public sealed class TypedValueConditionTests : IDisposable
     private List<long> Run(string field, QueryOperator op, object? value) =>
         Ids<VcTyped>(Db, Conds(Db, D, field, op, value), r => r.Id);
 
-    // field, row-1 value, row-3 value, row-1 value as text, row-3 value as text, ordered
-    public static TheoryData<string, object, object, string, string, bool> Scalars() => new()
+    // The typed values of rows 1 and 3 for each field; the theory data carries the field name and the text forms.
+    private static readonly Dictionary<string, (object V1, object V3)> TypedValues = new()
     {
-        { "id", 1L, 3L, "1", "3", true },
-        { "intCol", 10L, 30L, "10", "30", true },
-        { "longCol", 10_000_000_000L, 30_000_000_000L, "10000000000", "30000000000", true },
-        { "shortCol", 100L, 300L, "100", "300", true },
-        { "byteCol", 10L, 30L, "10", "30", true },
-        { "decimalCol", 1.5d, 4.5d, "1.5", "4.5", true },
-        { "doubleCol", 2.5d, 7.5d, "2.5", "7.5", true },
-        { "floatCol", 0.5d, 1.5d, "0.5", "1.5", true },
-        { "guidCol", Guids[0].ToString(), Guids[2].ToString("N"), Guids[0].ToString("D"), Guids[2].ToString("B"), false },
+        ["id"] = (1L, 3L),
+        ["intCol"] = (10L, 30L),
+        ["longCol"] = (10_000_000_000L, 30_000_000_000L),
+        ["shortCol"] = (100L, 300L),
+        ["byteCol"] = (10L, 30L),
+        ["decimalCol"] = (1.5d, 4.5d),
+        ["doubleCol"] = (2.5d, 7.5d),
+        ["floatCol"] = (0.5d, 1.5d),
+        ["guidCol"] = (Guids[0].ToString(), Guids[2].ToString("N")),
+    };
+
+    // field, row-1 value as text, row-3 value as text, ordered
+    public static TheoryData<string, string, string, bool> Scalars() => new()
+    {
+        { "id", "1", "3", true },
+        { "intCol", "10", "30", true },
+        { "longCol", "10000000000", "30000000000", true },
+        { "shortCol", "100", "300", true },
+        { "byteCol", "10", "30", true },
+        { "decimalCol", "1.5", "4.5", true },
+        { "doubleCol", "2.5", "7.5", true },
+        { "floatCol", "0.5", "1.5", true },
+        { "guidCol", Guids[0].ToString("D"), Guids[2].ToString("B"), false },
     };
 
     [Theory]
     [MemberData(nameof(Scalars))]
     public void Set_operators_select_the_rows_for_a_list_and_for_a_comma_separated_string(
-        string field, object v1, object v3, string t1, string t3, bool ordered)
+        string field, string t1, string t3, bool ordered)
     {
         _ = ordered;
+        var (v1, v3) = TypedValues[field];
         Run(field, QueryOperator.In, new List<object?> { v1, v3 }).Should().Equal(1, 3);
         Run(field, QueryOperator.In, $"{t1},{t3}").Should().Equal(1, 3);
         Run(field, QueryOperator.In, new List<object?> { v1 }).Should().Equal(1);
@@ -53,10 +68,10 @@ public sealed class TypedValueConditionTests : IDisposable
     [Theory]
     [MemberData(nameof(Scalars))]
     public void Comparison_operators_select_the_rows(
-        string field, object v1, object v3, string t1, string t3, bool ordered)
+        string field, string t1, string t3, bool ordered)
     {
-        _ = v3;
         _ = t3;
+        var v1 = TypedValues[field].V1;
         Run(field, QueryOperator.Eq, v1).Should().Equal(1);
         Run(field, QueryOperator.Eq, t1).Should().Equal(1);
         Run(field, QueryOperator.Neq, t1).Should().Equal(2, 3);

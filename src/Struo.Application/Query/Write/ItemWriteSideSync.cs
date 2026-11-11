@@ -1,6 +1,5 @@
 // src/Struo.Application/Query/Write/ItemWriteSideSync.cs
 using System.Text.Json;
-using Struo.Application.Configuration;
 using Struo.Application.Localization;
 using Struo.Application.Metadata;
 using Struo.Application.Query.Write;
@@ -24,8 +23,7 @@ public sealed class ItemWriteSideSync(
     RichTextCleaner richText,
     ItemDeserializer deserializer,
     IMetadataProvider metadata,
-    IPermissionService permissions,
-    StruoQueryOptions options)
+    IPermissionService permissions)
 {
     /// <summary>
     /// When <paramref name="meta"/> declares a translation sidecar and the request body carries a
@@ -250,17 +248,17 @@ public sealed class ItemWriteSideSync(
     }
 
     /// <summary>
-    /// Refuses a body whose many-to-many array holds more than <c>Query:MaxRelationLinks</c> ids. It
-    /// runs before the write transaction opens, so an oversized array costs no write.
+    /// Refuses a body whose many-to-many array holds more than <paramref name="maxLinks"/> ids
+    /// (<c>Query:MaxRelationLinks</c>). It runs before the write transaction opens, so an oversized array
+    /// costs no write.
     /// </summary>
-    public void EnsureRelationLinksWithinLimit(string collection, JsonElement body)
+    public void EnsureRelationLinksWithinLimit(string collection, JsonElement body, int maxLinks)
     {
-        foreach (var desc in m2mSource.M2MDescriptors(collection))
+        foreach (var name in m2mSource.M2MDescriptors(collection).Select(desc => desc.RelationName))
         {
-            if (!JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out var idsElem)) continue;
-            if (idsElem.GetArrayLength() > options.MaxRelationLinks)
-                throw new QueryException(
-                    $"'{desc.RelationName}' accepts at most {options.MaxRelationLinks} ids (Query:MaxRelationLinks).");
+            if (!JsonBodyUtil.TryGetRelationArray(body, name, out var idsElem)) continue;
+            if (idsElem.GetArrayLength() > maxLinks)
+                throw new QueryException($"'{name}' accepts at most {maxLinks} ids (Query:MaxRelationLinks).");
         }
     }
 

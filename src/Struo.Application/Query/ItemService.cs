@@ -48,12 +48,15 @@ public sealed class ItemService(
     IEnumerable<ICollectionDeleteHandler>? deleteHandlers = null) : IItemUseCases
 {
     private const string ReadNotPermitted = "Read not permitted.";
+    private const string CreateOperation = "create";
+    private const string UpdateOperation = "update";
+    private const string RevertOperation = "revert";
 
     private readonly ItemDeserializer deserializer = new(registry, m2mSource, new(sanitizer));
     // ItemWriteSideSync gets its own ItemDeserializer instance — a field initializer cannot reference
     // the sibling `deserializer` field above (CS0236).
     private readonly ItemWriteSideSync writeSync =
-        new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions, options);
+        new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
@@ -175,7 +178,7 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        writeSync.EnsureRelationLinksWithinLimit(collection, body);
+        writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
@@ -201,7 +204,7 @@ public sealed class ItemService(
             if (meta.Revisions)
             {
                 var snapshot = await snapshotBuilder.BuildAsync(collection, created, ct);
-                await revisions.CaptureAsync(collection, createdId.ToString()!, "create", snapshot, ct: ct);
+                await revisions.CaptureAsync(collection, createdId.ToString()!, CreateOperation, snapshot, ct: ct);
             }
         }, ct);
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, createdId, ItemChangeKind.Created));
@@ -209,7 +212,7 @@ public sealed class ItemService(
     }
 
     public Task<IReadOnlyDictionary<string, object?>?> UpdateAsync(string collection, string id, JsonElement body, CancellationToken ct = default)
-        => UpdateCoreAsync(collection, id, body, "update", sourceRevisionNumber: null, legacyJsonStrings: false, ct: ct);
+        => UpdateCoreAsync(collection, id, body, UpdateOperation, sourceRevisionNumber: null, legacyJsonStrings: false, ct: ct);
 
     private async Task<IReadOnlyDictionary<string, object?>?> UpdateCoreAsync(
         string collection, string id, JsonElement body, string operation,
@@ -224,7 +227,7 @@ public sealed class ItemService(
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
         // A revert re-applies a snapshot the system stored itself, so the link limit does not apply to it.
-        if (operation != "revert") writeSync.EnsureRelationLinksWithinLimit(collection, body);
+        if (operation != RevertOperation) writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
@@ -234,7 +237,7 @@ public sealed class ItemService(
         var bodyKeys = MergeBody(collection, meta, d, body, existing);
 
         var hooks = writeInterceptors.Begin(
-            operation == "revert" ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
+            operation == RevertOperation ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
             meta, existing, id, bodyKeys, body, preMerge);
         await hooks.BeforeWriteAsync(ct);
         await ValidateMergedAsync(collection, meta, d, body, existing, ct);
@@ -363,8 +366,8 @@ public sealed class ItemService(
             if (updated is null) return;
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
-            // capture — tolerate it (operation == "revert"); every other write path stays strict.
-            await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == "revert", ct);
+            // capture — tolerate it (a revert); every other write path stays strict.
+            await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == RevertOperation, ct);
             await writeSync.SyncTranslationsAsync(meta, body, updatedId, isCreate: false, legacyJsonStrings: legacyJsonStrings, ct: ct);
             hooks.Stored(updated, updatedId);
             await hooks.InTransactionAsync(ct);
@@ -607,7 +610,7 @@ public sealed class ItemService(
             : (await languages.GetEnabledAsync()).Where(l => !l.IsDefault).Select(l => l.Code).ToList();
         using var withLocales = JsonDocument.Parse(JsonBodyUtil.WithNullLocales(src.RootElement, nonDefault));
         using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(withLocales.RootElement, expectedVersion));
-        return await UpdateCoreAsync(collection, id, doc.RootElement, "revert", revisionNumber, legacyJsonStrings, ct: ct);
+        return await UpdateCoreAsync(collection, id, doc.RootElement, RevertOperation, revisionNumber, legacyJsonStrings, ct: ct);
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a

@@ -33,8 +33,8 @@ internal sealed class SqlCapture : IDisposable
     // The host is shared by every API test class, so the hook is taken off again when the test ends.
     public void Dispose()
     {
-        foreach (var c in _configs)
-            if (c.AopEvents is not null) c.AopEvents.OnLogExecuting = null;
+        foreach (var events in _configs.Select(c => c.AopEvents).OfType<AopEvents>())
+            events.OnLogExecuting = null;
     }
 
     public IReadOnlyList<string> Matching(string needle) =>

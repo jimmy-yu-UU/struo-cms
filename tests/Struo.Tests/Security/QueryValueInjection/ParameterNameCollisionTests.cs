@@ -62,7 +62,7 @@ public sealed class ParameterNameCollisionTests : IDisposable
     [Fact]
     public async Task A_clash_made_by_the_search_group_does_not_call_itself_a_filter()
     {
-        var fields = new[] { "code1" }.Concat(Enumerable.Repeat("other", 9)).Append("code").ToArray();
+        string[] fields = ["code1", .. Enumerable.Repeat("other", 9), "code"];
         var act = () => _h.SearchAsync("a", fields);
         var ex = (await act.Should().ThrowAsync<QueryException>()).Which;
         ex.Message.Should().NotContainEquivalentOf("filter").And.Contain("'code1'");

@@ -36,7 +36,7 @@ internal sealed class NamePairHarness : IDisposable
     public NamePairHarness()
     {
         Db = SqlSugarClientFactory.Create(_database.Options(), new TestCurrentUserAccessor(Guid.Empty));
-        Db.CodeFirst.InitTables(typeof(QvNamePair));
+        Db.CodeFirst.InitTables<QvNamePair>();
         Type[] types = [typeof(QvNamePair)];
         var collections = MetadataScanner.ScanTypes(types);
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
