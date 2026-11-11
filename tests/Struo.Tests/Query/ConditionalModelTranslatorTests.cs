@@ -38,8 +38,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("status", QueryOperator.Eq, "published"), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("status", QueryOperator.Eq, "published"));
 
             list.Should().ContainSingle();
             var cm = (ConditionalModel)list[0];
@@ -58,8 +58,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("id", QueryOperator.Eq, Guid.NewGuid().ToString()), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("id", QueryOperator.Eq, Guid.NewGuid().ToString()));
 
             list.Should().ContainSingle();
             ((ConditionalModel)list[0]).CSharpTypeName.Should().Be("guid");
@@ -73,8 +73,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("categoryId", QueryOperator.Eq, Guid.NewGuid().ToString()), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("categoryId", QueryOperator.Eq, Guid.NewGuid().ToString()));
 
             ((ConditionalModel)list[0]).CSharpTypeName.Should().Be("guid");
         }
@@ -86,8 +86,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("status", QueryOperator.Eq, "published"), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("status", QueryOperator.Eq, "published"));
 
             ((ConditionalModel)list[0]).CSharpTypeName.Should().BeNull();
         }
@@ -99,8 +99,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("status", QueryOperator.Contains, "x"), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("status", QueryOperator.Contains, "x"));
             ((ConditionalModel)list[0]).ConditionalType.Should().Be(ConditionalType.Like);
         }
     }
@@ -111,7 +111,7 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(null, "hello", ["status"], d, db);
+            var list = OwnColumns.Translate(db, d, null, "hello", ["status"]);
             list.Should().ContainSingle();
             list[0].Should().BeOfType<ConditionalCollections>();
         }
@@ -120,15 +120,15 @@ public partial class ConditionalModelTranslatorTests
     [Fact]
     public void Search_group_connects_to_a_preceding_filter_with_and_not_or()
     {
-        // Mirrors FilterTranslatorSqlShapeTests.Search_group_connects_to_a_preceding_filter_with_and_not_or:
-        // the multi-arg Translate overload builds its own search-group ConditionalCollections and must
-        // not repeat the connector defect fix round 3 removed from FilterTranslator (every entry, including
-        // the first, wrongly assigned WhereType.Or — rendering "<filter> OR (search…)").
+        // Same rule as FilterTranslatorSqlShapeTests.Search_group_connects_to_a_preceding_filter_with_and_not_or,
+        // on an entity of own columns: the search group must
+        // connect to the preceding filter with AND (an OR first entry renders
+        // "<filter> OR (search...)").
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("status", QueryOperator.Eq, "published"), "hello", ["status"], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("status", QueryOperator.Eq, "published"), "hello", ["status"]);
             var sql = db.Queryable<FxArticle>().Where(list).ToSql().Key;
 
             sql.Should().MatchRegex(@"=\s*@\w+\s+AND\s*\(\s*[\s\S]*?LIKE");
@@ -145,26 +145,24 @@ public partial class ConditionalModelTranslatorTests
         using (file)
         {
             var inner = new LogicalFilter(LogicalOperator.Or,
-                [new ComparisonFilter("title", QueryOperator.Contains, "x")]);
-            var outer = new LogicalFilter(LogicalOperator.And, [inner]);
-            var act = () => ConditionalModelTranslator.Translate(outer, null, [], d, db);
+                [new ComparisonFilter("status", QueryOperator.Contains, "x")]);
+            var outer = new LogicalFilter(LogicalOperator.Or, [inner]);
+            var act = () => OwnColumns.Translate(db, d, outer);
             act.Should().Throw<InvalidOperationException>();
         }
     }
 
     [Fact]
-    public void In_operator_serializes_value_list()
+    public void In_operator_on_a_text_column_is_one_bound_equality_per_value()
     {
-        // SqlSugar's ConditionalType.In expects a comma-joined string for FieldValue.
         var (db, d, file) = Setup();
         using (file)
         {
             var filter = new ComparisonFilter("status", QueryOperator.In, new List<object?> { "a", "b" });
-            var list = ConditionalModelTranslator.Translate(filter, null, [], d, db);
-            list.Should().ContainSingle();
-            var cm = (ConditionalModel)list[0];
-            cm.ConditionalType.Should().Be(ConditionalType.In);
-            cm.FieldValue.Should().Be("a,b");
+            var list = OwnColumns.Translate(db, d, filter);
+            var group = list.Should().ContainSingle().Which.Should().BeOfType<ConditionalCollections>().Which;
+            group.ConditionalList.Select(kv => kv.Value.ConditionalType).Should().OnlyContain(t => t == ConditionalType.Equal);
+            group.ConditionalList.Select(kv => kv.Value.FieldValueConvertFunc!("")).Should().Equal("a", "b");
         }
     }
 
@@ -177,8 +175,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("publishedAt", QueryOperator.Null, null), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("publishedAt", QueryOperator.Null, null));
 
             // SqlSugar emits irregular internal whitespace (e.g. "  IS NOT  NULL"), so
             // collapse runs of whitespace to single spaces before asserting on phrasing.
@@ -196,8 +194,8 @@ public partial class ConditionalModelTranslatorTests
         var (db, d, file) = Setup();
         using (file)
         {
-            var list = ConditionalModelTranslator.Translate(
-                new ComparisonFilter("publishedAt", QueryOperator.NNull, null), null, [], d, db);
+            var list = OwnColumns.Translate(db, d,
+                new ComparisonFilter("publishedAt", QueryOperator.NNull, null));
 
             var sql = Normalize(db.Queryable<FxArticle>().Where(list).ToSqlString());
 
@@ -240,8 +238,8 @@ public partial class ConditionalModelTranslatorTests
     [Fact]
     public void Decimal_comparison_round_trips_correctly_under_the_invariant_culture()
     {
-        // ConditionalModelTranslator always RENDERS a filter value with CultureInfo.InvariantCulture
-        // (ToFieldValue), but SqlSugar re-parses ConditionalModel.FieldValue back to the column's
+        // ValueConditions always RENDERS a filter value with CultureInfo.InvariantCulture
+        // (Format), but SqlSugar re-parses ConditionalModel.FieldValue back to the column's
         // real CLR type using CultureInfo.CurrentCulture, keyed off CSharpTypeName — verified against
         // SqlSugarCore 5.1.4.217: under de-DE (comma decimal separator), a rendered "1.5" reparses as
         // 15, because SqlSugar has no way to be told "parse this literal invariantly" — there is no
@@ -259,8 +257,8 @@ public partial class ConditionalModelTranslatorTests
             using (file)
             using (db)
             {
-                var list = ConditionalModelTranslator.Translate(
-                    new ComparisonFilter("price", QueryOperator.Gt, 1.5m), null, [], d, db);
+                var list = OwnColumns.Translate(db, d,
+                    new ComparisonFilter("price", QueryOperator.Gt, 1.5m));
                 var sql = db.Queryable<CultureProbeRow>().Where(list).ToSqlString();
 
                 sql.Should().Contain("1.5", "the invariant-rendered literal must re-parse back to 1.5, not 15 (a de-DE misparse) or 1,5");
@@ -289,8 +287,8 @@ public partial class ConditionalModelTranslatorTests
             using (db)
             {
                 var when = new DateTime(2026, 8, 9, 3, 0, 0, DateTimeKind.Unspecified);
-                var list = ConditionalModelTranslator.Translate(
-                    new ComparisonFilter("occurredAt", QueryOperator.Eq, when), null, [], d, db);
+                var list = OwnColumns.Translate(db, d,
+                    new ComparisonFilter("occurredAt", QueryOperator.Eq, when));
                 var sql = db.Queryable<CultureProbeRow>().Where(list).ToSqlString();
 
                 sql.Should().Contain("2026-08-09", "August 9 must not have been misread as day-before-month (September 8)");
@@ -322,9 +320,9 @@ public partial class ConditionalModelTranslatorTests
         var d = new EntityDescriptor(typeof(Struo.Infrastructure.Files.MediaFolder),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["createdAt"] = "CreatedAt" }, "Id");
 
-        var cm = ConditionalModelTranslator.ToSingleModel(
+        var cm = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Gt, value), d, db);
-        var inList = ConditionalModelTranslator.ToSingleModel(
+        var inList = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.In, new List<object?> { value, value }), d, db);
 
         var zoneAware = TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer;

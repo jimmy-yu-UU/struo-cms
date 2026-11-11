@@ -5,20 +5,6 @@ namespace Struo.Infrastructure.Query;
 
 internal static class RepositoryHelpers
 {
-    // Resolve the SqlSugar CSharpTypeName for a HAND-BUILT ConditionalModel so id/FK values bind as
-    // their real CLR type (Guid -> uuid, long -> bigint) on Postgres instead of as text (42883 on PG).
-    // Mirrors what ConditionalModelTranslator already does for the parsed query DSL; returns null for
-    // string/unknown so those keep untyped behavior.
-    public static string? TypeNameOf(object? sample) =>
-        sample is null ? null : ConditionalModelTranslator.SqlSugarTypeName(sample.GetType());
-
-    public static string? TypeNameOfProperty(Type entityType, string clrPropertyName)
-    {
-        var pt = entityType.GetProperty(clrPropertyName,
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.PropertyType;
-        return pt is null ? null : ConditionalModelTranslator.SqlSugarTypeName(Nullable.GetUnderlyingType(pt) ?? pt);
-    }
-
     public static EntityDescriptor Descriptor(IEntityRegistry registry, string collection) =>
         registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
 

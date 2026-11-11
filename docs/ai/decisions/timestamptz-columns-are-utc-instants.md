@@ -10,11 +10,11 @@ on PostgreSQL and SQL Server only. The converter binds the write as `DbType.Date
 connection.
 
 Item-API and GraphQL filters never reach the converter: SqlSugar builds a `ConditionalModel` parameter
-from its value alone. `ConditionalModelTranslator.ToDateTimeInstantModel` therefore parses an `_eq`,
+from its value alone. `ValueConditions` therefore parses an `_eq`,
 `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in` or `_nin` value on every `DateTime`/`DateTime?` property, zone-aware
 or not, as an instant: a trailing `Z` or offset names it, a value without one is UTC, and a
-query-string `_in`/`_nin` string is split on commas first, as SqlSugar splits it. A value that does not
-parse, `_null`, a property that is not a `DateTime` and the text operators (`_contains`,
+query-string `_in`/`_nin` string is split on commas first (`FilterValueList`). A value that does not
+parse is a 400. `_null`, a property that is not a `DateTime` and the text operators (`_contains`,
 `_starts_with`, `_ends_with`) keep the general path, which compares the column's text form.
 
 A zone-aware column gets a `datetimeoffset` at `+00:00` on PostgreSQL and SQL Server. Every other column

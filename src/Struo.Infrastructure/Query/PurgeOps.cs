@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using SqlSugar;
 using Struo.Application.Metadata;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
@@ -11,8 +12,8 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
     private static readonly GenericDispatcher<Func<PurgeOps, string, object, CancellationToken, Task>> SetForeignKeyNullDispatcher =
         new(typeof(PurgeOps), nameof(SetForeignKeyNullGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<PurgeOps, string, object, CancellationToken, Task>> DeleteByPropertyDispatcher =
-        new(typeof(PurgeOps), nameof(DeleteByPropertyGenericAsync), [typeof(string), typeof(object), typeof(CancellationToken)]);
+    private static readonly GenericDispatcher<Func<PurgeOps, ValueTarget, object, CancellationToken, Task>> DeleteByPropertyDispatcher =
+        new(typeof(PurgeOps), nameof(DeleteByPropertyGenericAsync), [typeof(ValueTarget), typeof(object), typeof(CancellationToken)]);
 
     // ── Purge referential-integrity primitives ─────────────
 
@@ -56,23 +57,14 @@ internal sealed class PurgeOps(ISqlSugarClient db, IEntityRegistry registry)
     public async Task DeleteByPropertyAsync(
         Type entityType, string property, object value, CancellationToken ct = default)
     {
-        var column = db.EntityMaintenance.GetDbColumnName(property, entityType);
-        await DeleteByPropertyDispatcher.For(entityType)(this, column, value, ct);
+        var target = WhereInQueries.TargetOf(db, entityType, property);
+        await DeleteByPropertyDispatcher.For(entityType)(this, target, value, ct);
     }
 
-    private async Task DeleteByPropertyGenericAsync<T>(string column, object value, CancellationToken ct)
+    private async Task DeleteByPropertyGenericAsync<T>(ValueTarget target, object value, CancellationToken ct)
         where T : class, new()
     {
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = column,
-                ConditionalType = ConditionalType.Equal,
-                FieldValue = value.ToString(),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(value)
-            }
-        };
+        var conditionals = new List<IConditionalModel> { ValueConditions.BuildInternal(target, QueryOperator.Eq, value)! };
         await db.Deleteable<T>().Where(conditionals).ExecuteCommandAsync(ct);
     }
 }

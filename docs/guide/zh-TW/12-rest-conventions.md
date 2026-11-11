@@ -380,8 +380,8 @@ HTTP_STATUS:400
 訊息點名關聯與那一筆目標的 id，呼叫端因此知道錯誤該標在哪一列。物件裡未宣告為這個關聯 payload 的
 鍵，還有 junction 自己的外鍵與結構欄位，一律被忽略。
 
-一個物件元素送到沒有宣告 payload 的關聯，或陣列裡出現布林、陣列、`null`、非整數這些不合法的形狀，
-一律得到同一句泛用訊息：
+一個物件元素送到沒有宣告 payload 的關聯，或陣列裡出現布林、陣列、`null`、非整數、不是目標主鍵型別的
+id 這些不合法的形狀，一律得到同一句泛用訊息：
 
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}

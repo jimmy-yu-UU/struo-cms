@@ -248,6 +248,21 @@ public sealed class ItemWriteSideSync(
     }
 
     /// <summary>
+    /// Refuses a body whose many-to-many array holds more than <paramref name="maxLinks"/> ids
+    /// (<c>Query:MaxRelationLinks</c>). It runs before the write transaction opens, so an oversized array
+    /// costs no write.
+    /// </summary>
+    public void EnsureRelationLinksWithinLimit(string collection, JsonElement body, int maxLinks)
+    {
+        foreach (var name in m2mSource.M2MDescriptors(collection).Select(desc => desc.RelationName))
+        {
+            if (!JsonBodyUtil.TryGetRelationArray(body, name, out var idsElem)) continue;
+            if (idsElem.GetArrayLength() > maxLinks)
+                throw new QueryException($"'{name}' accepts at most {maxLinks} ids (Query:MaxRelationLinks).");
+        }
+    }
+
+    /// <summary>
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
     /// from <paramref name="body"/> under the relation's camelCase name (e.g. <c>"tags"</c>).
     /// If the key is present, validates every id exists in the target collection, then delegates
@@ -343,16 +358,16 @@ public sealed class ItemWriteSideSync(
     {
         switch (e.ValueKind)
         {
-            case JsonValueKind.Number when e.TryGetInt64(out var n): return JunctionLink.Bare(n);
-            case JsonValueKind.String: return JunctionLink.Bare(e.GetString() ?? string.Empty);
+            case JsonValueKind.Number when e.TryGetInt64(out var n): return JunctionLink.Bare(ParseTargetId(n, desc));
+            case JsonValueKind.String: return JunctionLink.Bare(ParseTargetId(e.GetString() ?? string.Empty, desc));
             case JsonValueKind.Object when desc.HasPayload:
             {
                 if (!e.TryGetProperty("id", out var idEl))
                     throw new QueryException($"Each object in '{desc.RelationName}' must carry an 'id'.");
                 object id = idEl.ValueKind switch
                 {
-                    JsonValueKind.Number when idEl.TryGetInt64(out var n) => n,
-                    JsonValueKind.String => idEl.GetString() ?? string.Empty,
+                    JsonValueKind.Number when idEl.TryGetInt64(out var n) => ParseTargetId(n, desc),
+                    JsonValueKind.String => ParseTargetId(idEl.GetString() ?? string.Empty, desc),
                     _ => throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid."),
                 };
                 IReadOnlyDictionary<string, object?> bound;
@@ -370,6 +385,25 @@ public sealed class ItemWriteSideSync(
             }
             default:
                 throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
+        }
+    }
+
+    // An id becomes the CLR type of the target's key (the junction's target foreign key has that type),
+    // so what reaches the repository is a Guid or a number, never request text. A JSON number and the
+    // same number as a string name one id. The error does not echo the value.
+    private static object ParseTargetId(object raw, M2MDescriptor desc)
+    {
+        var column = desc.JunctionType.GetProperty(desc.TargetFkProperty)?.PropertyType
+            ?? throw new InvalidOperationException(
+                $"Junction '{desc.JunctionType.Name}' has no property '{desc.TargetFkProperty}'.");
+        var text = Convert.ToString(raw, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        try
+        {
+            return IdParsing.ParseTo(text, column);
+        }
+        catch (QueryException)
+        {
+            throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
         }
     }
 

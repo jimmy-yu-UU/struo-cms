@@ -8,10 +8,12 @@ using Struo.Domain.Query;
 
 namespace Struo.Application.Query;
 
-/// <summary>Filter conditions counted so far; shared by the root filter and every nested deep filter of one request.</summary>
+/// <summary>Filter conditions and `_in`/`_nin` values counted so far; shared by the root filter and every nested deep filter of one request.</summary>
 public sealed class FilterBudget
 {
     public int Used { get; set; }
+
+    public int InValues { get; set; }
 }
 
 public static class QueryValidator
@@ -161,6 +163,7 @@ public static class QueryValidator
                     return;
                 case ComparisonFilter c:
                     CountCondition();
+                    CountInValues(c);
                     if (IsJunctionLeaf(c.FieldPath)) ValidateJunctionLeaf(c.FieldPath, predicateRelation);
                     else CheckField(c.FieldPath, meta, hopsUsed: hopsUsed);
                     return;
@@ -293,6 +296,14 @@ public static class QueryValidator
             budget.Used++;
             if (budget.Used > opts.MaxFilterConditions)
                 throw new QueryException($"Too many filter conditions (max {opts.MaxFilterConditions}).");
+        }
+
+        private void CountInValues(ComparisonFilter c)
+        {
+            if (c.Op is not (QueryOperator.In or QueryOperator.Nin)) return;
+            budget.InValues += FilterValueList.Elements(c.Value).Count;
+            if (budget.InValues > opts.MaxInValues)
+                throw new QueryException($"Too many values in _in/_nin filters (max {opts.MaxInValues}, Query:MaxInValues).");
         }
 
         /// <summary>

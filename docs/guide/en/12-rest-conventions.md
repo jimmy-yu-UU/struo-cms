@@ -451,7 +451,8 @@ to flag. A key inside the object that isn't declared as this relation's payload,
 junction's own foreign keys and structural fields, is always ignored.
 
 An object element sent to a relation that has no declared payload, or an invalid shape in the
-array — a boolean, an array, `null`, a non-integer — always gets the same general-purpose message:
+array — a boolean, an array, `null`, a non-integer, an id that is not of the target's key type —
+always gets the same general-purpose message:
 
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}

@@ -69,7 +69,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
                          QueryOperator.Lt, QueryOperator.Lte,
                      })
             {
-                var cm = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter(field, op, value), Plain, db);
+                var cm = SingleModel.Of(new ComparisonFilter(field, op, value), Plain, db);
                 cm.FieldValue.Should().Be(Expected(backend));
                 cm.CSharpTypeName.Should().Be("datetime");
             }
@@ -82,9 +82,9 @@ public class ConditionalModelTranslatorPlainDateTimeTests
         var db = Client(backend);
         const string list = "2026-03-04T05:06:07Z,2026-03-04T10:36:07+05:30,2026-03-04T05:06:07";
 
-        var inModel = ConditionalModelTranslator.ToSingleModel(
+        var inModel = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.In, list), Plain, db);
-        var ninModel = ConditionalModelTranslator.ToSingleModel(
+        var ninModel = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Nin,
                 new List<object> { "2026-03-04T10:36:07+05:30", "2026-03-04T05:06:07Z" }), Plain, db);
 
@@ -97,25 +97,24 @@ public class ConditionalModelTranslatorPlainDateTimeTests
 
     [Theory]
     [MemberData(nameof(BackendNames))]
-    public void Other_input_keeps_the_general_path(string backend)
+    public void Other_input_keeps_the_general_path_and_unparseable_dates_are_refused(string backend)
     {
         var db = Client(backend);
 
-        var garbage = ConditionalModelTranslator.ToSingleModel(
-            new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Plain, db);
-        garbage.FieldValue.Should().Be("not-a-date");
-        garbage.CSharpTypeName.Should().Be("datetime");
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Plain, db))
+            .Should().Throw<QueryException>().WithMessage("*createdAt*");
 
-        var nullValue = ConditionalModelTranslator.ToSingleModel(
+        var nullValue = SingleModel.Of(
             new ComparisonFilter("deletedAt", QueryOperator.Eq, null), Plain, db);
         nullValue.FieldValue.Should().BeNull();
         nullValue.CSharpTypeName.Should().Be("datetime");
 
-        var startsWith = ConditionalModelTranslator.ToSingleModel(
+        var startsWith = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Plain, db);
         startsWith.FieldValue.Should().Be("2026-03-04");
 
-        var notDateTime = ConditionalModelTranslator.ToSingleModel(
+        var notDateTime = SingleModel.Of(
             new ComparisonFilter("size", QueryOperator.Eq, "5"), Plain, db);
         notDateTime.FieldValue.Should().Be("5");
         notDateTime.CSharpTypeName.Should().Be("long");
@@ -124,7 +123,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
     [Fact]
     public void SQL_Server_text_at_the_largest_instant_is_the_datetime_maximum()
     {
-        var cm = ConditionalModelTranslator.ToSingleModel(
+        var cm = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Gt, "9999-12-31T23:59:59.9999999Z"), Plain, Client("SqlServer"));
 
         cm.FieldValue.Should().Be("9999-12-31T23:59:59.997");
@@ -135,7 +134,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
     {
         var db = Client("SqlServer");
 
-        var cm = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter("createdAt", QueryOperator.In,
+        var cm = SingleModel.Of(new ComparisonFilter("createdAt", QueryOperator.In,
             "2026-03-04T05:06:07.1234567Z,2026-03-04T05:06:07.9996Z"), Plain, db);
 
         cm.FieldValue.Should().Be("2026-03-04T05:06:07.123,2026-03-04T05:06:08.000");
@@ -158,7 +157,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
             props.ToDictionary(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..], p => p.Name,
                 StringComparer.OrdinalIgnoreCase), "Id");
 
-        var cm = ConditionalModelTranslator.ToSingleModel(
+        var cm = SingleModel.Of(
             new ComparisonFilter("validFrom", QueryOperator.Gte, "2026-03-04T10:36:07+05:30"), descriptor, Client(backend));
 
         cm.FieldValue.Should().Be(Expected(backend));
@@ -178,7 +177,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
         var dated = new EntityDescriptor(typeof(DatedRow),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["day"] = "Day" }, "Id");
 
-        var day = ConditionalModelTranslator.ToSingleModel(
+        var day = SingleModel.Of(
             new ComparisonFilter("day", QueryOperator.Eq, "2026-03-04T10:00:00+05:30"), dated, db);
         day.FieldValue.Should().Be("2026-03-04T10:00:00+05:30");
         day.CSharpTypeName.Should().NotBe("datetimeoffset");

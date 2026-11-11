@@ -33,7 +33,11 @@ internal sealed partial class FilterTranslator
     private static readonly GenericDispatcher<Func<object, KeyValuePair<string, List<SugarParameter>>>> ToSqlDispatcher =
         new(typeof(FilterTranslator), nameof(ToSql), [typeof(object)]);
 
-    private object NewQueryable<T>(List<IConditionalModel> conds) where T : class, new() => db.Queryable<T>().Where(conds);
+    private object NewQueryable<T>(List<IConditionalModel> conds) where T : class, new()
+    {
+        ParameterNames.EnsureDistinct(db, () => typeof(T), conds);
+        return db.Queryable<T>().Where(conds);
+    }
     private static object Project<T, TField>(object q, LambdaExpression projection) where T : class, new() =>
         ((ISugarQueryable<T>)q).Select((Expression<Func<T, TField>>)projection);
     private static object Guard<T>(object q, string column) where T : class, new() =>
@@ -188,8 +192,8 @@ internal sealed partial class FilterTranslator
         var conds = new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = db.EntityMaintenance.GetDbColumnName(tm.LocaleProperty, tType), ConditionalType = ConditionalType.Equal, FieldValue = queryLocale },
-            ConditionalModelTranslator.ToSingleModel(c, TranslationDescriptor(tType), db),
         };
+        if (ConditionalModelTranslator.ToCondition(c, TranslationDescriptor(tType), db) is { } leaf) conds.Add(leaf);
         return Projected(NewQueryableDispatcher.For(tType)(this, conds), tType, tm.ForeignKeyProperty, own.EntityType, own.IdProperty, guard: false);
     }
 

@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using Struo.Application.Query.Write;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
@@ -58,16 +59,12 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
 
         var incoming = BuildIncomingLinks(links, targetProp, tableName);
 
-        // ConditionalType.In (not Equal): Equal binds FieldValue as text -> "bigint = text" 42883 on PostgreSQL. In is the Postgres-safe primitive the other collaborators use (WhereInQueries, TranslationStore).
+        // The typed set primitive (not Equal, which binds the value as text: "bigint = text" 42883 on PostgreSQL).
         var parentConditional = new List<IConditionalModel>
         {
-            new ConditionalModel
-            {
-                FieldName = parentColumn,
-                ConditionalType = ConditionalType.In,
-                FieldValue = parentId.ToString(),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)
-            }
+            ValueConditions.BuildInternal(
+                new ValueTarget(parentColumn, parentColumn, parentProp.PropertyType, db.CurrentConnectionConfig.DbType),
+                QueryOperator.In, new[] { parentId })!
         };
 
         // Delete + insert/update in a single transaction so a failed write never leaves the parent

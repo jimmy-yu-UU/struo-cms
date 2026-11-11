@@ -23,7 +23,7 @@ public static class StruoCmsHostingExtensions
 
         // A headless JSON API has no culture-formatted output of its own (outbound JSON is always
         // camelCase/invariant), but SqlSugar re-parses ConditionalModel.FieldValue back with
-        // CultureInfo.CurrentCulture according to CSharpTypeName, while ConditionalModelTranslator renders
+        // CultureInfo.CurrentCulture according to CSharpTypeName, while ValueConditions renders
         // that same value with CultureInfo.InvariantCulture — so the process's default culture MUST be
         // invariant too, or the two disagree (e.g. a rendered "1.5" would re-parse as 15 under de-DE).
         // Set before any service is registered, so every thread the host later spins up inherits it as

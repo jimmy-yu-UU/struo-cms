@@ -67,7 +67,8 @@ query basics chapter](10-query-basics.md). One governs sorting inside a nested l
 top-level sorting.
 
 A nested `sort` holds at most `Query:MaxSortFields` fields, like a top-level one, and the nested
-`filter` conditions count toward the same `Query:MaxFilterConditions` budget as the root `filter`.
+`filter` conditions count toward the same `Query:MaxFilterConditions` budget as the root `filter`, and
+its `_in`/`_nin` values toward the same `Query:MaxInValues` budget.
 
 The junction's payload (the `_junction` key) is already covered in
 [Chapter 8: Relations](08-relations.md); it shows up again in this chapter's complete example at
