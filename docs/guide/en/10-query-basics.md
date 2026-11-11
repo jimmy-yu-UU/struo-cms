@@ -99,10 +99,12 @@ inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends
 
 **Empty lists, `null` and duplicates.** An empty list is no value at all: `_in` with no value
 matches no row and `_nin` with no value adds no condition. A `null` element or a nested array is
-a 400; a value repeated in a text list is bound once. A text list takes text elements only: a
-number, a boolean or an object element, or a single value that is not a list, is a 400 naming the
-field. On a field of another type, an empty element of a query-string list (`1,,2`, or a lone `,`)
-is a 400 as well.
+a 400; a value repeated in a text list is bound once. On a text field, a number or a boolean
+element, or a number or a boolean in place of the list, is a 400 naming the field. A string in
+place of a list is read as a comma list, so `"a,b"` is two values. A JSON object, as an element or
+in place of a list, is compared as its raw JSON text, so it matches only a row that holds exactly
+that text. On a field of another type, an empty element of a query-string list (`1,,2`, or a lone
+`,`) is a 400 as well.
 
 **Text lists.** `_in`/`_nin` on a text field bind each value as a parameter, so a quote, a
 backslash, a comma, the empty string and the words `null` and `[null]` are plain text that matches

@@ -32,9 +32,10 @@
   An empty query-string value, `filter[code][_in]=`, is an empty list.
 - A text `_nin` inside an `_or` group is a `400` that says to move it to the top level or into an
   `_and`. A text `_in` inside `_or` works as before.
-- A text `_in` or `_nin` takes text elements only. A number, a boolean or an object element, or a
-  value that is not a list, is a `400` naming the field. An empty element of a query-string list on
-  a field of another type (`1,,2`, `,`) is a `400`.
+- A text `_in` or `_nin` takes text. A number or a boolean element, or a number or a boolean in place
+  of the list, is a `400` naming the field. A string in place of a list is one comma-separated list,
+  and a JSON object, as an element or in place of a list, is compared as its raw JSON text. An empty
+  element of a query-string list on a field of another type (`1,,2`, `,`) is a `400`.
 - The ids of a many-to-many write are parsed to the target's key type: a number for a `Guid` key, or
   text that is not a `Guid`, is a `400`; `1` and `"1"`, or one `Guid` in two spellings, name one id.
 

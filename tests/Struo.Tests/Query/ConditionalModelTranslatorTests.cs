@@ -238,8 +238,8 @@ public partial class ConditionalModelTranslatorTests
     [Fact]
     public void Decimal_comparison_round_trips_correctly_under_the_invariant_culture()
     {
-        // ConditionalModelTranslator always RENDERS a filter value with CultureInfo.InvariantCulture
-        // (ToFieldValue), but SqlSugar re-parses ConditionalModel.FieldValue back to the column's
+        // ValueConditions always RENDERS a filter value with CultureInfo.InvariantCulture
+        // (Format), but SqlSugar re-parses ConditionalModel.FieldValue back to the column's
         // real CLR type using CultureInfo.CurrentCulture, keyed off CSharpTypeName — verified against
         // SqlSugarCore 5.1.4.217: under de-DE (comma decimal separator), a rendered "1.5" reparses as
         // 15, because SqlSugar has no way to be told "parse this literal invariantly" — there is no

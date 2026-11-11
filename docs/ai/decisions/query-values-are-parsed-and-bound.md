@@ -23,13 +23,16 @@ the comparison operators on such a type keep passing the text as a bound value.
 - `ParameterNames.EnsureDistinct` renders a condition list once, on a copy and without running it
   (`ToSql()`), when the list names a column and a column made of it plus trailing digits. The list is
   refused only when the rendered parameters repeat a name. The check sits at the root condition list,
-  every subquery list and the id lookup that carries an extra filter.
+  every subquery list and the two id lookups that carry an extra filter
+  (`WhereInQueries.QueryWhereInFilteredAsync` and `WhereInWindowQueries`).
 - `Query:MaxInValues` (default 500, at most 900) bounds the `_in`/`_nin` values of one REST request or
   one GraphQL collection query field, and `Query:MaxRelationLinks` (default 1000) bounds the ids of one
   relation in one write. The link count is checked before the write transaction opens, and a revision
   revert is exempt: its snapshot is the system's own data.
-- A text set takes text elements only: a number, a boolean or an object element, a scalar in place of a
-  list, and an empty element of a query-string list on a typed field are each a 400.
+- A text set takes strings: a number or a boolean element, a number or a boolean in place of a list,
+  and an empty element of a query-string list on a typed field are each a 400. `QueryParser.ReadValue`
+  reads a JSON object as its raw JSON text, so an object element is compared as that text; a string in
+  place of a list is split at its commas (`FilterValueList.Elements`).
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.

@@ -8,7 +8,7 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Regression lock for the review-flagged `_starts_with`/`_ends_with` mapping fix in
-/// ConditionalModelTranslator.MapOperator. Before the fix,
+/// ValueConditions.Map. Before the fix,
 /// `_starts_with` mapped to SqlSugar's LikeRight (silently matching a SUFFIX) and
 /// `_ends_with` mapped to LikeLeft (silently matching a PREFIX) — exactly backwards.
 ///

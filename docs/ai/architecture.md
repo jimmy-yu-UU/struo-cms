@@ -372,9 +372,10 @@ it as well, with the column's CLR type as the target, and a value that is not of
 `InvalidOperationException`; a request value reaches them only after `ItemWriteSideSync` parsed it to
 the target key type. The design and its limits are in
 `docs/ai/decisions/query-values-are-parsed-and-bound.md`. `ParameterNames.EnsureDistinct` refuses a
-condition list whose rendered parameter names repeat, which can only happen when it names a column and
-a column made of it plus digits, and `Query:MaxInValues`
-(`QueryValidator`) bounds the list values of a request. It is `internal`, not registered in DI at all —
+condition list whose rendered parameter names repeat. Every condition this code builds is its own
+instance, so a list repeats a name only when it names a column and a column made of it plus digits.
+`Query:MaxInValues` (`QueryValidator`) bounds the list values of a request. `FilterTranslator` is
+`internal`, not registered in DI at all —
 `SqlSugarItemRepository` constructs it directly with
 `new FilterTranslator(db, graph, metadata, registry, options)` (four times: its own `filters` field,
 plus one separate instance each for `WhereInQueries`, `FacetQueries`, and `AggregateQueries` — see

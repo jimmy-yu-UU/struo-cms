@@ -38,10 +38,9 @@ public sealed class SearchCandidateResolver(ISearchProvider provider, StruoQuery
     private Type PrimaryKeyType(string collection)
     {
         var d = registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
-        // Resolve the PK property the same way the translator resolves the "id" column
-        // (ConditionalModelTranslator.ResolveClrType): FieldToProperty["id"] -> the CLR property
-        // name, looked up case-insensitively on EntityType, rather than trusting d.IdProperty's
-        // exact casing to already be a valid property name.
+        // The primary key property is found the way ConditionalModelTranslator.Target finds a field's
+        // property: FieldToProperty["id"] names it, and it is looked up case-insensitively on EntityType
+        // rather than trusting d.IdProperty's exact casing to be a valid property name.
         if (!d.FieldToProperty.TryGetValue("id", out var idProp)
             || d.EntityType.GetProperty(idProp, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not { } pi)
             throw new InvalidOperationException($"Collection '{collection}' exposes no 'id' field; search candidates need one.");
