@@ -44,7 +44,7 @@ internal static class ValueConditions
         QueryOperator.Nin => SetCondition(t, false, value),
         QueryOperator.Eq or QueryOperator.Neq or QueryOperator.Gt or QueryOperator.Gte
             or QueryOperator.Lt or QueryOperator.Lte => Comparison(t, op, value),
-        _ => Plain(t, op, ToText(value), TypeName(t.Underlying)),
+        _ => Plain(t, op, ToText(value), TextOperatorTypeName(t.Underlying)),
     };
 
     /// <summary>Terms for an <c>_or</c> group: every term is one <see cref="ConditionalModel"/> joined with OR.</summary>
@@ -114,6 +114,10 @@ internal static class ValueConditions
         if (clrType == typeof(float)) return "float";
         return null;
     }
+
+    // A text operator (`_contains` and the like) reads the value as text for every column; byte and enum
+    // columns carry no type name there.
+    private static string? TextOperatorTypeName(Type t) => t.IsEnum || t == typeof(byte) ? null : TypeName(t);
 
     private static bool IsSupported(Type t) => t.IsEnum || Supported.Contains(t);
 
