@@ -84,7 +84,7 @@ runs, and an unknown id rejects the whole batch: `One or more ids in '{relation}
 Each id is first parsed to the key type of the target, a `Guid` or a number. An id that is not of
 that type is a 400 (`One or more ids in '{relation}' are not valid.`), a JSON number and the same
 number as text name one id, and an array longer than `Query:MaxRelationLinks` (default 1000) is a
-400 that writes nothing.
+400 that writes nothing. Reverting a revision is not bound by the limit.
 
 The sync diffs the incoming array against the junction rows already on file: rows whose target has
 disappeared are deleted, rows for new targets are added, and rows for targets that remain keep

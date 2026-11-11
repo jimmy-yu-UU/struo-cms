@@ -9,7 +9,8 @@
   `deep` filters draw from it together, and a query-string list counts once per comma-separated
   element. A request over it is a `400`.
 - `Query:MaxRelationLinks` (default `1000`) bounds the ids one many-to-many relation accepts in a
-  single write. A longer array is a `400` and nothing is written.
+  single write. A longer array is a `400` and nothing is written; reverting a revision is not bound
+  by it.
 
 ### Changed
 

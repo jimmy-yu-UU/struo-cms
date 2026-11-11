@@ -359,7 +359,7 @@ parameter per value, and the ceiling of 900 keeps that under SQLite's expression
 
 `MaxRelationLinks` bounds the ids one many-to-many relation accepts in a single write, in REST and
 GraphQL alike. A longer array fails with a 400 that names the relation and the key; nothing is
-written.
+written. Reverting a revision is not bound by it: a snapshot is data the system stored.
 
 `MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
 finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never

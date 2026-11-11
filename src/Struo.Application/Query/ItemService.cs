@@ -223,7 +223,8 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        writeSync.EnsureRelationLinksWithinLimit(collection, body);
+        // A revert re-applies a snapshot the system stored itself, so the link limit does not apply to it.
+        if (operation != "revert") writeSync.EnsureRelationLinksWithinLimit(collection, body);
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);

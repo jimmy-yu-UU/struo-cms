@@ -26,7 +26,8 @@ the comparison operators on such a type keep passing the text as a bound value.
   every subquery list and the id lookup that carries an extra filter.
 - `Query:MaxInValues` (default 500, at most 900) bounds the `_in`/`_nin` values of one REST request or
   one GraphQL collection query field, and `Query:MaxRelationLinks` (default 1000) bounds the ids of one
-  relation in one write. The link count is checked before the write transaction opens.
+  relation in one write. The link count is checked before the write transaction opens, and a revision
+  revert is exempt: its snapshot is the system's own data.
 - A text set takes text elements only: a number, a boolean or an object element, a scalar in place of a
   list, and an empty element of a query-string list on a typed field are each a 400.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
