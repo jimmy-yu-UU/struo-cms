@@ -35,7 +35,7 @@ internal sealed partial class FilterTranslator
 
     private object NewQueryable<T>(List<IConditionalModel> conds) where T : class, new()
     {
-        ParameterNames.EnsureDistinct(conds);
+        ParameterNames.EnsureDistinct(db, () => typeof(T), conds);
         return db.Queryable<T>().Where(conds);
     }
     private static object Project<T, TField>(object q, LambdaExpression projection) where T : class, new() =>

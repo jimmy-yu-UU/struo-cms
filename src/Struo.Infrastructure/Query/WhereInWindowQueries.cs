@@ -32,7 +32,7 @@ internal sealed class WhereInWindowQueries(
         var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(target, values) };
         if (extraFilter is not null)
             conditionals.AddRange(filters.Translate(collection, extraFilter, null, null, [], queryLocale));
-        ParameterNames.EnsureDistinct(conditionals);
+        ParameterNames.EnsureDistinct(db, () => d.EntityType, conditionals);
 
         var terms = orderBy.BuildOrderBy(sort, d, collection, queryLocale);
         return await WindowDispatcher.For(d.EntityType)(this, conditionals, terms, offset, limit, ct);

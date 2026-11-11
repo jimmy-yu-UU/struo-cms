@@ -62,5 +62,13 @@ internal sealed class NamePairHarness : IDisposable
         return r.Rows.Cast<QvNamePair>().Select(p => (p.Code, p.Code1)).ToList();
     }
 
+    public async Task<List<(string? Code, string? Code1)>> SearchAsync(
+        string search, string[] searchableFields, Struo.Domain.Query.FilterNode? filter = null)
+    {
+        var r = await Repo.QueryAsync(
+            "qvNamePair", new Struo.Domain.Query.QueryModel(null, filter, [], 100, 0, search), searchableFields, null);
+        return r.Rows.Cast<QvNamePair>().Select(p => (p.Code, p.Code1)).ToList();
+    }
+
     public void Dispose() => _database.Dispose();
 }
