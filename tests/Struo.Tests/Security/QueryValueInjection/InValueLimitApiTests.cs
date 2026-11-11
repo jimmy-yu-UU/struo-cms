@@ -10,7 +10,8 @@ using Xunit;
 namespace Struo.Tests.Security.QueryValueInjection;
 
 /// <summary>`Query:MaxInValues` counts the values of every `_in` and `_nin`, the root filter and `deep` together.</summary>
-public sealed class InValueLimitApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
+[Collection("ApiIntegration")]
+public sealed class InValueLimitApiTests(ApiFactory factory)
 {
     private static string Csv(int n, string prefix = "v") => string.Join(",", Enumerable.Range(0, n).Select(i => $"{prefix}{i}"));
 

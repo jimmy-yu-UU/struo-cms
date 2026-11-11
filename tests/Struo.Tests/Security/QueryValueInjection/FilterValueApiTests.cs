@@ -14,7 +14,8 @@ using StruoFile = Struo.Infrastructure.Files.File;
 namespace Struo.Tests.Security.QueryValueInjection;
 
 /// <summary>Filter values reach the database only as parsed values or bound parameters, on every entrance.</summary>
-public sealed class FilterValueApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
+[Collection("ApiIntegration")]
+public sealed class FilterValueApiTests(ApiFactory factory) : IDisposable
 {
     private const string Widen = "0 OR 1=1";
     private const string QuoteBreak = "x' OR 1=1 -- -";
@@ -23,6 +24,8 @@ public sealed class FilterValueApiTests(ApiFactory factory) : IClassFixture<ApiF
     private SqlCapture? _capture;
 
     private SqlCapture Capture => _capture ??= SqlCapture.Attach(factory.Services);
+
+    public void Dispose() => _capture?.Dispose();
 
     private ISqlSugarClient Db => factory.Services.GetRequiredService<ISqlSugarClient>();
 

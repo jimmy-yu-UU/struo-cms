@@ -46,7 +46,7 @@ public sealed partial class ValueConditionsConventionTests
     [InlineData("x = ConditionalType.InSingle;", false)]
     public void The_scan_reads_code_and_comments_and_nothing_else(string text, bool flagged)
     {
-        Offenders([("src/Other.cs", text)]).Count.Should().Be(flagged ? 1 : 0);
+        Offenders([("another file", text)]).Count.Should().Be(flagged ? 1 : 0);
         Offenders([(AllowedFile, text)]).Should().BeEmpty();
     }
 }

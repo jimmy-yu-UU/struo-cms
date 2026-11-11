@@ -15,11 +15,14 @@ using Xunit;
 namespace Struo.Tests.Security.QueryValueInjection;
 
 /// <summary>The ids of a many-to-many write become the key type before any query, and there are never too many.</summary>
-public sealed class RelationLinkApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
+[Collection("ApiIntegration")]
+public sealed class RelationLinkApiTests(ApiFactory factory) : IDisposable
 {
     private SqlCapture? _capture;
 
     private SqlCapture Capture => _capture ??= SqlCapture.Attach(factory.Services);
+
+    public void Dispose() => _capture?.Dispose();
 
     private ISqlSugarClient Db => factory.Services.GetRequiredService<ISqlSugarClient>();
 

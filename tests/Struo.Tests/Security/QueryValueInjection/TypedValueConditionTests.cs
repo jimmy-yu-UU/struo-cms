@@ -237,6 +237,19 @@ public sealed class TypedValueConditionTests : IDisposable
         SqlOf<VcTyped>(Db, spaced).Sql.Should().NotContain(" 0010 ").And.Contain("10");
     }
 
+    [Theory]
+    [InlineData("boolCol", " TRUE ")]
+    [InlineData("decimalCol", "+0001.50")]
+    [InlineData("doubleCol", "2.5E0")]
+    [InlineData("longCol", " 0010000000000 ")]
+    [InlineData("enumCol", " blue ")]
+    public void A_set_never_holds_the_original_spelling_of_a_value(string field, string spelling)
+    {
+        var conds = Conds(Db, D, field, QueryOperator.In, new List<object?> { spelling, spelling.Trim() });
+        var (sql, _) = SqlOf<VcTyped>(Db, conds);
+        sql.Should().NotContain(spelling.Trim());
+    }
+
     [Fact]
     public void The_soft_delete_filter_still_applies_to_every_shape()
     {
