@@ -250,6 +250,21 @@ public sealed class ItemWriteSideSync(
     }
 
     /// <summary>
+    /// Refuses a body whose many-to-many array holds more than <c>Query:MaxRelationLinks</c> ids. It
+    /// runs before the write transaction opens, so an oversized array costs no write.
+    /// </summary>
+    public void EnsureRelationLinksWithinLimit(string collection, JsonElement body)
+    {
+        foreach (var desc in m2mSource.M2MDescriptors(collection))
+        {
+            if (!JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out var idsElem)) continue;
+            if (idsElem.GetArrayLength() > options.MaxRelationLinks)
+                throw new QueryException(
+                    $"'{desc.RelationName}' accepts at most {options.MaxRelationLinks} ids (Query:MaxRelationLinks).");
+        }
+    }
+
+    /// <summary>
     /// For each M2M relation declared on <paramref name="collection"/>, reads the target-id array
     /// from <paramref name="body"/> under the relation's camelCase name (e.g. <c>"tags"</c>).
     /// If the key is present, validates every id exists in the target collection, then delegates
@@ -266,10 +281,6 @@ public sealed class ItemWriteSideSync(
         {
             // Only sync when the relation key is present in the request body as an array.
             if (!JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out var idsElem)) continue;
-
-            if (idsElem.GetArrayLength() > options.MaxRelationLinks)
-                throw new QueryException(
-                    $"'{desc.RelationName}' accepts at most {options.MaxRelationLinks} ids (Query:MaxRelationLinks).");
 
             var hasObjectElement = idsElem.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object);
             var (junctionMeta, payloadNames) = EnsureJunctionPayloadGrant(desc, hasObjectElement);

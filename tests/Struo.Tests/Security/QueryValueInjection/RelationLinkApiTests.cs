@@ -122,6 +122,21 @@ public sealed class RelationLinkApiTests(ApiFactory factory) : IDisposable
     }
 
     [Fact]
+    public async Task Too_many_ids_are_refused_before_any_row_is_written()
+    {
+        var (admin, article, tag) = await SeedAsync();
+        var tooMany = Enumerable.Range(0, 1001).Select(_ => Guid.NewGuid().ToString()).ToArray();
+        Capture.Clear();
+        var (status, _) = await PutTagsAsync(admin, article, JsonSerializer.Serialize(tooMany));
+        status.Should().Be(HttpStatusCode.BadRequest);
+        Capture.All.Where(s => s.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+                               || s.TrimStart().StartsWith("INSERT", StringComparison.OrdinalIgnoreCase)
+                               || s.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
+            .Should().BeEmpty("the count is checked before the transaction starts");
+        (await LinkedTagsAsync(article)).Should().Equal(Guid.Parse(tag));
+    }
+
+    [Fact]
     public async Task The_lookup_sites_refuse_a_value_of_the_wrong_type_without_running_a_statement()
     {
         using var scope = factory.Services.CreateScope();
