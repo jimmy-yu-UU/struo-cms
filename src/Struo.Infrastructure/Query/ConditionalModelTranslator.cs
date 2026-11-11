@@ -1,5 +1,4 @@
 // src/Struo.Infrastructure/Query/ConditionalModelTranslator.cs
-using System.Globalization;
 using System.Reflection;
 using SqlSugar;
 using Struo.Application.Metadata;
@@ -24,8 +23,8 @@ public static class ConditionalModelTranslator
     {
         var models = new List<IConditionalModel>();
 
-        if (filter is not null)
-            models.Add(ToModel(filter, descriptor, db));
+        if (filter is not null && ToModel(filter, descriptor, db) is { } model)
+            models.Add(model);
 
         if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
         {
@@ -55,129 +54,96 @@ public static class ConditionalModelTranslator
     }
 
     /// <summary>
-    /// Translates a single <see cref="ComparisonFilter"/> leaf into a SqlSugar <see cref="ConditionalModel"/>.
-    /// Extracted from <see cref="ToModel"/> so relation-filter pushdown (<c>FilterTranslator</c>) can build
-    /// own-collection leaf conditionals — including on a synthetic <see cref="EntityDescriptor"/> for a
-    /// junction/translation entity — without going through the full <see cref="FilterNode"/> AST dispatch.
+    /// Translates one <see cref="ComparisonFilter"/> leaf. Extracted from <see cref="ToModel"/> so relation-filter
+    /// pushdown (<c>FilterTranslator</c>) can build own-collection leaf conditionals — including on a synthetic
+    /// <see cref="EntityDescriptor"/> for a junction/translation entity — without going through the full
+    /// <see cref="FilterNode"/> AST dispatch. The result is one <see cref="ConditionalModel"/> or, for a set
+    /// operator on a text column, a group; it is null when the operator adds no condition (an empty <c>_nin</c>).
     /// </summary>
-    public static ConditionalModel ToSingleModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
-        ToDateTimeInstantModel(c, d, db) ?? new()
-        {
-            FieldName = Column(d, db, c.FieldPath),
-            ConditionalType = MapOperator(c.Op),
-            FieldValue = ToFieldValue(c.Op, c.Value),
-            CSharpTypeName = ResolveCSharpTypeName(d, c.FieldPath, c.Op)
-        };
+    public static IConditionalModel? ToCondition(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
+        ValueConditions.Build(Target(c.FieldPath, d, db), c.Op, c.Value);
 
-    // A filter value on a DateTime column is an instant: a trailing Z or offset names it and a value
-    // without one is UTC, which is how every DateTime the product writes is kept. A comparison or set
-    // operator therefore compares instants, never the host's local time. Where the column is bound as
-    // an instant (a TimestampWithTimeZone column on PostgreSQL and SQL Server) the value goes out as
-    // DateTimeOffset at +00:00, which neither the session zone nor SQL Server's legacy datetime
-    // rounding touches. Any other column gets the UTC wall clock with no zone: SQL Server's datetime
-    // column rounds it to 1/300 s the way it rounds the stored value, so the text is an ISO 8601
-    // form cut to milliseconds, which datetime reads under any language setting; the other backends
-    // get Microsoft.Data.Sqlite's text form, which MySQL also reads as a datetime and PostgreSQL binds
-    // as a zone-less timestamp (In/Nin render inline literals). A query-string _in/_nin value is one
-    // comma-separated string, split the way SqlSugar splits it. Null for any other operator, a
-    // property that is not a DateTime, or a value that does not parse: the general path handles those.
-    private static ConditionalModel? ToDateTimeInstantModel(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db)
+    /// <summary>The terms a leaf contributes inside an <c>_or</c> group.</summary>
+    internal static OrTerms ToOrTerms(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
+        ValueConditions.OrMembers(Target(c.FieldPath, d, db), c.Op, c.Value);
+
+    private static ValueTarget Target(string field, EntityDescriptor d, ISqlSugarClient db)
     {
-        if (!InstantOperators.Contains(c.Op) || DateTimeProperty(d, c.FieldPath) is not { } property) return null;
-
-        var values = c.Value switch
-        {
-            string text when c.Op is QueryOperator.In or QueryOperator.Nin => text.Split(',').Cast<object?>().ToList(),
-            System.Collections.IEnumerable list and not string => list.Cast<object?>().ToList(),
-            _ => [c.Value],
-        };
-        var instants = values.Select(ToUtcInstant).ToList();
-        if (instants.Any(i => i is null)) return null;
-
-        var dbType = db.CurrentConnectionConfig.DbType;
-        var asOffset = UtcInstantConverter.AppliesTo(dbType) && UtcInstantConverter.IsUtcInstantProperty(property);
-        var wallClockFormat = dbType == SqlSugar.DbType.SqlServer
-            ? "yyyy-MM-ddTHH:mm:ss.fff"
-            : "yyyy-MM-dd HH:mm:ss.FFFFFFF";
-        return new ConditionalModel
-        {
-            FieldName = Column(d, db, c.FieldPath),
-            ConditionalType = MapOperator(c.Op),
-            FieldValue = string.Join(",", instants.Select(i => asOffset
-                ? new DateTimeOffset(i!.Value).ToString("O", CultureInfo.InvariantCulture)
-                : WallClock(i!.Value, dbType).ToString(wallClockFormat, CultureInfo.InvariantCulture))),
-            CSharpTypeName = asOffset ? "datetimeoffset" : "datetime"
-        };
+        var property = d.EntityType
+            .GetProperty(d.FieldToProperty.GetValueOrDefault(field) ?? string.Empty,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var utcInstant = property is not null && UtcInstantConverter.IsUtcInstantProperty(property);
+        return new ValueTarget(
+            Column(d, db, field), field, property?.PropertyType ?? typeof(string),
+            db.CurrentConnectionConfig.DbType, utcInstant);
     }
 
-    private static readonly DateTime SqlServerDateTimeMax = new(9999, 12, 31, 23, 59, 59, 997, DateTimeKind.Utc);
-
-    // SQL Server's datetime holds 1/300 s steps, so milliseconds are the finest text it takes. The
-    // rounded value is clamped to datetime's largest value, 9999-12-31 23:59:59.997.
-    private static DateTime WallClock(DateTime instant, SqlSugar.DbType dbType) =>
-        dbType == SqlSugar.DbType.SqlServer
-            ? new DateTime(Math.Min(SqlServerDateTimeMax.Ticks,
-                (instant.Ticks + TimeSpan.TicksPerMillisecond / 2) / TimeSpan.TicksPerMillisecond
-                * TimeSpan.TicksPerMillisecond), DateTimeKind.Utc)
-            : instant;
-
-    private static readonly HashSet<QueryOperator> InstantOperators =
-    [
-        QueryOperator.Eq, QueryOperator.Neq, QueryOperator.Gt, QueryOperator.Gte,
-        QueryOperator.Lt, QueryOperator.Lte, QueryOperator.In, QueryOperator.Nin
-    ];
-
-    private static PropertyInfo? DateTimeProperty(EntityDescriptor d, string field) =>
-        d.FieldToProperty.TryGetValue(field, out var property)
-        && d.EntityType.GetProperty(property, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-            is { } info
-        && (Nullable.GetUnderlyingType(info.PropertyType) ?? info.PropertyType) == typeof(DateTime)
-            ? info
-            : null;
-
-    private static DateTime? ToUtcInstant(object? value) => value switch
-    {
-        DateTime instant => UtcInstantConverter.ToUtc(instant),
-        DateTimeOffset offset => offset.UtcDateTime,
-        string text when DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal, out var parsed) => parsed.UtcDateTime,
-        _ => null,
-    };
-
-    private static IConditionalModel ToModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
+    private static IConditionalModel? ToModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
     {
         switch (node)
         {
             case ComparisonFilter c:
-                return ToSingleModel(c, d, db);
+                return ToCondition(c, d, db);
+
+            case LogicalFilter { Op: LogicalOperator.Or } l:
+                return OrGroup(l, d, db);
 
             case LogicalFilter l:
-                var wt = l.Op == LogicalOperator.And ? WhereType.And : WhereType.Or;
-                return new ConditionalCollections
-                {
-                    ConditionalList = l.Children
-                        .Select(ch => new KeyValuePair<WhereType, ConditionalModel>(wt, ToLeafModel(ch, d, db)))
-                        .ToList()
-                };
+                return AndGroup(l, d, db);
 
             default:
                 throw new InvalidOperationException($"Unknown filter node type: {node.GetType().Name}");
         }
     }
 
-    /// <summary>
-    /// Converts a child node to a <see cref="ConditionalModel"/>.
-    /// Nested <see cref="LogicalFilter"/> inside a <see cref="LogicalFilter"/> is not supported
-    /// (SqlSugar's ConditionalCollections cannot be nested).
-    /// </summary>
-    private static ConditionalModel ToLeafModel(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
+    // Nested LogicalFilter inside a LogicalFilter is not supported (SqlSugar's ConditionalCollections
+    // cannot be nested), and neither is a text-column set operator inside an `_and` group here: its
+    // group is itself a ConditionalCollections.
+    private static IConditionalModel? AndGroup(LogicalFilter l, EntityDescriptor d, ISqlSugarClient db)
     {
-        if (node is not ComparisonFilter)
+        var members = l.Children.Select(ch => ToLeaf(ch, d, db)).OfType<ConditionalModel>().ToList();
+        return members.Count == 0
+            ? null
+            : new ConditionalCollections
+            {
+                ConditionalList = members
+                    .Select(m => new KeyValuePair<WhereType, ConditionalModel>(WhereType.And, m))
+                    .ToList()
+            };
+    }
+
+    private static IConditionalModel? ToLeaf(FilterNode node, EntityDescriptor d, ISqlSugarClient db)
+    {
+        if (node is not ComparisonFilter c)
             throw new InvalidOperationException(
                 $"Nested logical filter reached the translator for node type '{node.GetType().Name}'; " +
                 "this should have been rejected by QueryValidator before reaching this point.");
 
-        return (ConditionalModel)ToModel(node, d, db);
+        var condition = ToCondition(c, d, db);
+        return condition is null or ConditionalModel
+            ? condition
+            : throw new QueryException(
+                $"'{c.Op}' on the text field '{c.FieldPath}' cannot be combined inside a logical group here.");
+    }
+
+    private static IConditionalModel OrGroup(LogicalFilter l, EntityDescriptor d, ISqlSugarClient db)
+    {
+        var terms = l.Children
+            .Select(ch => ch is ComparisonFilter c
+                ? ToOrTerms(c, d, db)
+                : throw new InvalidOperationException(
+                    $"Nested logical filter reached the translator for node type '{ch.GetType().Name}'; " +
+                    "this should have been rejected by QueryValidator before reaching this point."))
+            .ToList();
+        var models = terms.SelectMany(t => t.Models).ToList();
+        if (models.Count == 0 && terms.Select(t => t.NeverMatchesColumn).FirstOrDefault(c => c is not null) is { } never)
+            return ValueConditions.NeverMatches(never);
+        return new ConditionalCollections
+        {
+            ConditionalList = models
+                .Select(m => new KeyValuePair<WhereType, ConditionalModel>(WhereType.Or, m))
+                .ToList()
+        };
     }
 
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)
@@ -188,99 +154,4 @@ public static class ConditionalModelTranslator
 
         return db.EntityMaintenance.GetDbColumnName(property, d.EntityType);
     }
-
-    private static string? ToFieldValue(QueryOperator op, object? value)
-    {
-        // EqualNull (_null) / IsNot (_nnull) do not use FieldValue; always pass null.
-        if (op is QueryOperator.Null or QueryOperator.NNull)
-            return null;
-
-        // Convert.ToString(v, InvariantCulture) rather than v.ToString(): a bare ToString() on
-        // decimal/double/DateTime renders using CultureInfo.CurrentCulture, so a comma-decimal
-        // locale (e.g. de-DE) would emit "1,5" into what must be a dot-decimal SQL literal.
-        return value switch
-        {
-            null => null,
-            System.Collections.IEnumerable list when value is not string =>
-                string.Join(",", list.Cast<object?>().Select(v => v is null ? null : Convert.ToString(v, CultureInfo.InvariantCulture))),
-            _ => Convert.ToString(value, CultureInfo.InvariantCulture)
-        };
-    }
-
-    /// <summary>
-    /// Resolves the SqlSugar <c>ConditionalModel.CSharpTypeName</c> for a filter field, so the
-    /// string <c>FieldValue</c> is cast/parameterized to the column's real CLR type instead of
-    /// being sent as text. Without this, a uuid (Guid) column comparison becomes
-    /// <c>WHERE category_id = 'text-literal'</c>, which SQLite accepts (loose typing) but
-    /// PostgreSQL rejects with 42883 "operator does not exist: uuid = text". Returns null for
-    /// string columns (and anything unrecognized) so their behavior is unchanged.
-    /// </summary>
-    private static string? ResolveCSharpTypeName(EntityDescriptor d, string field, QueryOperator op)
-    {
-        // _null / _nnull never touch FieldValue (render pure "IS [NOT] NULL"); a cast is moot.
-        if (op is QueryOperator.Null or QueryOperator.NNull)
-            return null;
-
-        var clrType = ResolveClrType(d, field);
-        return clrType is null ? null : SqlSugarTypeName(clrType);
-    }
-
-    private static Type? ResolveClrType(EntityDescriptor d, string field)
-    {
-        if (!d.FieldToProperty.TryGetValue(field, out var property))
-            return null;
-
-        var propertyType = d.EntityType
-            .GetProperty(property, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-            ?.PropertyType;
-
-        return propertyType is null ? null : Nullable.GetUnderlyingType(propertyType) ?? propertyType;
-    }
-
-    /// <summary>
-    /// Maps a CLR type to the string SqlSugar's <c>ConditionalModel.CSharpTypeName</c> expects
-    /// (verified against SqlSugarCore 5.1.4.216 via decompilation of
-    /// <c>UtilMethods.ConvertDataByTypeName</c>/<c>IsNumber</c>, which compare case-insensitively
-    /// against these literals and against <c>Type.Name</c>). Returns null for <see cref="string"/>
-    /// and any unmapped type, so those columns keep today's untyped (string) behavior exactly.
-    /// </summary>
-    internal static string? SqlSugarTypeName(Type clrType)
-    {
-        if (clrType == typeof(Guid)) return "guid";
-        if (clrType == typeof(int)) return "int";
-        if (clrType == typeof(long)) return "long";
-        if (clrType == typeof(short)) return "short";
-        if (clrType == typeof(bool)) return "bool";
-        if (clrType == typeof(DateTime)) return "datetime";
-        if (clrType == typeof(DateTimeOffset)) return "datetimeoffset";
-        if (clrType == typeof(decimal)) return "decimal";
-        if (clrType == typeof(double)) return "double";
-        if (clrType == typeof(float)) return "float";
-        return null;
-    }
-
-    private static ConditionalType MapOperator(QueryOperator op) => op switch
-    {
-        QueryOperator.Eq         => ConditionalType.Equal,
-        QueryOperator.Neq        => ConditionalType.NoEqual,
-        QueryOperator.Contains   => ConditionalType.Like,
-        // SqlSugar's LikeLeft/LikeRight naming is the OPPOSITE of what the enum names suggest
-        // (verified empirically against SqlSugarCore 5.1.4.215 on SQLite): LikeLeft renders
-        // `value%` (wildcard trails, i.e. starts-with) and LikeRight renders `%value` (wildcard
-        // leads, i.e. ends-with) — hence StartsWith below maps to LikeLeft, EndsWith to LikeRight.
-        QueryOperator.StartsWith => ConditionalType.LikeLeft,   // LikeLeft  = value%
-        QueryOperator.EndsWith   => ConditionalType.LikeRight,  // LikeRight = %value
-        QueryOperator.In         => ConditionalType.In,
-        QueryOperator.Nin        => ConditionalType.NotIn,
-        QueryOperator.Lt         => ConditionalType.LessThan,
-        QueryOperator.Lte        => ConditionalType.LessThanOrEqual,
-        QueryOperator.Gt         => ConditionalType.GreaterThan,
-        QueryOperator.Gte        => ConditionalType.GreaterThanOrEqual,
-        // Portable null checks. EqualNull renders pure "col IS NULL"; IsNot renders
-        // pure "col IS NOT NULL". IsNullOrEmpty would emit "OR col = ''", which throws
-        // a type error on PostgreSQL for non-text columns (bigint, timestamptz).
-        QueryOperator.Null       => ConditionalType.EqualNull,
-        QueryOperator.NNull      => ConditionalType.IsNot,
-        _ => throw new InvalidOperationException($"Unmapped operator: {op}")
-    };
 }

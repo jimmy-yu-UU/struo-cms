@@ -7,13 +7,13 @@ namespace Struo.Infrastructure.Query;
 
 internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner transactions)
 {
-    private static readonly GenericDispatcher<Func<TranslationStore, string, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, ValueTarget, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadDispatcher =
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
-            [typeof(string), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
+            [typeof(ValueTarget), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
 
-    private static readonly GenericDispatcher<Func<TranslationStore, TranslationSyncRequest, string, CancellationToken, Task>> SyncDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, TranslationSyncRequest, ValueTarget, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
-            [typeof(TranslationSyncRequest), typeof(string), typeof(CancellationToken)]);
+            [typeof(TranslationSyncRequest), typeof(ValueTarget), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<TranslationStore, string, string, IReadOnlyList<string>, object, IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>, CancellationToken, Task>> InsertDispatcher =
         new(typeof(TranslationStore), nameof(InsertTranslationsGenericAsync),
@@ -30,26 +30,17 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
     {
         if (parentIds.Count == 0) return [];
 
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(fkProperty, translationType);
+        var fkTarget = WhereInQueries.TargetOf(db, translationType, fkProperty);
         var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        return await LoadDispatcher.For(translationType)(this, fkColumn, parentIds, localeColumn, locale, ct);
+        return await LoadDispatcher.For(translationType)(this, fkTarget, parentIds, localeColumn, locale, ct);
     }
 
     private async Task<IReadOnlyList<object>> LoadTranslationsGenericAsync<T>(
-        string fkColumn, IReadOnlyList<object> parentIds, string localeColumn, string? locale,
+        ValueTarget fkTarget, IReadOnlyList<object> parentIds, string localeColumn, string? locale,
         CancellationToken ct) where T : class, new()
     {
-        // ConditionalType.In on the FK keeps "bigint IN (...)" Postgres-safe (no text coercion).
-        var conditionals = new List<IConditionalModel>
-        {
-            new ConditionalModel
-            {
-                FieldName = fkColumn,
-                ConditionalType = ConditionalType.In,
-                FieldValue = string.Join(",", parentIds.Select(v => v?.ToString())),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentIds.FirstOrDefault(v => v is not null))  // parent FK is Guid
-            }
-        };
+        // The typed set primitive on the FK keeps "bigint IN (...)" Postgres-safe (no text coercion).
+        var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(fkTarget, parentIds) };
         if (locale is not null)
         {
             conditionals.Add(new ConditionalModel
@@ -75,8 +66,8 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
 
     public async Task SyncTranslationsAsync(TranslationSyncRequest request, CancellationToken ct = default)
     {
-        var fkColumn = db.EntityMaintenance.GetDbColumnName(request.FkProperty, request.TranslationType);
-        await SyncDispatcher.For(request.TranslationType)(this, request, fkColumn, ct);
+        var fkTarget = WhereInQueries.TargetOf(db, request.TranslationType, request.FkProperty);
+        await SyncDispatcher.For(request.TranslationType)(this, request, fkTarget, ct);
     }
 
     // A create inserts under a parent id that is new in this transaction, so there is nothing to look up.
@@ -95,7 +86,7 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
     }
 
     private async Task SyncTranslationsGenericAsync<T>(
-        TranslationSyncRequest request, string fkColumn, CancellationToken ct) where T : class, new()
+        TranslationSyncRequest request, ValueTarget fkTarget, CancellationToken ct) where T : class, new()
     {
         var perLocale = request.PerLocale;
         var deleteLocales = request.DeleteLocales;
@@ -115,7 +106,7 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
             // updates of different items on InnoDB. The existing rows come from a plain consistent read.
             // Two concurrent updates of the same item are kept apart by the parent's version check
             // (the AuditableEntity optimistic lock), which runs before this sync in the same transaction.
-            var existing = await LoadExistingAsync<T>(fkColumn, request.ParentId, ct);
+            var existing = await LoadExistingAsync<T>(fkTarget, request.ParentId, ct);
             var updates = new List<T>();
             var insertLocales = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
             foreach (var (locale, values) in perLocale)
@@ -187,18 +178,9 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         }
     }
 
-    private async Task<List<T>> LoadExistingAsync<T>(string fkColumn, object parentId, CancellationToken ct)
+    private async Task<List<T>> LoadExistingAsync<T>(ValueTarget fkTarget, object parentId, CancellationToken ct)
         where T : class, new() =>
-        await db.Queryable<T>().Where(
-        [
-            new ConditionalModel
-            {
-                FieldName = fkColumn,
-                ConditionalType = ConditionalType.In,
-                FieldValue = parentId.ToString(),
-                CSharpTypeName = RepositoryHelpers.TypeNameOf(parentId)  // parent FK is Guid
-            }
-        ]).ToListAsync(ct);
+        await db.Queryable<T>().Where([WhereInQueries.InCondition(fkTarget, [parentId])]).ToListAsync(ct);
 
     private static bool TryGetValueCaseInsensitive(
         IReadOnlyDictionary<string, object?> dict, string key, out object? value)

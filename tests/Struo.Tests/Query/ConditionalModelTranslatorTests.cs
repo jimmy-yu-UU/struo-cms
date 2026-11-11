@@ -153,18 +153,16 @@ public partial class ConditionalModelTranslatorTests
     }
 
     [Fact]
-    public void In_operator_serializes_value_list()
+    public void In_operator_on_a_text_column_is_one_bound_equality_per_value()
     {
-        // SqlSugar's ConditionalType.In expects a comma-joined string for FieldValue.
         var (db, d, file) = Setup();
         using (file)
         {
             var filter = new ComparisonFilter("status", QueryOperator.In, new List<object?> { "a", "b" });
             var list = ConditionalModelTranslator.Translate(filter, null, [], d, db);
-            list.Should().ContainSingle();
-            var cm = (ConditionalModel)list[0];
-            cm.ConditionalType.Should().Be(ConditionalType.In);
-            cm.FieldValue.Should().Be("a,b");
+            var group = list.Should().ContainSingle().Which.Should().BeOfType<ConditionalCollections>().Which;
+            group.ConditionalList.Select(kv => kv.Value.ConditionalType).Should().OnlyContain(t => t == ConditionalType.Equal);
+            group.ConditionalList.Select(kv => kv.Value.FieldValueConvertFunc!("")).Should().Equal("a", "b");
         }
     }
 
@@ -322,9 +320,9 @@ public partial class ConditionalModelTranslatorTests
         var d = new EntityDescriptor(typeof(Struo.Infrastructure.Files.MediaFolder),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["createdAt"] = "CreatedAt" }, "Id");
 
-        var cm = ConditionalModelTranslator.ToSingleModel(
+        var cm = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Gt, value), d, db);
-        var inList = ConditionalModelTranslator.ToSingleModel(
+        var inList = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.In, new List<object?> { value, value }), d, db);
 
         var zoneAware = TestBackend.Current is TestBackendKind.PostgreSQL or TestBackendKind.SqlServer;

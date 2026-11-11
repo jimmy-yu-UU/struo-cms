@@ -27,9 +27,9 @@ internal sealed class WhereInWindowQueries(
         if (values.Count == 0) return [];
         if (SortsTranslatableFieldWithoutLocale(collection, sort, queryLocale)) return null;
 
-        var (d, column) = WhereInQueries.ResolveColumn(db, registry, collection, property);
+        var (d, target) = WhereInQueries.ResolveColumn(db, registry, collection, property);
 
-        var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(column, values) };
+        var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(target, values) };
         if (extraFilter is not null)
             conditionals.AddRange(filters.Translate(collection, extraFilter, null, null, [], queryLocale));
 

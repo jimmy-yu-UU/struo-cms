@@ -46,13 +46,13 @@ internal sealed partial class FilterTranslator(
     // be parsed to the PK type (SearchCandidateResolver guarantees this). An empty set becomes
     // `id IS NULL`: always false on a non-null PK, portable, and deterministic under our control
     // (SqlSugar's own rendering of an empty IN, `IN (null)`, happens to work too but is undocumented).
-    private ConditionalModel CandidateConditional(string collection, IReadOnlyList<object> ids, EntityDescriptor? rootDescriptor)
+    private IConditionalModel CandidateConditional(string collection, IReadOnlyList<object> ids, EntityDescriptor? rootDescriptor)
     {
         var d = rootDescriptor ?? RepositoryHelpers.Descriptor(registry, collection);
         var leaf = ids.Count == 0
             ? new ComparisonFilter("id", QueryOperator.Null, null)
             : new ComparisonFilter("id", QueryOperator.In, ids);
-        return ConditionalModelTranslator.ToSingleModel(leaf, d, db);
+        return ConditionalModelTranslator.ToCondition(leaf, d, db)!;
     }
 
     // Appends node's translation into a PLAIN list (SqlSugar ANDs consecutive top-level
@@ -74,10 +74,10 @@ internal sealed partial class FilterTranslator(
             foreach (var child in l.Children) AppendModel(models, collection, child, queryLocale);
             return;
         }
-        models.Add(ToModel(collection, node, queryLocale));
+        if (ToModel(collection, node, queryLocale) is { } model) models.Add(model);
     }
 
-    private IConditionalModel ToModel(string collection, FilterNode node, string? queryLocale) => node switch
+    private IConditionalModel? ToModel(string collection, FilterNode node, string? queryLocale) => node switch
     {
         ComparisonFilter c => Leaf(collection, c, queryLocale),
         RelationPredicateFilter p => Predicate(collection, p, queryLocale),
@@ -93,8 +93,13 @@ internal sealed partial class FilterTranslator(
     };
 
     // Builds an OR group (an explicit `_or` FilterNode) from its already-translated children.
-    private ConditionalCollections OrGroup(string collection, LogicalFilter l, string? queryLocale) =>
-        BuildOrCollection(l.Children.Select(ch => LeafModel(collection, ch, queryLocale)).ToList());
+    private ConditionalCollections OrGroup(string collection, LogicalFilter l, string? queryLocale)
+    {
+        var terms = l.Children.Select(ch => LeafTerms(collection, ch, queryLocale)).ToList();
+        return BuildOrCollection(
+            terms.SelectMany(t => t.Models).ToList(),
+            terms.Select(t => t.NeverMatchesColumn).FirstOrDefault(c => c is not null));
+    }
 
     // Builds a ConditionalCollections whose ConditionalList holds AT MOST ONE ICustomConditionalFunc
     // entry — the SqlSugar adjacency defect (see AppendModel above) fires only between two ADJACENT
@@ -115,8 +120,13 @@ internal sealed partial class FilterTranslator(
     // since every plain-list predecessor here (a filter, or nothing) needs AND, never OR. The first
     // entry therefore always gets WhereType.And; the rest keep WhereType.Or (this method builds only
     // OR-groups — an `_and` FilterNode never reaches here, see AppendModel/ToModel).
-    private static ConditionalCollections BuildOrCollection(List<ConditionalModel> children)
+    //
+    // `neverMatchesColumn` names a column when a member of the group matches no row (an empty `_in`)
+    // and was dropped: a group left with no member then matches no row, and is never emitted empty
+    // (SqlSugar drops an empty group, which would make it match every row).
+    private static ConditionalCollections BuildOrCollection(List<ConditionalModel> children, string? neverMatchesColumn = null)
     {
+        if (children.Count == 0 && neverMatchesColumn is not null) return ValueConditions.NeverMatches(neverMatchesColumn);
         var wrapped = children.Where(c => c.CustomConditionalFunc is not null).ToList();
         var entries = (wrapped.Count >= 2
             ? children.Where(c => c.CustomConditionalFunc is null).Append(OrOfSubqueriesConditional.Merge(wrapped))
@@ -131,19 +141,27 @@ internal sealed partial class FilterTranslator(
 
     // Children of a logical group must be ConditionalModel (ConditionalCollections cannot nest). Own leaves
     // AND subquery-wrapped relation nodes are both ConditionalModel, so either can sit inside an OR group.
-    private ConditionalModel LeafModel(string collection, FilterNode node, string? queryLocale) => node switch
+    // A text-column `_in` contributes one equality per value and a text-column `_nin` is a 400 here
+    // (D3: an AND-ed run of inequalities cannot sit inside an OR group of plain terms).
+    private OrTerms LeafTerms(string collection, FilterNode node, string? queryLocale) => node switch
     {
-        ComparisonFilter c => Leaf(collection, c, queryLocale),
-        RelationPredicateFilter p => Predicate(collection, p, queryLocale),
+        ComparisonFilter c when IsOwnColumn(collection, c, queryLocale) =>
+            ConditionalModelTranslator.ToOrTerms(c, RepositoryHelpers.Descriptor(registry, collection), db),
+        ComparisonFilter c => new OrTerms([(ConditionalModel)Leaf(collection, c, queryLocale)!]),
+        RelationPredicateFilter p => new OrTerms([Predicate(collection, p, queryLocale)]),
         _ => throw new InvalidOperationException(
             $"Nested logical filter reached the translator for node type '{node.GetType().Name}'; QueryValidator should have rejected it.")
     };
 
-    private ConditionalModel Leaf(string collection, ComparisonFilter c, string? queryLocale)
+    private bool IsOwnColumn(string collection, ComparisonFilter c, string? queryLocale) =>
+        !RelationPath.IsRelationPath(c.FieldPath)
+        && !(queryLocale is not null && IsTranslatable(collection, c.FieldPath));
+
+    private IConditionalModel? Leaf(string collection, ComparisonFilter c, string? queryLocale)
     {
         if (RelationPath.IsRelationPath(c.FieldPath)) return DottedPath(collection, c, queryLocale);
         if (queryLocale is not null && IsTranslatable(collection, c.FieldPath)) return TranslatableLeaf(collection, c, queryLocale);
-        return ConditionalModelTranslator.ToSingleModel(c, RepositoryHelpers.Descriptor(registry, collection), db);
+        return ConditionalModelTranslator.ToCondition(c, RepositoryHelpers.Descriptor(registry, collection), db);
     }
 
     // One OR group: LIKE per non-translatable searchable field, one translation-sidecar subquery per
@@ -152,7 +170,7 @@ internal sealed partial class FilterTranslator(
     // searchable fields would otherwise put two adjacent custom entries in one ConditionalCollections.
     private ConditionalCollections SearchGroup(string collection, string search, IReadOnlyList<string> searchableFields, string? queryLocale) =>
         BuildOrCollection(searchableFields
-            .Select(f => Leaf(collection, new ComparisonFilter(f, QueryOperator.Contains, search), queryLocale))
+            .Select(f => (ConditionalModel)Leaf(collection, new ComparisonFilter(f, QueryOperator.Contains, search), queryLocale)!)
             .ToList());
 
     private bool IsTranslatable(string collection, string field)

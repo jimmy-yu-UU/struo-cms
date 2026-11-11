@@ -188,8 +188,8 @@ internal sealed partial class FilterTranslator
         var conds = new List<IConditionalModel>
         {
             new ConditionalModel { FieldName = db.EntityMaintenance.GetDbColumnName(tm.LocaleProperty, tType), ConditionalType = ConditionalType.Equal, FieldValue = queryLocale },
-            ConditionalModelTranslator.ToSingleModel(c, TranslationDescriptor(tType), db),
         };
+        if (ConditionalModelTranslator.ToCondition(c, TranslationDescriptor(tType), db) is { } leaf) conds.Add(leaf);
         return Projected(NewQueryableDispatcher.For(tType)(this, conds), tType, tm.ForeignKeyProperty, own.EntityType, own.IdProperty, guard: false);
     }
 

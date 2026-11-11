@@ -66,7 +66,7 @@ public class ConditionalModelTranslatorBackendTests
                      (QueryOperator.Lt, ConditionalType.LessThan), (QueryOperator.Lte, ConditionalType.LessThanOrEqual),
                  })
         {
-            var cm = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter("createdAt", op, value), Folder, db);
+            var cm = SingleModel.Of(new ComparisonFilter("createdAt", op, value), Folder, db);
             cm.ConditionalType.Should().Be(type);
             cm.FieldName.Should().Be(db.EntityMaintenance.GetDbColumnName<MediaFolder>(nameof(MediaFolder.CreatedAt)));
             cm.FieldValue.Should().Be(Expected(backend));
@@ -84,8 +84,8 @@ public class ConditionalModelTranslatorBackendTests
         var db = Client(backend);
         const string list = "2026-03-04T05:06:07Z,2026-03-04T13:06:07+08:00";
 
-        var inModel = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter("createdAt", QueryOperator.In, list), Folder, db);
-        var ninModel = ConditionalModelTranslator.ToSingleModel(new ComparisonFilter("createdAt", QueryOperator.Nin, list), Folder, db);
+        var inModel = SingleModel.Of(new ComparisonFilter("createdAt", QueryOperator.In, list), Folder, db);
+        var ninModel = SingleModel.Of(new ComparisonFilter("createdAt", QueryOperator.Nin, list), Folder, db);
 
         inModel.ConditionalType.Should().Be(ConditionalType.In);
         ninModel.ConditionalType.Should().Be(ConditionalType.NotIn);
@@ -96,26 +96,25 @@ public class ConditionalModelTranslatorBackendTests
     [Theory]
     [InlineData("PostgreSQL")]
     [InlineData("SqlServer")]
-    public void Text_operators_null_checks_and_unparseable_values_keep_the_general_path(string backend)
+    public void Text_operators_and_null_checks_keep_the_general_path_and_unparseable_values_are_refused(string backend)
     {
         var db = Client(backend);
 
-        var startsWith = ConditionalModelTranslator.ToSingleModel(
+        var startsWith = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Folder, db);
         startsWith.ConditionalType.Should().Be(ConditionalType.LikeLeft);
         startsWith.FieldValue.Should().Be("2026-03-04");
         startsWith.CSharpTypeName.Should().Be("datetime");
 
-        var garbage = ConditionalModelTranslator.ToSingleModel(
-            new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Folder, db);
-        garbage.FieldValue.Should().Be("not-a-date");
-        garbage.CSharpTypeName.Should().Be("datetime");
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Folder, db))
+            .Should().Throw<QueryException>().WithMessage("*createdAt*");
 
-        var nullValue = ConditionalModelTranslator.ToSingleModel(
+        var nullValue = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Eq, null), Folder, db);
         nullValue.FieldValue.Should().BeNull();
 
-        var isNull = ConditionalModelTranslator.ToSingleModel(
+        var isNull = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Null, null), Folder, db);
         isNull.ConditionalType.Should().Be(ConditionalType.EqualNull);
         isNull.FieldValue.Should().BeNull();
@@ -146,14 +145,14 @@ public class ConditionalModelTranslatorBackendTests
     {
         var db = Client("PostgreSQL");
 
-        FluentActions.Invoking(() => ConditionalModelTranslator.ToSingleModel(
+        FluentActions.Invoking(() => SingleModel.Of(
                 new ComparisonFilter("nope", QueryOperator.Eq, "x"), Folder, db))
             .Should().Throw<ArgumentException>().WithMessage("*Unknown field path 'nope'*");
         FluentActions.Invoking(() => ConditionalModelTranslator.Translate(
                 new RelationPredicateFilter("parent", RelationQuantifier.Some,
                     new ComparisonFilter("name", QueryOperator.Eq, "A")), null, [], Folder, db))
             .Should().Throw<InvalidOperationException>().WithMessage("*Unknown filter node type*");
-        FluentActions.Invoking(() => ConditionalModelTranslator.ToSingleModel(
+        FluentActions.Invoking(() => SingleModel.Of(
                 new ComparisonFilter("name", (QueryOperator)999, "x"), Folder, db))
             .Should().Throw<InvalidOperationException>().WithMessage("*Unmapped operator*");
     }
