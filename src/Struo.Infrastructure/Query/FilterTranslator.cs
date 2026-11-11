@@ -36,6 +36,7 @@ internal sealed partial class FilterTranslator(
             models.Add(CandidateConditional(collection, searchCandidates, rootDescriptor));
         else if (!string.IsNullOrWhiteSpace(search) && searchableFields.Count > 0)
             models.Add(SearchGroup(collection, search, searchableFields, queryLocale));
+        ParameterNames.EnsureDistinct(models);
         return models;
     }
 

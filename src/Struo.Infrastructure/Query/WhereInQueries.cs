@@ -76,6 +76,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         // subqueries by FilterTranslator. SqlSugar ANDs consecutive IConditionalModel entries.
         if (extraFilter is not null)
             conditionals.AddRange(filters.Translate(collection, extraFilter, null, null, [], queryLocale));
+        ParameterNames.EnsureDistinct(conditionals);
 
         return await WhereInFilteredDispatcher.For(d.EntityType)(this, conditionals, maxRows, ct);
     }
