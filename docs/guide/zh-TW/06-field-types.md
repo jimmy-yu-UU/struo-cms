@@ -282,7 +282,9 @@ UTC。
 又不在前面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`，預設的
 `MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。明寫更大的 `MaxLength` 擋不住
 欄位寬度，通過驗證的值在 PostgreSQL 上會以
-`22001 value too long for type character varying(255)` 失敗。修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+`22001 value too long for type character varying(255)` 失敗。
+
+修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。表已經建好的話，還要
 另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤。
 

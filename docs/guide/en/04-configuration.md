@@ -135,7 +135,9 @@ The database part of startup runs in this order:
 
 Every assembly name in the list must resolve through `Assembly.Load`, which in practice means the
 API host project references it directly; an unresolvable name fails startup rather than being
-skipped.
+skipped. Once an assembly loads, a type in it that cannot load (a dependency that was not deployed,
+for example) fails startup too, and the message carries the assembly name, the number of failed
+types and the loader errors; a `[CmsCollection]` type is never dropped silently.
 
 This key is read directly from `builder.Configuration` before `builder.Build()` runs, bypassing
 `IOptions<T>`. So it sees every normal configuration source installed before startup, but a custom

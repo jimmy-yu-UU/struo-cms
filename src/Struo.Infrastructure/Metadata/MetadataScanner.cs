@@ -38,14 +38,14 @@ public static class MetadataScanner
          nameof(IAuditable.UpdatedAt), nameof(IAuditable.UpdatedBy)];
 
     public static IReadOnlyList<CollectionMetadata> Scan(params Assembly[] assemblies) =>
-        ScanTypes(assemblies.SelectMany(SafeGetTypes));
+        ScanTypes(assemblies.SelectMany(LoadTypes));
 
     /// <summary>
-    /// <see cref="Assembly.GetTypes"/> that tolerates an assembly with an unresolvable type: instead of
-    /// throwing <see cref="ReflectionTypeLoadException"/> (which aborts the whole scan), it returns the
-    /// types that did load. Guards convention-based discovery against a single bad dependency.
+    /// Every type of <paramref name="assembly"/>. A type that cannot load (a missing or mismatched
+    /// dependency) throws a <see cref="MetadataException"/> naming the assembly and the loader errors,
+    /// because skipping the type would drop its collection from the API without a trace.
     /// </summary>
-    public static IEnumerable<Type> SafeGetTypes(Assembly assembly)
+    public static IEnumerable<Type> LoadTypes(Assembly assembly)
     {
         try
         {
@@ -53,7 +53,7 @@ public static class MetadataScanner
         }
         catch (ReflectionTypeLoadException ex)
         {
-            return ex.Types.Where(t => t is not null)!;
+            throw AssemblyLoadFailure.ForAssembly(assembly, ex);
         }
     }
 
@@ -68,7 +68,7 @@ public static class MetadataScanner
             var collectionAttr = type.GetCustomAttribute<CmsCollectionAttribute>();
             if (collectionAttr is null) continue;
 
-            var meta = BuildCollection(type, collectionAttr);
+            var meta = AssemblyLoadFailure.Inspect(type, () => BuildCollection(type, collectionAttr));
             if (!seen.TryAdd(meta.Name, type))
                 throw new MetadataException(
                     $"Duplicate collection name '{meta.Name}' (types '{seen[meta.Name].FullName}' and '{type.FullName}').");
@@ -238,38 +238,42 @@ public static class MetadataScanner
         {
             if (type.GetCustomAttribute<CmsCollectionAttribute>() is null) continue;
 
-            var collection = CollectionNameOf(type);
-            var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var idProperty = "Id";
-            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                fieldToProp[Camel(prop.Name)] = prop.Name;
-                if (prop.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
-                    idProperty = prop.Name;
-            }
-
-            // Also map each declared many-to-one relation's local FK (camelCase -> CLR
-            // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
-            // can resolve filters like "categoryId" even though the FK carries no [CmsField]
-            // (it must NOT be added to meta.Fields — not projected/writable/required).
-            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                var nav = NavigateShape.Of(prop);
-                var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
-                if (nav is null || rel is null) continue;
-
-                var isCollection = prop.PropertyType.IsGenericType
-                    && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
-                if (isCollection) continue; // only many-to-one relations have a local FK
-
-                var fkProp = nav.Value.ForeignKey;
-                if (!string.IsNullOrEmpty(fkProp))
-                    fieldToProp[Camel(fkProp)] = fkProp;
-            }
-
-            map[collection] = new EntityDescriptor(type, fieldToProp, idProperty);
+            map[CollectionNameOf(type)] = AssemblyLoadFailure.Inspect(type, () => DescribeEntity(type));
         }
         return map;
+    }
+
+    private static EntityDescriptor DescribeEntity(Type type)
+    {
+        var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var idProperty = "Id";
+        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            fieldToProp[Camel(prop.Name)] = prop.Name;
+            if (prop.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
+                idProperty = prop.Name;
+        }
+
+        // Also map each declared many-to-one relation's local FK (camelCase -> CLR
+        // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
+        // can resolve filters like "categoryId" even though the FK carries no [CmsField]
+        // (it must NOT be added to meta.Fields — not projected/writable/required).
+        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var nav = NavigateShape.Of(prop);
+            var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
+            if (nav is null || rel is null) continue;
+
+            var isCollection = prop.PropertyType.IsGenericType
+                && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
+            if (isCollection) continue; // only many-to-one relations have a local FK
+
+            var fkProp = nav.Value.ForeignKey;
+            if (!string.IsNullOrEmpty(fkProp))
+                fieldToProp[Camel(fkProp)] = fkProp;
+        }
+
+        return new EntityDescriptor(type, fieldToProp, idProperty);
     }
 
     private static string Camel(string name) => JsonNamingPolicy.CamelCase.ConvertName(name);

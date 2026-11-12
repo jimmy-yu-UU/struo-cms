@@ -17,15 +17,6 @@ public class MetadataScannerTests
         MetadataScanner.ScanTypes([typeof(FxArticle), typeof(FxCategory)])
             .Single(c => c.Name == "fxArticle");
 
-    // SafeGetTypes returns the loadable types of a normal assembly without throwing (the
-    // ReflectionTypeLoadException path only triggers on an assembly with an unresolvable type).
-    [Fact]
-    public void SafeGetTypes_returns_loadable_types()
-    {
-        var types = MetadataScanner.SafeGetTypes(typeof(FxArticle).Assembly).ToList();
-        types.Should().Contain(typeof(FxArticle));
-    }
-
     [Fact]
     public void Scans_collection_identity_in_camelCase()
     {

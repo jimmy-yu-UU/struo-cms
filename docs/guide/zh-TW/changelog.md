@@ -44,6 +44,14 @@
   `Field '{name}' exceeds maximum length 255.` migration 把這類欄位加寬到 255 以上的 fork，要把
   `[CmsField(MaxLength = n)]` 設成那個寬度，否則更長的值仍被拒絕。核心欄位不受影響，
   `schema/core-collections.json` 不變。
+- 內容組件裡載入不起來的型別（依賴的組件缺少或版本不符）讓主機在啟動時失敗，丟出
+  `MetadataException`，訊息帶出組件名稱、載入失敗的型別數與去重後的載入錯誤；型別載得起來但讀不
+  了成員的 `[CmsCollection]` 型別，則帶出該型別。這類型別原本被悄悄略過、沒有任何 log：internal 的
+  `[CmsCollection]` 型別讓主機照常啟動、集合消失，`/api/items/{name}` 回 `404`；public 的則在稍
+  後的 migration 步驟失敗，錯誤訊息看不出是哪個集合；指向它的關聯則以
+  `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
+  或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
+  敗；呼叫它的 fork 要改名。
 :::
 
 ### 新增
