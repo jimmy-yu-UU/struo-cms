@@ -31,12 +31,16 @@
   登出網址的，把它從提供者那邊拿掉。`signin-oidc-{id}` 與 `signout-callback-oidc-{id}` 不變。
   管理映像的 nginx 範本與 Vite 開發代理不再轉發 `/signout-oidc` 開頭的路徑；自己的反向代理若有
   對應規則，可以拿掉。
-- 掃描器只接受兩種 `[Navigate]` 寫法：多對一與一對多的 `(NavigateType, 外鍵)`，以及多對多的
-  `(junction 型別, 父端鍵, 目標端鍵)`；其他寫法讓主機在啟動時失敗，訊息點名實體類別與屬性。其他寫法
-  指的是 `NavigateType` 後面接第二個鍵、帶 `whereSql` 或 `mappingSql`（`null` 也算）、多對多再加
-  兩個類別鍵。這些寫法原本能啟動，掃描器只讀第一個鍵，查詢層把它當成指向目標主鍵：`deep` 展開與
-  刪除目標回 `500`，一對多的 `(Id, ParentId)` 展開成空陣列，依關聯篩選回 `500` 或什麼都比不到，
-  `whereSql` 的條件被忽略。宣告了這類寫法的 fork 要改成支援的寫法；不支援關聯到非主鍵欄位。
+- 掃描器在掛了 `[CmsRelation]` 的屬性上只接受兩種 `[Navigate]` 寫法：多對一與一對多的
+  `(NavigateType, 外鍵)`，以及多對多的 `(junction 型別, 父端鍵, 目標端鍵)`；其他寫法讓主機在啟動
+  時失敗，訊息點名實體類別與屬性。其他寫法指的是 `NavigateType` 後面接第二個鍵、帶 `whereSql` 或
+  `mappingSql`（`null` 也算）、多對多再加兩個類別鍵、單一實體屬性上不是 `OneToOne` 或 `ManyToOne`
+  的 `NavigateType`、清單屬性上不是 `OneToMany` 的 `NavigateType`、單一實體屬性上的多對多寫法、為
+  `null`、空字串或空白的鍵或 junction 型別，以及 `Navigate` 的子類別。這些寫法原本能啟動，掃描器
+  只讀第一個鍵，查詢層把它當成指向目標主鍵：`deep` 展開與刪除目標回 `500`，一對多的
+  `(Id, ParentId)` 展開成空陣列，依關聯篩選回 `500` 或什麼都比不到，`whereSql` 的條件被忽略。宣告
+  了這類寫法的 fork 要改成支援的寫法；不支援關聯到非主鍵欄位。沒有 `[CmsRelation]` 的 `[Navigate]`
+  不是關聯，不會因為它的形狀讓主機啟動失敗；其中多對多寫法的，仍只讀它的 junction 型別。
 - 沒有 `MaxLength` 的 `string` 欄位，不論介面為何，上限就是欄位寬度：255，或 `[SugarColumn]` 的
   `Length`。欄位沒有長度可言時不設上限：LongText 與 JSON 介面、`[ColumnShape]`、`IsJson = true`、
   明寫的 `ColumnDataType`。`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有上限，超過 255

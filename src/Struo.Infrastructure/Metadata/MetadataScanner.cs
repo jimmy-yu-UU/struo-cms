@@ -116,7 +116,7 @@ public static class MetadataScanner
             if (owner is null) continue;
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                if (NavigateShape.Of(prop) is not { IsJunction: true } nav) continue;
+                if (NavigateShape.TryOf(prop) is not { IsJunction: true } nav) continue;
                 ValidateOneJunctionCollection(owner, prop, nav, byName);
             }
         }
@@ -165,7 +165,7 @@ public static class MetadataScanner
             if (owner is null) continue;
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                if (NavigateShape.Of(prop) is not { IsJunction: true } nav) continue;
+                if (NavigateShape.TryOf(prop) is not { IsJunction: true } nav) continue;
                 ValidateOneJunctionPrimaryKey(owner, prop, nav, checkedJunctions);
             }
         }
@@ -217,7 +217,7 @@ public static class MetadataScanner
         if (r.JunctionCollection is null || !byName.TryGetValue(r.JunctionCollection, out var junction)) return r;
         var prop = ownerType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .First(p => string.Equals(Camel(p.Name), r.Name, StringComparison.OrdinalIgnoreCase));
-        var nav = NavigateShape.Of(prop)!.Value;
+        var nav = NavigateShape.Of(prop)!;
         var junctionType = nav.JunctionType!;
         var excluded = new HashSet<string>(StringComparer.Ordinal) { nav.ParentKey, nav.TargetKey };
         if (prop.GetCustomAttribute<CmsRelationAttribute>()?.SortField is { } sortProperty) excluded.Add(sortProperty);
@@ -260,17 +260,11 @@ public static class MetadataScanner
         // (it must NOT be added to meta.Fields — not projected/writable/required).
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            var nav = NavigateShape.Of(prop);
-            var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
-            if (nav is null || rel is null) continue;
+            if (prop.GetCustomAttribute<CmsRelationAttribute>() is null) continue;
+            if (NavigateShape.Of(prop) is not { } nav) continue;
+            if (NavigateShape.IsListProperty(prop)) continue; // only many-to-one relations have a local FK
 
-            var isCollection = prop.PropertyType.IsGenericType
-                && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
-            if (isCollection) continue; // only many-to-one relations have a local FK
-
-            var fkProp = nav.Value.ForeignKey;
-            if (!string.IsNullOrEmpty(fkProp))
-                fieldToProp[Camel(fkProp)] = fkProp;
+            fieldToProp[Camel(nav.ForeignKey)] = nav.ForeignKey;
         }
 
         return new EntityDescriptor(type, fieldToProp, idProperty);
@@ -546,22 +540,20 @@ public static class MetadataScanner
     /// </summary>
     /// <remarks>
     /// SqlSugar's <c>Navigate</c> attribute exposes no public properties, so its data is read from
-    /// the constructor arguments (<see cref="NavigateShape"/>). Only two constructors are supported;
-    /// any other throws <see cref="MetadataException"/>.
+    /// the constructor arguments (<see cref="NavigateShape"/>). A <c>[CmsRelation]</c> property with an
+    /// unsupported <c>[Navigate]</c> throws <see cref="MetadataException"/>; a <c>[Navigate]</c> without
+    /// <c>[CmsRelation]</c> is not a relation and is skipped.
     /// </remarks>
     public static IReadOnlyList<RelationMetadata> ScanRelations(Type type)
     {
         var list = new List<RelationMetadata>();
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            // Both [Navigate] and [CmsRelation] required
-            var navShape = NavigateShape.Of(prop);
+            // Both [Navigate] and [CmsRelation] required; only a [CmsRelation] property is read.
             var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
-            if (navShape is null || rel is null) continue;
-            var nav = navShape.Value;
+            if (rel is null || NavigateShape.Of(prop) is not { } nav) continue;
 
-            var isCollection = prop.PropertyType.IsGenericType
-                && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType);
+            var isCollection = NavigateShape.IsListProperty(prop);
 
             Type target;
             RelationKind kind;

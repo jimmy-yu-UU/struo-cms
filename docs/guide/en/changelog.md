@@ -38,15 +38,20 @@
   registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
   are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
   start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
-- The scanner accepts two `[Navigate]` forms, `(NavigateType, foreignKey)` for many-to-one and
-  one-to-many and `(junctionType, parentKey, targetKey)` for many-to-many, and stops the host at start
-  on any other, naming the entity class and the property. The others are a second key after
-  `NavigateType`, a `whereSql` or `mappingSql` argument (even `null`) and the two class keys of a
-  many-to-many. They used to start, with the scanner reading only the first key and the query layer
-  treating it as pointing at the target's primary key: `deep` expansion and deleting the target
-  answered `500`, a one-to-many `(Id, ParentId)` expanded to an empty array, a filter on the relation
-  answered `500` or matched nothing, and a `whereSql` condition was ignored. A fork that declares one
-  rewrites it to a supported form; a relation to a non-primary-key column is not supported.
+- The scanner accepts two `[Navigate]` forms on a `[CmsRelation]` property, `(NavigateType, foreignKey)`
+  for many-to-one and one-to-many and `(junctionType, parentKey, targetKey)` for many-to-many, and
+  stops the host at start on any other, naming the entity class and the property. The others are a
+  second key after `NavigateType`, a `whereSql` or `mappingSql` argument (even `null`), the two class
+  keys of a many-to-many, a `NavigateType` other than `OneToOne` or `ManyToOne` on a single-entity
+  property and `OneToMany` on a list property, a junction form on a single-entity property, a null,
+  empty or blank key or junction type, and a subclass of `Navigate`. They used to start, with the
+  scanner reading only the first key and the query layer treating it as pointing at the target's
+  primary key: `deep` expansion and deleting the target answered `500`, a one-to-many `(Id, ParentId)`
+  expanded to an empty array, a filter on the relation answered `500` or matched nothing, and a
+  `whereSql` condition was ignored. A fork that declares one rewrites it to a supported form; a
+  relation to a non-primary-key column is not supported. A `[Navigate]` without `[CmsRelation]` is not
+  a relation and never stops the host for its shape; a many-to-many one is read only for its junction
+  type, as before.
 - A `string` field with no `MaxLength` is limited to the width of its column whatever its interface:
   255, or the `Length` of its `[SugarColumn]`. A column that states no length has no limit: LongText
   and JSON interfaces, `[ColumnShape]`, `IsJson = true`, an explicit `ColumnDataType`. `Hidden`,
