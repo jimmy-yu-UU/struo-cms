@@ -29,7 +29,8 @@ key, so any other form stops startup: a second key after `NavigateType` (even wh
 primary key), a `whereSql` or `mappingSql` argument (even when it is `null`), the two extra class
 keys on a many-to-many, a `NavigateType` or property shape the list above does not allow, a null,
 empty or blank key or junction type, and a subclass of `Navigate` (the CMS reads `[Navigate]`
-itself). The message names the entity class, the property, what was found and the two forms.
+itself). The message names the entity class, the property, the declaration it found and the two
+forms.
 
 The check applies to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
