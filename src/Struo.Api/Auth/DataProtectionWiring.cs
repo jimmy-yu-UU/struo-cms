@@ -96,7 +96,7 @@ public static class DataProtectionWiring
     /// </summary>
     public sealed class RedisKeyRingConnection : IDisposable
     {
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private ConnectionMultiplexer? _multiplexer;
 
         public IDatabase GetDatabase(string connectionString)
