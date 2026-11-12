@@ -111,8 +111,8 @@ cookie 本身只是一把不透明的鑰匙——背後真正的工作階段狀�
 會被新使用者的改密碼或刪除觸發撤銷，不會被前一個使用者的觸發撤銷。換帳號之前先登出，別讓同一個
 cookie jar 同時對應兩個帳號。
 
-工作階段用到超過滑動視窗的一半時，帶著它的請求會把它延長。這個續期盡力而為：續期當中快取失敗，只記一則
-警告，內容是票證的 key，請求照常回應；工作階段維持原本的到期時間，下一個請求再試一次。
+工作階段用到超過滑動視窗的一半時，帶著它的請求會把它延長。這個續期盡力而為：續期當中快取失敗，
+只記一則警告，內容是票證的 key，請求照常回應；工作階段維持目前的到期時間，下一個請求再試一次。
 
 ## 登出與撤銷
 
@@ -303,9 +303,9 @@ auth:unlock: no Redis is configured, so the login attempt count lives in the mem
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
 叫 userinfo 端點補齊。每個提供者有自己的回呼路徑：隨附的 `microsoft` 項目設為 `/signin-oidc`，隨附的 `google`
 項目設為 `/signin-oidc-google`，沒設 `CallbackPath` 的項目用 `/signin-oidc-{id}`；
-另外還有一條由 id 推導的登出回呼路徑：`/signout-callback-oidc-{id}`。API 不提供前端通道登出路徑，
-對 `/signout-oidc-{id}` 的請求回 `404`，不會結束任何工作階段；不要向提供者登記前端通道登出網址。啟用中的
-提供者之間不能共用路徑。
+另外還有一條由 id 推導的登出回呼路徑：`/signout-callback-oidc-{id}`。沒有任何端點提供
+`/signout-oidc-{id}`：API 回 `404`，不會結束任何工作階段（經由管理映像時，nginx 會把這條路徑交給
+SPA）；不要向提供者登記前端通道登出網址。啟用中的提供者之間不能共用路徑。
 
 登入預設一律顯示提供者的帳號挑選畫面（`Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
 第 4 章。
@@ -407,8 +407,8 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 該提供者必須有非空的 `AllowedEmailDomains`，因為 Google 沒有 tenant 可釘，錯誤訊息會點名這個鍵。
 單一 tenant 的 authority，或提供者停用時，都不受影響。
 
-多租用戶的 authority 只靠 `AllowedEmailDomains` 釘住時，主機照常啟動，但會記一則警告點名這個提供者：網域只
-縮小能登入的人，沒有把提供者綁到單一 tenant，那要靠 `AllowedTenantId`。
+多租用戶的 authority 只靠 `AllowedEmailDomains` 釘住時，主機照常啟動，但會記一則警告點名這個
+提供者：網域只縮小能登入的人，沒有把提供者綁到單一 tenant，那要靠 `AllowedTenantId`。
 
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
 這個參數從網址列移除。設了 CORS 來源時，這個頁面在已核准的 `returnUrl` 的來源上；沒有的話，在絕對的
@@ -425,7 +425,8 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 | `external_login_Inactive` | 對應到的本機帳號已停用 |
 | `external_login_AccountMismatch` | 找到的帳號，email 的拼法與身分裡的不同 |
 
-其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
+其他任何值，以及 `external_login_AccountMismatch`（管理介面沒有為它準備專屬訊息），登入頁一律顯示
+通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
 路徑，或是來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時，才會拿去挑戰；其他任何值或留空，都退回
 `Oidc:ReturnUrlDefault`。API 的 base URL 指向與頁面不同的來源時，SPA 會把自己的完整網址當 `returnUrl` 送出。
 登出回 `204`，沒有內容，也不做轉址。

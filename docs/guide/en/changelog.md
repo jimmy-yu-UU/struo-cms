@@ -19,12 +19,19 @@
 - The eight numeric keys of `RateLimiting:Login`, `RateLimiting:LoginAccount`,
   `RateLimiting:LoginConcurrency` and `RateLimiting:Password` are validated at start whatever
   `Enabled` says; a value out of range stops the host, with the full key and the allowed range in the
-  message (ranges in [Chapter 4](04-configuration.md)). Such values used to let the host start: an invalid
-  value of `Login`, `LoginConcurrency` or `Password` threw on the first request, so every request
-  answered `500`, and nothing was limited while `Enabled=false`; a `LoginAccount` `PermitLimit` of `0`
-  or below answered `429` to every attempt after the first failure, and a `WindowSeconds` of `0` or
-  below never locked. A fork that sets such a value changes it to one in range; no value means "no
-  limit", so a limiter is switched off with `Enabled=false`.
+  message (ranges in [Chapter 4](04-configuration.md)). Such values used to let the host start. While
+  `Enabled` was true, an invalid value of `Login` or `LoginConcurrency` made every login request answer
+  `500`, and one of `Password` did the same to every password-change request; nothing was limited
+  while `Enabled=false`. A `LoginAccount` `PermitLimit` of `0` or below let the first attempt of a
+  window through and answered `429` to the rest on the in-memory and distributed-cache throttle, and
+  answered `429` to every attempt on the Redis throttle; a `WindowSeconds` of `0` or below never
+  locked. A fork that sets such a value changes it to one in range; no value means "no limit", so a
+  limiter is switched off with `Enabled=false`.
+- On MySQL, MariaDB and SQL Server, an account whose stored email differs from the address the user
+  types, or the address the OIDC provider sends, by something the collation folds but trimming and
+  lowercasing do not (accents, full-width forms, invisible characters) can no longer sign in: password
+  login answers as for an unknown account, and external login is refused with
+  `external_login_AccountMismatch`. Check for such rows before upgrading and correct the stored email.
 - The OIDC remote sign-out endpoint `/signout-oidc-{id}` is removed, and so is
   `OidcProviderOptions.RemoteSignOutPathFor`; a fork that references the method deletes the reference.
   A request to that path answers `404` and leaves the session alone. A front-channel logout URL
@@ -35,8 +42,8 @@
 
 ### Added
 
-- A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId` logs one
-  start-up warning naming the provider id, never the domains; the host still starts.
+- A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
+  logs one start-up warning naming the provider id, never the domains; the host still starts.
 
 ### Fixed
 
@@ -48,16 +55,17 @@
   gets the response, verification cost and throttle count of an account that does not exist; external
   login returns to the login page with `external_login_AccountMismatch` and neither links nor creates
   an account. The duplicate check when a user is created or changed still compares by collation and
-  still answers `409`. PostgreSQL and SQLite were never affected.
+  still answers `409`. PostgreSQL and SQLite with their default collations were never affected.
 - A translation field name on a write, and a field name in a nested sort (`sort` inside REST `deep`,
   the nested `sort` argument in GraphQL), are validated without regard to case but then reached the
-  process-wide, ever-growing property cache in the spelling of the request, one entry per capitalization.
-  They now use the metadata spelling, so the cache stops growing with requests; responses are the same,
-  except that a field name in an error message is the metadata spelling.
-- A cache failure while a session is renewed made the request that triggered the renewal fail. It is now
-  logged as one warning (the ticket key, nothing from the ticket), the request answers as usual, and the
-  session keeps its current expiry. A cache failure while logging in, reading or logging out still fails
-  the request.
+  process-wide, ever-growing property cache in the spelling of the request, one entry per
+  capitalization. They now use the metadata spelling, so the cache stops growing with requests;
+  responses are the same, except that the translation-field value, format and length errors name
+  the field by its metadata spelling, in the message and in `details[].field`.
+- A cache failure while a session is renewed made the request that triggered the renewal fail. It is
+  now logged as one warning (the ticket key, nothing from the ticket), the request answers as usual,
+  and the session keeps its current expiry. A cache failure while logging in, reading or logging
+  out still fails the request.
 
 ### Security
 

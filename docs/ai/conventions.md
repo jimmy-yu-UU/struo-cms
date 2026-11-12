@@ -597,8 +597,9 @@ none is ever surfaced client-side.
   (`FieldFormatRules`, shared with translation values and `Repeater` sub-fields). `Required` is
   enforced for non-translatable fields at this layer.
 - **Configuration**: bound with the `IOptions` pattern and validated with `ValidateOnStart` —
-  `Database`, `Struo:Files`, `Oidc`, and `Query` options all fail fast at startup (before the app
-  accepts a single request) rather than surfacing as a confusing first-request failure
+  `Database`, `Struo:Files`, `Oidc`, `Query` and the `RateLimiting:*` options all fail fast at
+  startup (before the app accepts a single request) rather than surfacing as a confusing
+  first-request failure
   (`tests/Struo.Tests/DependencyInjection/OptionsValidationTests.cs` exercises this against a real
   generic host). `FileStorageOptionsValidator`
   (`src/Struo.Infrastructure/DependencyInjection/FileStorageServiceCollectionExtensions.cs`) is an
