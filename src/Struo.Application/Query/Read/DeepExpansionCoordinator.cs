@@ -42,7 +42,7 @@ public sealed class DeepExpansionCoordinator(
 
         var nodes = 0;
         ValidateDeepTree(collection, visible, depth: 1, budget ?? new FilterBudget(), ref nodes);
-        return visible;
+        return CanonicalizeSorts(collection, visible);
     }
 
     /// <summary>
@@ -163,6 +163,33 @@ public sealed class DeepExpansionCoordinator(
         QueryValidator.Validate(
             new QueryModel(null, null, relSpec.Sort, 0, 0, null),
             targetMeta, options, graph, metadata, permissions);
+    }
+
+    // A nested sort field is validated without regard to case and then read through PropertyAccessorCache, which
+    // keeps one entry per spelling, so a validated tree carries the metadata spelling on to the expander.
+    private DeepSpec CanonicalizeSorts(string coll, DeepSpec spec)
+    {
+        var relations = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (relName, relSpec) in spec.Relations)
+        {
+            var rel = graph.Resolve(coll, relName)!;
+            var target = Meta(rel.TargetCollection);
+            relations[relName] = relSpec with
+            {
+                Sort = relSpec.Sort?.Select(s => s with { Field = MetadataSpelling(target, s.Field) }).ToList(),
+                Deep = relSpec.Deep is null ? null : CanonicalizeSorts(rel.TargetCollection, relSpec.Deep),
+            };
+        }
+        return new DeepSpec(relations);
+    }
+
+    // The spellings QueryValidator admits for a sort field: a visible field, a many-to-one foreign key, or "id".
+    private static string MetadataSpelling(CollectionMetadata meta, string field)
+    {
+        bool Same(string name) => string.Equals(name, field, StringComparison.OrdinalIgnoreCase);
+        return meta.Fields.FirstOrDefault(f => !f.Hidden && Same(f.Name))?.Name
+               ?? meta.Relations.FirstOrDefault(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null && Same(r.ForeignKey))?.ForeignKey
+               ?? (Same("id") ? "id" : throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'."));
     }
 
     private CollectionMetadata Meta(string collection) =>

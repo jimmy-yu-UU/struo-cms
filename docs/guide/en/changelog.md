@@ -44,6 +44,11 @@
   login returns to the login page with `external_login_AccountMismatch` and neither links nor creates
   an account. The duplicate check when a user is created or changed still compares by collation and
   still answers `409`. PostgreSQL and SQLite were never affected.
+- A translation field name on a write, and a field name in a nested sort (`sort` inside REST `deep`,
+  the nested `sort` argument in GraphQL), are validated without regard to case but then reached the
+  process-wide, ever-growing property cache in the spelling of the request, one entry per capitalization.
+  They now use the metadata spelling, so the cache stops growing with requests; responses are the same,
+  except that a field name in an error message is the metadata spelling.
 
 ### Security
 
