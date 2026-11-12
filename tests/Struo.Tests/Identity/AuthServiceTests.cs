@@ -127,7 +127,19 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Case_and_surrounding_space_differences_still_authenticate()
+    public async Task A_credential_without_an_email_takes_the_unknown_account_path()
+    {
+        var hasher = new RecordingHasher();
+        var result = await new AuthService(
+                new FakeCredentialStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", true, null!)), hasher)
+            .AuthenticateAsync("jose@corp.com", "pw");
+
+        result.Failure.Should().Be(AuthFailure.InvalidCredentials);
+        hasher.VerifiedEncodedValues.Should().HaveCount(1).And.NotContain("enc:pw");
+    }
+
+    [Fact]
+    public async Task Case_and_surrounding_space_differences_authenticate()
     {
         var id = Guid.CreateVersion7();
         var sut = new AuthService(

@@ -61,6 +61,28 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
         read.GetProperty("data").GetProperty("translations").GetProperty("en").GetProperty("title").GetString().Should().Be("mixed-case title");
     }
 
+    [Fact]
+    public async Task An_invalid_translation_value_names_the_field_by_its_metadata_spelling()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+
+        var response = await admin.PostAsJsonAsync("/api/items/fxArticle", new Dictionary<string, object>
+        {
+            ["status"] = "draft",
+            ["translations"] = new Dictionary<string, object>
+            {
+                ["en"] = new Dictionary<string, object> { ["tITLE"] = new[] { 1, 2 } },
+            },
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error");
+        error.GetProperty("message").GetString().Should().Contain("'title'").And.NotContain("tITLE");
+        var detail = error.GetProperty("details")[0];
+        detail.GetProperty("field").GetString().Should().Be("title");
+        detail.GetProperty("message").GetString().Should().Contain("'title'").And.NotContain("tITLE");
+    }
+
     private static async Task<string> SeedCategoryWithArticlesAsync(HttpClient admin)
     {
         var category = await admin.PostAsJsonAsync("/api/items/fxCategory", new { name = "cat-" + Guid.NewGuid().ToString("N")[..6] });
@@ -80,7 +102,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Nested_sort_field_names_in_any_case_add_no_cache_key_and_still_sort()
+    public async Task Nested_sort_field_names_in_any_case_add_no_cache_key_and_sort()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var categoryId = await SeedCategoryWithArticlesAsync(admin);
@@ -127,7 +149,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task An_unknown_nested_sort_field_is_still_rejected()
+    public async Task An_unknown_nested_sort_field_is_rejected()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
 

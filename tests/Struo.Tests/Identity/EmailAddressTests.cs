@@ -39,10 +39,17 @@ public class EmailAddressTests
     public void IsSameAccount_holds_for_spellings_that_normalize_to_the_same_string(string stored, string presented) =>
         EmailAddress.IsSameAccount(stored, presented).Should().BeTrue();
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsSameAccount_fails_for_a_missing_or_blank_stored_email(string? stored) =>
+        EmailAddress.IsSameAccount(stored, "a@b.c").Should().BeFalse();
+
     [Fact]
     public void IsSameAccount_fails_for_a_collation_equivalent_variant()
     {
-        EmailAddress.IsSameAccount("a@b.c", "a@b́.c").Should().BeFalse();
+        EmailAddress.IsSameAccount("a@b.c", "a@b\u0301.c").Should().BeFalse();
         EmailAddress.IsSameAccount("jos\u00e9@b.c", "jose@b.c").Should().BeFalse();
     }
 }

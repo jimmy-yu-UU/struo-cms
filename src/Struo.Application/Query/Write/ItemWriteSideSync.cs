@@ -216,8 +216,8 @@ public sealed class ItemWriteSideSync(
         }
         catch (JsonException)
         {
-            var message = $"Field '{field.Name}' has an invalid value for locale '{locale}'.";
-            throw new QueryException(message, [new QueryErrorDetail(field.Name, locale, message)]);
+            var message = $"Field '{fieldName}' has an invalid value for locale '{locale}'.";
+            throw new QueryException(message, [new QueryErrorDetail(fieldName, locale, message)]);
         }
     }
 

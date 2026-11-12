@@ -16,9 +16,11 @@ public static class EmailAddress
     /// account up with the database's collation, which can fold spellings that normalize differently
     /// (accents, width, ignorable characters), while the login throttles key on the normalized spelling alone.
     /// Password login and external login accept a found account only when this holds; the duplicate checks
-    /// on user create and update deliberately keep the collation match.</summary>
-    public static bool IsSameAccount(string stored, string presented) =>
-        string.Equals(Normalize(stored), Normalize(presented), StringComparison.Ordinal);
+    /// on user create and update deliberately keep the collation match. A missing or blank stored address
+    /// never matches.</summary>
+    public static bool IsSameAccount(string? stored, string presented) =>
+        !string.IsNullOrWhiteSpace(stored)
+        && string.Equals(Normalize(stored), Normalize(presented), StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="email"/> can address a login lock: not blank and at most
     /// <see cref="MaxLength"/> characters once trimmed. A lock is keyed on the string alone, so this checks
