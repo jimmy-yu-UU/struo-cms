@@ -24,10 +24,10 @@ public sealed class LoginAccountRateLimitOptions
     /// cannot lock themselves out by logging in normally. Deliberately generous relative to the
     /// per-IP limiter's 5/60s — this layer targets slow, sustained password-spraying against one
     /// account, not burst traffic, and 10 attempts leaves headroom for a real user mistyping their
-    /// password a few times.</summary>
+    /// password a few times. Range: <see cref="RateLimitBounds"/>.</summary>
     public int PermitLimit { get; set; } = 10;
 
     /// <summary>Fixed-window length, in seconds. Deliberately much longer than the per-IP limiter's
-    /// 60s window, for the same reason as <see cref="PermitLimit"/>.</summary>
+    /// 60s window, for the same reason as <see cref="PermitLimit"/>. Range: <see cref="RateLimitBounds"/>.</summary>
     public int WindowSeconds { get; set; } = 900;
 }

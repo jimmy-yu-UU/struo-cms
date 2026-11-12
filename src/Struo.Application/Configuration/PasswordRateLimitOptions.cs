@@ -22,9 +22,9 @@ public sealed class PasswordRateLimitOptions
     /// their own single bucket and will be throttled past it, while every target user's own budget is
     /// left untouched. That is the safer direction: it also means this endpoint can never be used to
     /// lock a victim out of changing their own password. Configurable in case the admin-side
-    /// throttling becomes a problem in practice.</summary>
+    /// throttling becomes a problem in practice. Range: <see cref="RateLimitBounds"/>.</summary>
     public int PermitLimit { get; set; } = 5;
 
-    /// <summary>Fixed-window length, in seconds.</summary>
+    /// <summary>Fixed-window length, in seconds. Range: <see cref="RateLimitBounds"/>.</summary>
     public int WindowSeconds { get; set; } = 60;
 }

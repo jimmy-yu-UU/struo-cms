@@ -435,7 +435,12 @@ nginx 後面才是 API 時，設成 `2`，並把兩層代理都列進清單：�
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這十二個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
+八個數值鍵在主機啟動時檢查，不論所屬區段有沒有啟用；超出範圍就擋下啟動，訊息帶出完整的鍵與允許
+的範圍。沒有「不限制」的值，要關掉限流器請設 `Enabled=false`。`Login`、`LoginAccount` 與 `Password`
+的 `PermitLimit` 為 1 到 1000000、`WindowSeconds` 為 1 到 86400；`LoginConcurrency` 的 `PermitLimit`
+為 1 到 1000、`QueueLimit` 為 0 到 10000。
+
+`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
 被擋下時回 429，訊息依政策命名，並帶 `Retry-After`；`LoginAccount` 的 429 由登入端點
 自己回，訊息固定。
 

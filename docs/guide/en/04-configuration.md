@@ -509,8 +509,13 @@ the host at startup while `Enabled=true`.
 | `RateLimiting:Password:PermitLimit` | integer | `5` |
 | `RateLimiting:Password:WindowSeconds` | integer (seconds) | `60` |
 
-None of the twelve keys has a validation rule; a wrong value only surfaces once a request comes
-in. When a rate-limiter policy (`Login:*`, `LoginConcurrency:*` or `Password:*`) blocks a request it
+The eight numeric keys are checked when the host starts, whether or not their section is enabled;
+a value out of range stops startup, with the full key and the allowed range in the message. No
+value means "no limit": switch a limiter off with `Enabled=false`. `PermitLimit` is 1 to 1000000
+and `WindowSeconds` 1 to 86400 for `Login`, `LoginAccount` and `Password`; `LoginConcurrency` takes
+a `PermitLimit` of 1 to 1000 and a `QueueLimit` of 0 to 10000.
+
+When a rate-limiter policy (`Login:*`, `LoginConcurrency:*` or `Password:*`) blocks a request it
 returns 429, with a message naming the policy and a `Retry-After` header; the `LoginAccount` 429 is
 returned by the login endpoint itself, with a fixed message.
 

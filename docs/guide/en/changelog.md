@@ -16,6 +16,15 @@
   database row. A fork that implements `IUserCredentialStore` or `IExternalUserStore`, or builds
   either type itself, supplies it; `FindByEmailAsync` still returns the row the database found.
   `ExternalLoginFailure` gains `AccountMismatch`, which a fork that switches over it must handle.
+- The eight numeric keys of `RateLimiting:Login`, `RateLimiting:LoginAccount`,
+  `RateLimiting:LoginConcurrency` and `RateLimiting:Password` are validated at start whatever
+  `Enabled` says; a value out of range stops the host, with the full key and the allowed range in the
+  message (ranges in [Chapter 4](04-configuration.md)). Such values used to let the host start: an invalid
+  value of `Login`, `LoginConcurrency` or `Password` threw on the first request, so every request
+  answered `500`, and nothing was limited while `Enabled=false`; a `LoginAccount` `PermitLimit` of `0`
+  or below answered `429` to every attempt after the first failure, and a `WindowSeconds` of `0` or
+  below never locked. A fork that sets such a value changes it to one in range; no value means "no
+  limit", so a limiter is switched off with `Enabled=false`.
 :::
 
 ### Fixed

@@ -14,6 +14,13 @@
   fork 自己實作 `IUserCredentialStore`、`IExternalUserStore`，或自己建立這兩個型別的，要補上這個
   值；`FindByEmailAsync` 照舊回資料庫找到的那一列。`ExternalLoginFailure` 多了 `AccountMismatch`，
   switch 它的 fork 要處理這個新成員。
+- `RateLimiting:Login`、`RateLimiting:LoginAccount`、`RateLimiting:LoginConcurrency` 與
+  `RateLimiting:Password` 的八個數值鍵在啟動時驗證，不論 `Enabled` 為何；超出範圍的值讓主機無法
+  啟動，訊息帶出完整的鍵與允許的範圍，範圍見[第 4 章](04-configuration.md)。這些值原本不擋啟動：
+  `Login`、`LoginConcurrency` 與 `Password` 的無效值在第一個請求丟出例外，每個請求都回 `500`，
+  `Enabled=false` 時則不限流；`LoginAccount` 的 `PermitLimit` 小於等於 `0` 讓第一次失敗之後的每次
+  嘗試都回 `429`，`WindowSeconds` 小於等於 `0` 則永遠不鎖。設了這類值的 fork 要改成範圍內的值；
+  沒有「不限制」的值，要關掉限流器請設 `Enabled=false`。
 :::
 
 ### 修正
