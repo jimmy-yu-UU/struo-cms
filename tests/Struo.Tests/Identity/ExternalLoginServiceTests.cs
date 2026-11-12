@@ -113,7 +113,7 @@ public class ExternalLoginServiceTests
     }
 
     [Fact]
-    public async Task Case_differences_still_link_the_existing_account()
+    public async Task Case_differences_link_the_existing_account()
     {
         var store = new MismatchStore("alice@corp.com");
         var sut = new ExternalLoginService(store);

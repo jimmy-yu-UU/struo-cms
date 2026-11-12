@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
@@ -18,8 +19,10 @@ namespace Struo.Tests.Api;
 /// the presented one after normalizing, so a collation-equivalent variant neither reaches the account nor
 /// gets a login-lock counter of its own. The duplicate check on user create keeps the collation match.
 /// Each backend folds a different set of spellings; <see cref="Variants"/> lists the ones the selected
-/// backend folds, or one spelling it does not fold (PostgreSQL, SQLite), where the variant is just
-/// another email.
+/// backend folds. The class discriminates only on MySQL, MariaDB and SQL Server. On SQLite and PostgreSQL
+/// the list holds one spelling the database does not fold, so the variant is just another email and the
+/// tests pass whether or not the normalized comparison exists. The comparison rule itself is covered on
+/// every backend by <c>AuthServiceTests</c> and <c>ExternalLoginServiceTests</c>.
 /// </summary>
 [Collection("ApiIntegration")]
 public class LoginEmailCollationTests(ApiFactory factory)
@@ -28,14 +31,14 @@ public class LoginEmailCollationTests(ApiFactory factory)
 
     private sealed record Variant(string Name, Func<string, string> Make, bool FoldedByBackend);
 
-    private static readonly Variant AccentE = new("accent-e", s => s.Replace('e', 'é'), true);
-    private static readonly Variant UmlautO = new("umlaut-o", s => s.Replace('o', 'ö'), true);
-    private static readonly Variant FullwidthO = new("fullwidth-o", s => s.Replace('o', 'ｏ'), true);
-    private static readonly Variant SoftHyphen = new("soft-hyphen", s => s.Insert(1, "­"), true);
-    private static readonly Variant ZeroWidthSpace = new("zero-width-space", s => s.Insert(1, "​"), true);
-    private static readonly Variant DotlessI = new("dotless-i", s => s.Replace('i', 'ı'), true);
-    private static readonly Variant DottedCapitalI = new("dotted-capital-i", s => s.Replace('i', 'İ'), true);
-    private static readonly Variant SharpS = new("sharp-s", s => s.Replace('s', 'ß'), true);
+    private static readonly Variant AccentE = new("accent-e", s => s.Replace('e', '\u00E9'), true);
+    private static readonly Variant UmlautO = new("umlaut-o", s => s.Replace('o', '\u00F6'), true);
+    private static readonly Variant FullwidthO = new("fullwidth-o", s => s.Replace('o', '\uFF4F'), true);
+    private static readonly Variant SoftHyphen = new("soft-hyphen", s => s.Insert(1, "\u00AD"), true);
+    private static readonly Variant ZeroWidthSpace = new("zero-width-space", s => s.Insert(1, "\u200B"), true);
+    private static readonly Variant DotlessI = new("dotless-i", s => s.Replace('i', '\u0131'), true);
+    private static readonly Variant DottedCapitalI = new("dotted-capital-i", s => s.Replace('i', '\u0130'), true);
+    private static readonly Variant SharpS = new("sharp-s", s => s.Replace('s', '\u00DF'), true);
 
     private static IReadOnlyList<Variant> Variants => TestBackend.Current switch
     {
@@ -69,7 +72,7 @@ public class LoginEmailCollationTests(ApiFactory factory)
         return (r.StatusCode, error.GetProperty("code").GetString()!, error.GetProperty("message").GetString()!);
     }
 
-    private HttpClient LockingClient() =>
+    private WebApplicationFactory<Program> LockingHost() =>
         factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(
             new Dictionary<string, string?>
             {
@@ -77,7 +80,7 @@ public class LoginEmailCollationTests(ApiFactory factory)
                 ["RateLimiting:LoginAccount:PermitLimit"] = "3",
                 ["RateLimiting:LoginAccount:WindowSeconds"] = "300",
                 ["RateLimiting:Login:Enabled"] = "false",
-            }))).CreateClient();
+            })));
 
     [Fact]
     public async Task Password_login_with_the_exact_email_succeeds()
@@ -106,7 +109,8 @@ public class LoginEmailCollationTests(ApiFactory factory)
     [Fact]
     public async Task A_variant_gets_no_login_lock_counter_of_its_own()
     {
-        var client = LockingClient();
+        using var host = LockingHost();
+        var client = host.CreateClient();
 
         foreach (var variant in Variants)
         {
