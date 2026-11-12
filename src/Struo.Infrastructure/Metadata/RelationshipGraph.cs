@@ -198,14 +198,14 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                 r.Name,
                 StringComparison.OrdinalIgnoreCase));
 
-        var navData = prop.CustomAttributes
-            .First(a => a.AttributeType == typeof(Navigate));
+        var nav = NavigateShape.Of(prop)
+            ?? throw new MetadataException($"Relation '{r.Name}' has no [Navigate] on '{entityType.Name}.{prop.Name}'.");
 
         if (r.Kind == RelationKind.ManyToMany)
         {
-            var junctionType = MetadataScanner.NavigateMappingType(navData)!;
-            var parentFk = MetadataScanner.NavigateMappingA(navData)!;
-            var targetFk = MetadataScanner.NavigateMappingB(navData)!;
+            var junctionType = nav.JunctionType!;
+            var parentFk = nav.ParentKey;
+            var targetFk = nav.TargetKey;
             var sort = prop.GetCustomAttribute<Struo.Domain.Metadata.Attributes.CmsRelationAttribute>()?.SortField;
             var (junctionCollection, payload) = JunctionPayloadOf(r, junctionType);
             return new RelationDescriptor(r, junctionType, parentFk, targetFk, sort, null, junctionCollection, payload);
@@ -220,7 +220,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                 JunctionParentFk: null,
                 JunctionTargetFk: null,
                 JunctionSort: null,
-                ReverseForeignKeyProperty: MetadataScanner.NavigateForeignKeyName(navData));
+                ReverseForeignKeyProperty: nav.ForeignKey);
         }
 
         // ManyToOne — FK is already captured in Meta.ForeignKey

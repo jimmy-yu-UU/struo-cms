@@ -15,6 +15,19 @@ scanner infers which applies from the property's own shape: a scalar or nullable
 is many-to-one; a list property defaults to one-to-many, and counts as many-to-many only when
 `[Navigate]`'s first argument is a type.
 
+### Supported `[Navigate]` forms
+
+The scanner accepts two `[Navigate]` forms, recognised by the constructor's parameters:
+
+- Many-to-one and one-to-many: `[Navigate(NavigateType.…, foreignKey)]`.
+- Many-to-many: `[Navigate(junctionType, parentKey, targetKey)]`.
+
+The code behind these relations assumes the foreign key points at the target collection's primary
+key, so any other form stops startup: a second key after `NavigateType` (even when it is the target's
+primary key), a `whereSql` or `mappingSql` argument (even when it is `null`), or the two extra class
+keys on a many-to-many. The message names the entity class, the property and the two forms. A
+`[Navigate]` on a `[CmsCollection]` class is checked the same way without a `[CmsRelation]`.
+
 ### Many-to-one: `File.Folder`
 
 The framework and the sample always use `NavigateType.OneToOne` for a many-to-one relation and

@@ -38,6 +38,15 @@
   registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
   are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
   start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
+- The scanner accepts two `[Navigate]` forms, `(NavigateType, foreignKey)` for many-to-one and
+  one-to-many and `(junctionType, parentKey, targetKey)` for many-to-many, and stops the host at start
+  on any other, naming the entity class and the property. The others are a second key after
+  `NavigateType`, a `whereSql` or `mappingSql` argument (even `null`) and the two class keys of a
+  many-to-many. They used to start, with the scanner reading only the first key and the query layer
+  treating it as pointing at the target's primary key: `deep` expansion and deleting the target
+  answered `500`, a one-to-many `(Id, ParentId)` expanded to an empty array, a filter on the relation
+  answered `500` or matched nothing, and a `whereSql` condition was ignored. A fork that declares one
+  rewrites it to a supported form; a relation to a non-primary-key column is not supported.
 :::
 
 ### Added
