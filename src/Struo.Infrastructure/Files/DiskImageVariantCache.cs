@@ -29,7 +29,7 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
 
     private readonly ILogger _logger = logger ?? NullLogger.Instance;
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
-    private readonly object _seedLock = new();
+    private readonly Lock _seedLock = new();
     private long _totalBytes = -1;   // -1 until seeded from disk
 
     public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req)

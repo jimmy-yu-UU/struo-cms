@@ -91,7 +91,7 @@ public sealed class OrderByExpressionBuilder(
         var rp = RelationPath.Parse(rootCollection, path, graph, metadata, options.MaxRelationDepth);
         var segs = rp.Segments;
 
-        string FkProperty(EntityDescriptor d, string fk) =>
+        static string FkProperty(EntityDescriptor d, string fk) =>
             d.FieldToProperty.TryGetValue(fk, out var p) ? p
                 : throw new QueryException($"Foreign key '{fk}' is not a known property on '{d.EntityType.Name}'.");
 
