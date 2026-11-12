@@ -47,6 +47,14 @@
   answered `500`, a one-to-many `(Id, ParentId)` expanded to an empty array, a filter on the relation
   answered `500` or matched nothing, and a `whereSql` condition was ignored. A fork that declares one
   rewrites it to a supported form; a relation to a non-primary-key column is not supported.
+- A `string` field with no `MaxLength` is limited to the width of its column whatever its interface:
+  255, or the `Length` of its `[SugarColumn]`. A column that states no length has no limit: LongText
+  and JSON interfaces, `[ColumnShape]`, `IsJson = true`, an explicit `ColumnDataType`. `Hidden`,
+  `Time` and a `Uuid` declared on a `string` had no limit, so a value over 255 characters was stored
+  on SQLite and answered `500` on PostgreSQL, MySQL and SQL Server; it is now a `400`,
+  `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a column wider than
+  255 sets `[CmsField(MaxLength = n)]` to that width, or longer values stay rejected. No core field is
+  affected and `schema/core-collections.json` is unchanged.
 :::
 
 ### Added
@@ -75,6 +83,9 @@
   now logged as one warning (the ticket key, nothing from the ticket), the request answers as usual,
   and the session keeps its current expiry. A cache failure while logging in, reading or logging
   out still fails the request.
+- A `Text`-style `string` field whose column states no length (`[ColumnShape(ColumnShape.LongText)]`,
+  `IsJson = true`, an explicit `ColumnDataType`) was limited to 255 characters on write although the
+  column holds more. It has no limit now, like any column without a length.
 
 ### Security
 

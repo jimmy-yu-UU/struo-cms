@@ -18,9 +18,10 @@ public sealed class CmsFieldAttribute : Attribute
     public string? Group { get; set; }
 
     /// <summary>
-    /// CMS-layer input-length limit (UTF-16 code units). 0 = unset: short-string interfaces
-    /// default to 255 (matching SqlSugar's default column width), content-bearing interfaces
-    /// are unlimited. Independent of the DB column width ([SugarColumn(Length = n)]).
+    /// Input-length limit (UTF-16 code units), enforced on write. 0 = unset: a string field takes its
+    /// column's width (255, or [SugarColumn(Length = n)]), and has no limit when its column states none
+    /// (content-bearing and JSON interfaces, a column shape, IsJson, an explicit ColumnDataType).
+    /// An explicit value does not change the column.
     /// </summary>
     public int MaxLength { get; set; }
 }

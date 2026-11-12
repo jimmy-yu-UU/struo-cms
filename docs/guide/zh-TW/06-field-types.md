@@ -184,19 +184,19 @@ UTC。
 
 ## `MaxLength` 的行為
 
-`MaxLength` 只管後台輸入，以 UTF-16 code unit 計，跟 `[SugarColumn(Length = n)]` 或明寫的
-`ColumnDataType` 都不相干。負值，或掛在非 `string` 屬性上，都會在啟動時丟出
-`MetadataException`。有效的 `MaxLength` 依序解出：
+`MaxLength` 以 UTF-16 code unit 計，後台輸入與寫入驗證都以它為準，超過回 400。負值，或掛在非
+`string` 屬性上，都會在啟動時丟出 `MetadataException`。有效的 `MaxLength` 依序解出：
 
 1. 明寫且大於零，用明寫的值。
-2. 否則屬性是 `string`，介面又落在十二個短字串介面之一時退回 255：`Text`、`Slug`、
-   `Email`、`Url`、`Password`、`Color`、`Phone`、`Select`、`MultiSelect`、`Radio`、
-   `CheckboxGroup`、`Tags`。
-3. 兩者都不成立，是 `null`，代表不限長度。
+2. 否則屬性是 `string`，用它的欄位寬度：沒有指定長度的 `string` 欄位是 255，
+   `[SugarColumn(Length = n)]` 則是 `n`。
+3. 欄位沒有長度可言時是 `null`，代表不限長度：`Textarea`、`RichText`、`Markdown`、`Code`、
+   `Json`、六個存成 JSON 的介面，以及帶 `[ColumnShape]`、`IsJson = true` 或明寫
+   `ColumnDataType` 的屬性。
 
-後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上，所以就算從未寫過
-`MaxLength`，255 的預設值一樣會在後台生效。這跟資料庫欄位寬度無關——兩者剛好都是 255，只是
-因為 SqlSugar 對未加寬 `string` 的預設值也是 255。
+預設值跟介面無關：`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 一樣是 255。明寫的 `MaxLength`
+不會改欄位寬度，要存比欄位更長的值，欄位本身也要加寬，見本章結尾的常見陷阱。後台把有效的
+`MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上。
 
 ## 必填、唯讀、隱藏與系統欄位
 
@@ -278,10 +278,11 @@ UTC。
 
 ## 常見陷阱
 
-**寫入長文字時 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面又不在前
-面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`；寫入超過 255 字元的
-值，在 PostgreSQL 上會以 `22001 value too long for type character varying(255)` 失敗。
-修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+**寫入長文字被拒絕，或在 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面
+又不在前面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`，預設的
+`MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。明寫更大的 `MaxLength` 擋不住
+欄位寬度，通過驗證的值在 PostgreSQL 上會以
+`22001 value too long for type character varying(255)` 失敗。修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。表已經建好的話，還要
 另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤。
 

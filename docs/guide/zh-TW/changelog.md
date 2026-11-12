@@ -37,6 +37,13 @@
   兩個類別鍵。這些寫法原本能啟動，掃描器只讀第一個鍵，查詢層把它當成指向目標主鍵：`deep` 展開與
   刪除目標回 `500`，一對多的 `(Id, ParentId)` 展開成空陣列，依關聯篩選回 `500` 或什麼都比不到，
   `whereSql` 的條件被忽略。宣告了這類寫法的 fork 要改成支援的寫法；不支援關聯到非主鍵欄位。
+- 沒有 `MaxLength` 的 `string` 欄位，不論介面為何，上限就是欄位寬度：255，或 `[SugarColumn]` 的
+  `Length`。欄位沒有長度可言時不設上限：LongText 與 JSON 介面、`[ColumnShape]`、`IsJson = true`、
+  明寫的 `ColumnDataType`。`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有上限，超過 255
+  字元的值在 SQLite 上寫得進去，在 PostgreSQL、MySQL 與 SQL Server 上回 `500`；現在回 `400`，
+  `Field '{name}' exceeds maximum length 255.` migration 把這類欄位加寬到 255 以上的 fork，要把
+  `[CmsField(MaxLength = n)]` 設成那個寬度，否則更長的值仍被拒絕。核心欄位不受影響，
+  `schema/core-collections.json` 不變。
 :::
 
 ### 新增
@@ -59,6 +66,9 @@
 - 工作階段續期時快取失敗，原本讓觸發續期的那個請求失敗，現在只記一則警告（內容是票證的 key，
   不含票證內容），請求照常回應，工作階段維持原本的到期時間。登入、讀取與登出時的快取失敗照舊
   讓請求失敗。
+- 欄位沒有長度可言（`[ColumnShape(ColumnShape.LongText)]`、`IsJson = true`、明寫 `ColumnDataType`）
+  的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。現在跟其他沒有
+  長度的欄位一樣不設上限。
 
 ### 安全性
 

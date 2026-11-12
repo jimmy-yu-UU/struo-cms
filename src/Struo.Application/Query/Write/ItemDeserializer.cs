@@ -261,8 +261,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
     }
 
-    // Max length — a CMS-layer limit; the DB column width is SqlSugar's separate concern.
-    // Runs after RichText sanitization so the stored value is what gets measured.
+    // Max length — the field's declared MaxLength, which defaults to its column width. Runs after
+    // RichText sanitization so the stored value is what gets measured.
     private static void EnforceMaxLength(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
         foreach (var field in meta.Fields.Where(f => f.MaxLength is > 0 && !f.Translatable))

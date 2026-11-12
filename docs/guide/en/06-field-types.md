@@ -206,21 +206,21 @@ interfaces entirely: `Hidden`, `Divider`, and `Password`.
 
 ## `MaxLength` behavior
 
-`MaxLength` governs only the admin input, counted in UTF-16 code units, and has nothing to do with
-`[SugarColumn(Length = n)]` or an explicit `ColumnDataType`. A negative value, or one set on a
-non-`string` property, throws a startup `MetadataException`. The effective `MaxLength` resolves in
-this order:
+`MaxLength` is counted in UTF-16 code units; the admin input and write validation both use it, and a
+longer value is a 400. A negative value, or one set on a non-`string` property, throws a startup
+`MetadataException`. The effective `MaxLength` resolves in this order:
 
 1. Explicitly set and greater than zero — use the explicit value.
-2. Otherwise, when the property is `string` and the interface is one of twelve short-string
-   interfaces, fall back to 255: `Text`, `Slug`, `Email`, `Url`, `Password`, `Color`, `Phone`,
-   `Select`, `MultiSelect`, `Radio`, `CheckboxGroup`, `Tags`.
-3. Neither applies — `null`, meaning no length limit.
+2. Otherwise, when the property is `string`, its column width: 255 for a `string` column with no
+   length, `n` for `[SugarColumn(Length = n)]`.
+3. `null`, meaning no length limit, when the column has no length to state: `Textarea`, `RichText`,
+   `Markdown`, `Code`, `Json`, the six interfaces stored as JSON, and a property carrying
+   `[ColumnShape]`, `IsJson = true` or an explicit `ColumnDataType`.
 
-The admin SPA binds the effective `MaxLength` directly to the native input's `maxlength`
-attribute, so the 255 default takes effect in the form even when `MaxLength` was never written.
-This has nothing to do with the database column's width — both happen to land on 255 only because
-SqlSugar's own default for an unwidened `string` is also 255.
+The default does not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string`
+are 255 like the rest. An explicit `MaxLength` does not change the column width; storing a longer
+value means widening the column too (see Common pitfalls at the end of this chapter). The admin SPA
+binds the effective `MaxLength` directly to the native input's `maxlength` attribute.
 
 ## Required, read-only, hidden, and system fields
 
@@ -317,9 +317,11 @@ editor's link dialog or any other allowlist. The same sanitizer also normalizes 
 
 ## Common pitfalls
 
-**Writing long text fails on PostgreSQL with `22001 value too long`.** A `string` property with no
-explicit column type, whose interface isn't one of the five long-text ones, is written by
-`make:migration` as `AsString(255)`; writing a value over 255 characters fails on PostgreSQL with
+**Writing long text is rejected, or fails on PostgreSQL with `22001 value too long`.** A `string`
+property with no explicit column type, whose interface isn't one of the five long-text ones, is
+written by `make:migration` as `AsString(255)` and has a default `MaxLength` of 255: a value over
+255 characters is rejected with a 400 by the admin and the API. An explicit, larger `MaxLength` does
+not widen the column, and a value that passes validation fails on PostgreSQL with
 `22001 value too long for type character varying(255)`.
 
 The fix is switching to one of those five interfaces, or writing

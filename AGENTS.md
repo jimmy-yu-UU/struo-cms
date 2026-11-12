@@ -227,8 +227,9 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
    the backend enum, `MetadataScanner`, `src/Struo.Api/GraphQl/SchemaTypeMapper.cs` (an unmapped
    member fails GraphQL schema build, which surfaces as a misleading `ObjectDisposedException` on
    `IServiceProvider` during host startup rather than a clear error — see
-   `docs/ai/task-playbooks.md` Playbook 2b), possibly `SqlSugarClientFactory`'s column-widening
-   hook, and — both required — `frontend/src/lib/fieldTypes/types.ts`'s type
+   `docs/ai/task-playbooks.md` Playbook 2b), possibly the `FieldInterfaceSets` groupings that
+   `SqlSugarClientFactory` reads for column widening (`FieldInterfaceSetsTests` has one row per
+   member and fails until the new one is added), and — both required — `frontend/src/lib/fieldTypes/types.ts`'s type
    union/`ALL_FIELD_INTERFACES` and its `registry.ts` component. Then regenerate
    `schema/interfaces.json` — required for *every* new member, whether or not a collection uses
    it yet — and `schema/core-collections.json` too if the value is used by a core collection

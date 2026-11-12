@@ -19,26 +19,6 @@ public static class MetadataScanner
         FieldInterface.CheckboxGroup, FieldInterface.Tags
     ];
 
-    // Interfaces whose undeclared MaxLength defaults to 255 (SqlSugar's default varchar width).
-    // Content-bearing interfaces (RichText/Textarea/Markdown/Code/Json) default to unlimited.
-    private static readonly HashSet<FieldInterface> ShortStringInterfaces =
-    [
-        FieldInterface.Text, FieldInterface.Slug, FieldInterface.Email, FieldInterface.Url,
-        FieldInterface.Password, FieldInterface.Color, FieldInterface.Phone,
-        FieldInterface.Select, FieldInterface.MultiSelect, FieldInterface.Radio,
-        FieldInterface.CheckboxGroup, FieldInterface.Tags
-    ];
-
-    // JSON-column interfaces that live on the parent entity and cannot be translatable
-    // (translating a structured aggregate is out of scope). A [CmsField(Translatable=true)] on any of
-    // these fail-fasts at scan. Json is intentionally excluded (a string that could be made translatable
-    // in future; non-translatable by convention here, but not fail-fasted).
-    private static readonly HashSet<FieldInterface> NonTranslatableJsonInterfaces =
-    [
-        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
-        FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
-    ];
-
     // Sub-field interfaces allowed inside a Repeater child object (the lean scalar set).
     // Everything else — RichText, File/Image/Files, multi-value, Json/KeyValue, nested Repeater,
     // Password/Hidden/Uuid/Divider — fail-fasts at scan.
@@ -348,7 +328,8 @@ public static class MetadataScanner
         foreach (var tf in translatableFields) fields.Add((++order, tf));
 
         foreach (var (_, field) in fields)
-            if (field.Translatable && NonTranslatableJsonInterfaces.Contains(field.Interface))
+            // A JSON-column aggregate lives on the parent entity; translating it is not supported.
+            if (field.Translatable && FieldInterfaceSets.JsonColumnInterfaces.Contains(field.Interface))
                 throw new MetadataException(
                     $"Field '{field.Name}' uses interface '{field.Interface}', which cannot be translatable.");
 
@@ -450,11 +431,8 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
 
-        int? maxLength = null;
-        if (attr.MaxLength > 0)
-            maxLength = attr.MaxLength;
-        else if (prop.PropertyType == typeof(string) && ShortStringInterfaces.Contains(attr.Interface))
-            maxLength = 255;
+        // Without an explicit MaxLength a string field is limited to its column's width, if it has one.
+        int? maxLength = attr.MaxLength > 0 ? attr.MaxLength : StringColumnWidth.Of(prop);
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
