@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.7" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.9" />
     <PackageVersion Include="FluentMigrator.Runner.Core" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.MySql" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.Oracle" Version="8.0.1" />
