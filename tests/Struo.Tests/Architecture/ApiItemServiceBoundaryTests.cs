@@ -13,9 +13,10 @@ namespace Struo.Tests.Architecture;
 /// this guard does not scan. A repo-shape check (it reads the Api sources on disk) that ignores
 /// comments and string literals, so a doc comment or a message may still mention the class.
 /// </summary>
-public sealed class ApiItemServiceBoundaryTests
+public sealed partial class ApiItemServiceBoundaryTests
 {
-    private static readonly Regex ConcreteName = new(@"\bItemService\b", RegexOptions.Compiled);
+    [GeneratedRegex(@"\bItemService\b", RegexOptions.Compiled)]
+    private static partial Regex ConcreteName();
 
     [Fact]
     public void No_api_type_depends_on_the_concrete_item_service()
@@ -71,7 +72,7 @@ public sealed class ApiItemServiceBoundaryTests
     {
         var lines = StripLiteralsAndComments(source).Split('\n');
         for (var i = 0; i < lines.Length; i++)
-            if (ConcreteName.IsMatch(lines[i])) yield return i + 1;
+            if (ConcreteName().IsMatch(lines[i])) yield return i + 1;
     }
 
     /// <summary>
