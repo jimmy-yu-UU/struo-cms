@@ -14,18 +14,25 @@ internal sealed class BrokenAssemblyFixture : IDisposable
 {
     internal enum Defect
     {
-        /// <summary>A [CmsCollection] type derives from a class of an assembly that is not there: the type cannot load.</summary>
+        /// <summary>
+        /// A [CmsCollection] type derives from a class of an assembly that is not there: the type cannot load.
+        /// </summary>
         MissingBaseClass,
 
-        /// <summary>A [CmsCollection] type loads, but one of its properties has a type of the missing assembly.</summary>
+        /// <summary>
+        /// A [CmsCollection] type loads, but one of its properties has a type of the missing assembly.
+        /// </summary>
         MissingPropertyType,
+
+        /// <summary>A [CmsCollection] type loads, but it carries an attribute of the missing assembly.</summary>
+        MissingAttributeType,
     }
 
     public const string GoodTypeName = "BrokenFixture.GoodThing";
 
     public const string BrokenTypeName = "BrokenFixture.BrokenThing";
 
-    private readonly string _directory = Path.Combine(Path.GetTempPath(), "struo-broken-" + Guid.NewGuid().ToString("N"));
+    private readonly string _directory;
     private readonly AssemblyLoadContext _context = new("struo-broken-" + Guid.NewGuid().ToString("N"), isCollectible: true);
 
     public Assembly Assembly { get; }
@@ -34,14 +41,24 @@ internal sealed class BrokenAssemblyFixture : IDisposable
 
     public string DependencyName { get; }
 
-    public BrokenAssemblyFixture(Defect defect, bool publicBrokenType = true, int brokenTypeCount = 1)
+    public BrokenAssemblyFixture(
+        Defect defect, bool publicBrokenType = true, int brokenTypeCount = 1, string? baseDirectory = null)
     {
+        _directory = Path.Combine(baseDirectory ?? Path.GetTempPath(), "struo-broken-" + Guid.NewGuid().ToString("N"));
         var suffix = Guid.NewGuid().ToString("N")[..12];
         AssemblyName = "StruoBrokenFixture" + suffix;
         DependencyName = "StruoMissingDependency" + suffix;
         Directory.CreateDirectory(_directory);
-        using var image = new MemoryStream(File.ReadAllBytes(Emit(defect, publicBrokenType, brokenTypeCount)));
-        Assembly = _context.LoadFromStream(image);
+        try
+        {
+            using var image = new MemoryStream(File.ReadAllBytes(Emit(defect, publicBrokenType, brokenTypeCount)));
+            Assembly = _context.LoadFromStream(image);
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
     }
 
     public void Dispose()
@@ -52,8 +69,10 @@ internal sealed class BrokenAssemblyFixture : IDisposable
 
     private string Emit(Defect defect, bool publicBrokenType, int brokenTypeCount)
     {
+        if (!Enum.IsDefined(defect)) throw new ArgumentOutOfRangeException(nameof(defect), defect, "unknown defect");
+
         var core = typeof(object).Assembly;
-        var missing = EmitDependency(core);
+        var (missing, marker) = EmitDependency(core);
 
         var builder = new PersistedAssemblyBuilder(new AssemblyName(AssemblyName), core);
         var module = builder.DefineDynamicModule(AssemblyName);
@@ -74,6 +93,7 @@ internal sealed class BrokenAssemblyFixture : IDisposable
                 ? DefineClass(module, typeName, visibility, missing)
                 : DefineClass(module, typeName, TypeAttributes.Public, null);
             if (defect == Defect.MissingPropertyType) AddProperty(broken, missing);
+            if (defect == Defect.MissingAttributeType) broken.SetCustomAttribute(new CustomAttributeBuilder(marker, []));
             broken.SetCustomAttribute(Collection("Broken", "brokenThing" + i));
             broken.CreateType();
         }
@@ -84,13 +104,16 @@ internal sealed class BrokenAssemblyFixture : IDisposable
         return assemblyPath;
     }
 
-    private Type EmitDependency(Assembly core)
+    private (Type Type, ConstructorInfo MarkerConstructor) EmitDependency(Assembly core)
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(DependencyName), core);
         var module = builder.DefineDynamicModule(DependencyName);
         var type = DefineClass(module, "Missing.Dependency", TypeAttributes.Public, null).CreateType();
+        var marker = module.DefineType("Missing.MarkerAttribute", TypeAttributes.Public | TypeAttributes.Class, typeof(Attribute));
+        var markerConstructor = marker.DefineDefaultConstructor(MethodAttributes.Public);
+        marker.CreateType();
         builder.Save(Path.Combine(_directory, DependencyName + ".dll"));
-        return type;
+        return (type, markerConstructor);
     }
 
     private static TypeBuilder DefineClass(ModuleBuilder module, string name, TypeAttributes visibility, Type? parent)

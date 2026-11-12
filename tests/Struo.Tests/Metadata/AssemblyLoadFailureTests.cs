@@ -139,6 +139,95 @@ public class AssemblyLoadFailureTests
         act.Should().NotThrow().Which.Message.Should().Contain("1 of 1 types");
     }
 
+    [Fact]
+    public void A_type_with_an_attribute_that_cannot_be_resolved_names_the_assembly_and_the_type()
+    {
+        using var fixture = new BrokenAssemblyFixture(Defect.MissingAttributeType);
+        var types = MetadataScanner.LoadTypes(fixture.Assembly).ToList();
+
+        var scan = () => MetadataScanner.Scan(fixture.Assembly);
+        var scanTypes = () => MetadataScanner.ScanTypes(types);
+        var descriptors = () => MetadataScanner.ScanDescriptors(types);
+        var typeMap = () => MetadataScanner.CollectionTypeMap(types);
+
+        foreach (var act in new Action[] { () => scan(), () => scanTypes(), () => descriptors(), () => typeMap() })
+            act.Should().Throw<MetadataException>()
+                .WithMessage($"*'{BrokenTypeName}'*'{fixture.AssemblyName}'*{fixture.DependencyName}*");
+    }
+
+    [Fact]
+    public void The_message_says_Assembly_for_every_assembly_it_scans()
+    {
+        using var fixture = new BrokenAssemblyFixture(Defect.MissingBaseClass);
+
+        var act = () => MetadataScanner.LoadTypes(fixture.Assembly);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith($"Assembly '{fixture.AssemblyName}'").And.NotContain("Content assembly");
+    }
+
+    // The inspection guard classifies by exception type; these three are raised by the runtime when a
+    // dependency exists but a member or an attribute blob does not match, which no emitted fixture here
+    // reproduces, so the exceptions are thrown from the inspected delegate.
+    [Theory]
+    [InlineData(typeof(MissingMethodException))]
+    [InlineData(typeof(MissingFieldException))]
+    [InlineData(typeof(MissingMemberException))]
+    [InlineData(typeof(CustomAttributeFormatException))]
+    [InlineData(typeof(FileNotFoundException))]
+    [InlineData(typeof(FileLoadException))]
+    [InlineData(typeof(BadImageFormatException))]
+    [InlineData(typeof(TypeLoadException))]
+    public void Inspect_turns_a_load_failure_into_a_MetadataException_naming_the_type(Type failure)
+    {
+        var thrown = (Exception)Activator.CreateInstance(failure, "the member is gone")!;
+
+        var act = () => AssemblyLoadFailure.Inspect<int>(typeof(string), () => throw thrown);
+
+        act.Should().Throw<MetadataException>()
+            .WithMessage("*'System.String'*'System.Private.CoreLib'*the member is gone*")
+            .Which.InnerException.Should().BeSameAs(thrown);
+    }
+
+    [Fact]
+    public void Inspect_lets_any_other_exception_through()
+    {
+        var act = () => AssemblyLoadFailure.Inspect<int>(typeof(string), () => throw new InvalidOperationException("other"));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("other");
+    }
+
+    [Fact]
+    public void Summary_lists_at_most_five_failed_type_names_and_counts_the_rest()
+    {
+        var typeLoads = Enumerable.Range(1, 8).Select(i => (Exception)CaptureTypeLoadException("Some.Missing.Type" + i));
+        var failure = new ReflectionTypeLoadException(Enumerable.Repeat<Type?>(null, 8).ToArray(), typeLoads.ToArray());
+
+        var message = AssemblyLoadFailure.ForAssembly(typeof(int).Assembly, failure).Message;
+
+        message.Should().MatchRegex(
+            @"cannot be loaded \(Some\.Missing\.Type1, Some\.Missing\.Type2, Some\.Missing\.Type3, " +
+            @"Some\.Missing\.Type4, Some\.Missing\.Type5, and 3 more\)");
+    }
+
+    [Fact]
+    public void The_fixture_removes_its_directory_when_construction_fails()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "struo-fixture-parent-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(parent);
+        try
+        {
+            var act = () => new BrokenAssemblyFixture((Defect)99, baseDirectory: parent);
+
+            act.Should().Throw<ArgumentOutOfRangeException>();
+            Directory.GetDirectories(parent).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
     private static TypeLoadException CaptureTypeLoadException(string typeName)
     {
         try

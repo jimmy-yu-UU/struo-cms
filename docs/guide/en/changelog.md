@@ -61,15 +61,16 @@
   `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a column wider than
   255 sets `[CmsField(MaxLength = n)]` to that width, or longer values stay rejected. No core field is
   affected and `schema/core-collections.json` is unchanged.
-- A type of a content assembly that cannot load, because a dependency is missing or does not match,
-  stops the host at start with a `MetadataException` that names the assembly, the number of failed
-  types and the distinct loader errors (and the type, for a `[CmsCollection]` type that loads but
-  whose members cannot be read). Such a type used to be skipped without a log: with an internal
-  `[CmsCollection]` type the host started with the collection missing and `/api/items/{name}`
-  answered `404`, with a public one startup failed later, in the migration step, with an error that
-  named no collection, and a relation that targeted it failed with
-  `Relation '{a.b}' targets unknown collection`. A fork that has such an assembly deploys the
-  missing dependency or removes the type. The public
+- A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
+  stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
+  the message names the assembly, the number of failed types, the type names the loader reports and
+  the distinct loader errors, five of each at most, then a count of the rest. A `[CmsCollection]` type
+  that loads but whose members or attributes cannot be read is reported with its name and assembly
+  instead. Such a type used to be skipped without a log: with an internal `[CmsCollection]` type the
+  host started with the collection missing and `/api/items/{name}` answered `404`, with a public one
+  startup failed later, in the migration step, with an error that named no collection, and a relation
+  that targeted it failed with `Relation '{a.b}' targets unknown collection`. A fork that has such an
+  assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
 :::

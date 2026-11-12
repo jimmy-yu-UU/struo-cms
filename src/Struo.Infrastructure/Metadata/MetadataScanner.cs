@@ -65,7 +65,7 @@ public static class MetadataScanner
 
         foreach (var type in typeList)
         {
-            var collectionAttr = type.GetCustomAttribute<CmsCollectionAttribute>();
+            var collectionAttr = CollectionAttributeOf(type);
             if (collectionAttr is null) continue;
 
             var meta = AssemblyLoadFailure.Inspect(type, () => BuildCollection(type, collectionAttr));
@@ -202,7 +202,7 @@ public static class MetadataScanner
     {
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var typeByName = types
-            .Where(t => t.GetCustomAttribute<CmsCollectionAttribute>() is not null)
+            .Where(t => CollectionAttributeOf(t) is not null)
             .ToDictionary(CollectionNameOf, StringComparer.OrdinalIgnoreCase);
         return collections
             .Select(c => c.Relations.Any(r => r.JunctionCollection is not null)
@@ -236,7 +236,7 @@ public static class MetadataScanner
         var map = new Dictionary<string, EntityDescriptor>(StringComparer.OrdinalIgnoreCase);
         foreach (var type in types)
         {
-            if (type.GetCustomAttribute<CmsCollectionAttribute>() is null) continue;
+            if (CollectionAttributeOf(type) is null) continue;
 
             map[CollectionNameOf(type)] = AssemblyLoadFailure.Inspect(type, () => DescribeEntity(type));
         }
@@ -270,6 +270,11 @@ public static class MetadataScanner
         return new EntityDescriptor(type, fieldToProp, idProperty);
     }
 
+    // The [CmsCollection] lookup runs on every type of a scanned assembly, so an attribute that cannot be
+    // resolved is reported with the type and assembly instead of surfacing as a bare loader exception.
+    private static CmsCollectionAttribute? CollectionAttributeOf(Type type) =>
+        AssemblyLoadFailure.Inspect(type, type.GetCustomAttribute<CmsCollectionAttribute>);
+
     private static string Camel(string name) => JsonNamingPolicy.CamelCase.ConvertName(name);
 
     private static readonly Regex ExplicitNamePattern =
@@ -281,7 +286,7 @@ public static class MetadataScanner
     /// </summary>
     public static Dictionary<string, Type> CollectionTypeMap(IEnumerable<Type> types) =>
         types
-            .Where(t => t.GetCustomAttribute<CmsCollectionAttribute>() is not null)
+            .Where(t => CollectionAttributeOf(t) is not null)
             .ToDictionary(CollectionNameOf, t => t, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
