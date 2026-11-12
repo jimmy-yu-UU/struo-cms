@@ -62,7 +62,7 @@ public static class GraphQlServiceCollectionExtensions
         // The IServiceCollection-level AddErrorFilter overload registers against application
         // services instead, where full constructor DI (including ILogger<T>) resolves normally.
         services.AddErrorFilter<StruoErrorFilter>();
-        services.AddScoped<IGraphQlDataSource, ItemServiceGraphQlDataSource>();
+        services.AddScoped<IGraphQlDataSource, ItemUseCasesGraphQlDataSource>();
         // AddTypeModule<T>() resolves T via GetRequiredService<T>() against application services
         // (not schema-scoped activation) — StruoTypeModule must be registered explicitly.
         services.AddSingleton<StruoTypeModule>();
@@ -104,10 +104,10 @@ public static class GraphQlServiceCollectionExtensions
             .DisableIntrospection(!exposeSchema)
             // Pin both root scopes to Request explicitly (Mutation would otherwise fall back to
             // HotChocolate's implicit default) so resolvers — query AND mutation — resolve scoped
-            // services against the HTTP request's DI scope. That's what lets ItemService's RBAC
+            // services against the HTTP request's DI scope. That's what lets the item use cases' RBAC
             // checks see the per-request ICurrentPermissions snapshot populated by
             // PermissionResolutionMiddleware; without this, a mutation resolver could resolve a
-            // different scoped ItemService with no (or stale) permission snapshot attached.
+            // different scoped IItemUseCases with no (or stale) permission snapshot attached.
             .ModifyOptions(o =>
             {
                 o.DefaultQueryDependencyInjectionScope = DependencyInjectionScope.Request;

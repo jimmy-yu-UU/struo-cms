@@ -7,9 +7,9 @@ namespace Struo.Application.Query;
 /// Single implementation of the viewing-deleted permission gate. Requesting soft-deleted
 /// rows (<see cref="DeletedFilter.Only"/>/<see cref="DeletedFilter.With"/>) exposes data that a
 /// plain read grant does not, so it additionally requires delete permission on the collection.
-/// Both the REST <c>ItemsController</c> and the GraphQL <c>CollectionResolvers</c> call this so the
-/// rule (and its message) lives in exactly one place. <see cref="ItemService"/> only checks
-/// <c>CanRead</c>, hence this stricter gate sits in front of it.
+/// <see cref="ItemService"/> calls it after its read check, and the REST <c>ItemsController</c> and the
+/// GraphQL <c>CollectionResolvers</c> call it at their entry points, so the rule (and its message)
+/// lives in exactly one place.
 /// </summary>
 public static class DeletedAccessGuard
 {

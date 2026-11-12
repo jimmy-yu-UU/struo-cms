@@ -6,10 +6,10 @@ using Struo.Domain.Query;
 namespace Struo.Api.GraphQl;
 
 /// <summary>
-/// Api-owned seam over the concrete <see cref="ItemService"/>. Exists so GraphQL resolvers depend
-/// on an interface (fakeable in tests) without adding an interface to the Application layer. Covers
-/// the full surface GraphQL needs: reads (Query/Get) and writes (Create/Update/Delete) — all
-/// delegating straight through to ItemService.
+/// The seam GraphQL resolvers read and write items through, fakeable in tests. Covers the surface
+/// GraphQL needs: reads (Query/Get), writes (Create/Update/Delete/Restore/Revert) and revisions. The
+/// shipped implementation, <see cref="ItemUseCasesGraphQlDataSource"/>, delegates every call to the
+/// registered <see cref="IItemUseCases"/>.
 /// </summary>
 public interface IGraphQlDataSource
 {
@@ -24,7 +24,8 @@ public interface IGraphQlDataSource
     Task<IReadOnlyDictionary<string, object?>?> RevertAsync(string collection, string id, long revisionNumber, long? expectedVersion, CancellationToken ct);
 }
 
-public sealed class ItemServiceGraphQlDataSource(ItemService items) : IGraphQlDataSource
+/// <summary>Forwards each call to <see cref="IItemUseCases"/>, the same seam REST uses.</summary>
+public sealed class ItemUseCasesGraphQlDataSource(IItemUseCases items) : IGraphQlDataSource
 {
     public Task<PagedResult> QueryAsync(string collection, QueryModel query, string? locale, DeletedFilter deleted, CancellationToken ct)
         => items.QueryAsync(collection, query, locale, deleted, ct);

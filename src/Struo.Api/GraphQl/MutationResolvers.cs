@@ -12,7 +12,7 @@ namespace Struo.Api.GraphQl;
 /// <summary>
 /// Root mutation field configs + resolvers, one create/update/delete per collection. Mirrors
 /// <see cref="CollectionResolvers"/> (queries). Resolvers convert the typed input to a JsonElement
-/// and delegate to <see cref="IGraphQlDataSource"/> (which wraps ItemService); create/update re-read
+/// and delegate to <see cref="IGraphQlDataSource"/> (which forwards to <see cref="Struo.Application.Query.IItemUseCases"/>); create/update re-read
 /// the row so the returned node matches a query result.
 /// </summary>
 internal static class MutationResolvers

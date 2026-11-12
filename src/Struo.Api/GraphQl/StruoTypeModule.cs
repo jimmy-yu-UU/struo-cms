@@ -129,7 +129,7 @@ public sealed class StruoTypeModule(
 
     // DeletedFilter: SDL enum EXCLUDE/ONLY/WITH bound onto the C# Struo.Domain.Query
     // enum's own members (Exclude/Only/With) — the `deleted` list-query argument and the
-    // ItemService/IGraphQlDataSource read path share this exact runtime type.
+    // IItemUseCases/IGraphQlDataSource read path share this exact runtime type.
     private static EnumType DeletedFilterEnumType()
     {
         var config = new EnumTypeConfiguration("DeletedFilter", null, typeof(DeletedFilter));
