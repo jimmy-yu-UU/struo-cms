@@ -54,8 +54,8 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
     /// <summary>
     /// Parses the <c>?deleted=exclude|only|with</c> query parameter (default exclude). Requesting
     /// <c>only</c>/<c>with</c> exposes soft-deleted rows, so it requires delete permission on the
-    /// collection — <see cref="ItemService.QueryAsync"/>/<see cref="ItemService.GetAsync"/> only
-    /// check <c>CanRead</c>, so the stricter gate lives here.
+    /// collection. The gate runs here so a denied request fails before the use case is called;
+    /// <see cref="IItemUseCases.QueryAsync"/> and <see cref="IItemUseCases.GetAsync"/> enforce the same rule.
     /// </summary>
     private DeletedFilter DeletedMode(string collection)
     {

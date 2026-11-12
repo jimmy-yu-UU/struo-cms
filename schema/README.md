@@ -1,12 +1,13 @@
 # `schema/` — committed schema contract
 
-Two machine-generated files that pin what the admin SPA is expected to cope with. **Neither is
-hand-edited** — see [Regenerating](#regenerating).
+Three machine-generated files. The first two pin what the admin SPA is expected to cope with; the
+third pins the GraphQL schema. **None is hand-edited** — see [Regenerating](#regenerating).
 
 | File | Pins | Scope |
 |---|---|---|
 | `core-collections.json` | The core collection metadata the SPA receives from `GET /api/schema` | The seven core collections |
 | `interfaces.json` | Every declared `FieldInterface` / `RelationInterface` member | All of them, used or not |
+| `core-graphql.graphql` | The SDL of the GraphQL schema built from the framework entities alone | The seven core collections and their input and list types |
 
 ## Why they are committed
 
@@ -82,9 +83,21 @@ the union gains a member with no registry entry. But `ALL_FIELD_INTERFACES` is t
 `Record<string, RelationInputKind>` — so for those two, this contract test is the **only** thing
 standing between a forgotten mirror update and a silently uneditable field or relation.
 
+## `core-graphql.graphql`
+
+The GraphQL schema the host serves when only the framework's own entities exist, printed as SDL with
+LF line endings. `CoreSchemaSnapshotTests` builds it from the metadata scanned out of
+`FrameworkEntityTypes.All` and the host's own scalar and type-module registration
+(`AddStruoSchemaTypes`), with no database and none of the test fixtures' collections. Because the host
+and the test share that one registration, the file cannot describe a schema the host does not serve.
+
+It is checked by the backend test only; the admin SPA does not read it. A change to how a core field,
+relation or collection becomes a GraphQL type — in `SchemaTypeMapper`, `CollectionSchemaBuilder` or
+`StruoTypeModule` — shows up as a diff here. A fork's own collections are outside it.
+
 ## Regenerating
 
-One command regenerates both files. From the repository root (bash):
+One command regenerates all three files. From the repository root (bash):
 
 ```bash
 UPDATE_SCHEMA_SNAPSHOT=1 dotnet test --filter CoreSchemaSnapshot

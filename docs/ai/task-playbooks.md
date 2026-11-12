@@ -155,7 +155,8 @@ picker instead of a plain text input) — frontend-only, no backend change:
    declared enum member regardless of use, which is what makes step 6 enforced rather than
    honour-system. If the new interface is additionally used by (or an existing field's `Interface`/other
    `[CmsField]`/`[CmsCollection]` attribute is changed to use) one of the seven core `[CmsCollection]`
-   types, `schema/core-collections.json` is stale too. One command regenerates both; commit the result
+   types, `schema/core-collections.json` is stale too, and so is `schema/core-graphql.graphql` when the
+   GraphQL type of a core field changes. One command regenerates all of them; commit the result
    (bash shown; see `schema/README.md` for the PowerShell form, which needs an explicit unset
    afterward):
    ```bash

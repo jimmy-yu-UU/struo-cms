@@ -686,7 +686,9 @@ destructive actions, the user is left with a blocked action and no working way t
 - **Contract** (`schema/core-collections.json` and `schema/interfaces.json` plus
   `tests/Struo.Tests/Api/CoreSchemaSnapshotTests.cs` and `frontend/tests/schemaContract.test.ts`):
   committed snapshots of the core collections' `GET /api/schema` wire shape and of every declared
-  `FieldInterface`/`RelationInterface` member, checked from both ends. It exists because the admin SPA
+  `FieldInterface`/`RelationInterface` member, checked from both ends. A third snapshot,
+  `schema/core-graphql.graphql`, pins the SDL of the core-only GraphQL schema, built through the host's
+  own `AddStruoSchemaTypes` registration; only the backend test reads it. It exists because the admin SPA
   mirrors the backend DTOs and enums by hand, and drift between them is silent to every other gate — an
   unknown `FieldInterface` falls back to a read-only renderer instead of erroring, a field whose
   interface has no list-column formatter just disappears from the list view, and an unmapped

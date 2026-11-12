@@ -6,20 +6,24 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// The item read/write use-case surface the HTTP layer depends on. Extracted verbatim from
-/// <see cref="ItemService"/> so controllers bind to this seam rather than the concrete service,
-/// keeping the Api layer testable in isolation and free of Infrastructure wiring. The sole
-/// implementation is <see cref="ItemService"/>; GraphQL keeps its own <c>IGraphQlDataSource</c> seam.
+/// The item read/write use-case surface the Api layer depends on: REST controllers inject it, and
+/// GraphQL reaches it through <c>IGraphQlDataSource</c>. Nothing in the Api layer names the concrete
+/// service, so a replacement registered for this interface serves both. The shipped implementation is
+/// <see cref="ItemService"/>. An implementation must require delete permission whenever
+/// <see cref="QueryAsync"/> or <see cref="GetAsync"/> is given a <see cref="DeletedFilter"/> other than
+/// <see cref="DeletedFilter.Exclude"/>.
 /// </summary>
 public interface IItemUseCases
 {
-    /// <summary>Reads a page of projected items for a collection. Requires read permission.</summary>
+    /// <summary>Reads a page of projected items for a collection. Requires read permission, and delete
+    /// permission as well when <paramref name="deleted"/> is not <see cref="DeletedFilter.Exclude"/>.</summary>
     Task<PagedResult> QueryAsync(
         string collection, QueryModel raw, string? locale = null,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
 
     /// <summary>Reads a single projected item by id, optionally expanding <paramref name="deep"/>
-    /// relations. Requires read permission. Null for an unknown id (→ 404).</summary>
+    /// relations. Requires read permission, and delete permission as well when <paramref name="deleted"/> is
+    /// not <see cref="DeletedFilter.Exclude"/>. Null for an unknown id (→ 404).</summary>
     Task<IReadOnlyDictionary<string, object?>?> GetAsync(
         string collection, string id, DeepSpec? deep = null, string? locale = null,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);

@@ -35,4 +35,7 @@ public static class RepoRoot
 
     public static string InterfacesSnapshotPath() =>
         Path.Combine(Find(), "schema", "interfaces.json");
+
+    public static string GraphQlSnapshotPath() =>
+        Path.Combine(Find(), "schema", "core-graphql.graphql");
 }

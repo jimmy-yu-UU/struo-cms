@@ -177,12 +177,17 @@ services.AddSingleton(graph);
 
 `src/Struo.Application/Query/IItemUseCases.cs`: the item read/write surface the HTTP layer depends on —
 `QueryAsync`, `GetAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `RestoreAsync`,
-`ListRevisionsAsync`, `GetRevisionAsync`, `RevertAsync`. Its doc comment states it was "extracted
-verbatim from `ItemService`" so controllers depend on this seam rather than the concrete class. Sole
+`ListRevisionsAsync`, `GetRevisionAsync`, `RevertAsync`. Nothing in `src/Struo.Api` names the concrete
+`ItemService` (`ApiItemServiceBoundaryTests` fails otherwise): controllers inject this interface and
+GraphQL reaches it through `IGraphQlDataSource`, whose shipped implementation
+`ItemUseCasesGraphQlDataSource` forwards each call here. A replacement registered for `IItemUseCases`
+therefore serves REST and GraphQL alike. Sole shipped
 implementation: `ItemService` (`src/Struo.Application/Query/ItemService.cs`) — note this is one of the
 few Application-layer classes with real business logic rather than a pure contract; it enforces RBAC
 internally by calling `IPermissionService.CanRead`/`CanWrite`/`CanDelete` before each operation and
-throwing `PermissionDeniedException` on denial. The sole shippable `IPermissionService` implementation,
+throwing `PermissionDeniedException` on denial. `QueryAsync` and `GetAsync` also require delete
+permission when given `DeletedFilter.Only` or `With` (`DeletedAccessGuard`), and an implementation of
+the interface must do the same. The sole shippable `IPermissionService` implementation,
 `RbacPermissionService`, answers those calls by reading the resolved snapshot off
 `ICurrentPermissions.Current` (`src/Struo.Application/Security/ICurrentPermissions.cs`), which only
 exposes that read-only `Current` getter; writing a new snapshot goes through the separate
@@ -207,9 +212,8 @@ the same `ItemService` instance in `DataServiceCollectionExtensions.AddStruoData
 services.AddScoped<ItemService>();
 services.AddScoped<IItemUseCases>(sp => sp.GetRequiredService<ItemService>());
 ```
-GraphQL does **not** consume `IItemUseCases` — it keeps its own `IGraphQlDataSource` seam (see the
-GraphQL section below) so the REST and GraphQL read/write paths can differ in shape while sharing the
-same underlying repository/expander/resolver primitives.
+`IGraphQlDataSource` (`src/Struo.Api/GraphQl/GraphQlDataSource.cs`) is GraphQL's own seam over it, the
+one the resolvers and tests fake; it is registered scoped as `ItemUseCasesGraphQlDataSource`.
 
 `ItemService` names no collection. Per-collection write rules are `IItemWriteInterceptor`
 registrations (`src/Struo.Application/Query/Write/`) — `LanguageWriteInterceptor`,

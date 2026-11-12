@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.31.0
+
+::: danger Breaking
+- GraphQL reads and writes go through `IItemUseCases`, the interface REST uses, so a replacement
+  registered for it serves both. The GraphQL data source class is renamed from
+  `ItemServiceGraphQlDataSource` to `ItemUseCasesGraphQlDataSource`; a fork that registers it by the
+  old name renames the registration to `ItemUseCasesGraphQlDataSource`.
+- `IItemUseCases.QueryAsync` and `GetAsync` require delete permission when called with
+  `DeletedFilter.Only` or `With`, where they used to check read permission only and left the delete
+  check to the REST controller and the GraphQL resolver. A fork's own implementation of the interface
+  must call `DeletedAccessGuard.EnsureCanViewDeleted` for those two values. REST and GraphQL responses
+  are unchanged.
+:::
+
 ## 0.30.1 — 2026-11-11
 
 ### Added

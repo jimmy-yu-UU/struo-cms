@@ -76,6 +76,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
+        DeletedAccessGuard.EnsureCanViewDeleted(permissions, collection, deleted);
         locale = await ValidateLocaleAsync(locale);
 
         // Effective query locale: explicit locale ?? global default. Computed unconditionally —
@@ -138,6 +139,7 @@ public sealed class ItemService(
     {
         var meta = Meta(collection);
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
+        DeletedAccessGuard.EnsureCanViewDeleted(permissions, collection, deleted);
         locale = await ValidateLocaleAsync(locale);
         var deepSpec = deepExpansion.Prepare(collection, deep, budget: null);
         var entity = await repository.GetByIdAsync(collection, id, deleted, ct);

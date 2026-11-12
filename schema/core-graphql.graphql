@@ -1,0 +1,651 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  _service: String @cost(weight: "10")
+  language(id: ID!, locale: String): Language @cost(weight: "10")
+  languages(
+    filter: LanguageFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): LanguageList! @cost(weight: "10")
+  file(id: ID!, locale: String): File @cost(weight: "10")
+  files(
+    filter: FileFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): FileList! @cost(weight: "10")
+  mediaFolder(id: ID!, locale: String): MediaFolder @cost(weight: "10")
+  mediaFolders(
+    filter: MediaFolderFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): MediaFolderList! @cost(weight: "10")
+  user(id: ID!, locale: String): User @cost(weight: "10")
+  users(
+    filter: UserFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): UserList! @cost(weight: "10")
+  role(id: ID!, locale: String): Role @cost(weight: "10")
+  roles(
+    filter: RoleFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): RoleList! @cost(weight: "10")
+  permission(id: ID!, locale: String): Permission @cost(weight: "10")
+  permissions(
+    filter: PermissionFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): PermissionList! @cost(weight: "10")
+  userRole(id: ID!, locale: String): UserRole @cost(weight: "10")
+  userRoles(
+    filter: UserRoleFilterInput
+    sort: [String!]
+    limit: Int
+    offset: Int
+    search: String
+    locale: String
+    deleted: DeletedFilter
+    facets: [String!]
+    aggregate: AggregateInput
+  ): UserRoleList! @cost(weight: "10")
+}
+
+type Mutation {
+  _service: String @cost(weight: "10")
+  createLanguage(input: LanguageCreateInput!, locale: String): Language
+    @cost(weight: "10")
+  updateLanguage(id: ID!, input: LanguageUpdateInput!, locale: String): Language
+    @cost(weight: "10")
+  deleteLanguage(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreLanguage(id: ID!): Language @cost(weight: "10")
+  createFile(input: FileCreateInput!, locale: String): File @cost(weight: "10")
+  updateFile(id: ID!, input: FileUpdateInput!, locale: String): File
+    @cost(weight: "10")
+  deleteFile(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreFile(id: ID!): File @cost(weight: "10")
+  createMediaFolder(input: MediaFolderCreateInput!, locale: String): MediaFolder
+    @cost(weight: "10")
+  updateMediaFolder(id: ID!, input: MediaFolderUpdateInput!, locale: String): MediaFolder
+    @cost(weight: "10")
+  deleteMediaFolder(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreMediaFolder(id: ID!): MediaFolder @cost(weight: "10")
+  createUser(input: UserCreateInput!, locale: String): User @cost(weight: "10")
+  updateUser(id: ID!, input: UserUpdateInput!, locale: String): User
+    @cost(weight: "10")
+  deleteUser(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreUser(id: ID!): User @cost(weight: "10")
+  createRole(input: RoleCreateInput!, locale: String): Role @cost(weight: "10")
+  updateRole(id: ID!, input: RoleUpdateInput!, locale: String): Role
+    @cost(weight: "10")
+  deleteRole(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreRole(id: ID!): Role @cost(weight: "10")
+  createPermission(input: PermissionCreateInput!, locale: String): Permission
+    @cost(weight: "10")
+  updatePermission(id: ID!, input: PermissionUpdateInput!, locale: String): Permission
+    @cost(weight: "10")
+  deletePermission(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restorePermission(id: ID!): Permission @cost(weight: "10")
+  createUserRole(input: UserRoleCreateInput!, locale: String): UserRole
+    @cost(weight: "10")
+  updateUserRole(id: ID!, input: UserRoleUpdateInput!, locale: String): UserRole
+    @cost(weight: "10")
+  deleteUserRole(id: ID!, purge: Boolean): Boolean @cost(weight: "10")
+  restoreUserRole(id: ID!): UserRole @cost(weight: "10")
+}
+
+type FacetResult {
+  field: String!
+  values: [FacetValue!]!
+}
+
+type FacetValue {
+  value: Any
+  count: Int!
+}
+
+type File {
+  id: ID!
+  version: Long
+  fileName: String
+  title: String
+  contentType: String
+  alt: String
+  size: Long
+  width: Int
+  height: Int
+  status: String
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+  folder: MediaFolder
+  translations: [Translation!]
+}
+
+type FileList {
+  items: [File!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type Language {
+  id: ID!
+  version: Long
+  code: String
+  name: String
+  isDefault: Boolean
+  enabled: Boolean
+  sort: Int
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+}
+
+type LanguageList {
+  items: [Language!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type MediaFolder {
+  id: ID!
+  version: Long
+  name: String
+  createdAt: DateTime
+  updatedAt: DateTime
+  createdBy: String
+  updatedBy: String
+  parent: MediaFolder
+}
+
+type MediaFolderList {
+  items: [MediaFolder!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type Permission {
+  id: ID!
+  version: Long
+  roleId: String
+  collection: String
+  canRead: Boolean
+  canWrite: Boolean
+  canDelete: Boolean
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+}
+
+type PermissionList {
+  items: [Permission!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type Revision {
+  revisionNumber: Int!
+  operation: String!
+  createdAt: DateTime!
+  createdBy: ID
+  sourceRevisionNumber: Int
+  snapshot: Any
+}
+
+type Role {
+  id: ID!
+  version: Long
+  name: String
+  isSuperAdmin: Boolean
+  description: String
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+}
+
+type RoleList {
+  items: [Role!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type TagItem {
+  value: String!
+  label: String
+}
+
+type Translation {
+  locale: String!
+  fields: Any!
+}
+
+type User {
+  id: ID!
+  version: Long
+  email: String
+  name: String
+  isActive: Boolean
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+  roles(filter: RoleFilterInput, sort: [String!], limit: Int, offset: Int): [Role!]
+}
+
+type UserList {
+  items: [User!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+type UserRole {
+  id: ID!
+  version: Long
+  userId: String
+  roleId: String
+  createdAt: DateTime
+  createdBy: String
+  updatedAt: DateTime
+  updatedBy: String
+}
+
+type UserRoleList {
+  items: [UserRole!]!
+  total: Int!
+  facets: [FacetResult!]!
+  aggregate: Any
+}
+
+input AggregateInput {
+  count: [String!]
+  sum: [String!]
+  min: [String!]
+  max: [String!]
+  avg: [String!]
+}
+
+input BooleanFilter {
+  eq: Boolean
+  neq: Boolean
+  isNull: Boolean
+}
+
+input DateTimeFilter {
+  eq: DateTime
+  neq: DateTime
+  in: [DateTime!]
+  nin: [DateTime!]
+  lt: DateTime
+  lte: DateTime
+  gt: DateTime
+  gte: DateTime
+  isNull: Boolean
+}
+
+input FileCreateInput {
+  status: String
+  folderId: ID
+  translations: [FileTranslationInput!]
+}
+
+input FileFilterInput {
+  and: [FileFilterInput!]
+  or: [FileFilterInput!]
+  some: FileFilterInput
+  none: FileFilterInput
+  id: IdFilter
+  fileName: StringFilter
+  title: StringFilter
+  contentType: StringFilter
+  alt: StringFilter
+  size: LongFilter
+  width: IntFilter
+  height: IntFilter
+  status: StringFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+  folderId: IdFilter
+  folder: MediaFolderFilterInput
+}
+
+input FileTranslationFieldsInput {
+  title: String
+  alt: String
+}
+
+input FileTranslationInput {
+  locale: String!
+  fields: FileTranslationFieldsInput
+}
+
+input FileUpdateInput {
+  version: Long
+  status: String
+  folderId: ID
+  translations: [FileTranslationInput!]
+}
+
+input FloatFilter {
+  eq: Float
+  neq: Float
+  in: [Float!]
+  nin: [Float!]
+  lt: Float
+  lte: Float
+  gt: Float
+  gte: Float
+  isNull: Boolean
+}
+
+input IdFilter {
+  eq: ID
+  neq: ID
+  in: [ID!]
+  nin: [ID!]
+  isNull: Boolean
+}
+
+input IntFilter {
+  eq: Int
+  neq: Int
+  in: [Int!]
+  nin: [Int!]
+  lt: Int
+  lte: Int
+  gt: Int
+  gte: Int
+  isNull: Boolean
+}
+
+input LanguageCreateInput {
+  code: String
+  name: String
+  isDefault: Boolean
+  enabled: Boolean
+  sort: Int
+}
+
+input LanguageFilterInput {
+  and: [LanguageFilterInput!]
+  or: [LanguageFilterInput!]
+  some: LanguageFilterInput
+  none: LanguageFilterInput
+  id: IdFilter
+  code: StringFilter
+  name: StringFilter
+  isDefault: BooleanFilter
+  enabled: BooleanFilter
+  sort: IntFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+}
+
+input LanguageUpdateInput {
+  version: Long
+  code: String
+  name: String
+  isDefault: Boolean
+  enabled: Boolean
+  sort: Int
+}
+
+input LongFilter {
+  eq: Long
+  neq: Long
+  in: [Long!]
+  nin: [Long!]
+  lt: Long
+  lte: Long
+  gt: Long
+  gte: Long
+  isNull: Boolean
+}
+
+input MediaFolderCreateInput {
+  name: String
+  parentId: ID
+}
+
+input MediaFolderFilterInput {
+  and: [MediaFolderFilterInput!]
+  or: [MediaFolderFilterInput!]
+  some: MediaFolderFilterInput
+  none: MediaFolderFilterInput
+  id: IdFilter
+  name: StringFilter
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedBy: StringFilter
+  parentId: IdFilter
+  parent: MediaFolderFilterInput
+}
+
+input MediaFolderUpdateInput {
+  version: Long
+  name: String
+  parentId: ID
+}
+
+input PermissionCreateInput {
+  roleId: String
+  collection: String
+  canRead: Boolean
+  canWrite: Boolean
+  canDelete: Boolean
+}
+
+input PermissionFilterInput {
+  and: [PermissionFilterInput!]
+  or: [PermissionFilterInput!]
+  some: PermissionFilterInput
+  none: PermissionFilterInput
+  id: IdFilter
+  roleId: StringFilter
+  collection: StringFilter
+  canRead: BooleanFilter
+  canWrite: BooleanFilter
+  canDelete: BooleanFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+}
+
+input PermissionUpdateInput {
+  version: Long
+  roleId: String
+  collection: String
+  canRead: Boolean
+  canWrite: Boolean
+  canDelete: Boolean
+}
+
+input RoleCreateInput {
+  name: String
+  description: String
+}
+
+input RoleFilterInput {
+  and: [RoleFilterInput!]
+  or: [RoleFilterInput!]
+  some: RoleFilterInput
+  none: RoleFilterInput
+  id: IdFilter
+  name: StringFilter
+  isSuperAdmin: BooleanFilter
+  description: StringFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+}
+
+input RoleUpdateInput {
+  version: Long
+  name: String
+  description: String
+}
+
+input StringFilter {
+  eq: String
+  neq: String
+  in: [String!]
+  nin: [String!]
+  contains: String
+  startsWith: String
+  endsWith: String
+  isNull: Boolean
+}
+
+input TagItemInput {
+  value: String!
+  label: String
+}
+
+input UserCreateInput {
+  email: String
+  name: String
+  isActive: Boolean
+  roles: [ID!]
+}
+
+input UserFilterInput {
+  and: [UserFilterInput!]
+  or: [UserFilterInput!]
+  some: UserFilterInput
+  none: UserFilterInput
+  id: IdFilter
+  email: StringFilter
+  name: StringFilter
+  isActive: BooleanFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+  roles: RoleFilterInput
+}
+
+input UserRoleCreateInput {
+  userId: String
+  roleId: String
+}
+
+input UserRoleFilterInput {
+  and: [UserRoleFilterInput!]
+  or: [UserRoleFilterInput!]
+  some: UserRoleFilterInput
+  none: UserRoleFilterInput
+  id: IdFilter
+  userId: StringFilter
+  roleId: StringFilter
+  createdAt: DateTimeFilter
+  createdBy: StringFilter
+  updatedAt: DateTimeFilter
+  updatedBy: StringFilter
+}
+
+input UserRoleUpdateInput {
+  version: Long
+  userId: String
+  roleId: String
+}
+
+input UserUpdateInput {
+  version: Long
+  email: String
+  name: String
+  isActive: Boolean
+  roles: [ID!]
+}
+
+enum DeletedFilter {
+  EXCLUDE
+  ONLY
+  WITH
+}
+
+"The `Any` scalar type represents any valid GraphQL value."
+scalar Any @specifiedBy(url: "https://scalars.graphql.org/chillicream/any.html")
+
+"The `Date` scalar type represents a date in UTC."
+scalar Date
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/date.html")
+
+"The `DateTime` scalar type represents a date and time with time zone offset information."
+scalar DateTime
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/date-time.html")
+
+"The `Long` scalar type represents a signed 64-bit integer."
+scalar Long
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/long.html")
+
+"The `UUID` scalar type represents a Universally Unique Identifier (UUID) as defined by RFC 9562."
+scalar UUID
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/uuid.html")
+
+"The purpose of the `cost` directive is to define a `weight` for GraphQL types, fields, and arguments. Static analysis can use these weights when calculating the overall cost of a query or response."
+directive @cost(
+  "The `weight` argument defines what value to add to the overall cost for every appearance, or possible appearance, of a type, field, argument, etc."
+  weight: String!
+) on
+  | SCALAR
+  | OBJECT
+  | FIELD_DEFINITION
+  | ARGUMENT_DEFINITION
+  | ENUM
+  | INPUT_FIELD_DEFINITION
