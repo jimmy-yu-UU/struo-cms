@@ -69,9 +69,9 @@ internal static class CollectionResolvers
         var deleted = ctx.ArgumentValue<DeletedFilter?>("deleted") ?? DeletedFilter.Exclude;
         var facets = ctx.ArgumentValue<IReadOnlyList<string>?>("facets");
         var aggregate = ctx.ArgumentValue<IReadOnlyDictionary<string, object?>?>("aggregate");
-        // Checked here as well as in ItemService so a denied soft-delete view fails before the query is
-        // built; the permission service is resolved only when one is requested. The rule and its message
-        // live in DeletedAccessGuard.
+        // Checked here as well as behind IItemUseCases.QueryAsync so a denied soft-delete view fails before
+        // the query is built; the permission service is resolved only when one is requested. The rule and its
+        // message live in DeletedAccessGuard.
         if (deleted != DeletedFilter.Exclude)
             DeletedAccessGuard.EnsureCanViewDeleted(ctx.Service<IPermissionService>(), collection, deleted);
         var deep = SelectionDeepSpec(ctx, collection, metadata, elementIsDirect: false);

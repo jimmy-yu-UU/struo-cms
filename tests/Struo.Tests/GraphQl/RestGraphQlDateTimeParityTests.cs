@@ -18,7 +18,7 @@ public class RestGraphQlDateTimeParityTests(ApiFactory factory, ITestOutputHelpe
 {
     private static readonly string[] Fields = ["createdAt", "updatedAt", "publishedAt"];
 
-    [Fact]
+    [NonUtcHostZoneFact("the REST and GraphQL comparison cannot tell a missing conversion apart under UTC")]
     public async Task The_same_row_prints_the_same_date_times_over_REST_and_GraphQL()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();

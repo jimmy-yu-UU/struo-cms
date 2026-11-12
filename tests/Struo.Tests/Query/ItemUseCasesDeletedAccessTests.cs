@@ -23,11 +23,12 @@ namespace Struo.Tests.Query;
 public sealed class ItemUseCasesDeletedAccessTests : IDisposable
 {
     private const string Collection = "fxCategory";
+    private const string ReadDeniedMessage = "Read not permitted.";
     private const string DeniedMessage = "Viewing deleted items requires delete permission.";
 
-    private sealed class Grants(bool canDelete) : IPermissionService
+    private sealed class Grants(bool canDelete, bool canRead = true) : IPermissionService
     {
-        public bool CanRead(string collection) => true;
+        public bool CanRead(string collection) => canRead;
         public bool CanWrite(string collection) => false;
         public bool CanDelete(string collection) => canDelete;
         public IReadOnlyCollection<string> ReadableFields(string c, IEnumerable<string> all) => all.ToList();
@@ -37,7 +38,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    private IItemUseCases Build(bool canDelete)
+    private IItemUseCases Build(bool canDelete, bool canRead = true)
     {
         var db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<FxArticle>();
@@ -68,7 +69,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
             repo, provider, registry, graph, new RelationExpander(repo, graph, options), graph,
             new LanguageProvider(db), user, new SqlSugarRevisionStore(db, user),
             new RevisionSnapshotBuilder(repo, provider, registry, graph),
-            permissions: new Grants(canDelete));
+            permissions: new Grants(canDelete, canRead));
     }
 
     private static QueryModel EmptyQuery() => new(null, null, [], 20, 0, null);
@@ -110,6 +111,18 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     {
         var items = Build(canDelete: true);
         (await items.GetAsync(Collection, Guid.NewGuid().ToString(), deleted: deleted)).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(DeletedFilter.Only)]
+    [InlineData(DeletedFilter.With)]
+    public async Task Without_read_or_delete_permission_the_read_denial_comes_first(DeletedFilter deleted)
+    {
+        var items = Build(canDelete: false, canRead: false);
+        var query = async () => await items.QueryAsync(Collection, EmptyQuery(), deleted: deleted);
+        (await query.Should().ThrowAsync<PermissionDeniedException>()).WithMessage(ReadDeniedMessage);
+        var get = async () => await items.GetAsync(Collection, Guid.NewGuid().ToString(), deleted: deleted);
+        (await get.Should().ThrowAsync<PermissionDeniedException>()).WithMessage(ReadDeniedMessage);
     }
 
     [Fact]

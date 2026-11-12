@@ -36,6 +36,18 @@ public sealed class NotOnBackendFactAttribute : FactAttribute
     }
 }
 
+/// <summary>A <see cref="FactAttribute"/> that is skipped while the host's local zone is UTC, where a test that
+/// compares zone-dependent output proves nothing.</summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class NonUtcHostZoneFactAttribute : FactAttribute
+{
+    public NonUtcHostZoneFactAttribute(string reason)
+    {
+        if (TimeZoneInfo.Local.BaseUtcOffset == TimeSpan.Zero)
+            Skip = $"Host zone is UTC: {reason}";
+    }
+}
+
 /// <summary>
 /// Skip reasons for the opt-in live tests: which environment variable or configuration key supplies the
 /// missing connection.
