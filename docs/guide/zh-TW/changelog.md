@@ -10,7 +10,20 @@
   權限，原本只檢查 read 權限，delete 檢查由 REST 控制器與 GraphQL resolver 負責。fork 自己實作這個
   介面的類別，遇到這兩個值時必須呼叫 `DeletedAccessGuard.EnsureCanViewDeleted`。REST 與 GraphQL 的
   回應不變。
+- `UserCredential` 與 `ExternalUserMatch` 多了必填的 `Email` 參數，帶的是資料庫那一列儲存的 email。
+  fork 自己實作 `IUserCredentialStore`、`IExternalUserStore`，或自己建立這兩個型別的，要補上這個
+  值；`FindByEmailAsync` 照舊回資料庫找到的那一列。`ExternalLoginFailure` 多了 `AccountMismatch`，
+  switch 它的 fork 要處理這個新成員。
 :::
+
+### 修正
+
+- 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
+  MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端
+  不同），變體因此能登入同一個帳號，登入鎖定的計數卻落在另一個鍵上，鎖定擋不住它。現在變體的
+  登入和查無此帳號的回應、驗證成本與節流計數都相同；外部登入以 `external_login_AccountMismatch`
+  導回登入頁，不連結也不建立帳號。建立與修改使用者的重複檢查照舊用定序比對，仍回 `409`。
+  PostgreSQL 與 SQLite 本來就不受影響。
 
 ## 0.30.1 — 2026-11-11
 

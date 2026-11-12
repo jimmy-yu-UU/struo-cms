@@ -11,7 +11,7 @@ public sealed class SqlSugarUserCredentialStore(ISqlSugarClient db) : IUserCrede
         var u = await db.Queryable<User>()
             .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);
-        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive);
+        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.Email);
     }
 
     public async Task<UserCredential?> FindByAccessTokenAsync(string tokenHash, CancellationToken ct = default)
@@ -19,13 +19,13 @@ public sealed class SqlSugarUserCredentialStore(ISqlSugarClient db) : IUserCrede
         var u = await db.Queryable<User>()
             .Where(x => x.AccessToken == tokenHash)
             .FirstAsync(ct);
-        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.AccessTokenLastUsedAt);
+        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.Email, u.AccessTokenLastUsedAt);
     }
 
     public async Task<UserCredential?> FindByIdAsync(Guid id, CancellationToken ct = default)
     {
         var u = await db.Queryable<User>().Where(x => x.Id == id).FirstAsync(ct);
-        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.AccessTokenLastUsedAt);
+        return u is null ? null : new UserCredential(u.Id, u.Password, u.IsActive, u.Email, u.AccessTokenLastUsedAt);
     }
 
     public Task TouchAccessTokenLastUsedAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) =>

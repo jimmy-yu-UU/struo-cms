@@ -70,6 +70,7 @@ public sealed class LoginLocksController(
             return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "An email is required.");
 
         // Looked up before the lock is cleared, so a failing lookup leaves the lock and the record in step.
+        // The match is by collation on purpose: a variant that reaches a super-admin row meets the guard below.
         var target = await users.FindByEmailAsync(email!, ct);
         var actor = currentUser.GetCurrentUserId();
 

@@ -2,7 +2,7 @@ namespace Struo.Application.Security;
 
 /// <summary>Minimal user lookup/creation for external login. Deliberately bypasses the generic
 /// projection (mirrors <see cref="IUserCredentialStore"/>). Returns only id + active flag.</summary>
-public sealed record ExternalUserMatch(Guid Id, bool IsActive);
+public sealed record ExternalUserMatch(Guid Id, bool IsActive, string Email);
 
 public interface IExternalUserStore
 {

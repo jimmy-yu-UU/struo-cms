@@ -25,7 +25,7 @@ public class AuthServiceTests
     public async Task Valid_credentials_succeed()
     {
         var id = Guid.CreateVersion7();
-        var svc = new AuthService(new FakeStore(new UserCredential(id, "enc:pw", true)), new PlainHasher());
+        var svc = new AuthService(new FakeStore(new UserCredential(id, "enc:pw", true, "a@b.com")), new PlainHasher());
         var r = await svc.AuthenticateAsync("a@b.com", "pw");
         r.Succeeded.Should().BeTrue();
         r.UserId.Should().Be(id);
@@ -34,7 +34,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Wrong_password_fails_invalid()
     {
-        var svc = new AuthService(new FakeStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", true)), new PlainHasher());
+        var svc = new AuthService(new FakeStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", true, "a@b.com")), new PlainHasher());
         (await svc.AuthenticateAsync("a@b.com", "nope")).Failure.Should().Be(AuthFailure.InvalidCredentials);
     }
 
@@ -48,7 +48,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Inactive_user_fails_inactive()
     {
-        var svc = new AuthService(new FakeStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", false)), new PlainHasher());
+        var svc = new AuthService(new FakeStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", false, "a@b.com")), new PlainHasher());
         (await svc.AuthenticateAsync("a@b.com", "pw")).Failure.Should().Be(AuthFailure.Inactive);
     }
 
@@ -56,7 +56,7 @@ public class AuthServiceTests
     public async Task Empty_stored_hash_is_invalid_credentials_and_never_verifies_the_empty_hash()
     {
         var userId = Guid.NewGuid();
-        var store = new FakeCredentialStore(new UserCredential(userId, "", IsActive: true));
+        var store = new FakeCredentialStore(new UserCredential(userId, "", IsActive: true, Email: "jit@corp.com"));
         var hasher = new RecordingHasher();
         var sut = new AuthService(store, hasher);
 
@@ -94,5 +94,47 @@ public class AuthServiceTests
         public List<string> VerifiedEncodedValues { get; } = [];
         public string Hash(string password) => "dummy-hash";
         public bool Verify(string encoded, string password) { VerifiedEncodedValues.Add(encoded); return false; }
+    }
+
+    // The database collation can return an account whose stored email normalizes to a different string
+    // than the one presented (SQLite's default collation never does, so the store is faked).
+    [Fact]
+    public async Task A_found_account_whose_email_differs_after_normalizing_is_the_unknown_account_outcome()
+    {
+        var hasher = new RecordingHasher();
+        var stored = new UserCredential(Guid.CreateVersion7(), "enc:pw", true, "jos\u00e9@corp.com");
+        var sut = new AuthService(new FakeCredentialStore(stored), hasher);
+
+        var result = await sut.AuthenticateAsync("jose@corp.com", "pw");
+
+        result.Succeeded.Should().BeFalse();
+        result.Failure.Should().Be(AuthFailure.InvalidCredentials);
+        result.UserId.Should().BeNull();
+        hasher.VerifiedEncodedValues.Should().HaveCount(1).And.NotContain("enc:pw");
+    }
+
+    [Fact]
+    public async Task A_mismatching_account_gets_the_same_result_as_a_missing_one()
+    {
+        var mismatch = await new AuthService(
+                new FakeCredentialStore(new UserCredential(Guid.CreateVersion7(), "enc:pw", true, "jos\u00e9@corp.com")),
+                new PlainHasher())
+            .AuthenticateAsync("jose@corp.com", "pw");
+        var missing = await new AuthService(new FakeCredentialStore(null), new PlainHasher())
+            .AuthenticateAsync("jose@corp.com", "pw");
+
+        mismatch.Should().Be(missing);
+    }
+
+    [Fact]
+    public async Task Case_and_surrounding_space_differences_still_authenticate()
+    {
+        var id = Guid.CreateVersion7();
+        var sut = new AuthService(
+            new FakeCredentialStore(new UserCredential(id, "enc:pw", true, "alice@corp.com")), new PlainHasher());
+
+        var result = await sut.AuthenticateAsync("  Alice@Corp.com ", "pw");
+
+        result.UserId.Should().Be(id);
     }
 }

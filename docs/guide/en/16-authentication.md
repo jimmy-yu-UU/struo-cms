@@ -43,6 +43,14 @@ account exists, or the account has no local password at all (covered in the OIDC
 the server still runs one full Argon2id verification against a fake hash, so failure always takes
 the same time — the caller can't infer from response speed whether that email exists.
 
+The database finds the account with its own collation, and some backends treat accents, full-width
+forms or invisible characters as equal. A found account counts only when its stored email, trimmed
+and lowercased, is character for character the submitted one; otherwise it is treated as no such
+account, with the same response, verification cost and throttle count, so a different spelling
+neither logs in nor escapes the throttle. The duplicate check when a user is created or changed
+still compares by collation, so an email that differs only in a way the collation ignores is still
+a `409`.
+
 Login exposes only two kinds of failure to the caller: a password that verifies but an account
 that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wrong password, an
 account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.` — the two
@@ -484,7 +492,10 @@ Resolution checks the following in order, and failing any one of them fails the 
 - the matched local account is still active — a deactivated account is never reactivated just
   because an external identity passed validation.
 
-Matching is by email equality, case-insensitive. When nothing matches, a new account is created on
+Matching is by email equality, case-insensitive. A found account's stored email must also be
+character for character the identity's email once both are trimmed and lowercased; if it is not,
+the login is refused (`external_login_AccountMismatch`) and nothing is linked or created, for the
+same reason as in password login (see Passwords above). When nothing matches, a new account is created on
 the spot — that's what "just-in-time provisioning" means, with no administrator having to open an
 account beforehand.
 
@@ -522,6 +533,7 @@ set and never carries exception text:
 | `external_login_DomainNotAllowed` | The email's domain is not in `AllowedEmailDomains` |
 | `external_login_TenantNotAllowed` | The tenant is not the provider's `AllowedTenantId` |
 | `external_login_Inactive` | The matched local account is deactivated |
+| `external_login_AccountMismatch` | The found account's email is spelled differently |
 
 The login page shows the generic message for any other value. `GET /api/auth/login/oidc/{provider}` accepts a
 `returnUrl`. It is used in the challenge only when it is a site-relative path, or an absolute URL

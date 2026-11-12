@@ -12,7 +12,23 @@
   check to the REST controller and the GraphQL resolver. A fork's own implementation of the interface
   must call `DeletedAccessGuard.EnsureCanViewDeleted` for those two values. REST and GraphQL responses
   are unchanged.
+- `UserCredential` and `ExternalUserMatch` take a required `Email` parameter, the email stored on the
+  database row. A fork that implements `IUserCredentialStore` or `IExternalUserStore`, or builds
+  either type itself, supplies it; `FindByEmailAsync` still returns the row the database found.
+  `ExternalLoginFailure` gains `AccountMismatch`, which a fork that switches over it must handle.
 :::
+
+### Fixed
+
+- Password login and external login accept a found account only when its stored email and the
+  submitted one are character for character the same once trimmed and lowercased. The default
+  collations of MySQL, MariaDB and SQL Server treat some spellings as equal (accents, full-width
+  forms, invisible characters, a different set per backend), so a variant logged in to the same
+  account while the login lock counted it under a key of its own and never stopped it. A variant now
+  gets the response, verification cost and throttle count of an account that does not exist; external
+  login returns to the login page with `external_login_AccountMismatch` and neither links nor creates
+  an account. The duplicate check when a user is created or changed still compares by collation and
+  still answers `409`. PostgreSQL and SQLite were never affected.
 
 ## 0.30.1 — 2026-11-11
 

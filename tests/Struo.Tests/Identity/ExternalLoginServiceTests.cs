@@ -28,7 +28,7 @@ public class ExternalLoginServiceTests
     [Fact]
     public async Task Existing_active_user_resolves_without_provisioning()
     {
-        var existing = new ExternalUserMatch(Guid.CreateVersion7(), IsActive: true);
+        var existing = new ExternalUserMatch(Guid.CreateVersion7(), IsActive: true, Email: "alice@corp.com");
         var sut = new ExternalLoginService(new FakeStore(existing));
         var r = await sut.ResolveOrProvisionAsync(Id(), Policy());
         r.Succeeded.Should().BeTrue();
@@ -51,7 +51,7 @@ public class ExternalLoginServiceTests
     [Fact]
     public async Task Existing_inactive_user_is_rejected()
     {
-        var sut = new ExternalLoginService(new FakeStore(new ExternalUserMatch(Guid.CreateVersion7(), IsActive: false)));
+        var sut = new ExternalLoginService(new FakeStore(new ExternalUserMatch(Guid.CreateVersion7(), IsActive: false, Email: "alice@corp.com")));
         var r = await sut.ResolveOrProvisionAsync(Id(), Policy());
         r.Succeeded.Should().BeFalse();
         r.Failure.Should().Be(ExternalLoginFailure.Inactive);
@@ -87,5 +87,40 @@ public class ExternalLoginServiceTests
         var sut = new ExternalLoginService(new FakeStore());
         var r = await sut.ResolveOrProvisionAsync(Id(email: "bob@evil.com"), Policy(domains: ["corp.com"]));
         r.Failure.Should().Be(ExternalLoginFailure.DomainNotAllowed);
+    }
+
+    private sealed class MismatchStore(string storedEmail) : IExternalUserStore
+    {
+        public int Created { get; private set; }
+        public Task<ExternalUserMatch?> FindByEmailAsync(string email, CancellationToken ct = default) =>
+            Task.FromResult<ExternalUserMatch?>(new ExternalUserMatch(Guid.CreateVersion7(), true, storedEmail));
+        public Task<Guid> CreateExternalUserAsync(string email, string? name, CancellationToken ct = default)
+        { Created++; return Task.FromResult(Guid.CreateVersion7()); }
+    }
+
+    [Fact]
+    public async Task A_found_account_whose_email_differs_after_normalizing_is_refused_without_linking_or_creating()
+    {
+        var store = new MismatchStore("jos\u00e9@corp.com");
+        var sut = new ExternalLoginService(store);
+
+        var r = await sut.ResolveOrProvisionAsync(Id(email: "jose@corp.com"), Policy());
+
+        r.Succeeded.Should().BeFalse();
+        r.UserId.Should().BeNull();
+        r.Failure.Should().Be(ExternalLoginFailure.AccountMismatch);
+        store.Created.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Case_differences_still_link_the_existing_account()
+    {
+        var store = new MismatchStore("alice@corp.com");
+        var sut = new ExternalLoginService(store);
+
+        var r = await sut.ResolveOrProvisionAsync(Id(email: " Alice@Corp.com "), Policy());
+
+        r.Succeeded.Should().BeTrue();
+        r.Provisioned.Should().BeFalse();
     }
 }
