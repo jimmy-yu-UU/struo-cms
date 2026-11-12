@@ -435,7 +435,12 @@ nginx 後面才是 API 時，設成 `2`，並把兩層代理都列進清單：�
 | `RateLimiting:Password:PermitLimit` | 整數 | `5` |
 | `RateLimiting:Password:WindowSeconds` | 整數（秒） | `60` |
 
-這十二個鍵都沒有驗證規則，設錯的值要到請求進來才會出錯。`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
+八個數值鍵在主機啟動時檢查，不論所屬區段有沒有啟用；超出範圍就擋下啟動，訊息帶出完整的鍵與允許
+的範圍。沒有「不限制」的值，要關掉限流器請設 `Enabled=false`。`Login`、`LoginAccount` 與 `Password`
+的 `PermitLimit` 為 1 到 1000000、`WindowSeconds` 為 1 到 86400；`LoginConcurrency` 的 `PermitLimit`
+為 1 到 1000、`QueueLimit` 為 0 到 10000。
+
+`Login:*`、`LoginConcurrency:*` 與 `Password:*` 這幾個限流政策
 被擋下時回 429，訊息依政策命名，並帶 `Retry-After`；`LoginAccount` 的 429 由登入端點
 自己回，訊息固定。
 
@@ -599,9 +604,8 @@ cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataPr
   `AllowedEmailDomains`。
 - Google 的 `Authority`（`https://accounts.google.com`）要搭配非空的 `AllowedEmailDomains`，因為 Google
   沒有 tenant 可釘，否則任何 Google 帳號都能登入。
-- 啟用中的提供者之間不能共用路徑。每個提供者還有兩條由 id 推導的登出路徑，
-  `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`，它們不能設定，自訂的 `CallbackPath` 也不能
-  跟其中任何一條相撞。
+- 啟用中的提供者之間不能共用路徑。每個提供者還有一條由 id 推導的登出回呼路徑，
+  `/signout-callback-oidc-{id}`，它不能設定，自訂的 `CallbackPath` 也不能跟它相撞。
 
 提供者 id 不符合 id 規則時，不論有沒有啟用，啟動都會失敗。提供者停用或不存在時，
 `/api/auth/login/oidc/{provider}` 回 404，這不是設定錯誤。

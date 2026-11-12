@@ -10,7 +10,54 @@
   權限，原本只檢查 read 權限，delete 檢查由 REST 控制器與 GraphQL resolver 負責。fork 自己實作這個
   介面的類別，遇到這兩個值時必須呼叫 `DeletedAccessGuard.EnsureCanViewDeleted`。REST 與 GraphQL 的
   回應不變。
+- `UserCredential` 與 `ExternalUserMatch` 多了必填的 `Email` 參數，帶的是資料庫那一列儲存的 email。
+  fork 自己實作 `IUserCredentialStore`、`IExternalUserStore`，或自己建立這兩個型別的，要補上這個
+  值；`FindByEmailAsync` 照舊回資料庫找到的那一列。`ExternalLoginFailure` 多了 `AccountMismatch`，
+  switch 它的 fork 要處理這個新成員。
+- `RateLimiting:Login`、`RateLimiting:LoginAccount`、`RateLimiting:LoginConcurrency` 與
+  `RateLimiting:Password` 的八個數值鍵在啟動時驗證，不論 `Enabled` 為何；超出範圍的值讓主機無法
+  啟動，訊息帶出完整的鍵與允許的範圍，範圍見[第 4 章](04-configuration.md)。這些值原本不擋啟動：
+  `Enabled` 為 true 時，`Login` 或 `LoginConcurrency` 的無效值讓每個登入請求都回 `500`，`Password`
+  的無效值讓每個改密碼請求都回 `500`；`Enabled=false` 時則不限流。`LoginAccount` 的 `PermitLimit`
+  小於等於 `0` 時，記憶體與分散式快取的節流放行一個視窗內的第一次嘗試、其餘都回 `429`，Redis
+  的節流則每次嘗試都回 `429`；`WindowSeconds` 小於等於 `0` 則永遠不鎖。設了這類值的 fork 要改成
+  範圍內的值；沒有「不限制」的值，要關掉限流器請設 `Enabled=false`。
+- 在 MySQL、MariaDB 與 SQL Server 上，帳號儲存的 email 與使用者輸入的（或 OIDC 提供者送來的）
+  email，若差在定序視為相同、但去除空白並轉小寫之後並不相同的地方（重音、全形、不可見字元），
+  就再也登入不了：密碼登入的回應與查無此帳號一樣，外部登入則被拒絕並帶
+  `external_login_AccountMismatch`。升級前請先找出這類資料列，把儲存的 email 改正。
+- OIDC 的遠端登出端點 `/signout-oidc-{id}` 移除，`OidcProviderOptions.RemoteSignOutPathFor` 一併移除；
+  fork 若引用這個方法，刪掉引用即可。API 對該路徑回 `404`，不碰工作階段。已向提供者登記前端通道
+  登出網址的，把它從提供者那邊拿掉。`signin-oidc-{id}` 與 `signout-callback-oidc-{id}` 不變。
+  管理映像的 nginx 範本與 Vite 開發代理不再轉發 `/signout-oidc` 開頭的路徑；自己的反向代理若有
+  對應規則，可以拿掉。
 :::
+
+### 新增
+
+- 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
+  提供者的 id，不含網域；主機照常啟動。
+
+### 修正
+
+- 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
+  MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端
+  不同），變體因此能登入同一個帳號，登入鎖定的計數卻落在另一個鍵上，鎖定擋不住它。現在變體的
+  登入和查無此帳號的回應、驗證成本與節流計數都相同；外部登入以 `external_login_AccountMismatch`
+  導回登入頁，不連結也不建立帳號。建立與修改使用者的重複檢查照舊用定序比對，仍回 `409`。
+  PostgreSQL 與 SQLite 在預設定序下本來就不受影響。
+- 寫入時的翻譯欄位名，以及巢狀排序（REST 的 `deep` 裡的 `sort`、GraphQL 的巢狀 `sort` 參數）的欄位名，
+  驗證時不分大小寫，之後卻以請求的拼法進入程序層級、只增不減的屬性快取，每多一種大小寫就多一個項目。
+  現在改用中繼資料的拼法，快取項目數不再隨請求增加；回應內容不變，只有翻譯欄位的值、格式與長度
+  錯誤，在訊息與 `details[].field` 裡以中繼資料的拼法點名欄位。
+- 工作階段續期時快取失敗，原本讓觸發續期的那個請求失敗，現在只記一則警告（內容是票證的 key，
+  不含票證內容），請求照常回應，工作階段維持原本的到期時間。登入、讀取與登出時的快取失敗照舊
+  讓請求失敗。
+
+### 安全性
+
+- 對 `/signout-oidc-{id}` 不帶任何參數的 GET，就會清掉目前的工作階段 cookie 並結束伺服器端的工作階段，
+  任何頁面都能用一個跨站的請求把已登入的使用者登出。這個端點已移除，見破壞性變更。
 
 ## 0.30.1 — 2026-11-11
 

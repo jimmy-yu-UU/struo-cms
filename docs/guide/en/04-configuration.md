@@ -509,8 +509,13 @@ the host at startup while `Enabled=true`.
 | `RateLimiting:Password:PermitLimit` | integer | `5` |
 | `RateLimiting:Password:WindowSeconds` | integer (seconds) | `60` |
 
-None of the twelve keys has a validation rule; a wrong value only surfaces once a request comes
-in. When a rate-limiter policy (`Login:*`, `LoginConcurrency:*` or `Password:*`) blocks a request it
+The eight numeric keys are checked when the host starts, whether or not their section is enabled;
+a value out of range stops startup, with the full key and the allowed range in the message. No
+value means "no limit": switch a limiter off with `Enabled=false`. `PermitLimit` is 1 to 1000000
+and `WindowSeconds` 1 to 86400 for `Login`, `LoginAccount` and `Password`; `LoginConcurrency` takes
+a `PermitLimit` of 1 to 1000 and a `QueueLimit` of 0 to 10000.
+
+When a rate-limiter policy (`Login:*`, `LoginConcurrency:*` or `Password:*`) blocks a request it
 returns 429, with a message naming the policy and a `Retry-After` header; the `LoginAccount` 429 is
 returned by the login endpoint itself, with a fixed message.
 
@@ -694,9 +699,9 @@ an error naming that provider's key. The same applies to these rules:
   `AllowedTenantId` or `AllowedEmailDomains`.
 - A Google `Authority` (`https://accounts.google.com`) comes with a non-empty `AllowedEmailDomains`, since
   Google has no tenant to pin and any Google account could otherwise sign in.
-- No two enabled providers share a path. Each provider also owns two sign-out paths derived from its
-  id, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; they are not configurable, and a custom
-  `CallbackPath` must not collide with any of them.
+- No two enabled providers share a path. Each provider also owns a sign-out callback path derived from
+  its id, `/signout-callback-oidc-{id}`; it is not configurable, and a custom `CallbackPath` must not
+  collide with it.
 
 A provider id that breaks the id rule fails startup, whether or not the provider is enabled. A
 provider that is disabled or absent makes `/api/auth/login/oidc/{provider}` return 404; that is not a

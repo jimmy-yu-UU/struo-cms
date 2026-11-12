@@ -12,7 +12,66 @@
   check to the REST controller and the GraphQL resolver. A fork's own implementation of the interface
   must call `DeletedAccessGuard.EnsureCanViewDeleted` for those two values. REST and GraphQL responses
   are unchanged.
+- `UserCredential` and `ExternalUserMatch` take a required `Email` parameter, the email stored on the
+  database row. A fork that implements `IUserCredentialStore` or `IExternalUserStore`, or builds
+  either type itself, supplies it; `FindByEmailAsync` still returns the row the database found.
+  `ExternalLoginFailure` gains `AccountMismatch`, which a fork that switches over it must handle.
+- The eight numeric keys of `RateLimiting:Login`, `RateLimiting:LoginAccount`,
+  `RateLimiting:LoginConcurrency` and `RateLimiting:Password` are validated at start whatever
+  `Enabled` says; a value out of range stops the host, with the full key and the allowed range in the
+  message (ranges in [Chapter 4](04-configuration.md)). Such values used to let the host start. While
+  `Enabled` was true, an invalid value of `Login` or `LoginConcurrency` made every login request answer
+  `500`, and one of `Password` did the same to every password-change request; nothing was limited
+  while `Enabled=false`. A `LoginAccount` `PermitLimit` of `0` or below let the first attempt of a
+  window through and answered `429` to the rest on the in-memory and distributed-cache throttle, and
+  answered `429` to every attempt on the Redis throttle; a `WindowSeconds` of `0` or below never
+  locked. A fork that sets such a value changes it to one in range; no value means "no limit", so a
+  limiter is switched off with `Enabled=false`.
+- On MySQL, MariaDB and SQL Server, an account whose stored email differs from the address the user
+  types, or the address the OIDC provider sends, by something the collation folds but trimming and
+  lowercasing do not (accents, full-width forms, invisible characters) can no longer sign in: password
+  login answers as for an unknown account, and external login is refused with
+  `external_login_AccountMismatch`. Check for such rows before upgrading and correct the stored email.
+- The OIDC remote sign-out endpoint `/signout-oidc-{id}` is removed, and so is
+  `OidcProviderOptions.RemoteSignOutPathFor`; a fork that references the method deletes the reference.
+  The API answers `404` on that path and leaves the session alone. A front-channel logout URL
+  registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
+  are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
+  start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
 :::
+
+### Added
+
+- A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
+  logs one start-up warning naming the provider id, never the domains; the host still starts.
+
+### Fixed
+
+- Password login and external login accept a found account only when its stored email and the
+  submitted one are character for character the same once trimmed and lowercased. The default
+  collations of MySQL, MariaDB and SQL Server treat some spellings as equal (accents, full-width
+  forms, invisible characters, a different set per backend), so a variant logged in to the same
+  account while the login lock counted it under a key of its own and never stopped it. A variant now
+  gets the response, verification cost and throttle count of an account that does not exist; external
+  login returns to the login page with `external_login_AccountMismatch` and neither links nor creates
+  an account. The duplicate check when a user is created or changed still compares by collation and
+  still answers `409`. PostgreSQL and SQLite with their default collations were never affected.
+- A translation field name on a write, and a field name in a nested sort (`sort` inside REST `deep`,
+  the nested `sort` argument in GraphQL), are validated without regard to case but then reached the
+  process-wide, ever-growing property cache in the spelling of the request, one entry per
+  capitalization. They now use the metadata spelling, so the cache stops growing with requests;
+  responses are the same, except that the translation-field value, format and length errors name
+  the field by its metadata spelling, in the message and in `details[].field`.
+- A cache failure while a session is renewed made the request that triggered the renewal fail. It is
+  now logged as one warning (the ticket key, nothing from the ticket), the request answers as usual,
+  and the session keeps its current expiry. A cache failure while logging in, reading or logging
+  out still fails the request.
+
+### Security
+
+- A GET to `/signout-oidc-{id}` with no parameters cleared the current session cookie and ended the
+  server-side session, so any page could sign a logged-in user out with one cross-site request. The
+  endpoint is removed; see Breaking.
 
 ## 0.30.1 — 2026-11-11
 

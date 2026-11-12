@@ -53,7 +53,7 @@ public sealed class OidcOptionsValidator : IValidateOptions<OidcOptions>
                          string.Join(", ", OidcProviderOptions.AllowedPromptValues));
     }
 
-    // The callback, signed-out callback and remote sign-out path of every enabled provider are all served
+    // The callback and signed-out callback path of every enabled provider are served
     // by the one handler that owns the path, so no two may coincide.
     private static void ValidateUniqueCallbackPaths(OidcOptions options, List<string> failures)
     {
@@ -62,7 +62,6 @@ public sealed class OidcOptionsValidator : IValidateOptions<OidcOptions>
             {
                 (p.Id, Path: p.Options.EffectiveCallbackPath(p.Id)),
                 (p.Id, Path: OidcProviderOptions.SignedOutCallbackPathFor(p.Id)),
-                (p.Id, Path: OidcProviderOptions.RemoteSignOutPathFor(p.Id)),
             })
             .GroupBy(x => x.Path.TrimEnd('/'), StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1);

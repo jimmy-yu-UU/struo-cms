@@ -31,9 +31,9 @@ public sealed class LoginRateLimitOptions
     /// of which IP is attempting it.</summary>
     public bool Enabled { get; set; } = false;
 
-    /// <summary>Max login attempts allowed per client IP within <see cref="WindowSeconds"/>.</summary>
+    /// <summary>Max login attempts allowed per client IP within <see cref="WindowSeconds"/>. Range: <see cref="RateLimitBounds"/>.</summary>
     public int PermitLimit { get; set; } = 5;
 
-    /// <summary>Fixed-window length, in seconds.</summary>
+    /// <summary>Fixed-window length, in seconds. Range: <see cref="RateLimitBounds"/>.</summary>
     public int WindowSeconds { get; set; } = 60;
 }

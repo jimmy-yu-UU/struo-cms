@@ -55,7 +55,7 @@ function blocks(): Block[] {
 
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
 // Locations that forward to the API: /api/ and the per-provider OIDC callback paths.
-const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?$'
+const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$'
 const PROXIED = ['/api/', OIDC_LOCATION]
 
 // Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
@@ -189,13 +189,11 @@ describe('nginx template API proxying', () => {
     '/signin-oidc-my-idp-2',
     '/signout-callback-oidc',
     '/signout-callback-oidc-google',
-    '/signout-oidc',
-    '/signout-oidc-google',
   ])('routes %s to the API', (path) => {
     expect(matchLocation(path)).toBe(OIDC_LOCATION)
   })
 
-  it.each(['/signin', '/signin-oidcx', '/signin-oidc/', '/signin-oidc-Google', '/signout', '/signout-oidc-', '/login', '/collections/x'])(
+  it.each(['/signin', '/signin-oidcx', '/signin-oidc/', '/signin-oidc-Google', '/signout', '/signout-oidc', '/signout-oidc-google', '/signout-oidc-', '/login', '/collections/x'])(
     'leaves %s to the SPA',
     (path) => {
       expect(matchLocation(path)).not.toBe(OIDC_LOCATION)

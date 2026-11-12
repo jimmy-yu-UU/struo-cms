@@ -11,7 +11,11 @@ public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hash
     {
         var cred = await store.FindByEmailAsync(email, ct);
 
-        if (cred is null || string.IsNullOrWhiteSpace(cred.PasswordEncoded))
+        // A row the database matched under its collation counts only when its email is the presented one
+        // after normalizing: the login lock is keyed on that spelling, so a collation-equivalent variant
+        // would otherwise reach the account through a counter of its own.
+        if (cred is null || string.IsNullOrWhiteSpace(cred.PasswordEncoded)
+            || !EmailAddress.IsSameAccount(cred.Email, email))
         {
             // No account (or no password set): spend the same verify cost, then fail generically.
             hasher.Verify(DummyHash(hasher), password);

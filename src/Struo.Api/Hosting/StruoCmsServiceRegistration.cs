@@ -4,6 +4,8 @@ using System.Text.Json.Serialization;
 using Struo.Api.Auth;
 using Struo.Api.GraphQl;
 using Struo.Api.Http;
+using Microsoft.Extensions.Options;
+using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.DependencyInjection;
 using Struo.Infrastructure.Health;
@@ -79,16 +81,19 @@ internal static class StruoCmsServiceRegistration
         // Config-bound tuning for the per-client-IP login rate limiter in StruoCmsRateLimiting (defaults:
         // disabled, 5 attempts / 60s if enabled) — see LoginRateLimitOptions for why it ships off
         services.AddOptions<Struo.Application.Configuration.LoginRateLimitOptions>()
-            .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName);
+            .BindConfiguration(Struo.Application.Configuration.LoginRateLimitOptions.SectionName)
+            .ValidateOnStart();
         // Config-bound tuning for the per-account login throttle (AuthController.Login, via
         // ILoginAttemptThrottle) — independent of the per-client-IP limiter above. Defaults: enabled,
         // 10 attempts per 900s
         services.AddOptions<Struo.Application.Configuration.LoginAccountRateLimitOptions>()
-            .BindConfiguration(Struo.Application.Configuration.LoginAccountRateLimitOptions.SectionName);
+            .BindConfiguration(Struo.Application.Configuration.LoginAccountRateLimitOptions.SectionName)
+            .ValidateOnStart();
         // Process-wide cap on concurrent logins (see LoginConcurrencyOptions and the global limiter in
         // StruoCmsRateLimiting).
         services.AddOptions<Struo.Application.Configuration.LoginConcurrencyOptions>()
-            .BindConfiguration(Struo.Application.Configuration.LoginConcurrencyOptions.SectionName);
+            .BindConfiguration(Struo.Application.Configuration.LoginConcurrencyOptions.SectionName)
+            .ValidateOnStart();
         // Fail fast at boot: MinLength is published to the SPA and sizes the admin password generator, so
         // a misconfigured MinLength > MaxLength would hand an administrator a "Generate strong password"
         // button that produces passwords the server always rejects, with no error until the next write.
@@ -99,7 +104,13 @@ internal static class StruoCmsServiceRegistration
                 "Auth:Password:MinLength must be >= 1 and <= Auth:Password:MaxLength.")
             .ValidateOnStart();
         services.AddOptions<Struo.Application.Configuration.PasswordRateLimitOptions>()
-            .BindConfiguration(Struo.Application.Configuration.PasswordRateLimitOptions.SectionName);
+            .BindConfiguration(Struo.Application.Configuration.PasswordRateLimitOptions.SectionName)
+            .ValidateOnStart();
+        // Range rules for the four RateLimiting sections, checked at start whether or not a section is Enabled.
+        services.AddSingleton<IValidateOptions<LoginRateLimitOptions>, LoginRateLimitOptionsValidator>();
+        services.AddSingleton<IValidateOptions<LoginAccountRateLimitOptions>, LoginAccountRateLimitOptionsValidator>();
+        services.AddSingleton<IValidateOptions<LoginConcurrencyOptions>, LoginConcurrencyOptionsValidator>();
+        services.AddSingleton<IValidateOptions<PasswordRateLimitOptions>, PasswordRateLimitOptionsValidator>();
         services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthSchemes.Cookie)
             .PostConfigure<DistributedCacheTicketStore>((options, store) => options.SessionStore = store);
         services.AddScoped<SchemaService>();

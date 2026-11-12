@@ -65,6 +65,7 @@ public sealed class OidcFailureRedirectTests : IDisposable
     [InlineData(ExternalLoginFailure.DomainNotAllowed)]
     [InlineData(ExternalLoginFailure.TenantNotAllowed)]
     [InlineData(ExternalLoginFailure.Inactive)]
+    [InlineData(ExternalLoginFailure.AccountMismatch)]
     public async Task Refused_external_login_keeps_its_specific_code(ExternalLoginFailure failure)
     {
         var (_, location, _) = await RemoteFailureAsync(new Exception($"external_login_{failure}"));

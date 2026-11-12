@@ -12,9 +12,9 @@ public sealed class LoginConcurrencyOptions
     /// <summary>Whether the concurrency cap is active. Defaults to <c>true</c>.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Logins allowed to verify a password simultaneously.</summary>
+    /// <summary>Logins allowed to verify a password simultaneously. Range: <see cref="RateLimitBounds"/>.</summary>
     public int PermitLimit { get; set; } = 4;
 
-    /// <summary>Logins allowed to wait for a free slot; further requests are rejected with 429.</summary>
+    /// <summary>Logins allowed to wait for a free slot; further requests are rejected with 429. Range: <see cref="RateLimitBounds"/>.</summary>
     public int QueueLimit { get; set; } = 32;
 }

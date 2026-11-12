@@ -11,6 +11,17 @@ public static class EmailAddress
 
     public static string Normalize(string email) => email.Trim().ToLowerInvariant();
 
+    /// <summary>Whether the address stored on an account and the address a caller presented are the same
+    /// account's login identity: equal once both are normalized, compared ordinally. The stores look an
+    /// account up with the database's collation, which can fold spellings that normalize differently
+    /// (accents, width, ignorable characters), while the login throttles key on the normalized spelling alone.
+    /// Password login and external login accept a found account only when this holds; the duplicate checks
+    /// on user create and update deliberately keep the collation match. A missing or blank stored address
+    /// never matches.</summary>
+    public static bool IsSameAccount(string? stored, string presented) =>
+        !string.IsNullOrWhiteSpace(stored)
+        && string.Equals(Normalize(stored), Normalize(presented), StringComparison.Ordinal);
+
     /// <summary>Whether <paramref name="email"/> can address a login lock: not blank and at most
     /// <see cref="MaxLength"/> characters once trimmed. A lock is keyed on the string alone, so this checks
     /// nothing about the address's shape; <c>POST /api/users</c> applies the Email field rule when it creates

@@ -43,6 +43,13 @@ account exists, or the account has no local password at all (covered in the OIDC
 the server still runs one full Argon2id verification against a fake hash, so failure always takes
 the same time — the caller can't infer from response speed whether that email exists.
 
+The database finds the account with its own collation, and some backends treat accents, full-width
+forms or invisible characters as equal. A found account counts only when its stored email, trimmed
+and lowercased, is character for character the submitted one; otherwise it is treated as no such
+account, with the same response, verification cost and throttle count, so a different spelling
+neither logs in nor escapes the throttle. The duplicate check when a user is created or changed
+compares by collation, so an email that differs only in a way the collation ignores is a `409`.
+
 Login exposes only two kinds of failure to the caller: a password that verifies but an account
 that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wrong password, an
 account that doesn't exist — returns the same `401` `UNAUTHORIZED` `Invalid credentials.` — the two
@@ -145,6 +152,11 @@ not the previous one's. The next section covers how user-level revocation (a pas
 account deletion) relies on that same index, so a session renewed in place is revoked by the
 new user's password change or deletion, never by the previous user's. Log out before switching
 accounts, rather than letting the same cookie jar answer for two accounts at once.
+
+A session that has used more than half of its sliding window is extended by a request that carries
+it. That renewal is best-effort: when the cache fails during it, one warning naming the ticket key
+is logged and the request answers as usual; the session keeps its current expiry and the next
+request tries again.
 
 ## Logout and revocation
 
@@ -382,8 +394,10 @@ External login is the authorization code flow with PKCE. The provider's own toke
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
 rest. Each provider has its own callback path: the shipped `microsoft` entry sets `/signin-oidc`, the
 shipped `google` entry `/signin-oidc-google`, and an entry without `CallbackPath` uses `/signin-oidc-{id}`.
-Each provider also has two sign-out paths derived from its id: `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`.
-No two enabled providers may share a path.
+Each provider also has a sign-out callback path derived from its id: `/signout-callback-oidc-{id}`.
+No endpoint serves `/signout-oidc-{id}`: the API answers `404` and ends no session (through the
+admin image, nginx hands the path to the SPA instead). Register no front-channel logout URL with
+the provider. No two enabled providers may share a path.
 
 Sign-in always shows the provider's account picker by default (`Prompt` = `select_account`);
 chapter 4 lists the other values and how to send no prompt.
@@ -442,10 +456,9 @@ server forwards these paths to the API and keeps the browser's `Host`, so the AP
 URI from the host you opened the dev server with. Open `http://localhost:5173`, not
 `http://127.0.0.1:5173`, to match the registered URI.
 
-The admin image's nginx proxies `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
-`/signout-oidc-{id}` to the API alongside `/api/`, so the provider's redirect lands on the same origin
-the sign-in started from. The Vite dev server forwards the same paths. A custom `CallbackPath` under
-`/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
+The admin image's nginx proxies `/signin-oidc-{id}` and `/signout-callback-oidc-{id}` to the API
+alongside `/api/`, so the provider's redirect lands on the same origin the sign-in started from. The
+Vite dev server forwards the same paths. A custom `CallbackPath` under `/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
 other custom path needs its own `location` block in `frontend/nginx/default.conf.template`, or a
 matching rule in your own proxy.
 
@@ -484,7 +497,10 @@ Resolution checks the following in order, and failing any one of them fails the 
 - the matched local account is still active — a deactivated account is never reactivated just
   because an external identity passed validation.
 
-Matching is by email equality, case-insensitive. When nothing matches, a new account is created on
+Matching is by email equality, case-insensitive. A found account's stored email must also be
+character for character the identity's email once both are trimmed and lowercased; if it is not,
+the login is refused (`external_login_AccountMismatch`) and nothing is linked or created, for the
+same reason as in password login (see Passwords above). When nothing matches, a new account is created on
 the spot — that's what "just-in-time provisioning" means, with no administrator having to open an
 account beforehand.
 
@@ -507,6 +523,10 @@ The second is a Google `Authority` (`https://accounts.google.com`, in any case, 
 slash): the provider needs a non-empty `AllowedEmailDomains`, because Google has no tenant to pin, and the
 error names that key. A single-tenant authority, or a disabled provider, is never affected.
 
+A multi-tenant authority pinned by `AllowedEmailDomains` alone starts, but the host logs one warning
+naming the provider: the domain narrows who may sign in without tying the provider to one tenant,
+which only `AllowedTenantId` does.
+
 A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
 shows a localized message and removes the parameter from the address. When CORS origins are
 configured, that page is on the origin of the approved `returnUrl`; without one, on the origin of an
@@ -522,8 +542,10 @@ set and never carries exception text:
 | `external_login_DomainNotAllowed` | The email's domain is not in `AllowedEmailDomains` |
 | `external_login_TenantNotAllowed` | The tenant is not the provider's `AllowedTenantId` |
 | `external_login_Inactive` | The matched local account is deactivated |
+| `external_login_AccountMismatch` | The found account's email is spelled differently |
 
-The login page shows the generic message for any other value. `GET /api/auth/login/oidc/{provider}` accepts a
+The login page shows the generic message for any other value, and for `external_login_AccountMismatch`,
+which has no message of its own in the admin UI. `GET /api/auth/login/oidc/{provider}` accepts a
 `returnUrl`. It is used in the challenge only when it is a site-relative path, or an absolute URL
 whose origin is listed in `Struo:Cors:AllowedOrigins`; any other value, or none, falls back to
 `Oidc:ReturnUrlDefault`. When the API base URL points at another origin than the page, the SPA sends

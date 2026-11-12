@@ -34,4 +34,9 @@ public static class PropertyAccessorCache
 
     public static object? Read(object instance, string propertyName) =>
         Resolve(instance.GetType(), propertyName)?.GetValue(instance);
+
+    /// <summary>The names cached for <paramref name="type"/>, so a test can assert which spellings reached the
+    /// cache.</summary>
+    internal static IReadOnlyList<string> NamesFor(Type type) =>
+        Cache.Keys.Where(k => k.Type == type).Select(k => k.Name).ToList();
 }

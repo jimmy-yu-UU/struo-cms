@@ -31,6 +31,11 @@
 完整的 Argon2id 驗證去比對一個假的雜湊值，讓失敗看起來花一樣的時間，不讓呼叫端從回應快慢猜出這個
 email 存不存在。
 
+資料庫是用自己的定序找帳號的，有些後端會把重音、全形或不可見的字元當成相同。找到的帳號，儲存的
+email 去除前後空白並轉小寫之後，必須與送來的逐字相同；不同就當成查無此帳號，回應、驗證成本與
+節流計數都和查無此帳號一樣，所以換一種拼法既登入不了，也躲不掉節流。建立與修改使用者時的重複檢查
+用定序比對，拼法不同但定序相同的 email 一樣回 `409`。
+
 登入只分兩種失敗給呼叫端看：密碼驗證通過但帳號已停用，回 `401` `ACCOUNT_INACTIVE`；其餘情況，
 密碼錯、帳號不存在，一律回同一種 `401` `UNAUTHORIZED` `Invalid credentials.`，兩者刻意不可分辨。
 成功則回 `200` `{ id }`，沒有其他欄位。
@@ -105,6 +110,9 @@ cookie 本身只是一把不透明的鑰匙——背後真正的工作階段狀�
 下一節會說明，使用者層級的撤銷（改密碼、刪除帳號）靠這個索引，所以原地續期出來的工作階段，
 會被新使用者的改密碼或刪除觸發撤銷，不會被前一個使用者的觸發撤銷。換帳號之前先登出，別讓同一個
 cookie jar 同時對應兩個帳號。
+
+工作階段用到超過滑動視窗的一半時，帶著它的請求會把它延長。這個續期盡力而為：續期當中快取失敗，
+只記一則警告，內容是票證的 key，請求照常回應；工作階段維持目前的到期時間，下一個請求再試一次。
 
 ## 登出與撤銷
 
@@ -295,8 +303,9 @@ auth:unlock: no Redis is configured, so the login attempt count lives in the mem
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
 叫 userinfo 端點補齊。每個提供者有自己的回呼路徑：隨附的 `microsoft` 項目設為 `/signin-oidc`，隨附的 `google`
 項目設為 `/signin-oidc-google`，沒設 `CallbackPath` 的項目用 `/signin-oidc-{id}`；
-另外還有兩條由 id 推導的登出路徑：`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`。啟用中的提供者
-之間不能共用路徑。
+另外還有一條由 id 推導的登出回呼路徑：`/signout-callback-oidc-{id}`。沒有任何端點提供
+`/signout-oidc-{id}`：API 回 `404`，不會結束任何工作階段（經由管理映像時，nginx 會把這條路徑交給
+SPA）；不要向提供者登記前端通道登出網址。啟用中的提供者之間不能共用路徑。
 
 登入預設一律顯示提供者的帳號挑選畫面（`Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
 第 4 章。
@@ -348,7 +357,7 @@ cookie 帶 `Secure`，所以其他來源都要用 `https`。要用登出回呼�
 `Host`，API 就依你開啟開發伺服器用的主機組出重新導向網址。請開 `http://localhost:5173`，不要開
 `http://127.0.0.1:5173`，才會跟登記的網址一致。
 
-管理映像的 nginx 會把 `/signin-oidc-{id}`、`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}` 和
+管理映像的 nginx 會把 `/signin-oidc-{id}` 與 `/signout-callback-oidc-{id}` 和
 `/api/` 一樣代理給 API，所以提供者的重新導向會落回登入當初的那個來源；Vite 開發伺服器轉發的是同一組
 路徑。自訂的 `CallbackPath` 只要在 `/api/` 底下，例如 `/api/signin-oidc-acme`，`/api/` 這條規則就涵蓋了，
 nginx 不用改。其他自訂路徑要在 `frontend/nginx/default.conf.template` 另加一個 `location` 區塊，或在你
@@ -379,7 +388,9 @@ nginx 容器自己的位址或專用 network 列為已知代理；不要信任�
 - email 網域在允許清單裡（該提供者的 `AllowedEmailDomains`，預設空清單即不限制）；
 - 比對到的本機帳號仍是啟用狀態，停用的帳號不會因為外部身分通過驗證就被重新啟用。
 
-比對靠的是 email 相等，大小寫不分；比對不到就地建立一個新帳號，這正是「即時建立」的意思，不需要
+比對靠的是 email 相等，大小寫不分；找到的帳號，儲存的 email 與身分裡的 email 去除前後空白並轉小寫
+之後必須逐字相同，不同就拒絕這次登入（`external_login_AccountMismatch`），既不連結也不建立帳號，
+理由與密碼登入一樣，見上面「密碼」一節。比對不到就地建立一個新帳號，這正是「即時建立」的意思，不需要
 事先由管理員手動開帳號。即時建立的帳號是啟用狀態、沒有任何角色、密碼欄位是空的——沒有角色代表
 除了 `public` 這層下限之外什麼都沒有：外部登入解決的是身分，不是授權，角色與這層下限見
 [第 17 章：角色與權限](17-roles-and-permissions.md)。它同樣沒有本機密碼，改密碼的端點一樣回
@@ -396,6 +407,9 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 該提供者必須有非空的 `AllowedEmailDomains`，因為 Google 沒有 tenant 可釘，錯誤訊息會點名這個鍵。
 單一 tenant 的 authority，或提供者停用時，都不受影響。
 
+多租用戶的 authority 只靠 `AllowedEmailDomains` 釘住時，主機照常啟動，但會記一則警告點名這個
+提供者：網域只縮小能登入的人，沒有把提供者綁到單一 tenant，那要靠 `AllowedTenantId`。
+
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
 這個參數從網址列移除。設了 CORS 來源時，這個頁面在已核准的 `returnUrl` 的來源上；沒有的話，在絕對的
 `Oidc:ReturnUrlDefault` 的來源上；再沒有就是相對的 `/login`。代碼是固定的一組，絕不帶例外訊息：
@@ -409,8 +423,10 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 | `external_login_DomainNotAllowed` | email 網域不在該提供者的 `AllowedEmailDomains` |
 | `external_login_TenantNotAllowed` | tenant 不是該提供者的 `AllowedTenantId` |
 | `external_login_Inactive` | 對應到的本機帳號已停用 |
+| `external_login_AccountMismatch` | 找到的帳號，email 的拼法與身分裡的不同 |
 
-其他任何值，登入頁一律顯示通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
+其他任何值，以及 `external_login_AccountMismatch`（管理介面沒有為它準備專屬訊息），登入頁一律顯示
+通用訊息。`GET /api/auth/login/oidc/{provider}` 接受 `returnUrl`。它只有在是站內相對
 路徑，或是來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時，才會拿去挑戰；其他任何值或留空，都退回
 `Oidc:ReturnUrlDefault`。API 的 base URL 指向與頁面不同的來源時，SPA 會把自己的完整網址當 `returnUrl` 送出。
 登出回 `204`，沒有內容，也不做轉址。

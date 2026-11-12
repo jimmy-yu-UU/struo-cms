@@ -8,7 +8,7 @@ public sealed record ExternalIdentity(
 public sealed record ExternalLoginPolicy(
     bool RequireEmailVerified, string? AllowedTenantId, IReadOnlyList<string> AllowedEmailDomains);
 
-public enum ExternalLoginFailure { NoEmail, EmailNotVerified, DomainNotAllowed, TenantNotAllowed, Inactive }
+public enum ExternalLoginFailure { NoEmail, EmailNotVerified, DomainNotAllowed, TenantNotAllowed, Inactive, AccountMismatch }
 
 public sealed record ExternalLoginResult(bool Succeeded, Guid? UserId, bool Provisioned, ExternalLoginFailure? Failure)
 {

@@ -3,7 +3,8 @@ using Struo.Application.Security;
 
 namespace Struo.Infrastructure.Identity;
 
-/// <summary>External-login user lookup/creation. Email match is case-insensitive; created users are
+/// <summary>External-login user lookup/creation. The email match is the database collation's, so the returned
+/// <see cref="ExternalUserMatch.Email"/> is the stored spelling for the caller to compare; created users are
 /// active, role-less, and have an empty password (never password-loginable).</summary>
 public sealed class SqlSugarExternalUserStore(ISqlSugarClient db) : IExternalUserStore
 {
@@ -13,7 +14,7 @@ public sealed class SqlSugarExternalUserStore(ISqlSugarClient db) : IExternalUse
         var u = await db.Queryable<User>()
             .Where(x => SqlFunc.ToLower(x.Email) == lowered)
             .FirstAsync(ct);
-        return u is null ? null : new ExternalUserMatch(u.Id, u.IsActive);
+        return u is null ? null : new ExternalUserMatch(u.Id, u.IsActive, u.Email);
     }
 
     public async Task<Guid> CreateExternalUserAsync(string email, string? name, CancellationToken ct = default)

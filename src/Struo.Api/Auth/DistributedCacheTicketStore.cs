@@ -49,9 +49,22 @@ public sealed class DistributedCacheTicketStore(
         // cache entry still exists right before persisting closes that window; a revocation landing in
         // the instant between this check and the SetAsync below is not covered (IDistributedCache has
         // no compare-and-swap), but that residual race already existed for the cache write itself.
-        if (await cache.GetAsync(key) is null) return;
-        await PersistAsync(key, ticket);
-        await RenewIndexAsync(key, ticket);
+        //
+        // The whole renewal is best-effort, cache calls included: it runs from Response.OnStarting, where
+        // an exception cannot become an error response, so it would escape the request pipeline
+        // instead (seen on the test server, not measured on Kestrel). A failed renewal leaves the session with
+        // its current expiry, and the next request tries again. Cancellation is handled like any other failure:
+        // the cache calls take no token, so one can only come from the cache client itself.
+        try
+        {
+            if (await cache.GetAsync(key) is null) return;
+            await PersistAsync(key, ticket);
+            await RenewIndexAsync(key, ticket);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to renew the session for ticket key {TicketKey}.", key);
+        }
     }
 
     public async Task<AuthenticationTicket?> RetrieveAsync(string key)
@@ -77,7 +90,7 @@ public sealed class DistributedCacheTicketStore(
     // request, so an uncaught exception here would fail the whole login. Once a userId IS known,
     // StoreAsync's/RemoveAsync's index writes are ordinary awaited calls: a real DB error there
     // propagates like any other write in this codebase. RenewAsync is the one exception (see its own
-    // try/catch below) because it runs from Response.OnStarting, where a thrown exception lands at the
+    // try/catch above) because it runs from Response.OnStarting, where a thrown exception lands at the
     // worst possible point in the response lifecycle rather than failing an ordinary request.
 
     private async Task IndexNewSessionAsync(string key, AuthenticationTicket ticket)

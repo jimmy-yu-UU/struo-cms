@@ -70,7 +70,7 @@ public sealed class ItemWriteSideSync(
             return; // update: absent/non-object translations = no-op partial update
         }
 
-        var allowed = tm.Fields.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowed = tm.Fields.ToDictionary(f => f, StringComparer.OrdinalIgnoreCase);
         var requiredFields = meta.Fields
             .Where(f => f.Translatable && f.Required)
             .Select(f => f.Name)
@@ -110,13 +110,15 @@ public sealed class ItemWriteSideSync(
             var fieldValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
             foreach (var field in localeProp.Value.EnumerateObject())
             {
-                if (!allowed.Contains(field.Name))
+                // From here on the field is addressed by the metadata spelling, never the request's: the
+                // spelling reaches PropertyAccessorCache, which keeps one entry per distinct spelling.
+                if (!allowed.TryGetValue(field.Name, out var fieldName))
                     throw new QueryException(
                         $"Field '{field.Name}' is not a translatable field of '{meta.Name}'.");
-                var value = BindTranslationValue(meta, tm, field, locale, legacyJsonStrings);
-                if (value is string s && RichTextCleaner.IsRichTextField(meta, field.Name))
+                var value = BindTranslationValue(meta, tm, field, fieldName, locale, legacyJsonStrings);
+                if (value is string s && RichTextCleaner.IsRichTextField(meta, fieldName))
                     value = richText.Sanitize(s);
-                fieldValues[field.Name] = value;
+                fieldValues[fieldName] = value;
             }
 
             // Required: every required translatable field must be present and non-empty. A create judges
@@ -196,13 +198,14 @@ public sealed class ItemWriteSideSync(
     // read back and sent again is stored unchanged; only a legacy snapshot revert stores a string verbatim.
     // A value of the wrong shape is a 400 naming the field and the locale.
     private static object? BindTranslationValue(
-        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string locale, bool legacyJsonStrings)
+        CollectionMetadata meta, TranslationMetadata tm, JsonProperty field, string fieldName, string locale,
+        bool legacyJsonStrings)
     {
         if (field.Value.ValueKind == JsonValueKind.Null) return null;
-        var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, field.Name);
+        var prop = PropertyAccessorCache.Resolve(tm.TranslationEntityType, fieldName);
         if (prop is null) return JsonBodyUtil.JsonValue(field.Value);
         var isJson = meta.Fields.Any(f => f.Translatable && f.Interface == FieldInterface.Json
-                                          && string.Equals(f.Name, field.Name, StringComparison.OrdinalIgnoreCase));
+                                          && string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
         if (isJson && prop.PropertyType == typeof(string))
             return legacyJsonStrings && field.Value.ValueKind == JsonValueKind.String
                 ? field.Value.GetString()
@@ -213,8 +216,8 @@ public sealed class ItemWriteSideSync(
         }
         catch (JsonException)
         {
-            var message = $"Field '{field.Name}' has an invalid value for locale '{locale}'.";
-            throw new QueryException(message, [new QueryErrorDetail(field.Name, locale, message)]);
+            var message = $"Field '{fieldName}' has an invalid value for locale '{locale}'.";
+            throw new QueryException(message, [new QueryErrorDetail(fieldName, locale, message)]);
         }
     }
 
