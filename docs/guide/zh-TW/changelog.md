@@ -2,14 +2,15 @@
 
 ## 0.31.0
 
-### 變更
-
+::: danger 破壞性變更
 - GraphQL 的讀取與寫入改走 `IItemUseCases`，也就是 REST 用的介面，所以註冊在它上面的替代實作對兩者
   都生效。GraphQL 資料來源類別由 `ItemServiceGraphQlDataSource` 改名為
-  `ItemUseCasesGraphQlDataSource`；以舊名稱註冊它的 fork 要把註冊改成新名稱。
+  `ItemUseCasesGraphQlDataSource`；以舊名稱註冊它的 fork 要把註冊改成 `ItemUseCasesGraphQlDataSource`。
 - `IItemUseCases.QueryAsync` 與 `GetAsync` 在以 `DeletedFilter.Only` 或 `With` 呼叫時要求 delete
-  權限，原本只檢查 read 權限，delete 檢查由 REST 控制器與 GraphQL resolver 負責。實作這個介面的類別
-  必須做同樣的檢查。REST 與 GraphQL 的回應不變。
+  權限，原本只檢查 read 權限，delete 檢查由 REST 控制器與 GraphQL resolver 負責。fork 自己實作這個
+  介面的類別，遇到這兩個值時必須呼叫 `DeletedAccessGuard.EnsureCanViewDeleted`。REST 與 GraphQL 的
+  回應不變。
+:::
 
 ## 0.30.1 — 2026-11-11
 

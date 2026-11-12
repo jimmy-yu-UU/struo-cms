@@ -185,19 +185,20 @@ cd frontend && pnpm test && pnpm build && pnpm e2e
 
 ## Schema 契約
 
-schema 契約是兩個提交進版本控制的 JSON 檔：`schema/core-collections.json` 記錄七個框架集
-合的 `GET /api/schema` 傳輸格式，`schema/interfaces.json` 記錄每一個宣告出來的欄位介面與關
-聯介面成員。
+管理後台前端讀的 schema 契約是兩個提交進版本控制的 JSON 檔：`schema/core-collections.json` 記錄七
+個框架集合的 `GET /api/schema` 傳輸格式，`schema/interfaces.json` 記錄每一個宣告出來的欄位介面
+與關聯介面成員。
 
-兩側各有一個測試釘住它們：後端 `CoreSchemaSnapshotTests`（兩個測試方法，
-`CoreSchema_MatchesCommittedSnapshot` 與 `InterfaceEnums_MatchCommittedSnapshot`），前端
-`schemaContract.test.ts`——後者把這兩份檔案餵進真正的 registry 跟欄位型別解析邏輯，不是自
-己重新宣告一份預期值。這是第四種測試，不是第四道指令：兩邊都搭著 `dotnet test`／
-`pnpm test` 一起跑，不需要另外的執行方式。
+兩側各有一個測試釘住它們：後端 `CoreSchemaSnapshotTests` 檢查這兩份檔案是否與程式碼一致，前端
+`schemaContract.test.ts` 把它們餵進真正的 registry 跟欄位型別解析邏輯，不是自己重新宣告一份預
+期值。
 
 第三個檔案 `schema/core-graphql.graphql` 以 SDL 記錄框架集合的 GraphQL schema，由同一個
-`CoreSchemaSnapshotTests` 類別檢查（`CoreGraphQlSchema_MatchesCommittedSnapshot`），管理後台前端
-不讀它。
+`CoreSchemaSnapshotTests` 類別檢查（`CoreGraphQlSchema_MatchesCommittedSnapshot`），沒有任何前端
+測試讀它。
+
+這是第四種測試，不是第四道指令：後端與前端兩邊都搭著 `dotnet test`／`pnpm test` 一起跑，不需要
+另外的執行方式。
 
 改了核心 schema 之後要重新產生快照，Bash 與 PowerShell 各一組：
 

@@ -44,7 +44,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `samples/Struo.Sample.Blog.Tests` | The sample's own tests; deleted together with the sample. |
-| `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) the declared interface enums (`interfaces.json`) and the core GraphQL SDL (`core-graphql.graphql`) — `schema/README.md`. |
+| `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`), the declared interface enums (`interfaces.json`) and the core GraphQL SDL (`core-graphql.graphql`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
 | `tests/Struo.Tests` | The backend xUnit suite (unit and integration). |
 | `tests/Struo.Tests.Fixtures` | Test-only content project (collections prefixed `fx`, tables `fx_*`) with its own migration; the core tests' content assembly. No host registers it. |
