@@ -27,6 +27,11 @@
   的 nginx 範本與 Vite 開發代理不再轉發 `/signout-oidc` 開頭的路徑；自己的反向代理若有對應規則，可以拿掉。
 :::
 
+### 新增
+
+- 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
+  提供者的 id，不含網域；主機照常啟動。
+
 ### 修正
 
 - 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。

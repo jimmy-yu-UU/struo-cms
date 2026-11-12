@@ -33,6 +33,11 @@
   start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
 :::
 
+### Added
+
+- A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId` logs one
+  start-up warning naming the provider id, never the domains; the host still starts.
+
 ### Fixed
 
 - Password login and external login accept a found account only when its stored email and the

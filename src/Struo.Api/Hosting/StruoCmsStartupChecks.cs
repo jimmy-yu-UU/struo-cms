@@ -27,6 +27,8 @@ internal static class StruoCmsStartupChecks
             app.Configuration, startupLogger);
         Struo.Api.Auth.OidcLegacyKeyWarnings.Log(
             app.Configuration, startupLogger);
+        Struo.Api.Auth.OidcDomainOnlyPinWarnings.Log(
+            sp.GetRequiredService<IOptions<Struo.Application.Security.OidcOptions>>().Value, startupLogger);
         Struo.Api.Auth.AuthWiring.WarnIfSessionsAreInMemory(
             app.Configuration, app.Environment, startupLogger);
         Struo.Api.Auth.DataProtectionWarnings.Log(

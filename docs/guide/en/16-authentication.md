@@ -522,6 +522,10 @@ The second is a Google `Authority` (`https://accounts.google.com`, in any case, 
 slash): the provider needs a non-empty `AllowedEmailDomains`, because Google has no tenant to pin, and the
 error names that key. A single-tenant authority, or a disabled provider, is never affected.
 
+A multi-tenant authority pinned by `AllowedEmailDomains` alone starts, but the host logs one warning naming
+the provider: the domain narrows who may sign in without tying the provider to one tenant, which only
+`AllowedTenantId` does.
+
 A failed external login redirects the browser to the admin login page, `/login?error=<code>`, which
 shows a localized message and removes the parameter from the address. When CORS origins are
 configured, that page is on the origin of the approved `returnUrl`; without one, on the origin of an

@@ -407,6 +407,9 @@ email 相等本身是刻意接受的風險：沒有另外加上至少一道關�
 該提供者必須有非空的 `AllowedEmailDomains`，因為 Google 沒有 tenant 可釘，錯誤訊息會點名這個鍵。
 單一 tenant 的 authority，或提供者停用時，都不受影響。
 
+多租用戶的 authority 只靠 `AllowedEmailDomains` 釘住時，主機照常啟動，但會記一則警告點名這個提供者：網域只
+縮小能登入的人，沒有把提供者綁到單一 tenant，那要靠 `AllowedTenantId`。
+
 外部登入失敗時，瀏覽器會被導向管理介面的登入頁 `/login?error=<code>`，登入頁顯示在地化的訊息，並把
 這個參數從網址列移除。設了 CORS 來源時，這個頁面在已核准的 `returnUrl` 的來源上；沒有的話，在絕對的
 `Oidc:ReturnUrlDefault` 的來源上；再沒有就是相對的 `/login`。代碼是固定的一組，絕不帶例外訊息：
