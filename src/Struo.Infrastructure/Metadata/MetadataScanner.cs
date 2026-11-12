@@ -88,7 +88,7 @@ public static class MetadataScanner
     /// silently shadow the real query semantics for any predicate mentioning it. Caught at scan time
     /// instead of surfacing as a confusing "unknown field" or mis-parsed query at request time.
     /// </summary>
-    private static void ValidateReservedNames(IReadOnlyList<CollectionMetadata> collections)
+    private static void ValidateReservedNames(List<CollectionMetadata> collections)
     {
         foreach (var c in collections)
         {
@@ -107,7 +107,7 @@ public static class MetadataScanner
     /// generic-CRUD API would store empty junction keys. Runs for both <see cref="ScanTypes"/> and the
     /// assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
-    private static void ValidateJunctionCollections(IReadOnlyList<CollectionMetadata> collections, IEnumerable<Type> types)
+    private static void ValidateJunctionCollections(List<CollectionMetadata> collections, IEnumerable<Type> types)
     {
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         foreach (var type in types)
@@ -126,7 +126,7 @@ public static class MetadataScanner
     // and exception message) to keep the caller's cognitive complexity in check.
     private static void ValidateOneJunctionCollection(
         CollectionMetadata owner, PropertyInfo prop, NavigateShape nav,
-        IReadOnlyDictionary<string, CollectionMetadata> byName)
+        Dictionary<string, CollectionMetadata> byName)
     {
         var junctionType = nav.JunctionType!;
         var junction = byName.GetValueOrDefault(CollectionNameOf(junctionType));
@@ -155,7 +155,7 @@ public static class MetadataScanner
     /// with no startup diagnostic. Runs for both <see cref="ScanTypes"/> and the assembly-based
     /// <see cref="Scan"/> (which delegates to it).
     /// </summary>
-    private static void ValidateJunctionPrimaryKeys(IReadOnlyList<CollectionMetadata> collections, IEnumerable<Type> types)
+    private static void ValidateJunctionPrimaryKeys(List<CollectionMetadata> collections, IEnumerable<Type> types)
     {
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var checkedJunctions = new HashSet<Type>();
@@ -198,7 +198,7 @@ public static class MetadataScanner
     /// collection relation are returned as-is.
     /// </summary>
     private static List<CollectionMetadata> ResolveJunctionPayloadFields(
-        IReadOnlyList<CollectionMetadata> collections, IReadOnlyList<Type> types)
+        List<CollectionMetadata> collections, IReadOnlyList<Type> types)
     {
         var byName = collections.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var typeByName = types

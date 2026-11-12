@@ -62,7 +62,7 @@ internal static class AssemblyLoadFailure
             or MissingMemberException or CustomAttributeFormatException;
 
     // Distinct messages in order of first appearance, each with its count, capped like the type names.
-    private static string Summarize(IReadOnlyCollection<Exception> errors)
+    private static string Summarize(List<Exception> errors)
     {
         if (errors.Count == 0) return "none reported";
 
