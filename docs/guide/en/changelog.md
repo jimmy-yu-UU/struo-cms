@@ -34,7 +34,7 @@
   `external_login_AccountMismatch`. Check for such rows before upgrading and correct the stored email.
 - The OIDC remote sign-out endpoint `/signout-oidc-{id}` is removed, and so is
   `OidcProviderOptions.RemoteSignOutPathFor`; a fork that references the method deletes the reference.
-  A request to that path answers `404` and leaves the session alone. A front-channel logout URL
+  The API answers `404` on that path and leaves the session alone. A front-channel logout URL
   registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
   are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
   start with `/signout-oidc`; a rule for them in your own reverse proxy can go.

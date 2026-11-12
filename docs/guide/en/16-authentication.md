@@ -457,8 +457,8 @@ URI from the host you opened the dev server with. Open `http://localhost:5173`, 
 `http://127.0.0.1:5173`, to match the registered URI.
 
 The admin image's nginx proxies `/signin-oidc-{id}` and `/signout-callback-oidc-{id}` to the API
-alongside `/api/`, so the provider's redirect lands on the same origin the sign-in started from. The Vite dev server forwards the same paths. A custom `CallbackPath` under
-`/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
+alongside `/api/`, so the provider's redirect lands on the same origin the sign-in started from. The
+Vite dev server forwards the same paths. A custom `CallbackPath` under `/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
 other custom path needs its own `location` block in `frontend/nginx/default.conf.template`, or a
 matching rule in your own proxy.
 

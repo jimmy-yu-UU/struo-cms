@@ -27,7 +27,7 @@
   就再也登入不了：密碼登入的回應與查無此帳號一樣，外部登入則被拒絕並帶
   `external_login_AccountMismatch`。升級前請先找出這類資料列，把儲存的 email 改正。
 - OIDC 的遠端登出端點 `/signout-oidc-{id}` 移除，`OidcProviderOptions.RemoteSignOutPathFor` 一併移除；
-  fork 若引用這個方法，刪掉引用即可。對該路徑的請求回 `404`，不碰工作階段。已向提供者登記前端通道
+  fork 若引用這個方法，刪掉引用即可。API 對該路徑回 `404`，不碰工作階段。已向提供者登記前端通道
   登出網址的，把它從提供者那邊拿掉。`signin-oidc-{id}` 與 `signout-callback-oidc-{id}` 不變。
   管理映像的 nginx 範本與 Vite 開發代理不再轉發 `/signout-oidc` 開頭的路徑；自己的反向代理若有
   對應規則，可以拿掉。
