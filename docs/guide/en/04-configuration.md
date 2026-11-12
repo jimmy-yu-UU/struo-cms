@@ -699,9 +699,9 @@ an error naming that provider's key. The same applies to these rules:
   `AllowedTenantId` or `AllowedEmailDomains`.
 - A Google `Authority` (`https://accounts.google.com`) comes with a non-empty `AllowedEmailDomains`, since
   Google has no tenant to pin and any Google account could otherwise sign in.
-- No two enabled providers share a path. Each provider also owns two sign-out paths derived from its
-  id, `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`; they are not configurable, and a custom
-  `CallbackPath` must not collide with any of them.
+- No two enabled providers share a path. Each provider also owns a sign-out callback path derived from
+  its id, `/signout-callback-oidc-{id}`; it is not configurable, and a custom `CallbackPath` must not
+  collide with it.
 
 A provider id that breaks the id rule fails startup, whether or not the provider is enabled. A
 provider that is disabled or absent makes `/api/auth/login/oidc/{provider}` return 404; that is not a

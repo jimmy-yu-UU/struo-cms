@@ -604,9 +604,8 @@ cookie。設了 `Redis:ConnectionString` 時，金鑰圈存在 Redis 的 `DataPr
   `AllowedEmailDomains`。
 - Google 的 `Authority`（`https://accounts.google.com`）要搭配非空的 `AllowedEmailDomains`，因為 Google
   沒有 tenant 可釘，否則任何 Google 帳號都能登入。
-- 啟用中的提供者之間不能共用路徑。每個提供者還有兩條由 id 推導的登出路徑，
-  `/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`，它們不能設定，自訂的 `CallbackPath` 也不能
-  跟其中任何一條相撞。
+- 啟用中的提供者之間不能共用路徑。每個提供者還有一條由 id 推導的登出回呼路徑，
+  `/signout-callback-oidc-{id}`，它不能設定，自訂的 `CallbackPath` 也不能跟它相撞。
 
 提供者 id 不符合 id 規則時，不論有沒有啟用，啟動都會失敗。提供者停用或不存在時，
 `/api/auth/login/oidc/{provider}` 回 404，這不是設定錯誤。

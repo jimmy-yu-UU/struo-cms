@@ -116,7 +116,7 @@ public class OidcMultiProviderTests
     }
 
     [Fact]
-    public void Schemes_carry_distinct_sign_out_paths()
+    public void Schemes_carry_distinct_signed_out_callback_paths_and_no_remote_sign_out_path()
     {
         using var provider = Build();
         var monitor = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>();
@@ -125,8 +125,8 @@ public class OidcMultiProviderTests
 
         ms.SignedOutCallbackPath.Value.Should().Be("/signout-callback-oidc-microsoft");
         g.SignedOutCallbackPath.Value.Should().Be("/signout-callback-oidc-google");
-        ms.RemoteSignOutPath.Value.Should().Be("/signout-oidc-microsoft");
-        g.RemoteSignOutPath.Value.Should().Be("/signout-oidc-google");
+        ms.RemoteSignOutPath.HasValue.Should().BeFalse();
+        g.RemoteSignOutPath.HasValue.Should().BeFalse();
     }
 
     [Fact]

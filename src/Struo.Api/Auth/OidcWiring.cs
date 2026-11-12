@@ -51,7 +51,9 @@ public static class OidcWiring
         options.ClientSecret = provider.ClientSecret;
         options.CallbackPath = provider.EffectiveCallbackPath(id);
         options.SignedOutCallbackPath = OidcProviderOptions.SignedOutCallbackPathFor(id);
-        options.RemoteSignOutPath = OidcProviderOptions.RemoteSignOutPathFor(id);
+        // No path: the handler answers only its callback and signed-out callback, so a remote sign-out request
+        // reaches no endpoint and clears no session.
+        options.RemoteSignOutPath = PathString.Empty;
         options.ResponseType = "code";
         options.UsePkce = true;
         options.SaveTokens = false;

@@ -25,6 +25,12 @@
   or below answered `429` to every attempt after the first failure, and a `WindowSeconds` of `0` or
   below never locked. A fork that sets such a value changes it to one in range; no value means "no
   limit", so a limiter is switched off with `Enabled=false`.
+- The OIDC remote sign-out endpoint `/signout-oidc-{id}` is removed, and so is
+  `OidcProviderOptions.RemoteSignOutPathFor`; a fork that references the method deletes the reference.
+  A request to that path answers `404` and leaves the session alone. A front-channel logout URL
+  registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
+  are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
+  start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
 :::
 
 ### Fixed
@@ -38,6 +44,12 @@
   login returns to the login page with `external_login_AccountMismatch` and neither links nor creates
   an account. The duplicate check when a user is created or changed still compares by collation and
   still answers `409`. PostgreSQL and SQLite were never affected.
+
+### Security
+
+- A GET to `/signout-oidc-{id}` with no parameters cleared the current session cookie and ended the
+  server-side session, so any page could sign a logged-in user out with one cross-site request. The
+  endpoint is removed; see Breaking.
 
 ## 0.30.1 — 2026-11-11
 

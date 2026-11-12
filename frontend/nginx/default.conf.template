@@ -131,12 +131,12 @@ server {
 
     # The OIDC provider redirects the browser to the API's callback paths at
     # this origin, so they are proxied exactly like /api/. Each provider has
-    # its own paths: /signin-oidc-{id}, /signout-callback-oidc-{id} and
-    # /signout-oidc-{id}, with {id} lowercase letters, digits and hyphens. The
-    # bare /signin-oidc, /signout-callback-oidc and /signout-oidc are covered
-    # too. A custom Oidc:Providers:<id>:CallbackPath under /api/ is covered by
-    # the location above; any other path needs its own block like this one.
-    location ~ ^/(signin-oidc|signout-callback-oidc|signout-oidc)(-[a-z0-9-]+)?$ {
+    # its own paths: /signin-oidc-{id} and /signout-callback-oidc-{id}, with
+    # {id} lowercase letters, digits and hyphens. The bare /signin-oidc and
+    # /signout-callback-oidc are covered too. A custom
+    # Oidc:Providers:<id>:CallbackPath under /api/ is covered by the location
+    # above; any other path needs its own block like this one.
+    location ~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$ {
         set $upstream "${API_UPSTREAM}";
         proxy_pass $upstream;
         proxy_http_version 1.1;

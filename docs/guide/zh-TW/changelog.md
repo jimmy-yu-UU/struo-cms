@@ -21,6 +21,10 @@
   `Enabled=false` 時則不限流；`LoginAccount` 的 `PermitLimit` 小於等於 `0` 讓第一次失敗之後的每次
   嘗試都回 `429`，`WindowSeconds` 小於等於 `0` 則永遠不鎖。設了這類值的 fork 要改成範圍內的值；
   沒有「不限制」的值，要關掉限流器請設 `Enabled=false`。
+- OIDC 的遠端登出端點 `/signout-oidc-{id}` 移除，`OidcProviderOptions.RemoteSignOutPathFor` 一併移除；
+  fork 若引用這個方法，刪掉引用即可。對該路徑的請求回 `404`，不碰工作階段。已向提供者登記前端通道
+  登出網址的，把它從提供者那邊拿掉。`signin-oidc-{id}` 與 `signout-callback-oidc-{id}` 不變。管理映像
+  的 nginx 範本與 Vite 開發代理不再轉發 `/signout-oidc` 開頭的路徑；自己的反向代理若有對應規則，可以拿掉。
 :::
 
 ### 修正
@@ -31,6 +35,11 @@
   登入和查無此帳號的回應、驗證成本與節流計數都相同；外部登入以 `external_login_AccountMismatch`
   導回登入頁，不連結也不建立帳號。建立與修改使用者的重複檢查照舊用定序比對，仍回 `409`。
   PostgreSQL 與 SQLite 本來就不受影響。
+
+### 安全性
+
+- 對 `/signout-oidc-{id}` 不帶任何參數的 GET，就會清掉目前的工作階段 cookie 並結束伺服器端的工作階段，
+  任何頁面都能用一個跨站的請求把已登入的使用者登出。這個端點已移除，見破壞性變更。
 
 ## 0.30.1 — 2026-11-11
 

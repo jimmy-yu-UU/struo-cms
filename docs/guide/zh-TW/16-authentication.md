@@ -300,8 +300,9 @@ auth:unlock: no Redis is configured, so the login attempt count lives in the mem
 走的是帶 PKCE 的授權碼流程，提供者自己的 token 不會被存下來，claim 名稱用的是精簡格式，再另外呼
 叫 userinfo 端點補齊。每個提供者有自己的回呼路徑：隨附的 `microsoft` 項目設為 `/signin-oidc`，隨附的 `google`
 項目設為 `/signin-oidc-google`，沒設 `CallbackPath` 的項目用 `/signin-oidc-{id}`；
-另外還有兩條由 id 推導的登出路徑：`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}`。啟用中的提供者
-之間不能共用路徑。
+另外還有一條由 id 推導的登出回呼路徑：`/signout-callback-oidc-{id}`。API 不提供前端通道登出路徑，
+對 `/signout-oidc-{id}` 的請求回 `404`，不會結束任何工作階段；不要向提供者登記前端通道登出網址。啟用中的
+提供者之間不能共用路徑。
 
 登入預設一律顯示提供者的帳號挑選畫面（`Prompt` 為 `select_account`）；其他值與不送 `prompt` 的做法見
 第 4 章。
@@ -353,7 +354,7 @@ cookie 帶 `Secure`，所以其他來源都要用 `https`。要用登出回呼�
 `Host`，API 就依你開啟開發伺服器用的主機組出重新導向網址。請開 `http://localhost:5173`，不要開
 `http://127.0.0.1:5173`，才會跟登記的網址一致。
 
-管理映像的 nginx 會把 `/signin-oidc-{id}`、`/signout-callback-oidc-{id}` 與 `/signout-oidc-{id}` 和
+管理映像的 nginx 會把 `/signin-oidc-{id}` 與 `/signout-callback-oidc-{id}` 和
 `/api/` 一樣代理給 API，所以提供者的重新導向會落回登入當初的那個來源；Vite 開發伺服器轉發的是同一組
 路徑。自訂的 `CallbackPath` 只要在 `/api/` 底下，例如 `/api/signin-oidc-acme`，`/api/` 這條規則就涵蓋了，
 nginx 不用改。其他自訂路徑要在 `frontend/nginx/default.conf.template` 另加一個 `location` 區塊，或在你

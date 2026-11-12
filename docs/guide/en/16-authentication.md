@@ -390,8 +390,9 @@ External login is the authorization code flow with PKCE. The provider's own toke
 stored, claim names use the short form, and a separate call to the userinfo endpoint fills in the
 rest. Each provider has its own callback path: the shipped `microsoft` entry sets `/signin-oidc`, the
 shipped `google` entry `/signin-oidc-google`, and an entry without `CallbackPath` uses `/signin-oidc-{id}`.
-Each provider also has two sign-out paths derived from its id: `/signout-callback-oidc-{id}` and `/signout-oidc-{id}`.
-No two enabled providers may share a path.
+Each provider also has a sign-out callback path derived from its id: `/signout-callback-oidc-{id}`. The API
+serves no front-channel logout path, so a request to `/signout-oidc-{id}` is a `404` and ends no session;
+register no front-channel logout URL with the provider. No two enabled providers may share a path.
 
 Sign-in always shows the provider's account picker by default (`Prompt` = `select_account`);
 chapter 4 lists the other values and how to send no prompt.
@@ -450,8 +451,7 @@ server forwards these paths to the API and keeps the browser's `Host`, so the AP
 URI from the host you opened the dev server with. Open `http://localhost:5173`, not
 `http://127.0.0.1:5173`, to match the registered URI.
 
-The admin image's nginx proxies `/signin-oidc-{id}`, `/signout-callback-oidc-{id}` and
-`/signout-oidc-{id}` to the API alongside `/api/`, so the provider's redirect lands on the same origin
+The admin image's nginx proxies `/signin-oidc-{id}` and `/signout-callback-oidc-{id}` to the API alongside `/api/`, so the provider's redirect lands on the same origin
 the sign-in started from. The Vite dev server forwards the same paths. A custom `CallbackPath` under
 `/api/`, such as `/api/signin-oidc-acme`, is covered by the `/api/` rule with no nginx change. Any
 other custom path needs its own `location` block in `frontend/nginx/default.conf.template`, or a
