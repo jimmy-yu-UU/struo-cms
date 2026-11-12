@@ -21,8 +21,8 @@ these, seven carry `[CmsCollection]` (are themselves collections): `Language`, `
 `UserSession` are framework tables but not collections. If you're unsure whether something is core, it's core only if it lives in
 `src/Struo.*` — with a few named exceptions that are core despite living elsewhere, `frontend/` among
 them. `schema/` is core too, despite living outside that path: it holds the
-committed snapshots of these seven collections' wire metadata and of the declared interface enums
-(`schema/README.md`), and a fork keeps
+committed snapshots of these seven collections' wire metadata, of the declared interface enums and of
+the core GraphQL schema (`schema/README.md`), and a fork keeps
 it alongside `src/Struo.*`.
 
 `samples/Struo.Sample.Blog` (Article/Tag/Category/…) is an optional, detachable **demo** — it shows how
@@ -44,7 +44,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 | `frontend/` | The Vue 3 admin SPA, a separate pnpm workspace, on Tailwind v4 + shadcn-vue. |
 | `samples/Struo.Sample.Blog` | Optional, detachable demo content project — not shipped capability. |
 | `samples/Struo.Sample.Blog.Tests` | The sample's own tests; deleted together with the sample. |
-| `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) and the declared interface enums (`interfaces.json`) — `schema/README.md`. |
+| `schema/` | Committed snapshots the schema contract gate checks both stacks against: core-collection wire shape (`core-collections.json`) the declared interface enums (`interfaces.json`) and the core GraphQL SDL (`core-graphql.graphql`) — `schema/README.md`. |
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
 | `tests/Struo.Tests` | The backend xUnit suite (unit and integration). |
 | `tests/Struo.Tests.Fixtures` | Test-only content project (collections prefixed `fx`, tables `fx_*`) with its own migration; the core tests' content assembly. No host registers it. |
@@ -265,7 +265,8 @@ sixth gate. Run whichever apply to your change; run all five before anything tou
 the three.
 
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
-not been mirrored into `schema/core-collections.json`, or an enum change into `schema/interfaces.json`;
+not been mirrored into `schema/core-collections.json`, an enum change into `schema/interfaces.json`,
+or a change to the core GraphQL schema into `schema/core-graphql.graphql`;
 `pnpm test` includes `frontend/tests/schemaContract.test.ts`, which fails when the admin SPA cannot
 handle what those snapshots describe — including a `FieldInterface` or `RelationInterface` member the
 frontend has no mirror for, whether or not any collection uses it.

@@ -195,6 +195,10 @@ schema 契約是兩個提交進版本控制的 JSON 檔：`schema/core-collectio
 己重新宣告一份預期值。這是第四種測試，不是第四道指令：兩邊都搭著 `dotnet test`／
 `pnpm test` 一起跑，不需要另外的執行方式。
 
+第三個檔案 `schema/core-graphql.graphql` 以 SDL 記錄框架集合的 GraphQL schema，由同一個
+`CoreSchemaSnapshotTests` 類別檢查（`CoreGraphQlSchema_MatchesCommittedSnapshot`），管理後台前端
+不讀它。
+
 改了核心 schema 之後要重新產生快照，Bash 與 PowerShell 各一組：
 
 ```bash

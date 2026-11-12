@@ -69,25 +69,7 @@ public static class GraphQlServiceCollectionExtensions
 
         return services
             .AddGraphQLServer()
-            .AddQueryType(d => d
-                .Name("Query")
-                // Anchor field so the schema is always valid even before the type module adds
-                // collection fields (GraphQL requires Query to have >=1 field).
-                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL"))
-            .AddMutationType(d => d
-                .Name("Mutation")
-                // Anchor field so the Mutation root is valid even before the type module adds
-                // collection mutations (GraphQL requires each root type to have >=1 field). Also
-                // serves as the empty-schema guard when zero collections are discovered.
-                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL mutations")
-                    .Use(MutationAuthentication.Middleware))
-            .AddType<LongType>()
-            .AddType<DateTimeType>()
-            .AddType<DateType>()
-            .AddType<UuidType>()
-            .AddType<AnyType>()            // JSON scalar (SDL name "Any")
-            .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
-            .AddTypeModule<StruoTypeModule>() // dynamic per-collection object/list/filter types + root query fields
+            .AddStruoSchemaTypes()
             .AddMaxExecutionDepthRule(limits.MaxExecutionDepth, skipIntrospectionFields: true)
             // Stamps extensions.traceId on every error, including the validation errors the error filter never sees.
             .UseRequest(TraceIdResultMiddleware.Create)
@@ -132,6 +114,33 @@ public static class GraphQlServiceCollectionExtensions
                 o.DefaultMutationDependencyInjectionScope = DependencyInjectionScope.Request;
             });
     }
+
+    /// <summary>
+    /// Everything that decides the shape of the schema: the root types, the scalars and the type module.
+    /// The host and the core schema snapshot (<c>schema/core-graphql.graphql</c>) both build from this
+    /// one method, so the snapshot cannot drift from the served schema.
+    /// </summary>
+    internal static IRequestExecutorBuilder AddStruoSchemaTypes(this IRequestExecutorBuilder builder) =>
+        builder
+            .AddQueryType(d => d
+                .Name("Query")
+                // Anchor field so the schema is always valid even before the type module adds
+                // collection fields (GraphQL requires Query to have >=1 field).
+                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL"))
+            .AddMutationType(d => d
+                .Name("Mutation")
+                // Anchor field so the Mutation root is valid even before the type module adds
+                // collection mutations (GraphQL requires each root type to have >=1 field). Also
+                // serves as the empty-schema guard when zero collections are discovered.
+                .Field("_service").Type<StringType>().Resolve(_ => "StruoCMS GraphQL mutations")
+                    .Use(MutationAuthentication.Middleware))
+            .AddType<LongType>()
+            .AddType<DateTimeType>()
+            .AddType<DateType>()
+            .AddType<UuidType>()
+            .AddType<AnyType>()            // JSON scalar (SDL name "Any")
+            .AddJsonTypeConverter()        // lets resolvers return dictionaries/JsonElement for Any
+            .AddTypeModule<StruoTypeModule>(); // dynamic per-collection object/list/filter types + root query fields
 
     public static void MapStruoGraphQl(this WebApplication app)
     {

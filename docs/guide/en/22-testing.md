@@ -235,6 +235,10 @@ methods, `CoreSchema_MatchesCommittedSnapshot` and `InterfaceEnums_MatchCommitte
 the admin SPA's `schemaContract.test.ts` — the latter feeds the two files into the real registry
 and field-type resolution logic rather than re-declaring its own expected values.
 
+A third file, `schema/core-graphql.graphql`, holds the GraphQL schema of the framework collections as
+SDL. The same `CoreSchemaSnapshotTests` class checks it
+(`CoreGraphQlSchema_MatchesCommittedSnapshot`); the admin SPA does not read it.
+
 This is a fourth kind of test, not a fourth command: both sides ride along with
 `dotnet test`/`pnpm test` and need no separate way to run them.
 

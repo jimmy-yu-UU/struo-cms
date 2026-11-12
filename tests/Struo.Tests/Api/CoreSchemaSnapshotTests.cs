@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using Struo.Domain.Metadata.Enums;
+using Struo.Tests.GraphQl;
 using Struo.Infrastructure.Metadata;
 using Struo.Tests.Support;
 using Xunit;
@@ -22,6 +23,8 @@ namespace Struo.Tests.Api;
 /// The collection snapshot makes any change to the core content model visible in the diff. The
 /// interface-enum snapshot covers what the collection snapshot cannot: a new enum member no core
 /// collection happens to use. frontend/tests/schemaContract.test.ts consumes both.
+///
+/// The GraphQL snapshot is separate: the SDL of the core-only schema, which no frontend test reads.
 /// </summary>
 [Collection("ApiIntegration")]
 public sealed class CoreSchemaSnapshotTests
@@ -61,11 +64,29 @@ public sealed class CoreSchemaSnapshotTests
             "the declared FieldInterface/RelationInterface members");
 
     /// <summary>
+    /// Pins the GraphQL SDL of the core collections. The schema is built through the host's own scalar
+    /// and type-module registration (<c>AddStruoSchemaTypes</c>), so a change to how a core field maps to
+    /// a GraphQL type shows up here even though nothing else in the contract sees it.
+    /// </summary>
+    [Fact]
+    public async Task CoreGraphQlSchema_MatchesCommittedSnapshot() =>
+        CompareOrWrite(ToLf(await CoreGraphQlSchema.BuildSdlAsync()), RepoRoot.GraphQlSnapshotPath(),
+            "the GraphQL SDL of the core collections", consumedByFrontend: false);
+
+    /// <summary>
+    /// The snapshot is only reviewable if two builds print the same text.
+    /// </summary>
+    [Fact]
+    public async Task CoreGraphQlSchema_PrintsTheSameTextOnEveryBuild() =>
+        (await CoreGraphQlSchema.BuildSdlAsync()).Should().Be(await CoreGraphQlSchema.BuildSdlAsync());
+
+    /// <summary>
     /// Compares <paramref name="actual"/> against the committed file, or rewrites that file when
     /// UPDATE_SCHEMA_SNAPSHOT=1. <paramref name="whatDrifted"/> names the subject in the failure
     /// message, so a red build is actionable without reading this source.
     /// </summary>
-    private static void CompareOrWrite(string actual, string path, string whatDrifted)
+    private static void CompareOrWrite(
+        string actual, string path, string whatDrifted, bool consumedByFrontend = true)
     {
         var relative = Path.GetRelativePath(RepoRoot.Find(), path).Replace('\\', '/');
 
@@ -83,8 +104,10 @@ public sealed class CoreSchemaSnapshotTests
 
         Normalize(actual).Should().Be(Normalize(File.ReadAllText(path)),
             $"{whatDrifted} no longer matches {relative}. If the change is intended, regenerate with " +
-            $"`{UpdateEnvVar}=1 dotnet test --filter CoreSchemaSnapshot` and commit it — " +
-            "frontend/tests/schemaContract.test.ts then verifies the admin SPA can still handle it.");
+            $"`{UpdateEnvVar}=1 dotnet test --filter CoreSchemaSnapshot` and commit it" +
+            (consumedByFrontend
+                ? " — frontend/tests/schemaContract.test.ts then verifies the admin SPA can still handle it."
+                : "."));
     }
 
     /// <summary>
@@ -145,5 +168,7 @@ public sealed class CoreSchemaSnapshotTests
 
     // Compare on content, not line endings: a Windows checkout can present the committed file
     // either way depending on core.autocrlf.
+    private static string ToLf(string s) => s.Replace("\r\n", "\n").TrimEnd('\n') + "\n";
+
     private static string Normalize(string s) => s.Replace("\r\n", "\n").TrimEnd('\n');
 }

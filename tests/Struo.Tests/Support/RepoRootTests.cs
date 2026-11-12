@@ -30,6 +30,10 @@ public sealed class RepoRootTests
     }
 
     [Fact]
+    public void GraphQlSnapshotPath_PointsAtTheCoreGraphQlFile() =>
+        RepoRoot.GraphQlSnapshotPath().Should().EndWith(Path.Combine("schema", "core-graphql.graphql"));
+
+    [Fact]
     public void SchemaSnapshotPath_PointsAtTheCoreCollectionsFile()
     {
         var path = RepoRoot.SchemaSnapshotPath();
