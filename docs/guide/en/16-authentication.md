@@ -154,6 +154,10 @@ account deletion) relies on that same index, so a session renewed in place is re
 new user's password change or deletion, never by the previous user's. Log out before switching
 accounts, rather than letting the same cookie jar answer for two accounts at once.
 
+A session that has used more than half of its sliding window is extended by a request that carries it. That
+renewal is best-effort: when the cache fails during it, one warning naming the ticket key is logged and the
+request answers as usual; the session keeps its current expiry and the next request tries again.
+
 ## Logout and revocation
 
 Session state lives server-side, which is what makes revocation immediate: logging

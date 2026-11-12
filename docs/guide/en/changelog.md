@@ -49,6 +49,10 @@
   process-wide, ever-growing property cache in the spelling of the request, one entry per capitalization.
   They now use the metadata spelling, so the cache stops growing with requests; responses are the same,
   except that a field name in an error message is the metadata spelling.
+- A cache failure while a session is renewed made the request that triggered the renewal fail. It is now
+  logged as one warning (the ticket key, nothing from the ticket), the request answers as usual, and the
+  session keeps its current expiry. A cache failure while logging in, reading or logging out still fails
+  the request.
 
 ### Security
 
