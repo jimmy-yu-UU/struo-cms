@@ -8,7 +8,8 @@ namespace Struo.Tests.Metadata;
 
 // One row per FieldInterface member: its membership in each Infrastructure grouping and what the
 // GraphQL mapper gives it. A member without a row fails Every_member_has_a_row, so adding a member
-// forces a decision for each column here. Number interfaces are listed with an int property.
+// forces a decision for each column here. The table lists the number interfaces with an int property;
+// Number_members_follow_the_property_type covers the other CLR types.
 public class FieldInterfaceSetsTests
 {
     private sealed record Row(
@@ -96,5 +97,20 @@ public class FieldInterfaceSetsTests
         foreach (var row in Table)
             SchemaTypeMapper.WritableInputSdl(row.Member, typeof(int)).Should()
                 .Be(row.WritableInputSdl, $"WritableInputSdl({row.Member})");
+    }
+
+    [Theory]
+    [InlineData(typeof(int), "Int")]
+    [InlineData(typeof(long), "Long")]
+    [InlineData(typeof(decimal), "Float")]
+    public void Number_members_follow_the_property_type(Type clrType, string expected)
+    {
+        FieldInterface[] numbers = [FieldInterface.Number, FieldInterface.Slider, FieldInterface.Rating];
+
+        foreach (var member in numbers)
+        {
+            SchemaTypeMapper.ScalarSdl(member, clrType).Should().Be(expected, $"ScalarSdl({member})");
+            SchemaTypeMapper.WritableInputSdl(member, clrType).Should().Be(expected, $"WritableInputSdl({member})");
+        }
     }
 }

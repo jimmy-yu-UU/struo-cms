@@ -53,8 +53,9 @@
   a relation and never stops the host for its shape; a many-to-many one is read only for its junction
   type, as before.
 - A `string` field with no `MaxLength` is limited to the width of its column whatever its interface:
-  255, or the `Length` of its `[SugarColumn]`. A column that states no length has no limit: LongText
-  and JSON interfaces, `[ColumnShape]`, `IsJson = true`, an explicit `ColumnDataType`. `Hidden`,
+  255, or the `Length` of its `[SugarColumn]`, also when that sets a `ColumnDataType`. A column that
+  states no length has no limit: LongText and JSON interfaces, `[ColumnShape]`, `IsJson = true`, an
+  explicit `ColumnDataType` with no `Length` (set `MaxLength` on the field to have one). `Hidden`,
   `Time` and a `Uuid` declared on a `string` had no limit, so a value over 255 characters was stored
   on SQLite and answered `500` on PostgreSQL, MySQL and SQL Server; it is now a `400`,
   `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a column wider than
@@ -100,8 +101,10 @@
   and the session keeps its current expiry. A cache failure while logging in, reading or logging
   out still fails the request.
 - A `Text`-style `string` field whose column states no length (`[ColumnShape(ColumnShape.LongText)]`,
-  `IsJson = true`, an explicit `ColumnDataType`) was limited to 255 characters on write although the
-  column holds more. It has no limit now, like any column without a length.
+  `IsJson = true`, an explicit `ColumnDataType` with no `Length`) was limited to 255 characters on
+  write although the column holds more. It has no limit now, like any column without a length; set
+  `MaxLength` on the field to have one. With a `Length` beside the `ColumnDataType`, the limit is that
+  `Length`.
 
 ### Security
 

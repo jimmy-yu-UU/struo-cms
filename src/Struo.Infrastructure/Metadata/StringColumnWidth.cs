@@ -18,7 +18,8 @@ internal static class StringColumnWidth
     /// <summary>
     /// The width of the column <paramref name="property"/> maps to, or null when the property is not a
     /// string or its column has no length to state: a <c>[ColumnShape]</c>, a JSON or content-bearing
-    /// <c>[CmsField]</c> interface, <c>IsJson</c>, or an explicit <c>ColumnDataType</c>.
+    /// <c>[CmsField]</c> interface, <c>IsJson</c>, or an explicit <c>ColumnDataType</c> without a
+    /// <c>Length</c>. An explicit <c>ColumnDataType</c> with a <c>Length</c> is that <c>Length</c> wide.
     /// </summary>
     internal static int? Of(PropertyInfo property)
     {
@@ -26,7 +27,7 @@ internal static class StringColumnWidth
         if (property.GetCustomAttribute<ColumnShapeAttribute>() is not null) return null;
 
         var column = property.GetCustomAttribute<SugarColumn>();
-        if (column is { IsJson: true } || !string.IsNullOrEmpty(column?.ColumnDataType)) return null;
+        if (column is { IsJson: true }) return null;
 
         var field = property.GetCustomAttribute<CmsFieldAttribute>();
         if (field is not null
@@ -34,6 +35,7 @@ internal static class StringColumnWidth
                 || FieldInterfaceSets.ContentBearingInterfaces.Contains(field.Interface)))
             return null;
 
-        return column is { Length: > 0 } ? column.Length : Default;
+        var length = column is { Length: > 0 } ? column.Length : (int?)null;
+        return string.IsNullOrEmpty(column?.ColumnDataType) ? length ?? Default : length;
     }
 }

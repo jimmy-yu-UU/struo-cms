@@ -189,10 +189,10 @@ UTC。
 
 1. 明寫且大於零，用明寫的值。
 2. 否則屬性是 `string`，用它的欄位寬度：沒有指定長度的 `string` 欄位是 255，
-   `[SugarColumn(Length = n)]` 則是 `n`。
+   `[SugarColumn(Length = n)]` 則是 `n`，同一個 attribute 另外明寫 `ColumnDataType` 也一樣。
 3. 欄位沒有長度可言時是 `null`，代表不限長度：`Textarea`、`RichText`、`Markdown`、`Code`、
-   `Json`、六個存成 JSON 的介面，以及帶 `[ColumnShape]`、`IsJson = true` 或明寫
-   `ColumnDataType` 的屬性。
+   `Json`、六個存成 JSON 的介面，以及帶 `[ColumnShape]`、`IsJson = true`，或明寫 `ColumnDataType`
+   又沒有 `Length` 的屬性。這些欄位要有上限，就在欄位上設 `MaxLength`。
 
 預設值跟介面無關：`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 一樣是 255。明寫的 `MaxLength`
 不會改欄位寬度，要存比欄位更長的值，欄位本身也要加寬，見本章結尾的常見陷阱。後台把有效的

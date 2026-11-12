@@ -7,7 +7,8 @@ using Struo.Infrastructure.Persistence;
 namespace Struo.Tests.Metadata;
 
 // String fields across the width rules: the default varchar(255), an explicit [SugarColumn(Length)],
-// and the columns that state no length (LongText interfaces, [ColumnShape], an explicit ColumnDataType).
+// an explicit ColumnDataType (with a Length it is that width, without one it states no length), and the
+// columns that state no length (LongText interfaces, [ColumnShape]).
 [SugarTable("width_probe")]
 [CmsCollection("Width probe", Name = "widthProbe")]
 public sealed class WidthProbeEntity : AuditableEntity
@@ -58,4 +59,8 @@ public sealed class WidthProbeEntity : AuditableEntity
     [SugarColumn(IsNullable = true, ColumnDataType = "text")]
     [CmsField(Label = "Typed", Interface = FieldInterface.Text)]
     public string? TypedText { get; set; }
+
+    [SugarColumn(IsNullable = true, ColumnDataType = "varchar", Length = 64)]
+    [CmsField(Label = "Typed with length", Interface = FieldInterface.Text)]
+    public string? TypedLengthText { get; set; }
 }

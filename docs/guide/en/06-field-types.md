@@ -212,10 +212,11 @@ longer value is a 400. A negative value, or one set on a non-`string` property, 
 
 1. Explicitly set and greater than zero — use the explicit value.
 2. Otherwise, when the property is `string`, its column width: 255 for a `string` column with no
-   length, `n` for `[SugarColumn(Length = n)]`.
+   length, `n` for `[SugarColumn(Length = n)]`, also when the same attribute sets `ColumnDataType`.
 3. `null`, meaning no length limit, when the column has no length to state: `Textarea`, `RichText`,
    `Markdown`, `Code`, `Json`, the six interfaces stored as JSON, and a property carrying
-   `[ColumnShape]`, `IsJson = true` or an explicit `ColumnDataType`.
+   `[ColumnShape]`, `IsJson = true`, or an explicit `ColumnDataType` with no `Length`. Set
+   `MaxLength` on the field to have a limit there.
 
 The default does not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string`
 are 255 like the rest. An explicit `MaxLength` does not change the column width; storing a longer

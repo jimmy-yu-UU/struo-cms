@@ -22,7 +22,8 @@ public class StringColumnWidthTests
         (nameof(WidthProbeEntity.RichBody), null),
         (nameof(WidthProbeEntity.RawJson), null),
         (nameof(WidthProbeEntity.ShapedText), null),
-        (nameof(WidthProbeEntity.TypedText), null)
+        (nameof(WidthProbeEntity.TypedText), null),
+        (nameof(WidthProbeEntity.TypedLengthText), 64)
     ];
 
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name[1..];

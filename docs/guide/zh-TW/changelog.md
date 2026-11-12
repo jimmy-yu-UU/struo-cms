@@ -42,12 +42,13 @@
   了這類寫法的 fork 要改成支援的寫法；不支援關聯到非主鍵欄位。沒有 `[CmsRelation]` 的 `[Navigate]`
   不是關聯，不會因為它的形狀讓主機啟動失敗；其中多對多寫法的，仍只讀它的 junction 型別。
 - 沒有 `MaxLength` 的 `string` 欄位，不論介面為何，上限就是欄位寬度：255，或 `[SugarColumn]` 的
-  `Length`。欄位沒有長度可言時不設上限：LongText 與 JSON 介面、`[ColumnShape]`、`IsJson = true`、
-  明寫的 `ColumnDataType`。`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有上限，超過 255
-  字元的值在 SQLite 上寫得進去，在 PostgreSQL、MySQL 與 SQL Server 上回 `500`；現在回 `400`，
-  `Field '{name}' exceeds maximum length 255.` migration 把這類欄位加寬到 255 以上的 fork，要把
-  `[CmsField(MaxLength = n)]` 設成那個寬度，否則更長的值仍被拒絕。核心欄位不受影響，
-  `schema/core-collections.json` 不變。
+  `Length`（同一個 attribute 另外明寫 `ColumnDataType` 也一樣）。欄位沒有長度可言時不設上限：
+  LongText 與 JSON 介面、`[ColumnShape]`、`IsJson = true`、明寫 `ColumnDataType` 又沒有 `Length`
+  （要有上限就在欄位上設 `MaxLength`）。`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有
+  上限，超過 255 字元的值在 SQLite 上寫得進去，在 PostgreSQL、MySQL 與 SQL Server 上回
+  `500`；現在回 `400`，`Field '{name}' exceeds maximum length 255.` migration 把這類欄位加寬到
+  255 以上的 fork，要把 `[CmsField(MaxLength = n)]` 設成那個寬度，否則更長的值仍被拒絕。核心欄位
+  不受影響，`schema/core-collections.json` 不變。
 - 內容組件裡載入不起來的型別（依賴的組件缺少或版本不符）讓主機在啟動時失敗，丟出
   `MetadataException`，訊息帶出組件名稱、載入失敗的型別數與去重後的載入錯誤；型別載得起來但讀不
   了成員的 `[CmsCollection]` 型別，則帶出該型別。這類型別原本被悄悄略過、沒有任何 log：internal 的
@@ -78,9 +79,10 @@
 - 工作階段續期時快取失敗，原本讓觸發續期的那個請求失敗，現在只記一則警告（內容是票證的 key，
   不含票證內容），請求照常回應，工作階段維持原本的到期時間。登入、讀取與登出時的快取失敗照舊
   讓請求失敗。
-- 欄位沒有長度可言（`[ColumnShape(ColumnShape.LongText)]`、`IsJson = true`、明寫 `ColumnDataType`）
-  的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。現在跟其他沒有
-  長度的欄位一樣不設上限。
+- 欄位沒有長度可言（`[ColumnShape(ColumnShape.LongText)]`、`IsJson = true`、明寫 `ColumnDataType`
+  又沒有 `Length`）的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。
+  現在跟其他沒有長度的欄位一樣不設上限，要有上限就在欄位上設 `MaxLength`；`ColumnDataType` 旁有
+  `Length` 時，上限就是那個 `Length`。
 
 ### 安全性
 
