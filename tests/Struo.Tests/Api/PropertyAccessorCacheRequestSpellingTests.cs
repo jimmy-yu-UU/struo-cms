@@ -20,6 +20,12 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
     // Spellings no metadata or property uses; the cache may hold "title" and "Title" for legitimate callers.
     private static readonly string[] TitleSpellings = ["tITLE", "tiTle", "titLE", "TItle", "TITLE"];
     private static readonly string[] StatusSpellings = ["sTATUS", "staTUS", "-STAtus", "STATUS"];
+    private static readonly int[] InvalidTitleValue = [1, 2];
+    private static readonly string[] UnknownSortField = ["NoSuchField"];
+    private static readonly string[] PublishedThenDraft = ["published", "draft"];
+    private static readonly string[] DraftThenPublished = ["draft", "published"];
+    private static readonly string[] GraphqlSortSpellings = ["sTATuS", "-STAtUs"];
+    private static readonly string[] GraphqlSortNames = ["sTATuS", "STAtUs"];
 
     [Fact]
     public async Task Translation_field_names_in_any_case_add_no_cache_key()
@@ -71,7 +77,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
             ["status"] = "draft",
             ["translations"] = new Dictionary<string, object>
             {
-                ["en"] = new Dictionary<string, object> { ["tITLE"] = new[] { 1, 2 } },
+                ["en"] = new Dictionary<string, object> { ["tITLE"] = InvalidTitleValue },
             },
         });
 
@@ -87,7 +93,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
     {
         var category = await admin.PostAsJsonAsync("/api/items/fxCategory", new { name = "cat-" + Guid.NewGuid().ToString("N")[..6] });
         var categoryId = (await category.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetProperty("id").GetString();
-        foreach (var status in new[] { "published", "draft" })
+        foreach (var status in PublishedThenDraft)
             await admin.PostAsJsonAsync("/api/items/fxArticle", new Dictionary<string, object>
             {
                 ["status"] = status,
@@ -121,7 +127,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
             var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
             var statuses = data[0].GetProperty("articles").EnumerateArray()
                 .Select(a => a.GetProperty("status").GetString()).ToList();
-            var expected = spelling.StartsWith('-') ? new[] { "published", "draft" } : new[] { "draft", "published" };
+            var expected = spelling.StartsWith('-') ? PublishedThenDraft : DraftThenPublished;
             statuses.Should().Equal(expected, spelling);
         }
 
@@ -135,7 +141,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var categoryId = await SeedCategoryWithArticlesAsync(admin);
 
-        foreach (var spelling in new[] { "sTATuS", "-STAtUs" })
+        foreach (var spelling in GraphqlSortSpellings)
         {
             var response = await admin.PostAsJsonAsync("/graphql", new
             {
@@ -145,7 +151,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
             raw.Should().NotContain("\"errors\"", spelling);
         }
 
-        PropertyAccessorCache.NamesFor(typeof(FxArticle)).Should().NotContain(["sTATuS", "STAtUs"]);
+        PropertyAccessorCache.NamesFor(typeof(FxArticle)).Should().NotContain(GraphqlSortNames);
     }
 
     [Fact]
@@ -157,7 +163,7 @@ public class PropertyAccessorCacheRequestSpellingTests(ApiFactory factory)
         {
             ["deep"] = new Dictionary<string, object>
             {
-                ["articles"] = new Dictionary<string, object> { ["sort"] = new[] { "NoSuchField" } },
+                ["articles"] = new Dictionary<string, object> { ["sort"] = UnknownSortField },
             },
         });
 
