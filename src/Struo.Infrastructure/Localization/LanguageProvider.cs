@@ -6,7 +6,7 @@ namespace Struo.Infrastructure.Localization;
 
 public sealed class LanguageProvider(ISqlSugarClient db) : ILanguageProvider
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private Task<IReadOnlyList<LanguageInfo>>? _load;
 
     // One load per scope: concurrent callers share the same Task. A failed or cancelled load is
