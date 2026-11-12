@@ -16,7 +16,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// <see cref="IItemUseCases.QueryAsync"/> and <see cref="IItemUseCases.GetAsync"/> refuse
+/// <see cref="ItemService.QueryAsync"/> and <see cref="ItemService.GetAsync"/> refuse
 /// <see cref="DeletedFilter.Only"/> and <see cref="DeletedFilter.With"/> without delete permission, on
 /// their own: no controller or resolver gate sits in front of the calls here.
 /// </summary>
@@ -79,7 +79,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [InlineData(DeletedFilter.With)]
     public async Task QueryAsync_without_delete_permission_is_denied(DeletedFilter deleted)
     {
-        IItemUseCases items = Build(canDelete: false);
+        var items = Build(canDelete: false);
         var act = async () => await items.QueryAsync(Collection, EmptyQuery(), deleted: deleted);
         (await act.Should().ThrowAsync<PermissionDeniedException>()).WithMessage(DeniedMessage);
     }
@@ -89,7 +89,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [InlineData(DeletedFilter.With)]
     public async Task GetAsync_without_delete_permission_is_denied(DeletedFilter deleted)
     {
-        IItemUseCases items = Build(canDelete: false);
+        var items = Build(canDelete: false);
         var act = async () => await items.GetAsync(Collection, Guid.NewGuid().ToString(), deleted: deleted);
         (await act.Should().ThrowAsync<PermissionDeniedException>()).WithMessage(DeniedMessage);
     }
@@ -99,7 +99,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [InlineData(DeletedFilter.With)]
     public async Task QueryAsync_with_delete_permission_succeeds(DeletedFilter deleted)
     {
-        IItemUseCases items = Build(canDelete: true);
+        var items = Build(canDelete: true);
         var page = await items.QueryAsync(Collection, EmptyQuery(), deleted: deleted);
         page.Total.Should().Be(0);
     }
@@ -109,7 +109,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [InlineData(DeletedFilter.With)]
     public async Task GetAsync_with_delete_permission_succeeds(DeletedFilter deleted)
     {
-        IItemUseCases items = Build(canDelete: true);
+        var items = Build(canDelete: true);
         (await items.GetAsync(Collection, Guid.NewGuid().ToString(), deleted: deleted)).Should().BeNull();
     }
 
@@ -118,7 +118,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [InlineData(DeletedFilter.With)]
     public async Task Without_read_or_delete_permission_the_read_denial_comes_first(DeletedFilter deleted)
     {
-        IItemUseCases items = Build(canDelete: false, canRead: false);
+        var items = Build(canDelete: false, canRead: false);
         var query = async () => await items.QueryAsync(Collection, EmptyQuery(), deleted: deleted);
         (await query.Should().ThrowAsync<PermissionDeniedException>()).WithMessage(ReadDeniedMessage);
         var get = async () => await items.GetAsync(Collection, Guid.NewGuid().ToString(), deleted: deleted);
@@ -128,7 +128,7 @@ public sealed class ItemUseCasesDeletedAccessTests : IDisposable
     [Fact]
     public async Task Exclude_needs_only_read_permission()
     {
-        IItemUseCases items = Build(canDelete: false);
+        var items = Build(canDelete: false);
         (await items.QueryAsync(Collection, EmptyQuery())).Total.Should().Be(0);
         (await items.GetAsync(Collection, Guid.NewGuid().ToString())).Should().BeNull();
     }
