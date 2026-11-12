@@ -12,7 +12,7 @@ namespace Struo.Tests.Identity;
 /// <summary>
 /// Renewing a session runs from the cookie handler's response callback, where an exception cannot become an
 /// error response. A cache that fails while renewing is logged and skipped; storing and retrieving a ticket
-/// still surface the failure, so a login that cannot be saved fails visibly.
+/// surface the failure, so a login that cannot be saved fails visibly.
 /// </summary>
 public class DistributedCacheTicketStoreRenewalFailureTests
 {
@@ -67,7 +67,7 @@ public class DistributedCacheTicketStoreRenewalFailureTests
     }
 
     [Fact]
-    public async Task Storing_and_retrieving_still_surface_a_cache_failure()
+    public async Task Storing_and_retrieving_surface_a_cache_failure()
     {
         var (store, cache, _) = NewStore();
         var key = await store.StoreAsync(Ticket());

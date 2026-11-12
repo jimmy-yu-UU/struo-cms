@@ -48,8 +48,7 @@ forms or invisible characters as equal. A found account counts only when its sto
 and lowercased, is character for character the submitted one; otherwise it is treated as no such
 account, with the same response, verification cost and throttle count, so a different spelling
 neither logs in nor escapes the throttle. The duplicate check when a user is created or changed
-still compares by collation, so an email that differs only in a way the collation ignores is still
-a `409`.
+compares by collation, so an email that differs only in a way the collation ignores is a `409`.
 
 Login exposes only two kinds of failure to the caller: a password that verifies but an account
 that's deactivated returns `401` `ACCOUNT_INACTIVE`; every other case — a wrong password, an

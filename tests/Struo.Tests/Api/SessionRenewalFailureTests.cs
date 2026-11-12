@@ -15,7 +15,7 @@ namespace Struo.Tests.Api;
 
 /// <summary>
 /// When the cookie handler renews a session past half its sliding window and the cache fails during the
-/// renewal, the request that triggered it still gets its normal response.
+/// renewal, the request that triggered it gets its normal response.
 /// </summary>
 [Collection("ApiIntegration")]
 public class SessionRenewalFailureTests(ApiFactory factory)
@@ -45,7 +45,7 @@ public class SessionRenewalFailureTests(ApiFactory factory)
             .Last(v => v.StartsWith(prefix, StringComparison.Ordinal))[prefix.Length..].Split(';')[0];
 
         clock.Advance(TimeSpan.FromHours(5));
-        // The cookie handler reads the ticket first, then the renewal checks it is still there: the second read fails.
+        // The cookie handler reads the ticket first, then the renewal checks it is there: the second read fails.
         cache.ThrowOnGetNumber = onGet ? 2 : 0;
         cache.ThrowOnSet = onSet;
         cache.Armed = true;
