@@ -261,7 +261,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
     }
 
-    // Max length — the field's declared MaxLength, which defaults to its column width. Runs after
+    // Max length: the field's declared MaxLength, which defaults to its column width. Runs after
     // RichText sanitization so the stored value is what gets measured.
     private static void EnforceMaxLength(CollectionMetadata meta, EntityDescriptor d, object entity)
     {

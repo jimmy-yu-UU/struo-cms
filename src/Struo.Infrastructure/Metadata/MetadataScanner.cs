@@ -257,7 +257,7 @@ public static class MetadataScanner
         // Also map each declared many-to-one relation's local FK (camelCase -> CLR
         // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
         // can resolve filters like "categoryId" even though the FK carries no [CmsField]
-        // (it must NOT be added to meta.Fields — not projected/writable/required).
+        // (it must NOT be added to meta.Fields: not projected/writable/required).
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (prop.GetCustomAttribute<CmsRelationAttribute>() is null) continue;

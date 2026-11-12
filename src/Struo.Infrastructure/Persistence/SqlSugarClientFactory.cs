@@ -247,7 +247,7 @@ public static class SqlSugarClientFactory
         || TakesZoneLessTimestamp(property);
 
     // A property that carries only a bare [SugarColumn(IsJson = true)] — no
-    // [CmsField] interface in FieldInterfaceSets.JsonColumnInterfaces, no [ColumnShape] — still
+    // [CmsField] interface in FieldInterfaceSets.JsonColumnInterfaces, no [ColumnShape], still
     // needs widening, but column.DataType cannot be the test for "nothing has
     // claimed this column yet": SqlSugar's own attribute processing already stamps
     // an IsJson column with its own default length (observed varchar(4000) here on
