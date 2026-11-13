@@ -52,31 +52,35 @@
   relation to a non-primary-key column is not supported. A `[Navigate]` without `[CmsRelation]` is not
   a relation and never stops the host for its shape; a many-to-many one is read only for its junction
   type, as before.
-- A `string` field with no `MaxLength` is limited to the width of its column whatever its interface:
-  255, or the `Length` of its `[SugarColumn]`, also when that sets a `ColumnDataType`, and then on a
-  LongText interface too. A column that states no length has no limit: JSON interfaces,
+- A `string` field with no `MaxLength` is limited to the width of its column: 255, or the
+  `Length` of its `[SugarColumn]`, also when that sets a `ColumnDataType` (a long-text interface
+  needs the explicit `ColumnDataType` for its `Length` to count, and an interface stored as JSON
+  ignores `Length`). A column that states no length has no limit: JSON interfaces,
   `[ColumnShape]`, `IsJson = true`, LongText interfaces with no `ColumnDataType`, an explicit
-  `ColumnDataType` with no `Length` (set `MaxLength` on the field to have one). `Hidden`,
-  `Time` and a `Uuid` declared on a `string` had no limit, so a value over 255 characters was stored
-  on SQLite and answered `500` on PostgreSQL, MySQL and SQL Server; it is now a `400`,
-  `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a column wider than
-  255 declares `[SugarColumn(Length = n)]` on the property, and the default `MaxLength` follows it;
-  setting only `[CmsField(MaxLength = n)]` stops the host at start, see the next entry. No core
-  field is affected and `schema/core-collections.json` is unchanged.
+  `ColumnDataType` with no `Length`; a length written inside the type string, as in
+  `varchar(500)`, is not read, so such a field needs `Length`, or `MaxLength` on the field.
+  `Hidden`, `Time` and a `Uuid` declared on a `string` had no limit, so a value over 255
+  characters was stored on SQLite and answered `500` on PostgreSQL, MySQL and SQL Server; it is
+  now a `400`, `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a
+  column wider than 255 declares `[SugarColumn(Length = n)]` on the property, and the default
+  `MaxLength` follows it; setting only `[CmsField(MaxLength = n)]` stops the host at start, see
+  the next entry. No core field is affected and `schema/core-collections.json` is unchanged.
 - An explicit `[CmsField(MaxLength = n)]` wider than the column width the property declares stops
   the host at start with a `MetadataException` naming the entity class and the property, the
   declared `MaxLength` and the column width. The width is 255, the `Length` of the `[SugarColumn]`,
-  or the `Length` beside a `ColumnDataType`, on any interface; a `MaxLength` equal to it starts as
-  before, and a column that states no length is not checked. Fields of collection entities,
-  translation entities and junction payloads are covered; a `Repeater` sub-field lives inside a
-  JSON value, has no column of its own, and is not checked, and neither is a property with
-  `[SugarColumn(IsIgnore = true)]`. Such a field used to start: a value over the column width
-  passed write validation and answered `500` on PostgreSQL, MySQL and SQL Server, and was stored
-  on SQLite. A fork that declares one lowers `MaxLength`, or widens the column with
-  `[SugarColumn(Length = n)]` or `[ColumnShape(ColumnShape.LongText)]`; a table that already
-  exists also needs a migration that widens the column. The comparison uses the width declared on
-  the property, not the width of the database column. Neither a core field nor the Blog sample is
-  affected.
+  or the `Length` beside a `ColumnDataType` (not on an interface stored as JSON); a `MaxLength`
+  equal to it starts as before, and a column that states no length is not checked. Fields of
+  collection entities, translation entities and junction payloads are covered; a `Repeater`
+  sub-field lives inside a JSON value, has no column of its own, and is not checked, and neither
+  is a property with `[SugarColumn(IsIgnore = true)]`. Such a field used to start: a value over
+  the column width passed write validation and answered `500` on PostgreSQL, MySQL and SQL
+  Server, and was stored on SQLite. A fork that declares one lowers `MaxLength`, or widens the
+  column with `[SugarColumn(Length = n)]` or `[ColumnShape(ColumnShape.LongText)]`; only when the
+  declaration is widened and the table already exists with the narrower column does it also need
+  a migration that widens the column, and lowering `MaxLength`, or adding the matching
+  `[SugarColumn(Length = n)]` to a column that is already that wide, needs none. The comparison
+  uses the width declared on the property, not the width of the database column. Neither a core
+  field nor the Blog sample is affected.
 - A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
   stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
   the message names the assembly, the number of failed types, the type names the loader reports and
