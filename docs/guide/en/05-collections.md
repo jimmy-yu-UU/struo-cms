@@ -78,11 +78,12 @@ follow SqlSugar's lower-casing of the CLR property name.
 
 A nullable property (`DateTime?`, `Guid?`, `int?`, `string?`) maps to a nullable column
 automatically: the entity metadata records it, `make:migration` writes `.Nullable()` from it, and
-`migrate:check` compares against it, so `[SugarColumn(IsNullable = true)]` is redundant. A nullable
-property always gets a nullable column, and `[SugarColumn(IsNullable = false)]` does not change
-that. To get a NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and
-`string`, not `string?`. `[SugarColumn(IsNullable = true)]` gives a non-nullable `string` property a
-nullable column.
+`migrate:check` compares against it, so `[SugarColumn(IsNullable = true)]` is redundant. To get a
+NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and `string`, not
+`string?`. A nullable property that also carries `[SugarColumn(IsNullable = false)]` is rejected
+at startup; see
+[Chapter 6, "Declarations rejected at startup"](06-field-types.md#declarations-rejected-at-startup).
+`[SugarColumn(IsNullable = true)]` gives a non-nullable `string` property a nullable column.
 
 ## `[CmsCollection]` options
 

@@ -85,7 +85,7 @@ SqlSugar client in `SqlSugarClientFactory.Create` (see that chapter's
 meant to reimplement to swap ORMs — an entity's SqlSugar attributes stay bound to SqlSugar
 regardless of what implements that interface. Consequence: a SqlSugar major-version upgrade, or a
 semantic change to an attribute like `[SugarIndex]`, lands directly on every fork's entity classes;
-core does not absorb it. Two decisions are the exception: bare-`IsJson` column widening and the
+core does not absorb it. Two decisions are the exception: `IsJson` column widening (a `[CmsField]` `List<>` property gets `IsJson` too) and the
 translation sidecar's `(fk, locale)` unique are both derived inside `SqlSugarClientFactory`'s
 `EntityService` hook rather than declared per entity, so core absorbs a change to either one on a
 fork's behalf. That absorption leans on SqlSugar-internal surface — the hook sets
