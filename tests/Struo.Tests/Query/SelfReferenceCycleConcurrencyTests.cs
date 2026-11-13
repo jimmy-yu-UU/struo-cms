@@ -52,7 +52,7 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    private ItemService Build(bool createTables, ArrivalGate? gate)
+    private ItemService Build(bool createTables, ArrivalGate? gate, IEnumerable<IItemWriteInterceptor>? interceptors = null)
     {
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var db = SqlSugarClientFactory.Create(_database.Options(), currentUser);
@@ -81,7 +81,7 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         return TestItemService.Create(
             repo, provider, registry, graph, new RelationExpander(repo, graph, new StruoQueryOptions()), graph,
             new LanguageProvider(db), currentUser, new SqlSugarRevisionStore(db, currentUser),
-            new RevisionSnapshotBuilder(repo, provider, registry, graph));
+            new RevisionSnapshotBuilder(repo, provider, registry, graph), interceptors: interceptors);
     }
 
     private static JsonElement BodyOf(object obj) => JsonSerializer.SerializeToElement(obj);
@@ -174,6 +174,29 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         AssertAtMostOneMoved(results);
         await AssertNoCycleAsync();
         AssertDeadlockOnServers(results);
+    }
+
+    // The row is loaded before the transaction opens. When another request removes it in between, the row
+    // write finds nothing and the update answers not found; the cycle check is never reached.
+    [Fact]
+    public async Task A_row_removed_after_it_was_loaded_answers_not_found_even_for_a_cyclic_move()
+    {
+        var x = await CreateAsync("X");
+        var y = await CreateAsync("Y", x);
+        var writer = Build(false, null, [new RemoveRowBeforeWrite(_reader, x)]);
+
+        var result = await writer.UpdateAsync("mediafolder", x.ToString(), BodyOf(new { parentId = y }));
+
+        result.Should().BeNull();
+    }
+
+    private sealed class RemoveRowBeforeWrite(ISqlSugarClient client, Guid id) : IItemWriteInterceptor
+    {
+        public bool AppliesTo(string collection) =>
+            string.Equals(collection, "MediaFolder", StringComparison.OrdinalIgnoreCase);
+
+        public async Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct) =>
+            await client.Deleteable<MediaFolder>().In(id).ExecuteCommandAsync(ct);
     }
 
     [Fact]
