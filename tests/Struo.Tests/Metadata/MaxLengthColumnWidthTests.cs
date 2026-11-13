@@ -52,6 +52,39 @@ public sealed class MaxLengthColumnWidthTests
         [CmsField(Interface = FieldInterface.Text, MaxLength = 100)] public string? Typed { get; set; }
     }
 
+    [CmsCollection("Typed body over", Name = "mlwTypedBodyOver")]
+    public sealed class TypedBodyOver
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "varchar", Length = 64)]
+        [CmsField(Interface = FieldInterface.Textarea, MaxLength = 100)] public string? Body { get; set; }
+    }
+
+    [CmsCollection("Typed width at", Name = "mlwTypedAt")]
+    public sealed class TypedWidthAt
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "varchar", Length = 64)]
+        [CmsField(Interface = FieldInterface.Text, MaxLength = 64)] public string? Typed { get; set; }
+        [SugarColumn(ColumnDataType = "varchar", Length = 64)]
+        [CmsField(Interface = FieldInterface.Textarea)] public string? TypedBody { get; set; }
+    }
+
+    [CmsCollection("Ignored", Name = "mlwIgnored")]
+    public sealed class IgnoredProperty
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)]
+        [CmsField(Interface = FieldInterface.Text, MaxLength = 1000)] public string? Computed { get; set; }
+    }
+
+    [CmsCollection("Translatable on parent", Name = "mlwParentTranslatable")]
+    public sealed class ParentTranslatable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text, Translatable = true, MaxLength = 300)] public string? Title { get; set; }
+    }
+
     [CmsCollection("No width", Name = "mlwNoWidth")]
     public sealed class NoWidth
     {
@@ -129,6 +162,8 @@ public sealed class MaxLengthColumnWidthTests
     [InlineData(typeof(DefaultWidthOver), "DefaultWidthOver", "Wide", 256, 255)]
     [InlineData(typeof(DeclaredWidthOver), "DeclaredWidthOver", "Narrow", 200, 100)]
     [InlineData(typeof(TypedWidthOver), "TypedWidthOver", "Typed", 100, 64)]
+    [InlineData(typeof(TypedBodyOver), "TypedBodyOver", "Body", 100, 64)]
+    [InlineData(typeof(ParentTranslatable), "ParentTranslatable", "Title", 300, 255)]
     public void A_MaxLength_wider_than_the_column_fails_the_scan(
         Type type, string className, string property, int declared, int width)
     {
@@ -149,6 +184,18 @@ public sealed class MaxLengthColumnWidthTests
 
         var declared = MetadataScanner.ScanTypes([typeof(DeclaredWidthAt)]).Single().Fields;
         declared.Single(f => f.Name == "narrow").MaxLength.Should().Be(100);
+
+        var typed = MetadataScanner.ScanTypes([typeof(TypedWidthAt)]).Single().Fields;
+        typed.Single(f => f.Name == "typed").MaxLength.Should().Be(64);
+        typed.Single(f => f.Name == "typedBody").MaxLength.Should().Be(64);
+    }
+
+    [Fact]
+    public void An_ignored_property_has_no_column_and_keeps_its_MaxLength()
+    {
+        var fields = MetadataScanner.ScanTypes([typeof(IgnoredProperty)]).Single().Fields;
+
+        fields.Single(f => f.Name == "computed").MaxLength.Should().Be(1000);
     }
 
     [Fact]

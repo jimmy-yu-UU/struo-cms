@@ -321,7 +321,7 @@ public static class MetadataScanner
             var isAudit = isAuditable && AuditFieldNames.Contains(prop.Name);
 
             if (fieldAttr is not null)
-                fields.Add((order, BuildField(prop, fieldAttr)));
+                fields.Add((order, BuildField(prop, fieldAttr, isColumn: true)));
             else if (isAudit)
                 fields.Add((order, BuildSystemField(prop)));
             // properties with neither [CmsField] nor audit convention are ignored
@@ -401,7 +401,7 @@ public static class MetadataScanner
             throw new MetadataException($"Translation entity '{tType.Name}' must declare at least one [CmsField].");
 
         var fields = fieldProps
-            .Select(p => BuildField(p, p.GetCustomAttribute<CmsFieldAttribute>()!) with { Translatable = true })
+            .Select(p => BuildField(p, p.GetCustomAttribute<CmsFieldAttribute>()!, isColumn: true) with { Translatable = true })
             .ToList();
 
         var meta = new TranslationMetadata
@@ -414,18 +414,21 @@ public static class MetadataScanner
         return (meta, fields);
     }
 
-    // A MaxLength wider than the column would pass validation and fail the write.
+    // A MaxLength wider than the column would pass validation and not fit the column. An ignored
+    // property has no column.
     private static void RequireFitsColumn(PropertyInfo prop, int declared, int? columnWidth)
     {
         if (columnWidth is not { } width || declared <= width) return;
+        if (prop.GetCustomAttribute<SugarColumn>() is { IsIgnore: true }) return;
         throw new MetadataException(
             $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength {declared} but its column is " +
-            $"{width} wide. Lower MaxLength to {width} or less, or declare a wider column with " +
-            "[SugarColumn(Length = n)] or [ColumnShape].");
+            $"{width} wide. Lower MaxLength to {width} or less, or widen the column with " +
+            "[SugarColumn(Length = n)] or [ColumnShape(ColumnShape.LongText)]; " +
+            "an existing table also needs a migration that widens the column.");
     }
 
     // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.
-    private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn = true)
+    private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
     {
         IReadOnlyList<FieldOption>? options = null;
         var optionsAttr = prop.GetCustomAttribute<CmsOptionsAttribute>();
