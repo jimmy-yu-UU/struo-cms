@@ -21,7 +21,8 @@ public sealed class CmsFieldAttribute : Attribute
     /// Input-length limit (UTF-16 code units), enforced on write. 0 = unset: a string field takes its
     /// column's width (255, or [SugarColumn(Length = n)]), and has no limit when its column states none
     /// (content-bearing and JSON interfaces, a column shape, IsJson, an explicit ColumnDataType).
-    /// An explicit value does not change the column.
+    /// An explicit value does not change the column, and one wider than the column's width fails the
+    /// metadata scan; a Repeater sub-field has no column and is not checked.
     /// </summary>
     public int MaxLength { get; set; }
 }

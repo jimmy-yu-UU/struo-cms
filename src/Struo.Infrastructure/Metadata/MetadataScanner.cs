@@ -414,7 +414,18 @@ public static class MetadataScanner
         return (meta, fields);
     }
 
-    private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr)
+    // A MaxLength wider than the column would pass validation and fail the write.
+    private static void RequireFitsColumn(PropertyInfo prop, int declared, int? columnWidth)
+    {
+        if (columnWidth is not { } width || declared <= width) return;
+        throw new MetadataException(
+            $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength {declared} but its column is " +
+            $"{width} wide. Lower MaxLength to {width} or less, or declare a wider column with " +
+            "[SugarColumn(Length = n)] or [ColumnShape].");
+    }
+
+    // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.
+    private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn = true)
     {
         IReadOnlyList<FieldOption>? options = null;
         var optionsAttr = prop.GetCustomAttribute<CmsOptionsAttribute>();
@@ -435,7 +446,9 @@ public static class MetadataScanner
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
 
         // Without an explicit MaxLength a string field is limited to its column's width, if it has one.
-        int? maxLength = attr.MaxLength > 0 ? attr.MaxLength : StringColumnWidth.Of(prop);
+        var columnWidth = StringColumnWidth.Of(prop);
+        if (isColumn) RequireFitsColumn(prop, attr.MaxLength, columnWidth);
+        int? maxLength = attr.MaxLength > 0 ? attr.MaxLength : columnWidth;
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
@@ -496,7 +509,7 @@ public static class MetadataScanner
             if (subAttr.Translatable)
                 throw new MetadataException(
                     $"Repeater field '{Camel(prop.Name)}' sub-field '{Camel(sub.Name)}' cannot be translatable.");
-            fields.Add(BuildField(sub, subAttr));
+            fields.Add(BuildField(sub, subAttr, isColumn: false));
         }
         return fields;
     }
