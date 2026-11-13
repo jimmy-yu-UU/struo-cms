@@ -39,36 +39,15 @@ public enum ColumnShape
 /// Marks a property with the dialect-neutral <see cref="ColumnShape"/> it needs.
 ///
 /// <para>
-/// Precedence: this attribute wins over BOTH the convention-based widening in
-/// <c>SqlSugarClientFactory</c>'s <c>EntityService</c> hook AND an explicit
-/// <c>[SugarColumn(ColumnDataType = "...")]</c> on the same property — the hook resolves the shape
-/// and returns before either is considered. A fork that wants its own vendor literal to win must
-/// omit <c>[ColumnShape]</c> on that property. Pinned by
-/// <c>ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType</c>.
+/// On a <c>[CmsField]</c> property the metadata scan rejects the attribute together with an explicit
+/// <c>[SugarColumn(ColumnDataType = ...)]</c> and together with a JSON-column interface (the
+/// multi-value selects, <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>), at startup in every
+/// environment. For an entity the scan does not see, the column convention refuses the JSON-interface
+/// pairing with an <see cref="InvalidOperationException"/> on first use.
 /// </para>
 /// <para>
-/// Combining this attribute with a JSON-column <c>[CmsField]</c> interface (the multi-value selects,
-/// <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>) is <b>refused</b>: the hook throws an
-/// <see cref="InvalidOperationException"/> naming the property and the offending interface. For
-/// anything in the <c>InitTables</c> set — every framework entity plus every <c>[CmsCollection]</c>
-/// type — that throw lands at <b>startup</b> in Development, because the startup gate's
-/// <c>SchemaChecker</c> asks <c>EntityMaintenance</c> for each type's table, and building that
-/// <c>EntityInfo</c> runs this hook over every property. Only an entity <i>outside</i> that set — a fork's own non-collection entity
-/// used directly through <c>ISqlSugarClient</c> — fails on first use instead. Were the
-/// combination allowed, <c>[ColumnShape]</c>'s early <c>return</c> would outrank the hook's later
-/// JSON branch: the property would keep the <c>DataType</c> and lose <c>IsJson</c>. Both branches
-/// resolve a JSON-column interface to <see cref="ColumnShape.LongText"/>, so with the shape declared
-/// as that same value — the only sensible choice here — losing <c>IsJson</c> would be the
-/// combination's only effect, and without it SqlSugar never serializes the collection and CodeFirst
-/// leaves the length unset — <c>varchar(1)</c> on PostgreSQL, where every write of a real value
-/// fails with 22001.
-/// Pinned by <c>ColumnTypeMapTests.ColumnShape_combined_with_a_JSON_column_CmsField_is_refused</c>.
-/// </para>
-/// <para>
-/// A <b>content-bearing</b> <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>,
-/// <c>Markdown</c>, <c>Code</c>, <c>Json</c>) is a different case and stays legal: both paths resolve
-/// to <see cref="ColumnShape.LongText"/>, the shape simply wins first, and nothing is lost. Pinned by
-/// <c>ColumnTypeMapTests.ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed</c>.
+/// A content-bearing <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>, <c>Markdown</c>,
+/// <c>Code</c>, <c>Json</c>) may carry the attribute: both resolve to <see cref="ColumnShape.LongText"/>.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]

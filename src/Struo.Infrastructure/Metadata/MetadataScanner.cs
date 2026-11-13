@@ -441,6 +441,9 @@ public static class MetadataScanner
             options = ParseOptions(prop, optionsAttr);
         }
 
+        // A Repeater sub-field has no column of its own, so its column declarations mean nothing.
+        if (isColumn) ColumnDeclarationCheck.Require(prop, attr);
+
         if (attr.MaxLength < 0)
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has a MaxLength that is negative.");
