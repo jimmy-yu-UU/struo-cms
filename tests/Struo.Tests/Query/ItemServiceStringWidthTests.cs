@@ -63,6 +63,7 @@ public sealed class ItemServiceStringWidthTests : IDisposable
     [InlineData("narrowText", 100)]
     [InlineData("explicitLimit", 120)]
     [InlineData("typedLengthText", 64)]
+    [InlineData("typedLengthBody", 64)]
     public async Task A_value_at_the_limit_is_stored(string field, int limit)
     {
         var created = await _svc.CreateAsync(Collection, Body(field, limit));
@@ -78,6 +79,7 @@ public sealed class ItemServiceStringWidthTests : IDisposable
     [InlineData("narrowText", 100)]
     [InlineData("explicitLimit", 120)]
     [InlineData("typedLengthText", 64)]
+    [InlineData("typedLengthBody", 64)]
     public async Task A_value_over_the_limit_is_a_validation_error(string field, int limit)
     {
         var act = () => _svc.CreateAsync(Collection, Body(field, limit + 1));
@@ -91,6 +93,7 @@ public sealed class ItemServiceStringWidthTests : IDisposable
     [InlineData("richBody")]
     [InlineData("shapedText")]
     [InlineData("typedText")]
+    [InlineData("typedBody")]
     public async Task A_field_without_a_column_width_takes_a_long_value(string field)
     {
         var created = await _svc.CreateAsync(Collection, Body(field, 4000));

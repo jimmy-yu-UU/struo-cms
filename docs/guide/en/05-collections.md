@@ -157,7 +157,8 @@ Every `[CmsField]` setting is written as a named argument:
 - `Sort` decides its order in the admin form and list columns — ascending by `Sort`, with
   declaration order as the tiebreaker; the four audit fields are fixed at `Sort = 1000`, so only a
   field declaring a higher `Sort` sorts after them.
-- `MaxLength` is a CMS-layer input-length cap, independent of the database column width.
+- `MaxLength` is a CMS-layer input-length cap that cannot exceed the column width the property
+  declares, or startup fails; the default and the details are in [Chapter 6](06-field-types.md).
 
 `Required` validates the merged entity on update, not the request body: omitting a field keeps the
 stored value and passes, while an explicit `null` or a blank string (including whitespace-only)

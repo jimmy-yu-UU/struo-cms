@@ -190,13 +190,20 @@ UTC。
 1. 明寫且大於零，用明寫的值。
 2. 否則屬性是 `string`，用它的欄位寬度：沒有指定長度的 `string` 欄位是 255，
    `[SugarColumn(Length = n)]` 則是 `n`，同一個 attribute 另外明寫 `ColumnDataType` 也一樣。
-3. 欄位沒有長度可言時是 `null`，代表不限長度：`Textarea`、`RichText`、`Markdown`、`Code`、
-   `Json`、六個存成 JSON 的介面，以及帶 `[ColumnShape]`、`IsJson = true`，或明寫 `ColumnDataType`
-   又沒有 `Length` 的屬性。這些欄位要有上限，就在欄位上設 `MaxLength`。
+   `Textarea`、`RichText`、`Markdown`、`Code` 與 `Json` 上的 `Length` 要搭配明寫的
+   `ColumnDataType` 才算；存成 JSON 的介面不看 `Length`。
+3. 欄位沒有長度可言時是 `null`，代表不限長度：六個存成 JSON 的介面、帶 `[ColumnShape]` 或
+   `IsJson = true` 的屬性、沒有明寫 `ColumnDataType` 的 `Textarea`、`RichText`、`Markdown`、`Code`
+   與 `Json`（掛了 `Length` 也一樣），以及明寫的 `ColumnDataType` 沒有 `Length` 的屬性。寫在型別
+   字串裡的長度（例如 `varchar(500)`）不會被讀取，這種欄位要設 `Length`。這些欄位要有上限，就在
+   欄位上設 `MaxLength`。
 
 預設值跟介面無關：`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 一樣是 255。明寫的 `MaxLength`
-不會改欄位寬度，要存比欄位更長的值，欄位本身也要加寬，見本章結尾的常見陷阱。後台把有效的
-`MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上。
+不會改欄位寬度：它大於欄位寬度時，啟動丟出 `MetadataException`，訊息點名類別、屬性、`MaxLength`
+與欄位寬度。等於或小於欄位寬度照常。集合、翻譯實體與 junction payload 的欄位都檢查；沒有欄位寬度
+的欄位不檢查，`Repeater` 子欄位存在 JSON 裡、沒有自己的欄位，也不檢查，掛
+`[SugarColumn(IsIgnore = true)]` 的屬性沒有欄位，同樣不檢查。要存比預設寬度更長的值，先加寬
+欄位，見本章結尾的常見陷阱。後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上。
 
 ## 必填、唯讀、隱藏與系統欄位
 
@@ -278,15 +285,20 @@ UTC。
 
 ## 常見陷阱
 
-**寫入長文字被拒絕，或在 PostgreSQL 報 `22001 value too long`。** 一個沒有明寫欄位型別、介面
+**寫入長文字被拒絕，或啟動時報 `MaxLength` 大於欄位寬度。** 一個沒有明寫欄位型別、介面
 又不在前面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`，預設的
-`MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。明寫更大的 `MaxLength` 擋不住
-欄位寬度，通過驗證的值在 PostgreSQL 上會以
-`22001 value too long for type character varying(255)` 失敗。
+`MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。啟動錯誤則對任何宣告了欄位
+寬度的屬性成立，寬度是 255 或 `[SugarColumn]` 的 `Length`，長文字介面搭配 `ColumnDataType` 與
+`Length` 也算。在這種屬性上明寫更大的 `MaxLength`，啟動就丟出 `MetadataException`，因為欄位裝
+不下通過驗證的值。
 
-修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
-`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。表已經建好的話，還要
-另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤。
+被 400 拒絕時，修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要
+直接寫 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。啟動失敗時，把
+`MaxLength` 調到欄位寬度以下，或用 `[SugarColumn(Length = n)]`、
+`[ColumnShape(ColumnShape.LongText)]` 加寬欄位。只有宣告加寬、而表已經建好且欄位比較窄時，才要
+另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤；調低
+`MaxLength`，或表的欄位本來就夠寬、只是補上對應的 `[SugarColumn(Length = n)]`，都不必寫
+migration。
 
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
 外掛 `[ColumnShape]` 會丟出 `InvalidOperationException`，訊息點名屬性與介面。集合與框架 entity 在
