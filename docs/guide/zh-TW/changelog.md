@@ -72,6 +72,46 @@
   `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
   或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
   敗；呼叫它的 fork 要改名。
+- 資料庫把某個請求選為死結犧牲者時，現在回 `409 CONFLICT`，原本是 `500`。各資料庫的錯誤碼：
+  - PostgreSQL：`40P01`
+  - MySQL 與 MariaDB：`1213`
+  - SQL Server：`1205`
+  - MariaDB 另有：`1020`（紀錄自上次讀取後已變動）
+
+  訊息固定：`The request lost a database deadlock.` 這對每一個寫入都成立，不只樹狀搬移。
+  死結發生在寫入交易裡：什麼都沒寫入。
+  死結發生在提交之後的工作（寫入攔截器的 `AfterCommitAsync`）：寫入已經生效，重送前先確認。
+  把 `500` 當成死結訊號的用戶端或監控，要改成處理 `409`。
+  鎖等待逾時與 SQLite 的 `database is locked` 不變。
+- 自我參照的循環檢查改在寫入交易裡執行，並使用列鎖。檢查拆成兩步：寫入前呼叫
+  `SelfReferenceCycleGuard.LockMovedRowAsync`，寫入後呼叫 `EnsureNoCycleAsync`（簽章已改）。
+  兩者都必須在交易裡呼叫。後者只接收前者在同一個交易裡回傳的結果。
+  檢查移到列寫入之後，錯誤的先後跟著變：
+  - 過期的 `version` 加上循環：回 `409 VERSION_CONFLICT`，原本是 `400`。
+  - 列在載入後被別的請求刪掉，加上循環：回 `404`，原本是 `400`。
+  - 列寫入撞到唯一鍵衝突，加上循環：回 `409 CONFLICT`，原本是 `400`。
+  - 循環檢查本身輸掉死結：回 `409`。
+
+  更新沒有改變自我參照的鍵時，只鎖被更新的那一列。
+  鍵有改變時，才鎖新父層與它往上的整條祖先鏈。
+- `IItemRepository` 新增四個成員，預設實作都丟 `NotSupportedException`：
+  - `GetByIdLockedAsync`：在交易裡讀一列並鎖住它，回傳最新已提交的值。沒有交易會丟
+    `InvalidOperationException`。
+  - `CountTrashedWhereInAsync`：只數垃圾桶裡符合條件的列。用 COUNT，不載入實體。
+  - `SetForeignKeyNullForTrashedAsync`：只把垃圾桶裡的列的外鍵設成 `null`。
+  - `IsForeignKeyNullable`：欄位是否允許 NULL，依 ORM 的欄位資訊回答。
+
+  自己實作或包裝 `IItemRepository` 的 fork，要實作或轉送這四個。否則兩件事會失敗：
+  - 更新自我參照集合的列。
+  - 清除被 `OnDelete.Restrict` 關聯指向的列，只要沒有未在垃圾桶的參照列先擋下它。
+- 清除一個項目時，垃圾桶裡以 `OnDelete.Restrict` 關聯指向它的列，現在會被處理。
+  原本它們的外鍵會留著，指向已經不存在的列。
+  - 外鍵可為 `null`：在清除的交易裡設成 `null`。
+  - 外鍵不可為 `null`：清除回 `409 CONFLICT`，什麼都不改，直到那些列被清除。
+  - 能不能為 `null`，以欄位本身為準，也就是 ORM 建欄位時用的資訊
+    （nullable 註記與 `[SugarColumn(IsNullable = ...)]`）。
+
+  有可軟刪除集合、且帶不可為 `null` 外鍵的 fork，要檢查自己的清除流程。核心與範例都沒有。
 - 重複的語言代碼在每個後端都回 `409` `CONFLICT`。
   - SQLite 與 PostgreSQL：代碼只差大小寫的重複原本回 `400`，現在回 `409`，訊息不變
     （`Language code '{code}' already exists.`）。其他後端與完全相同的重複原本就回 `409`。
@@ -99,7 +139,8 @@
     案的所有變體。`SetAsync` 的契約多一條：寫入某個檔案的變體時，要一併刪掉同一個檔案其他
     `version` 的變體。`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，一定帶
     著檔案 id。自己實作這個介面的 fork 要補上方法、遵守新的契約、接受新的鍵形狀。
-  - `FileService`：建構函式在最後多了選用參數 `IImageVariantCache? variantCache`。
+  - `FileService`：建構函式在最後多了選用參數 `IImageVariantCache? variantCache`，並新增公開方法
+    `ExistsAsync(Guid id, CancellationToken)`（垃圾桶裡的檔案也算存在）。
   - `DiskImageVariantCache`：新增公開方法 `RunMaintenance()`，API 每次啟動時在背景呼叫。目錄結構改成
     `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`。
 
@@ -114,6 +155,18 @@
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
+- 新增的公開成員：
+  - `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
+    `DomainErrorMap.DeadlockMessage`。
+  - `SelfReferenceCycleGuard.LockMovedRowAsync` 與型別 `SelfReferenceMove`。
+    只有 `LockMovedRowAsync` 會建立它。
+  - `PasswordProof`（`From`、`Matches`）、`IAuthService.ConfirmUnchangedAsync`、
+    `IUserSessionStore.RemoveByTicketKeysAsync`、`IImageVariantCache.RemoveAllForFileAsync`、
+    `FileService.ExistsAsync` 與 `DiskImageVariantCache.RunMaintenance`，各自的用法見破壞性變更。
+  - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
+    `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
+
+  自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
 
 ### 修正
 
@@ -134,6 +187,12 @@
   又沒有 `Length`）的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。
   現在跟其他沒有長度的欄位一樣不設上限，要有上限就在欄位上設 `MaxLength`；`ColumnDataType` 旁有
   `Length` 時，上限就是那個 `Length`。
+- 清除一個資料夾時，垃圾桶裡原本放在其中的檔案不會被動到：復原那個檔案，`folderId` 指向不存在的
+  資料夾，檔案既不在媒體庫根目錄，也不在垃圾桶。現在清除會清掉那個外鍵，復原的檔案出現在根目錄。
+  所有外鍵可為 `null` 的 `Restrict` 關聯都一樣，透過 `DELETE /api/files/{id}?purge=true` 清除檔案
+  也一樣。
+- 樹狀集合（例如媒體資料夾）裡兩個方向相反的同時搬動，可能都通過循環檢查，讓兩個資料夾互為父層。
+  現在檢查會鎖住整條父鏈，其中至多一個成功，另一個回 `400` 或 `409`。
 - 撤銷使用者全部工作階段（改密碼、刪除使用者）時，原本在列出鑰匙之後才寫入的工作階段，索引列會
   跟著被整批刪掉；那個工作階段留在快取裡、之後的撤銷又找不到它，撤銷不掉。現在撤銷只刪列出並
   撤銷的那些鑰匙的索引列。密碼登入也補上另一半：工作階段寫入後重讀儲存的密碼雜湊，跟驗證密碼時
@@ -144,7 +203,8 @@
 - 永久刪除檔案時，圖片轉換的快取變體原本留在磁碟上，直到被容量淘汰；現在資料列刪掉後會一併刪除該
   檔案的所有變體（失敗只記警告，不影響刪除）。寫入某個 `version` 的變體時，同一個檔案其他 `version`
   的變體也會刪掉。寫入用的暫存檔原本不計入容量、也從不刪除，現在超過一小時的暫存檔在啟動時與每次
-  容量清理時刪除，且不計入容量。快取只清掉處理請求的那個副本的本機磁碟，其他副本的變體留到被淘汰。
+  容量清理時刪除，且不計入容量。轉換進行當中檔案被永久刪除時，剛寫入的變體也會被移除。快取只清掉處
+  理請求的那個副本的本機磁碟，其他副本的變體留到被淘汰。
 
 ### 安全性
 

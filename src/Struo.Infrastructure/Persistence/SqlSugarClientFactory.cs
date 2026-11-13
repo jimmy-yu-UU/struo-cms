@@ -153,8 +153,8 @@ public static class SqlSugarClientFactory
         // columns in CodeFirst DDL, so inherited Guid? audit actors
         // (CreatedBy/UpdatedBy from AuditableEntity) need no [SugarColumn(IsNullable=true)]
         // in Domain code. Correct on every backend.
-        // A nullable value-type property that must map to a NOT NULL column should carry
-        // [SugarColumn(IsNullable = false)] to override this hook.
+        // A nullable property always gets a nullable column here: [SugarColumn(IsNullable = false)] does not
+        // override this hook. A property that must map to a NOT NULL column has a non-nullable type.
         if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
         {
             column.IsNullable = true;

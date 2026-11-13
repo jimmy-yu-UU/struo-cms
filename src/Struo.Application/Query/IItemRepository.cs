@@ -16,6 +16,17 @@ public interface IItemRepository
         string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
     Task<object?> GetByIdAsync(string collection, string id,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
+    /// <summary>
+    /// Like <see cref="GetByIdAsync"/>, but inside a transaction the read locks the row until the
+    /// transaction ends and returns its latest committed values, so a concurrent change to the row waits.
+    /// Requires an open transaction; a backend that takes no row lock (SQLite) reads plainly inside it.
+    /// The default throws: an implementation that wraps another repository must forward this call, or it
+    /// would read without the lock.
+    /// </summary>
+    Task<object?> GetByIdLockedAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.GetByIdLockedAsync must be overridden by implementations that serve concurrent writers.");
     Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default);
     Task<object?> UpdateAsync(string collection, string id, object entity, CancellationToken ct = default);
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default);
@@ -174,6 +185,34 @@ public interface IItemRepository
         Type entityType, string property, object value, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "IItemRepository.DeleteByPropertyAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// Counts the rows of <paramref name="collection"/> whose <paramref name="property"/> (camelCase field
+    /// name) is in <paramref name="values"/> and that are in the trash (<c>DeletedAt</c> set). A typed
+    /// COUNT that loads no entity. Zero for a collection without soft delete.
+    /// </summary>
+    Task<int> CountTrashedWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.CountTrashedWhereInAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// Like <see cref="SetForeignKeyNullAsync"/> but only for rows in the trash (<c>DeletedAt</c> set); a
+    /// live row that references <paramref name="typedId"/> is left as it is. Does nothing for a collection
+    /// without soft delete.
+    /// </summary>
+    Task SetForeignKeyNullForTrashedAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "IItemRepository.SetForeignKeyNullForTrashedAsync must be overridden by implementations that support purge integrity.");
+
+    /// <summary>
+    /// True when the column behind <paramref name="property"/> (camelCase field name) of
+    /// <paramref name="collection"/> accepts NULL, as the ORM's column metadata says.
+    /// </summary>
+    bool IsForeignKeyNullable(string collection, string property) =>
+        throw new NotSupportedException(
+            "IItemRepository.IsForeignKeyNullable must be overridden by implementations that support purge integrity.");
 
     /// <summary>
     /// Like <see cref="QueryWhereInAsync"/> but bypasses the soft-delete query filter, so an

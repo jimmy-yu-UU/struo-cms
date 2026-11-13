@@ -15,6 +15,9 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<IReadOnlyList<object>>>> WhereInWithDeletedDispatcher =
         new(typeof(WhereInQueries), nameof(WhereInWithDeletedGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<WhereInQueries, List<IConditionalModel>, CancellationToken, Task<int>>> CountTrashedDispatcher =
+        new(typeof(WhereInQueries), nameof(CountTrashedGenericAsync), [typeof(List<IConditionalModel>), typeof(CancellationToken)]);
+
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
     {
@@ -87,6 +90,22 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
         var rows = await Capped(db.Queryable<T>().Where(conditionals), maxRows).ToListAsync(ct);
         return rows.Cast<object>().ToList();
     }
+
+    // A typed COUNT over the trashed rows only; no entity is loaded. A collection without soft delete has
+    // no trashed rows.
+    public async Task<int> CountTrashedWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
+    {
+        if (values.Count == 0) return 0;
+        var (d, target) = ResolveColumn(db, registry, collection, property);
+        if (!typeof(ISoftDeletable).IsAssignableFrom(d.EntityType)) return 0;
+        var conditionals = new List<IConditionalModel> { InCondition(target, values) };
+        return await CountTrashedDispatcher.For(d.EntityType)(this, conditionals, ct);
+    }
+
+    private async Task<int> CountTrashedGenericAsync<T>(List<IConditionalModel> conditionals, CancellationToken ct)
+        where T : class, new() =>
+        await DeletedScope.Root<T>(db, conditionals, DeletedFilter.Only).CountAsync(ct);
 
     public async Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)

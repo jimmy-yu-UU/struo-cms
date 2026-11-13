@@ -93,6 +93,56 @@
   assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
+- A request the database picks as a deadlock victim now answers `409 CONFLICT`, where it used to
+  answer `500`. The error codes per database:
+  - PostgreSQL: `40P01`
+  - MySQL and MariaDB: `1213`
+  - SQL Server: `1205`
+  - MariaDB also: `1020` (record changed since last read)
+
+  The message is fixed: `The request lost a database deadlock.` This holds for every write, not
+  only tree moves. A deadlock inside the write transaction writes nothing. A deadlock in work done
+  after the commit (a write interceptor's `AfterCommitAsync`) leaves the write applied, so check
+  before sending the request again. A client or monitor that treats `500` as the deadlock signal
+  handles `409` instead. Lock wait timeouts and SQLite's `database is locked` are unchanged.
+- The self-reference cycle check runs inside the write transaction and uses row locks. It is now
+  two steps: `SelfReferenceCycleGuard.LockMovedRowAsync` before the row write and
+  `EnsureNoCycleAsync` after it (its signature changed). Both must be called inside a transaction.
+  The second takes only what the first returned in the same transaction.
+  Because the check follows the row write, some answers change:
+  - A stale `version` plus a cycle: `409 VERSION_CONFLICT`, where it used to be `400`.
+  - A row another request deleted after it was loaded, plus a cycle: `404`, where it used to be
+    `400`.
+  - A unique-key violation on the row write, plus a cycle: `409 CONFLICT`, where it used to be
+    `400`.
+  - The cycle check itself can lose a deadlock: `409`.
+
+  An update that does not change the self-reference key locks only the row being updated.
+  An update that changes it also locks the new parent and its whole ancestor chain.
+- `IItemRepository` gains four members. Their defaults throw `NotSupportedException`:
+  - `GetByIdLockedAsync`: reads one row inside a transaction and locks it, returning the latest
+    committed values. It throws `InvalidOperationException` without a transaction.
+  - `CountTrashedWhereInAsync`: counts the matching rows in the trash with a COUNT, loading no
+    entity.
+  - `SetForeignKeyNullForTrashedAsync`: sets the foreign key to `null` on rows in the trash only.
+  - `IsForeignKeyNullable`: says whether the column accepts NULL, from the ORM's column metadata.
+
+  A fork that implements or wraps `IItemRepository` implements or forwards all four. Otherwise two
+  things fail:
+  - Updating a row of a self-referencing collection.
+  - Purging a row that an `OnDelete.Restrict` relation points at, unless a live referencing row
+    blocks it first.
+- Purging an item now deals with the rows in the trash that point at it through an
+  `OnDelete.Restrict` relation. Their foreign key used to stay, pointing at a row that no longer
+  existed.
+  - A nullable key is set to `null` in the purge transaction.
+  - A key that cannot be null makes the purge answer `409 CONFLICT` and change nothing, until those
+    rows are purged.
+  - Whether a key can be null follows the column itself, as the ORM builds it (nullable annotations
+    and `[SugarColumn(IsNullable = ...)]`).
+
+  A fork with a soft-deletable collection that has such a non-null key checks its purge flows.
+  The core and the sample have none.
 - A duplicate language code answers `409` `CONFLICT` on every backend.
   - SQLite and PostgreSQL: a duplicate that differs only in letter case answered `400` and now
     answers `409` with the same message (`Language code '{code}' already exists.`). The other
@@ -131,7 +181,8 @@
     fork with its own implementation adds the method, follows the rule and accepts the new key
     shape.
   - `FileService`: the constructor takes a new optional last parameter,
-    `IImageVariantCache? variantCache`.
+    `IImageVariantCache? variantCache`, and the class gains the public method
+    `ExistsAsync(Guid id, CancellationToken)` (a file in the trash exists).
   - `DiskImageVariantCache`: gains the public method `RunMaintenance()`, which the API calls in
     the background at every start. Files are laid out as
     `<CachePath>/<file id>/<version hash>/<variant hash>`.
@@ -149,6 +200,20 @@ transformed again on the first request.
 
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
+- New public members:
+  - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
+    `DomainErrorMap.DeadlockMessage`.
+  - `SelfReferenceCycleGuard.LockMovedRowAsync` and the type `SelfReferenceMove`. Only
+    `LockMovedRowAsync` creates it.
+  - `PasswordProof` (`From`, `Matches`), `IAuthService.ConfirmUnchangedAsync`,
+    `IUserSessionStore.RemoveByTicketKeysAsync`, `IImageVariantCache.RemoveAllForFileAsync`,
+    `FileService.ExistsAsync` and `DiskImageVariantCache.RunMaintenance`; Breaking says how each
+    is used.
+  - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
+    `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
+
+  A class that implements or wraps `IItemRepository` must implement or forward all four; see
+  Breaking.
 
 ### Fixed
 
@@ -176,6 +241,14 @@ transformed again on the first request.
   write although the column holds more. It has no limit now, like any column without a length; set
   `MaxLength` on the field to have one. With a `Length` beside the `ColumnDataType`, the limit is that
   `Length`.
+- Purging a media folder with a file in the trash that was in it set no key: restoring the file gave
+  it a `folderId` that pointed at nothing, so it showed neither in the library root nor in the
+  trash. The purge now clears the key and the restored file appears in the root. The same holds for
+  every `Restrict` relation with a nullable key, and for purging a file through
+  `DELETE /api/files/{id}?purge=true`.
+- Two concurrent moves in a tree collection (media folders, for example) in opposite directions
+  could both pass the cycle check and leave two folders as each other's parent. The check now holds
+  locks on the whole chain, so at most one of them succeeds and the other answers `400` or `409`.
 - Revoking all of a user's sessions (a password change, deleting the user) deleted every index row
   of that user after it had listed the ticket keys, so a session whose row was written after the
   listing lost its row while its ticket stayed in the cache, and a later revocation could not find
@@ -192,8 +265,9 @@ transformed again on the first request.
   does not fail the delete). Writing a variant of one `version` also deletes that file's variants of
   other versions. The temp files used for writes were neither counted towards the cap nor ever
   deleted; temp files older than one hour are now deleted at start and on every eviction sweep, and
-  they do not count towards the cap. Only the local disk of the replica that handled the request is
-  cleared; other replicas keep their variants until eviction.
+  they do not count towards the cap. A variant written while its file is being permanently deleted
+  is removed too. Only the local disk of the replica that handled the request is cleared; other
+  replicas keep their variants until eviction.
 
 ### Security
 

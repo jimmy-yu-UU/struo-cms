@@ -45,7 +45,9 @@ public sealed class ItemPurgePipeline(
 
     /// <summary>
     /// The recursive purge core. Runs, in order: (1) the Restrict guard — same
-    /// as <see cref="CheckRestrictAsync"/>; (2) SetNull every inbound FK; (3) recursively purge every
+    /// as <see cref="CheckRestrictAsync"/> - then the foreign keys of trashed rows that still reference the
+    /// target through a Restrict relation are set to null, or the purge is refused when such a key cannot
+    /// be null; (2) SetNull every inbound FK; (3) recursively purge every
     /// inbound Cascade row through this SAME method (<paramref name="visited"/> is a cross-recursion
     /// cycle guard: a (collection, id) pair already being purged is skipped rather than looping
     /// forever on a cyclic Cascade graph); (4) delete this item's own M2M junction rows (parent side)
@@ -69,6 +71,7 @@ public sealed class ItemPurgePipeline(
         var meta = Meta(collection);
         await CheckRestrictAsync(collection, id, ct);
         var typedId = TypedId(collection, id);
+        await ClearTrashedRestrictReferencesAsync(collection, id, typedId, ct);
 
         foreach (var (sourceCollection, foreignKey) in graph.InboundSetNull(collection))
         {
@@ -112,6 +115,30 @@ public sealed class ItemPurgePipeline(
         var deleted = await repository.DeleteAsync(collection, id, ct);
         if (deleted) changes.Add(meta.Name, typedId.ToString()!, ItemChangeKind.Purged);
         return deleted;
+    }
+
+    // The Restrict check on live rows has passed, so the rows that reference the target in the trash are the
+    // ones left to deal with. Their key is set to null in this transaction, or the purge is refused when the
+    // key column cannot hold NULL. Count and update match trashed rows only, so a row restored or created
+    // since the check keeps its key. Nothing is written until every relation has been checked. Audit
+    // columns and revisions stay as they are, and no change notification is raised for a trashed row.
+    private async Task ClearTrashedRestrictReferencesAsync(
+        string collection, string id, object typedId, CancellationToken ct)
+    {
+        var toClear = new List<(string SourceCollection, string ForeignKey)>();
+        foreach (var (sourceCollection, foreignKey) in graph.InboundRestrict(collection))
+        {
+            var count = await repository.CountTrashedWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
+            if (count == 0) continue;
+            if (!repository.IsForeignKeyNullable(sourceCollection, foreignKey))
+                throw new RelationConflictException(
+                    $"Cannot delete '{collection}/{id}': {count} trashed '{Meta(sourceCollection).Name}' " +
+                    "item(s) reference it and the reference cannot be cleared. " +
+                    "Delete them permanently first.");
+            toClear.Add((sourceCollection, foreignKey));
+        }
+        foreach (var (sourceCollection, foreignKey) in toClear)
+            await repository.SetForeignKeyNullForTrashedAsync(sourceCollection, foreignKey, typedId, ct);
     }
 
     // U5b: a SetNull child's document changes too (its FK is about to be cleared), so record an

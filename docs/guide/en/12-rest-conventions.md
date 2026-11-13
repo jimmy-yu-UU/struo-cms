@@ -119,7 +119,14 @@ means the same thing on both protocols:
 | `IMAGE_TRANSFORM_BUSY` | 503 | No image-transform slot freed within the queue timeout |
 
 - `CONFLICT` covers a delete blocked by a relation, a duplicate email, a database unique-key
-  violation, and any other plain 409.
+  violation, and any other plain 409. A request the database picks as a deadlock victim also
+  answers `409`, with the fixed message `The request lost a database deadlock.` The error codes are
+  PostgreSQL `40P01`, MySQL and MariaDB `1213`, SQL Server `1205`, and MariaDB also `1020`. A lock
+  wait timeout is not covered. Where the deadlock happens decides whether the write took effect, for
+  example:
+  - Inside the write transaction: nothing was written, and the request can be sent again.
+  - In work done after the commit (a write interceptor's `AfterCommitAsync`): the write is applied,
+    so check before sending it again.
 - `LAST_SUPER_ADMIN` is the refusal to remove the last active account from a super-admin role, by
   deactivating, deleting or unassigning it ([Chapter 17](17-roles-and-permissions.md)). It is a `409`
   like `CONFLICT`, with its own code so a client can explain it.

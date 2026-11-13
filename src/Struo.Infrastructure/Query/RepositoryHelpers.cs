@@ -1,4 +1,5 @@
 // src/Struo.Infrastructure/Query/RepositoryHelpers.cs
+using SqlSugar;
 using Struo.Application.Metadata;
 
 namespace Struo.Infrastructure.Query;
@@ -7,6 +8,14 @@ internal static class RepositoryHelpers
 {
     public static EntityDescriptor Descriptor(IEntityRegistry registry, string collection) =>
         registry.Get(collection) ?? throw new InvalidOperationException($"Unknown collection '{collection}'.");
+
+    // Inside a transaction a read is a locking read (FOR UPDATE, or UPDLOCK on SQL Server): it sees the
+    // latest committed row even where the transaction's snapshot is older, and a concurrent change waits.
+    // SQLite has a single writer and takes no lock clause.
+    public static ISugarQueryable<T> Locked<T>(ISqlSugarClient db, ISugarQueryable<T> query) =>
+        db.Ado.IsAnyTran() && db.CurrentConnectionConfig.DbType != DbType.Sqlite
+            ? query.TranLock(DbLockType.Wait)
+            : query;
 
     /// <summary>
     /// Converts a string ID to the PK property type. Handles Guid and all IConvertible types.

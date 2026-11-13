@@ -22,12 +22,13 @@ public static class DomainErrorMap
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
     /// yields <see cref="ErrorCodes.Forbidden"/>. A <see cref="StruoDomainException"/> (a fork's own error) is matched first and surfaces
     /// its own code and message. Mapped domain exceptions surface their
-    /// client-safe <see cref="System.Exception.Message"/> verbatim. Three cases carry a fixed message
-    /// instead. Two because the exception's own text names internals:
+    /// client-safe <see cref="System.Exception.Message"/> verbatim. Four cases carry a fixed message
+    /// instead. Three because the exception's own text names internals:
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
-    /// host) and a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
-    /// constraint, index or column). The third is Kestrel's own 413 <c>BadHttpRequestException</c>, an
-    /// over-limit request body, which maps to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
+    /// host), a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
+    /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The
+    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps
+    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
     /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
@@ -52,6 +53,7 @@ public static class DomainErrorMap
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
+            _ when IsDeadlockVictim(exception) => (ErrorCodes.Conflict, DeadlockMessage),
             _ => (ErrorCodes.Internal, "An internal error occurred."),
         };
 
@@ -84,6 +86,19 @@ public static class DomainErrorMap
     /// message, which names the constraint, index or column.
     /// </summary>
     public const string UniqueViolationMessage = "A record with the same unique value already exists.";
+
+    /// <summary>
+    /// True when the database ended <paramref name="exception"/>'s transaction as a deadlock victim (or, on
+    /// MariaDB, because a record changed since it was read). Inside a write transaction nothing was
+    /// written; work done after the commit follows a write that is already applied.
+    /// </summary>
+    public static bool IsDeadlockVictim(Exception exception) => DeadlockVictim.IsMatch(exception);
+
+    /// <summary>
+    /// Fixed client-facing message for a request that lost a database deadlock. Never the provider's own
+    /// message, which names internals.
+    /// </summary>
+    public const string DeadlockMessage = "The request lost a database deadlock.";
 
     /// <summary>
     /// REST-only: the HTTP status for <paramref name="exception"/>. A <see cref="StruoDomainException"/>

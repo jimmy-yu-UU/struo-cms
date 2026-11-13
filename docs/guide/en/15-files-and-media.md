@@ -302,7 +302,10 @@ self-referencing its parent, entirely decoupled from storage keys, `Hidden` for 
 
 Deleting a folder that still holds files or child folders is blocked by the ordinary
 `OnDelete.Restrict`, not by any special-cased logic, returning `409`/`CONFLICT` with the message
-`Cannot delete 'mediaFolder/{id}': referenced by 'file'.`.
+`Cannot delete 'mediaFolder/{id}': referenced by 'file'.`. Files that are only in the trash do not
+block it: purging the folder sets their `folderId` to `null`, and a restored file appears in the
+library root. Moving a folder under its own descendant is rejected by the cycle guard (`400`), see
+[Chapter 8](08-relations.md).
 
 ## Live image transforms
 
@@ -414,6 +417,11 @@ A permanent delete of a file (`?purge=true`, through the media library or the it
 all of that file's variants once the row is gone, and no other file's. A failure to remove them is
 logged as one warning and does not fail the delete. Trash and restore do not touch variants.
 
+If a file is permanently deleted while a transform of it is in flight, the variant that transform
+writes is removed too: after the write, the request checks that the file row still exists and
+deletes the file's variants if it does not. A trashed file's row still exists, so trash does not
+remove variants.
+
 When stale temp files, empty directories and leftover variants are cleaned up depends on whether
 there is a size cap. No cap means `CacheMaxBytes` of `0` or less, and then there is no eviction
 sweep.
@@ -432,9 +440,9 @@ variant of another version that a write could not delete is left for a later wri
 permanent delete, and, with a cap, possibly for eviction.
 
 If a directory is removed in the middle of a write, by a permanent delete or another cleanup, the
-write creates it again and retries, up to five times. If it still fails, the variant counts as a
-cache miss: the response carries the transformed image uncached, one warning is logged, and the
-request is not affected.
+write creates it again and retries, up to five attempts in all. If it still fails, the variant
+counts as a cache miss: the response carries the transformed image uncached, one warning is
+logged, and the request is not affected.
 
 At start, the API tidies `CachePath` once in the background. It deletes only files of exactly two
 shapes, `<2 hex>/<64 hex>` (the directory equals the first two characters of the name) and, in the

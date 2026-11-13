@@ -242,7 +242,7 @@ public sealed class ItemService(
             operation == RevertOperation ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
             meta, existing, id, bodyKeys, body, preMerge);
         await hooks.BeforeWriteAsync(ct);
-        await ValidateMergedAsync(collection, meta, d, body, existing, ct);
+        ValidateMerged(meta, d, body, existing);
 
         var persisted = await PersistUpdateAsync(
             new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings), meta, d, body, existing, hooks, ct);
@@ -276,7 +276,7 @@ public sealed class ItemService(
         // No Required check here — an update only overlays fields the client actually sent (see
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
         // `incoming` alone; the Required check re-runs against the merged `existing` entity in
-        // ValidateMergedAsync.
+        // ValidateMerged.
         var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
@@ -331,15 +331,10 @@ public sealed class ItemService(
     // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert
     // passes a full snapshot as its body, so every field is re-sent and this check sees the same
     // values a full PUT would.
-    private async Task ValidateMergedAsync(
-        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing,
-        CancellationToken ct)
+    private static void ValidateMerged(
+        CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
-
-        // Self-referencing tree collections: reject a parentId that points at the item itself or
-        // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
-        await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
 
         // Optimistic concurrency: guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
@@ -364,8 +359,14 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            // Self-referencing tree collections: lock the row and find out whether the update changes the
+            // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
+            // movers form a deadlock the database detects.
+            var moves = await cycleGuard.LockMovedRowAsync(collection, meta, existing, ct);
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
+            // Reject a parentId that points at the item itself or one of its descendants.
+            await cycleGuard.EnsureNoCycleAsync(collection, moves, ct);
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (a revert); every other write path stays strict.
