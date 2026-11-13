@@ -24,14 +24,16 @@ using FileTranslation = Struo.Infrastructure.Files.FileTranslation;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// Two writers, each with its own connection and transaction, move media folders at the same time. A gate
-/// holds each writer at its first locked read until both have written their own row, so both reach the
-/// cycle check with an uncommitted write pending. Whatever the interleaving, the stored rows must not
-/// contain a cycle afterwards and at most one writer may succeed.
+/// Two writers, each with its own connection and transaction, move media folders at the same time. On a
+/// backend with row locks a gate holds each writer at its first locked read until both have written their
+/// own row, so both reach the cycle check with an uncommitted write pending. SQLite has a single writer, so
+/// the second writer never reaches a gate while the first holds the write lock; there the writers run
+/// without one. Whatever the interleaving, the stored rows must not contain a cycle afterwards and at most
+/// one writer may succeed.
 /// </summary>
 public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
 {
-    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);
 
     private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     private readonly ItemService _setup;
@@ -41,7 +43,7 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
 
     public SelfReferenceCycleConcurrencyTests()
     {
-        var gate = new ArrivalGate(2, GateTimeout);
+        var gate = TestBackend.IsLive ? new ArrivalGate(2, GateTimeout) : null;
         _setup = Build(true, null);
         _writerA = Build(false, gate);
         _writerB = Build(false, gate);

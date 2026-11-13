@@ -41,7 +41,7 @@ public class OppositeFolderMoveApiTests
         {
             if (!Armed || context.Operation != ItemWriteOperation.Update) return;
             if (Interlocked.Increment(ref _arrived) >= 2) _release.TrySetResult();
-            await Task.WhenAny(_release.Task, Task.Delay(TimeSpan.FromSeconds(10), ct));
+            await Task.WhenAny(_release.Task, Task.Delay(TimeSpan.FromSeconds(30), ct));
         }
     }
 
