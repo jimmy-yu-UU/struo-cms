@@ -284,7 +284,8 @@ public sealed class DiskImageVariantCacheFailureTests : IDisposable
 
         var act = () => cache.RemoveAllForFileAsync(file, default);
 
-        (await act.Should().ThrowAsync<Exception>()).Which.Should().Match<Exception>(e => e is IOException or UnauthorizedAccessException);
+        var error = (await act.Should().ThrowAsync<Exception>()).Which;
+        (error is IOException or UnauthorizedAccessException).Should().BeTrue(error.GetType().Name);
         cache.TrackedBytes.Should().Be(-1);
     }
 
