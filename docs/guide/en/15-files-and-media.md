@@ -422,12 +422,19 @@ sweep.
 |---|---|---|
 | Stale temp files of any file | At start, every sweep | At start only |
 | Stale temp files of the file written | Every write | Every write |
-| Empty file and version directories | At start, every sweep | At start only |
+| Empty file and version directories over an hour old | At start, every sweep | At start only |
 | Variants a permanent delete could not remove | Evicted over the cap, least recently read first | Stay until removed by hand |
 
 Empty directories are only those shaped `<file id>` and `<file id>/<version hash>`; `CachePath`
-itself is never removed. A variant of another version that a write could not delete is left for a
-later write of that file or a permanent delete, and, with a cap, possibly for eviction.
+itself is never removed. A directory is removed only if it is empty and its last change (an entry
+added or removed) is over an hour old, so a directory a writer has just created is left alone. A
+variant of another version that a write could not delete is left for a later write of that file or a
+permanent delete, and, with a cap, possibly for eviction.
+
+If a directory is removed in the middle of a write, by a permanent delete or another cleanup, the
+write creates it again and retries, up to five times. If it still fails, the variant counts as a
+cache miss: the response carries the transformed image uncached, one warning is logged, and the
+request is not affected.
 
 At start, the API tidies `CachePath` once in the background. It deletes only files of exactly two
 shapes, `<2 hex>/<64 hex>` (the directory equals the first two characters of the name) and, in the
