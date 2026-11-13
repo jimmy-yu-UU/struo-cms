@@ -73,6 +73,24 @@
   assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
+- A write the database ends as a deadlock victim answers `409 CONFLICT` with a fixed message instead
+  of `500`: PostgreSQL `40P01`, MySQL and MariaDB `1213`, SQL Server `1205`, and MariaDB `1020`
+  (record changed since last read). It applies to every write, not only tree moves, and nothing is
+  written. A client or monitor that treats `500` as the signal for a lost deadlock handles `409`
+  instead, and can send the request again. Lock wait timeouts and SQLite's `database is locked` are
+  unchanged.
+- The self-reference cycle check runs inside the write transaction, after the row is written, and
+  takes row locks on the moved row and every row of the parent chain. `SelfReferenceCycleGuard`
+  must be called inside a transaction. `IItemRepository` gains `GetByIdLockedAsync`, whose default
+  is a plain read; a fork's own implementation that serves concurrent writers overrides it with a
+  locking read, or the guard decides from values another transaction can change. An update that
+  carries a stale `version` and also a cycle answers `409 VERSION_CONFLICT` instead of `400`.
+- Purging an item whose trashed rows still point at it through an `OnDelete.Restrict` relation
+  sets their foreign key to `null` in the purge transaction, where it used to leave the key pointing
+  at a row that no longer existed. When that foreign key cannot be null, the purge answers
+  `409 CONFLICT` and changes nothing until those trashed rows are purged. A fork with a
+  soft-deletable collection that has such a non-null key checks its purge flows; the core and the
+  sample have none.
 :::
 
 ### Added
@@ -82,6 +100,14 @@
 
 ### Fixed
 
+- Purging a media folder with a file in the trash that was in it set no key: restoring the file gave
+  it a `folderId` that pointed at nothing, so it showed neither in the library root nor in the
+  trash. The purge now clears the key and the restored file appears in the root. The same holds for
+  every `Restrict` relation with a nullable key, and for purging a file through
+  `DELETE /api/files/{id}?purge=true`.
+- Two concurrent moves in a tree collection (media folders, for example) in opposite directions
+  could both pass the cycle check and leave two folders as each other's parent. The check now holds
+  locks on the whole chain, so at most one of them succeeds and the other answers `400` or `409`.
 - Password login and external login accept a found account only when its stored email and the
   submitted one are character for character the same once trimmed and lowercased. The default
   collations of MySQL, MariaDB and SQL Server treat some spellings as equal (accents, full-width

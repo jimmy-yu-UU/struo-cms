@@ -246,7 +246,9 @@ Logo 必須先在媒體庫發布才能儲存，否則儲存會回 `400`。草稿
 鉤，`Hidden` 的理由跟 `File` 一樣。資料夾的 CRUD 走一般的 `api/items/mediaFolder`，不經過
 `FilesController`。刪除一個還有檔案或子資料夾的資料夾，會被普通的 `OnDelete.Restrict` 擋
 下，不是另外寫的邏輯，回 `409`／`CONFLICT`，訊息是 `Cannot delete 'mediaFolder/{id}':
-referenced by 'file'.`。
+referenced by 'file'.`。只在垃圾桶裡的檔案不擋：清除資料夾時它們的 `folderId` 被設成 `null`，復原後
+出現在媒體庫根目錄。把資料夾搬到自己的子孫底下會被循環守衛擋下（`400`），
+見[第 8 章](08-relations.md)。
 
 ## 即時圖片轉換
 

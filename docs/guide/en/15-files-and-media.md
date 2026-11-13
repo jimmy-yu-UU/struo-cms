@@ -302,7 +302,10 @@ self-referencing its parent, entirely decoupled from storage keys, `Hidden` for 
 
 Deleting a folder that still holds files or child folders is blocked by the ordinary
 `OnDelete.Restrict`, not by any special-cased logic, returning `409`/`CONFLICT` with the message
-`Cannot delete 'mediaFolder/{id}': referenced by 'file'.`.
+`Cannot delete 'mediaFolder/{id}': referenced by 'file'.`. Files that are only in the trash do not
+block it: purging the folder sets their `folderId` to `null`, and a restored file appears in the
+library root. Moving a folder under its own descendant is rejected by the cycle guard (`400`), see
+[Chapter 8](08-relations.md).
 
 ## Live image transforms
 
