@@ -303,4 +303,50 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
         response.StatusCode.Should().Be(HttpStatusCode.OK, "a failed cleanup costs disk, not the response");
         controllerLog.Warnings.Should().ContainSingle(w => w.Contains(id, StringComparison.OrdinalIgnoreCase));
     }
+
+    private sealed class InstantTransformer : IImageTransformer
+    {
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels) =>
+            new([1, 2, 3, 4], "image/png", 1, 1);
+    }
+
+    // The other order of the interleaving: the variant has landed, the purge completes, and only then does
+    // the writer check that the file still exists.
+    [Theory]
+    [InlineData("/api/files/{0}?purge=true", 0L)]
+    [InlineData("/api/items/file/{0}?purge=true", 0L)]
+    [InlineData("/api/files/{0}?purge=true", 100_000_000L)]
+    [InlineData("/api/items/file/{0}?purge=true", 100_000_000L)]
+    public async Task A_purge_that_completes_after_the_variant_landed_and_before_the_row_check_leaves_no_variant(
+        string route, long cap)
+    {
+        using var landed = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var cache = new Struo.Infrastructure.Files.DiskImageVariantCache(_cacheRoot, cap)
+        {
+            VariantLanded = _ =>
+            {
+                landed.Set();
+                release.Wait(Wait);
+            },
+        };
+        using var host = Host(s =>
+        {
+            s.AddSingleton<IImageTransformer>(new InstantTransformer());
+            s.AddSingleton<IImageVariantCache>(cache);
+        });
+        var c = await SignedInAsync(host);
+        var id = await UploadPng(c);
+
+        var inFlight = c.GetAsync($"/api/files/{id}/content?width=64&format=png");
+        landed.Wait(Wait).Should().BeTrue("the variant landed");
+        VariantCount(id).Should().Be(1);
+        (await c.DeleteAsync(string.Format(route, id))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        release.Set();
+        var response = await inFlight;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "the image is still served");
+        VariantCount(id).Should().Be(0, "no variant of a purged file remains, whichever side removed it");
+        Directory.Exists(Path.Combine(_cacheRoot, id)).Should().BeFalse();
+    }
 }

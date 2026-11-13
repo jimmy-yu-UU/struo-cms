@@ -931,4 +931,47 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
             if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task A_purge_whose_delete_loses_a_child_directory_tries_again_while_the_file_directory_is_there()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = dir =>
+        {
+            // A sub-entry vanished under the recursive delete (a sweep, a tidy): the directory itself stays.
+            if (Interlocked.Increment(ref calls) == 1) throw new DirectoryNotFoundException();
+            Directory.Delete(dir, recursive: true);
+        };
+
+        await cache.RemoveAllForFileAsync(file, default);
+
+        calls.Should().Be(2);
+        Directory.Exists(DirOf(file)).Should().BeFalse("the second attempt removed what the first left");
+        cache.TrackedBytes.Should().Be(-1, "a retry means bytes may have moved, so the next write recounts");
+    }
+
+    [Fact]
+    public async Task A_purge_that_keeps_losing_children_while_the_directory_stays_warns_and_resets_the_total()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            throw new DirectoryNotFoundException();
+        };
+
+        var act = () => cache.RemoveAllForFileAsync(file, default);
+
+        await act.Should().NotThrowAsync();
+        calls.Should().Be(DiskImageVariantCache.PurgeAttempts);
+        logger.Warnings.Should().Be(1, "variants that stay after a purge are not benign");
+        cache.TrackedBytes.Should().Be(-1);
+    }
 }

@@ -439,10 +439,15 @@ added or removed) is over an hour old, so a directory a writer has just created 
 variant of another version that a write could not delete is left for a later write of that file or a
 permanent delete, and, with a cap, possibly for eviction.
 
-If a directory is removed in the middle of a write, by a permanent delete or another cleanup, the
-write creates it again and retries, up to five attempts in all. If it still fails, the variant
-counts as a cache miss: the response carries the transformed image uncached, one warning is
-logged, and the request is not affected.
+The first attempt of a write creates every missing directory. If a directory is removed in the
+middle of the write, the write tries again, up to five attempts in all, in one of two ways:
+
+- Only the `<version hash>` directory is gone (another version's write removed it, say): it is
+  created again and the write retries. If all five attempts fail, the variant counts as a cache
+  miss, one warning is logged, and the response still carries the transformed image.
+- The `<file id>` directory is gone too (the file was permanently deleted, or its empty directory
+  was pruned): nothing is created again. The write counts as a cache miss, no warning is logged, and
+  the response still carries the transformed image.
 
 At start, the API tidies `CachePath` once in the background. It deletes only files of exactly two
 shapes, `<2 hex>/<64 hex>` (the directory equals the first two characters of the name) and, in the

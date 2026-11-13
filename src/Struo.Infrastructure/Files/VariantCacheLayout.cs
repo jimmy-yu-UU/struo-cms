@@ -82,12 +82,13 @@ internal static class VariantCacheLayout
         (entry.Attributes & FileAttributes.ReparsePoint) != 0;
 
     // "Directory not empty" as .NET reports it: ERROR_DIR_NOT_EMPTY on Windows (0x80070091) and ENOTEMPTY
-    // on Linux (39), both observed by running; ENOTEMPTY on macOS (66) is from the platform documentation.
+    // on Linux (39), both observed by running; ENOTEMPTY on macOS and FreeBSD (66) is from the platform
+    // documentation, not observed.
     // Another platform has no code here, so its failure is not treated as a race.
     private static int? DirectoryNotEmptyCode =>
         OperatingSystem.IsWindows() ? unchecked((int)0x80070091)
         : OperatingSystem.IsLinux() ? 39
-        : OperatingSystem.IsMacOS() ? 66
+        : OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD() ? 66
         : null;
 
     /// <summary>

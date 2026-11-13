@@ -247,7 +247,7 @@ public sealed class FilesController(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Checking whether file {FileId} still exists after caching a variant failed.", id);
+            logger.LogWarning(ex, "Could not confirm or clean up the cached variants of file {FileId} after caching one.", id);
         }
     }
 }

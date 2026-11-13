@@ -24,15 +24,17 @@ namespace Struo.Infrastructure.Files;
 /// counted as variants. The stale ones (older than <see cref="VariantCacheLayout.StaleTempAge"/>) are
 /// removed by <see cref="RunMaintenance"/> at start, by every eviction sweep, and, for the file written,
 /// by each write; the sweep and the start also remove empty directories of the layout. A zero or negative
-/// <c>maxBytes</c> means no cap. The running total can read low when two removals of the same files
-/// overlap; the next sweep, a failed removal (which resets it so the next write counts the disk again)
-/// and a restart bring it back in line. Symbolic links and junctions are never followed or removed.
+/// <c>maxBytes</c> means no cap. The running total can read low (two removals of the same files overlap)
+/// or high (two writers of one key both add its length; a purge found the directory already gone). The
+/// next sweep, a failed removal (it resets the total so the next write counts the disk again) and a
+/// restart bring it back in line. Symbolic links and junctions are never followed or removed.
 /// </remarks>
 public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
     : IImageVariantCache
 {
     private const int MoveAttempts = 5;
     private const int MoveRetryDelayMs = 10;
+    private const int PurgeRetryDelayMs = 10;
     internal const int StoreAttempts = 5;
     internal const int PurgeAttempts = 3;
 
@@ -189,30 +191,32 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
             .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
             .SelectMany(VariantsIn);
 
-    public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct)
+    public async Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var dir = Path.Combine(rootPath, VariantCacheLayout.FileDirName(fileId));
         if (!Directory.Exists(dir) || VariantCacheLayout.IsReparsePoint(new DirectoryInfo(dir)))
-            return Task.CompletedTask;
+            return;
         var freed = SafeLength(() => VariantsOf(new DirectoryInfo(dir)).Sum(v => v.Length));
-        IOException? notEmpty = null;
+        IOException? remaining = null;
         var retried = false;
         for (var attempt = 1; attempt <= PurgeAttempts; attempt++)
         {
+            if (attempt > 1) await Task.Delay(PurgeRetryDelayMs, ct);   // a writer or a pending delete finishes
             try
             {
                 DeleteTree(dir);
-                notEmpty = null;
+                remaining = null;
                 break;
             }
-            catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex))
+            catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex) && !Directory.Exists(dir))
             {
-                return Task.CompletedTask;   // another purge removed it first, and accounted for it
+                return;   // the directory itself is gone: another purge removed it first, and accounted for it
             }
-            catch (IOException ex) when (VariantCacheLayout.IsDirectoryNotEmpty(ex))
+            catch (IOException ex) when (
+                VariantCacheLayout.IsMissingPath(ex) || VariantCacheLayout.IsDirectoryNotEmpty(ex))
             {
-                notEmpty = ex;   // a writer recreated an entry while the tree was being removed: try again
+                remaining = ex;   // a sub-entry vanished, or a writer added one, while the tree was removed
                 retried = true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -222,8 +226,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
             }
         }
 
-        FinishPurgeAccounting(dir, freed, retried, notEmpty);
-        return Task.CompletedTask;
+        FinishPurgeAccounting(dir, freed, retried, remaining);
     }
 
     // Bytes a writer added while the purge ran are unknown, so any retry resets the total for a recount;
