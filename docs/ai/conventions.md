@@ -363,8 +363,8 @@ that only ever runs one backend is free to write `[SugarColumn(ColumnDataType = 
 instead — that convention is respected too, just at lower precedence.
 
 **Contradicting declarations are rejected at startup.** `ColumnDeclarationCheck`
-(`src/Struo.Infrastructure/Metadata/ColumnDeclarationCheck.cs`) runs from `MetadataScanner` for every
-`[CmsField]` property that has a column, in collections, translation entities and junction
+(`src/Struo.Infrastructure/Metadata/ColumnDeclarationCheck.cs`) runs from `MetadataScanner` for
+every `[CmsField]` property that has a column, in collections, translation entities and junction
 collections. It throws a `MetadataException` naming `Class.Property` and both declarations for:
 
 - `[ColumnShape]` or `ColumnDataType` on a `JsonColumnInterfaces` member;

@@ -15,6 +15,8 @@ from the repository root:
   conventions, the template invariants, and the CI, Docker and health conventions. A fork can delete
   it (see [Chapter 25](25-after-forking.md)).
 - `tests/Struo.Tests.Fixtures` is a test-only content project, described below.
+- `tests/Struo.Tests.InvalidFixtures` is a test-only content project whose collections the metadata
+  scan rejects. A test names it as a content assembly to see the startup failure.
 - `tests/Struo.Tests.Support` is a class library, not a test project. It holds the helpers the test
   projects share.
 

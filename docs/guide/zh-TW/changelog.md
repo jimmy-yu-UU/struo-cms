@@ -80,9 +80,13 @@
     讓 `_eq` 比不到任何列。沒有 `IsJson` 的 `List<>` 屬性加 `ColumnDataType`，原本在 PostgreSQL、
     MySQL 與 MariaDB 上每次寫入都失敗。拿掉 `ColumnDataType` 後，欄位成為框架的 JSON 長文字型別；
     表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
-  - 可為 null 的屬性（`Guid?`、`int?`、`string?`）加 `[SugarColumn(IsNullable = false)]`。原本被
-    忽略，欄位照樣可為 null，所以拿掉 `IsNullable = false` 欄位不變。要 NOT NULL，把屬性宣告成
-    不可為 null（`Guid`、`string`），欄位會跟著變，已建好的表要另寫一支 migration。
+  - `IsJson = true` 加 `[ColumnShape]`。原本通過，欄位型別取 shape 的型別（例如
+    `timestamptz`），JSON 欄位因此不是長文字。拿掉 `[ColumnShape]` 後，欄位成為框架的 JSON 長文字
+    型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加
+    `[SugarColumn(IsNullable = false)]`。原本被忽略，欄位照樣可為 null，所以拿掉
+    `IsNullable = false` 欄位不變。要 NOT NULL，把屬性宣告成不可為 null（`Guid`、`string`），
+    欄位會跟著變，已建好的表要另寫一支 migration。
 
   規則與各組合的改法見[第 6 章](06-field-types.md#啟動時被擋的宣告)。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
@@ -185,7 +189,10 @@
   - `PasswordProof`（`From`、`Matches`）、`IAuthService.ConfirmUnchangedAsync`、
     `IUserSessionStore.RemoveByTicketKeysAsync`、`IImageVariantCache.RemoveAllForFileAsync`、
     `FileService.ExistsAsync` 與 `DiskImageVariantCache.RunMaintenance`，各自的用法見破壞性變更。
-  - `StruoCmsCommands.TryReportStartupFailure`：回報掃描器在指令執行時擋下的啟動失敗，用法見修正。
+  - `StruoCmsCommands.TryReportStartupFailure`：回報指令執行時的 `MetadataException` 啟動失敗，用法
+    見修正。
+  - `ForkHost.StartAsync` 與 `ForkHost.StartupErrorAsync`（`Struo.Tests.Support`）多了選用參數
+    `environment`，這是二進位層級的變更；參照 `Struo.Tests.Support` 的測試專案要重新編譯。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -193,16 +200,38 @@
 
 ### 修正
 
-- `[CmsField]` 的 `List<>` 屬性，介面不是 JSON 介面、也沒寫 `IsJson`，由框架對映成 JSON 欄位（`IsJson`
-  加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，`make:migration` 輸出 `.AsJson(Db)`。
-  原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗；SQLite 與 SQL Server 上，0 或 1 個元素的
-  清單寫入成功，讀回來是空清單。已標 `IsJson` 的屬性不變，`[Navigate]` 與 `[CmsTranslations]` 的
-  清單沒有 `[CmsField]`，不受影響。
-- 掃描器的啟動失敗讓 `make:migration` 與 `migrate:check` 印出一行 `<指令> failed: <訊息>` 並以 1
-  結束，不帶 stack trace。範本的 `Program.cs` 在通用的 `catch` 前多了一個
-  `catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))`；
-  fork 自己的 `Program.cs` 要照加，否則掃描器的訊息只會連同 stack trace 記在 log 裡。`make:migration
-  --entity` 遇到欄位對映拒絕的 entity 時，也印出訊息並以 1 結束。
+- `[CmsField]` 的 `List<>` 屬性，介面不是 JSON 介面、也沒寫 `IsJson`，由框架對映成 JSON 欄位
+  （`IsJson` 加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，`make:migration` 輸出
+  `.AsJson(Db)`。原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗；SQLite 與 SQL Server 上，
+  0 或 1 個元素的清單寫入成功，讀回來是空清單。已標 `IsJson` 的屬性不變，`[Navigate]` 與
+  `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
+- 主機因 `MetadataException` 建不起來，而命令列帶了指令時，印出一行 `<指令> failed: <訊息>` 並以 1
+  結束，不帶 stack trace，也不寫 log。指令是 `migrate`、`migrate:status`、`migrate:preview`、
+  `migrate:baseline`、`migrate:check`、`make:migration`、`files:sweep`、`auth:unlock` 任何一個；
+  `MetadataException` 包括本版新增的欄位宣告檢查、載入不了的內容組件與重複的集合名稱。其他啟動例外
+  照舊走通用的 `catch`。fork 自己的 `Program.cs` 要照範本改兩處，否則訊息只會連同 stack trace 記在
+  log 裡：
+
+  ```csharp
+  MigrationCliInvocation? cli = null;
+  try
+  {
+      cli = MigrationCli.Parse(args);   // 原本是 var cli = MigrationCli.Parse(args);
+      // ... 其餘不變
+  }
+  catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))
+  {
+      Environment.ExitCode = MigrationCli.Failure;
+  }
+  catch (Exception ex)
+  {
+      // 原有的 Log.Fatal 與 Environment.ExitCode = 1 不變
+  }
+  ```
+
+  `make:migration --entity` 遇到掃描器沒檢查過的 entity、而欄位對映拒絕它時，也印出訊息並以 1 結束。
+  掃描器看不到的 entity 上，JSON 介面加 `[ColumnShape]` 的拒絕，例外型別由
+  `InvalidOperationException` 改成 `MetadataException`。
 - 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
   MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端
   不同），變體因此能登入同一個帳號，登入鎖定的計數卻落在另一個鍵上，鎖定擋不住它。現在變體的

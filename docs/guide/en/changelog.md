@@ -86,26 +86,32 @@
   collections, translation entities and junction payloads, in every environment; a `Repeater`
   sub-field and a property with `[SugarColumn(IsIgnore = true)]` are not checked. A fork that
   declares one of these combinations can no longer start the host:
-  - A JSON interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`)
-    with `[ColumnShape]`. Development used to fail at startup with an `InvalidOperationException`;
+  - A JSON interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`) with
+    `[ColumnShape]`. Development used to fail at startup with an `InvalidOperationException`;
     Production started and every use of the table answered `500`; `make:migration` let the exception
     escape. Remove `[ColumnShape]`; the column does not change.
-  - A JSON interface with an explicit `ColumnDataType`. It used to be ignored, and the column was the
-    framework's JSON long-text type anyway (`jsonb` still built `text`). Remove `ColumnDataType`; the
-    column does not change.
-  - `[ColumnShape]` with `ColumnDataType`. `[ColumnShape]` used to win and `ColumnDataType` was dropped
-    without a word. Remove `ColumnDataType` and the column does not change; to use your own type,
-    remove `[ColumnShape]` instead and the column type changes with it.
-  - `IsJson = true`, or a `List<>` property, with `ColumnDataType`. `IsJson = true` used to accept the
-    declared type: PostgreSQL `jsonb` made REST filters on the column (`_eq`, `_contains`) answer
-    `500`, and MySQL `json` made `_eq` match no row. A `List<>` property without `IsJson` and with
-    `ColumnDataType` used to fail every write on PostgreSQL, MySQL and MariaDB. After you remove
-    `ColumnDataType` the column is the framework's JSON long-text type; a table built with another
-    type shows up in `migrate:check` and needs a migration that changes the column to long text.
-  - A nullable property (`Guid?`, `int?`, `string?`) with `[SugarColumn(IsNullable = false)]`. It used to
-    be ignored and the column was nullable anyway, so removing `IsNullable = false` changes nothing.
-    For NOT NULL, declare the property non-nullable (`Guid`, `string`); the column changes with it
-    and a table that exists needs its own migration.
+  - A JSON interface with an explicit `ColumnDataType`. It used to be ignored, and the column was
+    the framework's JSON long-text type anyway (`jsonb` still built `text`). Remove
+    `ColumnDataType`; the column does not change.
+  - `[ColumnShape]` with `ColumnDataType`. `[ColumnShape]` used to win and `ColumnDataType` was
+    dropped without a word. Remove `ColumnDataType` and the column does not change; to use your own
+    type, remove `[ColumnShape]` instead and the column type changes with it.
+  - `IsJson = true`, or a `List<>` property, with `ColumnDataType`. `IsJson = true` used to accept
+    the declared type: PostgreSQL `jsonb` made REST filters on the column (`_eq`, `_contains`)
+    answer `500`, and MySQL `json` made `_eq` match no row. A `List<>` property without `IsJson` and
+    with `ColumnDataType` used to fail every write on PostgreSQL, MySQL and MariaDB. After you
+    remove `ColumnDataType` the column is the framework's JSON long-text type; a table built with
+    another type shows up in `migrate:check` and needs a migration that changes the column to long
+    text.
+  - `IsJson = true` with `[ColumnShape]`. It used to pass, and the column took the shape's type (for
+    example `timestamptz`), so the JSON column was not long text. After you remove `[ColumnShape]`
+    the column is the framework's JSON long-text type; a table built with another type shows up in
+    `migrate:check` and needs a migration that changes the column to long text.
+  - A `Nullable<T>` (`Guid?`, `int?`) or `string?` property with
+    `[SugarColumn(IsNullable = false)]`. It used to be ignored and the column was nullable anyway,
+    so removing `IsNullable = false` changes nothing. For NOT NULL, declare the property
+    non-nullable (`Guid`, `string`); the column changes with it and a table that exists needs its
+    own migration.
 
   [Chapter 6](06-field-types.md#declarations-rejected-at-startup) has the rules and the change for
   each combination.
@@ -237,8 +243,11 @@ transformed again on the first request.
     `IUserSessionStore.RemoveByTicketKeysAsync`, `IImageVariantCache.RemoveAllForFileAsync`,
     `FileService.ExistsAsync` and `DiskImageVariantCache.RunMaintenance`; Breaking says how each
     is used.
-  - `StruoCmsCommands.TryReportStartupFailure`: reports a scanner failure that stopped a command's host;
-    Fixed says how it is used.
+  - `StruoCmsCommands.TryReportStartupFailure`: reports a `MetadataException` that stopped a
+    command's host; Fixed says how it is used.
+  - `ForkHost.StartAsync` and `ForkHost.StartupErrorAsync` (`Struo.Tests.Support`) gained the
+    optional parameter `environment`, a binary-level change; a test project that references
+    `Struo.Tests.Support` must be rebuilt.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
@@ -247,18 +256,42 @@ transformed again on the first request.
 
 ### Fixed
 
-- A `[CmsField]` `List<>` property whose interface is not a JSON interface and that has no `IsJson` is
-  mapped by the framework as a JSON column (`IsJson` plus long text), the same result as
-  `[SugarColumn(IsJson = true)]`, and `make:migration` writes `.AsJson(Db)`. It used to fail every write
-  on PostgreSQL, MySQL and MariaDB; on SQLite and SQL Server a list of 0 or 1 elements was written
-  and read back empty. A property already marked `IsJson` is unchanged, and `[Navigate]` and
+- A `[CmsField]` `List<>` property whose interface is not a JSON interface and that has no `IsJson`
+  is mapped by the framework as a JSON column (`IsJson` plus long text), the same result as
+  `[SugarColumn(IsJson = true)]`, and `make:migration` writes `.AsJson(Db)`. It used to fail every
+  write on PostgreSQL, MySQL and MariaDB; on SQLite and SQL Server a list of 0 or 1 elements was
+  written and read back empty. A property already marked `IsJson` is unchanged, and `[Navigate]` and
   `[CmsTranslations]` lists have no `[CmsField]` and are not affected.
-- A scanner startup failure makes `make:migration` and `migrate:check` print one line,
-  `<command> failed: <message>`, and exit 1, without a stack trace. The template `Program.cs` has one
-  more `catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))`
-  before its general `catch`; a fork's own `Program.cs` needs the same, or the scanner's message is
-  only logged with its stack trace. `make:migration --entity` also prints the message and exits 1 for
-  an entity the column convention refuses.
+- When the host cannot be built because of a `MetadataException` and a command was given on the
+  command line, one line, `<command> failed: <message>`, is printed and the exit code is 1, with no
+  stack trace and no log entry. The command is any of `migrate`, `migrate:status`,
+  `migrate:preview`, `migrate:baseline`, `migrate:check`, `make:migration`, `files:sweep` and
+  `auth:unlock`; a `MetadataException` includes the column declaration checks added in this release,
+  a content assembly that cannot be loaded and a duplicate collection name. Other startup exceptions
+  go through the general `catch` as before. A fork's own `Program.cs` needs both changes of the
+  template, or the message is only logged with its stack trace:
+
+  ```csharp
+  MigrationCliInvocation? cli = null;
+  try
+  {
+      cli = MigrationCli.Parse(args);   // was: var cli = MigrationCli.Parse(args);
+      // ... the rest is unchanged
+  }
+  catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))
+  {
+      Environment.ExitCode = MigrationCli.Failure;
+  }
+  catch (Exception ex)
+  {
+      // the existing Log.Fatal and Environment.ExitCode = 1 stay as they are
+  }
+  ```
+
+  `make:migration --entity` also prints the message and exits 1 for an entity the scanner did not
+  check and the column convention refuses. For an entity the scanner never sees, the refusal of
+  `[ColumnShape]` on a JSON interface throws a `MetadataException` instead of an
+  `InvalidOperationException`.
 - Password login and external login accept a found account only when its stored email and the
   submitted one are character for character the same once trimmed and lowercased. The default
   collations of MySQL, MariaDB and SQL Server treat some spellings as equal (accents, full-width

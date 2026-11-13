@@ -70,8 +70,8 @@ public sealed class Announcement : AuditableEntity
 可為 null 的屬性（`DateTime?`、`Guid?`、`int?`、`string?`）會自動對到可為 null 的欄位：
 entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Nullable()`，`migrate:check` 也拿
 它比對，不需要再加 `[SugarColumn(IsNullable = true)]`。要得到不可為 null 的欄位，就把屬性
-宣告成不可為 null：用 `Guid`，不用 `Guid?`；用 `string`，不用 `string?`。可為 null 的屬性
-再加 `[SugarColumn(IsNullable = false)]`，啟動時會被擋下，見
+宣告成不可為 null：用 `Guid`，不用 `Guid?`；用 `string`，不用 `string?`。`Nullable<T>` 或
+`string?` 屬性再加 `[SugarColumn(IsNullable = false)]`，啟動時會被擋下，見
 [第 6 章〈啟動時被擋的宣告〉](06-field-types.md#啟動時被擋的宣告)。
 `[SugarColumn(IsNullable = true)]` 能讓不可為 null 的 `string` 屬性得到可為 null 的欄位。
 

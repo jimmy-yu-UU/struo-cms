@@ -213,20 +213,21 @@ The declarations on a property decide its database column and the default input 
 |---|---|---|
 | A `string` with nothing special | `varchar(255)` | 255 |
 | A `string` on a long-text interface | long text | none |
-| A JSON interface | JSON | not applicable |
-| A `List<>` property on any interface | JSON | not applicable |
+| A JSON interface | long text holding JSON | not applicable |
+| A `List<>` property on any interface | long text holding JSON | not applicable |
 | `[ColumnShape(ColumnShape.LongText)]` | long text | none |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | type `t`, length `n` | `n` |
 | `[SugarColumn(ColumnDataType = "t")]` | type `t`, as written | none |
-| `[SugarColumn(IsJson = true)]` | JSON | not applicable |
+| `[SugarColumn(IsJson = true)]` | long text holding JSON | not applicable |
 
 Terms in the table:
 
 - Long-text interfaces: `Textarea`, `RichText`, `Markdown`, `Code`, `Json`.
 - JSON interfaces: `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`.
 - `varchar(255)` and `varchar(n)` are `nvarchar` on SQL Server.
-- None: there is no limit. Not applicable: `MaxLength` can only be set on a `string` property.
+- None: there is no limit. Not applicable: the property is not a `string`, so it cannot carry
+  `MaxLength`; the same declaration on a `string` property means none.
 - A `Length` on a long-text interface does not count; it needs a `ColumnDataType` beside it (the
   seventh row).
 
@@ -247,11 +248,14 @@ nothing waits for the table to be used.
 | `IsJson = true` with `ColumnDataType` | Remove `ColumnDataType` |
 | A `List<>` property with `ColumnDataType` | Remove `ColumnDataType` |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
-| A nullable property with `IsNullable = false` | Make the property non-nullable, or remove `IsNullable = false` |
+| `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 
 The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnDataType` cannot set
-it. A nullable property always gets a nullable column; for NOT NULL, declare `Guid` or `string`,
-not `Guid?` or `string?`.
+it.
+
+A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
+NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
+`List<string>?` and `byte[]?`, are not part of this check.
 
 The check covers `[CmsField]` properties of collections, translation entities and junction
 payloads. `[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives

@@ -190,20 +190,21 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 |---|---|---|
 | 沒有特別宣告的 `string` | `varchar(255)` | 255 |
 | 長文字介面上的 `string` | 長文字 | 不限 |
-| JSON 介面 | JSON | 不適用 |
-| 任何介面上的 `List<>` 屬性 | JSON | 不適用 |
+| JSON 介面 | 長文字，存 JSON | 不適用 |
+| 任何介面上的 `List<>` 屬性 | 長文字，存 JSON | 不適用 |
 | `[ColumnShape(ColumnShape.LongText)]` | 長文字 | 不限 |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | 型別 `t`，長度 `n` | `n` |
 | `[SugarColumn(ColumnDataType = "t")]` | 型別 `t`，照字面 | 不限 |
-| `[SugarColumn(IsJson = true)]` | JSON | 不適用 |
+| `[SugarColumn(IsJson = true)]` | 長文字，存 JSON | 不適用 |
 
 表裡的用語：
 
 - 長文字介面：`Textarea`、`RichText`、`Markdown`、`Code`、`Json`。
 - JSON 介面：`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`。
 - `varchar(255)` 與 `varchar(n)` 在 SQL Server 上是 `nvarchar`。
-- 不限：沒有上限。不適用：`MaxLength` 只能設在 `string` 屬性上。
+- 不限：沒有上限。不適用：屬性不是 `string`，不能設 `MaxLength`；同樣的宣告掛在 `string` 屬性上
+  則是不限。
 - 長文字介面上的 `Length` 不算，要搭配 `ColumnDataType` 才算（第七列）。
 
 寫了 `ColumnDataType`，整個欄位定義由你負責，包含長度。寫在型別字串裡的長度，例如
@@ -221,10 +222,13 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 | `IsJson = true` 加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | `List<>` 屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
-| 可為 null 的屬性加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
+| `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 
-JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。可為 null 的屬性一律
-得到可為 null 的欄位；要 NOT NULL 就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。
+JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。
+
+`Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
+就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與
+`byte[]?`，不在這條檢查裡。
 
 檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性。`[ColumnShape]` 加長文字介面
 照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，不檢查；掛
