@@ -242,7 +242,7 @@ public sealed class ItemService(
             operation == RevertOperation ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
             meta, existing, id, bodyKeys, body, preMerge);
         await hooks.BeforeWriteAsync(ct);
-        await ValidateMergedAsync(collection, meta, d, body, existing, ct);
+        ValidateMerged(meta, d, body, existing);
 
         var persisted = await PersistUpdateAsync(
             new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings), meta, d, body, existing, hooks, ct);
@@ -276,7 +276,7 @@ public sealed class ItemService(
         // No Required check here — an update only overlays fields the client actually sent (see
         // the loops below), so a Required field this body omits must not fail on the freshly-parsed
         // `incoming` alone; the Required check re-runs against the merged `existing` entity in
-        // ValidateMergedAsync.
+        // ValidateMerged.
         var incoming = deserializer.DeserializeForUpdate(collection, body, meta);
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
@@ -331,9 +331,8 @@ public sealed class ItemService(
     // Required (on the merged entity) reports the earlier failure, exactly as CREATE does. A revert
     // passes a full snapshot as its body, so every field is re-sent and this check sees the same
     // values a full PUT would.
-    private async Task ValidateMergedAsync(
-        string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing,
-        CancellationToken ct)
+    private static void ValidateMerged(
+        CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
 
