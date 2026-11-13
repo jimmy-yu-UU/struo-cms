@@ -47,8 +47,17 @@
   （要有上限就在欄位上設 `MaxLength`）。`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有
   上限，超過 255 字元的值在 SQLite 上寫得進去，在 PostgreSQL、MySQL 與 SQL Server 上回
   `500`；現在回 `400`，`Field '{name}' exceeds maximum length 255.` migration 把這類欄位加寬到
-  255 以上的 fork，要把 `[CmsField(MaxLength = n)]` 設成那個寬度，否則更長的值仍被拒絕。核心欄位
-  不受影響，`schema/core-collections.json` 不變。
+  255 以上的 fork，要在屬性上宣告 `[SugarColumn(Length = n)]`，預設的 `MaxLength` 就跟著是 `n`；
+  只設 `[CmsField(MaxLength = n)]` 會讓啟動失敗，見下一條。核心欄位不受影響，
+  `schema/core-collections.json` 不變。
+- 明寫的 `[CmsField(MaxLength = n)]` 大於該屬性所宣告的欄位寬度時，主機在啟動時失敗，丟出
+  `MetadataException`，訊息點名實體類別與屬性、宣告的 `MaxLength` 與欄位寬度。欄位寬度是 255、
+  `[SugarColumn]` 的 `Length`，或 `ColumnDataType` 旁的 `Length`；等於欄位寬度照常啟動，欄位沒有
+  長度可言時不檢查。集合實體、翻譯實體與 junction payload 的欄位都適用，`Repeater` 子欄位存在 JSON
+  裡，沒有自己的欄位，不檢查。這類欄位原本能啟動：超過欄位寬度的值通過寫入驗證，在 PostgreSQL、
+  MySQL 與 SQL Server 上回 `500`，在 SQLite 上寫得進去。宣告了這類 `MaxLength` 的 fork 要調低
+  `MaxLength`，或用 `[SugarColumn(Length = n)]`、`[ColumnShape]` 宣告更寬的欄位。比對的是屬性上
+  宣告的寬度，不是資料庫實際的欄位寬度。核心欄位與 Blog sample 不受影響。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
   `MetadataException`。原因是依賴的組件缺少或版本不符；訊息帶出組件名稱、載入失敗的型別數、載入器
   回報的型別名稱與去重後的載入錯誤，後兩者各最多列五個，其餘只給數量。型別載得起來但讀不了成員或

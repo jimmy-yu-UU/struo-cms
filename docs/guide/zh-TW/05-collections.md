@@ -141,7 +141,8 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
   `Interface`，就是一個 `Text` 欄位，不是 `Number`。
 - `Sort` 決定它在後台表單與清單欄位裡的順序——依 `Sort` 由小到大排，同值再依宣告順序排，四
   個稽核欄位固定排在 `Sort = 1000`，宣告了更大 `Sort` 值的欄位才會排在它們後面。
-- `MaxLength` 是 CMS 層的輸入長度上限，跟資料庫欄位寬度無關。
+- `MaxLength` 是 CMS 層的輸入長度上限，不能大於屬性宣告的欄位寬度，否則啟動失敗；預設值與細節見
+  [第 6 章](06-field-types.md)。
 
 `Required` 在更新時驗證的是合併後的 entity，不是請求 body：省略某個欄位會沿用資料庫既有值並
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個

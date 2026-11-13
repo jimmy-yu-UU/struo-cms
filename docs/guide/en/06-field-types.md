@@ -219,9 +219,14 @@ longer value is a 400. A negative value, or one set on a non-`string` property, 
    `MaxLength` on the field to have a limit there.
 
 The default does not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string`
-are 255 like the rest. An explicit `MaxLength` does not change the column width; storing a longer
-value means widening the column too (see Common pitfalls at the end of this chapter). The admin SPA
-binds the effective `MaxLength` directly to the native input's `maxlength` attribute.
+are 255 like the rest. An explicit `MaxLength` does not change the column width: one wider than
+the column width throws a startup `MetadataException` naming the class, the property, the
+`MaxLength` and the column width. Equal to or below the width is fine. Fields of collections,
+translation entities and junction payloads are checked; a field with no column width is not, and
+neither is a `Repeater` sub-field, which lives inside a JSON value and has no column of its own.
+Storing a value longer than the default width means widening the column first (see Common pitfalls
+at the end of this chapter). The admin SPA binds the effective `MaxLength` directly to the native
+input's `maxlength` attribute.
 
 ## Required, read-only, hidden, and system fields
 
@@ -318,12 +323,12 @@ editor's link dialog or any other allowlist. The same sanitizer also normalizes 
 
 ## Common pitfalls
 
-**Writing long text is rejected, or fails on PostgreSQL with `22001 value too long`.** A `string`
-property with no explicit column type, whose interface isn't one of the five long-text ones, is
-written by `make:migration` as `AsString(255)` and has a default `MaxLength` of 255: a value over
-255 characters is rejected with a 400 by the admin and the API. An explicit, larger `MaxLength` does
-not widen the column, and a value that passes validation fails on PostgreSQL with
-`22001 value too long for type character varying(255)`.
+**Writing long text is rejected, or startup reports a `MaxLength` wider than the column.** A
+`string` property with no explicit column type, whose interface isn't one of the five long-text
+ones, is written by `make:migration` as `AsString(255)` and has a default `MaxLength` of 255: a
+value over 255 characters is rejected with a 400 by the admin and the API. An explicit, larger
+`MaxLength` on such a property throws a startup `MetadataException`, because the column cannot
+hold a value that passes validation.
 
 The fix is switching to one of those five interfaces, or writing
 `[ColumnShape(ColumnShape.LongText)]` explicitly — not `[SugarColumn(ColumnDataType = "text")]`
