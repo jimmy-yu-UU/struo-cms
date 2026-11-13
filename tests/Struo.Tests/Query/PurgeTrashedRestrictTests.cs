@@ -12,7 +12,7 @@ namespace Struo.Tests.Query;
 /// <summary>
 /// A row in the trash that points through an OnDelete.Restrict relation at a purge target gets that key
 /// set to null in the purge transaction, or the purge is refused (409) when the key cannot be null.
-/// Either way no row, trashed or live, points at a target that no longer exists.
+/// Either way no row, trashed or live, points at a target that does not exist.
 /// </summary>
 public sealed class PurgeTrashedRestrictTests
 {
