@@ -130,7 +130,7 @@ public class SqlSugarUserSessionStoreTests
     }
 
     [Fact]
-    public async Task RemoveAllForUserAsync_deletes_every_row_for_that_user_only()
+    public async Task RemoveByTicketKeysAsync_deletes_only_the_named_rows()
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = NewDb(db);
@@ -140,12 +140,30 @@ public class SqlSugarUserSessionStoreTests
         var now = DateTime.UtcNow;
         await store.RecordAsync(userA, "a-key-1", now, now.AddHours(8));
         await store.RecordAsync(userA, "a-key-2", now, now.AddHours(8));
+        await store.RecordAsync(userA, "a-key-3", now, now.AddHours(8));
         await store.RecordAsync(userB, "b-key", now, now.AddHours(8));
 
-        await store.RemoveAllForUserAsync(userA);
+        await store.RemoveByTicketKeysAsync(["a-key-1", "a-key-2", "never-recorded"]);
 
-        (await store.ListTicketKeysForUserAsync(userA)).Should().BeEmpty();
+        (await store.ListTicketKeysForUserAsync(userA)).Should().BeEquivalentTo(["a-key-3"]);
         (await store.ListTicketKeysForUserAsync(userB)).Should().BeEquivalentTo(["b-key"]);
+    }
+
+    [Fact]
+    public async Task RemoveByTicketKeysAsync_handles_more_keys_than_one_chunk_and_an_empty_list()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var store = new SqlSugarUserSessionStore(NewDb(db));
+        var user = Guid.CreateVersion7();
+        var now = DateTime.UtcNow;
+        var keys = Enumerable.Range(0, 1200).Select(i => $"k-{i}").ToList();
+        foreach (var k in keys) await store.RecordAsync(user, k, now, now.AddHours(8));
+
+        await store.RemoveByTicketKeysAsync([]);
+        (await store.ListTicketKeysForUserAsync(user)).Should().HaveCount(1200);
+
+        await store.RemoveByTicketKeysAsync(keys);
+        (await store.ListTicketKeysForUserAsync(user)).Should().BeEmpty();
     }
 
     [Fact]

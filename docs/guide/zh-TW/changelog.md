@@ -112,6 +112,43 @@
     （nullable 註記與 `[SugarColumn(IsNullable = ...)]`）。
 
   有可軟刪除集合、且帶不可為 `null` 外鍵的 fork，要檢查自己的清除流程。核心與範例都沒有。
+- 重複的語言代碼在每個後端都回 `409` `CONFLICT`。
+  - SQLite 與 PostgreSQL：代碼只差大小寫的重複原本回 `400`，現在回 `409`，訊息不變
+    （`Language code '{code}' already exists.`）。其他後端與完全相同的重複原本就回 `409`。
+  - 代碼格式、至少一列啟用、恰好一列預設這幾條規則仍回 `400`。`struo_languages` 的唯一索引不變。
+  - `ILanguageCollectionRules` 的實作遇到重複代碼要丟 `ConflictException`，其餘違規丟
+    `QueryException`。
+- 登入與「撤銷全部工作階段」的競態修正，改了下列公開型別。
+  - `IUserSessionStore`：移除 `RemoveAllForUserAsync`，新增
+    `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`，只刪指定
+    鑰匙的索引列。實作這個介面的 fork 要改；內建的 `SqlSugarUserSessionStore` 已改。
+  - `IAuthService`：新增 `ConfirmUnchangedAsync(AuthResult, CancellationToken)`。它回傳登入驗證過的
+    密碼雜湊是否仍是儲存的那一份，而且使用者還在、仍啟用。自己實作這個介面的 fork 要補上這個方法。
+  - `AuthResult`：多了第三個位置成員 `Proof`（選用的 `PasswordProof`）。建構函式與
+    `AuthResult.Ok` 的簽章變了，針對舊簽章編譯的組件要重新編譯。把結果解構成兩個值的程式碼
+    （`var (id, failure) = result`）要改成三個（`var (id, failure, _) = result`）。
+  - `PasswordProof`（新型別）：自己實作 `IAuthService` 的 fork，驗證成功時回傳
+    `AuthResult.Ok(userId, PasswordProof.From(storedHash))`，`storedHash` 是驗證密碼所用、資料庫存
+    的那一份雜湊。`ConfirmUnchangedAsync` 重新讀取使用者後，用 `proof.Matches(目前儲存的雜湊)`（序
+    數比對）判斷，並檢查使用者還在且啟用。它沒有任何公開的方式讀出雜湊，`ToString()` 只印型別名稱。
+  - `AuthController`：建構函式多了 `SessionCookieName` 與 `ILogger<AuthController>` 參數，自己建立
+    這個控制器的 fork 要補上。`Login` 在工作階段寫入後呼叫 `ConfirmUnchangedAsync`；內建的
+    `AuthService` 對沒帶 `PasswordProof` 的結果一律回 `false`。
+- 圖片變體快取改成每個檔案一個目錄，改了下列公開型別。
+  - `IImageVariantCache`：新增 `RemoveAllForFileAsync(Guid fileId, CancellationToken)`，刪除某個檔
+    案的所有變體。`SetAsync` 的契約多一條：寫入某個檔案的變體時，要一併刪掉同一個檔案其他
+    `version` 的變體。`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，一定帶
+    著檔案 id。自己實作這個介面的 fork 要補上方法、遵守新的契約、接受新的鍵形狀。
+  - `FileService`：建構函式在最後多了選用參數 `IImageVariantCache? variantCache`，並新增公開方法
+    `ExistsAsync(Guid id, CancellationToken)`（垃圾桶裡的檔案也算存在）。
+  - `DiskImageVariantCache`：新增公開方法 `RunMaintenance()`，API 每次啟動時在背景呼叫。目錄結構改成
+    `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`。
+
+  升級後第一次啟動，API 在背景刪除 `CachePath` 底下形如 `<2 位十六進位>/<64 位十六進位>` 的快取檔、
+  同目錄的 `.<64 位十六進位>.<32 位十六進位>.tmp` 暫存檔，以及因此變空的目錄，其他檔案不動。這些變體
+  不搬移，第一次請求時重新轉換。
+
+  名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
 :::
 
 ### 新增
@@ -123,6 +160,9 @@
     `DomainErrorMap.DeadlockMessage`。
   - `SelfReferenceCycleGuard.LockMovedRowAsync` 與型別 `SelfReferenceMove`。
     只有 `LockMovedRowAsync` 會建立它。
+  - `PasswordProof`（`From`、`Matches`）、`IAuthService.ConfirmUnchangedAsync`、
+    `IUserSessionStore.RemoveByTicketKeysAsync`、`IImageVariantCache.RemoveAllForFileAsync`、
+    `FileService.ExistsAsync` 與 `DiskImageVariantCache.RunMaintenance`，各自的用法見破壞性變更。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -153,6 +193,18 @@
   也一樣。
 - 樹狀集合（例如媒體資料夾）裡兩個方向相反的同時搬動，可能都通過循環檢查，讓兩個資料夾互為父層。
   現在檢查會鎖住整條父鏈，其中至多一個成功，另一個回 `400` 或 `409`。
+- 撤銷使用者全部工作階段（改密碼、刪除使用者）時，原本在列出鑰匙之後才寫入的工作階段，索引列會
+  跟著被整批刪掉；那個工作階段留在快取裡、之後的撤銷又找不到它，撤銷不掉。現在撤銷只刪列出並
+  撤銷的那些鑰匙的索引列。密碼登入也補上另一半：工作階段寫入後重讀儲存的密碼雜湊，跟驗證密碼時
+  用的不同（或使用者不在、已停用），就撤銷剛建立的工作階段，回應不帶 session cookie，登入以
+  `401` `Invalid credentials.` 失敗，跟密碼錯誤相同；這次登入的嘗試照一般失敗登入保留在節流計數裡，
+  成功登入才清除計數。比對的是密碼雜湊，不是 `version`，其他欄位的編輯不影響登入。外部（OIDC）登入
+  沒有密碼可比對，只受惠於撤銷端的修正。
+- 永久刪除檔案時，圖片轉換的快取變體原本留在磁碟上，直到被容量淘汰；現在資料列刪掉後會一併刪除該
+  檔案的所有變體（失敗只記警告，不影響刪除）。寫入某個 `version` 的變體時，同一個檔案其他 `version`
+  的變體也會刪掉。寫入用的暫存檔原本不計入容量、也從不刪除，現在超過一小時的暫存檔在啟動時與每次
+  容量清理時刪除，且不計入容量。轉換進行當中檔案被永久刪除時，剛寫入的變體也會被移除。快取只清掉處
+  理請求的那個副本的本機磁碟，其他副本的變體留到被淘汰。
 
 ### 安全性
 

@@ -126,6 +126,8 @@ public sealed class FilesController(
                 // An unwritable cache (disk full, read-only directory) costs only the caching.
                 logger.LogWarning(ex, "Image variant {VariantKey} for file {FileId} could not be cached; serving it uncached.", key, id);
             }
+
+            await RemoveVariantsOfPurgedFileAsync(id);
             return File(transformed.Bytes, transformed.ContentType);
         }
 
@@ -228,5 +230,24 @@ public sealed class FilesController(
         if (!access.CanDelete())
             throw new PermissionDeniedException("Delete not permitted.");
         return await files.RestoreAsync(id, ct) ? NoContent() : NotFound();
+    }
+
+    // A purge deletes the file row (the commit) and only then removes the file's variants; a write lands
+    // its variant and only then checks the row. If the check runs before the commit, the purge's removal
+    // runs after the variant landed and takes it; if it runs after, the row is gone and this removes the
+    // variant. Neither order leaves one behind on this instance. A trashed row still exists, so trash
+    // keeps its variants. Other instances clear their own local caches only. A failure here costs only
+    // disk, so it never fails the response.
+    private async Task RemoveVariantsOfPurgedFileAsync(Guid id)
+    {
+        try
+        {
+            if (!await files.ExistsAsync(id, CancellationToken.None))
+                await images.Cache.RemoveAllForFileAsync(id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not confirm or clean up the cached variants of file {FileId} after caching one.", id);
+        }
     }
 }

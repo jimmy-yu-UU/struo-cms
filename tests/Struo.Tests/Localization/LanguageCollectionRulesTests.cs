@@ -35,11 +35,15 @@ public sealed class LanguageCollectionRulesTests : IDisposable
     }
 
     [Fact]
-    public async Task Duplicate_code_differing_only_in_case_is_rejected()
+    public async Task Duplicate_code_differing_only_in_case_is_a_conflict()
     {
+        // The rule is what stands behind a case-sensitive unique index (SQLite, PostgreSQL), so the
+        // test takes the index away on every backend and exercises the rule alone.
+        var table = _db.EntityMaintenance.GetTableName<Language>();
+        _db.DbMaintenance.DropIndex($"ux_{table}_code", table);
         await _db.Insertable(new Language { Code = "EN", Name = "dup", Enabled = false, Sort = 9 }).ExecuteCommandAsync();
         var act = () => _rules.EnsureInvariantsAsync();
-        (await act.Should().ThrowAsync<QueryException>()).WithMessage("Language code 'EN' already exists.");
+        (await act.Should().ThrowAsync<ConflictException>()).WithMessage("Language code 'EN' already exists.");
     }
 
     [Theory]

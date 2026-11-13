@@ -246,6 +246,13 @@ When `CachePath` is a relative path, it's relative to the application's content 
 process's current working directory. This matters for where the cache actually ends up when
 something like systemd starts the process from a different directory.
 
+The directory layout under `CachePath`, the cleanup on a permanent delete of a file and the
+tidy-up at start are in "Variant caching" in [Chapter 15](15-files-and-media.md). Files and
+directories of other shapes are left alone; a directory named like a canonical lowercase GUID (a
+file id) belongs to the cache, and everything in it is deleted when that file is permanently
+deleted. So this directory can be shared with other files, as long as nothing else lives in a
+directory named like a file id.
+
 The keys below bound what one caller can make the server compute and store.
 
 - `SizeSteps`: the output widths and heights a request can get. A requested `width` or `height`
@@ -263,8 +270,8 @@ The keys below bound what one caller can make the server compute and store.
   `IMAGE_TRANSFORM_BUSY` with a `Retry-After` header.
 - `CacheMaxBytes`: the size cap of the variant cache on disk. When a write leaves the cache above
   it, the least recently read variants are deleted until the cache is at 90% of the cap, so the
-  next writes do not sweep again. `0` or less removes the cap. A deletion that fails is logged and
-  never fails the request.
+  next writes do not sweep again. `0` or less removes the cap. Only variants count towards the cap,
+  not temp files. A deletion that fails is logged and never fails the request.
 - `MaxSourcePixels`: the largest source, width times height, that is decoded (at least `1`). The
   size is read from the file header without decoding; a larger source, or one whose header cannot
   be read, is served as its original bytes. For a GIF the size is the canvas its frames need; for an

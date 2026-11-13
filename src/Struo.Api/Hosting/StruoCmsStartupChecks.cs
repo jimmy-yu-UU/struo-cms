@@ -54,6 +54,28 @@ internal static class StruoCmsStartupChecks
 
         await Struo.Api.Auth.DefaultAdminAccountWarnings.LogAsync(
             sp.GetRequiredService<ISqlSugarClient>(), app.Environment, startupLogger);
+
+        StartImageCacheMaintenance(sp, startupLogger);
+    }
+
+    // Removes cache files of the earlier layout, stale temp files and empty cache directories. File work
+    // only, so it runs in the background and never delays serving; a failure is logged and the host
+    // carries on.
+    private static void StartImageCacheMaintenance(IServiceProvider sp, ILogger logger)
+    {
+        if (sp.GetRequiredService<Struo.Application.Files.IImageVariantCache>()
+            is not Struo.Infrastructure.Files.DiskImageVariantCache cache) return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                cache.RunMaintenance();
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Image variant cache upkeep failed.");
+            }
+        });
     }
 
     // Backend=custom has no core-built storage: resolving it here makes a missing registration fail

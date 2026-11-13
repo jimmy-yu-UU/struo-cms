@@ -143,6 +143,57 @@
 
   A fork with a soft-deletable collection that has such a non-null key checks its purge flows.
   The core and the sample have none.
+- A duplicate language code answers `409` `CONFLICT` on every backend.
+  - SQLite and PostgreSQL: a duplicate that differs only in letter case answered `400` and now
+    answers `409` with the same message (`Language code '{code}' already exists.`). The other
+    backends, and an identical code, already answered `409`.
+  - The code format, at-least-one-enabled and exactly-one-default rules still answer `400`. The
+    unique index on `struo_languages` is unchanged.
+  - An `ILanguageCollectionRules` implementation throws `ConflictException` for a duplicate code and
+    `QueryException` for any other violation.
+- The fix for a login racing "revoke all sessions" changes these public types.
+  - `IUserSessionStore`: `RemoveAllForUserAsync` is removed and
+    `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)` is added;
+    it deletes only the index rows of the given keys. A fork that implements the interface changes
+    it; the built-in `SqlSugarUserSessionStore` already has.
+  - `IAuthService`: gains `ConfirmUnchangedAsync(AuthResult, CancellationToken)`. It says whether
+    the password hash a login verified is still the stored one and the user still exists and is
+    active. A fork with its own implementation adds the method.
+  - `AuthResult`: gains a third positional member, `Proof` (an optional `PasswordProof`). The
+    constructor and `AuthResult.Ok` have new signatures, so an assembly compiled against the earlier
+    ones is rebuilt. Code that deconstructs a result into two values (`var (id, failure) = result`)
+    takes three (`var (id, failure, _) = result`).
+  - `PasswordProof` (new type): a fork with its own `IAuthService` returns
+    `AuthResult.Ok(userId, PasswordProof.From(storedHash))` on success, where `storedHash` is the
+    hash from the database that the password was verified against. `ConfirmUnchangedAsync` reads
+    the user again, decides with `proof.Matches(currentStoredHash)` (an ordinal comparison), and
+    checks that the user exists and is active. Nothing public reads the hash, and `ToString()`
+    prints only the type name.
+  - `AuthController`: the constructor takes new `SessionCookieName` and `ILogger<AuthController>`
+    parameters; a fork that builds the controller itself adds them. `Login` calls
+    `ConfirmUnchangedAsync` after the session is written. The built-in `AuthService` answers `false`
+    for a result that carries no `PasswordProof`.
+- The image variant cache keeps one directory per file, which changes these public types.
+  - `IImageVariantCache`: gains `RemoveAllForFileAsync(Guid fileId, CancellationToken)`, which
+    deletes all variants of one file. The `SetAsync` contract gains a rule: writing a variant of a
+    file also deletes that file's variants of other versions. The key `DeriveKey` returns is now
+    three parts, `<file id>/<version hash>/<variant hash>`, so it always carries the file id. A
+    fork with its own implementation adds the method, follows the rule and accepts the new key
+    shape.
+  - `FileService`: the constructor takes a new optional last parameter,
+    `IImageVariantCache? variantCache`, and the class gains the public method
+    `ExistsAsync(Guid id, CancellationToken)` (a file in the trash exists).
+  - `DiskImageVariantCache`: gains the public method `RunMaintenance()`, which the API calls in
+    the background at every start. Files are laid out as
+    `<CachePath>/<file id>/<version hash>/<variant hash>`.
+
+At the first start after the upgrade, the API deletes, in the background, the cache files under
+`CachePath` shaped `<2 hex>/<64 hex>`, the `.<64 hex>.<32 hex>.tmp` temp files beside them, and
+the directories that leaves empty. It touches nothing else. Those variants are not moved; they are
+transformed again on the first request.
+
+  A directory named like a canonical lowercase GUID belongs to the cache, and everything in it is
+  deleted when that file is permanently deleted.
 :::
 
 ### Added
@@ -154,6 +205,10 @@
     `DomainErrorMap.DeadlockMessage`.
   - `SelfReferenceCycleGuard.LockMovedRowAsync` and the type `SelfReferenceMove`. Only
     `LockMovedRowAsync` creates it.
+  - `PasswordProof` (`From`, `Matches`), `IAuthService.ConfirmUnchangedAsync`,
+    `IUserSessionStore.RemoveByTicketKeysAsync`, `IImageVariantCache.RemoveAllForFileAsync`,
+    `FileService.ExistsAsync` and `DiskImageVariantCache.RunMaintenance`; Breaking says how each
+    is used.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
@@ -194,6 +249,25 @@
 - Two concurrent moves in a tree collection (media folders, for example) in opposite directions
   could both pass the cycle check and leave two folders as each other's parent. The check now holds
   locks on the whole chain, so at most one of them succeeds and the other answers `400` or `409`.
+- Revoking all of a user's sessions (a password change, deleting the user) deleted every index row
+  of that user after it had listed the ticket keys, so a session whose row was written after the
+  listing lost its row while its ticket stayed in the cache, and a later revocation could not find
+  it. The revocation now deletes only the index rows of the keys it listed and revoked. Password
+  login covers the other half: once its session is written it reads the stored password hash
+  again, and when that differs from the one the password was verified against (or the user is gone
+  or inactive) it revokes the session it just created, sends no session cookie and fails with
+  `401` `Invalid credentials.`, like a wrong password; the attempt stays counted by the throttle
+  as for any failed login, and only a successful login clears the count. The comparison is on the
+  password hash, not on `version`, so an edit to any other field does not affect a login. External
+  (OIDC) login has no password to compare and gets only the revocation fix.
+- A permanent delete of a file left its cached image variants on disk until eviction removed them;
+  the row's deletion now deletes all of that file's variants (a failure is logged as a warning and
+  does not fail the delete). Writing a variant of one `version` also deletes that file's variants of
+  other versions. The temp files used for writes were neither counted towards the cap nor ever
+  deleted; temp files older than one hour are now deleted at start and on every eviction sweep, and
+  they do not count towards the cap. A variant written while its file is being permanently deleted
+  is removed too. Only the local disk of the replica that handled the request is cleared; other
+  replicas keep their variants until eviction.
 
 ### Security
 

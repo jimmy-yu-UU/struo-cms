@@ -5,6 +5,9 @@ namespace Struo.Infrastructure.Identity;
 
 public sealed class SqlSugarUserSessionStore(ISqlSugarClient db) : IUserSessionStore
 {
+    // Keeps one DELETE under the smallest bound-parameter limit of the supported backends.
+    private const int DeleteChunkSize = 500;
+
     public Task RecordAsync(
         Guid userId, string ticketKey, DateTime createdAtUtc, DateTime expiresAtUtc, CancellationToken ct = default) =>
         db.Insertable(new UserSession
@@ -33,6 +36,9 @@ public sealed class SqlSugarUserSessionStore(ISqlSugarClient db) : IUserSessionS
             .Select(s => s.TicketKey)
             .ToListAsync(ct);
 
-    public Task RemoveAllForUserAsync(Guid userId, CancellationToken ct = default) =>
-        db.Deleteable<UserSession>().Where(s => s.UserId == userId).ExecuteCommandAsync(ct);
+    public async Task RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken ct = default)
+    {
+        foreach (var chunk in ticketKeys.Chunk(DeleteChunkSize))
+            await db.Deleteable<UserSession>().Where(s => chunk.Contains(s.TicketKey)).ExecuteCommandAsync(ct);
+    }
 }

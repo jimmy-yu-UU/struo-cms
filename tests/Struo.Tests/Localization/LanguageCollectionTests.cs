@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -9,8 +10,28 @@ using Xunit;
 namespace Struo.Tests.Localization;
 
 [Collection("ApiIntegration")]
-public class LanguageCollectionTests(ApiFactory factory)
+public class LanguageCollectionTests(ApiFactory factory) : IAsyncLifetime
 {
+    // Languages the duplicate-code tests create; purged afterwards so the shared database keeps only
+    // the seeded ones, whether a test passes or fails.
+    private readonly ConcurrentBag<string> _created = [];
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        if (_created.IsEmpty) return;
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var failures = new List<string>();
+        foreach (var id in _created)
+        {
+            var res = await c.DeleteAsync($"/api/items/language/{id}?purge=true");
+            if (res.StatusCode != HttpStatusCode.NoContent) failures.Add($"{id}: {(int)res.StatusCode}");
+        }
+        if (failures.Count > 0)
+            throw new InvalidOperationException("Could not purge the languages this test created: " + string.Join(", ", failures));
+    }
+
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
@@ -47,15 +68,76 @@ public class LanguageCollectionTests(ApiFactory factory)
     private static string IdOf(JsonElement list, string code) =>
         list.EnumerateArray().Single(r => r.GetProperty("code").GetString() == code).GetProperty("id").ToString();
 
+    private async Task<HttpResponseMessage> CreateAsync(HttpClient c, string code)
+    {
+        var res = await c.PostAsJsonAsync("/api/items/language",
+            new { code, name = "dup probe", isDefault = false, enabled = true, sort = 50 });
+        if (res.IsSuccessStatusCode)
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            _created.Add(Root(body).GetProperty("data").GetProperty("id").ToString());
+            res.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        }
+        return res;
+    }
+
+    private static Task<HttpResponseMessage> UpdateCodeAsync(HttpClient c, string id, string code) =>
+        c.PutAsJsonAsync($"/api/items/language/{id}",
+            new { code, name = "dup probe", isDefault = false, enabled = true, sort = 50 });
+
+    private static async Task AssertConflictAsync(HttpResponseMessage res)
+    {
+        res.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        Root(await res.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("CONFLICT");
+    }
+
     [Fact]
-    public async Task Creating_a_language_with_an_existing_code_is_a_400()
+    public async Task Creating_a_language_with_an_identical_code_is_a_409()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var res = await c.PostAsJsonAsync("/api/items/language",
-            new { code = "EN", name = "English again", isDefault = false, enabled = true, sort = 50 });
-        res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        Root(await res.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("message").GetString()
-            .Should().Be("Language code 'EN' already exists.");
+        await AssertConflictAsync(await CreateAsync(c, "en"));
+    }
+
+    [Fact]
+    public async Task Creating_a_language_whose_code_differs_only_in_case_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        await AssertConflictAsync(await CreateAsync(c, "EN"));
+    }
+
+    [Fact]
+    public async Task Updating_a_language_to_an_identical_code_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupa")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        await AssertConflictAsync(await UpdateCodeAsync(c, id, "en"));
+    }
+
+    [Fact]
+    public async Task Updating_a_language_to_a_code_differing_only_in_case_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupb")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        await AssertConflictAsync(await UpdateCodeAsync(c, id, "EN"));
+    }
+
+    [Fact]
+    public async Task Changing_a_languages_own_code_by_case_only_succeeds()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupc")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        (await UpdateCodeAsync(c, id, "DUPC")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Creating_a_language_with_a_malformed_code_stays_a_400()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        (await CreateAsync(c, "bad code")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -97,5 +179,33 @@ public class LanguageCollectionTests(ApiFactory factory)
         var res = await c.DeleteAsync($"/api/items/language/{enId}");
         res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await ListAsync(c)).EnumerateArray().Select(r => r.GetProperty("code").GetString()).Should().Contain("en");
+    }
+
+    // If GraphQL wrongly accepted the duplicate, the row it created is still purged afterwards.
+    private void TrackGraphQlCreated(string body)
+    {
+        if (Root(body).TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("createLanguage", out var created) && created.ValueKind == JsonValueKind.Object
+            && created.TryGetProperty("id", out var id))
+            _created.Add(id.ToString());
+    }
+
+    [Fact]
+    public async Task A_duplicate_code_over_GraphQL_answers_the_same_conflict_as_REST()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var rest = Root(await (await CreateAsync(c, "en")).Content.ReadAsStringAsync()).GetProperty("error");
+
+        var res = await c.PostAsJsonAsync("/graphql", new
+        {
+            query = "mutation { createLanguage(input: { code: \"en\", name: \"dup probe\", isDefault: false, enabled: true, sort: 50 }) { id } }"
+        });
+        var body = await res.Content.ReadAsStringAsync();
+        TrackGraphQlCreated(body);
+
+        var error = Root(body).GetProperty("errors")[0];
+        error.GetProperty("extensions").GetProperty("code").GetString()
+            .Should().Be(rest.GetProperty("code").GetString(), body);
+        error.GetProperty("message").GetString().Should().Be(rest.GetProperty("message").GetString(), body);
     }
 }

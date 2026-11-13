@@ -401,6 +401,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req) => "ab";
         public Task<byte[]?> TryGetAsync(string key, CancellationToken ct) => Task.FromResult<byte[]?>(null);
         public Task SetAsync(string key, byte[] bytes, CancellationToken ct) => throw new IOException("disk full");
+        public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct) => Task.CompletedTask;
     }
 
     // The first probe reports an oversized source, later probes a small one.
@@ -435,6 +436,7 @@ public class ImageTransformHardeningEndpointTests(ApiFactory factory)
         public Task<byte[]?> TryGetAsync(string key, CancellationToken ct) =>
             Task.FromResult(Interlocked.Increment(ref _gets) == 1 ? null : Payload);
         public Task SetAsync(string key, byte[] bytes, CancellationToken ct) => Task.CompletedTask;
+        public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FixedDimensions((int, int)? size) : IImageDimensionReader

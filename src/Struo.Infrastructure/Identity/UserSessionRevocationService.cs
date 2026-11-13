@@ -11,6 +11,7 @@ public sealed class UserSessionRevocationService(IUserSessionStore sessions, IDi
         var keys = await sessions.ListTicketKeysForUserAsync(userId, ct);
         foreach (var key in keys)
             await cache.RemoveAsync(key, ct);
-        await sessions.RemoveAllForUserAsync(userId, ct);
+        // Only the rows listed above: a session indexed after the listing keeps its row.
+        await sessions.RemoveByTicketKeysAsync(keys, ct);
     }
 }

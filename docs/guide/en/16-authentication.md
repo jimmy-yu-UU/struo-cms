@@ -139,19 +139,28 @@ falling back to the cookie, even when the request carries both at once. A write 
 requires sign-in validates and merges both schemes instead — see
 [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
-If a caller logs in again while it's still carrying a valid session cookie, that doesn't open a
-second session: the cookie handler sees that this request already carries a session key, and
-renews that same key in place under the new login's identity, rather than storing a separate one.
+After a password login has written its session, it reads the user once more and checks two things:
+that the user row still exists and is active, and that the stored password hash equals the one the
+password was verified against. A missing row, a deactivated user or a different hash means a
+password change, a removal or a deactivation landed while the login was in flight: the session just
+created (the cache ticket and the index row) is revoked at once, the response carries no session
+cookie, and the login fails like a wrong password, as `401` `UNAUTHORIZED` `Invalid credentials.`,
+with the attempt still counted by the login throttle as for any failed login. Apart from the active
+flag only the password hash is compared, so an edit to any other field of the user row does not
+affect a login. External (OIDC) login verifies no password and does not make this check.
 
-The cookie the caller holds — whether the one already sitting in the browser or the one this
-response sets again — now authenticates as the new user. The old session isn't revoked, only
-overwritten.
+Every login (`POST /api/auth/login` and the OIDC callback) gets a brand-new session key. The
+session cookie such a request carries is taken away before the cookie handler sees it, so the
+handler does not renew that key under the new login's identity.
 
-That renewal also re-attributes the index row: the user id recorded there becomes the new user's,
-not the previous one's. The next section covers how user-level revocation (a password change, an
-account deletion) relies on that same index, so a session renewed in place is revoked by the
-new user's password change or deletion, never by the previous user's. Log out before switching
-accounts, rather than letting the same cookie jar answer for two accounts at once.
+After a successful login, the session the request presented is revoked: its cache ticket and its
+index row are deleted. A cookie that cannot be unprotected, or that carries no key, is skipped. So
+logging in as another account in the same browser ends the previous account's session.
+
+When a login fails, the presented session is left as it was and stays valid, and the response does
+not touch the session cookie: it sets no new value and sends no clearing cookie. A failure is a
+wrong password, a throttled attempt (`429`), or the password changing while the login was in
+flight, as described above. A refused OIDC callback does not revoke the presented session either.
 
 A session that has used more than half of its sliding window is extended by a request that carries
 it. That renewal is best-effort: when the cache fails during it, one warning naming the ticket key
@@ -176,10 +185,13 @@ through the item API, and a row is hard-deleted, never soft-deleted; a stale ind
 cleaned up the next time that user logs in, not by any scheduled sweep of the whole table.
 
 A successful password write immediately reads this index and revokes every session the target
-user currently has. A failure in that revocation step doesn't roll back the password change — it's
-reported with its own error code, `SESSION_REVOCATION_FAILED`, because the caller needs to know
-some sessions may still be alive. Deleting a user row (soft-delete or purge) triggers the same
-revocation at the service layer, so GraphQL's delete mutation is covered too.
+user currently has: it lists the keys in the index, deletes each from the cache, and then deletes
+the index rows of those keys only. A session whose row is written after the listing keeps its row,
+and the next revocation finds it. A failure in that revocation step doesn't roll back the password
+change; it's reported with its own error code, `SESSION_REVOCATION_FAILED`, because the caller
+needs to know some sessions may still be alive. Deleting a user row triggers the same revocation: a
+user row cannot be soft-deleted, so every delete is a purge. The revocation runs at the service
+layer, so GraphQL's delete mutation is covered too.
 
 The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the
 server cannot confirm the sign-out, the login page says so; a `401` means no session was left to end

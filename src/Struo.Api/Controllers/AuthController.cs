@@ -13,7 +13,8 @@ namespace Struo.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthController(
-    IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation) : ControllerBase
+    IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation,
+    SessionCookieName sessionCookie, ILogger<AuthController> logger) : ControllerBase
 {
     public sealed record LoginRequest(string Email, string Password);
 
@@ -57,19 +58,74 @@ public sealed class AuthController(
             return result.Failure == Struo.Application.Security.AuthFailure.Inactive
                 ? Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
                     Struo.Api.Http.ErrorCodes.AccountInactive, "This account has been deactivated.")
-                : Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
-                    Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+                : InvalidCredentials();
         }
-
-        // A legitimate login clears the reserved attempts, so a real user can never lock
-        // themselves out by logging in normally.
-        await loginThrottle.ResetAsync(body.Email, ct);
 
         var identity = new ClaimsIdentity(AuthSchemes.Cookie);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
         await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
-        await sessionRotation.RevokePresentedAsync(HttpContext);
+
+        // A password change or removal that revoked sessions before this one was written has not
+        // covered it. If the stored credential differs from the one verified above, the session is
+        // revoked here and the login fails like a wrong password. The reserved attempt stays counted,
+        // as for any failed login. A step that throws discards the session too, so a failed login
+        // never leaves one behind; the step's own exception is the one that propagates.
+        bool confirmed;
+        try
+        {
+            confirmed = await FinishLoginAsync(result, body.Email);
+        }
+        catch
+        {
+            await TryDiscardNewSessionAsync();
+            throw;
+        }
+
+        if (!confirmed)
+        {
+            await TryDiscardNewSessionAsync();
+            return InvalidCredentials();
+        }
+
         return Ok(new { id = result.UserId });
+    }
+
+    // The steps after the session is written do not take the request token: once it exists they must
+    // complete even if the client has gone, or the session would outlive a failed login.
+    private async Task<bool> FinishLoginAsync(AuthResult result, string email)
+    {
+        if (!await auth.ConfirmUnchangedAsync(result, CancellationToken.None)) return false;
+
+        // A legitimate login clears the reserved attempts, so a real user can never lock
+        // themselves out by logging in normally.
+        await loginThrottle.ResetAsync(email, CancellationToken.None);
+        await sessionRotation.RevokePresentedAsync(HttpContext);
+        return true;
+    }
+
+    private static ObjectResult InvalidCredentials() =>
+        Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+            Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+
+    // Sign-out removes the ticket and its index row through the ticket store; the session cookie (and
+    // its chunks) the sign-in and the sign-out queued are dropped so the client receives neither.
+    // Any other cookie on the response stays. A sign-out that fails is logged and does not replace the
+    // outcome of the login: the client still gets no session cookie, so the ticket it could not reach
+    // expires with its sliding window.
+    private async Task TryDiscardNewSessionAsync()
+    {
+        try
+        {
+            await HttpContext.SignOutAsync(AuthSchemes.Cookie);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Discarding the session of a failed login did not complete.");
+        }
+        finally
+        {
+            Response.Headers.SetCookie = SessionCookieHeaders.Without(Response.Headers.SetCookie, sessionCookie.Value);
+        }
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]

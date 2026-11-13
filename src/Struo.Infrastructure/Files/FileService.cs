@@ -26,7 +26,9 @@ public sealed class FileService(
     ILogger<FileService>? logger = null,
     // Reference handling shared with every collection's delete (Restrict guard, SetNull, junctions,
     // translations). DI always supplies it; only upload-only test harnesses leave it null.
-    ItemPurgePipeline? references = null) : IFileLifecycle
+    ItemPurgePipeline? references = null,
+    // Cleared of the purged file's variants; null in harnesses that have no cache.
+    IImageVariantCache? variantCache = null) : IFileLifecycle
 {
     private readonly ILogger log = logger ?? NullLogger<FileService>.Instance;
     private readonly IFileStorage blobs = storage.Storage;
@@ -222,6 +224,13 @@ public sealed class FileService(
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
         await db.Queryable<File>().In(id).FirstAsync(ct);
 
+    /// <summary>
+    /// Whether the file row exists. A trashed row exists (trash keeps the file and its cached variants), so
+    /// the soft-delete filter is cleared; only a purged file is absent. One primary-key lookup.
+    /// </summary>
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
+        db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).AnyAsync(ct);
+
     // This is the media library's PURGE operation (permanent, hard delete) — the default
     // FilesController DELETE is TrashAsync above; DeleteAsync is invoked via ?purge=true and must
     // therefore still find an already-trashed row, so the lookup clears the ISoftDeletable filter
@@ -247,7 +256,22 @@ public sealed class FileService(
         await NotifyAsync(changes);
         // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
         await BlobCleanup.TryDeleteAsync(blobs, row.StorageKey, log);
+        await TryRemoveVariantsAsync(id);
         return true;
+    }
+
+    // Best-effort like the blob delete: the row is gone, so a cache that cannot be cleaned costs only disk.
+    private async Task TryRemoveVariantsAsync(Guid fileId)
+    {
+        if (variantCache is null) return;
+        try
+        {
+            await variantCache.RemoveAllForFileAsync(fileId, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Removing the cached image variants of file {FileId} failed; they stay until evicted.", fileId);
+        }
     }
 
     public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
