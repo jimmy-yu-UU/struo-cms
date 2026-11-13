@@ -103,6 +103,8 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
         var depth = 0;
         while (parentId is not null)
         {
+            // Ignoring case can only report a cycle that is not one (string keys on a case-sensitive
+            // backend); it never lets a real cycle through.
             if (string.Equals(parentId, move.SelfId, StringComparison.OrdinalIgnoreCase))
                 throw new QueryException($"'{move.ForeignKey}' would create a cycle in '{collection}'.");
             if (++depth > MaxDepth)

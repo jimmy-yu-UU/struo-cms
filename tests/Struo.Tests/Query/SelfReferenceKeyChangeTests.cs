@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using SqlSugar;
 using Struo.Api.Http;
 using Struo.Application.Query;
+using Struo.Domain.Auditing;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Files;
 using Struo.Tests.Support;
@@ -172,15 +173,26 @@ public sealed class SelfReferenceKeyChangeTests : IDisposable
         (await _h.Reader.Queryable<StrNode>().In("r").FirstAsync()).ParentId.Should().Be("abc");
     }
 
-    // The counting repository wraps the SQL repository; a purge reaches the trashed-row primitives only if
-    // the wrapper forwards them.
+    // The counting repository wraps the SQL repository. A trashed file in the folder makes the purge count it,
+    // ask whether the key can be null and clear it, so all three primitives go through the wrapper.
     [Fact]
-    public async Task A_purge_through_a_wrapping_repository_reaches_the_purge_primitives()
+    public async Task A_purge_through_a_wrapping_repository_reaches_the_trashed_row_primitives()
     {
         var folder = await _h.CreateAsync(Folder, "A");
+        var fileId = Guid.NewGuid();
+        await _h.Reader.Insertable(new Struo.Infrastructure.Files.File
+        {
+            Id = fileId, StorageKey = "k", FileName = "a.png", ContentType = "image/png", Size = 1,
+            Status = "published", FolderId = folder,
+        }).ExecuteCommandAsync();
         var (svc, _) = _h.Build();
+        (await svc.DeleteAsync("file", fileId.ToString())).Should().BeTrue();
 
         (await svc.DeleteAsync(Folder, folder.ToString(), purge: true)).Should().BeTrue();
+
+        var stored = await _h.Reader.Queryable<Struo.Infrastructure.Files.File>()
+            .ClearFilter<ISoftDeletable>().In(fileId).FirstAsync();
+        stored.FolderId.Should().BeNull();
     }
 
     [Fact]

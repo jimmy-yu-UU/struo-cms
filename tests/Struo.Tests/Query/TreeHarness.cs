@@ -45,8 +45,8 @@ internal sealed class PlainNode : ISoftDeletable
     public PlainNode? Parent { get; set; }
 }
 
-/// <summary>Self-referencing node with a string key, for ids that differ only by case. Created only by the
-/// tests that insert its rows.</summary>
+/// <summary>Self-referencing node with a string key, for ids that differ only by case. Every harness creates
+/// its table; only the case-only-id test inserts rows.</summary>
 [SugarTable("test_str_nodes")]
 [CmsCollection("StrNode")]
 internal sealed class StrNode

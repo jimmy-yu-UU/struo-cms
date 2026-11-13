@@ -28,8 +28,9 @@ namespace Struo.Tests.Query;
 /// backend with row locks a gate holds each writer at its second locked read, the first read of the chain,
 /// until both have arrived. By then each writer holds the lock on its own row (its first locked read) and has
 /// written it, so neither can read the other's row without waiting. SQLite has a single writer, so the second
-/// writer never reaches a gate while the first holds the write lock; there the writers run without one. Whatever the interleaving, the stored rows must not contain a cycle afterwards and at most
-/// one writer may succeed.
+/// writer never reaches a gate while the first holds the write lock; there the writers run without one.
+/// Whatever the interleaving, the stored rows must not contain a cycle afterwards and at most one writer
+/// may succeed.
 /// </summary>
 public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
 {
