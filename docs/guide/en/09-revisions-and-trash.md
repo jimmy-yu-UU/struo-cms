@@ -219,6 +219,7 @@ in. The filter is cleared individually in these cases:
 - A single-item read that explicitly asks for deleted data.
 - A list or count deciding whether to see the trash, driven by the `deleted=` parameter.
 - Purge recursively looking for the data it must clean up along with it.
+- Purge finding the trashed rows that point at its target through a restrict relation.
 - The file-deletion flow's own internal query for what it needs to purge.
 
 This filter affects only queries, not update statements: the trash and restore writes carry their
@@ -252,13 +253,37 @@ not this parameter is present, because it has no intermediate state to land in.
 
 Purge does these steps in order, inside one transaction:
 
-1. Check any restrict-guarded foreign keys.
-2. Null out the foreign keys of rows that point at it.
-3. Recursively clean up data that should genuinely cascade with it.
-4. Clean up its own junction rows and any other collection's junction rows pointing at it.
-5. Clean up its translation sidecar rows.
-6. Clean up its revisions.
-7. Delete the row itself.
+1. Check any restrict-guarded foreign keys, counting only rows that are not in the trash.
+2. Null the foreign key of every trashed row that points at it through a restrict relation; refuse
+   the purge if that key cannot be null.
+3. Null out the foreign keys of rows that point at it through `SetNull`.
+4. Recursively clean up data that should genuinely cascade with it.
+5. Clean up its own junction rows and any other collection's junction rows pointing at it.
+6. Clean up its translation sidecar rows.
+7. Clean up its revisions.
+8. Delete the row itself.
+
+Rows in the trash do not block a purge. Step 2 matches trashed rows only. What it does depends on
+whether the foreign key can be null, which follows the column itself, as the ORM builds it:
+
+- A key that can be null is set to `null`. Only that one key changes: no version bump, no
+  audit-column change, no revision, no change notification. Restoring the row later gives it a
+  `null` key.
+- A key that cannot be null makes the purge answer `409 CONFLICT`, deleting and changing nothing.
+  The message says how many trashed items of which collection reference it: `Cannot delete
+  '{collection}/{id}': {n} trashed '{sourceCollection}' item(s) reference it and the reference
+  cannot be cleared. Delete them permanently first.`
+
+A referencing row outside the trash blocks the purge. When live and trashed referencing rows both
+exist, nothing is changed. Restore performs no reference check.
+
+No row lock sits between steps 1 and 2. A referencing row that another transaction creates or
+restores after the check is outside what step 2 covers; the race is described in
+[Chapter 8](08-relations.md).
+
+The core `File.FolderId` can be null: after a folder is purged, a file that sat in it and is in the
+trash comes back in the library root when restored. Neither the core nor the sample has a restrict
+relation whose key cannot be null.
 
 The items endpoint only takes the permanent path when this parameter's value is exactly `true`,
 case-insensitively: for a soft-deletable collection, `?purge=1` or a bare `?purge` is treated as an

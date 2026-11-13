@@ -72,12 +72,61 @@
   `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
   或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
   敗；呼叫它的 fork 要改名。
+- 資料庫把某個請求選為死結犧牲者時，現在回 `409 CONFLICT`，原本是 `500`。各資料庫的錯誤碼：
+  - PostgreSQL：`40P01`
+  - MySQL 與 MariaDB：`1213`
+  - SQL Server：`1205`
+  - MariaDB 另有：`1020`（紀錄自上次讀取後已變動）
+
+  訊息固定：`The request lost a database deadlock.` 這對每一個寫入都成立，不只樹狀搬移。
+  死結發生在寫入交易裡：什麼都沒寫入。
+  死結發生在提交之後的工作（寫入攔截器的 `AfterCommitAsync`）：寫入已經生效，重送前先確認。
+  把 `500` 當成死結訊號的用戶端或監控，要改成處理 `409`。
+  鎖等待逾時與 SQLite 的 `database is locked` 不變。
+- 自我參照的循環檢查改在寫入交易裡執行，並使用列鎖。檢查拆成兩步：寫入前呼叫
+  `SelfReferenceCycleGuard.LockMovedRowAsync`，寫入後呼叫 `EnsureNoCycleAsync`（簽章已改）。
+  兩者都必須在交易裡呼叫。後者只接收前者在同一個交易裡回傳的結果。
+  檢查移到列寫入之後，錯誤的先後跟著變：
+  - 過期的 `version` 加上循環：回 `409 VERSION_CONFLICT`，原本是 `400`。
+  - 列在載入後被別的請求刪掉，加上循環：回 `404`，原本是 `400`。
+  - 列寫入撞到唯一鍵衝突，加上循環：回 `409 CONFLICT`，原本是 `400`。
+  - 循環檢查本身輸掉死結：回 `409`。
+
+  更新沒有改變自我參照的鍵時，只鎖被更新的那一列。
+  鍵有改變時，才鎖新父層與它往上的整條祖先鏈。
+- `IItemRepository` 新增四個成員，預設實作都丟 `NotSupportedException`：
+  - `GetByIdLockedAsync`：在交易裡讀一列並鎖住它，回傳最新已提交的值。沒有交易會丟
+    `InvalidOperationException`。
+  - `CountTrashedWhereInAsync`：只數垃圾桶裡符合條件的列。用 COUNT，不載入實體。
+  - `SetForeignKeyNullForTrashedAsync`：只把垃圾桶裡的列的外鍵設成 `null`。
+  - `IsForeignKeyNullable`：欄位是否允許 NULL，依 ORM 的欄位資訊回答。
+
+  自己實作或包裝 `IItemRepository` 的 fork，要實作或轉送這四個。否則兩件事會失敗：
+  - 更新自我參照集合的列。
+  - 清除被 `OnDelete.Restrict` 關聯指向的列，只要沒有未在垃圾桶的參照列先擋下它。
+- 清除一個項目時，垃圾桶裡以 `OnDelete.Restrict` 關聯指向它的列，現在會被處理。
+  原本它們的外鍵會留著，指向已經不存在的列。
+  - 外鍵可為 `null`：在清除的交易裡設成 `null`。
+  - 外鍵不可為 `null`：清除回 `409 CONFLICT`，什麼都不改，直到那些列被清除。
+  - 能不能為 `null`，以欄位本身為準，也就是 ORM 建欄位時用的資訊
+    （nullable 註記與 `[SugarColumn(IsNullable = ...)]`）。
+
+  有可軟刪除集合、且帶不可為 `null` 外鍵的 fork，要檢查自己的清除流程。核心與範例都沒有。
 :::
 
 ### 新增
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
+- 新增的公開成員：
+  - `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
+    `DomainErrorMap.DeadlockMessage`。
+  - `SelfReferenceCycleGuard.LockMovedRowAsync` 與型別 `SelfReferenceMove`。
+    只有 `LockMovedRowAsync` 會建立它。
+  - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
+    `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
+
+  自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
 
 ### 修正
 
@@ -98,6 +147,12 @@
   又沒有 `Length`）的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。
   現在跟其他沒有長度的欄位一樣不設上限，要有上限就在欄位上設 `MaxLength`；`ColumnDataType` 旁有
   `Length` 時，上限就是那個 `Length`。
+- 清除一個資料夾時，垃圾桶裡原本放在其中的檔案不會被動到：復原那個檔案，`folderId` 指向不存在的
+  資料夾，檔案既不在媒體庫根目錄，也不在垃圾桶。現在清除會清掉那個外鍵，復原的檔案出現在根目錄。
+  所有外鍵可為 `null` 的 `Restrict` 關聯都一樣，透過 `DELETE /api/files/{id}?purge=true` 清除檔案
+  也一樣。
+- 樹狀集合（例如媒體資料夾）裡兩個方向相反的同時搬動，可能都通過循環檢查，讓兩個資料夾互為父層。
+  現在檢查會鎖住整條父鏈，其中至多一個成功，另一個回 `400` 或 `409`。
 
 ### 安全性
 

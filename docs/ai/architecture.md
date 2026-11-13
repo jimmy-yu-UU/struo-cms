@@ -231,11 +231,15 @@ create/update/delete, soft-delete/restore, transaction scoping, batched `WHERE..
 (`QueryWhereInFilteredAsync` takes a `string? queryLocale` before its trailing `CancellationToken`,
 so a translatable leaf inside its `extraFilter` resolves at that locale), M2M sync,
 translation-sidecar load/sync, facet/aggregate computation, and a set of purge referential-integrity
-primitives (`SetForeignKeyNullAsync`, `DeleteByPropertyAsync`, `QueryWhereInWithDeletedAsync`).
-Those three purge primitives are declared with default bodies that
-`throw new NotSupportedException(...)` rather than a silent no-op — the interface's own comment
-explains why: a second implementation that forgot to override one of them would otherwise silently
-orphan referential rows on purge, exactly the defect class the defaults exist to prevent.
+primitives (`SetForeignKeyNullAsync`, `DeleteByPropertyAsync`, `QueryWhereInWithDeletedAsync`,
+`CountTrashedWhereInAsync`, `SetForeignKeyNullForTrashedAsync` and `IsForeignKeyNullable`), plus
+`GetByIdLockedAsync`, the locking read the self-reference cycle guard uses. Those seven members are
+declared with default bodies that `throw new NotSupportedException(...)` rather than a silent no-op
+— the interface's own comment explains why: a second implementation that forgot to override one of
+them would otherwise silently orphan referential rows on purge, or read without the row lock,
+exactly the defect classes the defaults exist to prevent. A wrapper around another `IItemRepository`
+must forward all seven. `GetByIdLockedAsync` needs an open transaction and throws
+`InvalidOperationException` without one.
 `FacetAsync` and `AggregateAsync` (the facet-bucket and aggregate-value computation behind
 `docs/guide/en/11-query-advanced.md`'s "Facet counting" and "Aggregates `aggregate[<op>]`" sections)
 follow the identical default-throw pattern for the identical reason — a fork with its own
@@ -247,7 +251,13 @@ implementation: `SqlSugarItemRepository`
 (`src/Struo.Infrastructure/DependencyInjection/DataServiceCollectionExtensions.cs`). This is the
 seam a fork would implement to point at a different storage engine, not a different ORM — see *ORM
 coupling* above; the content entities' SqlSugar attributes stay regardless. Any replacement must
-implement the three purge primitives explicitly or purge will throw for every collection.
+implement the six purge primitives and `GetByIdLockedAsync` explicitly. A purge throws when it
+reaches a missing one: `SetForeignKeyNullAsync` for a SetNull relation,
+`QueryWhereInWithDeletedAsync` for a Cascade relation, `DeleteByPropertyAsync` for many-to-many
+junction rows and translation rows, and `CountTrashedWhereInAsync` for every `OnDelete.Restrict`
+relation that points at the row (`SetForeignKeyNullForTrashedAsync` and `IsForeignKeyNullable` once
+trashed rows reference it). An update throws in a self-referencing collection without
+`GetByIdLockedAsync`.
 
 **M2M sync strategy — diff-and-patch, not delete-and-recreate.** `SyncManyToManyAsync` (implemented by
 `ManyToManySync`, below) diffs the incoming `IReadOnlyList<JunctionLink>` against the junction rows
@@ -296,15 +306,16 @@ identically to sharing one:
   `AggregateQueries` subsection below covers why).
 - `TransactionRunner` (`TransactionRunner.cs`) — nesting-safe `InTransactionAsync` (both overloads).
 - `WhereInQueries` (`WhereInQueries.cs`) — the batched `WHERE...IN` reads: `QueryWhereInAsync`,
-  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, and `QueryWhereInWithDeletedAsync`.
+  `QueryEntityWhereInAsync`, `QueryWhereInFilteredAsync`, `QueryWhereInWithDeletedAsync`, and
+  `CountTrashedWhereInAsync` (a typed COUNT over trashed rows).
 - `WhereInWindowQueries` (`WhereInWindowQueries.cs`) — `QueryWhereInWindowAsync`: one batched fetch of a
   to-many relation's rows for a single parent, with the nested filter, sort, offset and limit applied in
   SQL. It sorts through its own `OrderByExpressionBuilder`, and returns `null` when it cannot take the
   window (a translatable sort with no locale), which leaves the caller on the capped in-memory path.
 - `SoftDeleteOps` (`SoftDeleteOps.cs`) — `SoftDeleteAsync`/`RestoreAsync`, the atomic
   `UPDATE ... WHERE deletedat IS [NOT] NULL` with the version bump.
-- `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`
-  and `DeleteByPropertyAsync`.
+- `PurgeOps` (`PurgeOps.cs`) — the purge referential-integrity primitives, `SetForeignKeyNullAsync`,
+  `SetForeignKeyNullForTrashedAsync`, `DeleteByPropertyAsync` and `IsForeignKeyNullable`.
 - `ManyToManySync` (`ManyToManySync.cs`) — `SyncManyToManyAsync`.
 - `TranslationStore` (`TranslationStore.cs`) — the translation-sidecar seam: `LoadTranslationsAsync`,
   `InsertTranslationsAsync` (create), `SyncTranslationsAsync` (update).

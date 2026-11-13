@@ -17,7 +17,12 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 
     // Root-row reads (QueryAsync and GetByIdAsync); WhereIn expansion lookups are counted apart.
     public int RootReads => _rootReads;
-    public void ResetCount() { _whereInCalls = 0; _rootReads = 0; }
+    public void ResetCount() { _whereInCalls = 0; _rootReads = 0; _lockedReads.Clear(); }
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Collection, string Id)> _lockedReads = [];
+
+    /// <summary>Every locking read, in order, as (collection, id).</summary>
+    public IReadOnlyList<(string Collection, string Id)> LockedReads => [.. _lockedReads];
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
@@ -65,6 +70,14 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         return inner.GetByIdAsync(collection, id, deleted, ct);
     }
 
+    public Task<object?> GetByIdLockedAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
+    {
+        System.Threading.Interlocked.Increment(ref _rootReads);
+        _lockedReads.Enqueue((collection, id));
+        return inner.GetByIdLockedAsync(collection, id, deleted, ct);
+    }
+
     public Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default) =>
         inner.CreateAsync(collection, entity, ct);
 
@@ -109,6 +122,17 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
     public Task SetForeignKeyNullAsync(
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
         inner.SetForeignKeyNullAsync(sourceCollection, foreignKeyProperty, typedId, ct);
+
+    public Task<int> CountTrashedWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        inner.CountTrashedWhereInAsync(collection, property, values, ct);
+
+    public Task SetForeignKeyNullForTrashedAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        inner.SetForeignKeyNullForTrashedAsync(sourceCollection, foreignKeyProperty, typedId, ct);
+
+    public bool IsForeignKeyNullable(string collection, string property) =>
+        inner.IsForeignKeyNullable(collection, property);
 
     public Task DeleteByPropertyAsync(Type entityType, string property, object value, CancellationToken ct = default) =>
         inner.DeleteByPropertyAsync(entityType, property, value, ct);

@@ -40,6 +40,8 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
             logger?.LogWarning(exception, "Search provider unavailable");
         else if (DomainErrorMap.IsUniqueViolation(exception))
             logger?.LogWarning(exception, "Unique constraint violation");
+        else if (DomainErrorMap.IsDeadlockVictim(exception))
+            logger?.LogWarning(exception, "The request lost a database deadlock");
         return (DomainErrorMap.StatusFor(exception, code),
             new ErrorBody(code, message, DomainErrorMap.DetailsFor(exception)));
     }

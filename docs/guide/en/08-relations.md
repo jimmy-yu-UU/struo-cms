@@ -61,10 +61,18 @@ or startup fails: `M2O relation '{collection}.{relation}' has no foreign key.`, 
 '{collection}.{relation}' targets unknown collection '{target}'.`
 
 A self-referencing many-to-one (such as `MediaFolder.Parent`) carries an extra `SelfReferencing`
-flag in its metadata, and gets an extra cycle guard on write: it walks the incoming parent's
-ancestor chain — even an ancestor already in the trash still counts — and rejects an update that
-would close a cycle. Create is exempt. That guard's own walk cap is 64 levels, purely as a
-defensive stop; it has nothing to do with the query DSL's own relation-depth cap.
+flag in its metadata, and gets an extra cycle guard on write. The guard works inside the write
+transaction:
+
+- An update that keeps the parent locks only the row being updated.
+- An update that changes the parent locks the row being moved, then walks the new parent's
+  ancestor chain and locks every row it reaches.
+- It decides from the values the locking reads return. An ancestor in the trash counts too.
+
+An update that would close a cycle is rejected (`400`). Create is exempt. Of two concurrent moves
+that together would close a cycle, at most one succeeds. The write that loses the database
+deadlock answers `409 CONFLICT` and can be sent again. The guard's own walk cap is 64 levels,
+purely as a defensive stop; it has nothing to do with the query DSL's relation-depth cap.
 
 ### One-to-many: the sample's `Category.Articles` and `Category.Children`
 
@@ -246,7 +254,9 @@ relation is ignored.
 `Restrict`'s message names the collection: `Cannot delete '{collection}/{id}': referenced by
 '{sourceCollection}'.` The same guard also runs on a plain trash, and again at every recursion
 level of a purge. The check takes no row lock, so a reference committed by another transaction in
-between can still race past it.
+between can still race past it. Referencing rows in the trash do not block a purge. Their key is
+set to `null`, and only a key that cannot be null refuses it
+([Chapter 9](09-revisions-and-trash.md)).
 
 A many-to-one that a junction entity declares on its own — pointing at a third collection, say —
 counts as an ordinary many-to-one too: it defaults to `Restrict`, so that third collection's row

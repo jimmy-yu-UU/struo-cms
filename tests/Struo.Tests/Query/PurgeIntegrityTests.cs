@@ -96,6 +96,74 @@ internal sealed class RestrictRef
 }
 
 /// <summary>
+/// Soft-deletable source whose Restrict foreign key to FxCategory is nullable (the shape of
+/// File.FolderId). The trash holds rows of it that still point at a category being purged.
+/// </summary>
+[SugarTable("test_trashable_restrict_refs")]
+[CmsCollection("TrashableRestrictRef")]
+internal sealed class TrashableRestrictRef : AuditableEntity, ISoftDeletable
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)]
+    public string Name { get; set; } = "";
+
+    [SugarColumn(IsNullable = true)]
+    public Guid? CategoryId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public FxCategory? Category { get; set; }
+}
+
+/// <summary>Same as <see cref="TrashableRestrictRef"/> with a foreign key that cannot be null.</summary>
+[SugarTable("test_trashable_restrict_ref_required")]
+[CmsCollection("TrashableRestrictRefRequired")]
+internal sealed class TrashableRestrictRefRequired : AuditableEntity, ISoftDeletable
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)]
+    public string Name { get; set; } = "";
+
+    public Guid CategoryId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(CategoryId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public FxCategory? Category { get; set; }
+}
+
+/// <summary>Soft-deletable source whose nullable Restrict key points at a CascadeNode.</summary>
+[SugarTable("test_trashed_node_refs")]
+[CmsCollection("TrashedNodeRef")]
+internal sealed class TrashedNodeRef : AuditableEntity, ISoftDeletable
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)]
+    public string Name { get; set; } = "";
+
+    [SugarColumn(IsNullable = true)]
+    public Guid? NodeId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(NodeId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public CascadeNode? Node { get; set; }
+}
+
+/// <summary>
 /// Wires a real <see cref="ItemService"/> over the fixture types PLUS the local
 /// <see cref="CascadeNode"/>/<see cref="RestrictRef"/> fixtures above, mirroring
 /// <c>RevisionServiceHarness</c>'s construction. When <paramref name="failDeleteRevision"/> is set,
@@ -138,12 +206,19 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         db.CodeFirst.InitTables<CascadeNode>();
         db.CodeFirst.InitTables<CascadeNodeTranslation>();
         db.CodeFirst.InitTables<RestrictRef>();
+        db.CodeFirst.InitTables<TrashableRestrictRef>();
+        db.CodeFirst.InitTables<TrashableRestrictRefRequired>();
+        db.CodeFirst.InitTables<TrashedNodeRef>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Files.MediaFolder>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
+        db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
         var types = new[]
         {
             typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
-            typeof(CascadeNode), typeof(RestrictRef), typeof(Struo.Infrastructure.Files.MediaFolder),
+            typeof(CascadeNode), typeof(RestrictRef), typeof(TrashableRestrictRef), typeof(TrashableRestrictRefRequired), typeof(TrashedNodeRef),
+            typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
@@ -156,6 +231,9 @@ internal sealed class PurgeIntegrityHarness : IDisposable
             ["file"]        = typeof(Struo.Infrastructure.Files.File),
             ["cascadeNode"] = typeof(CascadeNode),
             ["restrictRef"] = typeof(RestrictRef),
+            ["trashableRestrictRef"] = typeof(TrashableRestrictRef),
+            ["trashableRestrictRefRequired"] = typeof(TrashableRestrictRefRequired),
+            ["trashedNodeRef"] = typeof(TrashedNodeRef),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -224,6 +302,32 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     public async Task<string> CreateRestrictRefAsync(string name, Guid categoryId)
     {
         var created = await Service.CreateAsync("restrictRef", BodyOf(new { name, categoryId }));
+        return created["id"]!.ToString()!;
+    }
+
+    public async Task<string> CreateTrashedNodeRefAsync(string name, Guid nodeId)
+    {
+        var created = await Service.CreateAsync("trashedNodeRef", BodyOf(new { name, nodeId }));
+        var id = created["id"]!.ToString()!;
+        await Service.DeleteAsync("trashedNodeRef", id);
+        return id;
+    }
+
+    public async Task<string> CreateFolderAsync(string name)
+    {
+        var created = await Service.CreateAsync("mediafolder", BodyOf(new { name }));
+        return created["id"]!.ToString()!;
+    }
+
+    public async Task<string> CreateTrashableRefAsync(string name, Guid? categoryId)
+    {
+        var created = await Service.CreateAsync("trashableRestrictRef", BodyOf(new { name, categoryId }));
+        return created["id"]!.ToString()!;
+    }
+
+    public async Task<string> CreateTrashableRefRequiredAsync(string name, Guid categoryId)
+    {
+        var created = await Service.CreateAsync("trashableRestrictRefRequired", BodyOf(new { name, categoryId }));
         return created["id"]!.ToString()!;
     }
 

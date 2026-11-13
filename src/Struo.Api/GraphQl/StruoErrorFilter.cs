@@ -76,6 +76,12 @@ public sealed class StruoErrorFilter(
             return error.WithMessage(message).WithCode(code).WithException(null!);
         }
 
+        if (code == Http.ErrorCodes.Conflict && DomainErrorMap.IsDeadlockVictim(exception))
+        {
+            logger.LogWarning(exception, "The request lost a database deadlock");
+            return error.WithMessage(message).WithCode(code).WithException(null!);
+        }
+
         var coded = error.WithMessage(message).WithCode(code);
         var details = DomainErrorMap.DetailsFor(exception);
         return details is null
