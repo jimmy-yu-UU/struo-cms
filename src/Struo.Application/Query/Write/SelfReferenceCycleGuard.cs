@@ -33,7 +33,7 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
     /// <summary>
     /// Locks the row being updated and returns the self-reference keys whose stored value differs from the
     /// value about to be written. Empty for a collection without a self-reference (no read at all) and when
-    /// the row no longer exists (the row write then finds nothing).
+    /// the row does not exist (the row write then finds nothing).
     /// </summary>
     public async Task<IReadOnlyList<SelfReferenceMove>> LockMovedRowAsync(
         string collection, CollectionMetadata meta, object entityAfterOverlay, CancellationToken ct)
