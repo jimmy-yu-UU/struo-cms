@@ -123,6 +123,17 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
         inner.SetForeignKeyNullAsync(sourceCollection, foreignKeyProperty, typedId, ct);
 
+    public Task<int> CountTrashedWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        inner.CountTrashedWhereInAsync(collection, property, values, ct);
+
+    public Task SetForeignKeyNullForTrashedAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        inner.SetForeignKeyNullForTrashedAsync(sourceCollection, foreignKeyProperty, typedId, ct);
+
+    public bool IsForeignKeyNullable(string collection, string property) =>
+        inner.IsForeignKeyNullable(collection, property);
+
     public Task DeleteByPropertyAsync(Type entityType, string property, object value, CancellationToken ct = default) =>
         inner.DeleteByPropertyAsync(entityType, property, value, ct);
 

@@ -25,10 +25,10 @@ namespace Struo.Tests.Query;
 
 /// <summary>
 /// Two writers, each with its own connection and transaction, move media folders at the same time. On a
-/// backend with row locks a gate holds each writer at its first locked read until both have written their
-/// own row, so both reach the cycle check with an uncommitted write pending. SQLite has a single writer, so
-/// the second writer never reaches a gate while the first holds the write lock; there the writers run
-/// without one. Whatever the interleaving, the stored rows must not contain a cycle afterwards and at most
+/// backend with row locks a gate holds each writer at its second locked read, the first read of the chain,
+/// until both have arrived. By then each writer holds the lock on its own row (its first locked read) and has
+/// written it, so neither can read the other's row without waiting. SQLite has a single writer, so the second
+/// writer never reaches a gate while the first holds the write lock; there the writers run without one. Whatever the interleaving, the stored rows must not contain a cycle afterwards and at most
 /// one writer may succeed.
 /// </summary>
 public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
@@ -148,8 +148,9 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         AssertDeadlockOnServers(results);
     }
 
-    // The gate makes both writers hold an uncommitted write before either reads the other's row, so on a
-    // backend with row locks each waits for the other and the database ends one of them as a deadlock victim.
+    // The gate holds both writers after they locked and wrote their own row and before they read the chain, so
+    // on a backend with row locks each waits for the other and the database ends one of them as a deadlock
+    // victim.
     private static void AssertDeadlockOnServers(params (Outcome Outcome, Exception? Error)[] results)
     {
         if (!TestBackend.IsLive) return;
@@ -228,12 +229,12 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         }
     }
 
-    /// <summary>Forwards every call and holds the first locked read of its writer at the gate.</summary>
+    /// <summary>Forwards every call and holds the second locked read of its writer at the gate.</summary>
     private class GatedRepository : DispatchProxy
     {
         private IItemRepository _inner = null!;
         private ArrivalGate _gate = null!;
-        private int _held;
+        private int _lockedReads;
 
         public static IItemRepository Wrap(IItemRepository inner, ArrivalGate gate)
         {
@@ -247,7 +248,7 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             if (targetMethod!.Name == nameof(IItemRepository.GetByIdLockedAsync)
-                && Interlocked.Exchange(ref _held, 1) == 0)
+                && Interlocked.Increment(ref _lockedReads) == 2)
                 return HoldThenAsync(targetMethod, args);
             return Forward(targetMethod, args);
         }
