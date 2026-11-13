@@ -156,4 +156,22 @@ public sealed class PurgeTrashedRestrictTests
             null, new ComparisonFilter("folderId", QueryOperator.Null, null), [], 0, 0, null));
         root.Data.Should().Contain(d => (Guid)d["id"]! == fileId);
     }
+
+    // The target of the trashed row's key is a Cascade child of the purge target, so the key is cleared
+    // when that child is purged, one level down.
+    [Fact]
+    public async Task A_trashed_key_to_a_cascade_child_is_cleared_when_the_child_is_purged_with_its_parent()
+    {
+        using var h = PurgeIntegrityHarness.Create();
+        var parent = Guid.Parse(await h.CreateCascadeNodeAsync("Parent"));
+        var child = Guid.Parse(await h.CreateCascadeNodeAsync("Child", parent));
+        var refId = Guid.Parse(await h.CreateTrashedNodeRefAsync("R", child));
+
+        (await h.Service.DeleteAsync("cascadeNode", parent.ToString(), purge: true)).Should().BeTrue();
+
+        (await h.Repository.GetByIdAsync("cascadeNode", child.ToString(), DeletedFilter.With)).Should().BeNull();
+        var row = (TrashedNodeRef)(await h.Repository.GetByIdAsync(
+            "trashedNodeRef", refId.ToString(), DeletedFilter.With))!;
+        row.NodeId.Should().BeNull();
+    }
 }

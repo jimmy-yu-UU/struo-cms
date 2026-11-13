@@ -141,6 +141,28 @@ internal sealed class TrashableRestrictRefRequired : AuditableEntity, ISoftDelet
     public FxCategory? Category { get; set; }
 }
 
+/// <summary>Soft-deletable source whose nullable Restrict key points at a CascadeNode.</summary>
+[SugarTable("test_trashed_node_refs")]
+[CmsCollection("TrashedNodeRef")]
+internal sealed class TrashedNodeRef : AuditableEntity, ISoftDeletable
+{
+    [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)]
+    public string Name { get; set; } = "";
+
+    [SugarColumn(IsNullable = true)]
+    public Guid? NodeId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(NodeId))]
+    [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Restrict)]
+    [SugarColumn(IsIgnore = true)]
+    public CascadeNode? Node { get; set; }
+}
+
 /// <summary>
 /// Wires a real <see cref="ItemService"/> over the fixture types PLUS the local
 /// <see cref="CascadeNode"/>/<see cref="RestrictRef"/> fixtures above, mirroring
@@ -186,6 +208,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         db.CodeFirst.InitTables<RestrictRef>();
         db.CodeFirst.InitTables<TrashableRestrictRef>();
         db.CodeFirst.InitTables<TrashableRestrictRefRequired>();
+        db.CodeFirst.InitTables<TrashedNodeRef>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.MediaFolder>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.File>();
         db.CodeFirst.InitTables<Struo.Infrastructure.Files.FileTranslation>();
@@ -194,7 +217,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
         var types = new[]
         {
             typeof(FxArticle), typeof(FxCategory), typeof(FxTag), typeof(Struo.Infrastructure.Files.File),
-            typeof(CascadeNode), typeof(RestrictRef), typeof(TrashableRestrictRef), typeof(TrashableRestrictRefRequired),
+            typeof(CascadeNode), typeof(RestrictRef), typeof(TrashableRestrictRef), typeof(TrashableRestrictRefRequired), typeof(TrashedNodeRef),
             typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var collections = MetadataScanner.ScanTypes(types);
@@ -210,6 +233,7 @@ internal sealed class PurgeIntegrityHarness : IDisposable
             ["restrictRef"] = typeof(RestrictRef),
             ["trashableRestrictRef"] = typeof(TrashableRestrictRef),
             ["trashableRestrictRefRequired"] = typeof(TrashableRestrictRefRequired),
+            ["trashedNodeRef"] = typeof(TrashedNodeRef),
             ["mediafolder"] = typeof(Struo.Infrastructure.Files.MediaFolder),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
@@ -279,6 +303,14 @@ internal sealed class PurgeIntegrityHarness : IDisposable
     {
         var created = await Service.CreateAsync("restrictRef", BodyOf(new { name, categoryId }));
         return created["id"]!.ToString()!;
+    }
+
+    public async Task<string> CreateTrashedNodeRefAsync(string name, Guid nodeId)
+    {
+        var created = await Service.CreateAsync("trashedNodeRef", BodyOf(new { name, nodeId }));
+        var id = created["id"]!.ToString()!;
+        await Service.DeleteAsync("trashedNodeRef", id);
+        return id;
     }
 
     public async Task<string> CreateFolderAsync(string name)

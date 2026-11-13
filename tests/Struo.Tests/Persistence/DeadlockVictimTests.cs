@@ -2,10 +2,15 @@ using System.Data.Common;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using AwesomeAssertions;
+using HotChocolate;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Struo.Api.GraphQl;
 using Microsoft.Data.SqlClient;
 using MySqlConnector;
 using Struo.Api.Http;
 using Struo.Infrastructure.Persistence;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Persistence;
@@ -92,7 +97,7 @@ public class DeadlockVictimTests
         var (status, body) = StruoExceptionHandler.Map(new InvalidOperationException("wrapped", ex), true);
 
         status.Should().Be(409);
-        body.Code.Should().Be(ErrorCodes.Conflict);
+        body.Code.Should().Be(Struo.Api.Http.ErrorCodes.Conflict);
         body.Message.Should().Be(DomainErrorMap.DeadlockMessage);
     }
 
@@ -101,5 +106,20 @@ public class DeadlockVictimTests
     {
         StruoExceptionHandler.Map(new FakeDbException("55P03"), true).Status.Should().Be(500);
     }
-}
 
+    [Fact]
+    public void GraphQl_answers_the_conflict_code_with_the_fixed_message_and_logs_a_warning()
+    {
+        var logger = new ListLogger<StruoErrorFilter>();
+        var filter = new StruoErrorFilter(logger, new HttpContextAccessor { HttpContext = null });
+        var failure = new InvalidOperationException("wrapped", new FakeDbException("40P01"));
+        var error = ErrorBuilder.New().SetMessage("original").SetException(failure).Build();
+
+        var mapped = filter.OnError(error);
+
+        mapped.Code.Should().Be("CONFLICT");
+        mapped.Message.Should().Be(DomainErrorMap.DeadlockMessage);
+        mapped.Exception.Should().BeNull();
+        logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Warning);
+    }
+}
