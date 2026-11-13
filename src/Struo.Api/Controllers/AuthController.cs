@@ -64,11 +64,11 @@ public sealed class AuthController(
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
         await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
 
-        // The session now exists, so a password change or removal that revoked sessions before it was
-        // written has not covered it. If the credential verified above is no longer the stored one,
-        // the session is revoked here and the login fails like a wrong password. The reserved attempt
-        // stays counted, as for any failed login. Not tied to the request token: once the session is
-        // written, the check must complete even if the client has gone.
+        // A password change or removal that revoked sessions before this one was written has not
+        // covered it. If the stored credential differs from the one verified above, the session is
+        // revoked here and the login fails like a wrong password. The reserved attempt stays counted,
+        // as for any failed login. Not tied to the request token: once the session is written, the
+        // check must complete even if the client has gone.
         if (!await auth.ConfirmUnchangedAsync(result, CancellationToken.None))
         {
             await DiscardNewSessionAsync();
