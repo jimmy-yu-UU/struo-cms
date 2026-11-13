@@ -104,22 +104,34 @@
   `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`, which
   deletes only the index rows of the given keys; a fork that implements the interface changes it.
   `IAuthService` gains `ConfirmUnchangedAsync(AuthResult, CancellationToken)`, which says whether
-  the password hash a login verified is still the stored one (and the user still exists and is
-  active); a fork with its own `IAuthService` adds the method. The `AuthResult` constructor and
-  `AuthResult.Ok` take an optional `PasswordProof` parameter; `PasswordProof` is a new type whose
-  hash is invisible outside the assembly and never printed. `AuthController.Login` calls
-  `ConfirmUnchangedAsync` after the session is written; the built-in `AuthService` answers `false`
-  for a result that carries no `PasswordProof`.
+  the password hash a login verified is still the stored one and the user still exists and is
+  active; a fork with its own `IAuthService` adds the method. `AuthController.Login` calls it
+  after the session is written, and the built-in `AuthService` answers `false` for a result that
+  carries no `PasswordProof`. `AuthResult` gains a third positional member, `Proof` (an optional
+  `PasswordProof`): the `AuthResult` constructor and `AuthResult.Ok` have new signatures, so an
+  assembly compiled against the earlier ones is rebuilt, and code that deconstructs a result into
+  two values (`var (id, failure) = result`) takes three (`var (id, failure, _) = result`). A fork
+  with its own `IAuthService` returns `AuthResult.Ok(userId, PasswordProof.From(storedHash))` on
+  success, where `storedHash` is the hash from the database that the password was verified
+  against; in `ConfirmUnchangedAsync` it reads the user again, decides with
+  `proof.Matches(currentStoredHash)` (an ordinal comparison), and checks that the user exists and
+  is active. `PasswordProof` has no public way to read the hash, and `ToString()` prints only the
+  type name. The `AuthController` constructor takes a new `SessionCookieName` parameter; a fork
+  that builds the controller itself adds it.
 - `IImageVariantCache` gains `RemoveAllForFileAsync(Guid fileId, CancellationToken)`, which
-  deletes all variants of one file, and the key `DeriveKey` returns is now three parts,
-  `<file id>/<version hash>/<variant hash>`, so a key always carries its file id. A fork with its
-  own implementation adds the method and accepts the new key shape. The `FileService` constructor
-  takes a new optional last parameter, `IImageVariantCache? variantCache`. `DiskImageVariantCache`
-  lays files out as `<CachePath>/<file id>/<version hash>/<variant hash>`: at the first start
-  after the upgrade the API deletes, in the background, the cache files under `CachePath` shaped
-  `<2 hex>/<64 hex>`, the `.<64 hex>.<32 hex>.tmp` temp files beside them, and the directories
-  that leaves empty, and touches nothing else. Those variants are not moved; they are transformed
-  again on the first request.
+  deletes all variants of one file, and the `SetAsync` contract gains a rule: writing a variant of
+  a file also deletes that file's variants of other versions. The key `DeriveKey` returns is now
+  three parts, `<file id>/<version hash>/<variant hash>`, so a key always carries its file id. A
+  fork with its own implementation adds the method, follows the new contract and accepts the new
+  key shape. The `FileService` constructor takes a new optional last parameter,
+  `IImageVariantCache? variantCache`. `DiskImageVariantCache` gains the public method
+  `RunMaintenance()`, which the API calls in the background at every start. It lays files out as
+  `<CachePath>/<file id>/<version hash>/<variant hash>`: at the first start after the upgrade the
+  API deletes, in the background, the cache files under `CachePath` shaped `<2 hex>/<64 hex>`, the
+  `.<64 hex>.<32 hex>.tmp` temp files beside them, and the directories that leaves empty, and
+  touches nothing else. Those variants are not moved; they are transformed again on the first
+  request. A directory named like a canonical lowercase GUID belongs to the cache, and everything
+  in it is deleted when that file is permanently deleted.
 :::
 
 ### Added

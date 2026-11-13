@@ -81,18 +81,27 @@
   `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`，只刪指定鑰
   匙的索引列；實作這個介面的 fork 要改。`IAuthService` 多了
   `ConfirmUnchangedAsync(AuthResult, CancellationToken)`，回傳登入驗證過的密碼雜湊是否仍是儲存的那
-  一份（使用者還在、仍啟用）；自己實作 `IAuthService` 的 fork 要補上這個方法。`AuthResult` 的建構
-  函式與 `AuthResult.Ok` 多了選用的 `PasswordProof` 參數，`PasswordProof` 是新型別，外部看不到雜湊
-  內容，也不會印出。`AuthController.Login` 在工作階段寫入後呼叫 `ConfirmUnchangedAsync`；內建的
-  `AuthService` 對沒帶 `PasswordProof` 的結果一律回 `false`。
+  一份，而且使用者還在、仍啟用；自己實作 `IAuthService` 的 fork 要補上這個方法。
+  `AuthController.Login` 在工作階段寫入後呼叫它，內建的 `AuthService` 對沒帶 `PasswordProof` 的結
+  果一律回 `false`。`AuthResult` 多了第三個位置成員 `Proof`（選用的 `PasswordProof`）：
+  `AuthResult` 的建構函式與 `AuthResult.Ok` 的簽章變了，針對舊簽章編譯的組件要重新編譯；把結果解構
+  成兩個值的程式碼（`var (id, failure) = result`）要改成三個（`var (id, failure, _) = result`）。
+  自己實作 `IAuthService` 的 fork 在驗證成功時回傳
+  `AuthResult.Ok(userId, PasswordProof.From(storedHash))`，`storedHash` 是驗證密碼所用、資料庫存的
+  那一份雜湊；在 `ConfirmUnchangedAsync` 重新讀取使用者後，用 `proof.Matches(目前儲存的雜湊)`（序
+  數比對）判斷，並檢查使用者還在且啟用。`PasswordProof` 沒有任何公開的方式讀出雜湊，`ToString()`
+  只印型別名稱。`AuthController` 的建構函式多了 `SessionCookieName` 參數；自己建立這個控制器的
+  fork 要補上。
 - `IImageVariantCache` 多了 `RemoveAllForFileAsync(Guid fileId, CancellationToken)`，刪除某個檔案
-  的所有變體；`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，鍵一定帶著檔案
-  id。自己實作這個介面的 fork 要補上方法並接受新的鍵形狀。`FileService` 的建構函式在最後多了選用參
-  數 `IImageVariantCache? variantCache`。`DiskImageVariantCache` 的目錄結構改成
+  的所有變體；`SetAsync` 的契約多了一條：寫入某個檔案的變體時，要一併刪掉同一個檔案其他 `version`
+  的變體。`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，鍵一定帶著檔案 id。
+  自己實作這個介面的 fork 要補上方法、遵守新的契約並接受新的鍵形狀。`FileService` 的建構函式在最後
+  多了選用參數 `IImageVariantCache? variantCache`。`DiskImageVariantCache` 多了公開方法
+  `RunMaintenance()`，API 在每次啟動時於背景呼叫。它的目錄結構改成
   `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`：升級後第一次啟動，API 在背景刪除 `CachePath`
   底下形如 `<2 位十六進位>/<64 位十六進位>` 的快取檔、同目錄的
   `.<64 位十六進位>.<32 位十六進位>.tmp` 暫存檔，以及因此變空的目錄，其他檔案不動。這些變體不搬移，
-  第一次請求時重新轉換。
+  第一次請求時重新轉換。名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
 :::
 
 ### 新增

@@ -400,39 +400,51 @@ labeled text block (lowercased hex). The block is the file id, the `version`, pl
 rounding. Changing any one of them produces a different key. The version stamp is the
 optimistic-concurrency `version` counter, not `UpdatedAt`; any update to this row advances it.
 
-Every variant lives in a directory named for the file's id, so all variants of one file sit in one
-place and can be found and deleted without knowing the transform parameters. Writing a variant of
-one `version` also deletes that file's variants of other versions; one that cannot be deleted is
-logged as a warning and left for a later write, a permanent delete or eviction.
+Every variant lives under `<file id>/<version hash>/`, so all variants of one file sit in one place
+and can be found and deleted without knowing the transform parameters. Writing a variant of one
+`version` also deletes that file's variants of other versions; one that cannot be deleted is logged
+as a warning and left for a later write of that file or a permanent delete, and, with a size cap,
+possibly for eviction.
 
 A write goes to a temp file in the same directory first (its name starts with `.` and ends with
 `.tmp`) and is then moved into place, so a concurrent read never sees a half-written variant. A read
 that loses a race against a concurrent write is treated as a cache miss, not an error. A temp file
 is not a variant and does not count towards the cap. A process that stops mid-write can leave one
-behind; temp files older than one hour are deleted at start and on every eviction sweep.
+behind; temp files older than one hour are deleted: at start for every file, on every eviction sweep
+for every file, and when a variant of a file is written for that file only. With `CacheMaxBytes` at
+`0` there is no eviction sweep, so stale temp files in other files' directories wait for the next
+start.
+
+An eviction sweep and the tidy-up at start also delete empty `<file id>` and
+`<file id>/<version hash>` directories, those two shapes only and never `CachePath` itself. With
+`CacheMaxBytes` at `0` only the tidy-up at start does.
 
 A permanent delete of a file (`?purge=true`, through the media library or the item API) deletes
 all of that file's variants once the row is gone, and no other file's. A failure to remove them is
-logged as one warning and does not fail the delete; what is left waits for eviction. Trash and
-restore do not touch variants.
+logged as one warning and does not fail the delete. What is left is handled by eviction like any
+variant when there is a size cap (least recently read first); with `CacheMaxBytes` at `0` there is
+no eviction and the tidy-up at start does not delete them either, so they stay on disk until
+removed by hand. Trash and restore do not touch variants.
 
 At start, the API tidies `CachePath` once in the background. It deletes only files of exactly two
 shapes, `<2 hex>/<64 hex>` (the directory equals the first two characters of the name) and, in the
 same kind of directory, temp files shaped `.<64 hex>.<32 hex>.tmp`, and then the directories that
-leaves empty. Nothing else is touched, so `CachePath` may point at a directory that holds other
-files.
+leaves empty; stale temp files and empty directories are handled as described above. Files and
+directories of any other shape are left alone. A directory named like a file id (a canonical
+lowercase GUID) belongs to the cache, and everything in it is deleted when that file is permanently
+deleted, so keep nothing else in such a directory.
 
 The cache is size-capped by `CacheMaxBytes` (2 GB by default). Every hit stamps the variant as
 recently used; when a write leaves the cache over the cap, the variants that were read least
-recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A variant evicted while another request is reading it is read
-as a miss and transformed again.
+recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A
+variant evicted while another request is reading it is read as a miss and transformed again.
 
 The cache lives on the local disk of each API process (replica), and replicas do not share it. So a
 permanent delete and the write of a variant for a new `version` clear only the cache of the replica
-that handled the request; other replicas keep their copies until eviction removes them.
-`CachePath` points at local disk whether `Backend` is `local` or `s3`, so with `s3` the transform
-cache is still local. Its contents can be rebuilt at any time; losing them only means transforming
-again, so temporary storage is fine for it.
+that handled the request; other replicas keep their copies until eviction removes them (with
+`CacheMaxBytes` at `0` they keep them). `CachePath` points at local disk whether `Backend` is
+`local` or `s3`, so with `s3` the transform cache is still local. Its contents can be rebuilt at any
+time; losing them only means transforming again, so temporary storage is fine for it.
 
 Each replica has its own `CacheMaxBytes` cap, so the total disk use is `CacheMaxBytes` times the
 number of replicas. In an environment short on disk, lower `CacheMaxBytes`.

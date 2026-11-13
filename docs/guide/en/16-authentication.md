@@ -139,15 +139,15 @@ falling back to the cookie, even when the request carries both at once. A write 
 requires sign-in validates and merges both schemes instead — see
 [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
-After a password login has written its session, it reads the user once more and checks that the
-user still exists and is active, and that the stored password hash equals the one the password was
-verified against. A mismatch means a password change or a removal landed while the login was in
-flight: the session just created (the cache ticket and the index row) is revoked at once, the
-response carries no session cookie, and the login fails like a wrong password, as `401`
-`UNAUTHORIZED` `Invalid credentials.`, with the attempt still counted by the login throttle as for
-any failed login. Only the password hash is compared, so an edit to any other field of the user
-row does not affect a login. External (OIDC) login verifies no password and does not make this
-check.
+After a password login has written its session, it reads the user once more and checks two things:
+that the user row still exists and is active, and that the stored password hash equals the one the
+password was verified against. A missing row, a deactivated user or a different hash means a
+password change, a removal or a deactivation landed while the login was in flight: the session just
+created (the cache ticket and the index row) is revoked at once, the response carries no session
+cookie, and the login fails like a wrong password, as `401` `UNAUTHORIZED` `Invalid credentials.`,
+with the attempt still counted by the login throttle as for any failed login. Apart from the active
+flag only the password hash is compared, so an edit to any other field of the user row does not
+affect a login. External (OIDC) login verifies no password and does not make this check.
 
 If a caller logs in again while it's still carrying a valid session cookie, that doesn't open a
 second session: the cookie handler sees that this request already carries a session key, and
@@ -185,13 +185,14 @@ cache itself has no scan or enumerate operation, so without this index there's n
 through the item API, and a row is hard-deleted, never soft-deleted; a stale index row is only
 cleaned up the next time that user logs in, not by any scheduled sweep of the whole table.
 
-A successful password write immediately reads this index and revokes every session the target user
-currently has: it lists the keys in the index, deletes each from the cache, and then deletes the
-index rows of those keys only. A session whose row is written after the listing keeps its row, and
-the next revocation finds it. A failure in that revocation step doesn't roll back the password
-change — it's reported with its own error code, `SESSION_REVOCATION_FAILED`, because the caller
-needs to know some sessions may still be alive. Deleting a user row (soft-delete or purge)
-triggers the same revocation at the service layer, so GraphQL's delete mutation is covered too.
+A successful password write immediately reads this index and revokes every session the target
+user currently has: it lists the keys in the index, deletes each from the cache, and then deletes
+the index rows of those keys only. A session whose row is written after the listing keeps its row,
+and the next revocation finds it. A failure in that revocation step doesn't roll back the password
+change; it's reported with its own error code, `SESSION_REVOCATION_FAILED`, because the caller
+needs to know some sessions may still be alive. Deleting a user row triggers the same revocation: a
+user row cannot be soft-deleted, so every delete is a purge. The revocation runs at the service
+layer, so GraphQL's delete mutation is covered too.
 
 The admin's **Log out** always ends on the login page, even with unsaved edits in a form. If the
 server cannot confirm the sign-out, the login page says so; a `401` means no session was left to end

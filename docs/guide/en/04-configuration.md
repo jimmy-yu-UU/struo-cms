@@ -246,9 +246,12 @@ When `CachePath` is a relative path, it's relative to the application's content 
 process's current working directory. This matters for where the cache actually ends up when
 something like systemd starts the process from a different directory.
 
-The directory layout under `CachePath`, the cleanup on a permanent delete of a file and the tidy-up
-at start are in "Variant caching" in [Chapter 15](15-files-and-media.md). The tidy-up deletes only
-files of exactly the cache's own shapes, so this directory can be shared with other files.
+The directory layout under `CachePath`, the cleanup on a permanent delete of a file and the
+tidy-up at start are in "Variant caching" in [Chapter 15](15-files-and-media.md). Files and
+directories of other shapes are left alone; a directory named like a canonical lowercase GUID (a
+file id) belongs to the cache, and everything in it is deleted when that file is permanently
+deleted. So this directory can be shared with other files, as long as nothing else lives in a
+directory named like a file id.
 
 The keys below bound what one caller can make the server compute and store.
 
