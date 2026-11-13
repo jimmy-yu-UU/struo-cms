@@ -36,7 +36,8 @@ public sealed class ForkHost : IAsyncDisposable
     /// <summary>Starts a host; any startup failure propagates to the caller.</summary>
     public static async Task<ForkHost> StartAsync(
         Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
-        Action<IServiceCollection>? afterAddStruoCms = null, Action<WebApplication>? mapEndpoints = null)
+        Action<IServiceCollection>? afterAddStruoCms = null, Action<WebApplication>? mapEndpoints = null,
+        string environment = "Development")
     {
         var db = TestBackend.CreateSqliteDatabase();
         var filesRoot = Path.Combine(Path.GetTempPath(), "struo-forkhost-" + Guid.NewGuid().ToString("N"));
@@ -57,7 +58,7 @@ public sealed class ForkHost : IAsyncDisposable
             // Program.cs installs a fresh bootstrap logger before each host; a second UseSerilog on the same
             // one would find it frozen.
             Log.Logger = new LoggerConfiguration().CreateBootstrapLogger();
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment });
             builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(settings);
             builder.AddStruoCms(configure);
@@ -79,11 +80,11 @@ public sealed class ForkHost : IAsyncDisposable
     /// <summary>Starts a host and returns the failure it threw, or null when it started.</summary>
     public static async Task<Exception?> StartupErrorAsync(
         Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
-        Action<IServiceCollection>? afterAddStruoCms = null)
+        Action<IServiceCollection>? afterAddStruoCms = null, string environment = "Development")
     {
         try
         {
-            await using var host = await StartAsync(configure, mutate, afterAddStruoCms);
+            await using var host = await StartAsync(configure, mutate, afterAddStruoCms, environment: environment);
             return null;
         }
         catch (Exception ex)

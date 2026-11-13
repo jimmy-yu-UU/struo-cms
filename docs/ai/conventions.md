@@ -362,26 +362,27 @@ trail, including the parenthesised-literal edge case on SQL Server/MySQL). A for
 that only ever runs one backend is free to write `[SugarColumn(ColumnDataType = "...")]` directly
 instead — that convention is respected too, just at lower precedence.
 
-**Precedence, if a property carries both**: `[ColumnShape]` wins, silently — the hook resolves the
-shape and returns before the explicit `ColumnDataType` is ever consulted
-(`SqlSugarClientFactory`'s `EntityService` hook, the whole `[ColumnShape]` branch: the shape is read
-at the top and the branch returns at its end). There is no warning for the conflict; a fork that
-wants its own vendor literal to win on a shaped property must remove `[ColumnShape]` from it. Pinned by
-`ColumnTypeMapTests.ColumnShape_wins_over_an_explicitly_declared_ColumnDataType`
-(`tests/Struo.Tests/Persistence/ColumnTypeMapTests.cs`).
+**Contradicting declarations are rejected at startup.** `ColumnDeclarationCheck`
+(`src/Struo.Infrastructure/Metadata/ColumnDeclarationCheck.cs`) runs from `MetadataScanner` for
+every `[CmsField]` property that has a column, in collections, translation entities and junction
+collections. It throws a `MetadataException` naming `Class.Property` and both declarations for:
 
-**A JSON-column `[CmsField]` on the same property is refused, not resolved, whichever `[ColumnShape]`
-value it carries**: the hook throws an `InvalidOperationException` naming the property and the
-offending interface when `[ColumnShape]` co-occurs with a `JsonColumnInterfaces` member
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`) — for `ColumnShape.LongText`,
-the only shape that co-occurs with a `JsonColumnInterfaces` member in this repository, resolving
-the combination instead of refusing it would silently drop `IsJson` (both branches compute the same
-`DataType`, `LongText`, so only `IsJson` would be lost), leaving the column at CodeFirst's unset
-length, `varchar(1)` on PostgreSQL, where every real value fails with 22001. Remove `[ColumnShape]`
-from such a property; the JSON mapping already applies `LongText`. A **content-bearing** interface
-(`RichText`/`Textarea`/`Markdown`/`Code`/`Json`) is unaffected and stays legal. See
-`ColumnShapeAttribute`'s class doc (`src/Struo.Infrastructure/Persistence/ColumnShape.cs`) for the
-full derivation and the pinning tests.
+- `[ColumnShape]` or `ColumnDataType` on a `JsonColumnInterfaces` member;
+- `[ColumnShape]` or `ColumnDataType` beside `IsJson`, and `ColumnDataType` on a `List<>` property;
+- `[ColumnShape]` beside `ColumnDataType`;
+- `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
+  makes nullable (`Nullable<T>` or `string?`).
+
+A `Repeater` sub-field has no column and is not checked. `ColumnDeclarationGuardTests` and
+`NullableNotNullGuardTests` pin each rule and the allowed neighbours. A `[CmsField]` property of
+type `List<>` is mapped as a JSON column without `IsJson` (`ApplyListAsJson`); `[Navigate]` and
+`[CmsTranslations]` lists carry no `[CmsField]` and are ignored columns.
+
+An entity the scanner never sees, such as a fork's non-collection entity used straight through
+`ISqlSugarClient`, gets only the column convention. `ApplyColumnShape` refuses `[ColumnShape]` on a
+JSON-column interface there with a `MetadataException` on first use. `[ColumnShape]` wins over an
+explicit `ColumnDataType`, and `ColumnDataType` beside `IsJson` is honoured.
+`ColumnTypeMapTests` pins all three.
 
 Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
 `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite

@@ -1,4 +1,5 @@
 // src/Struo.Api/Hosting/StruoCmsCommands.cs
+using Struo.Domain.Metadata;
 using Struo.Infrastructure.Migrations.Commands;
 
 namespace Struo.Api.Hosting;
@@ -19,6 +20,22 @@ public static class StruoCmsCommands
 
         Environment.ExitCode = await MigrationCli.RunAsync(
             cli, app.Services, Console.Out, Console.Error, CancellationToken.None);
+        return true;
+    }
+
+    /// <summary>
+    /// Reports a metadata scan failure that stopped the host while a command was requested: one line
+    /// naming the command and the scan's message, no stack trace. Returns <c>false</c>, and writes
+    /// nothing, when no command was requested or the failure is something else.
+    /// </summary>
+    public static bool TryReportStartupFailure(MigrationCliInvocation? cli, Exception failure, TextWriter stderr)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        ArgumentNullException.ThrowIfNull(stderr);
+
+        if (cli?.Command is not { } command || failure is not MetadataException) return false;
+
+        stderr.WriteLine($"{command} failed: {failure.Message.ReplaceLineEndings(" ")}");
         return true;
     }
 }

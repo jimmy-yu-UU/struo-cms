@@ -142,9 +142,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
    (`src/Struo.Infrastructure/Metadata/FieldInterfaceSets.cs`). That one set is what
    `SqlSugarClientFactory` reads so SqlSugar (de)serializes it and the column gets `IsJson = true` + a
    widened `text`-shaped type together, and what `MetadataScanner` reads to refuse a translatable
-   field of that interface. The `EntityService` hook widens a *bare* `[SugarColumn(IsJson = true)]`
-   outside this set on its own, so that case needs no hand-added `ColumnDataType`; an explicit
-   `ColumnDataType` on the property still wins over the hook's default. If instead it's a plain long
+   field of that interface. The `EntityService` hook also maps a `[CmsField]` `List<>` property as a
+   JSON column on any interface, and widens a *bare* `[SugarColumn(IsJson = true)]` on its own, so
+   neither needs a hand-added `ColumnDataType`; the scanner rejects a `ColumnDataType` on a JSON
+   column (`ColumnDeclarationCheck`). If instead it's a plain long
    string that needs widening, add it to `FieldInterfaceSets.ContentBearingInterfaces` in the same file.
 5. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
    `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under

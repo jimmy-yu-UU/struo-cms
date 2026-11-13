@@ -48,6 +48,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 | `docs/` | The bilingual manual (`guide/en/`, `guide/zh-TW/`), this `ai/` reference set, and the VitePress site that renders the manual (`package.json`, `.vitepress/` — its own npm project, separate from `frontend/`). |
 | `tests/Struo.Tests` | The backend xUnit suite (unit and integration). |
 | `tests/Struo.Tests.Fixtures` | Test-only content project (collections prefixed `fx`, tables `fx_*`) with its own migration; the core tests' content assembly. No host registers it. |
+| `tests/Struo.Tests.InvalidFixtures` | Test-only collections the scan rejects; no host uses it. |
 | `tests/Struo.Tests.Support` | Class library of shared test helpers (`StruoApiFactory`, `TestBackend`, `TestHostEnvironment`, `StruoTestFramework`). Fork test projects reference it. |
 | `tests/Struo.Tests.Template` | The template's own repository guards (documentation conventions, template invariants, CI/Docker/health conventions). A fork may delete it. |
 

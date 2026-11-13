@@ -2,6 +2,7 @@ using System.Reflection;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Files;
@@ -121,7 +122,7 @@ public class ColumnTypeMapTests
             .EntityMaintenance.GetEntityInfo<ShapedTimestampProbe>()
             .Columns;
 
-        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt), nameof(ShapedTimestampProbe.Declared) })
+        foreach (var name in new[] { nameof(ShapedTimestampProbe.At), nameof(ShapedTimestampProbe.MaybeAt) })
         {
             var dataType = columns.Single(c => c.PropertyName == name).DataType;
             if (dbType == DbType.MySql) dataType.Should().Be("datetime(6)");
@@ -277,44 +278,6 @@ public class ColumnTypeMapTests
         }
     }
 
-    [SugarTable("column_shape_precedence_test_entity")]
-    private sealed class ColumnShapePrecedenceTestEntity
-    {
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public long Id { get; set; }
-
-        // 同一個屬性上兩種相衝的宣告：dialect-neutral 的 shape 與明寫的 vendor 字面值。
-        [ColumnShape(ColumnShape.LongText)]
-        [SugarColumn(ColumnDataType = "varchar(7)")]
-        public string? Body { get; set; }
-    }
-
-    /// <summary>
-    /// [ColumnShape] 蓋掉屬性上明寫的 [SugarColumn(ColumnDataType = ...)]。這是 fork 最可能誤解的
-    /// 一點（「我明寫的應該贏」），而它會靜默地得到相反結果。優先序來自 EntityService hook 中
-    /// [ColumnShape] 分支的早退（return）；本測試把它從實作細節升格為受檢規格，否則哪天有人
-    /// 重排 hook 分支順序，fork 的 DDL 會無聲改變。
-    /// </summary>
-    [Fact]
-    public void ColumnShape_wins_over_an_explicitly_declared_ColumnDataType()
-    {
-        var db = TestBackend.CreateUnitDatabase();
-        using (db)
-        {
-            var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
-
-            client.CodeFirst.InitTables<ColumnShapePrecedenceTestEntity>();
-
-            var body = client.DbMaintenance
-                .GetColumnInfosByTableName("column_shape_precedence_test_entity", false)
-                .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
-
-            // ShouldHaveShape 同時比對型別名與長度，所以 SQL Server 的 nvarchar(max) 也與 varchar(7) 分得開。
-            body.ShouldHaveShape(ColumnShape.LongText, db.DbType);
-            body.Length.Should().NotBe(7);
-        }
-    }
-
     [SugarTable("column_shape_json_conflict_test_entity")]
     private sealed class ColumnShapeJsonConflictTestEntity
     {
@@ -329,6 +292,8 @@ public class ColumnTypeMapTests
     }
 
     /// <summary>
+    /// 後衛：不是 [CmsCollection] 的 entity 掃描器看不到，所以 hook 仍要拒絕這個組合
+    /// （集合上的同一個組合由 <c>ColumnDeclarationGuardTests</c> 在掃描時擋下）。
     /// 走到 shape 分支的早退之前，hook 必須拒絕「[ColumnShape] + JSON-column [CmsField]」。
     /// 兩條路算出的 DataType 完全相同（都是 LongText），所以這個組合唯一的效果就是丟掉
     /// <c>IsJson</c>；而少了 IsJson，SqlSugar 根本不會序列化那個 List&lt;&gt;，CodeFirst 也會讓長度
@@ -350,7 +315,7 @@ public class ColumnTypeMapTests
             // ExceptionChainSearch.FindInner，與 OptionsValidationTests 那邊用的是同一個
             // helper，理由相同。
             var thrown = act.Should().Throw<Exception>().Which;
-            var guard = ExceptionChainSearch.FindInner<InvalidOperationException>(thrown);
+            var guard = ExceptionChainSearch.FindInner<MetadataException>(thrown);
             guard.Should().NotBeNull("hook 必須拒絕 [ColumnShape] 與 JSON-column [CmsField] 併用");
             guard!.Message.Should().Contain(nameof(ColumnShapeJsonConflictTestEntity.Tags),
                 "訊息必須指名違規的 property，否則讀者無從下手");
@@ -402,13 +367,6 @@ public class ColumnTypeMapTests
         [SugarColumn(IsJson = true)] public List<string> Tags { get; set; } = [];
     }
 
-    [SugarTable("explicit_isjson_probe")]
-    private sealed class ExplicitIsJsonProbe
-    {
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-        [SugarColumn(IsJson = true, ColumnDataType = "clob")] public List<string> Pinned { get; set; } = [];
-    }
-
     [Fact]
     public void Bare_IsJson_without_CmsField_or_shape_is_widened_to_LongText()
     {
@@ -431,15 +389,49 @@ public class ColumnTypeMapTests
         client.Queryable<BareIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta");
     }
 
+    // The two tests below cover an entity with no [CmsField]: the metadata scan never sees it, so the
+    // column convention alone decides.
+    [SugarTable("column_shape_precedence_test_entity")]
+    private sealed class ColumnShapePrecedenceTestEntity
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
+
+        [ColumnShape(ColumnShape.LongText)]
+        [SugarColumn(ColumnDataType = "varchar(7)")]
+        public string? Body { get; set; }
+    }
+
+    [SugarTable("explicit_isjson_probe")]
+    private sealed class ExplicitIsJsonProbe
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+        [SugarColumn(IsJson = true, ColumnDataType = "clob")] public List<string> Pinned { get; set; } = [];
+    }
+
+    [Fact]
+    public void ColumnShape_wins_over_an_explicit_ColumnDataType_on_an_entity_the_scan_does_not_see()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<ColumnShapePrecedenceTestEntity>();
+
+        var body = client.DbMaintenance
+            .GetColumnInfosByTableName("column_shape_precedence_test_entity", false)
+            .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
+
+        body.ShouldHaveShape(ColumnShape.LongText, db.DbType);
+        body.Length.Should().NotBe(7);
+    }
+
     [SqliteOnlyFact("explicit 'clob' column type is only valid on SQLite/Oracle")]
-    public void Explicit_ColumnDataType_on_an_IsJson_property_is_respected()
+    public void Explicit_ColumnDataType_beside_IsJson_is_honoured_on_an_entity_the_scan_does_not_see()
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
         client.CodeFirst.InitTables<ExplicitIsJsonProbe>();
 
         var columns = client.DbMaintenance.GetColumnInfosByTableName("explicit_isjson_probe", false);
-        Column(columns, "Pinned")
-            .DataType.Should().ContainEquivalentOf("clob", "a fork's own literal must win over the convention");
+        Column(columns, "Pinned").DataType.Should().ContainEquivalentOf("clob");
     }
 }

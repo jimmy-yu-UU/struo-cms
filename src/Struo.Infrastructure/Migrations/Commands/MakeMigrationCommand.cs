@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Metadata;
+using Struo.Domain.Metadata;
 using Struo.Infrastructure.Migrations.Schema;
 
 namespace Struo.Infrastructure.Migrations.Commands;
@@ -36,9 +37,9 @@ internal static class MakeMigrationCommand
             var (type, lookupError) = ResolveEntity(scope.ServiceProvider, parsed.Entity);
             if (type is null) return await UsageError(stderr, lookupError!);
             try { table = EntitySchemaReader.Read(scope.ServiceProvider.GetRequiredService<ISqlSugarClient>(), type); }
-            catch (OptionsValidationException ex)
+            catch (Exception ex) when (ex is OptionsValidationException or MetadataException)
             {
-                await stderr.WriteLineAsync($"make:migration failed: {ex.Message}");
+                await stderr.WriteLineAsync($"make:migration failed: {ex.Message.ReplaceLineEndings(" ")}");
                 return MigrationCli.Failure;
             }
         }

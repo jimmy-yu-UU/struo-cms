@@ -63,6 +63,32 @@
   只有宣告加寬、而表已經建好且欄位比較窄時，才要另外寫一支加寬欄位的 migration，調低
   `MaxLength`，或表的欄位本來就夠寬、只是補上對應的 `[SugarColumn(Length = n)]`，都不必。比對的是
   屬性上宣告的寬度，不是資料庫實際的欄位寬度。核心欄位與 Blog sample 不受影響。
+- 掃描器在啟動時拒絕互相衝突的欄位宣告，丟出 `MetadataException`，訊息點名「類別.屬性」與兩個衝突
+  的宣告。檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性，每個環境都一樣；
+  `Repeater` 子欄位與掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查。宣告了下列組合的 fork，
+  主機會無法啟動：
+  - JSON 介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）加
+    `[ColumnShape]`。原本 Development 在啟動時以 `InvalidOperationException` 失敗；正式環境照常
+    啟動，之後每次用到那張表都回 `500`；`make:migration` 讓例外直接飛出去。拿掉 `[ColumnShape]`，
+    欄位不變。
+  - JSON 介面加明寫的 `ColumnDataType`。原本被忽略，欄位照樣是框架的 JSON 長文字型別（`jsonb` 仍
+    建成 `text`）。拿掉 `ColumnDataType`，欄位不變。
+  - `[ColumnShape]` 加 `ColumnDataType`。原本 `[ColumnShape]` 勝出，`ColumnDataType` 悄悄被丟掉。
+    拿掉 `ColumnDataType`，欄位不變；要用自己的型別，改拿掉 `[ColumnShape]`，欄位型別會跟著變。
+  - `IsJson = true` 或 `List<>` 屬性加 `ColumnDataType`。`IsJson = true` 原本接受明寫的型別：
+    PostgreSQL 的 `jsonb` 讓 REST 對該欄位的篩選（`_eq`、`_contains`）回 `500`，MySQL 的 `json`
+    讓 `_eq` 比不到任何列。沒有 `IsJson` 的 `List<>` 屬性加 `ColumnDataType`，原本在 PostgreSQL、
+    MySQL 與 MariaDB 上每次寫入都失敗。拿掉 `ColumnDataType` 後，欄位成為框架的 JSON 長文字型別；
+    表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - `IsJson = true` 加 `[ColumnShape]`。原本通過，欄位型別取 shape 的型別（例如
+    `timestamptz`），JSON 欄位因此不是長文字。拿掉 `[ColumnShape]` 後，欄位成為框架的 JSON 長文字
+    型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加
+    `[SugarColumn(IsNullable = false)]`。原本被忽略，欄位照樣可為 null，所以拿掉
+    `IsNullable = false` 欄位不變。要 NOT NULL，把屬性宣告成不可為 null（`Guid`、`string`），
+    欄位會跟著變，已建好的表要另寫一支 migration。
+
+  規則與各組合的改法見[第 6 章](06-field-types.md#啟動時被擋的宣告)。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
   `MetadataException`。原因是依賴的組件缺少或版本不符；訊息帶出組件名稱、載入失敗的型別數、載入器
   回報的型別名稱與去重後的載入錯誤，後兩者各最多列五個，其餘只給數量。型別載得起來但讀不了成員或
@@ -163,6 +189,10 @@
   - `PasswordProof`（`From`、`Matches`）、`IAuthService.ConfirmUnchangedAsync`、
     `IUserSessionStore.RemoveByTicketKeysAsync`、`IImageVariantCache.RemoveAllForFileAsync`、
     `FileService.ExistsAsync` 與 `DiskImageVariantCache.RunMaintenance`，各自的用法見破壞性變更。
+  - `StruoCmsCommands.TryReportStartupFailure`：回報指令執行時的 `MetadataException` 啟動失敗，用法
+    見修正。
+  - `ForkHost.StartAsync` 與 `ForkHost.StartupErrorAsync`（`Struo.Tests.Support`）多了選用參數
+    `environment`，這是二進位層級的變更；參照 `Struo.Tests.Support` 的測試專案要重新編譯。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -170,6 +200,38 @@
 
 ### 修正
 
+- `[CmsField]` 的 `List<>` 屬性，介面不是 JSON 介面、也沒寫 `IsJson`，由框架對映成 JSON 欄位
+  （`IsJson` 加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，`make:migration` 輸出
+  `.AsJson(Db)`。原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗；SQLite 與 SQL Server 上，
+  0 或 1 個元素的清單寫入成功，讀回來是空清單。已標 `IsJson` 的屬性不變，`[Navigate]` 與
+  `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
+- 主機因 `MetadataException` 建不起來，而命令列帶了指令時，印出一行 `<指令> failed: <訊息>` 並以 1
+  結束，不帶 stack trace，也不寫 log。指令是 `migrate`、`migrate:status`、`migrate:preview`、
+  `migrate:baseline`、`migrate:check`、`make:migration`、`files:sweep`、`auth:unlock` 任何一個；
+  `MetadataException` 包括本版新增的欄位宣告檢查、載入不了的內容組件與重複的集合名稱。其他啟動例外
+  照舊走通用的 `catch`。fork 自己的 `Program.cs` 要照範本改兩處，否則訊息只會連同 stack trace 記在
+  log 裡：
+
+  ```csharp
+  MigrationCliInvocation? cli = null;
+  try
+  {
+      cli = MigrationCli.Parse(args);   // 原本是 var cli = MigrationCli.Parse(args);
+      // ... 其餘不變
+  }
+  catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))
+  {
+      Environment.ExitCode = MigrationCli.Failure;
+  }
+  catch (Exception ex)
+  {
+      // 原有的 Log.Fatal 與 Environment.ExitCode = 1 不變
+  }
+  ```
+
+  `make:migration --entity` 遇到掃描器沒檢查過的 entity、而欄位對映拒絕它時，也印出訊息並以 1 結束。
+  掃描器看不到的 entity 上，JSON 介面加 `[ColumnShape]` 的拒絕，例外型別由
+  `InvalidOperationException` 改成 `MetadataException`。
 - 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
   MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端
   不同），變體因此能登入同一個帳號，登入鎖定的計數卻落在另一個鍵上，鎖定擋不住它。現在變體的

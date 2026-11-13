@@ -40,8 +40,8 @@ MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資�
 | `Color` | `string` | `varchar(255)` | `TextField` |
 | `Phone` | `string` | `varchar(255)` | `TextField` |
 
-這五個介面的 `string` 屬性會自動加寬成長文字：`Textarea`、`RichText`、`Markdown`、
-`Code`，以及後面的 `Json`；其他 `string` 介面都停在 `varchar(255)`。除了 `Required` 與
+長文字介面是 `Textarea`、`RichText`、`Markdown`、`Code`，以及後面的 `Json`；其他 `string`
+介面都停在 `varchar(255)`。欄位怎麼決定，見〈屬性怎麼決定欄位〉。除了 `Required` 與
 `MaxLength` 之外，格式檢查只有 `Email` 與 `Url`，包含 `Phone` 在內的其他 `string` 介面接受任何
 文字。
 
@@ -137,8 +137,8 @@ UTC。
 
 `Json` 是一個裝著原始 JSON 文字的 `string` 屬性，API 層讀取時重新解析、寫入時重新序列化。
 真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`
-這六個結構化介面，SqlSugar 直接對 `IsJson = true` 的欄位（反）序列化整個 CLR 集合；
-`KeyValue` 的鍵不能留白。
+這六個結構化介面，以及任何介面上的 `List<>` 屬性。SqlSugar 直接對 JSON 欄位（反）序列化整個
+CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
@@ -182,28 +182,87 @@ UTC。
 `Divider`、`File`、`Image`、`Files`、`Hidden`、`Uuid`。只用這些介面的集合，清單畫面就是空
 的；GraphQL schema 另外完全排除三個介面：`Hidden`、`Divider`、`Password`。
 
+## 屬性怎麼決定欄位
+
+屬性上的宣告，決定資料庫欄位和沒寫 `MaxLength` 時的預設輸入上限。下表一列是一種宣告方式。
+
+| 宣告 | 建出的欄位 | 預設 `MaxLength` |
+|---|---|---|
+| 沒有特別宣告的 `string` | `varchar(255)` | 255 |
+| 長文字介面上的 `string` | 長文字 | 不限 |
+| JSON 介面 | 長文字，存 JSON | 不適用 |
+| 任何介面上的 `List<>` 屬性 | 長文字，存 JSON | 不適用 |
+| `[ColumnShape(ColumnShape.LongText)]` | 長文字 | 不限 |
+| `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
+| `[SugarColumn(ColumnDataType = "t", Length = n)]` | 型別 `t`，長度 `n` | `n` |
+| `[SugarColumn(ColumnDataType = "t")]` | 型別 `t`，照字面 | 不限 |
+| `[SugarColumn(IsJson = true)]` | 長文字，存 JSON | 不適用 |
+
+表裡的用語：
+
+- 長文字介面：`Textarea`、`RichText`、`Markdown`、`Code`、`Json`。
+- JSON 介面：`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`。
+- `varchar(255)` 與 `varchar(n)` 在 SQL Server 上是 `nvarchar`。
+- 不限：沒有上限。不適用：屬性不是 `string`，不能設 `MaxLength`；同樣的宣告掛在 `string` 屬性上
+  則是不限。
+- 長文字介面上的 `Length` 不算，要搭配 `ColumnDataType` 才算（第七列）。
+
+寫了 `ColumnDataType`，整個欄位定義由你負責，包含長度。寫在型別字串裡的長度，例如
+`varchar(500)`，不會當成欄位寬度讀取；要寬度，另外設 `Length`。
+
+### 啟動時被擋的宣告
+
+下面的組合互相衝突。主機啟動時就失敗，丟出 `MetadataException`，訊息點名類別、屬性和兩個衝突
+的宣告。每個環境都一樣，不用等到用到那張表。
+
+| 衝突的宣告 | 怎麼改 |
+|---|---|
+| JSON 介面加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
+| JSON 介面加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| `IsJson = true` 加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| `List<>` 屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
+| `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
+
+JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。
+
+`Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
+就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與
+`byte[]?`，不在這條檢查裡。
+
+檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性。`[ColumnShape]` 加長文字介面
+照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，不檢查；掛
+`[SugarColumn(IsIgnore = true)]` 的屬性也不檢查。
+
+### 存長文字
+
+用長文字介面，或寫 `[ColumnShape(ColumnShape.LongText)]`。不要寫
+`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。
+
+### 已建好的表要加寬
+
+宣告加寬之後，已經建好、欄位比較窄的表，要另外寫一支 `Alter.Column` 的 migration。
+`migrate:check` 把兩邊對不上報成錯誤。調低 `MaxLength`，或表的欄位本來就夠寬、只是補上
+`[SugarColumn(Length = n)]`，不必寫 migration。
+
 ## `MaxLength` 的行為
 
-`MaxLength` 以 UTF-16 code unit 計，後台輸入與寫入驗證都以它為準，超過回 400。負值，或掛在非
-`string` 屬性上，都會在啟動時丟出 `MetadataException`。有效的 `MaxLength` 依序解出：
+`MaxLength` 以 UTF-16 code unit 計。後台輸入與寫入驗證都以它為準，超過回 400。後台把有效的值綁到
+原生輸入的 `maxlength` 屬性上。
 
-1. 明寫且大於零，用明寫的值。
-2. 否則屬性是 `string`，用它的欄位寬度：沒有指定長度的 `string` 欄位是 255，
-   `[SugarColumn(Length = n)]` 則是 `n`，同一個 attribute 另外明寫 `ColumnDataType` 也一樣。
-   `Textarea`、`RichText`、`Markdown`、`Code` 與 `Json` 上的 `Length` 要搭配明寫的
-   `ColumnDataType` 才算；存成 JSON 的介面不看 `Length`。
-3. 欄位沒有長度可言時是 `null`，代表不限長度：六個存成 JSON 的介面、帶 `[ColumnShape]` 或
-   `IsJson = true` 的屬性、沒有明寫 `ColumnDataType` 的 `Textarea`、`RichText`、`Markdown`、`Code`
-   與 `Json`（掛了 `Length` 也一樣），以及明寫的 `ColumnDataType` 沒有 `Length` 的屬性。寫在型別
-   字串裡的長度（例如 `varchar(500)`）不會被讀取，這種欄位要設 `Length`。這些欄位要有上限，就在
-   欄位上設 `MaxLength`。
+沒有明寫（或寫 0）時，預設值照上一節的表。預設跟介面無關：`Hidden`、`Time` 與宣告在 `string`
+上的 `Uuid` 一樣是 255。要上限的「不限」欄位，在 `[CmsField]` 上設 `MaxLength`。
 
-預設值跟介面無關：`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 一樣是 255。明寫的 `MaxLength`
-不會改欄位寬度：它大於欄位寬度時，啟動丟出 `MetadataException`，訊息點名類別、屬性、`MaxLength`
-與欄位寬度。等於或小於欄位寬度照常。集合、翻譯實體與 junction payload 的欄位都檢查；沒有欄位寬度
-的欄位不檢查，`Repeater` 子欄位存在 JSON 裡、沒有自己的欄位，也不檢查，掛
-`[SugarColumn(IsIgnore = true)]` 的屬性沒有欄位，同樣不檢查。要存比預設寬度更長的值，先加寬
-欄位，見本章結尾的常見陷阱。後台把有效的 `MaxLength` 直接綁到原生輸入的 `maxlength` 屬性上。
+啟動時的檢查：
+
+- 負值，或掛在非 `string` 屬性上：丟 `MetadataException`。
+- 明寫的值大於欄位寬度：丟 `MetadataException`，訊息點名類別、屬性、`MaxLength` 與欄位寬度。
+  等於或小於欄位寬度照常。
+- 不檢查：沒有欄位寬度的屬性（表裡「不限」與「不適用」的列）、`Repeater` 子欄位、掛
+  `[SugarColumn(IsIgnore = true)]` 的屬性。
+- 範圍：集合、翻譯實體與 junction payload 的欄位。
+
+要存比預設寬度更長的值，見〈存長文字〉與〈已建好的表要加寬〉。
 
 ## 必填、唯讀、隱藏與系統欄位
 
@@ -282,51 +341,6 @@ UTC。
 `noreferrer`、允許百分比寬度，或是連高度一起存，動的是這個 sanitizer 本身，不是編輯器的連
 結對話框，也不是別處的白名單。表格 `<thead>` 的整理是同一個 sanitizer 做的另一件事，見
 [第 19 章](19-admin-customization.md)。
-
-## 常見陷阱
-
-**寫入長文字被拒絕，或啟動時報 `MaxLength` 大於欄位寬度。** 一個沒有明寫欄位型別、介面
-又不在前面那五個之列的 `string` 屬性，`make:migration` 寫出的是 `AsString(255)`，預設的
-`MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。啟動錯誤則對任何宣告了欄位
-寬度的屬性成立，寬度是 255 或 `[SugarColumn]` 的 `Length`，長文字介面搭配 `ColumnDataType` 與
-`Length` 也算。在這種屬性上明寫更大的 `MaxLength`，啟動就丟出 `MetadataException`，因為欄位裝
-不下通過驗證的值。
-
-被 400 拒絕時，修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要
-直接寫 `[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。啟動失敗時，把
-`MaxLength` 調到欄位寬度以下，或用 `[SugarColumn(Length = n)]`、
-`[ColumnShape(ColumnShape.LongText)]` 加寬欄位。只有宣告加寬、而表已經建好且欄位比較窄時，才要
-另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤；調低
-`MaxLength`，或表的欄位本來就夠寬、只是補上對應的 `[SugarColumn(Length = n)]`，都不必寫
-migration。
-
-**JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另
-外掛 `[ColumnShape]` 會丟出 `InvalidOperationException`，訊息點名屬性與介面。集合與框架 entity 在
-Development 啟動時的結構檢查就失敗，`make:migration` 與 `migrate:check` 讀到它也一樣；正式環境要等
-到第一次用到那張表才失敗。不是集合的 entity，在任何環境都是第一次用到才失敗。
-
-修法是移除 `[ColumnShape]`：JSON 對映本身就會加寬成長文字並設定 `IsJson`，單靠 shape 兩者都拿不
-到。`[ColumnShape]` 跟長內容的五個介面（`Textarea`、`RichText`、`Markdown`、`Code`、`Json`）併用
-合法、不受影響。
-
-同一個屬性上同時有 `[ColumnShape]` 與明寫的 `ColumnDataType` 時，`ColumnDataType` 會被忽略，
-而且不會有任何警告。
-
-**`JsonElement` 在 `JsonDocument` 釋放後不可用。** 用 `using var doc =
-JsonDocument.Parse(raw)` 解析 `Json` 欄位存的原始文字，再把 `doc.RootElement` 回傳到
-`using` 區塊之外，下一次讀取會丟出 `ObjectDisposedException`——`JsonElement` 只有在產生它的
-`JsonDocument` 還活著時才有效。改用 `JsonSerializer.Deserialize<JsonElement>(raw)`，不需要
-`using`，拿到的是一個可以安全持有的獨立值。
-
-**手動宣告的 `List<>` 屬性要自己標 `IsJson`。** `[CmsField]` 介面落在 `MultiSelect`／
-`CheckboxGroup`／`Tags`／`KeyValue`／`Files`／`Repeater` 以外的 `List<>` 屬性，
-`SqlSugarClientFactory` 的欄位對映 hook 不會替它套用 JSON 對映——SqlSugar 無法直接映射 list，得
-自己寫 `[SugarColumn(IsJson = true)]`。
-寫了之後，單獨 `IsJson` 的加寬邏輯會接手補上欄位型別；若另外明寫 `ColumnDataType`（例如
-PostgreSQL 原生的 `jsonb`），加寬邏輯會尊重它、不去動它——但這條路徑沒有測試涵蓋，效果不保證。
-
-反過來，介面本身就是六個 JSON 介面之一的屬性，hook 會無條件把它設成 `IsJson` 加長文字，不
-會讀你寫的 `ColumnDataType`——在 `MultiSelect` 欄位上釘 `jsonb` 不會生效，也不會有警告。
 
 ## 新增自訂欄位編輯器
 

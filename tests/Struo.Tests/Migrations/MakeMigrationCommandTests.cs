@@ -2,6 +2,8 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlSugar;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
 using Struo.Application.Configuration;
 using Struo.Application.Metadata;
 using Struo.Infrastructure.Migrations.Commands;
@@ -122,6 +124,33 @@ namespace Struo.Tests.Migrations
             stdout.Should().BeEmpty();
             err.Should().Contain("No entity named 'Nope'.").And.Contain("make:migration <Name>");
             Directory.GetFiles(_dir).Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task An_entity_the_column_convention_refuses_fails_with_its_message_and_writes_nothing()
+        {
+            var sp = Services(typeof(ShapedJsonEntity));
+
+            var (code, stdout, err) = await Run(sp, "CreateShaped", "--entity", "ShapedJsonEntity", "--output", _dir);
+
+            code.Should().Be(MigrationCli.Failure);
+            stdout.Should().BeEmpty();
+            err.Should().StartWith("make:migration failed: ").And.Contain("ShapedJsonEntity.Tags")
+                .And.Contain("Remove [ColumnShape]").And.NotContain(" at ");
+            Directory.GetFiles(_dir).Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task An_unrelated_InvalidOperationException_is_not_swallowed()
+        {
+            var sp = Track(new ServiceCollection()
+                .AddSingleton<IEntityTypeCollector>(new StubCollector(typeof(Unmappable)))
+                .AddSingleton<ISqlSugarClient>(_ => throw new InvalidOperationException("boom"))
+                .BuildServiceProvider());
+
+            var act = () => Run(sp, "CreateBoom", "--entity", "Unmappable", "--output", _dir);
+
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
         }
 
         [Fact]
@@ -307,6 +336,14 @@ namespace Struo.Tests.Migrations
             code.Should().Be(0, e.ToString());
             File.Exists(Path_("202610070304_CreateCli.cs")).Should().BeTrue();
         }
+    }
+
+    [SugarTable("shaped_json_entity")]
+    public sealed class ShapedJsonEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
     }
 
     [SugarTable("unmappable")]

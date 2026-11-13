@@ -97,6 +97,27 @@ public sealed class MigrateCheckCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task An_entity_the_column_convention_refuses_fails_with_its_message_on_one_line()
+    {
+        var sp = new ServiceCollection()
+            .AddSingleton<IEntityTypeCollector>(new StubCollector([typeof(ShapedJsonEntity)]))
+            .AddSingleton(_ => Options.Create(new DatabaseOptions
+                { DbType = _database.DbType, ConnectionString = _database.ConnectionString, TablePrefix = "mchke_" }))
+            .AddSingleton<ISqlSugarClient>(p => SqlSugarClientFactory.Create(
+                p.GetRequiredService<IOptions<DatabaseOptions>>().Value, new TestCurrentUserAccessor(Guid.Empty)))
+            .BuildServiceProvider();
+        _providers.Add(sp);
+
+        var (code, output, err) = await Run(sp, "migrate:check");
+
+        code.Should().Be(MigrationCli.Failure);
+        output.Should().BeEmpty();
+        err.Should().StartWith("migrate:check failed:").And.Contain("ShapedJsonEntity.Tags");
+        err.Trim().Split('\n').Should().HaveCount(1);
+        err.Should().NotContain("   at ");
+    }
+
+    [Fact]
     public async Task Command_arguments_are_a_usage_error()
     {
         var (code, _, err) = await Run(Services("mchkd_"), "migrate:check", "stray");

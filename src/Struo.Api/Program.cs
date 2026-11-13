@@ -5,9 +5,10 @@ using Struo.Infrastructure.Migrations.Commands;
 
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
+MigrationCliInvocation? cli = null;
 try
 {
-    var cli = MigrationCli.Parse(args);
+    cli = MigrationCli.Parse(args);
     var builder = WebApplication.CreateBuilder(cli.HostArgs);
 
     // Add configuration sources (Key Vault, ...) before AddStruoCms(): the content-assembly scan reads
@@ -22,6 +23,11 @@ try
 
     await app.UseStruoCmsAsync();
     await app.RunAsync();
+}
+catch (Exception ex) when (StruoCmsCommands.TryReportStartupFailure(cli, ex, Console.Error))
+{
+    // A command run stopped by the metadata scan: its message is printed, no log entry or stack trace.
+    Environment.ExitCode = MigrationCli.Failure;
 }
 catch (Exception ex)
 {

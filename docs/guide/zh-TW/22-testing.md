@@ -12,6 +12,8 @@
 - `tests/Struo.Tests.Template` 放模板自己的儲存庫守衛：文件慣例、模板不變式，以及 CI、Docker 與
   健康檢查的慣例。fork 可以整個刪掉（見[第 25 章](25-after-forking.md)）。
 - `tests/Struo.Tests.Fixtures` 是只給測試用的內容專案，下面會談。
+- `tests/Struo.Tests.InvalidFixtures` 是只給測試用的內容專案，裡面的集合會被中繼資料掃描擋下。
+  測試把它當內容組件，用來看啟動失敗。
 - `tests/Struo.Tests.Support` 是類別庫，不是測試專案，放各測試專案共用的輔助程式。
 
 預設後端是 SQLite：單元測試從 `TestBackend.CreateUnitDatabase()` 拿資料庫，沒有切換後端時那是
