@@ -22,7 +22,11 @@ public sealed class SelfReferenceKeyChangeTests : IDisposable
     private const string Plain = "plainNode";
     private readonly TreeHarness _h = new();
 
-    public void Dispose() => _h.Dispose();
+    public void Dispose()
+    {
+        _h.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static Task<IReadOnlyDictionary<string, object?>?> Update(
         ItemService svc, string collection, Guid id, object body) =>

@@ -34,6 +34,7 @@ namespace Struo.Tests.Query;
 public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
 {
     private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);
+    private static readonly Outcome[] OneMovedOneDeadlocked = [Outcome.Moved, Outcome.DeadlockConflict];
 
     private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     private readonly ItemService _setup;
@@ -50,7 +51,11 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
         _reader = SqlSugarClientFactory.Create(_database.Options(), new TestCurrentUserAccessor(Guid.Empty));
     }
 
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private ItemService Build(bool createTables, ArrivalGate? gate, IEnumerable<IItemWriteInterceptor>? interceptors = null)
     {
@@ -154,7 +159,7 @@ public sealed class SelfReferenceCycleConcurrencyTests : IDisposable
     private static void AssertDeadlockOnServers(params (Outcome Outcome, Exception? Error)[] results)
     {
         if (!TestBackend.IsLive) return;
-        results.Select(r => r.Outcome).Should().BeEquivalentTo(new[] { Outcome.Moved, Outcome.DeadlockConflict });
+        results.Select(r => r.Outcome).Should().BeEquivalentTo(OneMovedOneDeadlocked);
     }
 
     // W <- Y and X <- D. A moves X under Y; B moves W under D. Each writer's own row and new parent are

@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/Write/SelfReferenceCycleGuard.cs
+using System.Reflection;
 using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
@@ -53,7 +54,7 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
         string collection, CollectionMetadata meta, object entityAfterOverlay, CancellationToken ct)
     {
         var d = registry.Get(collection);
-        var keys = d is null ? [] : SelfReferenceKeys(meta);
+        var keys = d is null ? [] : SelfReferenceKeys(d, meta);
         if (d is null || keys.Count == 0) return [];
         var selfId = d.Properties.GetValueOrDefault(d.IdProperty)?.GetValue(entityAfterOverlay)?.ToString();
         if (selfId is null) return [];
@@ -62,10 +63,8 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
         if (stored is null) return [];
 
         var moves = new List<SelfReferenceMove>();
-        foreach (var key in keys)
+        foreach (var (key, prop) in keys)
         {
-            var prop = d.Properties.GetValueOrDefault(key);
-            if (prop is null) continue;
             var storedParent = prop.GetValue(stored)?.ToString();
             var newParent = prop.GetValue(entityAfterOverlay)?.ToString();
             if (!string.Equals(storedParent, newParent, StringComparison.Ordinal))
@@ -85,21 +84,21 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
         var d = registry.Get(collection);
         if (d is null) return;
         foreach (var move in moves)
-        {
-            var prop = d.Properties.GetValueOrDefault(move.ForeignKey);
-            if (prop is null) continue;
-            await WalkChainAsync(collection, move, parent => prop.GetValue(parent)?.ToString(), ct);
-        }
+            await WalkChainAsync(collection, move, d.Properties.GetValueOrDefault(move.ForeignKey), ct);
     }
 
-    private static List<string> SelfReferenceKeys(CollectionMetadata meta) =>
+    // The self-referencing many-to-one keys of the collection with the property each one reads.
+    private static List<(string Key, PropertyInfo Prop)> SelfReferenceKeys(EntityDescriptor d, CollectionMetadata meta) =>
         [.. meta.Relations
             .Where(r => r.SelfReferencing && r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
-            .Select(r => r.ForeignKey!)];
+            .Select(r => (Key: r.ForeignKey!, Prop: d.Properties.GetValueOrDefault(r.ForeignKey!)))
+            .Where(k => k.Prop is not null)
+            .Select(k => (k.Key, k.Prop!))];
 
     private async Task WalkChainAsync(
-        string collection, SelfReferenceMove move, Func<object, string?> parentOf, CancellationToken ct)
+        string collection, SelfReferenceMove move, PropertyInfo? keyProperty, CancellationToken ct)
     {
+        if (keyProperty is null) return;
         var parentId = move.NewParentId;
         var depth = 0;
         while (parentId is not null)
@@ -114,7 +113,7 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
             // passing through it would escape detection (Category is ISoftDeletable).
             var parent = await repository.GetByIdLockedAsync(collection, parentId, DeletedFilter.With, ct);
             if (parent is null) break;
-            parentId = parentOf(parent);
+            parentId = keyProperty.GetValue(parent)?.ToString();
         }
     }
 }

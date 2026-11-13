@@ -97,10 +97,14 @@ internal sealed class TreeHarness : IDisposable
     /// <summary>A separate connection for reads and for changes made outside a request.</summary>
     public ISqlSugarClient Reader { get; }
 
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     public (ItemService Service, CountingItemRepository Repository) Build(
-        IItemRepository? wrap = null, IEnumerable<IItemWriteInterceptor>? interceptors = null)
+        IEnumerable<IItemWriteInterceptor>? interceptors = null)
     {
         var currentUser = new TestCurrentUserAccessor(Guid.Empty);
         var db = SqlSugarClientFactory.Create(_database.Options(), currentUser);
@@ -132,7 +136,7 @@ internal sealed class TreeHarness : IDisposable
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var counting = new CountingItemRepository(
-            wrap ?? new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions()));
+            new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions()));
         var service = TestItemService.Create(
             counting, provider, registry, graph, new RelationExpander(counting, graph, new StruoQueryOptions()),
             graph, new LanguageProvider(db), currentUser, new SqlSugarRevisionStore(db, currentUser),

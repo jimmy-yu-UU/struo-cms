@@ -143,7 +143,7 @@ public sealed class PurgeTrashedRestrictKeyNullabilityTests : IDisposable
 {
     private readonly ITestDatabase _database = TestBackend.CreateUnitDatabase();
     private readonly ItemService _service;
-    private readonly IItemRepository _repository;
+    private readonly SqlSugarItemRepository _repository;
 
     public PurgeTrashedRestrictKeyNullabilityTests()
     {
@@ -185,7 +185,11 @@ public sealed class PurgeTrashedRestrictKeyNullabilityTests : IDisposable
             new RevisionSnapshotBuilder(_repository, provider, registry, graph));
     }
 
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static object NewSource(string collection, string id, string targetId) => collection switch
     {

@@ -16,6 +16,7 @@ namespace Struo.Tests.Query;
 public sealed class TrashedRestrictRepositoryTests
 {
     private const string Ref = "trashableRestrictRef";
+    private static readonly object[] OneValue = [1];
 
     [Fact]
     public async Task Count_and_set_null_touch_trashed_rows_only()
@@ -110,7 +111,7 @@ public sealed class TrashedRestrictRepositoryTests
         IItemRepository bare = new BareRepository();
 
         await Assert.ThrowsAsync<NotSupportedException>(() => bare.GetByIdLockedAsync("c", "1"));
-        await Assert.ThrowsAsync<NotSupportedException>(() => bare.CountTrashedWhereInAsync("c", "p", [1]));
+        await Assert.ThrowsAsync<NotSupportedException>(() => bare.CountTrashedWhereInAsync("c", "p", OneValue));
         await Assert.ThrowsAsync<NotSupportedException>(() => bare.SetForeignKeyNullForTrashedAsync("c", "p", 1));
         Assert.Throws<NotSupportedException>(() => bare.IsForeignKeyNullable("c", "p"));
     }

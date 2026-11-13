@@ -109,7 +109,11 @@ public sealed class FilePurgeTrashedReferenceTests : IDisposable
             references: FileTestPipeline.Create(repo, provider, registry, graph));
     }
 
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private async Task<Guid> InsertFileAsync()
     {
