@@ -23,7 +23,9 @@ public class StringColumnWidthTests
         (nameof(WidthProbeEntity.RawJson), null),
         (nameof(WidthProbeEntity.ShapedText), null),
         (nameof(WidthProbeEntity.TypedText), null),
-        (nameof(WidthProbeEntity.TypedLengthText), 64)
+        (nameof(WidthProbeEntity.TypedLengthText), 64),
+        (nameof(WidthProbeEntity.TypedLengthBody), 64),
+        (nameof(WidthProbeEntity.TypedBody), null)
     ];
 
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name[1..];
@@ -36,6 +38,17 @@ public class StringColumnWidthTests
         foreach (var (property, width) in Expected.Where(e => e.Property != nameof(WidthProbeEntity.ExplicitLimit)))
             fields.Single(f => f.Name == Camel(property)).MaxLength.Should().Be(width, property);
     }
+
+    [Fact]
+    public void Of_follows_an_explicit_ColumnDataType_on_a_content_bearing_interface()
+    {
+        Width(nameof(WidthProbeEntity.TypedLengthBody)).Should().Be(64);
+        Width(nameof(WidthProbeEntity.TypedBody)).Should().BeNull();
+        Width(nameof(WidthProbeEntity.BodyText)).Should().BeNull();
+    }
+
+    private static int? Width(string property) =>
+        StringColumnWidth.Of(typeof(WidthProbeEntity).GetProperty(property)!);
 
     [Fact]
     public void An_explicit_MaxLength_is_kept()
