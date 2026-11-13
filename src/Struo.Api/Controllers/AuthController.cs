@@ -57,19 +57,41 @@ public sealed class AuthController(
             return result.Failure == Struo.Application.Security.AuthFailure.Inactive
                 ? Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
                     Struo.Api.Http.ErrorCodes.AccountInactive, "This account has been deactivated.")
-                : Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
-                    Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+                : InvalidCredentials();
+        }
+
+        var identity = new ClaimsIdentity(AuthSchemes.Cookie);
+        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
+        await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
+
+        // The session now exists, so a password change or removal that revoked sessions before it was
+        // written has not covered it. If the credential verified above is no longer the stored one,
+        // the session is revoked here and the login fails like a wrong password. The reserved attempt
+        // stays counted, as for any failed login. Not tied to the request token: once the session is
+        // written, the check must complete even if the client has gone.
+        if (!await auth.ConfirmUnchangedAsync(result, CancellationToken.None))
+        {
+            await DiscardNewSessionAsync();
+            return InvalidCredentials();
         }
 
         // A legitimate login clears the reserved attempts, so a real user can never lock
         // themselves out by logging in normally.
         await loginThrottle.ResetAsync(body.Email, ct);
-
-        var identity = new ClaimsIdentity(AuthSchemes.Cookie);
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()));
-        await HttpContext.SignInAsync(AuthSchemes.Cookie, new ClaimsPrincipal(identity));
         await sessionRotation.RevokePresentedAsync(HttpContext);
         return Ok(new { id = result.UserId });
+    }
+
+    private static IActionResult InvalidCredentials() =>
+        Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
+            Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
+
+    // Sign-out removes the ticket and its index row through the ticket store; the cookies the sign-in
+    // and the sign-out queued are dropped so the client receives neither.
+    private async Task DiscardNewSessionAsync()
+    {
+        await HttpContext.SignOutAsync(AuthSchemes.Cookie);
+        Response.Headers.Remove(Microsoft.Net.Http.Headers.HeaderNames.SetCookie);
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]

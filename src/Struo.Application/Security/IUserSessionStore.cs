@@ -32,6 +32,8 @@ public interface IUserSessionStore
     /// <summary>Every ticket key currently indexed for this user.</summary>
     Task<IReadOnlyList<string>> ListTicketKeysForUserAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Deletes every row for this user.</summary>
-    Task RemoveAllForUserAsync(Guid userId, CancellationToken ct = default);
+    /// <summary>Deletes the rows of exactly these ticket keys, whoever they belong to. A row that is not
+    /// in <paramref name="ticketKeys"/> stays, so a session indexed after a listing is still found by the
+    /// next revocation.</summary>
+    Task RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken ct = default);
 }

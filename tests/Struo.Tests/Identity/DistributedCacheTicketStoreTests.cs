@@ -81,7 +81,7 @@ public class DistributedCacheTicketStoreTests
         public Task RemoveByTicketKeyAsync(string ticketKey, CancellationToken ct = default) => throw Failure();
         public Task RemoveExpiredForUserAsync(Guid userId, DateTime nowUtc, CancellationToken ct = default) => throw Failure();
         public Task<IReadOnlyList<string>> ListTicketKeysForUserAsync(Guid userId, CancellationToken ct = default) => throw Failure();
-        public Task RemoveAllForUserAsync(Guid userId, CancellationToken ct = default) => throw Failure();
+        public Task RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken ct = default) => throw Failure();
     }
 
     [Fact]
