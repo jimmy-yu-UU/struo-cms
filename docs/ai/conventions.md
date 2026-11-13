@@ -365,20 +365,24 @@ instead — that convention is respected too, just at lower precedence.
 **Contradicting declarations are rejected at startup.** `ColumnDeclarationCheck`
 (`src/Struo.Infrastructure/Metadata/ColumnDeclarationCheck.cs`) runs from `MetadataScanner` for every
 `[CmsField]` property that has a column, in collections, translation entities and junction
-collections, and throws a `MetadataException` naming `Class.Property` and both declarations:
-`[ColumnShape]` or `ColumnDataType` on a `JsonColumnInterfaces` member, `ColumnDataType` beside
-`IsJson` or on a `List<>` property, `[ColumnShape]` beside `ColumnDataType`, and
-`[SugarColumn(IsNullable = false)]` on a property the column convention makes nullable
-(`ClrNullability.GivesNullableColumn`). A `Repeater` sub-field has no column and is not checked.
-`ColumnDeclarationGuardTests` and `NullableNotNullGuardTests` pin each rule and the allowed
-neighbours. A `[CmsField]` property of type `List<>` is mapped as a JSON column without `IsJson`
-(`ApplyListAsJson`); `[Navigate]` and `[CmsTranslations]` lists carry no `[CmsField]` and are
-ignored columns.
+collections. It throws a `MetadataException` naming `Class.Property` and both declarations for:
 
-The hook has its own refusal of `[ColumnShape]` on a JSON-column interface
-(`ApplyColumnShape`, an `InvalidOperationException`) for entities the scanner never sees, such as a
-fork's non-collection entity used straight through `ISqlSugarClient`; `ColumnTypeMapTests` pins it.
-For those entities `[ColumnShape]` wins over an explicit `ColumnDataType`.
+- `[ColumnShape]` or `ColumnDataType` on a `JsonColumnInterfaces` member;
+- `[ColumnShape]` or `ColumnDataType` beside `IsJson`, and `ColumnDataType` on a `List<>` property;
+- `[ColumnShape]` beside `ColumnDataType`;
+- `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
+  makes nullable (`Nullable<T>` or `string?`).
+
+A `Repeater` sub-field has no column and is not checked. `ColumnDeclarationGuardTests` and
+`NullableNotNullGuardTests` pin each rule and the allowed neighbours. A `[CmsField]` property of
+type `List<>` is mapped as a JSON column without `IsJson` (`ApplyListAsJson`); `[Navigate]` and
+`[CmsTranslations]` lists carry no `[CmsField]` and are ignored columns.
+
+An entity the scanner never sees, such as a fork's non-collection entity used straight through
+`ISqlSugarClient`, gets only the column convention. `ApplyColumnShape` refuses `[ColumnShape]` on a
+JSON-column interface there with a `MetadataException` on first use. `[ColumnShape]` wins over an
+explicit `ColumnDataType`, and `ColumnDataType` beside `IsJson` is honoured.
+`ColumnTypeMapTests` pins all three.
 
 Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
 `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite

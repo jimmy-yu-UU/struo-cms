@@ -57,6 +57,15 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
     }
 
+    [CmsCollection("IsJson and shape", Name = "cdgIsJsonAndShape")]
+    public sealed class IsJsonAndShape
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [ColumnShape(ColumnShape.TimestampWithTimeZone)]
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+    }
+
     // ---- translation entities ----
 
     [CmsCollection("Tr shape on JSON", Name = "cdgTrShapeOnJson")]
@@ -128,6 +137,24 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
     }
 
+    [CmsCollection("Tr IsJson and shape", Name = "cdgTrIsJsonAndShape")]
+    public sealed class TrIsJsonAndShape
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        [CmsTranslations(typeof(TrIsJsonAndShapeTranslation))]
+        [SugarColumn(IsIgnore = true)] public List<TrIsJsonAndShapeTranslation> Translations { get; set; } = [];
+    }
+
+    public sealed class TrIsJsonAndShapeTranslation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public long TrIsJsonAndShapeId { get; set; }
+        public string Locale { get; set; } = "";
+        [ColumnShape(ColumnShape.LongText)]
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+    }
+
     // ---- junction collections (payload fields) ----
 
     [CmsCollection("Link shape on JSON", Name = "cdgLinkShapeOnJson", Hidden = true)]
@@ -171,6 +198,17 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
     }
 
+    [CmsCollection("Link IsJson and shape", Name = "cdgLinkIsJsonAndShape", Hidden = true)]
+    public sealed class LinkIsJsonAndShape
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
+        [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
+        [ColumnShape(ColumnShape.LongText)]
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+    }
+
     public static TheoryData<Type, string, string> Rejected() => new()
     {
         // G1: [ColumnShape] on a JSON interface
@@ -185,6 +223,10 @@ public sealed class ColumnDeclarationGuardTests
         { typeof(ShapeAndType), "ShapeAndType.Body", "both [ColumnShape(LongText)] and [SugarColumn(ColumnDataType = \"varchar(7)\")]" },
         { typeof(TrShapeAndType), "TrShapeAndTypeTranslation.Body", "both [ColumnShape(LongText)] and [SugarColumn(ColumnDataType = \"varchar(7)\")]" },
         { typeof(LinkShapeAndType), "LinkShapeAndType.Note", "both [ColumnShape(LongText)] and [SugarColumn(ColumnDataType = \"varchar(7)\")]" },
+        // IsJson with [ColumnShape]
+        { typeof(IsJsonAndShape), "IsJsonAndShape.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
+        { typeof(TrIsJsonAndShape), "TrIsJsonAndShapeTranslation.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
+        { typeof(LinkIsJsonAndShape), "LinkIsJsonAndShape.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
         // G5: IsJson with ColumnDataType, and a List<> (stored as JSON) with ColumnDataType
         { typeof(IsJsonAndType), "IsJsonAndType.Items", "ColumnDataType = \"jsonb\")] and [SugarColumn(IsJson = true)]" },
         { typeof(TrIsJsonAndType), "TrIsJsonAndTypeTranslation.Items", "ColumnDataType = \"jsonb\")] and [SugarColumn(IsJson = true)]" },
@@ -202,19 +244,8 @@ public sealed class ColumnDeclarationGuardTests
         var message = act.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain($"'{property}'").And.Contain(declarations);
         message.Should().Contain("Remove ").And.NotContain("Struo.Infrastructure");
-    }
-
-    [Theory]
-    [MemberData(nameof(Rejected))]
-    public void Every_rejection_message_is_ascii_and_at_most_two_sentences(Type type, string property, string declarations)
-    {
-        var act = () => MetadataScanner.ScanTypes([type]);
-
-        var message = act.Should().Throw<MetadataException>().Which.Message;
         message.All(c => c < 128).Should().BeTrue(message);
         message.Split(". ").Length.Should().BeLessThanOrEqualTo(2, message);
-        property.Should().NotBeNullOrEmpty();
-        declarations.Should().NotBeNullOrEmpty();
     }
 
     // ---- allowed neighbours ----

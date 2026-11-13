@@ -43,7 +43,7 @@ public enum ColumnShape
 /// <c>[SugarColumn(ColumnDataType = ...)]</c> and together with a JSON-column interface (the
 /// multi-value selects, <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>), at startup in every
 /// environment. For an entity the scan does not see, the column convention refuses the JSON-interface
-/// pairing with an <see cref="InvalidOperationException"/> on first use.
+/// pairing with a <c>MetadataException</c> on first use.
 /// </para>
 /// <para>
 /// A content-bearing <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>, <c>Markdown</c>,

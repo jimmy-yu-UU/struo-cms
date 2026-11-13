@@ -46,6 +46,9 @@ internal static class ColumnDeclarationCheck
                 $"Field '{name}' has both [ColumnShape({shape})] and {typeText}. " +
                 "Remove ColumnDataType to use the shape, or remove [ColumnShape] to use your own type.");
 
+        if (shape is not null && sugar is { IsJson: true })
+            throw Reject($"Field '{name}' has [ColumnShape] and [SugarColumn(IsJson = true)], which stores it as a JSON column.", "Remove [ColumnShape]", JsonOwner);
+
         if (hasType && JsonStorageOf(property, sugar) is { } stored)
             throw Reject($"Field '{name}' has {typeText} and {stored}.", "Remove ColumnDataType", JsonOwner);
     }

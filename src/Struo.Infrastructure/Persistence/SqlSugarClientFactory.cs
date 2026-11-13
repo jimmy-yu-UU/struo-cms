@@ -3,6 +3,7 @@ using SqlSugar;
 using Struo.Application.Abstractions;
 using Struo.Application.Configuration;
 using Struo.Domain.Auditing;
+using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
@@ -202,7 +203,7 @@ public static class SqlSugarClientFactory
         var shapedField = property.GetCustomAttribute<CmsFieldAttribute>();
         if (shapedField is not null && FieldInterfaceSets.JsonColumnInterfaces.Contains(shapedField.Interface))
         {
-            throw new InvalidOperationException(
+            throw new MetadataException(
                 $"'{property.DeclaringType?.FullName}.{property.Name}' carries both [ColumnShape] and " +
                 $"[CmsField(Interface = FieldInterface.{shapedField.Interface})], which maps to a JSON " +
                 "column. Remove [ColumnShape] from this property: the JSON-column mapping already " +

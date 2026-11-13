@@ -141,6 +141,19 @@ namespace Struo.Tests.Migrations
         }
 
         [Fact]
+        public async Task An_unrelated_InvalidOperationException_is_not_swallowed()
+        {
+            var sp = Track(new ServiceCollection()
+                .AddSingleton<IEntityTypeCollector>(new StubCollector(typeof(Unmappable)))
+                .AddSingleton<ISqlSugarClient>(_ => throw new InvalidOperationException("boom"))
+                .BuildServiceProvider());
+
+            var act = () => Run(sp, "CreateBoom", "--entity", "Unmappable", "--output", _dir);
+
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        }
+
+        [Fact]
         public async Task Ambiguous_simple_name_lists_the_full_names_sorted()
         {
             var sp = Services(typeof(Schema.B.Widget), typeof(Schema.A.Widget));

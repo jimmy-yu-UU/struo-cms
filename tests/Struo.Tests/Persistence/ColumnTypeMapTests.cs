@@ -2,6 +2,7 @@ using System.Reflection;
 using AwesomeAssertions;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Files;
@@ -314,7 +315,7 @@ public class ColumnTypeMapTests
             // ExceptionChainSearch.FindInner，與 OptionsValidationTests 那邊用的是同一個
             // helper，理由相同。
             var thrown = act.Should().Throw<Exception>().Which;
-            var guard = ExceptionChainSearch.FindInner<InvalidOperationException>(thrown);
+            var guard = ExceptionChainSearch.FindInner<MetadataException>(thrown);
             guard.Should().NotBeNull("hook 必須拒絕 [ColumnShape] 與 JSON-column [CmsField] 併用");
             guard!.Message.Should().Contain(nameof(ColumnShapeJsonConflictTestEntity.Tags),
                 "訊息必須指名違規的 property，否則讀者無從下手");
@@ -386,5 +387,51 @@ public class ColumnTypeMapTests
 
         client.Insertable(new BareIsJsonProbe { Tags = ["alpha", "beta"] }).ExecuteCommand();
         client.Queryable<BareIsJsonProbe>().First()!.Tags.Should().Equal("alpha", "beta");
+    }
+
+    // The two tests below cover an entity with no [CmsField]: the metadata scan never sees it, so the
+    // column convention alone decides.
+    [SugarTable("column_shape_precedence_test_entity")]
+    private sealed class ColumnShapePrecedenceTestEntity
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
+
+        [ColumnShape(ColumnShape.LongText)]
+        [SugarColumn(ColumnDataType = "varchar(7)")]
+        public string? Body { get; set; }
+    }
+
+    [SugarTable("explicit_isjson_probe")]
+    private sealed class ExplicitIsJsonProbe
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+        [SugarColumn(IsJson = true, ColumnDataType = "clob")] public List<string> Pinned { get; set; } = [];
+    }
+
+    [Fact]
+    public void ColumnShape_wins_over_an_explicit_ColumnDataType_on_an_entity_the_scan_does_not_see()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<ColumnShapePrecedenceTestEntity>();
+
+        var body = client.DbMaintenance
+            .GetColumnInfosByTableName("column_shape_precedence_test_entity", false)
+            .Single(c => c.DbColumnName.Equals("Body", StringComparison.OrdinalIgnoreCase));
+
+        body.ShouldHaveShape(ColumnShape.LongText, db.DbType);
+        body.Length.Should().NotBe(7);
+    }
+
+    [SqliteOnlyFact("explicit 'clob' column type is only valid on SQLite/Oracle")]
+    public void Explicit_ColumnDataType_beside_IsJson_is_honoured_on_an_entity_the_scan_does_not_see()
+    {
+        using var db = TestBackend.CreateUnitDatabase();
+        var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        client.CodeFirst.InitTables<ExplicitIsJsonProbe>();
+
+        var columns = client.DbMaintenance.GetColumnInfosByTableName("explicit_isjson_probe", false);
+        Column(columns, "Pinned").DataType.Should().ContainEquivalentOf("clob");
     }
 }
