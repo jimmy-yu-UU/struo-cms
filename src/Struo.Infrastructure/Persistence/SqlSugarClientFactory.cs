@@ -98,6 +98,7 @@ public static class SqlSugarClientFactory
 
         ApplySidecarUniqueGroup(property, column, policy);
         ApplyNullabilityInference(property, column);
+        ApplyListAsJson(property, column);
 
         if (ApplyColumnShape(property, column, dbType)) return;
         if (ApplyZoneLessTimestamp(property, column, dbType)) return;
@@ -155,22 +156,24 @@ public static class SqlSugarClientFactory
         // in Domain code. Correct on every backend.
         // A nullable property always gets a nullable column here: [SugarColumn(IsNullable = false)] does not
         // override this hook. A property that must map to a NOT NULL column has a non-nullable type.
-        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+        // NRT: string? maps to a nullable column too. SeoTranslation.SeoTitle / SeoMetaDescription declare
+        // string? and live in Domain (no [SugarColumn] allowed there); the compiler-emitted annotations
+        // carry the intent without adding SqlSugar to Domain. The scanner reads the same rule.
+        if (ClrNullability.GivesNullableColumn(property))
         {
             column.IsNullable = true;
         }
+    }
 
-        // NRT: map string? (nullable reference type) to nullable columns.
-        // SeoTranslation.SeoTitle / SeoMetaDescription declare string? and live in Domain
-        // (no [SugarColumn] allowed there). NullabilityInfoContext reads the compiler-emitted
-        // nullable annotations so we respect the intent without adding SqlSugar to Domain.
-        if (property.PropertyType == typeof(string))
+    // A List<> [CmsField] property is a JSON column on every interface. SqlSugar cannot map a list to a
+    // scalar column, so without IsJson every write fails or stores an empty list. The widening
+    // conventions below then give it the long-text type. [Navigate] and [CmsTranslations] lists carry
+    // no [CmsField] and are ignored columns, so they never reach this.
+    private static void ApplyListAsJson(PropertyInfo property, EntityColumnInfo column)
+    {
+        if (ListProperty.Is(property.PropertyType) && property.GetCustomAttribute<CmsFieldAttribute>() is not null)
         {
-            // NullabilityInfoContext is not thread-safe; EntityService can be invoked concurrently while
-            // SqlSugar reflects multiple entities during InitTables, so create a fresh instance per column.
-            var ctx = new NullabilityInfoContext();
-            if (ctx.Create(property).WriteState == NullabilityState.Nullable)
-                column.IsNullable = true;
+            column.IsJson = true;
         }
     }
 
