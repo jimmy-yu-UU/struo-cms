@@ -77,7 +77,7 @@ public sealed partial class DiskImageVariantCache
         try
         {
             var stale = VersionDirectories().SelectMany(v => StaleTempsIn(v, cutoff)).ToList();
-            removed = stale.Count(TryDelete);
+            removed = stale.Count(file => TryDelete(file));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -99,7 +99,7 @@ public sealed partial class DiskImageVariantCache
                 var versions = fileDir.EnumerateDirectories()
                     .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
                     .ToList();
-                removed += versions.Count(TryRemoveIfEmpty);
+                removed += versions.Count(version => TryRemoveIfEmpty(version));
                 if (TryRemoveIfEmpty(fileDir)) removed++;
             }
         }
