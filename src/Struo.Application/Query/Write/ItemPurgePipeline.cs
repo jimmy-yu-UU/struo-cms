@@ -132,7 +132,7 @@ public sealed class ItemPurgePipeline(
             if (!IsNullableKey(sourceCollection, foreignKey))
                 throw new RelationConflictException(
                     $"Cannot delete '{collection}/{id}': {count} trashed '{Meta(sourceCollection).Name}' " +
-                    "item(s) still reference it and the reference cannot be cleared. " +
+                    "item(s) reference it and the reference cannot be cleared. " +
                     "Delete them permanently first.");
             toClear.Add((sourceCollection, foreignKey));
         }
