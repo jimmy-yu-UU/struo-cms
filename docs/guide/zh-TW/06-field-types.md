@@ -189,10 +189,12 @@ UTC。
 
 1. 明寫且大於零，用明寫的值。
 2. 否則屬性是 `string`，用它的欄位寬度：沒有指定長度的 `string` 欄位是 255，
-   `[SugarColumn(Length = n)]` 則是 `n`，同一個 attribute 另外明寫 `ColumnDataType` 也一樣。
-3. 欄位沒有長度可言時是 `null`，代表不限長度：`Textarea`、`RichText`、`Markdown`、`Code`、
-   `Json`、六個存成 JSON 的介面，以及帶 `[ColumnShape]`、`IsJson = true`，或明寫 `ColumnDataType`
-   又沒有 `Length` 的屬性。這些欄位要有上限，就在欄位上設 `MaxLength`。
+   `[SugarColumn(Length = n)]` 則是 `n`，同一個 attribute 另外明寫 `ColumnDataType` 也一樣，
+   而且不論介面為何，長文字介面也一樣。
+3. 欄位沒有長度可言時是 `null`，代表不限長度：六個存成 JSON 的介面、帶 `[ColumnShape]` 或
+   `IsJson = true` 的屬性、沒有明寫 `ColumnDataType` 的 `Textarea`、`RichText`、`Markdown`、`Code`
+   與 `Json`，以及明寫的 `ColumnDataType` 沒有 `Length` 的任何屬性。這些欄位要有上限，就在欄位上
+   設 `MaxLength`。
 
 預設值跟介面無關：`Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 一樣是 255。明寫的 `MaxLength`
 不會改欄位寬度：它大於欄位寬度時，啟動丟出 `MetadataException`，訊息點名類別、屬性、`MaxLength`
@@ -285,8 +287,9 @@ UTC。
 `MaxLength` 也是 255：超過 255 字元的值被後台與 API 以 400 拒絕。在這種屬性上明寫更大的
 `MaxLength`，啟動就丟出 `MetadataException`，因為欄位裝不下通過驗證的值。
 
-修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
-`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。表已經建好的話，還要
+被 400 拒絕時，修法是換成這五個介面之一，或是明寫 `[ColumnShape(ColumnShape.LongText)]`——不要直接寫
+`[SugarColumn(ColumnDataType = "text")]`：`ColumnShape` 在每個後端都成立。啟動失敗時，把 `MaxLength`
+調到欄位寬度以下，或用 `[SugarColumn(Length = n)]` 宣告更寬的欄位。兩種情況在表已經建好時，都還要
 另外寫一支 `Alter.Column` 的 migration 把欄位加寬，`migrate:check` 會把兩邊對不上報成錯誤。
 
 **JSON 欄位介面上加 `[ColumnShape]` 會被拒絕。** 屬性的 `[CmsField]` 介面若是六個 JSON 介面之一，另

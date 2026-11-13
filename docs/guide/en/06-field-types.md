@@ -212,11 +212,12 @@ longer value is a 400. A negative value, or one set on a non-`string` property, 
 
 1. Explicitly set and greater than zero — use the explicit value.
 2. Otherwise, when the property is `string`, its column width: 255 for a `string` column with no
-   length, `n` for `[SugarColumn(Length = n)]`, also when the same attribute sets `ColumnDataType`.
-3. `null`, meaning no length limit, when the column has no length to state: `Textarea`, `RichText`,
-   `Markdown`, `Code`, `Json`, the six interfaces stored as JSON, and a property carrying
-   `[ColumnShape]`, `IsJson = true`, or an explicit `ColumnDataType` with no `Length`. Set
-   `MaxLength` on the field to have a limit there.
+   length, `n` for `[SugarColumn(Length = n)]`, also when the same attribute sets `ColumnDataType`,
+   and then whatever the interface, a long-text one included.
+3. `null`, meaning no length limit, when the column has no length to state: the six interfaces
+   stored as JSON, a property carrying `[ColumnShape]` or `IsJson = true`, `Textarea`, `RichText`,
+   `Markdown`, `Code` and `Json` with no explicit `ColumnDataType`, and any property whose explicit
+   `ColumnDataType` has no `Length`. Set `MaxLength` on the field to have a limit there.
 
 The default does not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string`
 are 255 like the rest. An explicit `MaxLength` does not change the column width: one wider than
@@ -330,10 +331,12 @@ value over 255 characters is rejected with a 400 by the admin and the API. An ex
 `MaxLength` on such a property throws a startup `MetadataException`, because the column cannot
 hold a value that passes validation.
 
-The fix is switching to one of those five interfaces, or writing
+For the 400, the fix is switching to one of those five interfaces, or writing
 `[ColumnShape(ColumnShape.LongText)]` explicitly — not `[SugarColumn(ColumnDataType = "text")]`
-directly: `ColumnShape` works on every backend. If the table already exists, also write an
-`Alter.Column` migration that widens the column; `migrate:check` reports the mismatch as an error.
+directly: `ColumnShape` works on every backend. For the startup error, lower `MaxLength` to the
+column width, or declare the wider width with `[SugarColumn(Length = n)]`. If the table already
+exists, in either case also write an `Alter.Column` migration that widens the column;
+`migrate:check` reports the mismatch as an error.
 
 **Adding `[ColumnShape]` on a JSON-interface field is rejected.** When a property's `[CmsField]`
 interface is one of the six JSON interfaces, also carrying `[ColumnShape]` throws an
