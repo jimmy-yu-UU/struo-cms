@@ -122,4 +122,10 @@ public class DeadlockVictimTests
         mapped.Exception.Should().BeNull();
         logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Warning);
     }
+
+    // A deadlock raised by after-commit work follows a write that is already applied, so the message says
+    // only what holds for every deadlock.
+    [Fact]
+    public void The_message_claims_nothing_about_whether_the_write_was_applied() =>
+        DomainErrorMap.DeadlockMessage.Should().Be("The request lost a database deadlock.");
 }

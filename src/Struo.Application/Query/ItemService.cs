@@ -363,8 +363,8 @@ public sealed class ItemService(
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
             // Self-referencing tree collections: reject a parentId that points at the item itself or one of
-            // its descendants. After the row write, so a writer already holds the database's write lock where
-            // the backend has a single writer, and before anything else is stored.
+            // its descendants. It runs after the row write, so each mover holds its own row's write lock
+            // before it waits on a chain row; opposite movers then form a deadlock the database detects.
             await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since

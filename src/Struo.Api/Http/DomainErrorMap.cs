@@ -26,8 +26,8 @@ public static class DomainErrorMap
     /// instead. Three because the exception's own text names internals:
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
     /// host), a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
-    /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an
-    /// over-limit request body, which maps to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
+    /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The
+    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
     /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
@@ -88,16 +88,16 @@ public static class DomainErrorMap
 
     /// <summary>
     /// True when the database ended <paramref name="exception"/>'s transaction as a deadlock victim (or, on
-    /// MariaDB, because a record changed since it was read). The request lost a race and wrote nothing.
+    /// MariaDB, because a record changed since it was read). Inside a write transaction nothing was
+    /// written; work done after the commit follows a write that is already applied.
     /// </summary>
     public static bool IsDeadlockVictim(Exception exception) => DeadlockVictim.IsMatch(exception);
 
     /// <summary>
-    /// Fixed client-facing message for a write that lost a database deadlock. Never the provider's own
+    /// Fixed client-facing message for a request that lost a database deadlock. Never the provider's own
     /// message, which names internals.
     /// </summary>
-    public const string DeadlockMessage =
-        "The change conflicted with a concurrent write and was not applied. Retry the request.";
+    public const string DeadlockMessage = "The request lost a database deadlock.";
 
     /// <summary>
     /// REST-only: the HTTP status for <paramref name="exception"/>. A <see cref="StruoDomainException"/>
