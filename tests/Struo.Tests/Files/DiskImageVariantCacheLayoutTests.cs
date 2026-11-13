@@ -764,7 +764,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         VariantCacheLayout.IsBenignRace(notEmpty).Should().BeTrue($"HResult {notEmpty.HResult}");
     }
 
-    private static Exception? Record(Action action)
+    private static IOException? Record(Action action)
     {
         try { action(); return null; }
         catch (IOException ex) { return ex; }
