@@ -122,6 +122,8 @@ public sealed class SqlSugarItemRepository(
     public async Task<object?> GetByIdLockedAsync(string collection, string id,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
+        if (!db.Ado.IsAnyTran())
+            throw new InvalidOperationException("A locking read needs an open transaction.");
         var d = RepositoryHelpers.Descriptor(registry, collection);
         return await GetByIdLockedDispatcher.For(d.EntityType)(this, RepositoryHelpers.ConvertId(id, d), deleted, ct);
     }
@@ -234,6 +236,17 @@ public sealed class SqlSugarItemRepository(
     public Task<IReadOnlyList<object>> QueryWhereInWithDeletedAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
         whereIn.QueryWhereInWithDeletedAsync(collection, property, values, ct);
+
+    public Task<int> CountTrashedWhereInAsync(
+        string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default) =>
+        whereIn.CountTrashedWhereInAsync(collection, property, values, ct);
+
+    public Task SetForeignKeyNullForTrashedAsync(
+        string sourceCollection, string foreignKeyProperty, object typedId, CancellationToken ct = default) =>
+        purge.SetForeignKeyNullForTrashedAsync(sourceCollection, foreignKeyProperty, typedId, ct);
+
+    public bool IsForeignKeyNullable(string collection, string property) =>
+        purge.IsForeignKeyNullable(collection, property);
 
     public Task<bool> SoftDeleteAsync(string collection, string id, DateTime deletedAt, Guid? deletedBy, CancellationToken ct = default) =>
         softDelete.SoftDeleteAsync(collection, id, deletedAt, deletedBy, ct);

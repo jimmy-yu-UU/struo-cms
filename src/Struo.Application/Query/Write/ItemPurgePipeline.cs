@@ -117,19 +117,20 @@ public sealed class ItemPurgePipeline(
         return deleted;
     }
 
-    // After the Restrict check on live rows has passed, only trashed rows can still point at the target.
-    // Their key is set to null in this transaction, or the purge is refused when the key cannot be null.
-    // Nothing is written until every relation has been checked. Audit columns and revisions stay as they
-    // are, and no change notification is raised for a trashed row.
+    // The Restrict check on live rows has passed, so the rows that reference the target in the trash are the
+    // ones left to deal with. Their key is set to null in this transaction, or the purge is refused when the
+    // key column cannot hold NULL. Count and update match trashed rows only, so a row restored or created
+    // since the check keeps its key. Nothing is written until every relation has been checked. Audit
+    // columns and revisions stay as they are, and no change notification is raised for a trashed row.
     private async Task ClearTrashedRestrictReferencesAsync(
         string collection, string id, object typedId, CancellationToken ct)
     {
         var toClear = new List<(string SourceCollection, string ForeignKey)>();
         foreach (var (sourceCollection, foreignKey) in graph.InboundRestrict(collection))
         {
-            var count = (await repository.QueryWhereInWithDeletedAsync(sourceCollection, foreignKey, [typedId], ct)).Count;
+            var count = await repository.CountTrashedWhereInAsync(sourceCollection, foreignKey, [typedId], ct);
             if (count == 0) continue;
-            if (!IsNullableKey(sourceCollection, foreignKey))
+            if (!repository.IsForeignKeyNullable(sourceCollection, foreignKey))
                 throw new RelationConflictException(
                     $"Cannot delete '{collection}/{id}': {count} trashed '{Meta(sourceCollection).Name}' " +
                     "item(s) reference it and the reference cannot be cleared. " +
@@ -137,21 +138,7 @@ public sealed class ItemPurgePipeline(
             toClear.Add((sourceCollection, foreignKey));
         }
         foreach (var (sourceCollection, foreignKey) in toClear)
-            await repository.SetForeignKeyNullAsync(sourceCollection, foreignKey, typedId, ct);
-    }
-
-    // An unknown key property counts as not nullable, so the purge is refused rather than guessing.
-    private bool IsNullableKey(string sourceCollection, string foreignKey)
-    {
-        var d = registry.Get(sourceCollection);
-        if (d is null) return false;
-        var name = d.FieldToProperty.TryGetValue(foreignKey, out var mapped) ? mapped : foreignKey;
-        var prop = d.Properties.GetValueOrDefault(name);
-        if (prop is null) return false;
-        return Nullable.GetUnderlyingType(prop.PropertyType) is not null
-               || (!prop.PropertyType.IsValueType
-                   && new System.Reflection.NullabilityInfoContext().Create(prop).WriteState
-                       != System.Reflection.NullabilityState.NotNull);
+            await repository.SetForeignKeyNullForTrashedAsync(sourceCollection, foreignKey, typedId, ct);
     }
 
     // U5b: a SetNull child's document changes too (its FK is about to be cleared), so record an

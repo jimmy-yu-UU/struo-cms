@@ -1,5 +1,6 @@
 using SqlSugar;
 using Struo.Application.Security;
+using Struo.Infrastructure.Query;
 
 namespace Struo.Infrastructure.Identity;
 
@@ -81,8 +82,5 @@ public sealed class SqlSugarSuperAdminDirectory(ISqlSugarClient db) : ISuperAdmi
         return active.ToHashSet();
     }
 
-    private ISugarQueryable<T> Locked<T>(ISugarQueryable<T> query) =>
-        db.Ado.IsAnyTran() && db.CurrentConnectionConfig.DbType != DbType.Sqlite
-            ? query.TranLock(DbLockType.Wait)
-            : query;
+    private ISugarQueryable<T> Locked<T>(ISugarQueryable<T> query) => RepositoryHelpers.Locked(db, query);
 }
