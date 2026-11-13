@@ -981,4 +981,89 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         logger.Warnings.Should().Be(1, "variants that stay after a purge are not benign");
         cache.TrackedBytes.Should().Be(-1);
     }
+
+    // On Windows a child that is being deleted at the same moment (a sweep eviction, a tidy) makes the
+    // recursive delete throw UnauthorizedAccessException while the delete is pending; it clears by itself.
+    [Fact]
+    public async Task A_purge_that_meets_a_pending_delete_retries_and_succeeds_without_a_warning()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = dir =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) throw new UnauthorizedAccessException("delete pending");
+            Directory.Delete(dir, recursive: true);
+        };
+
+        await cache.RemoveAllForFileAsync(file, default);
+
+        calls.Should().Be(2);
+        Directory.Exists(DirOf(file)).Should().BeFalse();
+        logger.Warnings.Should().Be(0, "the failure was transient");
+        cache.TrackedBytes.Should().Be(-1, "a retry means bytes may have moved, so the next write recounts");
+    }
+
+    [Fact]
+    public async Task A_purge_that_is_refused_on_every_attempt_throws_after_the_last_one_and_resets_the_total()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            throw new UnauthorizedAccessException("access denied");
+        };
+
+        var act = () => cache.RemoveAllForFileAsync(file, default);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>("a real permission problem still surfaces");
+        calls.Should().Be(DiskImageVariantCache.PurgeAttempts);
+        cache.TrackedBytes.Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task A_purge_that_fails_with_a_generic_io_error_on_every_attempt_throws_after_the_last_one()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            throw new IOException("the disk is unhappy", unchecked((int)0x80070070));
+        };
+
+        var act = () => cache.RemoveAllForFileAsync(file, default);
+
+        await act.Should().ThrowAsync<IOException>();
+        calls.Should().Be(DiskImageVariantCache.PurgeAttempts);
+        cache.TrackedBytes.Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task A_purge_that_loses_the_directory_after_a_transient_failure_is_done_quietly()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = dir =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) throw new UnauthorizedAccessException("delete pending");
+            Directory.Delete(dir, recursive: true);
+            throw new DirectoryNotFoundException();   // a concurrent pass finished the job
+        };
+
+        await cache.RemoveAllForFileAsync(file, default);
+
+        Directory.Exists(DirOf(file)).Should().BeFalse();
+        logger.Warnings.Should().Be(0);
+    }
 }

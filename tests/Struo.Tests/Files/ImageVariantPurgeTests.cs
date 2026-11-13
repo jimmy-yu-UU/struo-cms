@@ -148,7 +148,8 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
         (await c.DeleteAsync($"/api/files/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         (await c.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        logs.Warnings.Should().Contain(w => w.Contains(id, StringComparison.OrdinalIgnoreCase));
+        logs.Warnings.Should().ContainSingle(w => w.Contains(id, StringComparison.OrdinalIgnoreCase),
+            "a cleanup that cannot run is one warning, never silent and never repeated");
     }
 
     [Fact]

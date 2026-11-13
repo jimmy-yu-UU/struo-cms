@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -198,7 +199,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         if (!Directory.Exists(dir) || VariantCacheLayout.IsReparsePoint(new DirectoryInfo(dir)))
             return;
         var freed = SafeLength(() => VariantsOf(new DirectoryInfo(dir)).Sum(v => v.Length));
-        IOException? remaining = null;
+        Exception? failure = null;
         var retried = false;
         for (var attempt = 1; attempt <= PurgeAttempts; attempt++)
         {
@@ -206,36 +207,34 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
             try
             {
                 DeleteTree(dir);
-                remaining = null;
+                failure = null;
                 break;
             }
             catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex) && !Directory.Exists(dir))
             {
                 return;   // the directory itself is gone: another purge removed it first, and accounted for it
             }
-            catch (IOException ex) when (
-                VariantCacheLayout.IsMissingPath(ex) || VariantCacheLayout.IsDirectoryNotEmpty(ex))
-            {
-                remaining = ex;   // a sub-entry vanished, or a writer added one, while the tree was removed
-                retried = true;
-            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
-                throw;
+                failure = ex;   // a sub-entry vanished or was added, or a delete is pending: try again
+                retried = true;
             }
         }
 
-        FinishPurgeAccounting(dir, freed, retried, remaining);
+        FinishPurgeAccounting(dir, freed, retried, failure);
     }
 
-    // Bytes a writer added while the purge ran are unknown, so any retry resets the total for a recount;
-    // entries that remain after the last attempt are a warning (a purge must not leave variants behind).
-    private void FinishPurgeAccounting(string dir, long freed, bool retried, IOException? remainingFailure)
+    // Bytes a writer added while the purge ran are unknown, so any retry resets the total for a recount.
+    // A failure that survives the last attempt is not silent: entries that merely stayed (a sub-entry
+    // kept vanishing, a writer kept adding) are a warning here; anything else, such as a permission
+    // problem, is rethrown for the caller to report.
+    private void FinishPurgeAccounting(string dir, long freed, bool retried, Exception? remainingFailure)
     {
         if (remainingFailure is not null)
         {
-            ForgetTotal();
+            ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
+            if (!IsLeftoverFailure(remainingFailure))
+                ExceptionDispatchInfo.Capture(remainingFailure).Throw();
             if (_logger.IsEnabled(LogLevel.Warning))
                 _logger.LogWarning(remainingFailure, "Image variants of a purged file remain under {Path}.", dir);
             return;
@@ -248,6 +247,10 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
 
     /// <summary>Test seam: called with the variant's directory once it exists and before the temp file is written.</summary>
     internal Action<string>? DirectoryEnsured { get; set; }
+
+    private static bool IsLeftoverFailure(Exception failure) =>
+        VariantCacheLayout.IsMissingPath(failure)
+        || (failure is IOException io && VariantCacheLayout.IsDirectoryNotEmpty(io));
 
     /// <summary>Test seam: called with the variant's directory once the variant has landed, before the tidy.</summary>
     internal Action<string>? VariantLanded { get; set; }
