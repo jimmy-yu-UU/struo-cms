@@ -35,6 +35,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        GC.SuppressFinalize(this);
     }
 
     private DiskImageVariantCache NewCache(long maxBytes = 0) => new(_root, maxBytes);
@@ -44,7 +45,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         await cache.SetAsync(cache.DeriveKey(file, version, req), new byte[size], default);
     }
 
-    private IEnumerable<string> FilesUnder(string dir) =>
+    private static IEnumerable<string> FilesUnder(string dir) =>
         Directory.Exists(dir) ? Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories) : [];
 
     private string DirOf(Guid file) => Path.Combine(_root, file.ToString("D"));

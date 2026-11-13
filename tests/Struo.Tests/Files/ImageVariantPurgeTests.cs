@@ -26,6 +26,7 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_cacheRoot)) Directory.Delete(_cacheRoot, recursive: true);
+        GC.SuppressFinalize(this);
     }
 
     private WebApplicationFactory<Program> Host(Action<IServiceCollection>? configure = null) =>

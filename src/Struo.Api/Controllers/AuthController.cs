@@ -103,7 +103,7 @@ public sealed class AuthController(
         return true;
     }
 
-    private static IActionResult InvalidCredentials() =>
+    private static ObjectResult InvalidCredentials() =>
         Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
             Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
 

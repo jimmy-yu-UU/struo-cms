@@ -116,19 +116,26 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
     // its parent between the two levels of the creation; creating it again covers both.
     private static async Task WriteTempAsync(string dir, string tempPath, byte[] bytes, CancellationToken ct)
     {
-        for (var attempt = 1; ; attempt++)
+        for (var attempt = 1; attempt < CreateDirectoryAttempts; attempt++)
         {
             try
             {
-                Directory.CreateDirectory(dir);
-                await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
+                await CreateAndWriteAsync(dir, tempPath, bytes, ct);
                 return;
             }
-            catch (DirectoryNotFoundException) when (attempt < CreateDirectoryAttempts)
+            catch (DirectoryNotFoundException)
             {
                 // the directory was removed under us: create it again
             }
         }
+
+        await CreateAndWriteAsync(dir, tempPath, bytes, ct);   // the last attempt: a failure propagates
+    }
+
+    private static async Task CreateAndWriteAsync(string dir, string tempPath, byte[] bytes, CancellationToken ct)
+    {
+        Directory.CreateDirectory(dir);
+        await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
     }
 
     // The first capped write counts what is already on disk; later writes and evictions adjust the

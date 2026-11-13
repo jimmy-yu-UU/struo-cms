@@ -13,7 +13,7 @@ public sealed partial class DiskImageVariantCache
         var legacy = LegacyVariantLayout.Remove(rootPath, _logger);
         var temps = RemoveStaleTemps();
         var directories = RemoveEmptyDirectories();
-        if (legacy + temps + directories > 0)
+        if (legacy + temps + directories > 0 && _logger.IsEnabled(LogLevel.Information))
             _logger.LogInformation(
                 "Image variant cache upkeep removed {Legacy} file(s) of the earlier layout, "
                 + "{Temps} stale temp file(s) and {Directories} empty director(ies) under {Root}.",
@@ -49,12 +49,14 @@ public sealed partial class DiskImageVariantCache
         {
             if (VariantCacheLayout.IsBenignRace(ex))
             {
-                _logger.LogDebug(
-                    ex, "A concurrent change under {Path} ended an image variant tidy early.", fileDir.FullName);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug(
+                        ex, "A concurrent change under {Path} ended an image variant tidy early.", fileDir.FullName);
                 return;
             }
             ForgetTotal();
-            _logger.LogWarning(ex, "Could not tidy the image variants under {Path}.", fileDir.FullName);
+            if (_logger.IsEnabled(LogLevel.Warning))
+                _logger.LogWarning(ex, "Could not tidy the image variants under {Path}.", fileDir.FullName);
         }
     }
 
@@ -74,10 +76,8 @@ public sealed partial class DiskImageVariantCache
         var cutoff = DateTime.UtcNow - VariantCacheLayout.StaleTempAge;
         try
         {
-            foreach (var temp in VersionDirectories().SelectMany(v => StaleTempsIn(v, cutoff)).ToList())
-            {
-                if (TryDelete(temp)) removed++;
-            }
+            var stale = VersionDirectories().SelectMany(v => StaleTempsIn(v, cutoff)).ToList();
+            removed = stale.Count(TryDelete);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -96,12 +96,10 @@ public sealed partial class DiskImageVariantCache
         {
             foreach (var fileDir in FileDirectories().ToList())
             {
-                foreach (var version in fileDir.EnumerateDirectories()
-                             .Where(d => VariantCacheLayout.IsVersionDirName(d.Name)
-                                 && !VariantCacheLayout.IsReparsePoint(d)).ToList())
-                {
-                    if (TryRemoveIfEmpty(version)) removed++;
-                }
+                var versions = fileDir.EnumerateDirectories()
+                    .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
+                    .ToList();
+                removed += versions.Count(TryRemoveIfEmpty);
                 if (TryRemoveIfEmpty(fileDir)) removed++;
             }
         }
@@ -154,8 +152,13 @@ public sealed partial class DiskImageVariantCache
     private void LogMaintenanceFailure(Exception ex, string path)
     {
         if (VariantCacheLayout.IsBenignRace(ex))
-            _logger.LogDebug(ex, "A concurrent change interrupted image cache upkeep at {Path}.", path);
-        else
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(ex, "A concurrent change interrupted image cache upkeep at {Path}.", path);
+        }
+        else if (_logger.IsEnabled(LogLevel.Warning))
+        {
             _logger.LogWarning(ex, "Image cache upkeep could not complete at {Path}.", path);
+        }
     }
 }
