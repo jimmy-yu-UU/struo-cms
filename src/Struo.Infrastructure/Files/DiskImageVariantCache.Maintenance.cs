@@ -86,21 +86,26 @@ public sealed partial class DiskImageVariantCache
         return removed;
     }
 
-    // Only <file id> and <file id>/<version> directories: never the root, never another shape, never a
-    // reparse point.
+    // Only <file id> and <file id>/<version> directories that are empty and whose last write is older
+    // than EmptyDirectoryMinAge (UTC): a younger one may be about to receive a variant. Never the root,
+    // never another shape, never a reparse point.
     private int RemoveEmptyDirectories()
     {
         if (!Directory.Exists(rootPath)) return 0;
         var removed = 0;
+        var cutoff = DateTime.UtcNow - VariantCacheLayout.EmptyDirectoryMinAge;
         try
         {
             foreach (var fileDir in FileDirectories().ToList())
             {
+                // Judged before its versions go: removing a child moves the parent's last write to now.
+                var fileDirOld = fileDir.LastWriteTimeUtc < cutoff;
                 var versions = fileDir.EnumerateDirectories()
-                    .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
+                    .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d)
+                        && d.LastWriteTimeUtc < cutoff)
                     .ToList();
                 removed += versions.Count(version => TryRemoveIfEmpty(version));
-                if (TryRemoveIfEmpty(fileDir)) removed++;
+                if (fileDirOld && TryRemoveIfEmpty(fileDir)) removed++;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

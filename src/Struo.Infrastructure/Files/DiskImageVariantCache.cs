@@ -33,7 +33,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
 {
     private const int MoveAttempts = 5;
     private const int MoveRetryDelayMs = 10;
-    private const int CreateDirectoryAttempts = 5;
+    internal const int StoreAttempts = 5;
 
     private readonly ILogger _logger = logger ?? NullLogger.Instance;
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -95,11 +95,10 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         var tempPath = Path.Combine(dir, VariantCacheLayout.TempName(parsed.Variant));
         if (maxBytes > 0 && !TrySeed()) return;
         var replaced = ExistingLength(path);
-        var stored = false;
+        bool stored;
         try
         {
-            await WriteTempAsync(dir, tempPath, bytes, ct);
-            stored = await MoveIntoPlaceAsync(tempPath, path, ct);
+            stored = await StoreAsync(dir, tempPath, path, bytes, ct);
         }
         catch
         {
@@ -112,30 +111,32 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         if (maxBytes > 0 && AdjustTotal(bytes.Length - replaced) > maxBytes) Sweep();
     }
 
-    // A sweep can remove a directory while it is still empty, between its creation and the write, or
-    // its parent between the two levels of the creation; creating it again covers both.
-    private static async Task WriteTempAsync(string dir, string tempPath, byte[] bytes, CancellationToken ct)
+    // Creates the directory, writes the temp file and moves it into place. The directory can legitimately
+    // vanish at any step (a purge of the file, another version's write, a maintenance pass), so a missing
+    // path starts the attempt again; when the attempts run out the variant is dropped (the cache is an
+    // optimization) and logged once. Platform differences do not matter: both "directory not found" and
+    // "file not found" mean the same here.
+    private async Task<bool> StoreAsync(string dir, string tempPath, string path, byte[] bytes, CancellationToken ct)
     {
-        for (var attempt = 1; attempt < CreateDirectoryAttempts; attempt++)
+        for (var attempt = 1; attempt <= StoreAttempts; attempt++)
         {
             try
             {
-                await CreateAndWriteAsync(dir, tempPath, bytes, ct);
-                return;
+                Directory.CreateDirectory(dir);
+                DirectoryEnsured?.Invoke(dir);
+                await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
+                return await MoveIntoPlaceAsync(tempPath, path, ct);
             }
-            catch (DirectoryNotFoundException)
+            catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex))
             {
-                // the directory was removed under us: create it again
+                TryDeleteTemp(tempPath);
             }
         }
 
-        await CreateAndWriteAsync(dir, tempPath, bytes, ct);   // the last attempt: a failure propagates
-    }
-
-    private static async Task CreateAndWriteAsync(string dir, string tempPath, byte[] bytes, CancellationToken ct)
-    {
-        Directory.CreateDirectory(dir);
-        await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
+        if (_logger.IsEnabled(LogLevel.Warning))
+            _logger.LogWarning(
+                "Could not store image variant {Path}: its directory kept disappearing; it is served uncached.", path);
+        return false;
     }
 
     // The first capped write counts what is already on disk; later writes and evictions adjust the
@@ -203,6 +204,9 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         return Task.CompletedTask;
     }
 
+    /// <summary>Test seam: called with the variant's directory once it exists and before the temp file is written.</summary>
+    internal Action<string>? DirectoryEnsured { get; set; }
+
     internal long TrackedBytes => Interlocked.Read(ref _totalBytes);
 
     /// <summary>The total after adding <paramref name="delta"/>: a total that is not counted (negative) stays
@@ -244,7 +248,8 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
                 System.IO.File.Move(tempPath, path, overwrite: true);
                 return true;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException)
+                && !VariantCacheLayout.IsMissingPath(ex))
             {
                 last = ex;
                 if (attempt < MoveAttempts) await Task.Delay(MoveRetryDelayMs, ct);

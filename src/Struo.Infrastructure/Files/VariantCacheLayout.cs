@@ -15,6 +15,14 @@ internal static class VariantCacheLayout
     internal const string TempSuffix = ".tmp";
     internal const char KeySeparator = '/';
 
+    /// <summary>
+    /// An empty <c>&lt;file id&gt;</c> or <c>&lt;file id&gt;/&lt;version&gt;</c> directory is pruned only when its last
+    /// write (UTC) is older than this. A writer creates a directory and fills it moments later, so a young one
+    /// may be about to receive a variant. Its own constant, not <see cref="StaleTempAge"/>: the reason differs
+    /// (a write in flight, not an interrupted one), the value happens to match.
+    /// </summary>
+    internal static readonly TimeSpan EmptyDirectoryMinAge = TimeSpan.FromHours(1);
+
     /// <summary>A temp file older than this is a leftover of a write that never finished.</summary>
     internal static readonly TimeSpan StaleTempAge = TimeSpan.FromHours(1);
 
@@ -60,6 +68,14 @@ internal static class VariantCacheLayout
         && name[1 + VariantLength] == '.'
         && IsLowerHex(name.AsSpan(2 + VariantLength, TempGuidLength), TempGuidLength)
         && name.EndsWith(TempSuffix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// A path that is not there: the directory (or the file in it) was removed by a purge, a version change
+    /// or a maintenance pass. Linux reports a vanished directory as <see cref="DirectoryNotFoundException"/>,
+    /// and as <see cref="FileNotFoundException"/> when the directory is back by the time the error is classified.
+    /// </summary>
+    internal static bool IsMissingPath(Exception error) =>
+        error is DirectoryNotFoundException or FileNotFoundException;
 
     /// <summary>A symbolic link or junction: the cache never descends into one or deletes through one.</summary>
     internal static bool IsReparsePoint(FileSystemInfo entry) =>

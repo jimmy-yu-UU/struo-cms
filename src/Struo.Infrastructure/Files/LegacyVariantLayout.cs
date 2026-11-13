@@ -46,13 +46,13 @@ internal static class LegacyVariantLayout
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    logger.LogWarning(ex, "Could not remove image cache file {Path}.", file.FullName);
+                    Log(ex, logger, file.FullName);
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not list image cache directory {Path}.", shard.FullName);
+            Log(ex, logger, shard.FullName);
         }
         return removed;
     }
@@ -65,7 +65,21 @@ internal static class LegacyVariantLayout
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not remove image cache directory {Path}.", shard.FullName);
+            Log(ex, logger, shard.FullName);
+        }
+    }
+
+    // A path that vanished or a directory that gained an entry is a concurrent change, not a fault.
+    private static void Log(Exception ex, ILogger logger, string path)
+    {
+        if (VariantCacheLayout.IsBenignRace(ex))
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex, "A concurrent change interrupted the image cache cleanup at {Path}.", path);
+        }
+        else if (logger.IsEnabled(LogLevel.Warning))
+        {
+            logger.LogWarning(ex, "The image cache cleanup could not complete at {Path}.", path);
         }
     }
 
@@ -77,7 +91,7 @@ internal static class LegacyVariantLayout
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not list image cache root {Root}.", root);
+            Log(ex, logger, root);
             return [];
         }
     }

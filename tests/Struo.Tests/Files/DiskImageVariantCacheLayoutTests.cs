@@ -389,8 +389,10 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         await Put(cache, emptied, "1", Small, 100);
         var emptiedVersion = VersionDir(cache, emptied, "1", Small);
         File.Delete(Directory.GetFiles(emptiedVersion).Single());
+        Age(emptiedVersion, DirOf(emptied));
         var emptyFileDir = Path.Combine(_root, Guid.NewGuid().ToString("D"));
         Directory.CreateDirectory(emptyFileDir);
+        Age(emptyFileDir);
         var unrelatedEmpty = Directory.CreateDirectory(Path.Combine(_root, "not-a-cache-directory")).FullName;
         var emptyUnderUnrelated = Directory.CreateDirectory(Path.Combine(unrelatedEmpty, "inner")).FullName;
         var keep = Guid.NewGuid();
@@ -414,6 +416,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         var file = Guid.NewGuid();
         var emptyVersion = Path.Combine(_root, file.ToString("D"), new string('a', 32));
         Directory.CreateDirectory(emptyVersion);
+        Age(emptyVersion, DirOf(file));
         var nonEmptyFile = Guid.NewGuid();
         var keptVersion = Path.Combine(_root, nonEmptyFile.ToString("D"), new string('b', 32));
         Directory.CreateDirectory(keptVersion);
@@ -490,8 +493,15 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
     }
 
+    // A directory junction on Windows (no elevation needed), a symbolic link elsewhere: both are reparse points.
     private static void MakeJunction(string link, string target)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateSymbolicLink(link, target);
+            return;
+        }
+
         var info = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
         {
             CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -501,7 +511,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         process.ExitCode.Should().Be(0, "a junction needs no elevation");
     }
 
-    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    [Fact]
     public async Task Maintenance_a_sweep_and_a_version_tidy_never_go_through_a_junction()
     {
         var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
@@ -537,7 +547,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         }
     }
 
-    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    [Fact]
     public void An_empty_directory_behind_a_junction_is_not_removed()
     {
         var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
@@ -562,7 +572,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         }
     }
 
-    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    [Fact]
     public async Task A_purge_does_not_delete_through_a_junction_named_like_a_file_id()
     {
         var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
@@ -585,5 +595,173 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
                 RemoveJunction(link);
             if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
         }
+    }
+
+    // Backdates directories past the pruning threshold (the last write of a directory is when an entry
+    // was last added or removed).
+    private static void Age(params string[] directories)
+    {
+        var old = DateTime.UtcNow - VariantCacheLayout.EmptyDirectoryMinAge - TimeSpan.FromMinutes(5);
+        foreach (var directory in directories) Directory.SetLastWriteTimeUtc(directory, old);
+    }
+
+    [Fact]
+    public void Startup_maintenance_leaves_a_young_empty_directory_and_removes_an_old_one()
+    {
+        var young = Path.Combine(_root, Guid.NewGuid().ToString("D"), new string('a', 32));
+        var old = Path.Combine(_root, Guid.NewGuid().ToString("D"), new string('b', 32));
+        Directory.CreateDirectory(young);
+        Directory.CreateDirectory(old);
+        Age(old, Path.GetDirectoryName(old)!);
+
+        NewCache().RunMaintenance();
+
+        Directory.Exists(young).Should().BeTrue("a young directory may be about to receive a variant");
+        Directory.Exists(Path.GetDirectoryName(young)!).Should().BeTrue();
+        Directory.Exists(old).Should().BeFalse();
+        Directory.Exists(Path.GetDirectoryName(old)!).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_eviction_sweep_leaves_a_young_empty_directory_and_removes_an_old_one()
+    {
+        var cache = NewCache(maxBytes: 250);
+        var young = Path.Combine(_root, Guid.NewGuid().ToString("D"), new string('a', 32));
+        var old = Path.Combine(_root, Guid.NewGuid().ToString("D"), new string('b', 32));
+        Directory.CreateDirectory(young);
+        Directory.CreateDirectory(old);
+        Age(old, Path.GetDirectoryName(old)!);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        await Put(cache, file, "1", Large, 100);
+
+        await Put(cache, file, "1", new ImageTransformRequest(800, null, "webp", "inside", 80), 100);   // sweep
+
+        Directory.Exists(young).Should().BeTrue();
+        Directory.Exists(old).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_file_directory_that_was_old_before_its_last_version_was_pruned_goes_with_it()
+    {
+        var versionDir = Path.Combine(_root, Guid.NewGuid().ToString("D"), new string('a', 32));
+        Directory.CreateDirectory(versionDir);
+        Age(versionDir, Path.GetDirectoryName(versionDir)!);
+
+        NewCache().RunMaintenance();
+
+        Directory.Exists(Path.GetDirectoryName(versionDir)!).Should().BeFalse();
+    }
+
+    private sealed class WarningCounter : Microsoft.Extensions.Logging.ILogger
+    {
+        public int Warnings;
+        public int Errors;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) Interlocked.Increment(ref Warnings);
+            if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Error) Interlocked.Increment(ref Errors);
+        }
+    }
+
+    [Fact]
+    public async Task A_directory_that_vanishes_between_creation_and_write_is_created_again()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        var calls = 0;
+        cache.DirectoryEnsured = dir =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) Directory.Delete(dir, recursive: true);
+        };
+
+        await Put(cache, file, "1", Small, 100);
+
+        calls.Should().Be(2, "the first attempt lost its directory, the second succeeded");
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().HaveCount(100);
+        cache.TrackedBytes.Should().Be(100);
+    }
+
+    [Fact]
+    public async Task A_directory_that_keeps_vanishing_ends_as_a_cache_miss_with_one_warning_and_no_bytes_counted()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        var calls = 0;
+        cache.DirectoryEnsured = dir =>
+        {
+            Interlocked.Increment(ref calls);
+            Directory.Delete(dir, recursive: true);
+        };
+
+        var act = () => Put(cache, file, "1", Small, 100);
+
+        await act.Should().NotThrowAsync();
+        calls.Should().Be(DiskImageVariantCache.StoreAttempts);
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().BeNull();
+        cache.TrackedBytes.Should().Be(0, "nothing landed, so nothing is counted");
+        logger.Warnings.Should().Be(1);
+        logger.Errors.Should().Be(0);
+        FilesUnder(_root).Should().BeEmpty("no temp file is left behind");
+    }
+
+    [Fact]
+    public async Task A_vanishing_directory_is_also_handled_without_a_cap()
+    {
+        var cache = NewCache(maxBytes: 0);
+        var file = Guid.NewGuid();
+        cache.DirectoryEnsured = dir => Directory.Delete(dir, recursive: true);
+
+        var act = () => Put(cache, file, "1", Small, 100);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    // What this platform throws, observed here and pinned: the classification must hold on Windows and Linux.
+    [Fact]
+    public void The_exceptions_this_platform_throws_for_a_vanished_or_non_empty_directory_are_classified()
+    {
+        Directory.CreateDirectory(_root);
+        var missing = Path.Combine(_root, "missing");
+        var nonEmpty = Path.Combine(_root, "non-empty");
+        Directory.CreateDirectory(nonEmpty);
+        File.WriteAllBytes(Path.Combine(nonEmpty, "entry"), [1]);
+
+        Action writeIntoMissing = () => File.WriteAllBytes(Path.Combine(missing, ".temp.tmp"), [1]);
+        Action moveFromMissing = () => File.Move(Path.Combine(missing, ".temp.tmp"), Path.Combine(_root, "target"), true);
+        Action deleteMissing = () => Directory.Delete(missing);
+        Func<bool> enumerateMissing = () => new DirectoryInfo(missing).EnumerateFileSystemInfos().Any();
+        Action deleteNonEmpty = () => Directory.Delete(nonEmpty);
+
+        foreach (var missingPath in new Action[] { writeIntoMissing, moveFromMissing, deleteMissing, () => enumerateMissing() })
+        {
+            var error = Record(missingPath);
+            VariantCacheLayout.IsMissingPath(error!).Should().BeTrue(error!.GetType().Name);
+            VariantCacheLayout.IsBenignRace(error!).Should().BeTrue(error!.GetType().Name);
+        }
+
+        var notEmpty = Record(deleteNonEmpty)!;
+        notEmpty.Should().BeOfType<IOException>();
+        VariantCacheLayout.IsMissingPath(notEmpty).Should().BeFalse();
+        VariantCacheLayout.IsBenignRace(notEmpty).Should().BeTrue($"HResult {notEmpty.HResult}");
+    }
+
+    private static Exception? Record(Action action)
+    {
+        try { action(); return null; }
+        catch (Exception ex) { return ex; }
+    }
+
+    [Fact]
+    public void A_missing_file_and_a_missing_directory_are_both_a_missing_path()
+    {
+        VariantCacheLayout.IsMissingPath(new FileNotFoundException()).Should().BeTrue();
+        VariantCacheLayout.IsMissingPath(new DirectoryNotFoundException()).Should().BeTrue();
+        VariantCacheLayout.IsMissingPath(new IOException("disk full")).Should().BeFalse();
+        VariantCacheLayout.IsMissingPath(new UnauthorizedAccessException()).Should().BeFalse();
     }
 }
