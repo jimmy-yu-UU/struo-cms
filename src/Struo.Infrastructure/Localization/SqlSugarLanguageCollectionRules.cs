@@ -21,7 +21,7 @@ public sealed class SqlSugarLanguageCollectionRules(ISqlSugarClient db) : ILangu
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var duplicate = rows.FirstOrDefault(row => !seen.Add(row.Code));
         if (duplicate is not null)
-            throw new QueryException($"Language code '{duplicate.Code}' already exists.");
+            throw new ConflictException($"Language code '{duplicate.Code}' already exists.");
 
         var enabled = rows.Where(r => r.Enabled).ToList();
         if (enabled.Count == 0)

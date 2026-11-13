@@ -47,15 +47,67 @@ public class LanguageCollectionTests(ApiFactory factory)
     private static string IdOf(JsonElement list, string code) =>
         list.EnumerateArray().Single(r => r.GetProperty("code").GetString() == code).GetProperty("id").ToString();
 
+    private static Task<HttpResponseMessage> CreateAsync(HttpClient c, string code) =>
+        c.PostAsJsonAsync("/api/items/language",
+            new { code, name = "dup probe", isDefault = false, enabled = true, sort = 50 });
+
+    private static Task<HttpResponseMessage> UpdateCodeAsync(HttpClient c, string id, string code) =>
+        c.PutAsJsonAsync($"/api/items/language/{id}",
+            new { code, name = "dup probe", isDefault = false, enabled = true, sort = 50 });
+
+    private static async Task AssertConflictAsync(HttpResponseMessage res)
+    {
+        res.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        Root(await res.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("CONFLICT");
+    }
+
     [Fact]
-    public async Task Creating_a_language_with_an_existing_code_is_a_400()
+    public async Task Creating_a_language_with_an_identical_code_is_a_409()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var res = await c.PostAsJsonAsync("/api/items/language",
-            new { code = "EN", name = "English again", isDefault = false, enabled = true, sort = 50 });
-        res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        Root(await res.Content.ReadAsStringAsync()).GetProperty("error").GetProperty("message").GetString()
-            .Should().Be("Language code 'EN' already exists.");
+        await AssertConflictAsync(await CreateAsync(c, "en"));
+    }
+
+    [Fact]
+    public async Task Creating_a_language_whose_code_differs_only_in_case_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        await AssertConflictAsync(await CreateAsync(c, "EN"));
+    }
+
+    [Fact]
+    public async Task Updating_a_language_to_an_identical_code_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupa")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        await AssertConflictAsync(await UpdateCodeAsync(c, id, "en"));
+    }
+
+    [Fact]
+    public async Task Updating_a_language_to_a_code_differing_only_in_case_is_a_409()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupb")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        await AssertConflictAsync(await UpdateCodeAsync(c, id, "EN"));
+    }
+
+    [Fact]
+    public async Task Changing_a_languages_own_code_by_case_only_succeeds()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var id = Root(await (await CreateAsync(c, "dupc")).Content.ReadAsStringAsync())
+            .GetProperty("data").GetProperty("id").ToString();
+        (await UpdateCodeAsync(c, id, "DUPC")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Creating_a_language_with_a_malformed_code_stays_a_400()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        (await CreateAsync(c, "bad code")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
