@@ -58,6 +58,27 @@
   `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
   或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
   敗；呼叫它的 fork 要改名。
+- 重複的語言代碼在每個後端都回 `409` `CONFLICT`。代碼只差大小寫的重複，在 SQLite 與 PostgreSQL 上
+  原本回 `400`，現在回 `409`，訊息不變（`Language code '{code}' already exists.`）；MySQL、MariaDB、
+  SQL Server 與完全相同的重複原本就回 `409`。其餘的語言規則（代碼格式、至少一列啟用、恰好一列預設）
+  仍是 `400`。`ILanguageCollectionRules` 的實作遇到重複代碼要丟 `ConflictException`，其餘違規丟
+  `QueryException`。`struo_languages` 的唯一索引不變。
+- `IUserSessionStore.RemoveAllForUserAsync` 移除，換成
+  `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`，只刪指定鑰
+  匙的索引列；實作這個介面的 fork 要改。`IAuthService` 多了
+  `ConfirmUnchangedAsync(AuthResult, CancellationToken)`，回傳登入驗證過的密碼雜湊是否仍是儲存的那
+  一份（使用者還在、仍啟用）；自己實作 `IAuthService` 的 fork 要補上這個方法。`AuthResult` 的建構
+  函式與 `AuthResult.Ok` 多了選用的 `PasswordProof` 參數，`PasswordProof` 是新型別，外部看不到雜湊
+  內容，也不會印出。`AuthController.Login` 在工作階段寫入後呼叫 `ConfirmUnchangedAsync`；內建的
+  `AuthService` 對沒帶 `PasswordProof` 的結果一律回 `false`。
+- `IImageVariantCache` 多了 `RemoveAllForFileAsync(Guid fileId, CancellationToken)`，刪除某個檔案
+  的所有變體；`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，鍵一定帶著檔案
+  id。自己實作這個介面的 fork 要補上方法並接受新的鍵形狀。`FileService` 的建構函式在最後多了選用參
+  數 `IImageVariantCache? variantCache`。`DiskImageVariantCache` 的目錄結構改成
+  `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`：升級後第一次啟動，API 在背景刪除 `CachePath`
+  底下形如 `<2 位十六進位>/<64 位十六進位>` 的快取檔、同目錄的
+  `.<64 位十六進位>.<32 位十六進位>.tmp` 暫存檔，以及因此變空的目錄，其他檔案不動。這些變體不搬移，
+  第一次請求時重新轉換。
 :::
 
 ### 新增
@@ -84,6 +105,17 @@
   又沒有 `Length`）的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。
   現在跟其他沒有長度的欄位一樣不設上限，要有上限就在欄位上設 `MaxLength`；`ColumnDataType` 旁有
   `Length` 時，上限就是那個 `Length`。
+- 撤銷使用者全部工作階段（改密碼、刪除使用者）時，原本在列出鑰匙之後才寫入的工作階段，索引列會
+  跟著被整批刪掉；那個工作階段留在快取裡、之後的撤銷又找不到它，撤銷不掉。現在撤銷只刪列出並
+  撤銷的那些鑰匙的索引列。密碼登入也補上另一半：工作階段寫入後重讀儲存的密碼雜湊，跟驗證密碼時
+  用的不同（或使用者不在、已停用），就撤銷剛建立的工作階段，回應不帶 session cookie，登入以
+  `401` `Invalid credentials.` 失敗，跟密碼錯誤相同；這次登入的嘗試照一般失敗登入保留在節流計數裡，
+  成功登入才清除計數。比對的是密碼雜湊，不是 `version`，其他欄位的編輯不影響登入。外部（OIDC）登入
+  沒有密碼可比對，只受惠於撤銷端的修正。
+- 永久刪除檔案時，圖片轉換的快取變體原本留在磁碟上，直到被容量淘汰；現在資料列刪掉後會一併刪除該
+  檔案的所有變體（失敗只記警告，不影響刪除）。寫入某個 `version` 的變體時，同一個檔案其他 `version`
+  的變體也會刪掉。寫入用的暫存檔原本不計入容量、也從不刪除，現在超過一小時的暫存檔在啟動時與每次
+  容量清理時刪除，且不計入容量。快取只清掉處理請求的那個副本的本機磁碟，其他副本的變體留到被淘汰。
 
 ### 安全性
 

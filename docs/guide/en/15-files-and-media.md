@@ -394,23 +394,42 @@ Transformed variants are stored on disk, at the path set by
 `Struo:Files:ImageTransform:CachePath` (key in [Chapter 4](04-configuration.md)); a relative path
 here resolves against the application's content root, unlike `local`'s own root.
 
-The cache key is a SHA-256 of a labeled text block, lowercased to hex: the file id, this row's
-`version`, plus `width`, `height`, `format`, `fit` and `quality`, one per line, taken from the request after
-snapping and rounding. Changing any one of them produces a different key. The version stamp used is the optimistic-concurrency `version`
-counter, not `UpdatedAt`. Any update to this row advances `version`, which naturally invalidates
-old variants with no active invalidation mechanism needed.
+The cache key has three parts: the file id, a hash of this row's `version`, and a SHA-256 of a
+labeled text block (lowercased hex). The block is the file id, the `version`, plus `width`,
+`height`, `format`, `fit` and `quality`, one per line, taken from the request after snapping and
+rounding. Changing any one of them produces a different key. The version stamp is the
+optimistic-concurrency `version` counter, not `UpdatedAt`; any update to this row advances it.
 
-Each cache entry is bucketed into a subdirectory by the key's first two hex characters; a write
-goes to a temp file in the same directory first and is then moved into place, so a concurrent read
-never sees a half-written variant. A read that loses a race against a concurrent write is treated
-as a cache miss, not an error.
+Every variant lives in a directory named for the file's id, so all variants of one file sit in one
+place and can be found and deleted without knowing the transform parameters. Writing a variant of
+one `version` also deletes that file's variants of other versions; one that cannot be deleted is
+logged as a warning and left for a later write, a permanent delete or eviction.
+
+A write goes to a temp file in the same directory first (its name starts with `.` and ends with
+`.tmp`) and is then moved into place, so a concurrent read never sees a half-written variant. A read
+that loses a race against a concurrent write is treated as a cache miss, not an error. A temp file
+is not a variant and does not count towards the cap. A process that stops mid-write can leave one
+behind; temp files older than one hour are deleted at start and on every eviction sweep.
+
+A permanent delete of a file (`?purge=true`, through the media library or the item API) deletes
+all of that file's variants once the row is gone, and no other file's. A failure to remove them is
+logged as one warning and does not fail the delete; what is left waits for eviction. Trash and
+restore do not touch variants.
+
+At start, the API tidies `CachePath` once in the background. It deletes only files of exactly two
+shapes, `<2 hex>/<64 hex>` (the directory equals the first two characters of the name) and, in the
+same kind of directory, temp files shaped `.<64 hex>.<32 hex>.tmp`, and then the directories that
+leaves empty. Nothing else is touched, so `CachePath` may point at a directory that holds other
+files.
 
 The cache is size-capped by `CacheMaxBytes` (2 GB by default). Every hit stamps the variant as
 recently used; when a write leaves the cache over the cap, the variants that were read least
 recently are deleted until the cache is down to 90% of the cap, so the next writes have room. A variant evicted while another request is reading it is read
 as a miss and transformed again.
 
-The cache lives on the local disk of each API process (replica), and replicas do not share it.
+The cache lives on the local disk of each API process (replica), and replicas do not share it. So a
+permanent delete and the write of a variant for a new `version` clear only the cache of the replica
+that handled the request; other replicas keep their copies until eviction removes them.
 `CachePath` points at local disk whether `Backend` is `local` or `s3`, so with `s3` the transform
 cache is still local. Its contents can be rebuilt at any time; losing them only means transforming
 again, so temporary storage is fine for it.
@@ -461,11 +480,12 @@ references the file through an `OnDelete.Restrict` relation; `restore` never che
 
 `DELETE /api/files/{id}?purge=true` is the actual permanent delete: the file row, the translation
 row and the stored blob are removed together. Purge follows the same relation rules as any other
-collection: a `Restrict` reference blocks it, references with `OnDelete.SetNull` are set to null, and
-many-to-many junction rows pointing at the file are removed. Cleaning up the blob is best-effort and
-happens outside the transaction — the row data is already gone, so at worst a storage-layer failure
-leaves an orphaned blob behind; [`files:sweep`](20-deployment.md#removing-orphaned-blobs) removes
-such blobs.
+collection: a `Restrict` reference blocks it, references with `OnDelete.SetNull` are set to null,
+and many-to-many junction rows pointing at the file are removed. Cleaning up the blob is
+best-effort and happens outside the transaction — the row data is already gone, so at worst a
+storage-layer failure leaves an orphaned blob behind;
+[`files:sweep`](20-deployment.md#removing-orphaned-blobs) removes such blobs. The file's cached
+image variants are deleted too, see "Variant caching" below.
 
 Purge re-queries the row with the soft-delete filter cleared, so the most common flow — trash
 first, then purge (the default delete already trashes first) — works. Purge clears the brand-logo

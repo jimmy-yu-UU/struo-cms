@@ -73,6 +73,33 @@
   assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
+- A duplicate language code answers `409` `CONFLICT` on every backend. A duplicate that differs only
+  in letter case answered `400` on SQLite and PostgreSQL and now answers `409` with the same message
+  (`Language code '{code}' already exists.`); on MySQL, MariaDB and SQL Server, and for an identical
+  code, it already answered `409`. The other language rules (code format, at least one enabled row,
+  exactly one default) still answer `400`. An implementation of `ILanguageCollectionRules` throws
+  `ConflictException` for a duplicate code and `QueryException` for any other violation. The unique
+  index on `struo_languages` is unchanged.
+- `IUserSessionStore.RemoveAllForUserAsync` is removed in favor of
+  `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`, which
+  deletes only the index rows of the given keys; a fork that implements the interface changes it.
+  `IAuthService` gains `ConfirmUnchangedAsync(AuthResult, CancellationToken)`, which says whether
+  the password hash a login verified is still the stored one (and the user still exists and is
+  active); a fork with its own `IAuthService` adds the method. The `AuthResult` constructor and
+  `AuthResult.Ok` take an optional `PasswordProof` parameter; `PasswordProof` is a new type whose
+  hash is invisible outside the assembly and never printed. `AuthController.Login` calls
+  `ConfirmUnchangedAsync` after the session is written; the built-in `AuthService` answers `false`
+  for a result that carries no `PasswordProof`.
+- `IImageVariantCache` gains `RemoveAllForFileAsync(Guid fileId, CancellationToken)`, which
+  deletes all variants of one file, and the key `DeriveKey` returns is now three parts,
+  `<file id>/<version hash>/<variant hash>`, so a key always carries its file id. A fork with its
+  own implementation adds the method and accepts the new key shape. The `FileService` constructor
+  takes a new optional last parameter, `IImageVariantCache? variantCache`. `DiskImageVariantCache`
+  lays files out as `<CachePath>/<file id>/<version hash>/<variant hash>`: at the first start
+  after the upgrade the API deletes, in the background, the cache files under `CachePath` shaped
+  `<2 hex>/<64 hex>`, the `.<64 hex>.<32 hex>.tmp` temp files beside them, and the directories
+  that leaves empty, and touches nothing else. Those variants are not moved; they are transformed
+  again on the first request.
 :::
 
 ### Added
@@ -106,6 +133,24 @@
   write although the column holds more. It has no limit now, like any column without a length; set
   `MaxLength` on the field to have one. With a `Length` beside the `ColumnDataType`, the limit is that
   `Length`.
+- Revoking all of a user's sessions (a password change, deleting the user) deleted every index row
+  of that user after it had listed the ticket keys, so a session whose row was written after the
+  listing lost its row while its ticket stayed in the cache, and a later revocation could not find
+  it. The revocation now deletes only the index rows of the keys it listed and revoked. Password
+  login covers the other half: once its session is written it reads the stored password hash
+  again, and when that differs from the one the password was verified against (or the user is gone
+  or inactive) it revokes the session it just created, sends no session cookie and fails with
+  `401` `Invalid credentials.`, like a wrong password; the attempt stays counted by the throttle
+  as for any failed login, and only a successful login clears the count. The comparison is on the
+  password hash, not on `version`, so an edit to any other field does not affect a login. External
+  (OIDC) login has no password to compare and gets only the revocation fix.
+- A permanent delete of a file left its cached image variants on disk until eviction removed them;
+  the row's deletion now deletes all of that file's variants (a failure is logged as a warning and
+  does not fail the delete). Writing a variant of one `version` also deletes that file's variants of
+  other versions. The temp files used for writes were neither counted towards the cap nor ever
+  deleted; temp files older than one hour are now deleted at start and on every eviction sweep, and
+  they do not count towards the cap. Only the local disk of the replica that handled the request is
+  cleared; other replicas keep their variants until eviction.
 
 ### Security
 
