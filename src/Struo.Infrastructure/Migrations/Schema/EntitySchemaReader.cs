@@ -1,5 +1,6 @@
 using System.Reflection;
 using SqlSugar;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Migrations.Schema;
@@ -7,8 +8,6 @@ namespace Struo.Infrastructure.Migrations.Schema;
 /// <summary>Reads the schema an entity type declares from SqlSugar's post-convention entity metadata.</summary>
 public static class EntitySchemaReader
 {
-    private const int DefaultStringLength = 255;
-
     public static ExpectedTable Read(ISqlSugarClient db, Type entityType)
     {
         ArgumentNullException.ThrowIfNull(db);
@@ -55,7 +54,7 @@ public static class EntitySchemaReader
         var category = CategoryOf(column, dbType);
         int? length = category switch
         {
-            ColumnCategory.String => column.Length > 0 ? column.Length : DefaultStringLength,
+            ColumnCategory.String => column.Length > 0 ? column.Length : StringColumnWidth.Default,
             ColumnCategory.Decimal => column.Length > 0 ? column.Length : null,
             _ => null
         };

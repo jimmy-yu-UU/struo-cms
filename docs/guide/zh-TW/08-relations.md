@@ -10,6 +10,24 @@
 純量或可為 `null` 的純量參照是多對一；清單屬性預設是一對多，只有當 `[Navigate]` 的第一個參數是一個型
 別時才算多對多。
 
+### 支援的 `[Navigate]` 寫法
+
+掃描器在掛了 `[CmsRelation]` 的屬性上只接受兩種 `[Navigate]` 寫法，依建構子的參數辨認：
+
+- 多對一與一對多：`[Navigate(NavigateType.…, 外鍵屬性)]`。`OneToOne` 與 `ManyToOne` 用在單一實體
+  屬性，`OneToMany` 用在清單屬性；其他 `NavigateType` 一律不讀。
+- 多對多：`[Navigate(junction 型別, 父端鍵, 目標端鍵)]`，用在清單屬性。
+
+後面的程式碼都假設外鍵對到目標集合的主鍵，所以其他寫法一律讓啟動失敗：`NavigateType` 後面接兩個
+鍵（第二個鍵剛好是目標主鍵也一樣）、帶 `whereSql` 或 `mappingSql`（傳 `null` 也一樣）、多對多再
+加兩個類別鍵、上面沒列的 `NavigateType` 或屬性形狀、為 `null`、空字串或空白的鍵或 junction 型別，
+以及 `Navigate` 的子類別（CMS 讀的是 `[Navigate]` 本身）。訊息點名實體類別、屬性、讀到的內容與這
+兩種寫法。
+
+這項檢查只針對掛了 `[CmsRelation]` 的屬性。沒有 `[CmsRelation]` 的 `[Navigate]` 不是關聯，會被忽
+略；其中多對多寫法的，掃描器只讀它的 junction 型別，用來檢查 junction 集合是否把兩個鍵都開成可寫
+欄位，以及每個 junction 型別是否剛好宣告一個主鍵。
+
 ### 多對一——`File.Folder`
 
 框架與範例裡的多對一一律用 `NavigateType.OneToOne`，一對多一律用 `NavigateType.OneToMany`；但真正決

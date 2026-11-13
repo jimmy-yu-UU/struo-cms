@@ -116,7 +116,9 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:ContentAssemblies` | 字串陣列 | `[]` |
 
 清單裡的每個組件名稱都要能被 `Assembly.Load` 解析，通常代表 API 專案要直接參照它；解析不
-到就直接讓啟動失敗，不會被跳過。
+到就直接讓啟動失敗，不會被跳過。每個被掃描的組件，不論是內容組件、框架本身或宿主，只要有型別載
+不起來（例如依賴的套件沒有部署），同樣讓啟動失敗，訊息帶出組件名稱、失敗的型別數與載入錯誤；帶
+`[CmsCollection]` 的型別也不會被悄悄丟掉。
 
 這個鍵在 `builder.Build()` 之前就直接從 `builder.Configuration` 讀出，不經過
 `IOptions<T>`；因此它讀得到啟動前裝好的所有一般設定來源，但要是你在 `CreateBuilder` 之後才註

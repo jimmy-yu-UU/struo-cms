@@ -120,7 +120,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
    than insert unless you are certain nothing persists the numeric value).
 2. Teach `MetadataScanner.BuildField` (`src/Struo.Infrastructure/Metadata/MetadataScanner.cs`) about
    any interface-specific validation the new value needs (e.g. requiring `[CmsOptions]`, restricting
-   allowed CLR property types, `MaxLength` defaulting rules).
+   allowed CLR property types). The default `MaxLength` needs no rule of its own: a string field
+   takes its column's width from `StringColumnWidth.Of`
+   (`src/Struo.Infrastructure/Metadata/StringColumnWidth.cs`), which `SqlSugarClientFactory` also
+   builds the column from.
 3. Add the new member to `src/Struo.Api/GraphQl/SchemaTypeMapper.cs`'s `ScalarSdl` (and
    `WritableInputSdl` if the interface should be writable) switch expressions, choosing the GraphQL SDL
    type it maps to. **This step is easy to miss and fails loudly but unhelpfully if skipped**: both
@@ -135,13 +138,14 @@ picker instead of a plain text input) — frontend-only, no backend change:
    kept in step with the built schema by `GraphQlNameCollisionTests`; a new shared GraphQL type or
    root field goes into those lists.
 4. If the value's CLR-side value is a structured aggregate (a `List<>`/`Dictionary<>`) that needs a
-   JSON column, add it to `SqlSugarClientFactory`'s `JsonColumnInterfaces` set
-   (`src/Struo.Infrastructure/Persistence/SqlSugarClientFactory.cs`) so SqlSugar (de)serializes it and
-   the column gets `IsJson = true` + a widened `text`-shaped type together. The `EntityService` hook
-   widens a *bare* `[SugarColumn(IsJson = true)]` outside this set on its own, so that case needs no
-   hand-added `ColumnDataType`; an explicit `ColumnDataType` on the property still wins over the hook's
-   default. If instead it's a plain long string that needs widening, add it to `ContentBearingInterfaces`
-   in the same file.
+   JSON column, add it to `FieldInterfaceSets.JsonColumnInterfaces`
+   (`src/Struo.Infrastructure/Metadata/FieldInterfaceSets.cs`). That one set is what
+   `SqlSugarClientFactory` reads so SqlSugar (de)serializes it and the column gets `IsJson = true` + a
+   widened `text`-shaped type together, and what `MetadataScanner` reads to refuse a translatable
+   field of that interface. The `EntityService` hook widens a *bare* `[SugarColumn(IsJson = true)]`
+   outside this set on its own, so that case needs no hand-added `ColumnDataType`; an explicit
+   `ColumnDataType` on the property still wins over the hook's default. If instead it's a plain long
+   string that needs widening, add it to `FieldInterfaceSets.ContentBearingInterfaces` in the same file.
 5. If the value needs write-time structural validation beyond `Required` (like `MultiSelect`/`Tags`/
    `KeyValue`/`Files`/`Repeater` already have), add an `IFieldValidator` implementation under
    `src/Struo.Application/Query/Write/Validators/` and register it in `FieldValidatorRegistry.Phases`
@@ -164,8 +168,10 @@ picker instead of a plain text input) — frontend-only, no backend change:
    ```
    Skipping this fails the `backend` CI job's `CoreSchemaSnapshotTests` with a diff against the stale
    snapshot (`schema/README.md` has the full contract).
-8. **Tests to add**: a backend test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs`
-   covering the new interface's scan-time validation, a persistence-level test if you touched
+8. **Tests to add**: the new member's row in `tests/Struo.Tests/Metadata/FieldInterfaceSetsTests.cs`
+   (it fails until the row exists: membership in each set and the two GraphQL SDL results), a backend
+   test alongside `tests/Struo.Tests/Metadata/MetadataScannerTests.cs` covering the new interface's
+   scan-time validation, a persistence-level test if you touched
    `SqlSugarClientFactory` (follow the pattern of existing column-widening tests in
    `tests/Struo.Tests/Persistence/`), and a frontend `*.test.ts` for the new registry entry.
 9. **Gate**: four of the five standing gates (`dotnet build && dotnet test`, `pnpm test && pnpm build`)

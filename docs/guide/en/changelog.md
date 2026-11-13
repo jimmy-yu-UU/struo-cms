@@ -38,6 +38,41 @@
   registered with the provider is removed there. `signin-oidc-{id}` and `signout-callback-oidc-{id}`
   are unchanged. The admin image's nginx template and the Vite dev proxy no longer forward paths that
   start with `/signout-oidc`; a rule for them in your own reverse proxy can go.
+- The scanner accepts two `[Navigate]` forms on a `[CmsRelation]` property, `(NavigateType, foreignKey)`
+  for many-to-one and one-to-many and `(junctionType, parentKey, targetKey)` for many-to-many, and
+  stops the host at start on any other, naming the entity class and the property. The others are a
+  second key after `NavigateType`, a `whereSql` or `mappingSql` argument (even `null`), the two class
+  keys of a many-to-many, a `NavigateType` other than `OneToOne` or `ManyToOne` on a single-entity
+  property and `OneToMany` on a list property, a junction form on a single-entity property, a null,
+  empty or blank key or junction type, and a subclass of `Navigate`. They used to start, with the
+  scanner reading only the first key and the query layer treating it as pointing at the target's
+  primary key: `deep` expansion and deleting the target answered `500`, a one-to-many `(Id, ParentId)`
+  expanded to an empty array, a filter on the relation answered `500` or matched nothing, and a
+  `whereSql` condition was ignored. A fork that declares one rewrites it to a supported form; a
+  relation to a non-primary-key column is not supported. A `[Navigate]` without `[CmsRelation]` is not
+  a relation and never stops the host for its shape; a many-to-many one is read only for its junction
+  type, as before.
+- A `string` field with no `MaxLength` is limited to the width of its column whatever its interface:
+  255, or the `Length` of its `[SugarColumn]`, also when that sets a `ColumnDataType`. A column that
+  states no length has no limit: LongText and JSON interfaces, `[ColumnShape]`, `IsJson = true`, an
+  explicit `ColumnDataType` with no `Length` (set `MaxLength` on the field to have one). `Hidden`,
+  `Time` and a `Uuid` declared on a `string` had no limit, so a value over 255 characters was stored
+  on SQLite and answered `500` on PostgreSQL, MySQL and SQL Server; it is now a `400`,
+  `Field '{name}' exceeds maximum length 255.` A fork whose migration made such a column wider than
+  255 sets `[CmsField(MaxLength = n)]` to that width, or longer values stay rejected. No core field is
+  affected and `schema/core-collections.json` is unchanged.
+- A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
+  stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
+  the message names the assembly, the number of failed types, the type names the loader reports and
+  the distinct loader errors, five of each at most, then a count of the rest. A `[CmsCollection]` type
+  that loads but whose members or attributes cannot be read is reported with its name and assembly
+  instead. Such a type used to be skipped without a log: with an internal `[CmsCollection]` type the
+  host started with the collection missing and `/api/items/{name}` answered `404`, with a public one
+  startup failed later, in the migration step, with an error that named no collection, and a relation
+  that targeted it failed with `Relation '{a.b}' targets unknown collection`. A fork that has such an
+  assembly deploys the missing dependency or removes the type. The public
+  `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
+  fork that calls it renames the call.
 :::
 
 ### Added
@@ -66,6 +101,11 @@
   now logged as one warning (the ticket key, nothing from the ticket), the request answers as usual,
   and the session keeps its current expiry. A cache failure while logging in, reading or logging
   out still fails the request.
+- A `Text`-style `string` field whose column states no length (`[ColumnShape(ColumnShape.LongText)]`,
+  `IsJson = true`, an explicit `ColumnDataType` with no `Length`) was limited to 255 characters on
+  write although the column holds more. It has no limit now, like any column without a length; set
+  `MaxLength` on the field to have one. With a `Length` beside the `ColumnDataType`, the limit is that
+  `Length`.
 
 ### Security
 

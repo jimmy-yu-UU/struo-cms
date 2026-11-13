@@ -5,29 +5,12 @@ using Struo.Application.Configuration;
 using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
+using Struo.Infrastructure.Metadata;
 
 namespace Struo.Infrastructure.Persistence;
 
 public static class SqlSugarClientFactory
 {
-    // FieldInterface values whose content is unbounded by nature (see the EntityService hook below).
-    private static readonly HashSet<FieldInterface> ContentBearingInterfaces =
-    [
-        FieldInterface.RichText, FieldInterface.Textarea, FieldInterface.Markdown,
-        FieldInterface.Code, FieldInterface.Json
-    ];
-
-    // [CmsField] interfaces whose value is a structured aggregate stored as JSON — map them to a JSON
-    // column so SqlSugar (de)serializes the List<>/Dictionary<> automatically (jsonb-in-text). This is
-    // the multi-value selects, plus KeyValue, plus Files (List<Guid>), plus
-    // Repeater (List<TChild> of [CmsField] sub-props). Json is NOT here — it is a string
-    // holding raw JSON text and is widened to `text` by the content-bearing convention below.
-    private static readonly HashSet<FieldInterface> JsonColumnInterfaces =
-    [
-        FieldInterface.MultiSelect, FieldInterface.CheckboxGroup, FieldInterface.Tags,
-        FieldInterface.KeyValue, FieldInterface.Files, FieldInterface.Repeater
-    ];
-
     public static ISqlSugarClient Create(
         DatabaseOptions options,
         ICurrentUserAccessor currentUser,
@@ -124,6 +107,7 @@ public static class SqlSugarClientFactory
         if (ApplyJsonColumnInterfaceWidening(property, column, dbType)) return;
 
         ApplyContentBearingStringWidening(property, column, dbType);
+        ApplyStringWidth(property, column);
     }
 
     // SQLite-only: identity PK must be INTEGER (rowid alias) to auto-increment.
@@ -213,7 +197,7 @@ public static class SqlSugarClientFactory
         // lost. Pinned by
         // ColumnTypeMapTests.ColumnShape_combined_with_a_content_bearing_CmsField_is_still_allowed.
         var shapedField = property.GetCustomAttribute<CmsFieldAttribute>();
-        if (shapedField is not null && JsonColumnInterfaces.Contains(shapedField.Interface))
+        if (shapedField is not null && FieldInterfaceSets.JsonColumnInterfaces.Contains(shapedField.Interface))
         {
             throw new InvalidOperationException(
                 $"'{property.DeclaringType?.FullName}.{property.Name}' carries both [ColumnShape] and " +
@@ -263,7 +247,7 @@ public static class SqlSugarClientFactory
         || TakesZoneLessTimestamp(property);
 
     // A property that carries only a bare [SugarColumn(IsJson = true)] — no
-    // [CmsField] interface in JsonColumnInterfaces above, no [ColumnShape] — still
+    // [CmsField] interface in FieldInterfaceSets.JsonColumnInterfaces, no [ColumnShape], still
     // needs widening, but column.DataType cannot be the test for "nothing has
     // claimed this column yet": SqlSugar's own attribute processing already stamps
     // an IsJson column with its own default length (observed varchar(4000) here on
@@ -300,7 +284,7 @@ public static class SqlSugarClientFactory
     private static bool ApplyJsonColumnInterfaceWidening(PropertyInfo property, EntityColumnInfo column, DbType dbType)
     {
         var mvField = property.GetCustomAttribute<CmsFieldAttribute>();
-        if (mvField is null || !JsonColumnInterfaces.Contains(mvField.Interface)) return false;
+        if (mvField is null || !FieldInterfaceSets.JsonColumnInterfaces.Contains(mvField.Interface)) return false;
 
         column.IsJson = true;
         column.DataType = ColumnTypeMap.For(ColumnShape.LongText, dbType);
@@ -316,8 +300,7 @@ public static class SqlSugarClientFactory
     // database. Widen just these interfaces to the LongText shape. A property with
     // an explicit [ColumnShape] already returned above, before this convention runs;
     // a third-party fork's own [SugarColumn(ColumnDataType = ...)] is also
-    // respected here and wins over this convention. Plain Text fields keep
-    // SqlSugar's default varchar(255).
+    // respected here and wins over this convention.
     private static void ApplyContentBearingStringWidening(PropertyInfo property, EntityColumnInfo column, DbType dbType)
     {
         if (property.PropertyType != typeof(string)) return;
@@ -326,9 +309,16 @@ public static class SqlSugarClientFactory
         if (!string.IsNullOrEmpty(explicitDataType)) return;
 
         var cmsField = property.GetCustomAttribute<CmsFieldAttribute>();
-        if (cmsField is not null && ContentBearingInterfaces.Contains(cmsField.Interface))
+        if (cmsField is not null && FieldInterfaceSets.ContentBearingInterfaces.Contains(cmsField.Interface))
         {
             column.DataType = ColumnTypeMap.For(ColumnShape.LongText, dbType);
         }
+    }
+
+    // A string column that has a width takes it from StringColumnWidth, the rule MetadataScanner
+    // also reads for the field's default MaxLength.
+    private static void ApplyStringWidth(PropertyInfo property, EntityColumnInfo column)
+    {
+        if (StringColumnWidth.Of(property) is { } width) column.Length = width;
     }
 }
