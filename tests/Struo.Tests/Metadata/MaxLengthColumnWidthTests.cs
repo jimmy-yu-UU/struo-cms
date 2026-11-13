@@ -70,6 +70,15 @@ public sealed class MaxLengthColumnWidthTests
         [CmsField(Interface = FieldInterface.Textarea)] public string? TypedBody { get; set; }
     }
 
+    // Scanner and Of tests only: no table is ever created for this type.
+    [CmsCollection("Length only body", Name = "mlwLengthOnlyBody")]
+    public sealed class LengthOnlyBody
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(Length = 64)]
+        [CmsField(Interface = FieldInterface.Textarea)] public string? Body { get; set; }
+    }
+
     [CmsCollection("Ignored", Name = "mlwIgnored")]
     public sealed class IgnoredProperty
     {
@@ -188,6 +197,16 @@ public sealed class MaxLengthColumnWidthTests
         var typed = MetadataScanner.ScanTypes([typeof(TypedWidthAt)]).Single().Fields;
         typed.Single(f => f.Name == "typed").MaxLength.Should().Be(64);
         typed.Single(f => f.Name == "typedBody").MaxLength.Should().Be(64);
+    }
+
+    [Fact]
+    public void A_long_text_interface_with_a_Length_but_no_ColumnDataType_has_no_width()
+    {
+        StringColumnWidth.Of(typeof(LengthOnlyBody).GetProperty(nameof(LengthOnlyBody.Body))!).Should().BeNull();
+
+        var fields = MetadataScanner.ScanTypes([typeof(LengthOnlyBody)]).Single().Fields;
+
+        fields.Single(f => f.Name == "body").MaxLength.Should().BeNull();
     }
 
     [Fact]

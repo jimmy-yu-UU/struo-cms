@@ -424,7 +424,7 @@ public static class MetadataScanner
             $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength {declared} but its column is " +
             $"{width} wide. Lower MaxLength to {width} or less, or widen the column with " +
             "[SugarColumn(Length = n)] or [ColumnShape(ColumnShape.LongText)]; " +
-            "an existing table also needs a migration that widens the column.");
+            "if the table already exists with the narrower column, widening it also takes a migration.");
     }
 
     // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.
