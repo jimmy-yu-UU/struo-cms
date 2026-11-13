@@ -58,8 +58,9 @@ internal static class StruoCmsStartupChecks
         StartImageCacheMaintenance(sp, startupLogger);
     }
 
-    // Removes cache files of the earlier layout and stale temp files. File work only, so it runs in the
-    // background and never delays serving; a failure is logged and the host carries on.
+    // Removes cache files of the earlier layout, stale temp files and empty cache directories. File work
+    // only, so it runs in the background and never delays serving; a failure is logged and the host
+    // carries on.
     private static void StartImageCacheMaintenance(IServiceProvider sp, ILogger logger)
     {
         if (sp.GetRequiredService<Struo.Application.Files.IImageVariantCache>()

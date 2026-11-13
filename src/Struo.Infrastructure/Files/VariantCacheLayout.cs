@@ -61,6 +61,21 @@ internal static class VariantCacheLayout
         && IsLowerHex(name.AsSpan(2 + VariantLength, TempGuidLength), TempGuidLength)
         && name.EndsWith(TempSuffix, StringComparison.Ordinal);
 
+    /// <summary>A symbolic link or junction. The cache never descends into one or deletes through one.</summary>
+    internal static bool IsReparsePoint(FileSystemInfo entry) =>
+        (entry.Attributes & FileAttributes.ReparsePoint) != 0;
+
+    // ERROR_DIR_NOT_EMPTY on Windows, ENOTEMPTY on Linux and on macOS.
+    private static readonly int[] DirectoryNotEmptyCodes = [unchecked((int)0x80070091), 39, 66];
+
+    /// <summary>
+    /// A failure that only says another writer, purge or maintenance pass changed the tree first: the
+    /// directory is gone, or no longer empty. It is not a fault of the disk.
+    /// </summary>
+    internal static bool IsBenignRace(Exception error) =>
+        error is DirectoryNotFoundException or FileNotFoundException
+        || (error is IOException io && DirectoryNotEmptyCodes.Contains(io.HResult));
+
     internal static bool IsLowerHex(ReadOnlySpan<char> text, int length)
     {
         if (text.Length != length) return false;

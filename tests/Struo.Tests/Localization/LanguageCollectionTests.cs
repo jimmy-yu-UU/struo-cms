@@ -22,8 +22,14 @@ public class LanguageCollectionTests(ApiFactory factory) : IAsyncLifetime
     {
         if (_created.IsEmpty) return;
         var c = await _factory.CreateAuthenticatedClientAsync();
+        var failures = new List<string>();
         foreach (var id in _created)
-            await c.DeleteAsync($"/api/items/language/{id}?purge=true");
+        {
+            var res = await c.DeleteAsync($"/api/items/language/{id}?purge=true");
+            if (res.StatusCode != HttpStatusCode.NoContent) failures.Add($"{id}: {(int)res.StatusCode}");
+        }
+        if (failures.Count > 0)
+            throw new InvalidOperationException("Could not purge the languages this test created: " + string.Join(", ", failures));
     }
 
     private readonly ApiFactory _factory = factory;
@@ -175,6 +181,15 @@ public class LanguageCollectionTests(ApiFactory factory) : IAsyncLifetime
         (await ListAsync(c)).EnumerateArray().Select(r => r.GetProperty("code").GetString()).Should().Contain("en");
     }
 
+    // If GraphQL wrongly accepted the duplicate, the row it created is still purged afterwards.
+    private void TrackGraphQlCreated(string body)
+    {
+        if (Root(body).TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("createLanguage", out var created) && created.ValueKind == JsonValueKind.Object
+            && created.TryGetProperty("id", out var id))
+            _created.Add(id.ToString());
+    }
+
     [Fact]
     public async Task A_duplicate_code_over_GraphQL_answers_the_same_conflict_as_REST()
     {
@@ -186,6 +201,7 @@ public class LanguageCollectionTests(ApiFactory factory) : IAsyncLifetime
             query = "mutation { createLanguage(input: { code: \"en\", name: \"dup probe\", isDefault: false, enabled: true, sort: 50 }) { id } }"
         });
         var body = await res.Content.ReadAsStringAsync();
+        TrackGraphQlCreated(body);
 
         var error = Root(body).GetProperty("errors")[0];
         error.GetProperty("extensions").GetProperty("code").GetString()

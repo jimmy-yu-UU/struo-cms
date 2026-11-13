@@ -22,19 +22,20 @@ public sealed partial class DiskImageVariantCache
 
     // Other versions of the file are stale as soon as a newer one is written, and so are the temp files
     // of an interrupted write. Best-effort: what cannot be removed now is removed by a later write, a
-    // purge or a sweep.
+    // purge or a sweep. A failure resets the running total, because a version may be half removed; a
+    // concurrent removal of the same directory is not a failure.
     private void TidyFileDirectory(VariantCacheLayout.VariantKey written)
     {
         var fileDir = new DirectoryInfo(Path.Combine(rootPath, written.FileDir));
         try
         {
             var stale = fileDir.EnumerateDirectories()
-                .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && d.Name != written.Version)
+                .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && d.Name != written.Version
+                    && !VariantCacheLayout.IsReparsePoint(d))
                 .ToList();
             foreach (var version in stale)
             {
-                var freed = version.EnumerateFiles()
-                    .Where(f => VariantCacheLayout.IsVariantName(f.Name)).Sum(f => f.Length);
+                var freed = VariantsIn(version).Sum(f => f.Length);
                 version.Delete(recursive: true);
                 if (maxBytes > 0) AdjustTotal(-freed);
             }
@@ -46,14 +47,24 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            if (VariantCacheLayout.IsBenignRace(ex))
+            {
+                _logger.LogDebug(ex, "A concurrent change under {Path} ended an image variant tidy early.", fileDir.FullName);
+                return;
+            }
             ForgetTotal();
             _logger.LogWarning(ex, "Could not tidy the image variants under {Path}.", fileDir.FullName);
         }
     }
 
+    private static IEnumerable<FileInfo> VariantsIn(DirectoryInfo versionDir) =>
+        versionDir.EnumerateFiles()
+            .Where(f => VariantCacheLayout.IsVariantName(f.Name) && !VariantCacheLayout.IsReparsePoint(f));
+
     private static IEnumerable<FileInfo> StaleTempsIn(DirectoryInfo versionDir, DateTime cutoffUtc) =>
         versionDir.EnumerateFiles()
-            .Where(f => VariantCacheLayout.IsTempName(f.Name) && f.LastWriteTimeUtc < cutoffUtc);
+            .Where(f => VariantCacheLayout.IsTempName(f.Name) && f.LastWriteTimeUtc < cutoffUtc
+                && !VariantCacheLayout.IsReparsePoint(f));
 
     private int RemoveStaleTemps()
     {
@@ -69,23 +80,24 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not scan image cache temp files under {Root}.", rootPath);
+            LogMaintenanceFailure(ex, rootPath);
         }
         return removed;
     }
 
-    // Only <file id> and <file id>/<version> directories: never the root, never another shape.
+    // Only <file id> and <file id>/<version> directories: never the root, never another shape, never a
+    // reparse point.
     private int RemoveEmptyDirectories()
     {
         if (!Directory.Exists(rootPath)) return 0;
         var removed = 0;
         try
         {
-            foreach (var fileDir in new DirectoryInfo(rootPath).EnumerateDirectories()
-                         .Where(d => VariantCacheLayout.IsFileDirName(d.Name)).ToList())
+            foreach (var fileDir in FileDirectories().ToList())
             {
                 foreach (var version in fileDir.EnumerateDirectories()
-                             .Where(d => VariantCacheLayout.IsVersionDirName(d.Name)).ToList())
+                             .Where(d => VariantCacheLayout.IsVersionDirName(d.Name)
+                                 && !VariantCacheLayout.IsReparsePoint(d)).ToList())
                 {
                     if (TryRemoveIfEmpty(version)) removed++;
                 }
@@ -94,16 +106,18 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not scan image cache directories under {Root}.", rootPath);
+            LogMaintenanceFailure(ex, rootPath);
         }
         return removed;
     }
 
-    private IEnumerable<DirectoryInfo> VersionDirectories() =>
+    private IEnumerable<DirectoryInfo> FileDirectories() =>
         new DirectoryInfo(rootPath).EnumerateDirectories()
-            .Where(d => VariantCacheLayout.IsFileDirName(d.Name))
-            .SelectMany(d => d.EnumerateDirectories()
-                .Where(v => VariantCacheLayout.IsVersionDirName(v.Name)));
+            .Where(d => VariantCacheLayout.IsFileDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d));
+
+    private IEnumerable<DirectoryInfo> VersionDirectories() =>
+        FileDirectories().SelectMany(d => d.EnumerateDirectories()
+            .Where(v => VariantCacheLayout.IsVersionDirName(v.Name) && !VariantCacheLayout.IsReparsePoint(v)));
 
     private bool TryRemoveIfEmpty(DirectoryInfo directory)
     {
@@ -115,7 +129,7 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not remove image cache directory {Path}.", directory.FullName);
+            LogMaintenanceFailure(ex, directory.FullName);
             return false;
         }
     }
@@ -129,8 +143,17 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not remove image cache file {Path}.", file.FullName);
+            LogMaintenanceFailure(ex, file.FullName);
             return false;
         }
+    }
+
+    // A directory that vanished or is no longer empty means another writer, purge or pass got there first.
+    private void LogMaintenanceFailure(Exception ex, string path)
+    {
+        if (VariantCacheLayout.IsBenignRace(ex))
+            _logger.LogDebug(ex, "A concurrent change interrupted image cache upkeep at {Path}.", path);
+        else
+            _logger.LogWarning(ex, "Image cache upkeep could not complete at {Path}.", path);
     }
 }

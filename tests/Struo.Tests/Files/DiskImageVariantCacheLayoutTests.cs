@@ -461,4 +461,128 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         await act.Should().ThrowAsync<IOException>();
         cache.TrackedBytes.Should().Be(-1);
     }
+
+    [Fact]
+    public void Only_a_link_counts_as_a_reparse_point()
+    {
+        Directory.CreateDirectory(_root);
+        var file = Path.Combine(_root, "plain.bin");
+        File.WriteAllBytes(file, [1]);
+
+        VariantCacheLayout.IsReparsePoint(new DirectoryInfo(_root)).Should().BeFalse();
+        VariantCacheLayout.IsReparsePoint(new FileInfo(file)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_vanished_or_non_empty_directory_is_a_benign_race_and_other_failures_are_not()
+    {
+        VariantCacheLayout.IsBenignRace(new DirectoryNotFoundException()).Should().BeTrue();
+        VariantCacheLayout.IsBenignRace(new FileNotFoundException()).Should().BeTrue();
+        VariantCacheLayout.IsBenignRace(new IOException("not empty", unchecked((int)0x80070091))).Should().BeTrue();
+        VariantCacheLayout.IsBenignRace(new IOException("disk full", unchecked((int)0x80070070))).Should().BeFalse();
+        VariantCacheLayout.IsBenignRace(new UnauthorizedAccessException()).Should().BeFalse();
+    }
+
+    // Directory.Delete without recursion removes the link only, never the target.
+    private static void RemoveJunction(string link)
+    {
+        if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
+    }
+
+    private static void MakeJunction(string link, string target)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+        {
+            CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+        };
+        using var process = System.Diagnostics.Process.Start(info)!;
+        process.WaitForExit();
+        process.ExitCode.Should().Be(0, "a junction needs no elevation");
+    }
+
+    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    public async Task Maintenance_a_sweep_and_a_version_tidy_never_go_through_a_junction()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var cache = NewCache(maxBytes: 250);
+            var file = Guid.NewGuid();
+            var versionKey = new string('d', VariantCacheLayout.VersionLength);
+            var linkedVersion = Path.Combine(_root, file.ToString("D"), versionKey);
+            Directory.CreateDirectory(Path.GetDirectoryName(linkedVersion)!);
+            MakeJunction(linkedVersion, outside);
+            var outsideVariant = Path.Combine(outside, new string('e', VariantCacheLayout.VariantLength));
+            var outsideTemp = Path.Combine(outside, $".{new string('e', VariantCacheLayout.VariantLength)}.{Guid.NewGuid():N}.tmp");
+            File.WriteAllBytes(outsideVariant, new byte[400]);
+            File.WriteAllBytes(outsideTemp, [1]);
+            File.SetLastWriteTimeUtc(outsideTemp, DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+
+            cache.RunMaintenance();
+            await Put(cache, file, "1", Small, 100);          // tidy: the junction is an "other version"
+            await Put(cache, file, "1", Large, 100);
+            await Put(cache, file, "1", new ImageTransformRequest(800, null, "webp", "inside", 80), 100);   // sweep
+
+            File.Exists(outsideVariant).Should().BeTrue("a variant behind a junction is neither counted nor evicted");
+            File.Exists(outsideTemp).Should().BeTrue("a temp file behind a junction is not pruned");
+            Directory.Exists(linkedVersion).Should().BeTrue("the junction itself stays");
+        }
+        finally
+        {
+            foreach (var link in Directory.Exists(_root) ? Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories).Where(d => VariantCacheLayout.IsReparsePoint(new DirectoryInfo(d))).ToList() : [])
+                RemoveJunction(link);
+            if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    public void An_empty_directory_behind_a_junction_is_not_removed()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var file = Guid.NewGuid();
+            var linkedVersion = Path.Combine(_root, file.ToString("D"), new string('d', VariantCacheLayout.VersionLength));
+            Directory.CreateDirectory(Path.GetDirectoryName(linkedVersion)!);
+            MakeJunction(linkedVersion, outside);
+
+            NewCache().RunMaintenance();
+
+            Directory.Exists(linkedVersion).Should().BeTrue();
+            Directory.Exists(outside).Should().BeTrue();
+        }
+        finally
+        {
+            foreach (var link in Directory.Exists(_root) ? Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories).Where(d => VariantCacheLayout.IsReparsePoint(new DirectoryInfo(d))).ToList() : [])
+                RemoveJunction(link);
+            if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [WindowsOnlyFact("creates a directory junction with mklink /J")]
+    public async Task A_purge_does_not_delete_through_a_junction_named_like_a_file_id()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var file = Guid.NewGuid();
+            Directory.CreateDirectory(_root);
+            MakeJunction(DirOf(file), outside);
+            var keep = Path.Combine(outside, "keep.bin");
+            File.WriteAllBytes(keep, [1]);
+
+            await NewCache().RemoveAllForFileAsync(file, default);
+
+            File.Exists(keep).Should().BeTrue();
+        }
+        finally
+        {
+            foreach (var link in Directory.Exists(_root) ? Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories).Where(d => VariantCacheLayout.IsReparsePoint(new DirectoryInfo(d))).ToList() : [])
+                RemoveJunction(link);
+            if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
+        }
+    }
 }

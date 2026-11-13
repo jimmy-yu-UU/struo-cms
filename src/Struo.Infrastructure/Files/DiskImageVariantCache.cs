@@ -23,13 +23,17 @@ namespace Struo.Infrastructure.Files;
 /// sweep is needed. Eviction failures are logged and never reach the caller. Temp files are never
 /// counted as variants. The stale ones (older than <see cref="VariantCacheLayout.StaleTempAge"/>) are
 /// removed by <see cref="RunMaintenance"/> at start, by every eviction sweep, and, for the file written,
-/// by each write; the sweep and the start also remove empty directories of the layout.
+/// by each write; the sweep and the start also remove empty directories of the layout. A zero or negative
+/// <c>maxBytes</c> means no cap. The running total can read low when two removals of the same files
+/// overlap; the next sweep, a failed removal (which resets it so the next write counts the disk again)
+/// and a restart bring it back in line. Symbolic links and junctions are never followed or removed.
 /// </remarks>
 public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
     : IImageVariantCache
 {
     private const int MoveAttempts = 5;
     private const int MoveRetryDelayMs = 10;
+    private const int CreateDirectoryAttempts = 5;
 
     private readonly ILogger _logger = logger ?? NullLogger.Instance;
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -120,7 +124,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
                 await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
                 return;
             }
-            catch (DirectoryNotFoundException) when (attempt < MoveAttempts)
+            catch (DirectoryNotFoundException) when (attempt < CreateDirectoryAttempts)
             {
                 // the directory was removed under us: create it again
             }
@@ -159,24 +163,29 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
     private List<FileInfo> ListVariants() =>
         Directory.Exists(rootPath)
             ? new DirectoryInfo(rootPath).EnumerateDirectories()
-                .Where(d => VariantCacheLayout.IsFileDirName(d.Name))
+                .Where(d => VariantCacheLayout.IsFileDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
                 .SelectMany(VariantsOf).ToList()
             : [];
 
     private static IEnumerable<FileInfo> VariantsOf(DirectoryInfo fileDir) =>
         fileDir.EnumerateDirectories()
-            .Where(d => VariantCacheLayout.IsVersionDirName(d.Name))
-            .SelectMany(d => d.EnumerateFiles().Where(f => VariantCacheLayout.IsVariantName(f.Name)));
+            .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && !VariantCacheLayout.IsReparsePoint(d))
+            .SelectMany(VariantsIn);
 
     public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var dir = Path.Combine(rootPath, VariantCacheLayout.FileDirName(fileId));
-        if (!Directory.Exists(dir)) return Task.CompletedTask;
+        if (!Directory.Exists(dir) || VariantCacheLayout.IsReparsePoint(new DirectoryInfo(dir)))
+            return Task.CompletedTask;
         var freed = SafeLength(() => VariantsOf(new DirectoryInfo(dir)).Sum(v => v.Length));
         try
         {
             Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex) when (VariantCacheLayout.IsBenignRace(ex))
+        {
+            return Task.CompletedTask;   // another purge or pass removed it first
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

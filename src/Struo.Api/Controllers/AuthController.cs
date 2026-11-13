@@ -14,7 +14,7 @@ namespace Struo.Api.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(
     IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation,
-    SessionCookieName sessionCookie) : ControllerBase
+    SessionCookieName sessionCookie, ILogger<AuthController> logger) : ControllerBase
 {
     public sealed record LoginRequest(string Email, string Password);
 
@@ -69,7 +69,7 @@ public sealed class AuthController(
         // covered it. If the stored credential differs from the one verified above, the session is
         // revoked here and the login fails like a wrong password. The reserved attempt stays counted,
         // as for any failed login. A step that throws discards the session too, so a failed login
-        // never leaves one behind.
+        // never leaves one behind; the step's own exception is the one that propagates.
         bool confirmed;
         try
         {
@@ -77,13 +77,13 @@ public sealed class AuthController(
         }
         catch
         {
-            await DiscardNewSessionAsync();
+            await TryDiscardNewSessionAsync();
             throw;
         }
 
         if (!confirmed)
         {
-            await DiscardNewSessionAsync();
+            await TryDiscardNewSessionAsync();
             return InvalidCredentials();
         }
 
@@ -109,11 +109,23 @@ public sealed class AuthController(
 
     // Sign-out removes the ticket and its index row through the ticket store; the session cookie (and
     // its chunks) the sign-in and the sign-out queued are dropped so the client receives neither.
-    // Any other cookie on the response stays.
-    private async Task DiscardNewSessionAsync()
+    // Any other cookie on the response stays. A sign-out that fails is logged and does not replace the
+    // outcome of the login: the client still gets no session cookie, so the ticket it could not reach
+    // expires with its sliding window.
+    private async Task TryDiscardNewSessionAsync()
     {
-        await HttpContext.SignOutAsync(AuthSchemes.Cookie);
-        Response.Headers.SetCookie = SessionCookieHeaders.Without(Response.Headers.SetCookie, sessionCookie.Value);
+        try
+        {
+            await HttpContext.SignOutAsync(AuthSchemes.Cookie);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Discarding the session of a failed login did not complete.");
+        }
+        finally
+        {
+            Response.Headers.SetCookie = SessionCookieHeaders.Without(Response.Headers.SetCookie, sessionCookie.Value);
+        }
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]

@@ -46,11 +46,28 @@ public class SessionCookieHeadersTests
     }
 
     [Fact]
-    public void A_name_that_needs_escaping_matches_its_escaped_form()
+    public void A_name_with_a_plus_is_matched_as_written()
     {
-        StringValues headers = new[] { "a%20b=1; path=/", "a%20bC1=2; path=/", "keep=3" };
+        StringValues headers = new[]
+        {
+            "struo+session=abc; path=/; httponly",
+            "struo+sessionC1=part1; path=/; httponly",
+            "struo+sessionC2=part2; path=/; httponly",
+            "struo%2Bsession=keep; path=/",
+            "struo session=keep; path=/",
+            "unrelated=1; path=/",
+        };
 
-        SessionCookieHeaders.Without(headers, "a b").ToArray().Should().Equal("keep=3");
+        SessionCookieHeaders.Without(headers, "struo+session").ToArray().Should().Equal(
+            "struo%2Bsession=keep; path=/", "struo session=keep; path=/", "unrelated=1; path=/");
+    }
+
+    [Fact]
+    public void Chunk_digits_are_ASCII_digits_only()
+    {
+        StringValues headers = new[] { "struo.sessionC1=a", "struo.sessionC٣=keep" };
+
+        SessionCookieHeaders.Without(headers, Name).ToArray().Should().Equal("struo.sessionC٣=keep");
     }
 
     [Fact]
