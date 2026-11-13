@@ -15,7 +15,7 @@ namespace Struo.Application.Query;
 /// moved and every row on the incoming parent's ancestor chain with locking reads, and decides from
 /// the values those reads return, so a concurrent move of any row on the chain waits or loses a
 /// deadlock instead of slipping past. A dangling parent id ends the walk (FK existence is not this
-/// guard's concern — accepted app-only stance). MaxDepth is a defensive stop against pre-existing
+/// guard's concern - accepted app-only stance). MaxDepth is a defensive stop against pre-existing
 /// corrupt data looping forever.
 /// </summary>
 public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityRegistry registry)
@@ -53,7 +53,7 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
             if (++depth > MaxDepth)
                 throw new QueryException(
                     $"'{foreignKey}' ancestor chain exceeds {MaxDepth} levels in '{collection}'.");
-            // DeletedFilter.With: the guard reasons about FK topology, not row visibility — a
+            // DeletedFilter.With: the guard reasons about FK topology, not row visibility - a
             // trashed (soft-deleted) ancestor's FK still exists and must be walked, or a cycle
             // passing through it would escape detection (Category is ISoftDeletable).
             var parent = await repository.GetByIdLockedAsync(collection, parentId, DeletedFilter.With, ct);

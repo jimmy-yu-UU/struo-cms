@@ -45,7 +45,7 @@ public sealed class ItemPurgePipeline(
 
     /// <summary>
     /// The recursive purge core. Runs, in order: (1) the Restrict guard — same
-    /// as <see cref="CheckRestrictAsync"/> — then the foreign keys of trashed rows that still reference the
+    /// as <see cref="CheckRestrictAsync"/> - then the foreign keys of trashed rows that still reference the
     /// target through a Restrict relation are set to null, or the purge is refused when such a key cannot
     /// be null; (2) SetNull every inbound FK; (3) recursively purge every
     /// inbound Cascade row through this SAME method (<paramref name="visited"/> is a cross-recursion
