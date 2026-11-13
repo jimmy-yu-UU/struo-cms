@@ -224,6 +224,13 @@ public sealed class FileService(
     public async Task<File?> GetAsync(Guid id, CancellationToken ct = default) =>
         await db.Queryable<File>().In(id).FirstAsync(ct);
 
+    /// <summary>
+    /// Whether the file row exists. A trashed row exists (trash keeps the file and its cached variants), so
+    /// the soft-delete filter is cleared; only a purged file is absent. One primary-key lookup.
+    /// </summary>
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) =>
+        db.Queryable<File>().ClearFilter<Struo.Domain.Auditing.ISoftDeletable>().In(id).AnyAsync(ct);
+
     // This is the media library's PURGE operation (permanent, hard delete) — the default
     // FilesController DELETE is TrashAsync above; DeleteAsync is invoked via ?purge=true and must
     // therefore still find an already-trashed row, so the lookup clears the ISoftDeletable filter

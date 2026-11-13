@@ -482,7 +482,8 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     {
         VariantCacheLayout.IsBenignRace(new DirectoryNotFoundException()).Should().BeTrue();
         VariantCacheLayout.IsBenignRace(new FileNotFoundException()).Should().BeTrue();
-        VariantCacheLayout.IsBenignRace(new IOException("not empty", unchecked((int)0x80070091))).Should().BeTrue();
+        VariantCacheLayout.IsBenignRace(new IOException("not empty", ThisPlatformsNotEmptyCode)).Should().BeTrue();
+        VariantCacheLayout.IsBenignRace(new IOException("other platform", OtherPlatformsNotEmptyCode)).Should().BeFalse();
         VariantCacheLayout.IsBenignRace(new IOException("disk full", unchecked((int)0x80070070))).Should().BeFalse();
         VariantCacheLayout.IsBenignRace(new UnauthorizedAccessException()).Should().BeFalse();
     }
@@ -655,15 +656,26 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
 
     private sealed class WarningCounter : Microsoft.Extensions.Logging.ILogger
     {
-        public int Warnings;
-        public int Errors;
+        private int _warnings;
+        private int _errors;
+
+        public int Warnings => _warnings;
+
+        public int Errors => _errors;
+
+        public Exception? LastWarningError { get; private set; }
+
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
         public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
             TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) Interlocked.Increment(ref Warnings);
-            if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Error) Interlocked.Increment(ref Errors);
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+            {
+                Interlocked.Increment(ref _warnings);
+                LastWarningError = exception;
+            }
+            if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Error) Interlocked.Increment(ref _errors);
         }
     }
 
@@ -706,6 +718,8 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         cache.TrackedBytes.Should().Be(0, "nothing landed, so nothing is counted");
         logger.Warnings.Should().Be(1);
         logger.Errors.Should().Be(0);
+        logger.LastWarningError.Should().NotBeNull("the warning names the last failure");
+        VariantCacheLayout.IsMissingPath(logger.LastWarningError!).Should().BeTrue();
         FilesUnder(_root).Should().BeEmpty("no temp file is left behind");
     }
 
@@ -753,7 +767,7 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     private static Exception? Record(Action action)
     {
         try { action(); return null; }
-        catch (Exception ex) { return ex; }
+        catch (IOException ex) { return ex; }
     }
 
     [Fact]
@@ -763,5 +777,158 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         VariantCacheLayout.IsMissingPath(new DirectoryNotFoundException()).Should().BeTrue();
         VariantCacheLayout.IsMissingPath(new IOException("disk full")).Should().BeFalse();
         VariantCacheLayout.IsMissingPath(new UnauthorizedAccessException()).Should().BeFalse();
+    }
+
+    // Verified by running: Windows 0x80070091, Linux 39. macOS 66 is from the platform documentation.
+    private static int ThisPlatformsNotEmptyCode =>
+        OperatingSystem.IsWindows() ? unchecked((int)0x80070091) : OperatingSystem.IsMacOS() ? 66 : 39;
+
+    private static int OtherPlatformsNotEmptyCode => OperatingSystem.IsWindows() ? 39 : unchecked((int)0x80070091);
+
+    [Fact]
+    public void A_missing_cache_root_is_not_a_benign_race_but_a_missing_entry_below_it_is()
+    {
+        Directory.CreateDirectory(_root);
+        var vanished = new DirectoryNotFoundException();
+        VariantCacheLayout.IsBenignRace(vanished, _root).Should().BeTrue("the root is there, an entry below it vanished");
+
+        Directory.Delete(_root, recursive: true);
+
+        VariantCacheLayout.IsBenignRace(vanished, _root).Should().BeFalse("the root itself is missing");
+    }
+
+    [Fact]
+    public async Task A_retry_does_not_recreate_a_file_directory_that_a_purge_removed()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        var calls = 0;
+        cache.DirectoryEnsured = dir =>
+        {
+            Interlocked.Increment(ref calls);
+            Directory.Delete(Path.GetDirectoryName(dir)!, recursive: true);   // the purge of the file
+        };
+
+        var act = () => Put(cache, file, "1", Small, 100);
+
+        await act.Should().NotThrowAsync();
+        calls.Should().Be(1, "the second attempt finds the file directory gone and ends as a miss");
+        Directory.Exists(DirOf(file)).Should().BeFalse("nothing is recreated for a purged file");
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().BeNull();
+        cache.TrackedBytes.Should().Be(0);
+        logger.Warnings.Should().Be(0, "a purge racing a write is expected, not a warning");
+    }
+
+    [Fact]
+    public async Task A_retried_replace_counts_the_bytes_exactly()
+    {
+        var cache = NewCache(maxBytes: 10_000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        cache.TrackedBytes.Should().Be(100);
+        var attempts = 0;
+        var nested = false;
+        cache.DirectoryEnsured = _ =>
+        {
+            if (nested) return;   // the other writer's own calls are not attempts of this write
+            if (++attempts != 1) return;
+            // Another writer stores version 2 of this file: its tidy removes version 1, the directory this
+            // write has just ensured, and takes the 100 bytes off the total.
+            nested = true;
+            Put(cache, file, "2", Small, 50).GetAwaiter().GetResult();
+            nested = false;
+        };
+
+        await Put(cache, file, "1", Small, 150);
+
+        attempts.Should().Be(2);
+        var onDisk = FilesUnder(_root).Sum(f => new FileInfo(f).Length);
+        onDisk.Should().Be(150, "the landed write's own tidy removed version 2");
+        cache.TrackedBytes.Should().Be(onDisk, "the total matches the disk after a retried replace");
+    }
+
+    [Fact]
+    public async Task A_purge_that_meets_a_concurrent_writer_retries_and_resets_the_total()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = dir =>
+        {
+            if (Interlocked.Increment(ref calls) < 3)
+                throw new IOException("directory not empty", ThisPlatformsNotEmptyCode);
+            Directory.Delete(dir, recursive: true);
+        };
+
+        await cache.RemoveAllForFileAsync(file, default);
+
+        calls.Should().Be(3);
+        Directory.Exists(DirOf(file)).Should().BeFalse();
+        cache.TrackedBytes.Should().Be(-1, "bytes a writer added meanwhile are unknown, so the next write counts again");
+    }
+
+    [Fact]
+    public async Task A_purge_that_cannot_empty_the_directory_warns_and_resets_the_total()
+    {
+        var logger = new WarningCounter();
+        var cache = new DiskImageVariantCache(_root, 1000, logger);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var calls = 0;
+        cache.DeleteTree = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            throw new IOException("directory not empty", ThisPlatformsNotEmptyCode);
+        };
+
+        var act = () => cache.RemoveAllForFileAsync(file, default);
+
+        await act.Should().NotThrowAsync();
+        calls.Should().Be(DiskImageVariantCache.PurgeAttempts);
+        logger.Warnings.Should().Be(1, "entries that stay after a purge are not a benign race");
+        cache.TrackedBytes.Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task A_purge_that_finds_the_directory_gone_is_done_and_changes_no_count()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        cache.DeleteTree = dir =>
+        {
+            Directory.Delete(dir, recursive: true);
+            throw new DirectoryNotFoundException();   // a second purge got there first
+        };
+
+        await cache.RemoveAllForFileAsync(file, default);
+
+        cache.TrackedBytes.Should().Be(100, "the purge that removed it accounts for it");
+    }
+
+    [Fact]
+    public void Earlier_layout_cleanup_does_not_follow_a_link_named_like_a_shard()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        var key = "ab" + new string('1', 62);
+        var legacyLookalike = Path.Combine(outside, key);
+        File.WriteAllBytes(legacyLookalike, [1]);
+        try
+        {
+            Directory.CreateDirectory(_root);
+            MakeJunction(Path.Combine(_root, "ab"), outside);
+
+            NewCache().RunMaintenance();
+
+            File.Exists(legacyLookalike).Should().BeTrue("a link is neither followed nor cleaned through");
+        }
+        finally
+        {
+            RemoveJunction(Path.Combine(_root, "ab"));
+            if (Directory.Exists(outside)) Directory.Delete(outside, recursive: true);
+        }
     }
 }

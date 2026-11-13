@@ -47,7 +47,7 @@ public sealed partial class DiskImageVariantCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (VariantCacheLayout.IsBenignRace(ex))
+            if (VariantCacheLayout.IsBenignRace(ex, rootPath))
             {
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug(
@@ -156,7 +156,7 @@ public sealed partial class DiskImageVariantCache
     // A directory that vanished or holds a new entry means another writer, purge or pass was first.
     private void LogMaintenanceFailure(Exception ex, string path)
     {
-        if (VariantCacheLayout.IsBenignRace(ex))
+        if (VariantCacheLayout.IsBenignRace(ex, rootPath))
         {
             if (_logger.IsEnabled(LogLevel.Debug))
                 _logger.LogDebug(ex, "A concurrent change interrupted image cache upkeep at {Path}.", path);

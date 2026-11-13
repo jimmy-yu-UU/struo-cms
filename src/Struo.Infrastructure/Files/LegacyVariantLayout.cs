@@ -19,8 +19,8 @@ internal static class LegacyVariantLayout
         var removed = 0;
         foreach (var shard in SafeDirectories(root, logger).Where(d => VariantCacheLayout.IsLowerHex(d.Name, ShardLength)))
         {
-            removed += RemoveFiles(shard, logger);
-            TryRemoveIfEmpty(shard, logger);
+            removed += RemoveFiles(shard, root, logger);
+            TryRemoveIfEmpty(shard, root, logger);
         }
         return removed;
     }
@@ -32,7 +32,7 @@ internal static class LegacyVariantLayout
             && fileName.AsSpan(1).StartsWith(shardName, StringComparison.Ordinal);
     }
 
-    private static int RemoveFiles(DirectoryInfo shard, ILogger logger)
+    private static int RemoveFiles(DirectoryInfo shard, string root, ILogger logger)
     {
         var removed = 0;
         try
@@ -46,18 +46,18 @@ internal static class LegacyVariantLayout
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    Log(ex, logger, file.FullName);
+                    Log(ex, logger, root, file.FullName);
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Log(ex, logger, shard.FullName);
+            Log(ex, logger, root, shard.FullName);
         }
         return removed;
     }
 
-    private static void TryRemoveIfEmpty(DirectoryInfo shard, ILogger logger)
+    private static void TryRemoveIfEmpty(DirectoryInfo shard, string root, ILogger logger)
     {
         try
         {
@@ -65,14 +65,14 @@ internal static class LegacyVariantLayout
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Log(ex, logger, shard.FullName);
+            Log(ex, logger, root, shard.FullName);
         }
     }
 
     // A path that vanished or a directory that gained an entry is a concurrent change, not a fault.
-    private static void Log(Exception ex, ILogger logger, string path)
+    private static void Log(Exception ex, ILogger logger, string root, string path)
     {
-        if (VariantCacheLayout.IsBenignRace(ex))
+        if (VariantCacheLayout.IsBenignRace(ex, root))
         {
             if (logger.IsEnabled(LogLevel.Debug))
                 logger.LogDebug(ex, "A concurrent change interrupted the image cache cleanup at {Path}.", path);
@@ -87,11 +87,12 @@ internal static class LegacyVariantLayout
     {
         try
         {
-            return new DirectoryInfo(root).EnumerateDirectories().ToList();
+            return new DirectoryInfo(root).EnumerateDirectories()
+                .Where(d => !VariantCacheLayout.IsReparsePoint(d)).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Log(ex, logger, root);
+            Log(ex, logger, root, root);
             return [];
         }
     }

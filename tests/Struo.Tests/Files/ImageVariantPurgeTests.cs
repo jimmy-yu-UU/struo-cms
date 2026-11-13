@@ -29,11 +29,15 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private WebApplicationFactory<Program> Host(Action<IServiceCollection>? configure = null) =>
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(60);
+
+    private WebApplicationFactory<Program> Host(Action<IServiceCollection>? configure = null, long? cacheMaxBytes = null) =>
         factory.WithWebHostBuilder(b =>
         {
-            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["Struo:Files:ImageTransform:CachePath"] = _cacheRoot }));
+            var settings = new Dictionary<string, string?> { ["Struo:Files:ImageTransform:CachePath"] = _cacheRoot };
+            if (cacheMaxBytes is not null)
+                settings["Struo:Files:ImageTransform:CacheMaxBytes"] = cacheMaxBytes.Value.ToString();
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(settings));
             b.ConfigureTestServices(s => configure?.Invoke(s));
         });
 
@@ -199,5 +203,66 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
             acl.RemoveAccessRule(deny);
             shard.SetAccessControl(acl);
         }
+    }
+
+    /// <summary>Holds the first transform until released, so a delete can happen while it is in flight.</summary>
+    private sealed class GatedTransformer : IImageTransformer
+    {
+        private int _calls;
+        public readonly TaskCompletionSource Reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ImageTransformResult? Transform(ReadOnlySpan<byte> source, ImageTransformRequest req, long maxSourcePixels)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                Reached.TrySetResult();
+                Release.Task.Wait(Wait);
+            }
+            return new ImageTransformResult([1, 2, 3, 4], "image/png", 1, 1);
+        }
+    }
+
+    [Theory]
+    [InlineData("/api/files/{0}?purge=true", 0L)]
+    [InlineData("/api/items/file/{0}?purge=true", 0L)]
+    [InlineData("/api/files/{0}?purge=true", 100_000_000L)]
+    [InlineData("/api/items/file/{0}?purge=true", 100_000_000L)]
+    public async Task A_purge_that_completes_while_a_transform_is_in_flight_leaves_no_variant(string route, long cap)
+    {
+        var gate = new GatedTransformer();
+        using var host = Host(s => s.AddSingleton<IImageTransformer>(gate), cap);
+        var c = await SignedInAsync(host);
+        var id = await UploadPng(c);
+
+        var inFlight = c.GetAsync($"/api/files/{id}/content?width=64&format=png");
+        await gate.Reached.Task.WaitAsync(Wait);
+        (await c.DeleteAsync(string.Format(route, id))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        gate.Release.SetResult();
+        var response = await inFlight;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "the request that was in flight is still answered");
+        VariantCount(id).Should().Be(0, "the variant landed after the purge removed the others, so the writer removes it");
+        Directory.Exists(Path.Combine(_cacheRoot, id)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(100_000_000L)]
+    public async Task Trashing_the_file_while_a_transform_is_in_flight_keeps_the_variant(long cap)
+    {
+        var gate = new GatedTransformer();
+        using var host = Host(s => s.AddSingleton<IImageTransformer>(gate), cap);
+        var c = await SignedInAsync(host);
+        var id = await UploadPng(c);
+
+        var inFlight = c.GetAsync($"/api/files/{id}/content?width=64&format=png");
+        await gate.Reached.Task.WaitAsync(Wait);
+        (await c.DeleteAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        gate.Release.SetResult();
+        var response = await inFlight;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        VariantCount(id).Should().Be(1, "trash keeps the file, so it keeps its variants");
     }
 }

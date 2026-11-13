@@ -34,6 +34,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
     private const int MoveAttempts = 5;
     private const int MoveRetryDelayMs = 10;
     internal const int StoreAttempts = 5;
+    internal const int PurgeAttempts = 3;
 
     private readonly ILogger _logger = logger ?? NullLogger.Instance;
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -94,11 +95,10 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         // stats the final path either sees nothing or the complete file — never a partial one.
         var tempPath = Path.Combine(dir, VariantCacheLayout.TempName(parsed.Variant));
         if (maxBytes > 0 && !TrySeed()) return;
-        var replaced = ExistingLength(path);
-        bool stored;
+        long? replaced;
         try
         {
-            stored = await StoreAsync(dir, tempPath, path, bytes, ct);
+            replaced = await StoreAsync(dir, tempPath, path, bytes, ct);
         }
         catch
         {
@@ -106,37 +106,45 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
             throw;
         }
 
-        if (!stored) return;
+        if (replaced is null) return;
         TidyFileDirectory(parsed);
-        if (maxBytes > 0 && AdjustTotal(bytes.Length - replaced) > maxBytes) Sweep();
+        if (maxBytes > 0 && AdjustTotal(bytes.Length - replaced.Value) > maxBytes) Sweep();
     }
 
-    // Creates the directory, writes the temp file and moves it into place. The directory can legitimately
-    // vanish at any step (a purge of the file, another version's write, a maintenance pass), so a missing
-    // path starts the attempt again; when the attempts run out the variant is dropped (the cache is an
-    // optimization) and logged once. Platform differences do not matter: both "directory not found" and
-    // "file not found" mean the same here.
-    private async Task<bool> StoreAsync(string dir, string tempPath, string path, byte[] bytes, CancellationToken ct)
+    // Creates the directory, writes the temp file and moves it into place; returns the length of the file
+    // the move replaced, or null when the variant was not stored. The directory can legitimately vanish at
+    // any step (a purge of the file, another version's write, a maintenance pass), so a missing path
+    // starts the attempt again. The replaced length is measured inside the attempt, because whatever
+    // removed the directory already took the old file off the total. From the second attempt on, a file
+    // directory that is gone means the file was purged (the one other remover, a sweep of an hour-old
+    // empty directory, gives the same answer), so nothing is recreated and the write is a miss. When the
+    // attempts run out the variant is dropped (the cache is an optimization) and logged once. Both
+    // "directory not found" and "file not found" mean the same here, whatever the platform throws.
+    private async Task<long?> StoreAsync(string dir, string tempPath, string path, byte[] bytes, CancellationToken ct)
     {
+        Exception? last = null;
         for (var attempt = 1; attempt <= StoreAttempts; attempt++)
         {
+            if (attempt > 1 && !Directory.Exists(Path.GetDirectoryName(dir)!)) return null;
             try
             {
                 Directory.CreateDirectory(dir);
                 DirectoryEnsured?.Invoke(dir);
                 await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
-                return await MoveIntoPlaceAsync(tempPath, path, ct);
+                var replaced = ExistingLength(path);
+                return await MoveIntoPlaceAsync(tempPath, path, ct) ? replaced : null;
             }
             catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex))
             {
+                last = ex;
                 TryDeleteTemp(tempPath);
             }
         }
 
         if (_logger.IsEnabled(LogLevel.Warning))
             _logger.LogWarning(
-                "Could not store image variant {Path}: its directory kept disappearing; it is served uncached.", path);
-        return false;
+                last, "Could not store image variant {Path}: its directory kept disappearing; it is served uncached.", path);
+        return null;
     }
 
     // The first capped write counts what is already on disk; later writes and evictions adjust the
@@ -187,25 +195,58 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         if (!Directory.Exists(dir) || VariantCacheLayout.IsReparsePoint(new DirectoryInfo(dir)))
             return Task.CompletedTask;
         var freed = SafeLength(() => VariantsOf(new DirectoryInfo(dir)).Sum(v => v.Length));
-        try
+        IOException? notEmpty = null;
+        var retried = false;
+        for (var attempt = 1; attempt <= PurgeAttempts; attempt++)
         {
-            Directory.Delete(dir, recursive: true);
+            try
+            {
+                DeleteTree(dir);
+                notEmpty = null;
+                break;
+            }
+            catch (Exception ex) when (VariantCacheLayout.IsMissingPath(ex))
+            {
+                return Task.CompletedTask;   // another purge removed it first, and accounted for it
+            }
+            catch (IOException ex) when (VariantCacheLayout.IsDirectoryNotEmpty(ex))
+            {
+                notEmpty = ex;   // a writer recreated an entry while the tree was being removed: try again
+                retried = true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
+                throw;
+            }
         }
-        catch (Exception ex) when (VariantCacheLayout.IsBenignRace(ex))
-        {
-            return Task.CompletedTask;   // another purge or pass removed it first
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
-            throw;
-        }
-        if (maxBytes > 0) AdjustTotal(-freed);
+
+        FinishPurgeAccounting(dir, freed, retried, notEmpty);
         return Task.CompletedTask;
+    }
+
+    // Bytes a writer added while the purge ran are unknown, so any retry resets the total for a recount;
+    // entries that remain after the last attempt are a warning (a purge must not leave variants behind).
+    private void FinishPurgeAccounting(string dir, long freed, bool retried, IOException? remainingFailure)
+    {
+        if (remainingFailure is not null)
+        {
+            ForgetTotal();
+            if (_logger.IsEnabled(LogLevel.Warning))
+                _logger.LogWarning(remainingFailure, "Image variants of a purged file remain under {Path}.", dir);
+            return;
+        }
+
+        if (maxBytes <= 0) return;
+        if (retried) ForgetTotal();
+        else AdjustTotal(-freed);
     }
 
     /// <summary>Test seam: called with the variant's directory once it exists and before the temp file is written.</summary>
     internal Action<string>? DirectoryEnsured { get; set; }
+
+    /// <summary>Test seam: removes a file's directory tree for a purge.</summary>
+    internal Action<string> DeleteTree { get; set; } = static dir => Directory.Delete(dir, recursive: true);
 
     internal long TrackedBytes => Interlocked.Read(ref _totalBytes);
 

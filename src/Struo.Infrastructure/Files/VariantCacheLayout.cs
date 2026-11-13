@@ -81,8 +81,14 @@ internal static class VariantCacheLayout
     internal static bool IsReparsePoint(FileSystemInfo entry) =>
         (entry.Attributes & FileAttributes.ReparsePoint) != 0;
 
-    // ERROR_DIR_NOT_EMPTY on Windows, ENOTEMPTY on Linux and on macOS.
-    private static readonly int[] DirectoryNotEmptyCodes = [unchecked((int)0x80070091), 39, 66];
+    // "Directory not empty" as .NET reports it: ERROR_DIR_NOT_EMPTY on Windows (0x80070091) and ENOTEMPTY
+    // on Linux (39), both observed by running; ENOTEMPTY on macOS (66) is from the platform documentation.
+    // Another platform has no code here, so its failure is not treated as a race.
+    private static int? DirectoryNotEmptyCode =>
+        OperatingSystem.IsWindows() ? unchecked((int)0x80070091)
+        : OperatingSystem.IsLinux() ? 39
+        : OperatingSystem.IsMacOS() ? 66
+        : null;
 
     /// <summary>
     /// A failure that only says another writer, purge or maintenance pass changed the tree first: the
@@ -90,7 +96,17 @@ internal static class VariantCacheLayout
     /// </summary>
     internal static bool IsBenignRace(Exception error) =>
         error is DirectoryNotFoundException or FileNotFoundException
-        || (error is IOException io && DirectoryNotEmptyCodes.Contains(io.HResult));
+        || (error is IOException io && IsDirectoryNotEmpty(io));
+
+    /// <summary>
+    /// <see cref="IsBenignRace(Exception)"/> for a failure under <paramref name="rootPath"/>: when the cache
+    /// root itself is missing (an unmounted volume, say) nothing raced, so it is not benign.
+    /// </summary>
+    internal static bool IsBenignRace(Exception error, string rootPath) =>
+        IsBenignRace(error) && Directory.Exists(rootPath);
+
+    internal static bool IsDirectoryNotEmpty(IOException error) =>
+        DirectoryNotEmptyCode is { } code && error.HResult == code;
 
     internal static bool IsLowerHex(ReadOnlySpan<char> text, int length)
     {
