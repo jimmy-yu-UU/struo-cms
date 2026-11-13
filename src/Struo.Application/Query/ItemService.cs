@@ -360,12 +360,14 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            // Self-referencing tree collections: lock the row and find out whether the update changes the
+            // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
+            // movers form a deadlock the database detects.
+            var moves = await cycleGuard.LockMovedRowAsync(collection, meta, existing, ct);
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
-            // Self-referencing tree collections: reject a parentId that points at the item itself or one of
-            // its descendants. It runs after the row write, so each mover holds its own row's write lock
-            // before it waits on a chain row; opposite movers then form a deadlock the database detects.
-            await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
+            // Reject a parentId that points at the item itself or one of its descendants.
+            await cycleGuard.EnsureNoCycleAsync(collection, moves, ct);
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (a revert); every other write path stays strict.

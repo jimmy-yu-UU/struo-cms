@@ -17,7 +17,12 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
 
     // Root-row reads (QueryAsync and GetByIdAsync); WhereIn expansion lookups are counted apart.
     public int RootReads => _rootReads;
-    public void ResetCount() { _whereInCalls = 0; _rootReads = 0; }
+    public void ResetCount() { _whereInCalls = 0; _rootReads = 0; _lockedReads.Clear(); }
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Collection, string Id)> _lockedReads = [];
+
+    /// <summary>Every locking read, in order, as (collection, id).</summary>
+    public IReadOnlyList<(string Collection, string Id)> LockedReads => [.. _lockedReads];
 
     public Task<IReadOnlyList<object>> QueryWhereInAsync(
         string collection, string property, IReadOnlyList<object> values, CancellationToken ct = default)
@@ -69,6 +74,7 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
     {
         System.Threading.Interlocked.Increment(ref _rootReads);
+        _lockedReads.Enqueue((collection, id));
         return inner.GetByIdLockedAsync(collection, id, deleted, ct);
     }
 
