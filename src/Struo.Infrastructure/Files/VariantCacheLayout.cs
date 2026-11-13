@@ -85,11 +85,13 @@ internal static class VariantCacheLayout
     // on Linux (39), both observed by running; ENOTEMPTY on macOS and FreeBSD (66) is from the platform
     // documentation, not observed.
     // Another platform has no code here, so its failure is not treated as a race.
-    private static int? DirectoryNotEmptyCode =>
-        OperatingSystem.IsWindows() ? unchecked((int)0x80070091)
-        : OperatingSystem.IsLinux() ? 39
-        : OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD() ? 66
-        : null;
+    private static int? DirectoryNotEmptyCode()
+    {
+        if (OperatingSystem.IsWindows()) return unchecked((int)0x80070091);
+        if (OperatingSystem.IsLinux()) return 39;
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD()) return 66;
+        return null;
+    }
 
     /// <summary>
     /// A failure that only says another writer, purge or maintenance pass changed the tree first: the
@@ -107,7 +109,7 @@ internal static class VariantCacheLayout
         IsBenignRace(error) && Directory.Exists(rootPath);
 
     internal static bool IsDirectoryNotEmpty(IOException error) =>
-        DirectoryNotEmptyCode is { } code && error.HResult == code;
+        DirectoryNotEmptyCode() is { } code && error.HResult == code;
 
     internal static bool IsLowerHex(ReadOnlySpan<char> text, int length)
     {

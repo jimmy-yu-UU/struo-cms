@@ -780,8 +780,15 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     }
 
     // Verified by running: Windows 0x80070091, Linux 39. macOS 66 is from the platform documentation.
-    private static int ThisPlatformsNotEmptyCode =>
-        OperatingSystem.IsWindows() ? unchecked((int)0x80070091) : OperatingSystem.IsMacOS() ? 66 : 39;
+    private static int ThisPlatformsNotEmptyCode
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows()) return unchecked((int)0x80070091);
+            if (OperatingSystem.IsMacOS()) return 66;
+            return 39;
+        }
+    }
 
     private static int OtherPlatformsNotEmptyCode => OperatingSystem.IsWindows() ? 39 : unchecked((int)0x80070091);
 
