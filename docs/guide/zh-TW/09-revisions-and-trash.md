@@ -219,13 +219,20 @@ payload 完全一樣，因此除了項目本身，也要有 junction collection 
 7. 清掉它的版本紀錄。
 8. 刪掉這一列本身。
 
-垃圾桶裡的列不擋清除。第 2 步只比對垃圾桶裡的列，對每一列只改那一個外鍵，不動版本號與稽核欄位，不留
-版本紀錄，也不發變更通知；之後復原那一列，它的外鍵就是 `null`。第 1 步與第 2 步之間不鎖列，所以檢查
-之後才由另一個交易新建或復原的參照列不在這一步的範圍內，競速的情形見[第 8 章](08-relations.md)。外鍵
-不可為 `null` 時，清除回 `409 CONFLICT`，什麼都沒刪也沒改，訊息點名垃圾桶裡有幾筆哪個集合的項目
-參照它：`Cannot delete '{collection}/{id}': {n} trashed '{sourceCollection}' item(s) reference it
-and the reference cannot be cleared. Delete them permanently first.` 沒在垃圾桶的參照列擋下清除；
-沒在垃圾桶與在垃圾桶的參照列同時存在時，什麼都不會改。復原不檢查參照。
+垃圾桶裡的列不擋清除。第 2 步只比對垃圾桶裡的列，處理方式看外鍵能不能為 `null`。能不能，以欄位本
+身為準，也就是 ORM 建欄位時用的資訊：
+
+- 可為 `null`：外鍵設成 `null`。只改這一個外鍵，不動版本號與稽核欄位，不留版本紀錄，也不發變更通
+  知。之後復原那一列，它的外鍵就是 `null`。
+- 不可為 `null`：清除回 `409 CONFLICT`，什麼都沒刪也沒改。訊息點名垃圾桶裡有幾筆哪個集合的項目參
+  照它：`Cannot delete '{collection}/{id}': {n} trashed '{sourceCollection}' item(s) reference it
+  and the reference cannot be cleared. Delete them permanently first.`
+
+沒在垃圾桶的參照列擋下清除。沒在垃圾桶與在垃圾桶的參照列同時存在時，什麼都不會改。復原不檢查參
+照。
+
+第 1 步與第 2 步之間不鎖列。檢查之後才由另一個交易新建或復原的參照列，不在第 2 步的範圍內，競速
+的情形見[第 8 章](08-relations.md)。
 
 核心的 `File.FolderId` 可為 `null`：清除一個資料夾後，垃圾桶裡原本放在其中的檔案復原時會出現在媒體庫
 根目錄。核心與範例沒有外鍵不可為 `null` 的限制式關聯。

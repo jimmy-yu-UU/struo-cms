@@ -102,11 +102,12 @@ GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀
 | `SEARCH_UNAVAILABLE` | 503 | 已註冊的搜尋提供者自己回應失敗 |
 | `IMAGE_TRANSFORM_BUSY` | 503 | 在佇列逾時內沒有圖片轉換名額空出來 |
 
-- `CONFLICT` 涵蓋被關聯擋下的刪除、使用者 email 重複、資料庫唯一鍵衝突，以及其他一般 409。資料庫
-  把某個請求選為死結犧牲者時（PostgreSQL `40P01`、MySQL 與 MariaDB `1213`、SQL Server `1205`，另有
-  MariaDB `1020`），也回 `409`，訊息固定：`The request lost a database deadlock.` 死結發生在寫入交易
-  裡時，什麼都沒寫入，重送即可。提交之後才做的工作（寫入攔截器的 `AfterCommitAsync`）遇到死結，同樣
-  回這個 `409`，但寫入已經生效，重送前先確認。鎖等待逾時不在內。
+- `CONFLICT` 涵蓋被關聯擋下的刪除、使用者 email 重複、資料庫唯一鍵衝突，以及其他一般 409。
+  資料庫把某個請求選為死結犧牲者時也回 `409`，訊息固定：`The request lost a database deadlock.`
+  錯誤碼：PostgreSQL `40P01`、MySQL 與 MariaDB `1213`、SQL Server `1205`、MariaDB 另有 `1020`。
+  鎖等待逾時不在內。死結發生的位置決定寫入有沒有生效：
+  - 在寫入交易裡：什麼都沒寫入，重送即可。
+  - 在提交之後的工作（寫入攔截器的 `AfterCommitAsync`）：寫入已經生效，重送前先確認。
 - `LAST_SUPER_ADMIN` 是拒絕把超級管理員角色裡最後一個啟用中的帳號移走：停用、刪除或移出角色都算
   （[第 17 章](17-roles-and-permissions.md)）。它跟 `CONFLICT` 一樣是 `409`，有自己的代碼，用戶端才能
   把原因說清楚。

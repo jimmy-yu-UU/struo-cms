@@ -93,34 +93,53 @@
   assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
-- A request the database picks as a deadlock victim answers `409 CONFLICT` with the fixed message
-  `The request lost a database deadlock.` instead of `500`: PostgreSQL `40P01`, MySQL and MariaDB
-  `1213`, SQL Server `1205`, and MariaDB `1020` (record changed since last read). It applies to
-  every write, not only tree moves. A deadlock inside the write transaction writes nothing; one
-  raised by work done after the commit (a write interceptor's `AfterCommitAsync`) answers the same
-  `409` with the write already applied, so check before sending it again. A client or monitor that
-  treats `500` as the signal for a lost deadlock handles `409` instead. Lock wait timeouts and
-  SQLite's `database is locked` are unchanged.
-- The self-reference cycle check runs inside the write transaction, after the row is written, and
-  takes row locks on the moved row and every row of the parent chain. `SelfReferenceCycleGuard`
-  must be called inside a transaction. Because the check now follows the row write, several errors
-  change order: an update with a stale `version` that would also form a cycle answers
-  `409 VERSION_CONFLICT` instead of `400`; one whose row another request deleted after it was loaded
-  answers `404` instead of `400`; one whose row write hits a unique-key violation answers
-  `409 CONFLICT` instead of `400`. The cycle check can itself lose a deadlock and answer `409`.
-- `IItemRepository` gains four members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
-  `SetForeignKeyNullForTrashedAsync` and `IsForeignKeyNullable`. Their defaults throw
-  `NotSupportedException`, like the interface's other purge primitives. A fork that implements or
-  wraps `IItemRepository` implements or forwards all four, or updates and purges in
-  self-referencing collections fail. `GetByIdLockedAsync` must be called inside a transaction and
-  throws `InvalidOperationException` without one.
-- Purging an item whose trashed rows still point at it through an `OnDelete.Restrict` relation
-  sets their foreign key to `null` in the purge transaction, where it used to leave the key pointing
-  at a row that no longer existed. When that foreign key cannot be null, the purge answers
-  `409 CONFLICT` and changes nothing until those trashed rows are purged. A fork with a
-  soft-deletable collection that has such a non-null key checks its purge flows; the core and the
-  sample have none. Whether a key can be cleared follows the column itself, as the ORM builds it
-  (nullable annotations and `[SugarColumn(IsNullable = ...)]`).
+- A request the database picks as a deadlock victim now answers `409 CONFLICT`, where it used to
+  answer `500`. The error codes per database:
+  - PostgreSQL: `40P01`
+  - MySQL and MariaDB: `1213`
+  - SQL Server: `1205`
+  - MariaDB also: `1020` (record changed since last read)
+
+  The message is fixed: `The request lost a database deadlock.` This holds for every write, not
+  only tree moves. A deadlock inside the write transaction writes nothing. A deadlock in work done
+  after the commit (a write interceptor's `AfterCommitAsync`) leaves the write applied, so check
+  before sending the request again. A client or monitor that treats `500` as the deadlock signal
+  handles `409` instead. Lock wait timeouts and SQLite's `database is locked` are unchanged.
+- The self-reference cycle check runs inside the write transaction and uses row locks. It is now
+  two steps: `SelfReferenceCycleGuard.LockMovedRowAsync` before the row write and
+  `EnsureNoCycleAsync` after it (its signature changed). Both must be called inside a transaction.
+  Because the check follows the row write, some answers change:
+  - A stale `version` plus a cycle: `409 VERSION_CONFLICT`, where it used to be `400`.
+  - A row another request deleted after it was loaded, plus a cycle: `404`, where it used to be
+    `400`.
+  - A unique-key violation on the row write, plus a cycle: `409 CONFLICT`, where it used to be
+    `400`.
+  - The cycle check itself can lose a deadlock: `409`.
+
+  An update that does not change the self-reference key locks only the row being updated.
+  An update that changes it also locks the whole ancestor chain above the new parent.
+- `IItemRepository` gains four members. Their defaults throw `NotSupportedException`:
+  - `GetByIdLockedAsync`: reads one row inside a transaction and locks it, returning the latest
+    committed values. It throws `InvalidOperationException` without a transaction.
+  - `CountTrashedWhereInAsync`: counts the matching rows in the trash with a COUNT, loading no
+    entity.
+  - `SetForeignKeyNullForTrashedAsync`: sets the foreign key to `null` on rows in the trash only.
+  - `IsForeignKeyNullable`: says whether the column accepts NULL, from the ORM's column metadata.
+
+  A fork that implements or wraps `IItemRepository` implements or forwards all four.
+  Otherwise updates in self-referencing collections, and purges of rows that soft-deletable
+  collections reference, fail.
+- Purging an item now deals with the rows in the trash that point at it through an
+  `OnDelete.Restrict` relation. Their foreign key used to stay, pointing at a row that no longer
+  existed.
+  - A nullable key is set to `null` in the purge transaction.
+  - A key that cannot be null makes the purge answer `409 CONFLICT` and change nothing, until those
+    rows are purged.
+  - Whether a key can be null follows the column itself, as the ORM builds it (nullable annotations
+    and `[SugarColumn(IsNullable = ...)]`).
+
+  A fork with a soft-deletable collection that has such a non-null key checks its purge flows.
+  The core and the sample have none.
 :::
 
 ### Added
@@ -128,9 +147,12 @@
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
 - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
-  `DomainErrorMap.DeadlockMessage`, and four `IItemRepository` members (`GetByIdLockedAsync`,
-  `CountTrashedWhereInAsync`, `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`). A class
-  that implements or wraps `IItemRepository` must implement or forward all four; see Breaking.
+  `DomainErrorMap.DeadlockMessage`.
+  `SelfReferenceCycleGuard` gains `LockMovedRowAsync` and the type `SelfReferenceMove`.
+  `IItemRepository` gains four members (`GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
+  `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`).
+  A class that implements or wraps `IItemRepository` must implement or forward all four; see
+  Breaking.
 
 ### Fixed
 
