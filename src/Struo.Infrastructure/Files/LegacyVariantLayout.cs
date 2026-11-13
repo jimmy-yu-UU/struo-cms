@@ -70,7 +70,7 @@ internal static class LegacyVariantLayout
     }
 
     // A path that vanished or a directory that gained an entry is a concurrent change, not a fault.
-    private static void Log(Exception ex, ILogger logger, string root, string path)
+    internal static void Log(Exception ex, ILogger logger, string root, string path)
     {
         if (VariantCacheLayout.IsBenignRace(ex, root))
         {

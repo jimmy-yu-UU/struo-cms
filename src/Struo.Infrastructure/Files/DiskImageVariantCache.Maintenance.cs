@@ -154,7 +154,7 @@ public sealed partial class DiskImageVariantCache
     }
 
     // A directory that vanished or holds a new entry means another writer, purge or pass was first.
-    private void LogMaintenanceFailure(Exception ex, string path)
+    internal void LogMaintenanceFailure(Exception ex, string path)
     {
         if (VariantCacheLayout.IsBenignRace(ex, rootPath))
         {

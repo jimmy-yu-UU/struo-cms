@@ -107,6 +107,7 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
         }
 
         if (replaced is null) return;
+        VariantLanded?.Invoke(dir);
         TidyFileDirectory(parsed);
         if (maxBytes > 0 && AdjustTotal(bytes.Length - replaced.Value) > maxBytes) Sweep();
     }
@@ -244,6 +245,9 @@ public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes
 
     /// <summary>Test seam: called with the variant's directory once it exists and before the temp file is written.</summary>
     internal Action<string>? DirectoryEnsured { get; set; }
+
+    /// <summary>Test seam: called with the variant's directory once the variant has landed, before the tidy.</summary>
+    internal Action<string>? VariantLanded { get; set; }
 
     /// <summary>Test seam: removes a file's directory tree for a purge.</summary>
     internal Action<string> DeleteTree { get; set; } = static dir => Directory.Delete(dir, recursive: true);

@@ -13,6 +13,21 @@ public sealed class WindowsOnlyFactAttribute : FactAttribute
     }
 }
 
+/// <summary>
+/// A <see cref="FactAttribute"/> for tests that remove permissions from a directory with a Unix file mode. It
+/// is skipped on Windows and while the process is privileged (root ignores file modes), so it runs wherever
+/// the suite runs as a normal user, as CI does.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class UnprivilegedUnixFactAttribute : FactAttribute
+{
+    public UnprivilegedUnixFactAttribute(string reason)
+    {
+        if (OperatingSystem.IsWindows()) Skip = $"Unix-only: {reason}";
+        else if (Environment.IsPrivilegedProcess) Skip = $"Needs an unprivileged user (root ignores file modes): {reason}";
+    }
+}
+
 /// <summary>A <see cref="FactAttribute"/> that is skipped unless the backend keeps a zone with its instants
 /// (PostgreSQL and SQL Server).</summary>
 [AttributeUsage(AttributeTargets.Method)]

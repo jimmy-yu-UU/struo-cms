@@ -265,4 +265,42 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         VariantCount(id).Should().Be(1, "trash keeps the file, so it keeps its variants");
     }
+
+    /// <summary>A cache whose removal of a file's variants always fails; everything else is the real thing.</summary>
+    private sealed class RemovalFailsCache(IImageVariantCache inner) : IImageVariantCache
+    {
+        public string DeriveKey(Guid fileId, string fileVersion, ImageTransformRequest req) =>
+            inner.DeriveKey(fileId, fileVersion, req);
+
+        public Task<byte[]?> TryGetAsync(string key, CancellationToken ct) => inner.TryGetAsync(key, ct);
+
+        public Task SetAsync(string key, byte[] bytes, CancellationToken ct) => inner.SetAsync(key, bytes, ct);
+
+        public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct) =>
+            throw new IOException("variant removal failed");
+    }
+
+    [Fact]
+    public async Task A_failing_variant_removal_after_a_purge_in_flight_is_logged_and_the_response_still_succeeds()
+    {
+        var gate = new GatedTransformer();
+        var controllerLog = new WarningCollector<Struo.Api.Controllers.FilesController>();
+        using var host = Host(s =>
+        {
+            s.AddSingleton<IImageTransformer>(gate);
+            s.AddSingleton<IImageVariantCache>(new RemovalFailsCache(new Struo.Infrastructure.Files.DiskImageVariantCache(_cacheRoot)));
+            s.AddSingleton<ILogger<Struo.Api.Controllers.FilesController>>(controllerLog);
+        });
+        var c = await SignedInAsync(host);
+        var id = await UploadPng(c);
+
+        var inFlight = c.GetAsync($"/api/files/{id}/content?width=64&format=png");
+        await gate.Reached.Task.WaitAsync(Wait);
+        (await c.DeleteAsync($"/api/files/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        gate.Release.SetResult();
+        var response = await inFlight;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "a failed cleanup costs disk, not the response");
+        controllerLog.Warnings.Should().ContainSingle(w => w.Contains(id, StringComparison.OrdinalIgnoreCase));
+    }
 }
