@@ -72,34 +72,40 @@
   `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
   或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
   敗；呼叫它的 fork 要改名。
-- 資料庫把某個寫入選為死結犧牲者時，改回固定訊息的 `409 CONFLICT`，原本是 `500`：PostgreSQL
-  `40P01`、MySQL 與 MariaDB `1213`、SQL Server `1205`，以及 MariaDB `1020`（紀錄自上次讀取後
-  已變動）。這對每一個寫入都成立，不只樹狀搬移，而且什麼都沒寫入。把 `500` 當成死結輸家訊號的用戶
-  端或監控，要改成處理 `409`，並可重送請求。鎖等待逾時與 SQLite 的 `database is locked` 不變。
+- 資料庫把某個請求選為死結犧牲者時，改回固定訊息 `The request lost a database deadlock.` 的
+  `409 CONFLICT`，原本是 `500`：PostgreSQL `40P01`、MySQL 與 MariaDB `1213`、SQL Server `1205`，
+  以及 MariaDB `1020`（紀錄自上次讀取後已變動）。這對每一個寫入都成立，不只樹狀搬移。死結發生在寫入
+  交易裡時，什麼都沒寫入；提交之後才做的工作（寫入攔截器的 `AfterCommitAsync`）遇到死結，同樣回
+  `409`，但寫入已經生效，重送前先確認。把 `500` 當成死結輸家訊號的用戶端或監控，要改成處理 `409`。
+  鎖等待逾時與 SQLite 的 `database is locked` 不變。
 - 自我參照的循環檢查改在寫入交易裡、列寫入之後執行，並對被搬動的那一列與父鏈上的每一列加列鎖。
-  `SelfReferenceCycleGuard` 必須在交易裡呼叫。`IItemRepository` 新增 `GetByIdLockedAsync`，預設
-  實作是一般讀取；fork 自己實作、要服務並行寫入的，要用鎖定讀取覆寫它，否則守衛會依另一個交易
-  還能改動的值判斷。帶著過期 `version` 又會形成循環的更新，改回 `409 VERSION_CONFLICT`，原本是
-  `400`。
+  `SelfReferenceCycleGuard` 必須在交易裡呼叫。檢查移到列寫入之後，幾種錯誤的先後跟著變：帶著過期
+  `version` 又會形成循環的更新回 `409 VERSION_CONFLICT`，原本是 `400`；列在載入之後被別的請求刪掉、
+  又會形成循環的更新回 `404`，原本是 `400`；列寫入撞到唯一鍵衝突、又會形成循環的更新回
+  `409 CONFLICT`，原本是 `400`。循環檢查本身也可能輸掉死結，回 `409`。
+- `IItemRepository` 新增四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
+  `SetForeignKeyNullForTrashedAsync` 與 `IsForeignKeyNullable`。預設實作都丟
+  `NotSupportedException`，跟同一介面的其他清除原語一致。自己實作或包裝 `IItemRepository` 的 fork
+  要實作或轉送這四個，否則自我參照集合的更新與清除會失敗。`GetByIdLockedAsync` 要在交易裡呼叫，沒
+  有交易會丟 `InvalidOperationException`。
 - 清除一個項目時，垃圾桶裡仍以 `OnDelete.Restrict` 關聯指向它的列，外鍵在清除的交易裡被設成
   `null`，原本會讓外鍵留著、指向已經不存在的列。外鍵不可為 `null` 時，清除回 `409 CONFLICT`，
   什麼都不改，直到那些垃圾桶裡的列被清除。有可軟刪除集合、且帶這種不可為 `null` 外鍵的 fork，要
-  檢查自己的清除流程；核心與範例都沒有。
+  檢查自己的清除流程；核心與範例都沒有。能不能清成 `null`，以欄位本身是否允許 NULL 為準，也就是 ORM
+  建欄位時用的那份資訊（nullable 註記與 `[SugarColumn(IsNullable = ...)]`）。
 :::
 
 ### 新增
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
+- 新增 `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
+  `DomainErrorMap.DeadlockMessage`，以及 `IItemRepository` 的四個成員（`GetByIdLockedAsync`、
+  `CountTrashedWhereInAsync`、`SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`）。自己實作
+  或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
 
 ### 修正
 
-- 清除一個資料夾時，垃圾桶裡原本放在其中的檔案不會被動到：復原那個檔案，`folderId` 指向不存在的
-  資料夾，檔案既不在媒體庫根目錄，也不在垃圾桶。現在清除會清掉那個外鍵，復原的檔案出現在根目錄。
-  所有外鍵可為 `null` 的 `Restrict` 關聯都一樣，透過 `DELETE /api/files/{id}?purge=true` 清除檔案
-  也一樣。
-- 樹狀集合（例如媒體資料夾）裡兩個方向相反的同時搬動，可能都通過循環檢查，讓兩個資料夾互為父層。
-  現在檢查會鎖住整條父鏈，其中至多一個成功，另一個回 `400` 或 `409`。
 - 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
   MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端
   不同），變體因此能登入同一個帳號，登入鎖定的計數卻落在另一個鍵上，鎖定擋不住它。現在變體的
@@ -117,6 +123,12 @@
   又沒有 `Length`）的 `Text` 類 `string` 欄位，原本寫入時被限制在 255 字元，欄位其實放得下更多。
   現在跟其他沒有長度的欄位一樣不設上限，要有上限就在欄位上設 `MaxLength`；`ColumnDataType` 旁有
   `Length` 時，上限就是那個 `Length`。
+- 清除一個資料夾時，垃圾桶裡原本放在其中的檔案不會被動到：復原那個檔案，`folderId` 指向不存在的
+  資料夾，檔案既不在媒體庫根目錄，也不在垃圾桶。現在清除會清掉那個外鍵，復原的檔案出現在根目錄。
+  所有外鍵可為 `null` 的 `Restrict` 關聯都一樣，透過 `DELETE /api/files/{id}?purge=true` 清除檔案
+  也一樣。
+- 樹狀集合（例如媒體資料夾）裡兩個方向相反的同時搬動，可能都通過循環檢查，讓兩個資料夾互為父層。
+  現在檢查會鎖住整條父鏈，其中至多一個成功，另一個回 `400` 或 `409`。
 
 ### 安全性
 

@@ -219,8 +219,9 @@ payload 完全一樣，因此除了項目本身，也要有 junction collection 
 7. 清掉它的版本紀錄。
 8. 刪掉這一列本身。
 
-垃圾桶裡的列不擋清除，但清除之後沒有任何一列指向不存在的對象。第 2 步對垃圾桶裡的列只改那一個外
-鍵，不動版本號與稽核欄位，不留版本紀錄，也不發變更通知；之後復原那一列，它的外鍵就是 `null`。外鍵
+垃圾桶裡的列不擋清除。第 2 步只比對垃圾桶裡的列，對每一列只改那一個外鍵，不動版本號與稽核欄位，不留
+版本紀錄，也不發變更通知；之後復原那一列，它的外鍵就是 `null`。第 1 步與第 2 步之間不鎖列，所以檢查
+之後才由另一個交易新建或復原的參照列不在這一步的範圍內，競速的情形見[第 8 章](08-relations.md)。外鍵
 不可為 `null` 時，清除回 `409 CONFLICT`，什麼都沒刪也沒改，訊息點名垃圾桶裡有幾筆哪個集合的項目
 參照它：`Cannot delete '{collection}/{id}': {n} trashed '{sourceCollection}' item(s) reference it
 and the reference cannot be cleared. Delete them permanently first.` 沒在垃圾桶的參照列擋下清除；

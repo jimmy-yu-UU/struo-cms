@@ -263,14 +263,16 @@ Purge does these steps in order, inside one transaction:
 7. Clean up its revisions.
 8. Delete the row itself.
 
-Rows in the trash do not block a purge, and after it no row points at a target that does not
-exist. For a trashed row, step 2 changes only that one foreign key: no version bump, no audit-column
-change, no revision, no change notification. Restoring the row later gives it a `null` key. When the
-key cannot be null, the purge answers `409 CONFLICT` and deletes and changes nothing; the message
-says how many trashed items of which collection reference it: `Cannot delete '{collection}/{id}':
-{n} trashed '{sourceCollection}' item(s) reference it and the reference cannot be cleared. Delete
-them permanently first.` A referencing row outside the trash blocks the purge, and when live and
-trashed referencing rows both exist nothing is changed. Restore performs no reference check.
+Rows in the trash do not block a purge. Step 2 matches trashed rows only and changes only that one
+foreign key of each: no version bump, no audit-column change, no revision, no change notification.
+Restoring the row later gives it a `null` key. No row lock sits between steps 1 and 2, so a
+referencing row that another transaction creates or restores after the check is outside what step 2
+covers; the race is described in [Chapter 8](08-relations.md). When the key cannot be null, the
+purge answers `409 CONFLICT` and deletes and changes nothing; the message says how many trashed
+items of which collection reference it: `Cannot delete '{collection}/{id}': {n} trashed
+'{sourceCollection}' item(s) reference it and the reference cannot be cleared. Delete them
+permanently first.` A referencing row outside the trash blocks the purge, and when live and trashed
+referencing rows both exist nothing is changed. Restore performs no reference check.
 
 The core `File.FolderId` can be null: after a folder is purged, a file that sat in it and is in the
 trash comes back in the library root when restored. Neither the core nor the sample has a restrict

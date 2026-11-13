@@ -93,41 +93,47 @@
   assembly deploys the missing dependency or removes the type. The public
   `MetadataScanner.SafeGetTypes` is renamed `LoadTypes`, since it no longer tolerates a failure; a
   fork that calls it renames the call.
-- A write the database ends as a deadlock victim answers `409 CONFLICT` with a fixed message instead
-  of `500`: PostgreSQL `40P01`, MySQL and MariaDB `1213`, SQL Server `1205`, and MariaDB `1020`
-  (record changed since last read). It applies to every write, not only tree moves, and nothing is
-  written. A client or monitor that treats `500` as the signal for a lost deadlock handles `409`
-  instead, and can send the request again. Lock wait timeouts and SQLite's `database is locked` are
-  unchanged.
+- A request the database picks as a deadlock victim answers `409 CONFLICT` with the fixed message
+  `The request lost a database deadlock.` instead of `500`: PostgreSQL `40P01`, MySQL and MariaDB
+  `1213`, SQL Server `1205`, and MariaDB `1020` (record changed since last read). It applies to
+  every write, not only tree moves. A deadlock inside the write transaction writes nothing; one
+  raised by work done after the commit (a write interceptor's `AfterCommitAsync`) answers the same
+  `409` with the write already applied, so check before sending it again. A client or monitor that
+  treats `500` as the signal for a lost deadlock handles `409` instead. Lock wait timeouts and
+  SQLite's `database is locked` are unchanged.
 - The self-reference cycle check runs inside the write transaction, after the row is written, and
   takes row locks on the moved row and every row of the parent chain. `SelfReferenceCycleGuard`
-  must be called inside a transaction. `IItemRepository` gains `GetByIdLockedAsync`, whose default
-  is a plain read; a fork's own implementation that serves concurrent writers overrides it with a
-  locking read, or the guard decides from values another transaction can change. An update that
-  carries a stale `version` and also a cycle answers `409 VERSION_CONFLICT` instead of `400`.
+  must be called inside a transaction. Because the check now follows the row write, several errors
+  change order: an update with a stale `version` that would also form a cycle answers
+  `409 VERSION_CONFLICT` instead of `400`; one whose row another request deleted after it was loaded
+  answers `404` instead of `400`; one whose row write hits a unique-key violation answers
+  `409 CONFLICT` instead of `400`. The cycle check can itself lose a deadlock and answer `409`.
+- `IItemRepository` gains four members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
+  `SetForeignKeyNullForTrashedAsync` and `IsForeignKeyNullable`. Their defaults throw
+  `NotSupportedException`, like the interface's other purge primitives. A fork that implements or
+  wraps `IItemRepository` implements or forwards all four, or updates and purges in
+  self-referencing collections fail. `GetByIdLockedAsync` must be called inside a transaction and
+  throws `InvalidOperationException` without one.
 - Purging an item whose trashed rows still point at it through an `OnDelete.Restrict` relation
   sets their foreign key to `null` in the purge transaction, where it used to leave the key pointing
   at a row that no longer existed. When that foreign key cannot be null, the purge answers
   `409 CONFLICT` and changes nothing until those trashed rows are purged. A fork with a
   soft-deletable collection that has such a non-null key checks its purge flows; the core and the
-  sample have none.
+  sample have none. Whether a key can be cleared follows the column itself, as the ORM builds it
+  (nullable annotations and `[SugarColumn(IsNullable = ...)]`).
 :::
 
 ### Added
 
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
+- `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
+  `DomainErrorMap.DeadlockMessage`, and four `IItemRepository` members (`GetByIdLockedAsync`,
+  `CountTrashedWhereInAsync`, `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`). A class
+  that implements or wraps `IItemRepository` must implement or forward all four; see Breaking.
 
 ### Fixed
 
-- Purging a media folder with a file in the trash that was in it set no key: restoring the file gave
-  it a `folderId` that pointed at nothing, so it showed neither in the library root nor in the
-  trash. The purge now clears the key and the restored file appears in the root. The same holds for
-  every `Restrict` relation with a nullable key, and for purging a file through
-  `DELETE /api/files/{id}?purge=true`.
-- Two concurrent moves in a tree collection (media folders, for example) in opposite directions
-  could both pass the cycle check and leave two folders as each other's parent. The check now holds
-  locks on the whole chain, so at most one of them succeeds and the other answers `400` or `409`.
 - Password login and external login accept a found account only when its stored email and the
   submitted one are character for character the same once trimmed and lowercased. The default
   collations of MySQL, MariaDB and SQL Server treat some spellings as equal (accents, full-width
@@ -152,6 +158,14 @@
   write although the column holds more. It has no limit now, like any column without a length; set
   `MaxLength` on the field to have one. With a `Length` beside the `ColumnDataType`, the limit is that
   `Length`.
+- Purging a media folder with a file in the trash that was in it set no key: restoring the file gave
+  it a `folderId` that pointed at nothing, so it showed neither in the library root nor in the
+  trash. The purge now clears the key and the restored file appears in the root. The same holds for
+  every `Restrict` relation with a nullable key, and for purging a file through
+  `DELETE /api/files/{id}?purge=true`.
+- Two concurrent moves in a tree collection (media folders, for example) in opposite directions
+  could both pass the cycle check and leave two folders as each other's parent. The check now holds
+  locks on the whole chain, so at most one of them succeeds and the other answers `400` or `409`.
 
 ### Security
 
