@@ -13,7 +13,8 @@ namespace Struo.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthController(
-    IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation) : ControllerBase
+    IAuthService auth, ILoginAttemptThrottle loginThrottle, SessionRotation sessionRotation,
+    SessionCookieName sessionCookie) : ControllerBase
 {
     public sealed record LoginRequest(string Email, string Password);
 
@@ -67,31 +68,52 @@ public sealed class AuthController(
         // A password change or removal that revoked sessions before this one was written has not
         // covered it. If the stored credential differs from the one verified above, the session is
         // revoked here and the login fails like a wrong password. The reserved attempt stays counted,
-        // as for any failed login. Not tied to the request token: once the session is written, the
-        // check must complete even if the client has gone.
-        if (!await auth.ConfirmUnchangedAsync(result, CancellationToken.None))
+        // as for any failed login. A step that throws discards the session too, so a failed login
+        // never leaves one behind.
+        bool confirmed;
+        try
+        {
+            confirmed = await FinishLoginAsync(result, body.Email);
+        }
+        catch
+        {
+            await DiscardNewSessionAsync();
+            throw;
+        }
+
+        if (!confirmed)
         {
             await DiscardNewSessionAsync();
             return InvalidCredentials();
         }
 
+        return Ok(new { id = result.UserId });
+    }
+
+    // The steps after the session is written do not take the request token: once it exists they must
+    // complete even if the client has gone, or the session would outlive a failed login.
+    private async Task<bool> FinishLoginAsync(AuthResult result, string email)
+    {
+        if (!await auth.ConfirmUnchangedAsync(result, CancellationToken.None)) return false;
+
         // A legitimate login clears the reserved attempts, so a real user can never lock
         // themselves out by logging in normally.
-        await loginThrottle.ResetAsync(body.Email, ct);
+        await loginThrottle.ResetAsync(email, CancellationToken.None);
         await sessionRotation.RevokePresentedAsync(HttpContext);
-        return Ok(new { id = result.UserId });
+        return true;
     }
 
     private static IActionResult InvalidCredentials() =>
         Struo.Api.Http.ApiResults.Fail(StatusCodes.Status401Unauthorized,
             Struo.Api.Http.ErrorCodes.Unauthorized, "Invalid credentials.");
 
-    // Sign-out removes the ticket and its index row through the ticket store; the cookies the sign-in
-    // and the sign-out queued are dropped so the client receives neither.
+    // Sign-out removes the ticket and its index row through the ticket store; the session cookie (and
+    // its chunks) the sign-in and the sign-out queued are dropped so the client receives neither.
+    // Any other cookie on the response stays.
     private async Task DiscardNewSessionAsync()
     {
         await HttpContext.SignOutAsync(AuthSchemes.Cookie);
-        Response.Headers.Remove(Microsoft.Net.Http.Headers.HeaderNames.SetCookie);
+        Response.Headers.SetCookie = SessionCookieHeaders.Without(Response.Headers.SetCookie, sessionCookie.Value);
     }
 
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]

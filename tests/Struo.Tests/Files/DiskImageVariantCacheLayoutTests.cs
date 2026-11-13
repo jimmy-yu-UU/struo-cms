@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Struo.Application.Files;
 using Struo.Infrastructure.Files;
+using Struo.Tests.Support;
 using Xunit;
 using File = System.IO.File;
 
@@ -146,8 +147,9 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     {
         var cache = NewCache(maxBytes: 250);
         var file = Guid.NewGuid();
-        var stale = PlantTemp(file, "1", DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
-        var fresh = PlantTemp(file, "1", DateTime.UtcNow);
+        var elsewhere = Guid.NewGuid();   // a file the writes below never touch
+        var stale = PlantTemp(elsewhere, "1", DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+        var fresh = PlantTemp(elsewhere, "1", DateTime.UtcNow);
 
         // 200 bytes of variants fit under the cap; the 1000 temp bytes on disk must not trigger a sweep.
         await Put(cache, file, "1", Small, 100);
@@ -170,9 +172,12 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         await Put(cache, a, "1", Small, 100);
         await Put(cache, a, "1", Large, 100);
 
+        cache.TrackedBytes.Should().Be(200);
         await cache.RemoveAllForFileAsync(a, default);
+        cache.TrackedBytes.Should().Be(0, "the purge frees its bytes before any further write");
         await Put(cache, b, "1", Small, 100);
         await Put(cache, b, "1", Large, 100);
+        cache.TrackedBytes.Should().Be(200);
 
         (await cache.TryGetAsync(cache.DeriveKey(b, "1", Small), default)).Should().NotBeNull();
         (await cache.TryGetAsync(cache.DeriveKey(b, "1", Large), default)).Should().NotBeNull();
@@ -181,13 +186,16 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
     [Fact]
     public async Task Replacing_a_version_frees_its_bytes_from_the_running_total()
     {
-        var cache = NewCache(maxBytes: 250);
+        var cache = NewCache(maxBytes: 1000);   // far above the bytes written, so no sweep re-counts the tree
         var a = Guid.NewGuid();
         await Put(cache, a, "1", Small, 100);
         await Put(cache, a, "1", Large, 100);
 
+        cache.TrackedBytes.Should().Be(200);
         await Put(cache, a, "2", Small, 100);
+        cache.TrackedBytes.Should().Be(100, "the replaced version's 200 bytes are gone, the new 100 counted");
         await Put(cache, a, "2", Large, 100);
+        cache.TrackedBytes.Should().Be(200);
 
         (await cache.TryGetAsync(cache.DeriveKey(a, "2", Small), default)).Should().NotBeNull();
         (await cache.TryGetAsync(cache.DeriveKey(a, "2", Large), default)).Should().NotBeNull();
@@ -321,5 +329,136 @@ public class DiskImageVariantCacheLayoutTests : IDisposable
         var path = Path.GetFullPath(VariantCacheLayout.VariantPath(root, parsed));
 
         path.Should().StartWith(root + Path.DirectorySeparatorChar);
+    }
+
+    [Theory]
+    [InlineData(-1L, -100L, -1L)]
+    [InlineData(-1L, 100L, -1L)]
+    [InlineData(0L, -100L, 0L)]
+    [InlineData(50L, -100L, 0L)]
+    [InlineData(50L, 25L, 75L)]
+    public void An_unseeded_total_stays_unseeded_and_a_seeded_total_never_goes_negative(long current, long delta, long expected)
+    {
+        DiskImageVariantCache.ApplyDelta(current, delta).Should().Be(expected);
+    }
+
+    private static string TempIn(string dir, string variantHex, DateTime lastWriteUtc)
+    {
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $".{variantHex}.{Guid.NewGuid():N}.tmp");
+        File.WriteAllBytes(path, [1]);
+        File.SetLastWriteTimeUtc(path, lastWriteUtc);
+        return path;
+    }
+
+    [Fact]
+    public async Task Writing_a_variant_removes_stale_temp_files_of_that_file_even_without_a_cap()
+    {
+        var cache = NewCache(maxBytes: 0);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small);
+        var key = cache.DeriveKey(file, "1", Small).Split('/');
+        var versionDir = Path.Combine(_root, key[0], key[1]);
+        var stale = TempIn(versionDir, key[2], DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+        var fresh = TempIn(versionDir, key[2], DateTime.UtcNow);
+        var otherFile = Guid.NewGuid();
+        await Put(cache, otherFile, "1", Small);
+        var otherKey = cache.DeriveKey(otherFile, "1", Small).Split('/');
+        var otherStale = TempIn(Path.Combine(_root, otherKey[0], otherKey[1]), otherKey[2],
+            DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+
+        await Put(cache, file, "1", Large);
+
+        File.Exists(stale).Should().BeFalse();
+        File.Exists(fresh).Should().BeTrue();
+        File.Exists(otherStale).Should().BeTrue("only the written file's directory is tidied");
+    }
+
+    private string VersionDir(DiskImageVariantCache cache, Guid file, string version, ImageTransformRequest req)
+    {
+        var parts = cache.DeriveKey(file, version, req).Split('/');
+        return Path.Combine(_root, parts[0], parts[1]);
+    }
+
+    [Fact]
+    public async Task An_eviction_sweep_removes_empty_version_and_file_directories_of_the_layout_only()
+    {
+        var cache = NewCache(maxBytes: 250);
+        var emptied = Guid.NewGuid();
+        await Put(cache, emptied, "1", Small, 100);
+        var emptiedVersion = VersionDir(cache, emptied, "1", Small);
+        File.Delete(Directory.GetFiles(emptiedVersion).Single());
+        var emptyFileDir = Path.Combine(_root, Guid.NewGuid().ToString("D"));
+        Directory.CreateDirectory(emptyFileDir);
+        var unrelatedEmpty = Directory.CreateDirectory(Path.Combine(_root, "not-a-cache-directory")).FullName;
+        var emptyUnderUnrelated = Directory.CreateDirectory(Path.Combine(unrelatedEmpty, "inner")).FullName;
+        var keep = Guid.NewGuid();
+        await Put(cache, keep, "1", Small, 100);
+        await Put(cache, keep, "1", Large, 100);
+
+        await Put(cache, keep, "1", new ImageTransformRequest(800, null, "webp", "inside", 80), 100);   // over the cap: sweep
+
+        Directory.Exists(emptiedVersion).Should().BeFalse();
+        Directory.Exists(Path.Combine(_root, emptied.ToString("D"))).Should().BeFalse();
+        Directory.Exists(emptyFileDir).Should().BeFalse();
+        Directory.Exists(unrelatedEmpty).Should().BeTrue();
+        Directory.Exists(emptyUnderUnrelated).Should().BeTrue();
+        Directory.Exists(_root).Should().BeTrue();
+        Directory.Exists(DirOf(keep)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Startup_maintenance_removes_empty_layout_directories_and_never_the_root()
+    {
+        var file = Guid.NewGuid();
+        var emptyVersion = Path.Combine(_root, file.ToString("D"), new string('a', 32));
+        Directory.CreateDirectory(emptyVersion);
+        var nonEmptyFile = Guid.NewGuid();
+        var keptVersion = Path.Combine(_root, nonEmptyFile.ToString("D"), new string('b', 32));
+        Directory.CreateDirectory(keptVersion);
+        File.WriteAllBytes(Path.Combine(keptVersion, new string('c', 64)), [1]);
+        var misnamedVersion = Path.Combine(_root, nonEmptyFile.ToString("D"), "short");
+        Directory.CreateDirectory(misnamedVersion);
+        var unrelated = Directory.CreateDirectory(Path.Combine(_root, "other")).FullName;
+
+        NewCache().RunMaintenance();
+
+        Directory.Exists(emptyVersion).Should().BeFalse();
+        Directory.Exists(Path.Combine(_root, file.ToString("D"))).Should().BeFalse();
+        Directory.Exists(keptVersion).Should().BeTrue();
+        Directory.Exists(misnamedVersion).Should().BeTrue();
+        Directory.Exists(unrelated).Should().BeTrue();
+        Directory.Exists(_root).Should().BeTrue();
+    }
+
+    [WindowsOnlyFact("relies on Windows refusing to delete a directory that holds an open file")]
+    public async Task A_replaced_version_that_cannot_be_removed_leaves_the_write_in_place_and_the_total_unseeded()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var held = Directory.GetFiles(VersionDir(cache, file, "1", Small)).Single();
+        using var lockHandle = new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var act = () => Put(cache, file, "2", Small, 100);
+
+        await act.Should().NotThrowAsync();
+        (await cache.TryGetAsync(cache.DeriveKey(file, "2", Small), default)).Should().NotBeNull();
+        cache.TrackedBytes.Should().Be(-1, "the total is counted again by the next write");
+    }
+
+    [WindowsOnlyFact("relies on Windows refusing to delete a directory that holds an open file")]
+    public async Task A_purge_that_cannot_remove_the_directory_throws_and_leaves_the_total_unseeded()
+    {
+        var cache = NewCache(maxBytes: 1000);
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small, 100);
+        var held = Directory.GetFiles(VersionDir(cache, file, "1", Small)).Single();
+        using var lockHandle = new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var act = () => cache.RemoveAllForFileAsync(file, default);
+
+        await act.Should().ThrowAsync<IOException>();
+        cache.TrackedBytes.Should().Be(-1);
     }
 }

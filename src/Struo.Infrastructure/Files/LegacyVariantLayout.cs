@@ -69,7 +69,7 @@ internal static class LegacyVariantLayout
         }
     }
 
-    private static IReadOnlyList<DirectoryInfo> SafeDirectories(string root, ILogger logger)
+    private static List<DirectoryInfo> SafeDirectories(string root, ILogger logger)
     {
         try
         {

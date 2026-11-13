@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,7 +48,14 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         }
     }
 
-    private sealed class GatedAuth(IAuthService inner, Gate gate) : IAuthService
+    /// <summary>Switches that make a post-sign-in step of the login fail.</summary>
+    private sealed class Faults
+    {
+        public volatile bool ConfirmThrows;
+        public volatile bool ResetThrows;
+    }
+
+    private sealed class GatedAuth(IAuthService inner, Gate gate, Faults faults) : IAuthService
     {
         public async Task<AuthResult> AuthenticateAsync(string email, string password, CancellationToken ct = default)
         {
@@ -57,7 +65,9 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         }
 
         public Task<bool> ConfirmUnchangedAsync(AuthResult result, CancellationToken ct = default) =>
-            inner.ConfirmUnchangedAsync(result, ct);
+            faults.ConfirmThrows
+                ? throw new InvalidOperationException("confirmation unavailable")
+                : inner.ConfirmUnchangedAsync(result, ct);
     }
 
     /// <summary>Pauses a listing after it read the keys and records every key ever indexed.</summary>
@@ -91,7 +101,7 @@ public class SessionRevocationRaceTests(ApiFactory factory)
     }
 
     /// <summary>Delegates to the real throttle and counts how often a login cleared it.</summary>
-    private sealed class CountingThrottle(ILoginAttemptThrottle inner) : ILoginAttemptThrottle
+    private sealed class CountingThrottle(ILoginAttemptThrottle inner, Faults faults) : ILoginAttemptThrottle
     {
         public int Resets;
 
@@ -101,7 +111,9 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         public Task ResetAsync(string email, CancellationToken ct = default)
         {
             Interlocked.Increment(ref Resets);
-            return inner.ResetAsync(email, ct);
+            return faults.ResetThrows
+                ? throw new InvalidOperationException("throttle store unavailable")
+                : inner.ResetAsync(email, ct);
         }
 
         public Task<LoginThrottleState> GetStateAsync(string email, CancellationToken ct = default) =>
@@ -110,7 +122,7 @@ public class SessionRevocationRaceTests(ApiFactory factory)
 
     private sealed record Rig(
         WebApplicationFactory<Program> Host, HttpClient Client, Gate AuthGate, Gate ListGate,
-        ConcurrentBag<string> Recorded, CountingThrottle Throttle, string Email, Guid UserId) : IDisposable
+        ConcurrentBag<string> Recorded, CountingThrottle Throttle, Faults Faults, string Email, Guid UserId) : IDisposable
     {
         public void Dispose()
         {
@@ -119,8 +131,9 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         }
     }
 
-    private async Task<Rig> NewRigAsync()
+    private async Task<Rig> NewRigAsync(Action<IServiceCollection>? extra = null)
     {
+        var faults = new Faults();
         var authGate = new Gate();
         var listGate = new Gate();
         var recorded = new ConcurrentBag<string>();
@@ -128,10 +141,11 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
         {
             s.AddSingleton<ILoginAttemptThrottle>(sp => throttle = new CountingThrottle(
-                ActivatorUtilities.CreateInstance<DistributedCacheLoginAttemptThrottle>(sp)));
-            s.AddScoped<IAuthService>(sp => new GatedAuth(ActivatorUtilities.CreateInstance<AuthService>(sp), authGate));
+                ActivatorUtilities.CreateInstance<DistributedCacheLoginAttemptThrottle>(sp), faults));
+            s.AddScoped<IAuthService>(sp => new GatedAuth(ActivatorUtilities.CreateInstance<AuthService>(sp), authGate, faults));
             s.AddScoped<IUserSessionStore>(sp =>
                 new GatedSessions(ActivatorUtilities.CreateInstance<SqlSugarUserSessionStore>(sp), listGate, recorded));
+            extra?.Invoke(s);
         }));
         var client = host.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
         client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
@@ -144,7 +158,7 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         await db.Insertable(new User { Id = id, Email = email, Password = hasher.Hash(Pw), IsActive = true })
             .ExecuteCommandAsync();
         host.Services.GetRequiredService<ILoginAttemptThrottle>();
-        return new Rig(host, client, authGate, listGate, recorded, throttle!, email, id);
+        return new Rig(host, client, authGate, listGate, recorded, throttle!, faults, email, id);
     }
 
     private static string? SessionCookieOf(HttpResponseMessage response)
@@ -297,6 +311,116 @@ public class SessionRevocationRaceTests(ApiFactory factory)
 
         (await MeAsync(rig, first)).Should().Be(HttpStatusCode.Unauthorized);
         (await MeAsync(rig, second)).Should().Be(HttpStatusCode.Unauthorized);
+        (await IndexedKeysAsync(rig)).Should().BeEmpty();
+    }
+
+    private sealed class UnrelatedCookieFilter : Microsoft.AspNetCore.Hosting.IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, pipeline) =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api/auth/login"))
+                    context.Response.Headers.SetCookie = Microsoft.Extensions.Primitives.StringValues.Concat(context.Response.Headers.SetCookie, "unrelated=1; path=/");
+                await pipeline();
+            });
+            next(app);
+        };
+    }
+
+    private static string[] SetCookieValues(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values) ? values.ToArray() : [];
+
+    [Fact]
+    public async Task A_failed_confirmation_keeps_an_unrelated_cookie_and_sends_no_session_cookie()
+    {
+        using var rig = await NewRigAsync(s => s.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, UnrelatedCookieFilter>());
+        var ownerCookie = SessionCookieOf(await LoginAsync(rig, Pw))!;
+
+        rig.AuthGate.Arm(rig.UserId);
+        var pausedLogin = LoginAsync(rig, Pw);
+        await rig.AuthGate.Reached.Task.WaitAsync(Wait);
+        (await ChangePasswordAsync(rig, ownerCookie)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        rig.AuthGate.Release.SetResult();
+        var response = await pausedLogin;
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var cookies = SetCookieValues(response);
+        cookies.Should().Contain("unrelated=1; path=/");
+        cookies.Should().NotContain(c => c.StartsWith(SessionCookieName.Default, StringComparison.Ordinal));
+        (await LiveTicketKeysAsync(rig)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_confirmation_that_throws_leaves_no_session_behind()
+    {
+        using var rig = await NewRigAsync();
+        rig.Faults.ConfirmThrows = true;
+
+        var response = await LoginAsync(rig, Pw);
+
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+        SessionCookieOf(response).Should().BeNull();
+        (await LiveTicketKeysAsync(rig)).Should().BeEmpty("the session written before the failure is discarded");
+        (await IndexedKeysAsync(rig)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_throttle_reset_that_throws_fails_the_login_and_leaves_no_session_behind()
+    {
+        using var rig = await NewRigAsync();
+        rig.Faults.ResetThrows = true;
+
+        var response = await LoginAsync(rig, Pw);
+
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+        SessionCookieOf(response).Should().BeNull();
+        (await LiveTicketKeysAsync(rig)).Should().BeEmpty();
+        (await IndexedKeysAsync(rig)).Should().BeEmpty();
+        rig.Faults.ResetThrows = false;
+        (await LoginAsync(rig, Pw)).StatusCode.Should().Be(HttpStatusCode.OK, "the account itself is untouched");
+    }
+
+    [Fact]
+    public async Task A_login_fails_when_the_user_is_deactivated_between_verification_and_confirmation()
+    {
+        using var rig = await NewRigAsync();
+        rig.AuthGate.Arm(rig.UserId);
+        var pausedLogin = LoginAsync(rig, Pw);
+        await rig.AuthGate.Reached.Task.WaitAsync(Wait);
+
+        using (var scope = rig.Host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            await db.Updateable<User>().SetColumns(u => u.IsActive == false).Where(u => u.Id == rig.UserId)
+                .ExecuteCommandAsync();
+        }
+        rig.AuthGate.Release.SetResult();
+        var response = await pausedLogin;
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        SessionCookieOf(response).Should().BeNull();
+        (await LiveTicketKeysAsync(rig)).Should().BeEmpty();
+        (await IndexedKeysAsync(rig)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_login_fails_when_the_user_is_purged_between_verification_and_confirmation()
+    {
+        using var rig = await NewRigAsync();
+        rig.AuthGate.Arm(rig.UserId);
+        var pausedLogin = LoginAsync(rig, Pw);
+        await rig.AuthGate.Reached.Task.WaitAsync(Wait);
+
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        (await admin.DeleteAsync($"/api/items/user/{rig.UserId}?purge=true")).StatusCode
+            .Should().Be(HttpStatusCode.NoContent);
+        rig.AuthGate.Release.SetResult();
+        var response = await pausedLogin;
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        SessionCookieOf(response).Should().BeNull();
+        (await LiveTicketKeysAsync(rig)).Should().BeEmpty();
         (await IndexedKeysAsync(rig)).Should().BeEmpty();
     }
 }

@@ -21,9 +21,11 @@ namespace Struo.Infrastructure.Files;
 /// and a write that leaves the total above the cap deletes the least recently stamped variants until
 /// it is at 90% of the cap. A running byte total, seeded from disk on the first write, decides when a
 /// sweep is needed. Eviction failures are logged and never reach the caller. Temp files are never
-/// counted as variants; <see cref="RunMaintenance"/> and every eviction sweep remove the stale ones.
+/// counted as variants. The stale ones (older than <see cref="VariantCacheLayout.StaleTempAge"/>) are
+/// removed by <see cref="RunMaintenance"/> at start, by every eviction sweep, and, for the file written,
+/// by each write; the sweep and the start also remove empty directories of the layout.
 /// </remarks>
-public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
+public sealed partial class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
     : IImageVariantCache
 {
     private const int MoveAttempts = 5;
@@ -82,7 +84,6 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
     {
         var path = PathFor(key, out var parsed);
         var dir = Path.GetDirectoryName(path)!;
-        Directory.CreateDirectory(dir);
 
         // Atomic write: stage in a uniquely-named temp file in the same directory (so the
         // subsequent move is same-volume and atomic), then move it into place. A reader that
@@ -93,7 +94,7 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         var stored = false;
         try
         {
-            await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
+            await WriteTempAsync(dir, tempPath, bytes, ct);
             stored = await MoveIntoPlaceAsync(tempPath, path, ct);
         }
         catch
@@ -103,9 +104,27 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         }
 
         if (!stored) return;
-        RemoveOtherVersions(parsed);
-        if (maxBytes <= 0) return;
-        if (Interlocked.Add(ref _totalBytes, bytes.Length - replaced) > maxBytes) Sweep();
+        TidyFileDirectory(parsed);
+        if (maxBytes > 0 && AdjustTotal(bytes.Length - replaced) > maxBytes) Sweep();
+    }
+
+    // A sweep can remove a directory while it is still empty, between its creation and the write, or
+    // its parent between the two levels of the creation; creating it again covers both.
+    private static async Task WriteTempAsync(string dir, string tempPath, byte[] bytes, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                await System.IO.File.WriteAllBytesAsync(tempPath, bytes, ct);
+                return;
+            }
+            catch (DirectoryNotFoundException) when (attempt < MoveAttempts)
+            {
+                // the directory was removed under us: create it again
+            }
+        }
     }
 
     // The first capped write counts what is already on disk; later writes and evictions adjust the
@@ -164,29 +183,27 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
             ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
             throw;
         }
-        if (maxBytes > 0 && Interlocked.Read(ref _totalBytes) >= 0) Interlocked.Add(ref _totalBytes, -freed);
+        if (maxBytes > 0) AdjustTotal(-freed);
         return Task.CompletedTask;
     }
 
-    // Other versions of the file are stale as soon as a newer one is written. Best-effort: a variant
-    // that cannot be removed now is removed by a later write, a purge or eviction.
-    private void RemoveOtherVersions(VariantCacheLayout.VariantKey written)
+    internal long TrackedBytes => Interlocked.Read(ref _totalBytes);
+
+    /// <summary>The total after adding <paramref name="delta"/>: a total that is not counted (negative) stays
+    /// not counted, and a counted one never drops below zero.</summary>
+    internal static long ApplyDelta(long current, long delta) =>
+        current < 0 ? current : Math.Max(0, current + delta);
+
+    // The only way the running total changes after it is counted. Returns the new total, or -1 while it
+    // is not counted, so a failed removal that reset it is never turned into a small positive number.
+    private long AdjustTotal(long delta)
     {
-        var fileDir = new DirectoryInfo(Path.Combine(rootPath, written.FileDir));
-        try
+        while (true)
         {
-            foreach (var stale in fileDir.EnumerateDirectories()
-                         .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && d.Name != written.Version).ToList())
-            {
-                var freed = stale.EnumerateFiles().Where(f => VariantCacheLayout.IsVariantName(f.Name)).Sum(f => f.Length);
-                stale.Delete(recursive: true);
-                if (maxBytes > 0 && Interlocked.Read(ref _totalBytes) >= 0) Interlocked.Add(ref _totalBytes, -freed);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ForgetTotal();
-            _logger.LogWarning(ex, "Could not remove the other versions of image variants under {Path}.", fileDir.FullName);
+            var current = Interlocked.Read(ref _totalBytes);
+            var next = ApplyDelta(current, delta);
+            if (next == current || Interlocked.CompareExchange(ref _totalBytes, next, current) == current)
+                return next;
         }
     }
 
@@ -196,57 +213,6 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
     {
         try { return measure(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
-    }
-
-    /// <summary>
-    /// One-time upkeep: removes files of the earlier flat layout and temp files left by writes that never
-    /// finished. Never throws; failures are logged.
-    /// </summary>
-    public void RunMaintenance()
-    {
-        var legacy = LegacyVariantLayout.Remove(rootPath, _logger);
-        var temps = RemoveStaleTemps();
-        if (legacy + temps > 0)
-            _logger.LogInformation(
-                "Image variant cache upkeep removed {Legacy} file(s) of the earlier layout and {Temps} stale temp file(s) under {Root}.",
-                legacy, temps, rootPath);
-    }
-
-    private int RemoveStaleTemps()
-    {
-        if (!Directory.Exists(rootPath)) return 0;
-        var removed = 0;
-        var cutoff = DateTime.UtcNow - VariantCacheLayout.StaleTempAge;
-        try
-        {
-            foreach (var temp in new DirectoryInfo(rootPath).EnumerateDirectories()
-                         .Where(d => VariantCacheLayout.IsFileDirName(d.Name))
-                         .SelectMany(d => d.EnumerateDirectories().Where(v => VariantCacheLayout.IsVersionDirName(v.Name)))
-                         .SelectMany(v => v.EnumerateFiles().Where(f => VariantCacheLayout.IsTempName(f.Name)))
-                         .Where(f => f.LastWriteTimeUtc < cutoff).ToList())
-            {
-                if (TryDelete(temp)) removed++;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(ex, "Could not scan image cache temp files under {Root}.", rootPath);
-        }
-        return removed;
-    }
-
-    private bool TryDelete(FileInfo file)
-    {
-        try
-        {
-            file.Delete();
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(ex, "Could not remove image cache file {Path}.", file.FullName);
-            return false;
-        }
     }
 
     // The destination can be briefly unreplaceable while a concurrent reader, evictor or writer of
@@ -299,27 +265,8 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         try
         {
             RemoveStaleTemps();
-            var files = ListVariants();
-            var total = files.Sum(v => v.Length);
-            Interlocked.Exchange(ref _totalBytes, total);
-            if (total <= maxBytes) return;
-
-            var lowWater = maxBytes - maxBytes / 10;
-            foreach (var file in files.OrderBy(v => v.LastWriteTimeUtc))
-            {
-                if (total <= lowWater) break;
-                var length = file.Length;
-                try
-                {
-                    file.Delete();
-                    total -= length;
-                    Interlocked.Add(ref _totalBytes, -length);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    _logger.LogWarning(ex, "Could not evict image variant {Path}.", file.FullName);
-                }
-            }
+            EvictToLowWater();
+            RemoveEmptyDirectories();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -331,10 +278,36 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         }
     }
 
+    private void EvictToLowWater()
+    {
+        var files = ListVariants();
+        var total = files.Sum(v => v.Length);
+        Interlocked.Exchange(ref _totalBytes, total);
+        if (total <= maxBytes) return;
+
+        var lowWater = maxBytes - maxBytes / 10;
+        foreach (var file in files.OrderBy(v => v.LastWriteTimeUtc))
+        {
+            if (total <= lowWater) break;
+            var length = file.Length;
+            try
+            {
+                file.Delete();
+                total -= length;
+                AdjustTotal(-length);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Could not evict image variant {Path}.", file.FullName);
+            }
+        }
+    }
+
     private string PathFor(string key, out VariantCacheLayout.VariantKey parsed)
     {
         if (!VariantCacheLayout.TryParseKey(key, out parsed))
-            throw new ArgumentException("Cache key must be <file id>/<version hex>/<variant hex>.", nameof(key));
+            throw new ArgumentException(
+                "Cache key must be <file id>/<version hex>/<variant hex>.", nameof(key));
         return VariantCacheLayout.VariantPath(rootPath, parsed);
     }
 }

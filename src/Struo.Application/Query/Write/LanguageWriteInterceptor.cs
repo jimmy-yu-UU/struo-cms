@@ -5,8 +5,8 @@ namespace Struo.Application.Query;
 
 /// <summary>
 /// The <c>language</c> collection's write rules: its invariants are checked inside the write transaction
-/// (a violation rolls it back and answers 409 for a duplicate code, 400 otherwise), and the request's language cache is dropped once the
-/// write is committed.
+/// (a violation rolls it back and answers 409 for a duplicate code, 400 otherwise), and the request's
+/// language cache is dropped once the write is committed.
 /// </summary>
 public sealed class LanguageWriteInterceptor(ILanguageCollectionRules rules, ILanguageProvider languages)
     : IItemWriteInterceptor

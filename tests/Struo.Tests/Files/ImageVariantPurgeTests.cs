@@ -166,4 +166,37 @@ public class ImageVariantPurgeTests(ApiFactory factory) : IDisposable
         File.Exists(legacy).Should().BeFalse();
         File.Exists(unrelated).Should().BeTrue();
     }
+
+    // The cleanup's outer catch (an exception that is not an IO error) has no seam without changing the
+    // production shape; this covers the failure it can actually meet, a directory it may not list.
+    [WindowsOnlyFact("uses a deny ACL on a subdirectory")]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public async Task Host_startup_survives_a_cache_directory_it_cannot_list_and_logs_a_warning()
+    {
+        var shard = Directory.CreateDirectory(Path.Combine(_cacheRoot, "ab"));
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(
+            me, System.Security.AccessControl.FileSystemRights.ListDirectory,
+            System.Security.AccessControl.AccessControlType.Deny);
+        var acl = shard.GetAccessControl();
+        acl.AddAccessRule(deny);
+        shard.SetAccessControl(acl);
+        try
+        {
+            var logs = new WarningCollector<Struo.Infrastructure.Files.DiskImageVariantCache>();
+            using var host = Host(s => s.AddSingleton<ILogger<Struo.Infrastructure.Files.DiskImageVariantCache>>(logs));
+            using var client = host.CreateClient();
+
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (logs.Warnings.IsEmpty && DateTime.UtcNow < deadline) await Task.Delay(50);
+
+            logs.Warnings.Should().NotBeEmpty();
+            (await client.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized, "the host is serving");
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            shard.SetAccessControl(acl);
+        }
+    }
 }

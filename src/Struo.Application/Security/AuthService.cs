@@ -26,7 +26,7 @@ public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hash
             return AuthResult.Fail(AuthFailure.InvalidCredentials);
         if (!cred.IsActive)
             return AuthResult.Fail(AuthFailure.Inactive);
-        return AuthResult.Ok(cred.Id, new PasswordProof(cred.PasswordEncoded));
+        return AuthResult.Ok(cred.Id, PasswordProof.From(cred.PasswordEncoded));
     }
 
     public async Task<bool> ConfirmUnchangedAsync(AuthResult result, CancellationToken ct = default)
@@ -34,7 +34,7 @@ public sealed class AuthService(IUserCredentialStore store, IPasswordHasher hash
         if (result is not { UserId: { } userId, Proof: { } proof }) return false;
         var current = await store.FindByIdAsync(userId, ct);
         return current is { IsActive: true }
-            && string.Equals(current.PasswordEncoded, proof.StoredHash, StringComparison.Ordinal);
+            && proof.Matches(current.PasswordEncoded);
     }
 
     private static string DummyHash(IPasswordHasher hasher) =>

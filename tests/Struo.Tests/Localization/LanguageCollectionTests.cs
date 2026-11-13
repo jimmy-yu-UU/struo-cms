@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -9,8 +10,22 @@ using Xunit;
 namespace Struo.Tests.Localization;
 
 [Collection("ApiIntegration")]
-public class LanguageCollectionTests(ApiFactory factory)
+public class LanguageCollectionTests(ApiFactory factory) : IAsyncLifetime
 {
+    // Languages the duplicate-code tests create; purged afterwards so the shared database keeps only
+    // the seeded ones, whether a test passes or fails.
+    private readonly ConcurrentBag<string> _created = [];
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        if (_created.IsEmpty) return;
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        foreach (var id in _created)
+            await c.DeleteAsync($"/api/items/language/{id}?purge=true");
+    }
+
     private readonly ApiFactory _factory = factory;
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
@@ -47,9 +62,18 @@ public class LanguageCollectionTests(ApiFactory factory)
     private static string IdOf(JsonElement list, string code) =>
         list.EnumerateArray().Single(r => r.GetProperty("code").GetString() == code).GetProperty("id").ToString();
 
-    private static Task<HttpResponseMessage> CreateAsync(HttpClient c, string code) =>
-        c.PostAsJsonAsync("/api/items/language",
+    private async Task<HttpResponseMessage> CreateAsync(HttpClient c, string code)
+    {
+        var res = await c.PostAsJsonAsync("/api/items/language",
             new { code, name = "dup probe", isDefault = false, enabled = true, sort = 50 });
+        if (res.IsSuccessStatusCode)
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            _created.Add(Root(body).GetProperty("data").GetProperty("id").ToString());
+            res.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        }
+        return res;
+    }
 
     private static Task<HttpResponseMessage> UpdateCodeAsync(HttpClient c, string id, string code) =>
         c.PutAsJsonAsync($"/api/items/language/{id}",
@@ -149,5 +173,23 @@ public class LanguageCollectionTests(ApiFactory factory)
         var res = await c.DeleteAsync($"/api/items/language/{enId}");
         res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await ListAsync(c)).EnumerateArray().Select(r => r.GetProperty("code").GetString()).Should().Contain("en");
+    }
+
+    [Fact]
+    public async Task A_duplicate_code_over_GraphQL_answers_the_same_conflict_as_REST()
+    {
+        var c = await _factory.CreateAuthenticatedClientAsync();
+        var rest = Root(await (await CreateAsync(c, "en")).Content.ReadAsStringAsync()).GetProperty("error");
+
+        var res = await c.PostAsJsonAsync("/graphql", new
+        {
+            query = "mutation { createLanguage(input: { code: \"en\", name: \"dup probe\", isDefault: false, enabled: true, sort: 50 }) { id } }"
+        });
+        var body = await res.Content.ReadAsStringAsync();
+
+        var error = Root(body).GetProperty("errors")[0];
+        error.GetProperty("extensions").GetProperty("code").GetString()
+            .Should().Be(rest.GetProperty("code").GetString(), body);
+        error.GetProperty("message").GetString().Should().Be(rest.GetProperty("message").GetString(), body);
     }
 }
