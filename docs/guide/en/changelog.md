@@ -108,6 +108,7 @@
 - The self-reference cycle check runs inside the write transaction and uses row locks. It is now
   two steps: `SelfReferenceCycleGuard.LockMovedRowAsync` before the row write and
   `EnsureNoCycleAsync` after it (its signature changed). Both must be called inside a transaction.
+  The second takes only what the first returned in the same transaction.
   Because the check follows the row write, some answers change:
   - A stale `version` plus a cycle: `409 VERSION_CONFLICT`, where it used to be `400`.
   - A row another request deleted after it was loaded, plus a cycle: `404`, where it used to be
@@ -117,7 +118,7 @@
   - The cycle check itself can lose a deadlock: `409`.
 
   An update that does not change the self-reference key locks only the row being updated.
-  An update that changes it also locks the whole ancestor chain above the new parent.
+  An update that changes it also locks the new parent and its whole ancestor chain.
 - `IItemRepository` gains four members. Their defaults throw `NotSupportedException`:
   - `GetByIdLockedAsync`: reads one row inside a transaction and locks it, returning the latest
     committed values. It throws `InvalidOperationException` without a transaction.
@@ -126,9 +127,11 @@
   - `SetForeignKeyNullForTrashedAsync`: sets the foreign key to `null` on rows in the trash only.
   - `IsForeignKeyNullable`: says whether the column accepts NULL, from the ORM's column metadata.
 
-  A fork that implements or wraps `IItemRepository` implements or forwards all four.
-  Otherwise updates in self-referencing collections, and purges of rows that soft-deletable
-  collections reference, fail.
+  A fork that implements or wraps `IItemRepository` implements or forwards all four. Otherwise two
+  things fail:
+  - Updating a row of a self-referencing collection.
+  - Purging a row that an `OnDelete.Restrict` relation points at, unless a live referencing row
+    blocks it first.
 - Purging an item now deals with the rows in the trash that point at it through an
   `OnDelete.Restrict` relation. Their foreign key used to stay, pointing at a row that no longer
   existed.
@@ -146,11 +149,14 @@
 
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
-- `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
-  `DomainErrorMap.DeadlockMessage`.
-  `SelfReferenceCycleGuard` gains `LockMovedRowAsync` and the type `SelfReferenceMove`.
-  `IItemRepository` gains four members (`GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
-  `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`).
+- New public members:
+  - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
+    `DomainErrorMap.DeadlockMessage`.
+  - `SelfReferenceCycleGuard.LockMovedRowAsync` and the type `SelfReferenceMove`. Only
+    `LockMovedRowAsync` creates it.
+  - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
+    `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
+
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
 

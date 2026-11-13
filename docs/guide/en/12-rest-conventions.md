@@ -122,7 +122,8 @@ means the same thing on both protocols:
   violation, and any other plain 409. A request the database picks as a deadlock victim also
   answers `409`, with the fixed message `The request lost a database deadlock.` The error codes are
   PostgreSQL `40P01`, MySQL and MariaDB `1213`, SQL Server `1205`, and MariaDB also `1020`. A lock
-  wait timeout is not covered. Where the deadlock happens decides whether the write took effect:
+  wait timeout is not covered. Where the deadlock happens decides whether the write took effect, for
+  example:
   - Inside the write transaction: nothing was written, and the request can be sent again.
   - In work done after the commit (a write interceptor's `AfterCommitAsync`): the write is applied,
     so check before sending it again.

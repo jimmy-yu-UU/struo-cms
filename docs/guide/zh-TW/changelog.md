@@ -85,14 +85,15 @@
   鎖等待逾時與 SQLite 的 `database is locked` 不變。
 - 自我參照的循環檢查改在寫入交易裡執行，並使用列鎖。檢查拆成兩步：寫入前呼叫
   `SelfReferenceCycleGuard.LockMovedRowAsync`，寫入後呼叫 `EnsureNoCycleAsync`（簽章已改）。
-  兩者都必須在交易裡呼叫。檢查移到列寫入之後，錯誤的先後跟著變：
+  兩者都必須在交易裡呼叫。後者只接收前者在同一個交易裡回傳的結果。
+  檢查移到列寫入之後，錯誤的先後跟著變：
   - 過期的 `version` 加上循環：回 `409 VERSION_CONFLICT`，原本是 `400`。
   - 列在載入後被別的請求刪掉，加上循環：回 `404`，原本是 `400`。
   - 列寫入撞到唯一鍵衝突，加上循環：回 `409 CONFLICT`，原本是 `400`。
   - 循環檢查本身輸掉死結：回 `409`。
 
   更新沒有改變自我參照的鍵時，只鎖被更新的那一列。
-  鍵有改變時，才鎖新父層往上的整條祖先鏈。
+  鍵有改變時，才鎖新父層與它往上的整條祖先鏈。
 - `IItemRepository` 新增四個成員，預設實作都丟 `NotSupportedException`：
   - `GetByIdLockedAsync`：在交易裡讀一列並鎖住它，回傳最新已提交的值。沒有交易會丟
     `InvalidOperationException`。
@@ -100,8 +101,9 @@
   - `SetForeignKeyNullForTrashedAsync`：只把垃圾桶裡的列的外鍵設成 `null`。
   - `IsForeignKeyNullable`：欄位是否允許 NULL，依 ORM 的欄位資訊回答。
 
-  自己實作或包裝 `IItemRepository` 的 fork，要實作或轉送這四個。
-  否則自我參照集合的更新，與有可軟刪除來源的清除，都會失敗。
+  自己實作或包裝 `IItemRepository` 的 fork，要實作或轉送這四個。否則兩件事會失敗：
+  - 更新自我參照集合的列。
+  - 清除被 `OnDelete.Restrict` 關聯指向的列，只要沒有未在垃圾桶的參照列先擋下它。
 - 清除一個項目時，垃圾桶裡以 `OnDelete.Restrict` 關聯指向它的列，現在會被處理。
   原本它們的外鍵會留著，指向已經不存在的列。
   - 外鍵可為 `null`：在清除的交易裡設成 `null`。
@@ -116,11 +118,14 @@
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
-- 新增 `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
-  `DomainErrorMap.DeadlockMessage`。
-  `SelfReferenceCycleGuard` 新增 `LockMovedRowAsync` 與型別 `SelfReferenceMove`。
-  `IItemRepository` 新增四個成員（`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
-  `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`）。
+- 新增的公開成員：
+  - `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
+    `DomainErrorMap.DeadlockMessage`。
+  - `SelfReferenceCycleGuard.LockMovedRowAsync` 與型別 `SelfReferenceMove`。
+    只有 `LockMovedRowAsync` 會建立它。
+  - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
+    `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
+
   自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
 
 ### 修正
