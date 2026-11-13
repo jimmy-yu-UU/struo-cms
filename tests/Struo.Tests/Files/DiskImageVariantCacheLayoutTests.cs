@@ -1,0 +1,325 @@
+using AwesomeAssertions;
+using Struo.Application.Files;
+using Struo.Infrastructure.Files;
+using Xunit;
+using File = System.IO.File;
+
+namespace Struo.Tests.Files;
+
+/// <summary>The per-file directory layout of the disk cache: removal by file, version replacement,
+/// temp files, the removal of earlier-layout files, and the shape of every path it builds.</summary>
+public class DiskImageVariantCacheLayoutTests : IDisposable
+{
+    private static readonly ImageTransformRequest Small = new(100, null, "webp", "inside", 80);
+    private static readonly ImageTransformRequest Large = new(400, null, "webp", "inside", 80);
+    private static readonly string[] HostileKeys =
+    [
+        "",
+        "..",
+        "../x",
+        "..\\..\\x",
+        "/etc/passwd",
+        "C:\\Windows\\x",
+        "a/b",
+        "a/b/c/d",
+        "00000000-0000-0000-0000-000000000000/../../x",
+        "00000000-0000-0000-0000-000000000000/00000000000000000000000000000000/..",
+        "00000000000000000000000000000000/00000000000000000000000000000000/" + "0000000000000000000000000000000000000000000000000000000000000000",
+        "{00000000-0000-0000-0000-000000000000}/00000000000000000000000000000000/" + "0000000000000000000000000000000000000000000000000000000000000000",
+        "00000000-0000-0000-0000-000000000000/0000000000000000000000000000000G/" + "0000000000000000000000000000000000000000000000000000000000000000",
+    ];
+
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "struo-variant-" + Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+    }
+
+    private DiskImageVariantCache NewCache(long maxBytes = 0) => new(_root, maxBytes);
+
+    private static async Task Put(DiskImageVariantCache cache, Guid file, string version, ImageTransformRequest req, int size = 10)
+    {
+        await cache.SetAsync(cache.DeriveKey(file, version, req), new byte[size], default);
+    }
+
+    private IEnumerable<string> FilesUnder(string dir) =>
+        Directory.Exists(dir) ? Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories) : [];
+
+    private string DirOf(Guid file) => Path.Combine(_root, file.ToString("D"));
+
+    [Fact]
+    public async Task Every_variant_of_a_file_lives_under_one_directory_named_for_its_id()
+    {
+        var cache = NewCache();
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small);
+        await Put(cache, file, "1", Large);
+
+        FilesUnder(_root).Should().HaveCount(2).And.OnlyContain(p => p.StartsWith(DirOf(file) + Path.DirectorySeparatorChar));
+    }
+
+    [Fact]
+    public async Task Removing_a_file_removes_all_its_variants_and_none_of_another_files()
+    {
+        var cache = NewCache();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        await Put(cache, a, "1", Small);
+        await Put(cache, a, "1", Large);
+        await Put(cache, b, "1", Small);
+        var keptKey = cache.DeriveKey(b, "1", Small);
+
+        await cache.RemoveAllForFileAsync(a, default);
+
+        FilesUnder(DirOf(a)).Should().BeEmpty();
+        Directory.Exists(DirOf(a)).Should().BeFalse();
+        (await cache.TryGetAsync(keptKey, default)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Removing_a_file_that_has_no_variants_is_a_no_op()
+    {
+        var cache = NewCache();
+        var act = () => cache.RemoveAllForFileAsync(Guid.NewGuid(), default);
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task Writing_a_new_version_removes_the_variants_of_other_versions_of_that_file_only()
+    {
+        var cache = NewCache();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        await Put(cache, a, "1", Small);
+        await Put(cache, a, "1", Large);
+        await Put(cache, b, "1", Small);
+        var oldKey = cache.DeriveKey(a, "1", Small);
+
+        await Put(cache, a, "2", Small);
+
+        (await cache.TryGetAsync(oldKey, default)).Should().BeNull();
+        (await cache.TryGetAsync(cache.DeriveKey(a, "1", Large), default)).Should().BeNull();
+        (await cache.TryGetAsync(cache.DeriveKey(a, "2", Small), default)).Should().NotBeNull();
+        (await cache.TryGetAsync(cache.DeriveKey(b, "1", Small), default)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Writing_another_size_of_the_same_version_keeps_the_existing_variants()
+    {
+        var cache = NewCache();
+        var a = Guid.NewGuid();
+        await Put(cache, a, "1", Small);
+        await Put(cache, a, "1", Large);
+
+        (await cache.TryGetAsync(cache.DeriveKey(a, "1", Small), default)).Should().NotBeNull();
+    }
+
+    private string PlantTemp(Guid file, string version, DateTime lastWriteUtc)
+    {
+        var cache = NewCache();
+        var key = cache.DeriveKey(file, version, Small);
+        var parts = key.Split('/');
+        var dir = Path.Combine(_root, parts[0], parts[1]);
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $".{parts[2]}.{Guid.NewGuid():N}.tmp");
+        File.WriteAllBytes(path, new byte[500]);
+        File.SetLastWriteTimeUtc(path, lastWriteUtc);
+        return path;
+    }
+
+    [Fact]
+    public void Maintenance_removes_a_stale_temp_file_and_leaves_a_fresh_one()
+    {
+        var file = Guid.NewGuid();
+        var stale = PlantTemp(file, "1", DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+        var fresh = PlantTemp(file, "1", DateTime.UtcNow - TimeSpan.FromMinutes(5));
+
+        NewCache().RunMaintenance();
+
+        File.Exists(stale).Should().BeFalse();
+        File.Exists(fresh).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_eviction_sweep_removes_a_stale_temp_file_and_never_counts_a_temp_file_as_a_variant()
+    {
+        var cache = NewCache(maxBytes: 250);
+        var file = Guid.NewGuid();
+        var stale = PlantTemp(file, "1", DateTime.UtcNow - VariantCacheLayout.StaleTempAge - TimeSpan.FromMinutes(5));
+        var fresh = PlantTemp(file, "1", DateTime.UtcNow);
+
+        // 200 bytes of variants fit under the cap; the 1000 temp bytes on disk must not trigger a sweep.
+        await Put(cache, file, "1", Small, 100);
+        await Put(cache, file, "1", Large, 100);
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().NotBeNull();
+        File.Exists(stale).Should().BeTrue("no sweep has run yet");
+
+        await Put(cache, file, "1", new ImageTransformRequest(800, null, "webp", "inside", 80), 100);   // 300 > 250: sweep
+
+        File.Exists(stale).Should().BeFalse();
+        File.Exists(fresh).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Removing_a_file_frees_its_bytes_from_the_running_total()
+    {
+        var cache = NewCache(maxBytes: 250);
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        await Put(cache, a, "1", Small, 100);
+        await Put(cache, a, "1", Large, 100);
+
+        await cache.RemoveAllForFileAsync(a, default);
+        await Put(cache, b, "1", Small, 100);
+        await Put(cache, b, "1", Large, 100);
+
+        (await cache.TryGetAsync(cache.DeriveKey(b, "1", Small), default)).Should().NotBeNull();
+        (await cache.TryGetAsync(cache.DeriveKey(b, "1", Large), default)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Replacing_a_version_frees_its_bytes_from_the_running_total()
+    {
+        var cache = NewCache(maxBytes: 250);
+        var a = Guid.NewGuid();
+        await Put(cache, a, "1", Small, 100);
+        await Put(cache, a, "1", Large, 100);
+
+        await Put(cache, a, "2", Small, 100);
+        await Put(cache, a, "2", Large, 100);
+
+        (await cache.TryGetAsync(cache.DeriveKey(a, "2", Small), default)).Should().NotBeNull();
+        (await cache.TryGetAsync(cache.DeriveKey(a, "2", Large), default)).Should().NotBeNull();
+    }
+
+    private static string LegacyKey(char first, char second, char fill) =>
+        new string([first, second]) + new string(fill, 62);
+
+    [Fact]
+    public void Startup_cleanup_removes_exactly_the_earlier_layout_files_and_nothing_else()
+    {
+        var legacyKey = LegacyKey('a', 'b', '1');
+        var legacyDir = Path.Combine(_root, "ab");
+        Directory.CreateDirectory(legacyDir);
+        var legacyVariant = Path.Combine(legacyDir, legacyKey);
+        var legacyTemp = Path.Combine(legacyDir, $".{legacyKey}.{Guid.NewGuid():N}.tmp");
+        File.WriteAllBytes(legacyVariant, [1]);
+        File.WriteAllBytes(legacyTemp, [1]);
+
+        var emptyShard = Path.Combine(_root, "cd");
+        Directory.CreateDirectory(emptyShard);
+        File.WriteAllBytes(Path.Combine(emptyShard, LegacyKey('c', 'd', '2')), [1]);
+
+        // Look-alikes that are not the earlier layout.
+        var keptShard = Path.Combine(_root, "ef");
+        Directory.CreateDirectory(keptShard);
+        var wrongShard = Path.Combine(keptShard, LegacyKey('a', 'b', '3'));   // key does not start with "ef"
+        var notes = Path.Combine(keptShard, "notes.txt");
+        var shortHex = Path.Combine(keptShard, "ef" + new string('4', 61));
+        var upper = Path.Combine(keptShard, "EF" + new string('A', 62));
+        var matching = Path.Combine(keptShard, LegacyKey('e', 'f', '5'));
+        foreach (var path in new[] { wrongShard, notes, shortHex, upper, matching }) File.WriteAllBytes(path, [1]);
+        var nested = Path.Combine(keptShard, "nested");
+        Directory.CreateDirectory(nested);
+        var nestedFile = Path.Combine(nested, LegacyKey('e', 'f', '6'));
+        File.WriteAllBytes(nestedFile, [1]);
+
+        var unrelatedFile = Path.Combine(_root, "readme.txt");
+        File.WriteAllBytes(unrelatedFile, [1]);
+        var unrelatedDir = Path.Combine(_root, "keep-me");
+        Directory.CreateDirectory(unrelatedDir);
+        var unrelatedInDir = Path.Combine(unrelatedDir, LegacyKey('k', 'e', '7'));
+        File.WriteAllBytes(unrelatedInDir, [1]);
+        var topLevelHex = Path.Combine(_root, LegacyKey('a', 'a', '8'));
+        File.WriteAllBytes(topLevelHex, [1]);
+
+        NewCache().RunMaintenance();
+
+        File.Exists(legacyVariant).Should().BeFalse();
+        File.Exists(legacyTemp).Should().BeFalse();
+        Directory.Exists(legacyDir).Should().BeFalse("the shard directory was left empty");
+        Directory.Exists(emptyShard).Should().BeFalse();
+        Directory.Exists(keptShard).Should().BeTrue();
+        File.Exists(matching).Should().BeFalse("it has the earlier shape");
+        new[] { wrongShard, notes, shortHex, upper, nestedFile, unrelatedFile, unrelatedInDir, topLevelHex }
+            .Should().OnlyContain(p => File.Exists(p));
+    }
+
+    [Fact]
+    public async Task Startup_cleanup_leaves_the_current_layout_alone()
+    {
+        var cache = NewCache();
+        var file = Guid.NewGuid();
+        await Put(cache, file, "1", Small);
+
+        cache.RunMaintenance();
+
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Maintenance_on_a_missing_root_does_nothing()
+    {
+        var act = () => NewCache().RunMaintenance();
+        act.Should().NotThrow();
+        Directory.Exists(_root).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Variants_of_the_earlier_layout_and_other_files_do_not_count_towards_the_cap()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "ab"));
+        File.WriteAllBytes(Path.Combine(_root, "ab", LegacyKey('a', 'b', '1')), new byte[1000]);
+        File.WriteAllBytes(Path.Combine(_root, "unrelated.bin"), new byte[1000]);
+        var cache = NewCache(maxBytes: 250);
+        var file = Guid.NewGuid();
+
+        await Put(cache, file, "1", Small, 100);
+        await Put(cache, file, "1", Large, 100);
+
+        (await cache.TryGetAsync(cache.DeriveKey(file, "1", Small), default)).Should().NotBeNull();
+        File.Exists(Path.Combine(_root, "unrelated.bin")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_derived_key_names_its_file_and_is_made_of_validated_components()
+    {
+        var file = Guid.NewGuid();
+        var key = NewCache().DeriveKey(file, "7", Small);
+
+        var parts = key.Split('/');
+        parts.Should().HaveCount(3);
+        parts[0].Should().Be(file.ToString("D"));
+        VariantCacheLayout.TryParseKey(key, out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_key_that_is_not_made_of_validated_components_is_refused_and_touches_nothing()
+    {
+        var cache = NewCache();
+        var outside = Path.Combine(Path.GetTempPath(), "struo-variant-outside-" + Guid.NewGuid().ToString("N"));
+        foreach (var key in HostileKeys.Append("../" + Path.GetFileName(outside)))
+        {
+            var get = () => cache.TryGetAsync(key, default);
+            var set = () => cache.SetAsync(key, [1], default);
+            await get.Should().ThrowAsync<ArgumentException>(because: key);
+            await set.Should().ThrowAsync<ArgumentException>(because: key);
+        }
+
+        Directory.Exists(outside).Should().BeFalse();
+        FilesUnder(_root).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Every_path_built_from_a_parsed_key_stays_inside_the_root()
+    {
+        var root = Path.GetFullPath(_root);
+        var key = NewCache().DeriveKey(Guid.NewGuid(), "x", Small);
+        VariantCacheLayout.TryParseKey(key, out var parsed).Should().BeTrue();
+
+        var path = Path.GetFullPath(VariantCacheLayout.VariantPath(root, parsed));
+
+        path.Should().StartWith(root + Path.DirectorySeparatorChar);
+    }
+}

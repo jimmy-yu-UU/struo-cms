@@ -187,7 +187,7 @@ public class DiskImageVariantCacheTests
     public async Task A_failure_while_counting_the_existing_variants_is_logged_and_the_write_is_skipped()
     {
         var root = Root();
-        var blocked = Directory.CreateDirectory(Path.Combine(root, "zz"));
+        var blocked = Directory.CreateDirectory(Path.Combine(root, Guid.NewGuid().ToString("D")));
         var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
         var deny = new System.Security.AccessControl.FileSystemAccessRule(
             me, System.Security.AccessControl.FileSystemRights.ListDirectory,

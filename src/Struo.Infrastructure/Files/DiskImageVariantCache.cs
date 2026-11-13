@@ -8,18 +8,20 @@ using Struo.Application.Files;
 namespace Struo.Infrastructure.Files;
 
 /// <summary>
-/// Disk-backed <see cref="IImageVariantCache"/>. Keys are the lowercase-hex SHA256 digest of the
-/// source file id, its version, and the normalized transform parameters, so they are inherently
-/// free of path separators and traversal sequences — no external input is ever concatenated into
-/// a path unsanitized. Variants are sharded into a subdirectory named after the key's first two
-/// hex characters (avoids one huge flat directory) and written atomically (temp file + rename) so
-/// a concurrent reader never observes a partially-written variant.
+/// Disk-backed <see cref="IImageVariantCache"/>. A variant lives at
+/// <c>&lt;root&gt;/&lt;file id&gt;/&lt;version&gt;/&lt;variant&gt;</c> (<see cref="VariantCacheLayout"/>), so every
+/// variant of one file sits under one directory and can be removed without knowing the transform
+/// parameters. A key is the three components joined by <c>/</c>; it is parsed back and each component
+/// validated before any path is built, so no caller text can leave the root. Variants are written
+/// atomically (temp file + rename) so a concurrent reader never observes a partial one.
 /// </summary>
 /// <remarks>
-/// When <c>maxBytes</c> is positive the cache is size-capped: a hit stamps the file's last-write time,
+/// Writing a variant of one version removes the file's variants of other versions. When
+/// <c>maxBytes</c> is positive the cache is size-capped: a hit stamps the file's last-write time,
 /// and a write that leaves the total above the cap deletes the least recently stamped variants until
 /// it is at 90% of the cap. A running byte total, seeded from disk on the first write, decides when a
-/// sweep is needed. Eviction failures are logged and never reach the caller.
+/// sweep is needed. Eviction failures are logged and never reach the caller. Temp files are never
+/// counted as variants; <see cref="RunMaintenance"/> and every eviction sweep remove the stale ones.
 /// </remarks>
 public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, ILogger? logger = null)
     : IImageVariantCache
@@ -46,13 +48,15 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
             quality={req.Quality}
             """);
 
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(hash);
+        var variant = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
+        var version = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fileVersion)))
+            [..VariantCacheLayout.VersionLength];
+        return VariantCacheLayout.ComposeKey(fileId, version, variant);
     }
 
     public async Task<byte[]?> TryGetAsync(string key, CancellationToken ct)
     {
-        var path = PathFor(key);
+        var path = PathFor(key, out _);
         if (!System.IO.File.Exists(path)) return null;
 
         try
@@ -76,14 +80,14 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
 
     public async Task SetAsync(string key, byte[] bytes, CancellationToken ct)
     {
-        var path = PathFor(key);
+        var path = PathFor(key, out var parsed);
         var dir = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(dir);
 
         // Atomic write: stage in a uniquely-named temp file in the same directory (so the
         // subsequent move is same-volume and atomic), then move it into place. A reader that
         // stats the final path either sees nothing or the complete file — never a partial one.
-        var tempPath = Path.Combine(dir, $".{key}.{Guid.NewGuid():N}.tmp");
+        var tempPath = Path.Combine(dir, VariantCacheLayout.TempName(parsed.Variant));
         if (maxBytes > 0 && !TrySeed()) return;
         var replaced = ExistingLength(path);
         var stored = false;
@@ -98,7 +102,9 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
             throw;
         }
 
-        if (maxBytes <= 0 || !stored) return;
+        if (!stored) return;
+        RemoveOtherVersions(parsed);
+        if (maxBytes <= 0) return;
         if (Interlocked.Add(ref _totalBytes, bytes.Length - replaced) > maxBytes) Sweep();
     }
 
@@ -130,11 +136,118 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
     }
 
+    // Only files of the cache layout count: a file in another place, or a temp file, is not a variant.
     private List<FileInfo> ListVariants() =>
         Directory.Exists(rootPath)
-            ? new DirectoryInfo(rootPath).EnumerateFiles("*", SearchOption.AllDirectories)
-                .Where(v => !v.Name.StartsWith('.')).ToList()
+            ? new DirectoryInfo(rootPath).EnumerateDirectories()
+                .Where(d => VariantCacheLayout.IsFileDirName(d.Name))
+                .SelectMany(VariantsOf).ToList()
             : [];
+
+    private static IEnumerable<FileInfo> VariantsOf(DirectoryInfo fileDir) =>
+        fileDir.EnumerateDirectories()
+            .Where(d => VariantCacheLayout.IsVersionDirName(d.Name))
+            .SelectMany(d => d.EnumerateFiles().Where(f => VariantCacheLayout.IsVariantName(f.Name)));
+
+    public Task RemoveAllForFileAsync(Guid fileId, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var dir = Path.Combine(rootPath, VariantCacheLayout.FileDirName(fileId));
+        if (!Directory.Exists(dir)) return Task.CompletedTask;
+        var freed = SafeLength(() => VariantsOf(new DirectoryInfo(dir)).Sum(v => v.Length));
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ForgetTotal();   // part of the tree may be gone; the next capped write counts the disk again
+            throw;
+        }
+        if (maxBytes > 0 && Interlocked.Read(ref _totalBytes) >= 0) Interlocked.Add(ref _totalBytes, -freed);
+        return Task.CompletedTask;
+    }
+
+    // Other versions of the file are stale as soon as a newer one is written. Best-effort: a variant
+    // that cannot be removed now is removed by a later write, a purge or eviction.
+    private void RemoveOtherVersions(VariantCacheLayout.VariantKey written)
+    {
+        var fileDir = new DirectoryInfo(Path.Combine(rootPath, written.FileDir));
+        try
+        {
+            foreach (var stale in fileDir.EnumerateDirectories()
+                         .Where(d => VariantCacheLayout.IsVersionDirName(d.Name) && d.Name != written.Version).ToList())
+            {
+                var freed = stale.EnumerateFiles().Where(f => VariantCacheLayout.IsVariantName(f.Name)).Sum(f => f.Length);
+                stale.Delete(recursive: true);
+                if (maxBytes > 0 && Interlocked.Read(ref _totalBytes) >= 0) Interlocked.Add(ref _totalBytes, -freed);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ForgetTotal();
+            _logger.LogWarning(ex, "Could not remove the other versions of image variants under {Path}.", fileDir.FullName);
+        }
+    }
+
+    private void ForgetTotal() => Interlocked.Exchange(ref _totalBytes, -1);
+
+    private static long SafeLength(Func<long> measure)
+    {
+        try { return measure(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
+    }
+
+    /// <summary>
+    /// One-time upkeep: removes files of the earlier flat layout and temp files left by writes that never
+    /// finished. Never throws; failures are logged.
+    /// </summary>
+    public void RunMaintenance()
+    {
+        var legacy = LegacyVariantLayout.Remove(rootPath, _logger);
+        var temps = RemoveStaleTemps();
+        if (legacy + temps > 0)
+            _logger.LogInformation(
+                "Image variant cache upkeep removed {Legacy} file(s) of the earlier layout and {Temps} stale temp file(s) under {Root}.",
+                legacy, temps, rootPath);
+    }
+
+    private int RemoveStaleTemps()
+    {
+        if (!Directory.Exists(rootPath)) return 0;
+        var removed = 0;
+        var cutoff = DateTime.UtcNow - VariantCacheLayout.StaleTempAge;
+        try
+        {
+            foreach (var temp in new DirectoryInfo(rootPath).EnumerateDirectories()
+                         .Where(d => VariantCacheLayout.IsFileDirName(d.Name))
+                         .SelectMany(d => d.EnumerateDirectories().Where(v => VariantCacheLayout.IsVersionDirName(v.Name)))
+                         .SelectMany(v => v.EnumerateFiles().Where(f => VariantCacheLayout.IsTempName(f.Name)))
+                         .Where(f => f.LastWriteTimeUtc < cutoff).ToList())
+            {
+                if (TryDelete(temp)) removed++;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not scan image cache temp files under {Root}.", rootPath);
+        }
+        return removed;
+    }
+
+    private bool TryDelete(FileInfo file)
+    {
+        try
+        {
+            file.Delete();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not remove image cache file {Path}.", file.FullName);
+            return false;
+        }
+    }
 
     // The destination can be briefly unreplaceable while a concurrent reader, evictor or writer of
     // the same key has it open or pending deletion. A few retries cover that; a variant that still
@@ -185,6 +298,7 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         if (!_sweepGate.Wait(0)) return;
         try
         {
+            RemoveStaleTemps();
             var files = ListVariants();
             var total = files.Sum(v => v.Length);
             Interlocked.Exchange(ref _totalBytes, total);
@@ -217,24 +331,10 @@ public sealed class DiskImageVariantCache(string rootPath, long maxBytes = 0, IL
         }
     }
 
-    private string PathFor(string key)
+    private string PathFor(string key, out VariantCacheLayout.VariantKey parsed)
     {
-        // Keys are always our own SHA256 hex digest (validated by DeriveKey's contract), so no
-        // traversal characters can ever appear here — but guard anyway in case of a caller misuse.
-        if (key.Length == 0 || !IsHex(key))
-            throw new ArgumentException("Cache key must be non-empty hex.", nameof(key));
-
-        var shard = key[..Math.Min(2, key.Length)];
-        return Path.Combine(rootPath, shard, key);
-    }
-
-    private static bool IsHex(string s)
-    {
-        foreach (var c in s)
-        {
-            var isHexDigit = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-            if (!isHexDigit) return false;
-        }
-        return true;
+        if (!VariantCacheLayout.TryParseKey(key, out parsed))
+            throw new ArgumentException("Cache key must be <file id>/<version hex>/<variant hex>.", nameof(key));
+        return VariantCacheLayout.VariantPath(rootPath, parsed);
     }
 }

@@ -26,7 +26,9 @@ public sealed class FileService(
     ILogger<FileService>? logger = null,
     // Reference handling shared with every collection's delete (Restrict guard, SetNull, junctions,
     // translations). DI always supplies it; only upload-only test harnesses leave it null.
-    ItemPurgePipeline? references = null) : IFileLifecycle
+    ItemPurgePipeline? references = null,
+    // Cleared of the purged file's variants; null in harnesses that have no cache.
+    IImageVariantCache? variantCache = null) : IFileLifecycle
 {
     private readonly ILogger log = logger ?? NullLogger<FileService>.Instance;
     private readonly IFileStorage blobs = storage.Storage;
@@ -247,7 +249,22 @@ public sealed class FileService(
         await NotifyAsync(changes);
         // The blob delete stays outside the transaction: best-effort (row gone, bytes orphaned).
         await BlobCleanup.TryDeleteAsync(blobs, row.StorageKey, log);
+        await TryRemoveVariantsAsync(id);
         return true;
+    }
+
+    // Best-effort like the blob delete: the row is gone, so a cache that cannot be cleaned costs only disk.
+    private async Task TryRemoveVariantsAsync(Guid fileId)
+    {
+        if (variantCache is null) return;
+        try
+        {
+            await variantCache.RemoveAllForFileAsync(fileId, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Removing the cached image variants of file {FileId} failed; they stay until evicted.", fileId);
+        }
     }
 
     public Task<bool> PurgeAsync(Guid id, CancellationToken ct = default) => DeleteAsync(id, ct);
