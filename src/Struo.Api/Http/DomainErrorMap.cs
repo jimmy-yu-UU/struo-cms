@@ -27,7 +27,8 @@ public static class DomainErrorMap
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
     /// host), a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
     /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The
-    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
+    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps
+    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
     /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
