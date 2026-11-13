@@ -8,9 +8,22 @@ namespace Struo.Application.Query;
 
 /// <summary>
 /// A self-reference key an update changes: the foreign key's field name and the id the row is moved
-/// under (null when it is moved to the root).
+/// under (null when it is moved to the root). Only <see cref="SelfReferenceCycleGuard.LockMovedRowAsync"/>
+/// creates one, under the row lock it has just taken.
 /// </summary>
-public sealed record SelfReferenceMove(string ForeignKey, string SelfId, string? NewParentId);
+public sealed record SelfReferenceMove
+{
+    internal SelfReferenceMove(string foreignKey, string selfId, string? newParentId)
+    {
+        ForeignKey = foreignKey;
+        SelfId = selfId;
+        NewParentId = newParentId;
+    }
+
+    public string ForeignKey { get; }
+    public string SelfId { get; }
+    public string? NewParentId { get; }
+}
 
 /// <summary>
 /// Rejects a self-referencing ManyToOne update that would create a parent cycle (A→B→…→A).
@@ -33,7 +46,8 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
     /// <summary>
     /// Locks the row being updated and returns the self-reference keys whose stored value differs from the
     /// value about to be written. Empty for a collection without a self-reference (no read at all) and when
-    /// the row does not exist (the row write then finds nothing).
+    /// the row does not exist (the row write then finds nothing). The result is meant for
+    /// <see cref="EnsureNoCycleAsync"/> in the same transaction and nowhere else.
     /// </summary>
     public async Task<IReadOnlyList<SelfReferenceMove>> LockMovedRowAsync(
         string collection, CollectionMetadata meta, object entityAfterOverlay, CancellationToken ct)
@@ -54,13 +68,16 @@ public sealed class SelfReferenceCycleGuard(IItemRepository repository, IEntityR
             if (prop is null) continue;
             var storedParent = prop.GetValue(stored)?.ToString();
             var newParent = prop.GetValue(entityAfterOverlay)?.ToString();
-            if (!string.Equals(storedParent, newParent, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(storedParent, newParent, StringComparison.Ordinal))
                 moves.Add(new SelfReferenceMove(key, selfId, newParent));
         }
         return moves;
     }
 
-    /// <summary>Walks each moved key's new ancestor chain under locks and rejects a cycle.</summary>
+    /// <summary>
+    /// Walks each moved key's new ancestor chain under locks and rejects a cycle. Takes exactly what
+    /// <see cref="LockMovedRowAsync"/> returned in the same transaction.
+    /// </summary>
     public async Task EnsureNoCycleAsync(
         string collection, IReadOnlyList<SelfReferenceMove> moves, CancellationToken ct)
     {

@@ -45,6 +45,25 @@ internal sealed class PlainNode : ISoftDeletable
     public PlainNode? Parent { get; set; }
 }
 
+/// <summary>Self-referencing node with a string key, for ids that differ only by case. Created only by the
+/// tests that insert its rows.</summary>
+[SugarTable("test_str_nodes")]
+[CmsCollection("StrNode")]
+internal sealed class StrNode
+{
+    [SugarColumn(IsPrimaryKey = true)] public string Id { get; set; } = "";
+
+    [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true)]
+    public string Name { get; set; } = "";
+
+    public string? ParentId { get; set; }
+
+    [Navigate(NavigateType.OneToOne, nameof(ParentId))]
+    [CmsRelation(Interface = RelationInterface.TreeSelect, OnDelete = OnDelete.SetNull)]
+    [SugarColumn(IsIgnore = true)]
+    public StrNode? Parent { get; set; }
+}
+
 /// <summary>A collection with no self-reference.</summary>
 [SugarTable("test_plain_leaves")]
 [CmsCollection("PlainLeaf")]
@@ -92,13 +111,14 @@ internal sealed class TreeHarness : IDisposable
             db.CodeFirst.InitTables<FileTranslation>();
             db.CodeFirst.InitTables<PlainNode>();
             db.CodeFirst.InitTables<PlainLeaf>();
+            db.CodeFirst.InitTables<StrNode>();
             db.CodeFirst.InitTables<Language>();
             db.CodeFirst.InitTables<Revision>();
             LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
             _tablesCreated = true;
         }
 
-        var types = new[] { typeof(MediaFolder), typeof(File), typeof(PlainNode), typeof(PlainLeaf) };
+        var types = new[] { typeof(MediaFolder), typeof(File), typeof(PlainNode), typeof(PlainLeaf), typeof(StrNode) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
@@ -108,6 +128,7 @@ internal sealed class TreeHarness : IDisposable
             ["file"] = typeof(File),
             ["plainNode"] = typeof(PlainNode),
             ["plainLeaf"] = typeof(PlainLeaf),
+            ["strNode"] = typeof(StrNode),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var counting = new CountingItemRepository(

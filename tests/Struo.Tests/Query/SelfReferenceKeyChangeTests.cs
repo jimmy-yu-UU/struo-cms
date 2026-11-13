@@ -6,6 +6,7 @@ using Struo.Api.Http;
 using Struo.Application.Query;
 using Struo.Domain.Query;
 using Struo.Infrastructure.Files;
+using Struo.Tests.Support;
 using Xunit;
 
 namespace Struo.Tests.Query;
@@ -147,6 +148,35 @@ public sealed class SelfReferenceKeyChangeTests : IDisposable
         ex.Should().NotBeNull();
         StruoExceptionHandler.Map(ex!, true).Status.Should().Be(409);
         ex.Should().NotBeOfType<QueryException>();
+    }
+
+    // On a case-sensitive collation "abc" and "ABC" are two rows, so moving a row from one to the other
+    // changes the key and the new chain must be walked. R sits under "abc" and "ABC" sits under R.
+    [NotOnBackendFact("the collation folds case, so ids differing only by case collide",
+        TestBackendKind.MySql, TestBackendKind.MariaDb, TestBackendKind.SqlServer)]
+    public async Task A_move_between_parents_whose_ids_differ_only_by_case_is_walked_and_refused_as_a_cycle()
+    {
+        await _h.Reader.Insertable(new StrNode { Id = "abc", Name = "lower" }).ExecuteCommandAsync();
+        await _h.Reader.Insertable(new StrNode { Id = "r", Name = "r", ParentId = "abc" }).ExecuteCommandAsync();
+        await _h.Reader.Insertable(new StrNode { Id = "ABC", Name = "upper", ParentId = "r" }).ExecuteCommandAsync();
+        var (svc, _) = _h.Build();
+
+        var ex = await Assert.ThrowsAsync<QueryException>(
+            () => svc.UpdateAsync("strNode", "r", TreeHarness.Body(new { parentId = "ABC" })));
+
+        ex.Message.Should().Contain("cycle");
+        (await _h.Reader.Queryable<StrNode>().In("r").FirstAsync()).ParentId.Should().Be("abc");
+    }
+
+    // The counting repository wraps the SQL repository; a purge reaches the trashed-row primitives only if
+    // the wrapper forwards them.
+    [Fact]
+    public async Task A_purge_through_a_wrapping_repository_reaches_the_purge_primitives()
+    {
+        var folder = await _h.CreateAsync(Folder, "A");
+        var (svc, _) = _h.Build();
+
+        (await svc.DeleteAsync(Folder, folder.ToString(), purge: true)).Should().BeTrue();
     }
 
     [Fact]
