@@ -16,6 +16,15 @@ public interface IItemRepository
         string? queryLocale = null, DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
     Task<object?> GetByIdAsync(string collection, string id,
         DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default);
+    /// <summary>
+    /// Like <see cref="GetByIdAsync"/>, but inside a transaction the read locks the row until the
+    /// transaction ends and returns its latest committed values, so a concurrent change to the row waits.
+    /// Outside a transaction, or on a backend that needs no row lock, it is a plain read. The default is a
+    /// plain read; an implementation that serves concurrent writers must override it.
+    /// </summary>
+    Task<object?> GetByIdLockedAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default) =>
+        GetByIdAsync(collection, id, deleted, ct);
     Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default);
     Task<object?> UpdateAsync(string collection, string id, object entity, CancellationToken ct = default);
     Task<bool> DeleteAsync(string collection, string id, CancellationToken ct = default);

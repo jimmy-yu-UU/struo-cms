@@ -337,10 +337,6 @@ public sealed class ItemService(
     {
         ItemDeserializer.EnforceRequiredFields(meta, d, existing);
 
-        // Self-referencing tree collections: reject a parentId that points at the item itself or
-        // one of its descendants (cycle). Runs after the FK overlay so it sees the incoming value.
-        await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
-
         // Optimistic concurrency: guard the write on the version the client last read. When the
         // client echoes `version`, the repository's compare-and-swap rejects the update (409) if another
         // writer already moved the row on. Absent a client version we fall back to the freshly-loaded
@@ -366,6 +362,10 @@ public sealed class ItemService(
             await hooks.InTransactionBeforeWriteAsync(ct);
             updated = await repository.UpdateAsync(collection, id, existing, ct);
             if (updated is null) return;
+            // Self-referencing tree collections: reject a parentId that points at the item itself or one of
+            // its descendants. After the row write, so a writer already holds the database's write lock where
+            // the backend has a single writer, and before anything else is stored.
+            await cycleGuard.EnsureNoCycleAsync(collection, meta, existing, ct);
             updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (a revert); every other write path stays strict.

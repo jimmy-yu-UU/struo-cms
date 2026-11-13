@@ -65,6 +65,9 @@ public sealed class SqlSugarItemRepository(
     private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdDispatcher =
         new(typeof(SqlSugarItemRepository), nameof(GetByIdGenericAsync), [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)]);
 
+    private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, DeletedFilter, CancellationToken, Task<object?>>> GetByIdLockedDispatcher =
+        new(typeof(SqlSugarItemRepository), nameof(GetByIdLockedGenericAsync), [typeof(object), typeof(DeletedFilter), typeof(CancellationToken)]);
+
     private static readonly GenericDispatcher<Func<SqlSugarItemRepository, object, CancellationToken, Task<object>>> CreateDispatcher =
         new(typeof(SqlSugarItemRepository), nameof(CreateGenericAsync), [typeof(object), typeof(CancellationToken)]);
 
@@ -114,6 +117,21 @@ public sealed class SqlSugarItemRepository(
             q = q.ClearFilter<ISoftDeletable>();
         // InSingleAsync has no CancellationToken overload; In(id).FirstAsync(ct) forwards the token.
         return await q.In(id).FirstAsync(ct);
+    }
+
+    public async Task<object?> GetByIdLockedAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
+    {
+        var d = RepositoryHelpers.Descriptor(registry, collection);
+        return await GetByIdLockedDispatcher.For(d.EntityType)(this, RepositoryHelpers.ConvertId(id, d), deleted, ct);
+    }
+
+    private async Task<object?> GetByIdLockedGenericAsync<T>(object id, DeletedFilter deleted, CancellationToken ct) where T : class, new()
+    {
+        var q = db.Queryable<T>();
+        if (deleted != DeletedFilter.Exclude && typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+            q = q.ClearFilter<ISoftDeletable>();
+        return await RepositoryHelpers.Locked(db, q).In(id).FirstAsync(ct);
     }
 
     public Task InTransactionAsync(Func<Task> body, CancellationToken ct = default) =>

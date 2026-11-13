@@ -65,6 +65,13 @@ public sealed class CountingItemRepository(IItemRepository inner) : IItemReposit
         return inner.GetByIdAsync(collection, id, deleted, ct);
     }
 
+    public Task<object?> GetByIdLockedAsync(string collection, string id,
+        DeletedFilter deleted = DeletedFilter.Exclude, CancellationToken ct = default)
+    {
+        System.Threading.Interlocked.Increment(ref _rootReads);
+        return inner.GetByIdLockedAsync(collection, id, deleted, ct);
+    }
+
     public Task<object> CreateAsync(string collection, object entity, CancellationToken ct = default) =>
         inner.CreateAsync(collection, entity, ct);
 
