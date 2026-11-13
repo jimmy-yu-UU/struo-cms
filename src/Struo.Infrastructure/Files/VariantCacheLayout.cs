@@ -61,7 +61,7 @@ internal static class VariantCacheLayout
         && IsLowerHex(name.AsSpan(2 + VariantLength, TempGuidLength), TempGuidLength)
         && name.EndsWith(TempSuffix, StringComparison.Ordinal);
 
-    /// <summary>A symbolic link or junction. The cache never descends into one or deletes through one.</summary>
+    /// <summary>A symbolic link or junction: the cache never descends into one or deletes through one.</summary>
     internal static bool IsReparsePoint(FileSystemInfo entry) =>
         (entry.Attributes & FileAttributes.ReparsePoint) != 0;
 
@@ -70,7 +70,7 @@ internal static class VariantCacheLayout
 
     /// <summary>
     /// A failure that only says another writer, purge or maintenance pass changed the tree first: the
-    /// directory is gone, or no longer empty. It is not a fault of the disk.
+    /// directory is gone, or it holds an entry that stops its removal. It is not a fault of the disk.
     /// </summary>
     internal static bool IsBenignRace(Exception error) =>
         error is DirectoryNotFoundException or FileNotFoundException

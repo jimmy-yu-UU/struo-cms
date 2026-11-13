@@ -49,7 +49,8 @@ public sealed partial class DiskImageVariantCache
         {
             if (VariantCacheLayout.IsBenignRace(ex))
             {
-                _logger.LogDebug(ex, "A concurrent change under {Path} ended an image variant tidy early.", fileDir.FullName);
+                _logger.LogDebug(
+                    ex, "A concurrent change under {Path} ended an image variant tidy early.", fileDir.FullName);
                 return;
             }
             ForgetTotal();
@@ -117,7 +118,8 @@ public sealed partial class DiskImageVariantCache
 
     private IEnumerable<DirectoryInfo> VersionDirectories() =>
         FileDirectories().SelectMany(d => d.EnumerateDirectories()
-            .Where(v => VariantCacheLayout.IsVersionDirName(v.Name) && !VariantCacheLayout.IsReparsePoint(v)));
+            .Where(v => VariantCacheLayout.IsVersionDirName(v.Name)
+                && !VariantCacheLayout.IsReparsePoint(v)));
 
     private bool TryRemoveIfEmpty(DirectoryInfo directory)
     {
@@ -148,7 +150,7 @@ public sealed partial class DiskImageVariantCache
         }
     }
 
-    // A directory that vanished or is no longer empty means another writer, purge or pass got there first.
+    // A directory that vanished or holds a new entry means another writer, purge or pass was first.
     private void LogMaintenanceFailure(Exception ex, string path)
     {
         if (VariantCacheLayout.IsBenignRace(ex))

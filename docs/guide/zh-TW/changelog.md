@@ -72,36 +72,42 @@
   `Relation '{a.b}' targets unknown collection` 失敗。有這類組件的 fork 要把缺少的依賴部署上去，
   或移除那個型別。public 的 `MetadataScanner.SafeGetTypes` 改名為 `LoadTypes`，因為它不再容忍失
   敗；呼叫它的 fork 要改名。
-- 重複的語言代碼在每個後端都回 `409` `CONFLICT`。代碼只差大小寫的重複，在 SQLite 與 PostgreSQL 上
-  原本回 `400`，現在回 `409`，訊息不變（`Language code '{code}' already exists.`）；MySQL、MariaDB、
-  SQL Server 與完全相同的重複原本就回 `409`。其餘的語言規則（代碼格式、至少一列啟用、恰好一列預設）
-  仍是 `400`。`ILanguageCollectionRules` 的實作遇到重複代碼要丟 `ConflictException`，其餘違規丟
-  `QueryException`。`struo_languages` 的唯一索引不變。
-- `IUserSessionStore.RemoveAllForUserAsync` 移除，換成
-  `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`，只刪指定鑰
-  匙的索引列；實作這個介面的 fork 要改。`IAuthService` 多了
-  `ConfirmUnchangedAsync(AuthResult, CancellationToken)`，回傳登入驗證過的密碼雜湊是否仍是儲存的那
-  一份，而且使用者還在、仍啟用；自己實作 `IAuthService` 的 fork 要補上這個方法。
-  `AuthController.Login` 在工作階段寫入後呼叫它，內建的 `AuthService` 對沒帶 `PasswordProof` 的結
-  果一律回 `false`。`AuthResult` 多了第三個位置成員 `Proof`（選用的 `PasswordProof`）：
-  `AuthResult` 的建構函式與 `AuthResult.Ok` 的簽章變了，針對舊簽章編譯的組件要重新編譯；把結果解構
-  成兩個值的程式碼（`var (id, failure) = result`）要改成三個（`var (id, failure, _) = result`）。
-  自己實作 `IAuthService` 的 fork 在驗證成功時回傳
-  `AuthResult.Ok(userId, PasswordProof.From(storedHash))`，`storedHash` 是驗證密碼所用、資料庫存的
-  那一份雜湊；在 `ConfirmUnchangedAsync` 重新讀取使用者後，用 `proof.Matches(目前儲存的雜湊)`（序
-  數比對）判斷，並檢查使用者還在且啟用。`PasswordProof` 沒有任何公開的方式讀出雜湊，`ToString()`
-  只印型別名稱。`AuthController` 的建構函式多了 `SessionCookieName` 參數；自己建立這個控制器的
-  fork 要補上。
-- `IImageVariantCache` 多了 `RemoveAllForFileAsync(Guid fileId, CancellationToken)`，刪除某個檔案
-  的所有變體；`SetAsync` 的契約多了一條：寫入某個檔案的變體時，要一併刪掉同一個檔案其他 `version`
-  的變體。`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，鍵一定帶著檔案 id。
-  自己實作這個介面的 fork 要補上方法、遵守新的契約並接受新的鍵形狀。`FileService` 的建構函式在最後
-  多了選用參數 `IImageVariantCache? variantCache`。`DiskImageVariantCache` 多了公開方法
-  `RunMaintenance()`，API 在每次啟動時於背景呼叫。它的目錄結構改成
-  `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`：升級後第一次啟動，API 在背景刪除 `CachePath`
-  底下形如 `<2 位十六進位>/<64 位十六進位>` 的快取檔、同目錄的
-  `.<64 位十六進位>.<32 位十六進位>.tmp` 暫存檔，以及因此變空的目錄，其他檔案不動。這些變體不搬移，
-  第一次請求時重新轉換。名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
+- 重複的語言代碼在每個後端都回 `409` `CONFLICT`。
+  - SQLite 與 PostgreSQL：代碼只差大小寫的重複原本回 `400`，現在回 `409`，訊息不變
+    （`Language code '{code}' already exists.`）。其他後端與完全相同的重複原本就回 `409`。
+  - 代碼格式、至少一列啟用、恰好一列預設這幾條規則仍回 `400`。`struo_languages` 的唯一索引不變。
+  - `ILanguageCollectionRules` 的實作遇到重複代碼要丟 `ConflictException`，其餘違規丟
+    `QueryException`。
+- 登入與「撤銷全部工作階段」的競態修正，改了下列公開型別。
+  - `IUserSessionStore`：移除 `RemoveAllForUserAsync`，新增
+    `RemoveByTicketKeysAsync(IReadOnlyCollection<string> ticketKeys, CancellationToken)`，只刪指定
+    鑰匙的索引列。實作這個介面的 fork 要改；內建的 `SqlSugarUserSessionStore` 已改。
+  - `IAuthService`：新增 `ConfirmUnchangedAsync(AuthResult, CancellationToken)`。它回傳登入驗證過的
+    密碼雜湊是否仍是儲存的那一份，而且使用者還在、仍啟用。自己實作這個介面的 fork 要補上這個方法。
+  - `AuthResult`：多了第三個位置成員 `Proof`（選用的 `PasswordProof`）。建構函式與
+    `AuthResult.Ok` 的簽章變了，針對舊簽章編譯的組件要重新編譯。把結果解構成兩個值的程式碼
+    （`var (id, failure) = result`）要改成三個（`var (id, failure, _) = result`）。
+  - `PasswordProof`（新型別）：自己實作 `IAuthService` 的 fork，驗證成功時回傳
+    `AuthResult.Ok(userId, PasswordProof.From(storedHash))`，`storedHash` 是驗證密碼所用、資料庫存
+    的那一份雜湊。`ConfirmUnchangedAsync` 重新讀取使用者後，用 `proof.Matches(目前儲存的雜湊)`（序
+    數比對）判斷，並檢查使用者還在且啟用。它沒有任何公開的方式讀出雜湊，`ToString()` 只印型別名稱。
+  - `AuthController`：建構函式多了 `SessionCookieName` 與 `ILogger<AuthController>` 參數，自己建立
+    這個控制器的 fork 要補上。`Login` 在工作階段寫入後呼叫 `ConfirmUnchangedAsync`；內建的
+    `AuthService` 對沒帶 `PasswordProof` 的結果一律回 `false`。
+- 圖片變體快取改成每個檔案一個目錄，改了下列公開型別。
+  - `IImageVariantCache`：新增 `RemoveAllForFileAsync(Guid fileId, CancellationToken)`，刪除某個檔
+    案的所有變體。`SetAsync` 的契約多一條：寫入某個檔案的變體時，要一併刪掉同一個檔案其他
+    `version` 的變體。`DeriveKey` 回傳的鍵改成 `<檔案 id>/<version 雜湊>/<變體雜湊>` 三段，一定帶
+    著檔案 id。自己實作這個介面的 fork 要補上方法、遵守新的契約、接受新的鍵形狀。
+  - `FileService`：建構函式在最後多了選用參數 `IImageVariantCache? variantCache`。
+  - `DiskImageVariantCache`：新增公開方法 `RunMaintenance()`，API 每次啟動時在背景呼叫。目錄結構改成
+    `<CachePath>/<檔案 id>/<version 雜湊>/<變體雜湊>`。
+
+  升級後第一次啟動，API 在背景刪除 `CachePath` 底下形如 `<2 位十六進位>/<64 位十六進位>` 的快取檔、
+  同目錄的 `.<64 位十六進位>.<32 位十六進位>.tmp` 暫存檔，以及因此變空的目錄，其他檔案不動。這些變體
+  不搬移，第一次請求時重新轉換。
+
+  名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
 :::
 
 ### 新增
