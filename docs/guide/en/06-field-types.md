@@ -20,12 +20,22 @@ The tables below use a few shorthand terms under Database column:
 - `varchar(255)`: a `string` with no length, which `make:migration` writes as `AsString(255)`; on
   SQL Server it is `nvarchar(255)`.
 - Long text: the result of applying `ColumnShape.LongText`; each backend maps it to its own type.
-- JSON: long text plus `IsJson = true` — SqlSugar serializes and restores the whole CLR collection
+- JSON: long text plus `IsJson = true` — SqlSugar serializes and restores the whole CLR value
   directly.
 - CLR default: numbers, `bool`, `Guid` keep FluentMigrator's and SqlSugar's ordinary mapping;
   nothing widens the length. For `DateTime` on each backend, see "Date and time".
 - `ColumnShape` has three members, `LongText`, `TimestampWithTimeZone` and `Timestamp` — there's no
   numeric shape.
+
+Terms used in this chapter:
+
+- Multi-value interfaces: the six interfaces `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`,
+  `Files` and `Repeater`, whose whole value is stored as one JSON column.
+- Single-value types: primitives, enums, `string`, `decimal`, `Guid`, `DateTime`, `DateTimeOffset`,
+  `DateOnly`, `TimeOnly`, `TimeSpan`, `byte[]`, and the `Nullable<T>` of each.
+- Structured types: every type other than a single-value type, for example `List<>`, `HashSet<>`,
+  `Dictionary<,>`, an array (except `byte[]`), a custom class or a struct.
+- Single-value interfaces: every interface except the multi-value interfaces, `Hidden` and `Json`.
 
 On MySQL/MariaDB, text columns use the database's default character set, so create the database as
 utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
@@ -151,15 +161,14 @@ whose property is not a `string` is not checked against its options.
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
 `Json` is a `string` property holding raw JSON text; the API layer re-parses it on read and
-re-serializes it on write. The real JSON columns come from the six structured interfaces —
-`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, and `Repeater` — and from a property on
-`Hidden` whose type is a list, an array, a dictionary or a custom class. SqlSugar (de)serializes the
-whole CLR value directly against a JSON column, and these properties need no `IsJson`; a `KeyValue`
-key can't be blank.
+re-serializes it on write. The real JSON columns come from the multi-value interfaces and from a
+structured-type property on `Hidden`. SqlSugar (de)serializes the whole CLR value directly against
+a JSON column, and these properties need no `IsJson`; a `KeyValue` key can't be blank.
 
-A field whose property type is not a single value can sit only on those six interfaces or on
-`Hidden`; on any other interface the host fails at startup. A `Json` interface property must be a
-`string`. The rules are in [Declarations rejected at startup](#declarations-rejected-at-startup).
+A structured-type property can sit only on a multi-value interface or on `Hidden`; on any other
+interface the host fails at startup. A `Json` interface property must be a `string`, and no
+interface accepts `object`. The rules are in
+[Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
 violating either throws a startup `MetadataException` naming the field. Child fields are limited
@@ -188,8 +197,8 @@ the same, and the admin picker can only fall back to showing the raw id.
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Hidden` | Any | Follows the type; a structured type is JSON | `ReadonlyField` |
-| `Divider` | Any | Follows the property type, or none | `DividerField` |
+| `Hidden` | Single-value or structured, not `object` | Follows the type; a structured type is JSON | `ReadonlyField` |
+| `Divider` | Single-value, or any type with `IsIgnore = true` | Follows the type; none with `IsIgnore` | `DividerField` |
 | `Uuid` | `Guid`/`Guid?` | CLR default | `ReadonlyField` |
 
 The `Hidden` here is the interface itself, rendering a read-only display component — it's a
@@ -218,7 +227,7 @@ The declarations on a property decide its database column and the default input 
 |---|---|---|
 | A `string` with nothing special | `varchar(255)` | 255 |
 | A `string` on a long-text interface | long text | none |
-| A JSON interface | long text holding JSON | not applicable |
+| A multi-value interface | long text holding JSON | not applicable |
 | A structured-type property on `Hidden` | long text holding JSON | not applicable |
 | `[ColumnShape(ColumnShape.LongText)]` | long text | none |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
@@ -226,17 +235,13 @@ The declarations on a property decide its database column and the default input 
 | `[SugarColumn(ColumnDataType = "t")]` | type `t`, as written | none |
 | `[SugarColumn(IsJson = true)]` | long text holding JSON | not applicable |
 
-Terms in the table:
+The multi-value interfaces and structured types in the table are defined in
+[Interface overview](#interface-overview). Other terms:
 
 - Long-text interfaces: `Textarea`, `RichText`, `Markdown`, `Code`, `Json`.
-- JSON interfaces: `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`.
 - `varchar(255)` and `varchar(n)` are `nvarchar` on SQL Server.
 - None: there is no limit. Not applicable: the property is not a `string`, so it cannot carry
   `MaxLength`; the same declaration on a `string` property means none.
-- Single-value types: primitives, enums, `string`, `decimal`, `Guid`, `DateTime`, `DateTimeOffset`,
-  `DateOnly`, `TimeOnly`, `TimeSpan`, `byte[]`, and the `Nullable<T>` of each. Every other type is a
-  structured type, for example a list, an array (except `byte[]`), a dictionary, a set or a custom
-  class.
 - A `Length` on a long-text interface does not count; it needs a `ColumnDataType` beside it, as in
   the `[SugarColumn(ColumnDataType = "t", Length = n)]` row.
 
@@ -252,22 +257,24 @@ nothing waits for the table to be used.
 
 | Conflicting declarations | What to change |
 |---|---|
-| A JSON interface with `[ColumnShape]` | Remove `[ColumnShape]` |
-| A JSON interface with `ColumnDataType` | Remove `ColumnDataType` |
+| A multi-value interface with `[ColumnShape]` | Remove `[ColumnShape]` |
+| A multi-value interface with `ColumnDataType` | Remove `ColumnDataType` |
 | `IsJson = true` with `ColumnDataType` | Remove `ColumnDataType` |
 | A structured-type property with `ColumnDataType` | Remove `ColumnDataType` |
 | A structured-type property with `[ColumnShape]` | Remove `[ColumnShape]` |
-| A structured-type property on a single-value interface | Use a JSON interface or `Hidden`, or a single-value type |
+| A structured-type property on a single-value interface | Use a multi-value interface, `Hidden`, or a single-value type |
 | A `Json` interface property that is not a `string` | Declare the property as `string` |
+| An `object` property on any interface | Declare the property as the actual type |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 
 The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnDataType` cannot set
 it. The same goes for a structured-type property, which is stored as a JSON column.
 
-A single-value interface is every interface except the JSON interfaces, `Hidden` and `Json`. A
-structured-type property on a single-value interface is rejected whether or not it carries
-`IsJson`. The `Json` interface stores raw JSON text, so its property is declared as `string`.
+A structured-type property on a single-value interface is rejected whether or not it carries
+`IsJson`. The `Json` interface stores raw JSON text, so its property is declared as `string`. An
+`object` property is read back as a JSON node, not as the value written, so no interface accepts
+it, the multi-value interfaces and `Hidden` included.
 
 A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
 NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
@@ -315,7 +322,7 @@ an existing table".
 `Required` always demands the field on create; on update it validates the merged entity, not the
 request body itself — details are in [Chapter 5: Defining Collections](05-collections.md).
 
-For a collection-valued field (an array or an object), `Required` means "a value was supplied": an
+For a field whose value is an array or an object, `Required` means "a value was supplied": an
 empty `[]` or `{}` passes, on the frontend and the backend alike. Requiring at least one entry is a
 check the fork writes in a write interceptor.
 

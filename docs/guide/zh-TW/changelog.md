@@ -43,7 +43,7 @@
   不是關聯，不會因為它的形狀讓主機啟動失敗；其中多對多寫法的，仍只讀它的 junction 型別。
 - 沒有 `MaxLength` 的 `string` 欄位，上限就是欄位寬度：255，或 `[SugarColumn]` 的 `Length`（同一個
   attribute 另外明寫 `ColumnDataType` 也一樣；長文字介面要搭配明寫的 `ColumnDataType`，存成 JSON
-  的介面不看 `Length`）。欄位沒有長度可言時不設上限：JSON 介面、`[ColumnShape]`、`IsJson = true`、
+  的介面不看 `Length`）。欄位沒有長度可言時不設上限：多值介面、`[ColumnShape]`、`IsJson = true`、
   沒有 `ColumnDataType` 的長文字介面、明寫 `ColumnDataType` 又沒有 `Length`；寫在型別字串裡的
   長度（例如 `varchar(500)`）不會被讀取，這種欄位要設 `Length`，或在欄位上設 `MaxLength`。
   `Hidden`、`Time` 與宣告在 `string` 上的 `Uuid` 原本沒有上限，超過 255 字元的值在 SQLite 上寫得
@@ -66,42 +66,41 @@
 - 掃描器在啟動時拒絕互相衝突的欄位宣告，丟出 `MetadataException`，訊息點名「類別.屬性」與兩個衝突
   的宣告。檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性，每個環境都一樣；
   `Repeater` 子欄位與掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查。宣告了下列組合的 fork，
-  主機會無法啟動：
-  - JSON 介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）加
-    `[ColumnShape]`。原本 Development 在啟動時以 `InvalidOperationException` 失敗；正式環境照常
-    啟動，之後每次用到那張表都回 `500`；`make:migration` 讓例外直接飛出去。拿掉 `[ColumnShape]`，
-    欄位不變。
-  - JSON 介面加明寫的 `ColumnDataType`。原本被忽略，欄位照樣是框架的 JSON 長文字型別（`jsonb` 仍
-    建成 `text`）。拿掉 `ColumnDataType`，欄位不變。
-  - `[ColumnShape]` 加 `ColumnDataType`。原本 `[ColumnShape]` 勝出，`ColumnDataType` 悄悄被丟掉。
-    拿掉 `ColumnDataType`，欄位不變；要用自己的型別，改拿掉 `[ColumnShape]`，欄位型別會跟著變。
-  - `IsJson = true` 或結構化型別屬性（清單、陣列、字典、自訂類別）加 `ColumnDataType`。
-    `IsJson = true` 原本接受明寫的型別：PostgreSQL 的 `jsonb` 讓 REST 對該欄位的篩選（`_eq`、
-    `_contains`）回 `500`，MySQL 的 `json` 讓 `_eq` 比不到任何列。沒有 `IsJson` 的 `List<>` 屬性加
-    `ColumnDataType`，原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗。拿掉 `ColumnDataType`
-    後，欄位成為框架的 JSON 長文字型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支
-    migration 改成長文字。
-  - `IsJson = true` 加 `[ColumnShape]`。原本通過，欄位型別取 shape 的型別（例如
-    `timestamptz`），JSON 欄位因此不是長文字。拿掉 `[ColumnShape]` 後，欄位成為框架的 JSON 長文字
-    型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
-  - 結構化型別屬性加 `[ColumnShape]`，沒有 `IsJson`。原本通過檢查。拿掉 `[ColumnShape]` 後，欄位成為
-    框架的 JSON 長文字型別；原本 shape 的型別不是長文字、表已用該型別建好時，要寫一支 migration 改成
+  主機會無法啟動；下面用到的多值介面、單一值介面與結構化型別，定義見
+  [第 6 章](06-field-types.md#介面總覽)：
+  - 多值介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）加
+    `[ColumnShape]`。拿掉 `[ColumnShape]`，欄位不變。
+  - 多值介面加明寫的 `ColumnDataType`。拿掉 `ColumnDataType`，欄位不變。
+  - `[ColumnShape]` 加 `ColumnDataType`。拿掉 `ColumnDataType`，欄位不變；要用自己的型別，改拿掉
+    `[ColumnShape]`，欄位型別會跟著變。
+  - `IsJson = true` 或結構化型別屬性加 `ColumnDataType`。拿掉 `ColumnDataType`，欄位成為框架的
+    JSON 長文字型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成
     長文字。
-  - 結構化型別屬性放在 JSON 介面與 `Hidden` 以外的介面（例如 `Text`、`Select`），沒有 `IsJson`。
-    原本主機照常啟動，寫入卻失敗：`List<>` 在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗，
-    在 SQLite 與 SQL Server 上，0 或 1 個元素的清單寫得進去、讀回來是空清單；字典、陣列與自訂
-    類別的欄位在 SQLite、PostgreSQL、MySQL 與 MariaDB 上建成 `varchar(1)`，在 SQL Server 上建成
-    `varchar(max)`，含這類屬性的實體在每個後端每次寫入都失敗。改用 JSON 介面或 `Hidden`，欄位
-    成為框架的 JSON 長文字型別，後台編輯器隨介面改變；改宣告成單一值屬性，欄位型別隨屬性型別
-    改變，已建好的表要另寫一支 migration。
-  - 結構化型別屬性放在 JSON 介面與 `Hidden` 以外的介面，並寫了 `IsJson = true`。原本能正常運作，
-    欄位是 JSON 長文字。改用 JSON 介面或 `Hidden` 後欄位不變，後台編輯器隨介面改變。
-  - `Json` 介面的屬性不是 `string`（例如清單或數字）。原本沒有這項檢查。`Json` 介面存的是原始 JSON
-    文字，屬性改宣告成 `string` 後欄位是長文字；表已用別的型別建好時，要另寫一支 migration。
-  - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加
-    `[SugarColumn(IsNullable = false)]`。原本被忽略，欄位照樣可為 null，所以拿掉
-    `IsNullable = false` 欄位不變。要 NOT NULL，把屬性宣告成不可為 null（`Guid`、`string`），
-    欄位會跟著變，已建好的表要另寫一支 migration。
+  - `IsJson = true` 加 `[ColumnShape]`。拿掉 `[ColumnShape]`，欄位成為框架的 JSON 長文字型別；
+    表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - 結構化型別屬性加 `[ColumnShape]`，沒有 `IsJson`。拿掉 `[ColumnShape]`，欄位成為框架的 JSON
+    長文字型別；表已用 shape 的型別建好時，要寫一支 migration 改成長文字。
+  - 結構化型別屬性放在單一值介面（例如 `Text`、`Select`；`[CmsField]` 沒寫 `Interface` 就是
+    `Text`），沒有 `IsJson`。原本主機照常啟動，框架替這個屬性推出 `varchar(1)` 欄位（SQL Server
+    上是 `varchar(max)`）；在 SQLite、PostgreSQL、MySQL、MariaDB 與 SQL Server 上，`List<string>`
+    屬性有兩個元素就寫入失敗，只有一個元素則讀回來是空清單，`Dictionary<string, string>` 或自訂
+    類別屬性每次寫入都失敗。改用多值介面或 `Hidden`，欄位成為框架的 JSON 長文字型別。已有
+    `varchar(1)` 欄位的表要寫一支 migration 改成長文字：`migrate:check` 在 PostgreSQL、MySQL 與
+    MariaDB 上報成錯誤，SQLite 不比對型別，SQL Server 的 `varchar(max)` 只報警告。多值介面有自己的
+    後台編輯器。放在 `Hidden` 時，欄位會從 GraphQL schema 消失、不是後台清單的欄位、在後台表單裡
+    只是唯讀顯示，REST 仍回傳也仍接受它。或者改宣告成單一值屬性：欄位型別隨屬性型別改變，已建好
+    的表要另寫一支 migration。
+  - 結構化型別屬性放在單一值介面，並寫了 `IsJson = true`。改用多值介面或 `Hidden`，欄位不變，
+    不必寫 migration。多值介面有自己的後台編輯器。放在 `Hidden` 時，欄位會從 GraphQL schema 消失、
+    不是後台清單的欄位、在後台表單裡只是唯讀顯示，REST 仍回傳也仍接受它。
+  - `Json` 介面的屬性不是 `string`（例如清單或數字），有沒有寫 `IsJson` 都一樣。屬性改宣告成
+    `string`：`Json` 介面存的是原始 JSON 文字，欄位是長文字。表已用別的型別建好時，要另寫一支
+    migration。
+  - 任何介面上的 `object` 屬性。屬性改宣告成實際的型別（`string`、`List<>`、自訂類別）；欄位隨該
+    型別改變，規則同上面各項。
+  - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加 `[SugarColumn(IsNullable = false)]`。
+    可為 null 的屬性一律得到可為 null 的欄位，所以拿掉 `IsNullable = false` 欄位不變。要 NOT NULL，
+    把屬性宣告成不可為 null（`Guid`、`string`），欄位會跟著變，已建好的表要另寫一支 migration。
 
   規則與各組合的改法見[第 6 章](06-field-types.md#啟動時被擋的宣告)。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
@@ -217,12 +216,12 @@
 
 - `Hidden` 介面上，型別為清單、陣列、字典或自訂類別的 `[CmsField]` 屬性，沒寫 `IsJson` 時由框架
   對映成 JSON 欄位（`IsJson` 加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，
-  `make:migration` 輸出 `.AsJson(Db)`。原本 `List<>` 屬性在 PostgreSQL、MySQL 與 MariaDB 上每次
-  寫入都失敗；SQLite 與 SQL Server 上，0 或 1 個元素的清單寫入成功，讀回來是空清單。字典、陣列
-  與自訂類別屬性的欄位在 SQLite、PostgreSQL、MySQL 與 MariaDB 上建成 `varchar(1)`，在 SQL Server
-  上建成 `varchar(max)`，含這類屬性的實體在每個後端每次寫入都失敗，所以這些欄位沒有舊值要轉換；
-  表若已用這樣的 varchar 欄位建好，要寫一支 migration 改成長文字。已標 `IsJson` 的屬性不變，
-  `[Navigate]` 與 `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
+  `make:migration` 輸出 `.AsJson(Db)`。原本框架替這樣的屬性推出 `varchar(1)` 欄位（SQL Server 上是
+  `varchar(max)`）：在 SQLite、PostgreSQL、MySQL、MariaDB 與 SQL Server 上，`List<string>` 屬性有
+  兩個元素就寫入失敗，只有一個元素則讀回來是空清單，`Dictionary<string, string>` 屬性每次寫入都
+  失敗。表若已有這樣的欄位，要寫一支 migration 改成長文字；`migrate:check` 在 PostgreSQL、MySQL 與
+  MariaDB 上把該欄位報成錯誤，SQLite 不比對型別，SQL Server 的 `varchar(max)` 只報警告。已標
+  `IsJson` 的屬性不變，`[Navigate]` 與 `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
 - 主機因 `MetadataException` 建不起來，而命令列帶了指令時，印出一行 `<指令> failed: <訊息>` 並以 1
   結束，不帶 stack trace，也不寫 log。指令是 `migrate`、`migrate:status`、`migrate:preview`、
   `migrate:baseline`、`migrate:check`、`make:migration`、`files:sweep`、`auth:unlock` 任何一個；
@@ -248,7 +247,7 @@
   ```
 
   `make:migration --entity` 遇到掃描器沒檢查過的 entity、而欄位對映拒絕它時，也印出訊息並以 1 結束。
-  掃描器看不到的 entity 上，JSON 介面加 `[ColumnShape]` 的拒絕，例外型別由
+  掃描器看不到的 entity 上，多值介面加 `[ColumnShape]` 的拒絕，例外型別由
   `InvalidOperationException` 改成 `MetadataException`。
 - 密碼登入與外部登入只接受儲存的 email 與送來的 email 去除前後空白並轉小寫之後逐字相同的帳號。
   MySQL、MariaDB 與 SQL Server 的預設定序會把某些拼法視為相同（重音、全形、不可見字元，各後端

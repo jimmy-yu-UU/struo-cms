@@ -16,10 +16,20 @@
 - `varchar(255)`：沒有指定長度的 `string`，`make:migration` 寫出 `AsString(255)`；SQL Server 上
   是 `nvarchar(255)`。
 - 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
-- JSON：長文字加上 `IsJson = true`，整個 CLR 集合由 SqlSugar 直接序列化與還原。
+- JSON：長文字加上 `IsJson = true`，整個 CLR 值由 SqlSugar 直接序列化與還原。
 - CLR 預設：數值、`bool`、`Guid` 照 FluentMigrator 與 SqlSugar 原本的對應，長度不會被動到；
   `DateTime` 各後端的型別見〈日期時間〉。
 - `ColumnShape` 有三個成員：`LongText`、`TimestampWithTimeZone` 與 `Timestamp`，沒有數值形狀。
+
+本章的用語：
+
+- 多值介面：`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater` 這六個
+  介面，值整個存成一個 JSON 欄位。
+- 單一值型別：基本型別、列舉、`string`、`decimal`、`Guid`、`DateTime`、`DateTimeOffset`、
+  `DateOnly`、`TimeOnly`、`TimeSpan`、`byte[]`，以及它們的 `Nullable<T>`。
+- 結構化型別：單一值型別以外的型別，例如 `List<>`、`HashSet<>`、`Dictionary<,>`、陣列
+  （`byte[]` 除外）、自訂類別與結構。
+- 單一值介面：除了多值介面、`Hidden` 與 `Json` 以外的介面。
 
 MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資料庫時要指定 utf8mb4，見
 [第 21 章〈各後端的差異〉](21-schema-and-upgrades.md#各後端的差異)。
@@ -136,12 +146,11 @@ UTC。
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
 `Json` 是一個裝著原始 JSON 文字的 `string` 屬性，API 層讀取時重新解析、寫入時重新序列化。
-真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`
-這六個結構化介面，以及 `Hidden` 上型別為清單、陣列、字典或自訂類別的屬性。SqlSugar 直接對
-JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
+真正的 JSON 欄位來自多值介面，以及 `Hidden` 上的結構化型別屬性。SqlSugar 直接對 JSON 欄位
+（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
 
-屬性型別不是單一值的欄位，只能放在這六個介面或 `Hidden`，放在其他介面，主機啟動時就失敗；
-`Json` 介面的屬性則必須是 `string`。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
+結構化型別的屬性只能放在多值介面或 `Hidden`，放在其他介面，主機啟動時就失敗；`Json` 介面的
+屬性則必須是 `string`，任何介面都不收 `object`。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
@@ -169,8 +178,8 @@ JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJso
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
-| `Hidden` | 不限 | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
-| `Divider` | 不限 | 依屬性型別，或無 | `DividerField` |
+| `Hidden` | 單一值或結構化型別，`object` 除外 | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
+| `Divider` | 單一值型別，或掛 `IsIgnore = true` 的任何型別 | 依屬性型別，`IsIgnore` 則無 | `DividerField` |
 | `Uuid` | `Guid`／`Guid?` | CLR 預設 | `ReadonlyField` |
 
 這裡的 `Hidden` 是介面本身，用來渲染一個唯讀的顯示元件，跟下一節的
@@ -193,7 +202,7 @@ JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJso
 |---|---|---|
 | 沒有特別宣告的 `string` | `varchar(255)` | 255 |
 | 長文字介面上的 `string` | 長文字 | 不限 |
-| JSON 介面 | 長文字，存 JSON | 不適用 |
+| 多值介面 | 長文字，存 JSON | 不適用 |
 | `Hidden` 上的結構化型別屬性 | 長文字，存 JSON | 不適用 |
 | `[ColumnShape(ColumnShape.LongText)]` | 長文字 | 不限 |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
@@ -201,16 +210,12 @@ JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJso
 | `[SugarColumn(ColumnDataType = "t")]` | 型別 `t`，照字面 | 不限 |
 | `[SugarColumn(IsJson = true)]` | 長文字，存 JSON | 不適用 |
 
-表裡的用語：
+表裡的多值介面與結構化型別，定義見[介面總覽](#介面總覽)。其他用語：
 
 - 長文字介面：`Textarea`、`RichText`、`Markdown`、`Code`、`Json`。
-- JSON 介面：`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`。
 - `varchar(255)` 與 `varchar(n)` 在 SQL Server 上是 `nvarchar`。
 - 不限：沒有上限。不適用：屬性不是 `string`，不能設 `MaxLength`；同樣的宣告掛在 `string` 屬性上
   則是不限。
-- 單一值型別：基本型別、列舉、`string`、`decimal`、`Guid`、`DateTime`、`DateTimeOffset`、
-  `DateOnly`、`TimeOnly`、`TimeSpan`、`byte[]`，以及它們的 `Nullable<T>`。其餘都是結構化型別，
-  例如清單、陣列（`byte[]` 除外）、字典、集合與自訂類別。
 - 長文字介面上的 `Length` 不算，要搭配 `ColumnDataType` 才算，也就是
   `[SugarColumn(ColumnDataType = "t", Length = n)]` 那一列。
 
@@ -224,21 +229,23 @@ JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJso
 
 | 衝突的宣告 | 怎麼改 |
 |---|---|
-| JSON 介面加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
-| JSON 介面加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| 多值介面加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
+| 多值介面加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | `IsJson = true` 加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | 結構化型別屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | 結構化型別屬性加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
-| 單一值介面上的結構化型別屬性 | 改用 JSON 介面或 `Hidden`，或宣告單一值屬性 |
+| 單一值介面上的結構化型別屬性 | 改用多值介面或 `Hidden`，或宣告單一值型別的屬性 |
 | `Json` 介面上不是 `string` 的屬性 | 屬性改宣告成 `string` |
+| 任何介面上的 `object` 屬性 | 屬性改宣告成實際的型別 |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 
 JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。結構化型別屬性存成
 JSON 欄位，同樣如此。
 
-單一值介面是除了 JSON 介面、`Hidden` 與 `Json` 以外的所有介面。單一值介面上的結構化型別屬性，
-有沒有寫 `IsJson` 都被擋。`Json` 介面存的是原始 JSON 文字，所以屬性要宣告成 `string`。
+單一值介面上的結構化型別屬性，有沒有寫 `IsJson` 都被擋。`Json` 介面存的是原始 JSON 文字，
+所以屬性要宣告成 `string`。`object` 屬性讀回來的是 JSON 節點，不是寫入的值，所以包含多值介面
+與 `Hidden` 在內，任何介面都不收。
 
 `Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
 就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與
@@ -283,7 +290,7 @@ JSON 欄位，同樣如此。
 `Required` 在建立時一定要帶那個欄位；在更新時驗證的是合併後的 entity，不是請求 body 本身，細
 節見[第 5 章：定義集合](05-collections.md)。
 
-值是陣列或物件的集合型別，`Required` 的語意是「有帶值」：空的 `[]`、`{}` 也算有帶值而通過，前後
+值是陣列或物件的欄位，`Required` 的語意是「有帶值」：空的 `[]`、`{}` 也算有帶值而通過，前後
 端一致。要求至少一筆，要由 fork 在寫入攔截器自行檢查。
 
 `RichText` 的內容如果清理後在視覺上等於空白，會先被轉成 `null` 再檢查 `Required`，所以看起

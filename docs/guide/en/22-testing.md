@@ -127,9 +127,11 @@ server.
 
 `tests/Struo.Tests.Fixtures` is a small content project that exists only for the tests. It declares
 one collection of each shape the core has to handle: an article with a translation sidecar,
-revisions and soft delete, tags joined through a junction that carries its own payload, and a
-self-referencing category tree, plus a plain class used as a `Repeater` child type. It has its own
-migration, and `tests/Struo.Tests` pins it as its content assembly through
+revisions and soft delete, tags joined through a junction that carries its own payload, a
+self-referencing category tree, a stash whose `Hidden` fields hold a list, an array, a dictionary
+and a custom class, and a glossary whose translation sidecar has a `Hidden` list, plus two plain
+classes, one used as a `Repeater` child type and one as the stash's custom class. It has two
+migrations, and `tests/Struo.Tests` pins it as its content assembly through
 `ContentAssemblyEnvBootstrap`.
 
 No shipped host registers it. Its collections carry an `fx` prefix (`fxArticle`, `fxTag`) and its
