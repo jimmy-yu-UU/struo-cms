@@ -65,10 +65,13 @@ public sealed class LikeLiteralConditionTests : IDisposable
         "%", "_", "[ab]", "[", One, "d" + One, One + "%", "^", "'", "''", "", Cjk, new string('a', 200), "a_c", "100%", Two,
     ];
 
-    public static IEnumerable<object[]> Cases() =>
-        from op in new[] { QueryOperator.Contains, QueryOperator.StartsWith, QueryOperator.EndsWith }
-        from index in Enumerable.Range(0, Values.Length)
-        select new object[] { op, index };
+    public static TheoryData<QueryOperator, int> Cases()
+    {
+        var data = new TheoryData<QueryOperator, int>();
+        foreach (var op in new[] { QueryOperator.Contains, QueryOperator.StartsWith, QueryOperator.EndsWith })
+            for (var index = 0; index < Values.Length; index++) data.Add(op, index);
+        return data;
+    }
 
     private readonly UnitDb _handle = new();
     private ISqlSugarClient Db => _handle.Db;

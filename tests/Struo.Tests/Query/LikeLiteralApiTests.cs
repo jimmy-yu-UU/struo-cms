@@ -136,11 +136,13 @@ public sealed class LikeLiteralApiTests : IDisposable
         r.Total.Should().Be(expected.Count);
     }
 
-    public static IEnumerable<object[]> Cases()
+    public static TheoryData<string, string> Cases()
     {
+        var data = new TheoryData<string, string>();
         foreach (var op in new[] { "_contains", "_starts_with", "_ends_with" })
             foreach (var value in new[] { "a_c", "%", "_", "a%", "100%", Backslash, "d" + Backslash, "[ab]", "[", Cjk, "ab" })
-                yield return [op, value];
+                data.Add(op, value);
+        return data;
     }
 
     // the three entrances
