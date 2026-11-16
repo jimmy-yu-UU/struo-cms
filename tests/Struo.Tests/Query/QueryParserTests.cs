@@ -325,4 +325,22 @@ public class QueryParserTests
         var act = () => QueryParser.ParseEnvelope(env);
         act.Should().Throw<QueryException>().WithMessage("*Unknown aggregate op 'median'*");
     }
+
+    // QueryParser.TokenOf falls back to the member name for an operator with no token; a new member must
+    // get its token in the parser's table first.
+    [Fact]
+    public void Every_query_operator_has_a_token_the_parser_reads_back()
+    {
+        var members = Enum.GetValues<QueryOperator>();
+        members.Should().NotBeEmpty();
+        var tokens = members.Select(QueryParser.TokenOf).ToList();
+        tokens.Should().OnlyContain(token => token.StartsWith('_'));
+        tokens.Should().OnlyHaveUniqueItems();
+        foreach (var op in members)
+        {
+            var body = JsonDocument.Parse("{\"filter\":{\"f\":{\"" + QueryParser.TokenOf(op) + "\":1}}}");
+            var parsed = QueryParser.ParseEnvelope(body.RootElement);
+            ((ComparisonFilter)parsed.Filter!).Op.Should().Be(op);
+        }
+    }
 }

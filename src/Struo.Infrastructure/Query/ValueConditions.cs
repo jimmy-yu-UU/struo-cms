@@ -76,7 +76,7 @@ internal static class ValueConditions
     {
         if (value is null)
             throw new QueryException(
-                $"Field '{t.Label}' cannot take null with '{Token(op)}'; use '_null' or '_nnull' to test for null.");
+                $"Field '{t.Label}' cannot take null with '{Token(op)}'; use {NullTests} to test for null.");
         if (IsStringOperator(op) && !t.IsText)
             throw new QueryException(
                 $"'{Token(op)}' matches text only and field '{t.Label}' is not a text field; " +
@@ -84,6 +84,8 @@ internal static class ValueConditions
         if (op is not (QueryOperator.In or QueryOperator.Nin) && value is IEnumerable and not string)
             throw new QueryException($"'{Token(op)}' on field '{t.Label}' takes a single value, not a list.");
     }
+
+    private static string NullTests => $"'{Token(QueryOperator.Null)}' or '{Token(QueryOperator.NNull)}'";
 
     private static bool IsStringOperator(QueryOperator op) =>
         op is QueryOperator.Contains or QueryOperator.StartsWith or QueryOperator.EndsWith;
@@ -111,7 +113,7 @@ internal static class ValueConditions
         var include = op == QueryOperator.In;
         if (!include && t.Underlying == typeof(string))
             throw new QueryException(
-                $"'_nin' on the text field '{t.Label}' cannot be used inside '_or'; put it at the top level or inside '_and'.");
+                $"'{Token(QueryOperator.Nin)}' on the text field '{t.Label}' cannot be used inside '_or'; put it at the top level or inside '_and'.");
 
         var values = SetValues(t, include, value);
         if (values.Count == 0)
@@ -198,12 +200,27 @@ internal static class ValueConditions
     private static ConditionalModel Comparison(ValueTarget t, QueryOperator op, object value)
     {
         var type = t.Underlying;
-        if (!IsSupported(type) || type == typeof(string))
+        if (t.IsText)
             return op == QueryOperator.Eq
                 ? BoundEquality(t.Column, ConditionalType.Equal, ToText(value)!)
                 : Plain(t, op, ToText(value), null);
+        if (!IsSupported(type))
+            return UncoveredComparison(t, op, value);
         var text = Format(t, value, forSet: false) ?? throw Invalid(t, Describe(type));
         return Plain(t, op, text, TypeNameFor(t));
+    }
+
+    // A type outside the parsed set that is not text (DateOnly, TimeOnly, TimeSpan) is compared with the
+    // caller's text as it is. SqlSugar reads the words null and [null] of an Equal as a null test, and
+    // binding the text instead would turn a date or time comparison into a database error on PostgreSQL
+    // and SQL Server, so those two words are refused and every other value keeps its plain path.
+    private static ConditionalModel UncoveredComparison(ValueTarget t, QueryOperator op, object value)
+    {
+        var text = ToText(value);
+        if (op == QueryOperator.Eq && text is "null" or "[null]")
+            throw new QueryException(
+                $"Field '{t.Label}' is compared as text, where the word '{text}' is no null test; use {NullTests} to test for null.");
+        return Plain(t, op, text, null);
     }
 
     // The parsed, re-rendered elements of a set (distinct for a text column, which keeps its text as it is).
@@ -211,7 +228,7 @@ internal static class ValueConditions
     {
         var type = t.Underlying;
         if (!IsSupported(type))
-            throw new QueryException($"'{(include ? "_in" : "_nin")}' is not supported on field '{t.Label}'.");
+            throw new QueryException($"'{Token(include ? QueryOperator.In : QueryOperator.Nin)}' is not supported on field '{t.Label}'.");
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var result = new List<string>();

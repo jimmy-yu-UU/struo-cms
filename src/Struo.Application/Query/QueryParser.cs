@@ -73,9 +73,13 @@ public static class QueryParser
         return fields.Count == 0 ? null : new AggregateSpec(fields);
     }
 
+    // A body key that is missing or JSON null is not given.
+    private static bool Given(JsonElement owner, string name, out JsonElement value) =>
+        owner.TryGetProperty(name, out value) && value.ValueKind != JsonValueKind.Null;
+
     private static List<string>? ParseFacetsEnvelope(JsonElement env)
     {
-        if (!env.TryGetProperty("facets", out var f)) return null;
+        if (!Given(env, "facets", out var f)) return null;
         if (f.ValueKind != JsonValueKind.Array || f.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String))
             throw new QueryException("'facets' must be an array of strings.");
         return f.EnumerateArray().Select(x => x.GetString()!).ToList();
@@ -83,7 +87,7 @@ public static class QueryParser
 
     private static AggregateSpec? ParseAggregateEnvelope(JsonElement env)
     {
-        if (!env.TryGetProperty("aggregate", out var a)) return null;
+        if (!Given(env, "aggregate", out var a)) return null;
         if (a.ValueKind != JsonValueKind.Object) throw new QueryException("'aggregate' must be an object.");
         var fields = new Dictionary<AggregateOp, IReadOnlyList<string>>();
         foreach (var prop in a.EnumerateObject())
@@ -127,8 +131,7 @@ public static class QueryParser
     private static bool IsGiven(JsonElement owner, string name, JsonValueKind kind, string expected, string? relation,
         out JsonElement value)
     {
-        value = default;
-        if (!owner.TryGetProperty(name, out value) || value.ValueKind == JsonValueKind.Null) return false;
+        if (!Given(owner, name, out value)) return false;
         if (value.ValueKind != kind)
             throw new QueryException($"'{name}' must be {expected}{Where(relation)}.");
         return true;
@@ -154,8 +157,8 @@ public static class QueryParser
         foreach (var item in ReadStringsKey(env, KeySort) ?? [])
             sort.Add(ParseSortToken(item));
 
-        var limit = env.TryGetProperty(KeyLimit, out var l) ? ReadInt(l, KeyLimit) : 0;
-        var offset = env.TryGetProperty(KeyOffset, out var o) ? ReadInt(o, KeyOffset) : 0;
+        var limit = Given(env, KeyLimit, out var l) ? ReadInt(l, KeyLimit) : 0;
+        var offset = Given(env, KeyOffset, out var o) ? ReadInt(o, KeyOffset) : 0;
         var search = env.TryGetProperty("search", out var se) ? ReadSearch(se) : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
@@ -186,8 +189,8 @@ public static class QueryParser
                 filter = ReadFilterKey(rel.Value, here);
                 if (ReadStringsKey(rel.Value, KeySort, here) is { } sortTokens)
                     sort = sortTokens.Select(ParseSortToken).ToList();
-                if (rel.Value.TryGetProperty(KeyLimit, out var l)) limit = ReadInt(l, KeyLimit, here);
-                if (rel.Value.TryGetProperty(KeyOffset, out var o)) offset = ReadInt(o, KeyOffset, here);
+                if (Given(rel.Value, KeyLimit, out var l)) limit = ReadInt(l, KeyLimit, here);
+                if (Given(rel.Value, KeyOffset, out var o)) offset = ReadInt(o, KeyOffset, here);
                 if (IsGiven(rel.Value, KeyDeep, JsonValueKind.Object, "an object", here, out var nd))
                     nested = ParseDeepObject(nd, here);
             }
@@ -220,7 +223,11 @@ public static class QueryParser
                 var op = prop.NameEquals("_and") ? LogicalOperator.And : LogicalOperator.Or;
                 if (prop.Value.ValueKind != JsonValueKind.Array)
                     throw new QueryException($"'{prop.Name}' must be an array.");
-                var children = prop.Value.EnumerateArray().Select(ParseFilter).ToList();
+                var children = prop.Value.EnumerateArray()
+                    .Select(child => child.ValueKind == JsonValueKind.Object
+                        ? ParseFilter(child)
+                        : throw new QueryException($"'{prop.Name}' must be an array of objects."))
+                    .ToList();
                 nodes.Add(new LogicalFilter(op, children));
                 continue;
             }

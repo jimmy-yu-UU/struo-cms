@@ -178,7 +178,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
 
         var day = SingleModel.Of(
             new ComparisonFilter("day", QueryOperator.Eq, "2026-03-04T10:00:00+05:30"), dated, db);
-        SingleModel.BoundValue(day).Should().Be("2026-03-04T10:00:00+05:30");
+        day.FieldValue.Should().Be("2026-03-04T10:00:00+05:30");
         day.CSharpTypeName.Should().NotBe("datetimeoffset");
     }
 }

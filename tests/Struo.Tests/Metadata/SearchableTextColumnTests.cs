@@ -40,6 +40,13 @@ public sealed class SearchableTextColumnTests
         [CmsField(Interface = FieldInterface.DateTime, Searchable = true)] public DateTime? At { get; set; }
     }
 
+    [CmsCollection("Search on a list of text", Name = "stcList")]
+    public sealed class SearchableList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Number, Searchable = true)] public List<string> Names { get; set; } = [];
+    }
+
     [CmsCollection("Search on a boolean", Name = "stcBool")]
     public sealed class SearchableBool
     {
@@ -100,6 +107,7 @@ public sealed class SearchableTextColumnTests
     [InlineData(typeof(SearchableGuid), "SearchableGuid.Ref", "Guid")]
     [InlineData(typeof(SearchableDate), "SearchableDate.At", "DateTime?")]
     [InlineData(typeof(SearchableBool), "SearchableBool.On", "bool")]
+    [InlineData(typeof(SearchableList), "SearchableList.Names", "List<string>")]
     [InlineData(typeof(TranslatedHost), "TranslatedNumberText.Rank", "int")]
     public void Searchable_on_a_column_that_is_not_text_fails_the_scan_and_says_what_to_change(
         Type type, string field, string columnType)

@@ -466,6 +466,7 @@ public static class MetadataScanner
         if (type == typeof(decimal)) return "decimal";
         if (type == typeof(double)) return "double";
         if (type == typeof(float)) return "float";
+        if (type == typeof(string)) return "string";
         return type.Name;
     }
 

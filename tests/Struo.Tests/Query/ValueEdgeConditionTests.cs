@@ -18,9 +18,9 @@ public sealed class VcJson
     [SugarColumn(IsJson = true)] public Dictionary<string, string> Meta { get; set; } = new();
 }
 
-/// <summary>Columns of types the filter parser does not cover; they are compared as text. No table is created.</summary>
-[SugarTable("vc_odd")]
-public sealed class VcOdd
+/// <summary>Date, time and duration columns: types the filter parser does not cover and that are not text.</summary>
+[SugarTable("vc_dates")]
+public sealed class VcDates
 {
     [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
     [SugarColumn(IsNullable = true)] public DateOnly? Day { get; set; }
@@ -117,20 +117,49 @@ public sealed class ValueEdgeConditionTests : IDisposable
         Ids<VcString>(Db, [set], r => r.Id).Should().Equal(id);
     }
 
+    // Binding the word would make a date or time comparison a database error on PostgreSQL and SQL Server,
+    // and the ORM would read it as a null test, so the two words are refused on a column of such a type.
     [Theory]
     [InlineData("day", "null")]
     [InlineData("day", "[null]")]
     [InlineData("clock", "null")]
+    [InlineData("clock", "[null]")]
     [InlineData("span", "null")]
-    public void Eq_with_the_word_null_on_a_type_the_filter_compares_as_text_binds_that_text(string field, string word)
+    [InlineData("span", "[null]")]
+    public void Eq_with_the_word_null_on_a_date_or_time_column_is_a_400_that_points_to_null_and_nnull(string field, string word)
     {
-        var d = Descriptor<VcOdd>("Id", "Day", "Clock", "Span");
-        var conds = Conds(Db, d, field, QueryOperator.Eq, word);
-        var (sql, pars) = SqlOf<VcOdd>(Db, conds);
-        sql.Should().NotMatchRegex(@"(?i)\b" + field + @"\W+is null");
-        pars.Select(p => p.Value).Should().Contain(word);
-        var repeated = SqlOf<VcOdd>(Db, conds);
-        repeated.Sql.Should().Be(sql);
+        Reset<VcDates>(Db);
+        Db.Insertable(new VcDates { Id = 1, Day = new DateOnly(2026, 3, 4), Clock = new TimeOnly(10, 0), Span = TimeSpan.FromHours(1) })
+            .ExecuteCommand();
+        Db.Insertable(new VcDates { Id = 2 }).ExecuteCommand();
+        var d = Descriptor<VcDates>("Id", "Day", "Clock", "Span");
+        var act = () => Conds(Db, d, field, QueryOperator.Eq, word);
+        act.Should().Throw<QueryException>().Which.Message
+            .Should().Contain($"'{field}'").And.Contain($"'{word}'").And.Contain("'_null'").And.Contain("'_nnull'");
+    }
+
+    // Any other value keeps the path it has always had: the text goes into the condition as it is.
+    [Theory]
+    [InlineData("day", "2026-03-04")]
+    [InlineData("clock", "10:00:00")]
+    [InlineData("span", "01:00:00")]
+    [InlineData("day", "NULL")]
+    public void Eq_with_another_value_on_a_date_or_time_column_passes_the_text_as_it_is(string field, string value)
+    {
+        var d = Descriptor<VcDates>("Id", "Day", "Clock", "Span");
+        var model = (ConditionalModel)ConditionalModelTranslator.ToCondition(new ComparisonFilter(field, QueryOperator.Eq, value), d, Db)!;
+        model.ConditionalType.Should().Be(ConditionalType.Equal);
+        model.FieldValue.Should().Be(value);
+        model.FieldValueConvertFunc.Should().BeNull();
+    }
+
+    [Fact]
+    public void Neq_with_the_word_null_on_a_date_column_keeps_its_plain_path()
+    {
+        var d = Descriptor<VcDates>("Id", "Day", "Clock", "Span");
+        var model = (ConditionalModel)ConditionalModelTranslator.ToCondition(new ComparisonFilter("day", QueryOperator.Neq, "null"), d, Db)!;
+        model.ConditionalType.Should().Be(ConditionalType.NoEqual);
+        model.FieldValue.Should().Be("null");
     }
 
     // ── string operators ─────────────────────────────────────────────────
