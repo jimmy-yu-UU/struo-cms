@@ -141,6 +141,10 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 `MultiSelect`、`CheckboxGroup`、`Tags`、`Files`、`File`、`Image`、`Repeater` 這些欄位在 GraphQL
 完全沒有篩選欄位。
 
+字串篩選帶有 `contains`、`startsWith`、`endsWith`，`createdBy` 這類 id 欄位也在內。這三個運算子
+只有文字欄位接受；用在其他欄位，請求會失敗，`errors` 項目的 code 是 `BAD_USER_INPUT`，訊息點名欄位與
+運算子，和 REST 回的訊息相同。
+
 數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位
 （`long`，例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的
 運算元可以超過 2^31 − 1，`Int` 的不行。

@@ -118,8 +118,9 @@ on write, a `Local` value is converted to UTC and an `Unspecified` one is taken 
 MariaDB and SQLite store the clock digits as given, so convert to UTC before writing.
 
 A comparison or `_in`/`_nin` filter on such a column compares instants too: a value with `Z` or an
-offset at the instant it names, one without a zone as UTC. Text operators such as `_contains` match
-the column's text form. Oracle gets none of this and is unverified.
+offset at the instant it names, one without a zone as UTC. `_contains`, `_starts_with` and
+`_ends_with` are a 400 on such a column; to match a date, use a range with `_gte` and `_lt`. Oracle
+gets none of this and is unverified.
 
 ### Choice
 

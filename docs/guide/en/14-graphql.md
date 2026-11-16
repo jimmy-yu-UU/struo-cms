@@ -177,6 +177,11 @@ only lets scalar interfaces be filtered — `RichText`, `Markdown`, `Code`, `Jso
 `MultiSelect`, `CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no
 filter fields in GraphQL at all.
 
+The string filters carry `contains`, `startsWith` and `endsWith`, an id column such as `createdBy`
+included. Those three operators are accepted on a text field only. On any other field the request
+fails with an `errors` entry whose code is `BAD_USER_INPUT` and whose message names the field and
+the operator, the same message REST answers with.
+
 A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
 `byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`
 for any other number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an

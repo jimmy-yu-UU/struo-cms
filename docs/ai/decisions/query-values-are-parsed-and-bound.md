@@ -30,9 +30,25 @@ the comparison operators on such a type keep passing the text as a bound value.
   relation in one write. The link count is checked before the write transaction opens, and a revision
   revert is exempt: its snapshot is the system's own data.
 - A text set takes strings: a number or a boolean element, a number or a boolean in place of a list,
-  and an empty element of a query-string list on a typed field are each a 400. `QueryParser.ReadValue`
-  reads a JSON object as its raw JSON text, so an object element is compared as that text; a string in
-  place of a list is split at its commas (`FilterValueList.Elements`).
+  and an empty element of a query-string list on a typed field are each a 400. A string in place of
+  a list is split at its commas (`FilterValueList.Elements`).
+- A JSON object is no value, alone or as a list element, for any operator: `QueryParser.ReadValue`
+  throws a `QueryException` naming the field and the operator, because the value leaves it as plain
+  objects and text and no later step could tell an object from a string. A query string carries
+  strings only.
+- A null value is a 400 for every operator but `_null`/`_nnull`, and the message points to those
+  two. A list given to an operator other than `_in`/`_nin` is a 400. GraphQL skips an operator key
+  whose value is null before it reaches `ValueConditions`.
+- A text column is a `string` property or a column stored as JSON (`ValueTarget.StoredAsJson`, read
+  from the ORM's column info). `_contains`, `_starts_with` and `_ends_with` on any other column are
+  a 400 that names the field and the operator and lists the operators the column takes, date-time
+  columns included. `MetadataScanner.IsTextColumn` (a `string` property, a JSON-column interface or
+  `IsJson`) gives the same answer from the entity type, and `Searchable = true` on a column that is
+  not text fails the scan with a `MetadataException`; `TextColumnAgreementTests` pins that both
+  sides agree for every field of the core and fixture collections.
+- Every `Equal` on a text value is a bound equality, the way a set member is: `_eq`, the translation
+  sidecar's locale condition (`FilterTranslator.TranslationSubquery`, `TranslationStore`) and the id
+  lookups all go through `ValueConditions`, so no other file builds an `Equal` of its own.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.
@@ -52,7 +68,9 @@ SqlSugar behaviours the group form has to work around:
 - A group's first entry carries the connector between the group and the condition before it.
 - An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the text
   `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list request
-  renders twice (count, then page). The name check renders a copy for that reason.
+  renders twice (count, then page). The name check renders a copy for that reason. Inside a subquery
+  the `IS NULL` form lost the `AND` that joins it to the locale condition, which made the statement
+  invalid.
 - One instance listed twice is numbered by its first position, which drops the closing parenthesis and
   repeats a parameter name.
 - An empty group renders nothing: the condition disappears, or the `AND` after it is left dangling.
@@ -96,6 +114,27 @@ Measured 2026-11-11 with the committed tests under `tests/Struo.Tests/Security/Q
   `409` under a case-insensitive collation and do not touch a filter. The run was inside an SDK
   container on the container network: from the host, the connection to a throwaway SQL Server
   container timed out at the pre-login handshake on every port and client tried.
+
+Measured 2026-11-13 on main before the change, with scratch probes (not committed) on SQLite 3.53.3,
+PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.00.4305), through REST,
+`POST /query` and GraphQL:
+
+- `_eq` with `null` rendered `IS NULL`, and `[null]` rendered `= 'null'` the first time and
+  `IS NULL` on every later render of the same list. Count and page of one request therefore
+  differed: `meta.total` 1 and no row, on all five backends and all three entrances. `_neq` was
+  never special.
+- `filter[title][_eq]=null&locale=en` on a translatable field, `_eq: "null"` in a `deep` filter and
+  a `locale` equal to an existing language code `null` answered 500 on all five backends: the
+  rendered subquery was `WHERE Locale = @p Title is null`.
+- `_contains`, `_starts_with` and `_ends_with` on integer, boolean, decimal, floating point, `Guid`,
+  date-time, enum, `DateOnly` and `TimeOnly` columns answered 500 (`42883`) on PostgreSQL only; the
+  other four backends answered 200 with results that differed per backend (SQL Server matched 0 rows
+  for `_starts_with "2026"` on a `datetime` column). On a column stored as JSON they ran everywhere.
+  A `Searchable` field that is not text made every `search=` request answer 500 on PostgreSQL.
+- A JSON object as `_in` was compared as raw text: `{"a":1}` matched a row whose code was that text,
+  and `{"a":1,"b":2}` was split at its comma and matched nothing. A null value of `_eq`/`_neq` on a
+  typed column compared with the type's default (`= 0`, `= False`) and threw `ArgumentNullException`
+  (500) on a `Guid`. A list given to `_eq` on a text column was joined with commas.
 
 ## Unknowns
 

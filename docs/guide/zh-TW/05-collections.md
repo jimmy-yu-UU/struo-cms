@@ -150,7 +150,11 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個
 不可為 null 的 `Guid` 欄位，`Guid.Empty` 也算缺漏，而且這種欄位本來就傳不了 `null`。
 
-`Hidden = true` 的欄位不會進搜尋白名單，即使設了 `Searchable`。`Sortable` 決定後台清單的表頭
+`Hidden = true` 的欄位不會進搜尋白名單，即使設了 `Searchable`。
+`Searchable` 只能用在文字欄位：`string` 屬性，或存成 JSON 的欄位（`MultiSelect`、`CheckboxGroup`、
+`Tags`、`KeyValue`、`Files`、`Repeater` 欄位，或有 `[SugarColumn(IsJson = true)]` 的屬性），因為搜尋
+比對的是文字。用在其他欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名屬性；拿掉
+`Searchable`，或把屬性改成 `string`。`Sortable` 決定後台清單的表頭
 能不能點著排序；查詢語法的 `sort` 不看這個旗標，任何已知欄位都排得動。
 
 欄位對外的鍵名是 CLR 屬性名稱的 camelCase 形式；退回 PascalCase 屬性名時，不會自動加空格或

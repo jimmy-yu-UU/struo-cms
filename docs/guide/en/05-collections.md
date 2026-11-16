@@ -169,8 +169,12 @@ fails. On create, the field must always be supplied. For a non-nullable `Guid` f
 also counts as missing, and such a field can never be sent as `null` at all.
 
 A field with `Hidden = true` never joins the search whitelist, even with `Searchable` set.
-`Sortable` decides only whether the admin list header can be clicked to sort; the query DSL's
-`sort` ignores the flag — any known field can be sorted on.
+`Searchable` takes a text field only: a `string` property, or a field stored as JSON (a
+`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files` or `Repeater` field, or a property with
+`[SugarColumn(IsJson = true)]`), because search matches text. On any other field the host stops at
+start with a `MetadataException` that names the property; remove `Searchable`, or make the property
+a `string`. `Sortable` decides only whether the admin list header can be clicked to sort; the query
+DSL's `sort` ignores the flag — any known field can be sorted on.
 
 A field's external key is the camelCase form of the CLR property name. A label that falls back
 to the PascalCase property name gets no inserted spaces and no case changes.

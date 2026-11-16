@@ -9,13 +9,15 @@ on PostgreSQL and SQL Server only. The converter binds the write as `DbType.Date
 `DateTimeKind.Utc`. MySQL, MariaDB and SQLite get no converter. The factory sets no `Timezone` on the
 connection.
 
-Item-API and GraphQL filters never reach the converter: SqlSugar builds a `ConditionalModel` parameter
-from its value alone. `ValueConditions` therefore parses an `_eq`,
-`_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in` or `_nin` value on every `DateTime`/`DateTime?` property, zone-aware
-or not, as an instant: a trailing `Z` or offset names it, a value without one is UTC, and a
-query-string `_in`/`_nin` string is split on commas first (`FilterValueList`). A value that does not
-parse is a 400. `_null`, a property that is not a `DateTime` and the text operators (`_contains`,
-`_starts_with`, `_ends_with`) keep the general path, which compares the column's text form.
+Item-API and GraphQL filters never reach the converter: SqlSugar builds a `ConditionalModel`
+parameter from its value alone. `ValueConditions` therefore parses an `_eq`, `_neq`, `_gt`, `_gte`,
+`_lt`, `_lte`, `_in` or `_nin` value on every `DateTime`/`DateTime?` property, zone-aware or not, as
+an instant: a trailing `Z` or offset names it, a value without one is UTC, and a query-string
+`_in`/`_nin` string is split on commas first (`FilterValueList`). A value that does not parse is a
+400. `_null` and a property that is not a `DateTime` keep the general path. The text operators
+(`_contains`, `_starts_with`, `_ends_with`) are a 400 on a `DateTime` column, because a `LIKE` on a
+date-time column has no portable meaning: the column's text form differs per backend, and PostgreSQL
+refuses the operator. A date is matched with a range (`_gte` and `_lt`).
 
 A zone-aware column gets a `datetimeoffset` at `+00:00` on PostgreSQL and SQL Server. Every other column
 gets the UTC wall clock with no zone and the type name `datetime`. On SQL Server that is an ISO 8601
