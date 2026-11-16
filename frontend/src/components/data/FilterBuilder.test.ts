@@ -291,33 +291,4 @@ describe('FilterBuilder', () => {
     await pickOption(w, selectTriggers(w, 0)[0], 'Slug')
     expect(selectTriggers(w, 0)[1].text()).toContain('contains')
   })
-
-  // A control named only by aria-label has no label element; each control of a row has an id that a
-  // visually hidden label points at, and no id repeats across rows.
-  it('gives every control of a row an id and a label that points at it', async () => {
-    const w = mountBuilder({}, kindFields)
-    await w.get('[data-testid="filter-add"]').trigger('click')
-    await w.get('[data-testid="filter-add"]').trigger('click')
-    const ids: string[] = []
-    for (const row of w.findAll('[data-testid="filter-row"]')) {
-      const labels = row.findAll('label')
-      expect(labels).toHaveLength(3)
-      expect(labels.map((l) => l.text())).toEqual(['Field', 'Operator', 'Value'])
-      for (const label of labels) {
-        const target = label.attributes('for')!
-        expect(target).toBeTruthy()
-        expect(row.find(`[id="${target}"]`).exists()).toBe(true)
-        ids.push(target)
-      }
-    }
-    expect(new Set(ids).size).toBe(6)
-  })
-
-  it('labels the value control of an enumerated field too', async () => {
-    const w = mountBuilder({}, kindFields)
-    await w.get('[data-testid="filter-add"]').trigger('click')
-    await pickOption(w, selectTriggers(w, 0)[0], 'Status')
-    const label = w.findAll('label').find((l) => l.text() === 'Value')!
-    expect(w.get(`[id="${label.attributes('for')}"]`).attributes('data-slot')).toBe('select-trigger')
-  })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, useId } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Plus, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,11 +32,6 @@ const emit = defineEmits<{ apply: [FilterSpec] }>()
 // Enter) must happen before anything reaches the query — editing conditions must not fire
 // requests keystroke by keystroke.
 const draft = ref<DraftRow[]>([])
-
-// Each control of a row gets an id built from this instance and the row, and a visually hidden label
-// that points at it, so the controls are named by a real label as well as by aria-label.
-const uid = useId()
-const controlId = (kind: 'field' | 'operator' | 'value', index: number): string => `${uid}-${kind}-${index}`
 
 function isTextField(name: string): boolean {
   return props.fields.find((f) => f.name === name)?.text === true
@@ -144,9 +139,8 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
       data-testid="filter-row"
       class="flex flex-wrap items-center gap-2"
     >
-      <label class="sr-only" :for="controlId('field', index)">{{ $t('filterBuilder.field') }}</label>
       <Select :model-value="row.field" @update:model-value="setDraftField(index, String($event))">
-        <SelectTrigger :id="controlId('field', index)" class="w-44" :aria-label="$t('filterBuilder.field')">
+        <SelectTrigger class="w-44" :aria-label="$t('filterBuilder.field')">
           <SelectValue :placeholder="$t('filterBuilder.field')" />
         </SelectTrigger>
         <SelectContent>
@@ -156,9 +150,8 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
         </SelectContent>
       </Select>
 
-      <label class="sr-only" :for="controlId('operator', index)">{{ $t('filterBuilder.operator') }}</label>
       <Select :model-value="effectiveOp(row)" @update:model-value="setDraftOperator(index, $event as never)">
-        <SelectTrigger :id="controlId('operator', index)" class="w-36" :aria-label="$t('filterBuilder.operator')">
+        <SelectTrigger class="w-36" :aria-label="$t('filterBuilder.operator')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -168,13 +161,12 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
         </SelectContent>
       </Select>
 
-      <label class="sr-only" :for="controlId('value', index)">{{ $t('filterBuilder.value') }}</label>
       <Select
         v-if="optionsFor(index)"
         :model-value="row.value"
         @update:model-value="setDraftValue(index, String($event))"
       >
-        <SelectTrigger :id="controlId('value', index)" class="w-48" :aria-label="$t('filterBuilder.value')">
+        <SelectTrigger class="w-48" :aria-label="$t('filterBuilder.value')">
           <SelectValue :placeholder="$t('filterBuilder.value')" />
         </SelectTrigger>
         <SelectContent>
@@ -185,7 +177,6 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
       </Select>
       <Input
         v-else
-        :id="controlId('value', index)"
         class="w-48"
         :model-value="row.value"
         :aria-label="$t('filterBuilder.value')"
