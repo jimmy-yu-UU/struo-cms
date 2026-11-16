@@ -63,8 +63,8 @@
   只有宣告加寬、而表已經建好且欄位比較窄時，才要另外寫一支加寬欄位的 migration，調低
   `MaxLength`，或表的欄位本來就夠寬、只是補上對應的 `[SugarColumn(Length = n)]`，都不必。比對的是
   屬性上宣告的寬度，不是資料庫實際的欄位寬度。核心欄位與 Blog sample 不受影響。
-- 查詢語法在建立條件之前，先拿篩選值對照欄位，所以下列每一種情況不是回 `400` 就是比對方式不同，
-  用戶端、fork 或存起來的查詢要改掉該項點名的做法（各欄位接受的運算子表見
+- 查詢語法在建立條件之前，先拿請求對照它指名的欄位，所以下列每一種情況不是回 `400`、讓主機啟動時
+  停下，就是比對方式不同，用戶端、fork 或存起來的查詢要改掉該項點名的做法（各欄位接受的運算子表見
   [第 10 章](10-query-basics.md)）：
   - 字串運算子 `_contains`、`_starts_with`、`_ends_with` 用在不是文字的欄位，回 `400`；REST、
     `POST /query` 與 GraphQL 都一樣，日期時間欄位也在內。文字欄位是 `string` 屬性；存成 JSON 的欄位
@@ -74,9 +74,10 @@
     （`_gte` 加 `_lt`；要比對某一天，就 `_gte` 當天、`_lt` 隔天）。
   - `string` 屬性或存成 JSON 的欄位上，`_eq` 的值是文字 `null` 或 `[null]`，比對的是欄位內容等於該
     文字。以前 `null` 會測 NULL，`[null]` 會用一個條件算出內容等於該文字的列數、換另一個條件取頁而
-    回 0 列。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，同樣兩個字回 `400` 並指向 `_null`，因為 ORM
-    把剛好這兩段文字當成測 NULL；其他值不變。靠 `_eq=null` 找 NULL 列的用戶端，改送 `_null` 或
-    `_nnull`。
+    回 0 列。靠 `_eq=null` 找 NULL 列的用戶端，改送 `_null` 或 `_nnull`。
+  - `DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值是文字 `null` 或 `[null]`，回 `400` 並指向
+    `_null` 或 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL；其他值不變。這兩個字以前會測 NULL 或
+    不回任何列。靠它們找 NULL 列的用戶端，改送 `_null` 或 `_nnull`。
   - `_null`、`_nnull` 以外的任何運算子，值是 JSON `null`，回 `400` 並指向這兩個運算子。以前會拿
     欄位跟 `NULL`、跟 `0`、`false` 或最早的日期比，`Guid` 欄位則回 `500`；GraphQL 仍然略過值是
     `null` 的運算子。送 `null` 的用戶端改送 `_null` 或 `_nnull`。
@@ -89,7 +90,7 @@
     這個鍵。
   - `POST /query` 的 body 裡，解析器不讀的鍵，不論在最上層或 `deep` 的關聯項目裡，都回 `400`，訊息點
     名該鍵並列出接受的鍵（body 是 `fields`、`filter`、`sort`、`limit`、`offset`、`search`、`deep`、
-    `facets`、 `aggregate`；關聯項目是同一份去掉 `search`、`facets`、`aggregate`）。這樣的鍵，例如拼
+    `facets`、`aggregate`；關聯項目是同一份去掉 `search`、`facets`、`aggregate`）。這樣的鍵，例如拼
     錯的 `filter`，以前被忽略，呼叫端拿到全部的列。送過的呼叫端把鍵改正或拿掉。
   - `Searchable = true` 用在欄位不是文字的屬性（數字、布林、`Guid`、列舉或日期時間屬性），或用在
     Repeater 子欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名屬性。以前能啟動：前者在
@@ -262,9 +263,9 @@
 - 可翻譯欄位上的 `filter[title][_eq]=null&locale=en`、`deep` 篩選裡的 `_eq: "null"`，以及 `locale`
   參數等於一個名為 `null` 的啟用語言代碼，在每個後端都回 `500`，原因是組出的子查詢少一個 `AND`。現在
   它們跟任何其他值一樣比對文字。沒有對應啟用語言的 `locale`（`null` 也一樣）回 `400`。
-- `POST /query` 的 body，`search`、`limit`、`offset` 的 JSON 種類不對，`sort` 或 `fields` 含非字串元
-  素（這四個在 `deep` 裡也一樣），body 不是 JSON 物件，或 `_and`、`_or` 的元素不是物件，以前回 `500`
-  。現在各自回 `400` 並點名欄位或運算子。
+- `POST /query` 的 body，`search`、`limit`、`offset` 的 JSON 種類不對，`sort` 或 `fields` 含非字串
+  元素（這四個在 `deep` 裡也一樣），body 不是 JSON 物件，`_and`、`_or` 的元素不是物件，或屬性名稱、
+  字串值含落單的代理字元，以前回 `500`。現在各自回 `400`，訊息點名欄位或運算子，或說明文字無效。
 - 文字欄位的 `_eq=[null]` 請求，算列數用一個條件、取頁用另一個條件，`meta.total` 與回傳的列對不上。
   現在兩邊跑同一個條件。
 - `Hidden` 介面上，型別是結構化型別的 `[CmsField]` 屬性，沒寫 `IsJson` 時由框架對映成 JSON 欄位

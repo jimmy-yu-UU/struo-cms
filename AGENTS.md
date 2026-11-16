@@ -129,8 +129,10 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   `ConditionalType.Equal`; `ValueConditionsConventionTests` reads the text of `src/` and fails on
   another file that names them, imports or aliases the enum, sets `ConditionalType = default`, or
   builds a `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. It
-  cannot see a cast from a number, reflection, or a model filled in after `new ConditionalModel()`.
-  See `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
+  cannot see a cast from a number, a condition type chosen through reflection or `Enum.Parse`, a
+  condition type assigned in a separate statement, a model filled in after `new ConditionalModel()`,
+  or braces inside verbatim, raw or interpolated strings or comments of an initializer body. See
+  `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no

@@ -151,15 +151,15 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個
 不可為 null 的 `Guid` 欄位，`Guid.Empty` 也算缺漏，而且這種欄位本來就傳不了 `null`。
 
-`Hidden = true` 的欄位不會被搜尋，所以 `Searchable` 加上 `Hidden = true` 什麼也不做，主機啟動時就停
-下並丟出 `MetadataException`，訊息點名屬性；兩個拿掉一個。放在 `Hidden` 介面上、沒有那個旗標的欄位，
-和其他欄位一樣進搜尋白名單。`Searchable` 只能用在文字欄位，因為搜尋比對的是文字：`string` 屬性、多值
-介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）上的屬性、`Hidden` 上
-結構化型別的屬性，或有 `[SugarColumn(IsJson = true)]` 的屬性（多值介面與結構化型別的定義見 [第 6 章
-](06-field-types.md#介面總覽)）。用在其他欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名
-屬性；拿掉 `Searchable`，或把屬性改成 `string`。`Repeater` 子欄位沒有自己的欄位、也不會被搜尋，所以
-在上面設 `Searchable` 同樣讓主機啟動時停下；把它拿掉。`Sortable` 決定後台清單的表頭能不能點著排序；
-查詢語法的 `sort` 不看這個旗標，任何已知欄位都排得動。
+`Hidden = true` 的欄位不會被搜尋，所以掃描拒絕 `Searchable` 加上 `Hidden = true`：主機啟動時就停下並
+丟出 `MetadataException`，訊息點名屬性；兩個拿掉一個。放在 `Hidden` 介面上、沒有那個旗標的欄位，和
+其他欄位一樣進搜尋白名單。搜尋比對的是文字，所以 `Searchable` 只能用在 `string` 屬性，或欄位存 JSON
+文字的結構化欄位：多值介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、
+`Repeater`）上的屬性，或 `Hidden` 上結構化型別的屬性
+（兩個詞的定義見[第 6 章](06-field-types.md#介面總覽)）。用在其他欄位，主機啟動時就停下並丟出
+`MetadataException`，訊息點名屬性；拿掉 `Searchable`，或把屬性改成 `string`。`Repeater` 子欄位沒有
+自己的欄位、也不會被搜尋，掃描同樣拒絕在上面設 `Searchable`；把它拿掉。`Sortable` 決定後台清單的
+表頭能不能點著排序；查詢語法的 `sort` 不看這個旗標，任何已知欄位都排得動。
 
 欄位對外的鍵名是 CLR 屬性名稱的 camelCase 形式；退回 PascalCase 屬性名時，不會自動加空格或
 改大小寫。

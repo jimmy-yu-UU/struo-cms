@@ -169,18 +169,18 @@ stored value and passes, while an explicit `null` or a blank string (including w
 fails. On create, the field must always be supplied. For a non-nullable `Guid` field, `Guid.Empty`
 also counts as missing, and such a field can never be sent as `null` at all.
 
-A field with `Hidden = true` is never searched, so `Searchable` together with `Hidden = true` does
-nothing and stops the host at start with a `MetadataException` that names the property; remove one
-of the two. A field on the `Hidden` interface, without that flag, joins the search whitelist like
-any other. `Searchable` takes a text column only, because search matches text: a `string` property,
-a property on a multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`,
-`Repeater`), a structured-type property on `Hidden`, or a property with
-`[SugarColumn(IsJson = true)]` (the multi-value interfaces and structured types are defined in
-[Chapter 6](06-field-types.md#interface-overview)). On any other field the host stops at start with
-a `MetadataException` that names the property; remove `Searchable`, or make the property a `string`.
-A `Repeater` sub-field has no column of its own and is never searched, so `Searchable` on one stops
-the host at start in the same way; remove it. `Sortable` decides only whether the admin list header
-can be clicked to sort; the query DSL's `sort` ignores the flag — any known field can be sorted on.
+A field with `Hidden = true` is never searched, so the scan refuses `Searchable` together with
+`Hidden = true`: the host stops at start with a `MetadataException` that names the property; remove
+one of the two. A field on the `Hidden` interface, without that flag, joins the search whitelist
+like any other. Search matches text, so `Searchable` takes a `string` property or a structured
+field, whose column holds JSON text: a property on a multi-value interface (`MultiSelect`,
+`CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`) or a structured-type property on `Hidden`
+(both terms are defined in [Chapter 6](06-field-types.md#interface-overview)). On any other field
+the host stops at start with a `MetadataException` that names the property; remove `Searchable`, or
+make the property a `string`. A `Repeater` sub-field has no column of its own and is never searched,
+so the scan refuses `Searchable` on one in the same way; remove it. `Sortable` decides only whether
+the admin list header can be clicked to sort; the query DSL's `sort` ignores the flag — any known
+field can be sorted on.
 
 A field's external key is the camelCase form of the CLR property name. A label that falls back
 to the PascalCase property name gets no inserted spaces and no case changes.

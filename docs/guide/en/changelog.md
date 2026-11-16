@@ -81,8 +81,8 @@
   `[SugarColumn(Length = n)]` to a column that is already that wide, needs none. The comparison
   uses the width declared on the property, not the width of the database column. Neither a core
   field nor the Blog sample is affected.
-- The query DSL checks a filter value against its field before it builds the condition, so each case
-  below answers `400` or compares differently, and a client, a fork or a stored query changes what
+- The query DSL checks a request against the field it names, so each case below answers `400`, stops
+  the host at start, or compares differently, and a client, a fork or a stored query changes what
   the case names ([Chapter 10](10-query-basics.md) lists the operators each field takes):
   - `_contains`, `_starts_with` and `_ends_with` on a field that is not text answer `400` in REST,
     `POST /query` and GraphQL, date-time fields included. A text field is a `string` property; a
@@ -94,10 +94,12 @@
     `_lt`; to match a date, `_gte` the day and `_lt` the next).
   - `_eq` with the text `null` or `[null]` on a `string` property or a field stored as JSON compares
     the column with that text. It used to test for NULL (`null`), or to count the rows holding the
-    text and return none (`[null]`). On a `DateOnly`, `TimeOnly` or `TimeSpan` column the same two
-    words answer `400` and point to `_null`, because the ORM reads exactly those two texts as a null
-    test; every other value is unchanged. A client that relied on `_eq=null` to find NULL rows sends
+    text and return none (`[null]`). A client that relied on `_eq=null` to find NULL rows sends
     `_null` or `_nnull`.
+  - `_eq` with the text `null` or `[null]` on a `DateOnly`, `TimeOnly` or `TimeSpan` column answers
+    `400` and points to `_null` or `_nnull`, because the ORM reads exactly those two texts as a null
+    test; every other value is unchanged. The two words used to test for NULL or to return no row. A
+    client that relied on them sends `_null` or `_nnull`.
   - A JSON `null` as the value of any operator but `_null` and `_nnull` answers `400` and says to
     use those two. It used to compare the column with `NULL`, with `0`, `false` or the earliest
     date, or answer `500` for a `Guid`; GraphQL still skips an operator whose value is `null`. A
@@ -342,10 +344,11 @@ transformed again on the first request.
   a `locale` parameter equal to the code of an enabled language that is named `null` answered `500`
   on every backend, because the rendered subquery lacked an `AND`. They compare the text like any
   other value. A `locale` that names no enabled language, `null` included, answers `400`.
-- A `POST /query` body whose `search`, `limit` or `offset` was not of the right JSON kind, whose
-  `sort` or `fields` held a non-string element (these four also inside `deep`), or that was not a
-  JSON object answered `500`, and so did an element of `_and` or `_or` that was not an object. Each
-  answers `400` and names the field or the operator.
+- A `POST /query` body answered `500` when `search`, `limit` or `offset` was not of the right JSON
+  kind, when `sort` or `fields` held a non-string element (these four also inside `deep`), when it
+  was not a JSON object, when an element of `_and` or `_or` was not an object, and when a property
+  name or a string value held a lone surrogate. Each answers `400` and names the field or the
+  operator, or says the text is not valid.
 - A request that filtered a text field with `_eq=[null]` counted its rows with one condition and
   returned the page with another, so `meta.total` and the rows disagreed. Both run the same
   condition.
