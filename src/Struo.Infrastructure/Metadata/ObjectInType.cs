@@ -25,25 +25,31 @@ internal static class ObjectInType
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (!visited.Add(type)) return null;
 
-        if (type.IsArray)
-        {
-            var element = type.GetElementType()!;
-            return element == typeof(object) ? $"element type of {Name(type)}" : Find(element, visited);
-        }
+        if (type.IsArray) return FindInArray(type, visited);
 
-        if (type.IsGenericType)
-        {
-            foreach (var argument in type.GetGenericArguments())
-            {
-                if (argument == typeof(object)) return $"type argument of {Name(type)}";
-                var inner = Find(argument, visited);
-                if (inner is not null) return inner;
-            }
-        }
+        var inArguments = type.IsGenericType ? FindInArguments(type, visited) : null;
+        if (inArguments is not null) return inArguments;
 
         if (IsUntypedCollection(type)) return $"untyped elements of {Name(type)}";
 
         return IsWalkable(type) ? FindInMembers(type, visited) : null;
+    }
+
+    private static string? FindInArray(Type type, HashSet<Type> visited)
+    {
+        var element = type.GetElementType()!;
+        return element == typeof(object) ? $"element type of {Name(type)}" : Find(element, visited);
+    }
+
+    private static string? FindInArguments(Type type, HashSet<Type> visited)
+    {
+        foreach (var argument in type.GetGenericArguments())
+        {
+            if (argument == typeof(object)) return $"type argument of {Name(type)}";
+            var inner = Find(argument, visited);
+            if (inner is not null) return inner;
+        }
+        return null;
     }
 
     private static string? FindInMembers(Type type, HashSet<Type> visited)
