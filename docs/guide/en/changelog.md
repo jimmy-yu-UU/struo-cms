@@ -81,9 +81,10 @@
   `[SugarColumn(Length = n)]` to a column that is already that wide, needs none. The comparison
   uses the width declared on the property, not the width of the database column. Neither a core
   field nor the Blog sample is affected.
-- The query DSL checks a request against the field it names, so each case below answers `400`, stops
-  the host at start, or compares differently, and a client, a fork or a stored query changes what
-  the case names ([Chapter 10](10-query-basics.md) lists the operators each field takes):
+- The query DSL and the metadata scan are stricter about what a request or a declaration may
+  hold, so each case below answers `400`, stops the host at start, or compares differently, and a
+  client, a fork or a stored query changes what the case names ([Chapter 10](10-query-basics.md)
+  lists the operators each field takes):
   - `_contains`, `_starts_with` and `_ends_with` on a field that is not text answer `400` in REST,
     `POST /query` and GraphQL, date-time fields included. A text field is a `string` property; a
     field stored as JSON (a multi-value interface, or a structured type on `Hidden`) keeps them and
@@ -117,9 +118,9 @@
   - A `POST /query` body key the parser does not read, at the top level or inside a `deep` relation
     entry, answers `400` that names the key and lists the accepted ones (`fields`, `filter`, `sort`,
     `limit`, `offset`, `search`, `deep`, `facets`, `aggregate` in the body; the same without
-    `search`, `facets` and `aggregate` in a relation entry). Such a key, a misspelled `filter` for
-    one, used to be ignored, so the caller got every row. A caller that sent one corrects or removes
-    the key.
+    `search`, `facets` and `aggregate` in a relation entry); a key that is not valid text gets the
+    not-valid-text answer instead. Such a key, a misspelled `filter` for one, used to be ignored, so
+    the caller got every row. A caller that sent one corrects or removes the key.
   - `Searchable = true` on a field whose column is not text (a number, boolean, `Guid`, enum or
     date-time property), or on a Repeater sub-field, stops the host at start with a
     `MetadataException` that names the property. It used to start: every `search=` request on that
@@ -346,8 +347,9 @@ transformed again on the first request.
   other value. A `locale` that names no enabled language, `null` included, answers `400`.
 - A `POST /query` body answered `500` when `search`, `limit` or `offset` was not of the right JSON
   kind, when `sort` or `fields` held a non-string element (these four also inside `deep`), when it
-  was not a JSON object, when an element of `_and` or `_or` was not an object, and when a property
-  name or a string value held a lone surrogate. Each answers `400` and names the field or the
+  was not a JSON object, when an element of `_and` or `_or` was not an object, and when a filter
+  field name, an operator name, a `deep` relation name, an aggregate operation name or a string
+  value the parser reads held a lone surrogate. Each answers `400` and names the field or the
   operator, or says the text is not valid.
 - A request that filtered a text field with `_eq=[null]` counted its rows with one condition and
   returned the page with another, so `meta.total` and the rows disagreed. Both run the same

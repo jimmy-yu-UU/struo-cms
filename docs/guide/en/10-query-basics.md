@@ -189,10 +189,11 @@ Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total`
 real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as text. The
 conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
 `DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number); a
-`string` is compared as text, and `_in`/`_nin` on any other type is a 400. On a `string` property or
-a structured field, `_eq` with the word `null` compares that word and never tests for NULL. On a
-`DateOnly`, `TimeOnly` or `TimeSpan` field, `_eq` with `null` or `[null]` is a 400 that names
-`_null` and `_nnull`, because the ORM reads exactly those two texts as a null test.
+`string` is compared as text, and `_in`/`_nin` on a type the conversion table does not cover is a
+400. On a `string` property or a structured field, `_eq` with the word `null` compares that word and
+never tests for NULL. On a `DateOnly`, `TimeOnly` or `TimeSpan` field, `_eq` with `null` or `[null]`
+is a 400 that names `_null` and `_nnull`, because the ORM reads exactly those two texts as a null
+test.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

@@ -162,9 +162,9 @@ HTTP_STATUS:200
 **型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——`Guid`
 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
-當成文字比對，其他型別的 `_in`／`_nin` 回 400。`string` 屬性或結構化欄位上，`_eq` 的值是 `null`
-這個字，比對的就是這個字，不會測 NULL。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值是
-`null` 或 `[null]` 回 400，訊息指向 `_null` 與 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL。
+當成文字比對，轉換表沒有涵蓋的型別，`_in`／`_nin` 回 400。`string` 屬性或結構化欄位上，`_eq` 的值是
+`null` 這個字，比對的就是這個字，不會測 NULL。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值
+是 `null` 或 `[null]` 回 400，訊息指向 `_null` 與 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
 並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、
