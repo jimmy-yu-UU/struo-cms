@@ -14,6 +14,15 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     private const string Items = "/api/items/fxStash";
     private const string Glossaries = "/api/items/fxGlossary";
 
+    private static readonly string[] LabelsAb = ["a", "b"];
+    private static readonly string[] LabelsCde = ["c", "d", "e"];
+    private static readonly int[] NumbersOneTwo = [1, 2];
+    private static readonly int[] NumbersThreeToFive = [3, 4, 5];
+    private static readonly string[] AliasesEn = ["a", "b"];
+    private static readonly string[] AliasesZh = ["\u7532", "\u4e59", "\u4e19"];
+    private static readonly string[] AliasesEnUpdated = ["c"];
+    private static readonly string[] AliasesZhUpdated = ["\u4e01", "\u620a"];
+
     private static async Task<JsonElement> DataOf(HttpResponseMessage response)
     {
         var text = await response.Content.ReadAsStringAsync();
@@ -21,7 +30,7 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
         return doc.RootElement.GetProperty("data").Clone();
     }
 
-    private static async Task<string> CreateStashAsync(HttpClient client, object body, string items = Items)
+    private static async Task<string> CreateItemAsync(HttpClient client, object body, string items = Items)
     {
         var create = await client.PostAsJsonAsync(items, body);
         create.StatusCode.Should().Be(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
@@ -52,11 +61,11 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     public async Task A_list_on_a_Hidden_field_reads_back_after_create_and_after_update()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var id = await CreateStashAsync(client, new { name = "s", labels = new[] { "a", "b" } });
+        var id = await CreateItemAsync(client, new { name = "s", labels = LabelsAb });
 
         Strings((await ReadAsync(client, id)).GetProperty("labels")).Should().Equal("a", "b");
 
-        await UpdateAsync(client, id, new { labels = new[] { "c", "d", "e" } });
+        await UpdateAsync(client, id, new { labels = LabelsCde });
 
         Strings((await ReadAsync(client, id)).GetProperty("labels")).Should().Equal("c", "d", "e");
     }
@@ -65,11 +74,11 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     public async Task An_array_on_a_Hidden_field_reads_back_after_create_and_after_update()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var id = await CreateStashAsync(client, new { name = "s", numbers = new[] { 1, 2 } });
+        var id = await CreateItemAsync(client, new { name = "s", numbers = NumbersOneTwo });
 
         Ints((await ReadAsync(client, id)).GetProperty("numbers")).Should().Equal(1, 2);
 
-        await UpdateAsync(client, id, new { numbers = new[] { 3, 4, 5 } });
+        await UpdateAsync(client, id, new { numbers = NumbersThreeToFive });
 
         Ints((await ReadAsync(client, id)).GetProperty("numbers")).Should().Equal(3, 4, 5);
     }
@@ -78,7 +87,7 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     public async Task A_dictionary_on_a_Hidden_field_reads_back_after_create_and_after_update()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var id = await CreateStashAsync(client, new { name = "s", scores = new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 } });
+        var id = await CreateItemAsync(client, new { name = "s", scores = new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 } });
 
         Scores((await ReadAsync(client, id)).GetProperty("scores"))
             .Should().BeEquivalentTo(new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 });
@@ -93,7 +102,7 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     public async Task A_custom_class_on_a_Hidden_field_reads_back_after_create_and_after_update()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var id = await CreateStashAsync(client, new { name = "s", note = new { text = "first", weight = 1 } });
+        var id = await CreateItemAsync(client, new { name = "s", note = new { text = "first", weight = 1 } });
 
         var first = (await ReadAsync(client, id)).GetProperty("note");
         first.GetProperty("text").GetString().Should().Be("first");
@@ -110,12 +119,12 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
     public async Task A_list_on_a_translatable_Hidden_field_reads_back_per_locale_after_create_and_after_update()
     {
         var client = await factory.CreateAuthenticatedClientAsync();
-        var id = await CreateStashAsync(client, new
+        var id = await CreateItemAsync(client, new
         {
             translations = new Dictionary<string, object>
             {
-                ["en"] = new { title = "T", aliases = new[] { "a", "b" } },
-                ["zh-TW"] = new { title = "T", aliases = new[] { "\u7532", "\u4e59", "\u4e19" } },
+                ["en"] = new { title = "T", aliases = AliasesEn },
+                ["zh-TW"] = new { title = "T", aliases = AliasesZh },
             },
         }, Glossaries);
 
@@ -127,8 +136,8 @@ public sealed class HiddenStructuredFieldApiTests(ApiFactory factory)
         {
             translations = new Dictionary<string, object>
             {
-                ["en"] = new { aliases = new[] { "c" } },
-                ["zh-TW"] = new { aliases = new[] { "\u4e01", "\u620a" } },
+                ["en"] = new { aliases = AliasesEnUpdated },
+                ["zh-TW"] = new { aliases = AliasesZhUpdated },
             },
         }, Glossaries);
 

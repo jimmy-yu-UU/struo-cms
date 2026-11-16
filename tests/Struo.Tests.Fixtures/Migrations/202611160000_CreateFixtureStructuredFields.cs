@@ -3,9 +3,12 @@ using Struo.Infrastructure.Migrations;
 
 namespace Struo.Tests.Fixtures.Migrations;
 
-/// <summary>Creates the stash table, whose Hidden fields hold structured values, and the glossary table with its translation table, whose Hidden field is translatable.</summary>
-[Migration(202611160000, "CreateFixtureStashes")]
-public sealed class CreateFixtureStashes : StruoMigration
+/// <summary>
+/// Creates the stash table, whose Hidden fields hold structured values, and the glossary tables,
+/// whose translation sidecar has a translatable Hidden field.
+/// </summary>
+[Migration(202611160000, "CreateFixtureStructuredFields")]
+public sealed class CreateFixtureStructuredFields : StruoMigration
 {
     private const string Stashes = "fx_stashes";
     private const string Glossaries = "fx_glossaries";

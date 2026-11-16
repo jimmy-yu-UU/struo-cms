@@ -16,6 +16,7 @@ internal static class ColumnDeclarationCheck
 {
     private const string JsonOwner = "the framework chooses the type of a JSON column";
     private const string JsonStorage = "which is always stored as a JSON column";
+    private const string ObjectWhy = "a value read from an object comes back as a JSON node, not as the value that was written";
 
     internal static void Require(PropertyInfo property, CmsFieldAttribute field)
     {
@@ -29,17 +30,12 @@ internal static class ColumnDeclarationCheck
     }
 
     // A structured value lives in a JSON column that only the multi-value interfaces and Hidden read and
-    // write; the Json interface holds raw JSON text in a string; no interface reads back an object.
+    // write; the Json interface holds raw JSON text in a string; no interface reads back an object, alone or
+    // inside the property type.
     private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string name)
     {
         var type = property.PropertyType;
         var held = $"Field '{name}' is a {TypeName(type)} property with Interface = {field.Interface}";
-
-        if (type == typeof(object))
-            throw Reject(
-                $"Field '{name}' is an object property with Interface = {field.Interface}.",
-                "Declare the concrete type of the value",
-                "a value read from an object property comes back as a JSON node, not as the value that was written");
 
         if (field.Interface == FieldInterface.Json)
         {
@@ -47,6 +43,17 @@ internal static class ColumnDeclarationCheck
                 throw Reject($"{held}, which holds raw JSON text.", "Declare the property as string", "the field stores the JSON text itself");
             return;
         }
+
+        if (type == typeof(object))
+            throw Reject(
+                $"Field '{name}' is an object property with Interface = {field.Interface}.",
+                "Declare the concrete type of the value",
+                ObjectWhy);
+
+        var nested = ObjectInType.Find(type);
+        if (nested is not null)
+            throw Reject(
+                $"{held}, which contains an object ({nested}).", "Declare the concrete type of the value", ObjectWhy);
 
         if (field.Interface == FieldInterface.Hidden || FieldInterfaceSets.JsonColumnInterfaces.Contains(field.Interface)) return;
         if (!StructuredType.Is(type)) return;
@@ -86,7 +93,7 @@ internal static class ColumnDeclarationCheck
             throw Reject($"Field '{name}' has {typeText} and {stored}.", "Remove ColumnDataType", JsonOwner);
     }
 
-    private static string TypeName(Type type)
+    internal static string TypeName(Type type)
     {
         if (type.IsArray) return TypeName(type.GetElementType()!) + "[]";
         if (!type.IsGenericType) return Keywords.GetValueOrDefault(type, type.Name);

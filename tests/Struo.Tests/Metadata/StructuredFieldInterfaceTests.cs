@@ -282,7 +282,7 @@ public sealed class StructuredFieldInterfaceTests
     public static TheoryData<Type, string> ObjectRejected() => new()
     {
         { typeof(HiddenHost<object>), "Hidden" }, { typeof(TextHost<object>), "Text" },
-        { typeof(JsonHost<object>), "Json" }, { typeof(MultiSelectHost<object>), "MultiSelect" },
+        { typeof(MultiSelectHost<object>), "MultiSelect" },
         { typeof(CheckboxGroupHost<object>), "CheckboxGroup" }, { typeof(TagsHost<object>), "Tags" },
         { typeof(KeyValueHost<object>), "KeyValue" }, { typeof(FilesHost<object>), "Files" },
         { typeof(RepeaterHost<object>), "Repeater" },
@@ -299,6 +299,101 @@ public sealed class StructuredFieldInterfaceTests
         message.Should().Contain(".Value'").And.Contain("an object property")
             .And.Contain($"Interface = {declaredInterface}").And.Contain("Declare the concrete type");
         message.All(c => c < 128).Should().BeTrue(message);
+    }
+
+    // ---- rejected: object anywhere inside the property type ----
+
+    public sealed class HolderWithObject
+    {
+        public string Name { get; set; } = "";
+        public object? Payload { get; set; }
+    }
+
+    public sealed class OuterWithInner
+    {
+        public HolderWithObject Inner { get; set; } = new();
+    }
+
+    public readonly struct StructWithObject
+    {
+        public object? Payload { get; init; }
+    }
+
+    public sealed class RowWithObjectSubField
+    {
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; set; } = "";
+        [CmsField(Label = "Payload", Interface = FieldInterface.Text)] public object? Payload { get; set; }
+    }
+
+    public sealed class RowWithObjectMember
+    {
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; set; } = "";
+        public object? Extra { get; set; }
+    }
+
+    public static TheoryData<Type, string> ObjectNestedRejected() => new()
+    {
+        { typeof(HiddenHost<Dictionary<string, object>>), "type argument of Dictionary<string, object>" },
+        { typeof(HiddenHost<List<object>>), "type argument of List<object>" },
+        { typeof(HiddenHost<object[]>), "element type of object[]" },
+        { typeof(HiddenHost<HolderWithObject>), "member HolderWithObject.Payload" },
+        { typeof(HiddenHost<OuterWithInner>), "member HolderWithObject.Payload" },
+        { typeof(HiddenHost<List<HolderWithObject>>), "member HolderWithObject.Payload" },
+        { typeof(HiddenHost<StructWithObject>), "member StructWithObject.Payload" },
+        { typeof(HiddenHost<(int, object)>), "type argument of ValueTuple<int, object>" },
+        { typeof(MultiSelectHost<List<object>>), "type argument of List<object>" },
+        { typeof(KeyValueHost<Dictionary<string, object>>), "type argument of Dictionary<string, object>" },
+        { typeof(RepeaterHost<List<RowWithObjectSubField>>), "member RowWithObjectSubField.Payload" },
+        { typeof(RepeaterHost<List<RowWithObjectMember>>), "member RowWithObjectMember.Extra" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ObjectNestedRejected))]
+    public void An_object_inside_the_property_type_fails_the_scan_and_names_where_it_is(Type type, string where)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain(".Value'").And.Contain("contains an object").And.Contain(where)
+            .And.Contain("Declare the concrete type");
+        message.All(c => c < 128).Should().BeTrue(message);
+    }
+
+    [Theory]
+    [InlineData(typeof(JsonHost<object>))]
+    [InlineData(typeof(JsonHost<Dictionary<string, object>>))]
+    [InlineData(typeof(JsonHost<List<object>>))]
+    public void On_the_Json_interface_an_object_property_still_gets_the_string_rule(Type type)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("raw JSON text").And.Contain("Declare the property as string");
+    }
+
+    public sealed class SelfReferencing
+    {
+        public string Name { get; set; } = "";
+        public SelfReferencing? Next { get; set; }
+        public List<SelfReferencing> Children { get; set; } = [];
+    }
+
+    public sealed class MutualA { public MutualB? B { get; set; } }
+    public sealed class MutualB { public MutualA? A { get; set; } public int N { get; set; } }
+
+    [Theory]
+    [InlineData(typeof(HiddenHost<SelfReferencing>))]
+    [InlineData(typeof(HiddenHost<MutualA>))]
+    [InlineData(typeof(HiddenHost<Dictionary<string, List<int>>>))]
+    [InlineData(typeof(HiddenHost<Dictionary<string, Custom>>))]
+    [InlineData(typeof(HiddenHost<Guid[]>))]
+    [InlineData(typeof(HiddenHost<(int, string)>))]
+    [InlineData(typeof(HiddenHost<System.Text.Json.JsonElement>))]
+    public void A_structured_type_without_object_scans_and_a_cycle_ends(Type type)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        act.Should().NotThrow();
     }
 
     [Fact]
