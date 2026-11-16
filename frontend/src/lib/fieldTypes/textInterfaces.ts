@@ -21,6 +21,5 @@ const TEXT_INTERFACE: Record<FieldInterface, boolean> = {
 }
 
 export function isTextInterface(fieldInterface: string): boolean {
-  return Object.prototype.hasOwnProperty.call(TEXT_INTERFACE, fieldInterface)
-    && TEXT_INTERFACE[fieldInterface as FieldInterface]
+  return Object.hasOwn(TEXT_INTERFACE, fieldInterface) && TEXT_INTERFACE[fieldInterface as FieldInterface]
 }
