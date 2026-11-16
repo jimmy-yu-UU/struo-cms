@@ -10,10 +10,11 @@ using Xunit;
 
 namespace Struo.Tests.Persistence;
 
-// A [CmsField] property of a List<> type is stored as a JSON column on every interface, with or
-// without [SugarColumn(IsJson = true)]. Navigation and translation lists carry no [CmsField] and
-// have no column.
-public sealed class ListFieldColumnTests
+// A [CmsField] property of a structured type (a list, an array, a dictionary or a custom class) is
+// stored as a JSON long-text column on Hidden and on the multi-value interfaces, with or without
+// [SugarColumn(IsJson = true)]. Navigation and translation lists carry no [CmsField] and have no
+// column.
+public sealed class StructuredFieldColumnTests
 {
     public sealed class ListFieldItem
     {
@@ -25,14 +26,25 @@ public sealed class ListFieldColumnTests
     public sealed class ListFieldProbe
     {
         [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-        [CmsField(Label = "Names", Interface = FieldInterface.Text)] public List<string> Names { get; set; } = [];
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<ListFieldItem> Items { get; set; } = [];
-        [CmsField(Label = "Notes", Interface = FieldInterface.Json)] public List<string> Notes { get; set; } = [];
+        [CmsField(Label = "Names", Interface = FieldInterface.Hidden)] public List<string> Names { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<ListFieldItem> Items { get; set; } = [];
+        [CmsField(Label = "Array", Interface = FieldInterface.Hidden)] public string[] Array { get; set; } = [];
+        [CmsField(Label = "Map", Interface = FieldInterface.Hidden)] public Dictionary<string, string> Map { get; set; } = new();
+        [CmsField(Label = "Custom", Interface = FieldInterface.Hidden)] public ListFieldItem Custom { get; set; } = new();
         [CmsField(Label = "Marked", Interface = FieldInterface.Tags)] public List<string> Marked { get; set; } = [];
         [SugarColumn(IsJson = true)]
-        [CmsField(Label = "Annotated", Interface = FieldInterface.Text)] public List<string> Annotated { get; set; } = [];
+        [CmsField(Label = "Annotated", Interface = FieldInterface.Hidden)] public List<string> Annotated { get; set; } = [];
         [SugarColumn(IsNullable = true)]
-        [CmsField(Label = "Maybe", Interface = FieldInterface.Text)] public List<string>? Maybe { get; set; }
+        [CmsField(Label = "Maybe", Interface = FieldInterface.Hidden)] public List<string>? Maybe { get; set; }
+    }
+
+    // An entity the scan never sees (a junction POCO that is not a collection) still gets the JSON
+    // column for a structured [CmsField] property, whatever its interface.
+    [SugarTable("list_field_unscanned_probe")]
+    public sealed class UnscannedProbe
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+        [CmsField(Label = "Names", Interface = FieldInterface.Text)] public List<string> Names { get; set; } = [];
     }
 
     [SugarTable("list_field_untouched_children")]
@@ -85,17 +97,27 @@ public sealed class ListFieldColumnTests
 
     [Theory]
     [MemberData(nameof(ColumnTypeMapTests.CodeFirstBackends), MemberType = typeof(ColumnTypeMapTests))]
-    public void A_List_CmsField_is_a_JSON_long_text_column_on_every_interface(DbType dbType)
+    public void A_structured_CmsField_is_a_JSON_long_text_column(DbType dbType)
     {
         var columns = InfoOf<ListFieldProbe>(dbType).Columns;
 
-        foreach (var name in new[] { "Names", "Items", "Notes", "Marked", "Annotated", "Maybe" })
+        foreach (var name in new[] { "Names", "Items", "Array", "Map", "Custom", "Marked", "Annotated", "Maybe" })
         {
             var column = columns.Single(c => c.PropertyName == name);
             column.IsJson.Should().BeTrue(name);
             column.DataType.Should().Be(ColumnTypeMap.For(ColumnShape.LongText, dbType), name);
         }
         columns.Single(c => c.PropertyName == "Maybe").IsNullable.Should().BeTrue();
+    }
+
+    [Theory]
+    [MemberData(nameof(ColumnTypeMapTests.CodeFirstBackends), MemberType = typeof(ColumnTypeMapTests))]
+    public void An_unscanned_entity_gets_the_JSON_column_for_a_structured_CmsField(DbType dbType)
+    {
+        var column = InfoOf<UnscannedProbe>(dbType).Columns.Single(c => c.PropertyName == "Names");
+
+        column.IsJson.Should().BeTrue();
+        column.DataType.Should().Be(ColumnTypeMap.For(ColumnShape.LongText, dbType));
     }
 
     [Theory]
@@ -128,7 +150,7 @@ public sealed class ListFieldColumnTests
     }
 
     [Fact]
-    public void Migration_source_for_a_List_CmsField_uses_AsJson_for_every_list_property()
+    public void Migration_source_for_a_structured_CmsField_uses_AsJson_for_every_structured_property()
     {
         var client = SqlSugarClientFactory.Create(
             new DatabaseOptions
@@ -142,7 +164,7 @@ public sealed class ListFieldColumnTests
         var source = MigrationGenerator.Generate(
             new MigrationSpec("AddListFieldProbe", 202611130000, null, EntitySchemaReader.Read(client, typeof(ListFieldProbe))));
 
-        foreach (var name in new[] { "Names", "Items", "Notes", "Marked", "Annotated" })
+        foreach (var name in new[] { "Names", "Items", "Array", "Map", "Custom", "Marked", "Annotated" })
             source.Should().Contain($".WithColumn(\"{name.ToLowerInvariant()}\").AsJson(Db).NotNullable()");
         source.Should().Contain(".WithColumn(\"maybe\").AsJson(Db).Nullable()");
         source.Should().NotContain("AsString(1)").And.NotContain("AsLongText(Db)");
@@ -152,7 +174,7 @@ public sealed class ListFieldColumnTests
 
     [Theory]
     [MemberData(nameof(ElementCounts))]
-    public void A_List_CmsField_without_IsJson_reads_back_what_was_written(int count)
+    public void A_structured_CmsField_without_IsJson_reads_back_what_was_written(int count)
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
@@ -160,17 +182,26 @@ public sealed class ListFieldColumnTests
         var names = Enumerable.Range(0, count).Select(i => $"n{i}").ToList();
         var items = Enumerable.Range(0, count).Select(i => new ListFieldItem { A = $"a{i}", B = i }).ToList();
 
-        var id = client.Insertable(new ListFieldProbe { Names = names, Items = items, Maybe = names })
+        var map = names.ToDictionary(n => n, n => n.ToUpperInvariant());
+        var custom = new ListFieldItem { A = "c" + count, B = count };
+
+        var id = client.Insertable(new ListFieldProbe
+            {
+                Names = names, Items = items, Array = names.ToArray(), Map = map, Custom = custom, Maybe = names,
+            })
             .ExecuteReturnBigIdentity();
 
         var read = client.Queryable<ListFieldProbe>().InSingle(id);
         read.Names.Should().Equal(names);
         read.Items.Should().BeEquivalentTo(items, o => o.WithStrictOrdering());
+        read.Array.Should().Equal(names);
+        read.Map.Should().Equal(map);
+        read.Custom.Should().BeEquivalentTo(custom);
         read.Maybe.Should().Equal(names);
     }
 
     [Fact]
-    public void A_List_CmsField_without_IsJson_can_be_updated_and_cleared()
+    public void A_structured_CmsField_without_IsJson_can_be_updated_and_cleared()
     {
         using var db = TestBackend.CreateUnitDatabase();
         var client = SqlSugarClientFactory.Create(db.Options(), new TestCurrentUserAccessor(Guid.Empty));
@@ -180,12 +211,18 @@ public sealed class ListFieldColumnTests
 
         var row = client.Queryable<ListFieldProbe>().InSingle(id);
         row.Names = ["p", "q", "r"];
+        row.Array = ["x", "y"];
+        row.Map = new Dictionary<string, string> { ["k"] = "v" };
+        row.Custom = new ListFieldItem { A = "z", B = 9 };
         row.Items = [];
         row.Maybe = null;
         client.Updateable(row).ExecuteCommand();
 
         var read = client.Queryable<ListFieldProbe>().InSingle(id);
         read.Names.Should().Equal("p", "q", "r");
+        read.Array.Should().Equal("x", "y");
+        read.Map.Should().Equal(new Dictionary<string, string> { ["k"] = "v" });
+        read.Custom.Should().BeEquivalentTo(new ListFieldItem { A = "z", B = 9 });
         read.Items.Should().BeEmpty();
         read.Maybe.Should().BeNull();
     }

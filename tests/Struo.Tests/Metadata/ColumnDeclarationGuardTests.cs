@@ -46,7 +46,7 @@ public sealed class ColumnDeclarationGuardTests
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [SugarColumn(IsJson = true, ColumnDataType = "jsonb")]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     [CmsCollection("List and type", Name = "cdgListAndType")]
@@ -54,7 +54,7 @@ public sealed class ColumnDeclarationGuardTests
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [SugarColumn(ColumnDataType = "jsonb")]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     [CmsCollection("IsJson and shape", Name = "cdgIsJsonAndShape")]
@@ -63,7 +63,7 @@ public sealed class ColumnDeclarationGuardTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [ColumnShape(ColumnShape.TimestampWithTimeZone)]
         [SugarColumn(IsJson = true)]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     // ---- translation entities ----
@@ -134,7 +134,7 @@ public sealed class ColumnDeclarationGuardTests
         public long TrIsJsonAndTypeId { get; set; }
         public string Locale { get; set; } = "";
         [SugarColumn(IsJson = true, ColumnDataType = "jsonb")]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     [CmsCollection("Tr IsJson and shape", Name = "cdgTrIsJsonAndShape")]
@@ -152,7 +152,7 @@ public sealed class ColumnDeclarationGuardTests
         public string Locale { get; set; } = "";
         [ColumnShape(ColumnShape.LongText)]
         [SugarColumn(IsJson = true)]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     // ---- junction collections (payload fields) ----
@@ -195,7 +195,7 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
         [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
         [SugarColumn(IsJson = true, ColumnDataType = "jsonb")]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
     }
 
     [CmsCollection("Link IsJson and shape", Name = "cdgLinkIsJsonAndShape", Hidden = true)]
@@ -206,11 +206,52 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
         [ColumnShape(ColumnShape.LongText)]
         [SugarColumn(IsJson = true)]
-        [CmsField(Label = "Items", Interface = FieldInterface.Text)] public List<string> Items { get; set; } = [];
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
+    }
+
+    // ---- [ColumnShape] beside a structured type that has no IsJson ----
+
+    [CmsCollection("Shape on structured", Name = "cdgShapeOnStructured")]
+    public sealed class ShapeOnStructured
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public List<string> Items { get; set; } = [];
+    }
+
+    [CmsCollection("Tr shape on structured", Name = "cdgTrShapeOnStructured")]
+    public sealed class TrShapeOnStructured
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        [CmsTranslations(typeof(TrShapeOnStructuredTranslation))]
+        [SugarColumn(IsIgnore = true)] public List<TrShapeOnStructuredTranslation> Translations { get; set; } = [];
+    }
+
+    public sealed class TrShapeOnStructuredTranslation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public long TrShapeOnStructuredId { get; set; }
+        public string Locale { get; set; } = "";
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public string[] Items { get; set; } = [];
+    }
+
+    [CmsCollection("Link shape on structured", Name = "cdgLinkShapeOnStructured", Hidden = true)]
+    public sealed class LinkShapeOnStructured
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
+        [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
+        [ColumnShape(ColumnShape.LongText)]
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden)] public Dictionary<string, string> Items { get; set; } = new();
     }
 
     public static TheoryData<Type, string, string> Rejected() => new()
     {
+        // [ColumnShape] beside a structured type without IsJson
+        { typeof(ShapeOnStructured), "ShapeOnStructured.Items", "[ColumnShape] and a List<string> property" },
+        { typeof(TrShapeOnStructured), "TrShapeOnStructuredTranslation.Items", "[ColumnShape] and a string[] property" },
+        { typeof(LinkShapeOnStructured), "LinkShapeOnStructured.Items", "[ColumnShape] and a Dictionary<string, string> property" },
         // G1: [ColumnShape] on a JSON interface
         { typeof(ShapeOnJson), "ShapeOnJson.Tags", "[ColumnShape] and Interface = Tags" },
         { typeof(TrShapeOnJson), "TrShapeOnJsonTranslation.Tags", "[ColumnShape] and Interface = Tags" },
@@ -227,11 +268,11 @@ public sealed class ColumnDeclarationGuardTests
         { typeof(IsJsonAndShape), "IsJsonAndShape.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
         { typeof(TrIsJsonAndShape), "TrIsJsonAndShapeTranslation.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
         { typeof(LinkIsJsonAndShape), "LinkIsJsonAndShape.Items", "[ColumnShape] and [SugarColumn(IsJson = true)]" },
-        // G5: IsJson with ColumnDataType, and a List<> (stored as JSON) with ColumnDataType
+        // G5: IsJson with ColumnDataType, and a structured type (stored as JSON) with ColumnDataType
         { typeof(IsJsonAndType), "IsJsonAndType.Items", "ColumnDataType = \"jsonb\")] and [SugarColumn(IsJson = true)]" },
         { typeof(TrIsJsonAndType), "TrIsJsonAndTypeTranslation.Items", "ColumnDataType = \"jsonb\")] and [SugarColumn(IsJson = true)]" },
         { typeof(LinkIsJsonAndType), "LinkIsJsonAndType.Items", "ColumnDataType = \"jsonb\")] and [SugarColumn(IsJson = true)]" },
-        { typeof(ListAndType), "ListAndType.Items", "ColumnDataType = \"jsonb\")] and a List<> type" },
+        { typeof(ListAndType), "ListAndType.Items", "ColumnDataType = \"jsonb\")] and a List<string> property" },
     };
 
     [Theory]
@@ -276,9 +317,9 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Shaped", Interface = FieldInterface.Text)] public string? Shaped { get; set; }
 
         [SugarColumn(IsJson = true)]
-        [CmsField(Label = "Marked", Interface = FieldInterface.Text)] public List<string> Marked { get; set; } = [];
+        [CmsField(Label = "Marked", Interface = FieldInterface.Hidden)] public List<string> Marked { get; set; } = [];
 
-        [CmsField(Label = "Unmarked", Interface = FieldInterface.Text)] public List<string> Unmarked { get; set; } = [];
+        [CmsField(Label = "Unmarked", Interface = FieldInterface.Hidden)] public List<string> Unmarked { get; set; } = [];
 
         [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
 

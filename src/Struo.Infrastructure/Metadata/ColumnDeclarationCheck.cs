@@ -2,6 +2,7 @@ using System.Reflection;
 using SqlSugar;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Metadata;
@@ -22,8 +23,33 @@ internal static class ColumnDeclarationCheck
         if (sugar is { IsIgnore: true }) return;
 
         var name = $"{property.DeclaringType?.Name}.{property.Name}";
+        RequireTypeFitsInterface(property, field, name);
         RequireConsistentType(property, field, sugar, name);
         RequireNullabilityConsistent(property, name);
+    }
+
+    // A structured value lives in a JSON column that only the multi-value interfaces and Hidden read and
+    // write; the Json interface holds raw JSON text in a string.
+    private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string name)
+    {
+        var type = property.PropertyType;
+        var held = $"Field '{name}' is a {TypeName(type)} property with Interface = {field.Interface}";
+
+        if (field.Interface == FieldInterface.Json)
+        {
+            if (type != typeof(string))
+                throw Reject($"{held}, which holds raw JSON text.", "Declare the property as string", "the field stores the JSON text itself");
+            return;
+        }
+
+        if (field.Interface == FieldInterface.Hidden || FieldInterfaceSets.JsonColumnInterfaces.Contains(field.Interface)) return;
+        if (!StructuredType.Is(type)) return;
+
+        var allowed = string.Join(", ", FieldInterfaceSets.JsonColumnInterfaces.Order()) + " or " + FieldInterface.Hidden;
+        throw Reject(
+            $"{held}, which holds a single value.",
+            $"Change the interface to one of {allowed}, or declare a single-value property",
+            "a structured value is stored as a JSON column that only those interfaces read and write");
     }
 
     private static void RequireConsistentType(PropertyInfo property, CmsFieldAttribute field, SugarColumn? sugar, string name)
@@ -46,12 +72,29 @@ internal static class ColumnDeclarationCheck
                 $"Field '{name}' has both [ColumnShape({shape})] and {typeText}. " +
                 "Remove ColumnDataType to use the shape, or remove [ColumnShape] to use your own type.");
 
-        if (shape is not null && sugar is { IsJson: true })
-            throw Reject($"Field '{name}' has [ColumnShape] and [SugarColumn(IsJson = true)], which stores it as a JSON column.", "Remove [ColumnShape]", JsonOwner);
+        var stored = JsonStorageOf(property, sugar);
+        if (shape is not null && stored is not null)
+            throw Reject($"Field '{name}' has [ColumnShape] and {stored}.", "Remove [ColumnShape]", JsonOwner);
 
-        if (hasType && JsonStorageOf(property, sugar) is { } stored)
+        if (hasType && stored is not null)
             throw Reject($"Field '{name}' has {typeText} and {stored}.", "Remove ColumnDataType", JsonOwner);
     }
+
+    private static string TypeName(Type type)
+    {
+        if (type.IsArray) return TypeName(type.GetElementType()!) + "[]";
+        if (!type.IsGenericType) return Keywords.GetValueOrDefault(type, type.Name);
+
+        var name = type.Name[..type.Name.IndexOf('`')];
+        return $"{name}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>";
+    }
+
+    private static readonly Dictionary<Type, string> Keywords = new()
+    {
+        [typeof(string)] = "string", [typeof(int)] = "int", [typeof(long)] = "long", [typeof(bool)] = "bool",
+        [typeof(decimal)] = "decimal", [typeof(double)] = "double", [typeof(float)] = "float",
+        [typeof(short)] = "short", [typeof(byte)] = "byte", [typeof(char)] = "char", [typeof(object)] = "object",
+    };
 
     private static MetadataException Reject(string declarations, string fix, string why) =>
         new($"{declarations} {fix}: {why}.");
@@ -59,7 +102,7 @@ internal static class ColumnDeclarationCheck
     private static string? JsonStorageOf(PropertyInfo property, SugarColumn? sugar)
     {
         if (sugar is { IsJson: true }) return "[SugarColumn(IsJson = true)], which stores it as a JSON column";
-        return ListProperty.Is(property.PropertyType) ? "a List<> type, which is stored as a JSON column" : null;
+        return StructuredType.Is(property.PropertyType) ? $"a {TypeName(property.PropertyType)} property, which is stored as a JSON column" : null;
     }
 
     private static void RequireNullabilityConsistent(PropertyInfo property, string name)

@@ -1,0 +1,316 @@
+using AwesomeAssertions;
+using SqlSugar;
+using Struo.Domain.Metadata;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
+using Struo.Infrastructure.Metadata;
+using Xunit;
+
+namespace Struo.Tests.Metadata;
+
+// A [CmsField] column property whose CLR type is not a single value sits on a multi-value interface
+// or on Hidden; any other interface fails the scan, with or without IsJson. The Json interface holds
+// raw JSON text, so its property is a string.
+public sealed class StructuredFieldInterfaceTests
+{
+    public sealed class Custom
+    {
+        public string A { get; set; } = "";
+        public int B { get; set; }
+    }
+
+    public enum Colour { Red, Green }
+
+    // ---- rejected: one collection per combination, so the message can name the class ----
+
+    [CmsCollection("Text list", Name = "sfiTextList")]
+    public sealed class TextList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public List<string> Value { get; set; } = [];
+    }
+
+    [CmsCollection("Text array", Name = "sfiTextArray")]
+    public sealed class TextArray
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public string[] Value { get; set; } = [];
+    }
+
+    [CmsCollection("Text map", Name = "sfiTextMap")]
+    public sealed class TextMap
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public Dictionary<string, string> Value { get; set; } = new();
+    }
+
+    [CmsCollection("Text custom", Name = "sfiTextCustom")]
+    public sealed class TextCustom
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public Custom Value { get; set; } = new();
+    }
+
+    [CmsCollection("Text list json", Name = "sfiTextListJson")]
+    public sealed class TextListJson
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public List<string> Value { get; set; } = [];
+    }
+
+    [CmsCollection("Text array json", Name = "sfiTextArrayJson")]
+    public sealed class TextArrayJson
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public string[] Value { get; set; } = [];
+    }
+
+    [CmsCollection("Text map json", Name = "sfiTextMapJson")]
+    public sealed class TextMapJson
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public Dictionary<string, string> Value { get; set; } = new();
+    }
+
+    [CmsCollection("Text custom json", Name = "sfiTextCustomJson")]
+    public sealed class TextCustomJson
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsJson = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public Custom Value { get; set; } = new();
+    }
+
+    [CmsCollection("Select list", Name = "sfiSelectList")]
+    public sealed class SelectList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Select)] public List<string> Value { get; set; } = [];
+    }
+
+    [CmsCollection("Json list", Name = "sfiJsonList")]
+    public sealed class JsonList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Json)] public List<string> Value { get; set; } = [];
+    }
+
+    [CmsCollection("Json number", Name = "sfiJsonNumber")]
+    public sealed class JsonNumber
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Json)] public int Value { get; set; }
+    }
+
+    [CmsCollection("Translated text list", Name = "sfiTrTextList")]
+    public sealed class TrTextList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        [CmsTranslations(typeof(TrTextListTranslation))]
+        [SugarColumn(IsIgnore = true)] public List<TrTextListTranslation> Translations { get; set; } = [];
+    }
+
+    public sealed class TrTextListTranslation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public long TrTextListId { get; set; }
+        public string Locale { get; set; } = "";
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public List<string> Value { get; set; } = [];
+    }
+
+    [CmsCollection("Link text list", Name = "sfiLinkTextList", Hidden = true)]
+    public sealed class LinkTextList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
+        [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public List<string> Value { get; set; } = [];
+    }
+
+    private const string StructuredFix = "Change the interface to one of MultiSelect, CheckboxGroup, Tags, KeyValue, Repeater, Files or Hidden";
+
+    public static TheoryData<Type, string, string, string, string> Rejected() => new()
+    {
+        { typeof(TextList), "TextList.Value", "List<string>", "Interface = Text", StructuredFix },
+        { typeof(TextArray), "TextArray.Value", "string[]", "Interface = Text", StructuredFix },
+        { typeof(TextMap), "TextMap.Value", "Dictionary<string, string>", "Interface = Text", StructuredFix },
+        { typeof(TextCustom), "TextCustom.Value", "Custom", "Interface = Text", StructuredFix },
+        { typeof(TextListJson), "TextListJson.Value", "List<string>", "Interface = Text", StructuredFix },
+        { typeof(TextArrayJson), "TextArrayJson.Value", "string[]", "Interface = Text", StructuredFix },
+        { typeof(TextMapJson), "TextMapJson.Value", "Dictionary<string, string>", "Interface = Text", StructuredFix },
+        { typeof(TextCustomJson), "TextCustomJson.Value", "Custom", "Interface = Text", StructuredFix },
+        { typeof(SelectList), "SelectList.Value", "List<string>", "Interface = Select", StructuredFix },
+        { typeof(TrTextList), "TrTextListTranslation.Value", "List<string>", "Interface = Text", StructuredFix },
+        { typeof(LinkTextList), "LinkTextList.Value", "List<string>", "Interface = Text", StructuredFix },
+        { typeof(JsonList), "JsonList.Value", "List<string>", "Interface = Json", "Declare the property as string" },
+        { typeof(JsonNumber), "JsonNumber.Value", "int", "Interface = Json", "Declare the property as string" },
+    };
+
+    [Theory]
+    [MemberData(nameof(Rejected))]
+    public void A_property_type_the_interface_cannot_hold_fails_the_scan_naming_the_property_both_declarations_and_the_fix(
+        Type type, string property, string clrType, string declaredInterface, string fix)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain($"'{property}'").And.Contain($"a {clrType} property")
+            .And.Contain(declaredInterface).And.Contain(fix);
+        message.All(c => c < 128).Should().BeTrue(message);
+        message.Should().NotContain("Struo.Infrastructure");
+    }
+
+    [Fact]
+    public void The_structured_message_offers_both_ways_out()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(TextList)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("or declare a single-value property");
+    }
+
+    [Fact]
+    public void The_Json_message_says_the_field_holds_raw_JSON_text()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(JsonList)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Contain("raw JSON text");
+    }
+
+    // ---- accepted: generic hosts, one per interface ----
+
+    [CmsCollection("Text host", Name = "sfiTextHost")]
+    public sealed class TextHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Hidden host", Name = "sfiHiddenHost")]
+    public sealed class HiddenHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Hidden)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Json host", Name = "sfiJsonHost")]
+    public sealed class JsonHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Json)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Multi select host", Name = "sfiMultiSelectHost")]
+    public sealed class MultiSelectHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.MultiSelect)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Checkbox group host", Name = "sfiCheckboxGroupHost")]
+    public sealed class CheckboxGroupHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.CheckboxGroup)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Tags host", Name = "sfiTagsHost")]
+    public sealed class TagsHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Tags)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Key value host", Name = "sfiKeyValueHost")]
+    public sealed class KeyValueHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.KeyValue)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Files host", Name = "sfiFilesHost")]
+    public sealed class FilesHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Files)] public T Value { get; set; } = default!;
+    }
+
+    [CmsCollection("Repeater host", Name = "sfiRepeaterHost")]
+    public sealed class RepeaterHost<T>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Value", Interface = FieldInterface.Repeater)] public T Value { get; set; } = default!;
+    }
+
+    public sealed class RepeaterRow
+    {
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; set; } = "";
+    }
+
+    public static TheoryData<Type> Accepted() => new()
+    {
+        typeof(HiddenHost<List<string>>), typeof(HiddenHost<string[]>),
+        typeof(HiddenHost<Dictionary<string, string>>), typeof(HiddenHost<Custom>),
+        typeof(JsonHost<string>), typeof(JsonHost<string?>),
+        typeof(MultiSelectHost<List<string>>), typeof(CheckboxGroupHost<List<string>>),
+        typeof(TagsHost<List<string>>), typeof(TagsHost<List<Struo.Domain.Metadata.Models.TagItem>>),
+        typeof(KeyValueHost<Dictionary<string, string>>), typeof(FilesHost<List<Guid>>),
+        typeof(RepeaterHost<List<RepeaterRow>>),
+        typeof(TextHost<byte[]>), typeof(TextHost<string>), typeof(TextHost<string?>),
+        typeof(TextHost<int>), typeof(TextHost<int?>), typeof(TextHost<long>), typeof(TextHost<bool>),
+        typeof(TextHost<short>), typeof(TextHost<byte>), typeof(TextHost<double>), typeof(TextHost<float>),
+        typeof(TextHost<char>), typeof(TextHost<decimal>), typeof(TextHost<decimal?>),
+        typeof(TextHost<Guid>), typeof(TextHost<Guid?>), typeof(TextHost<DateTime>),
+        typeof(TextHost<DateTime?>), typeof(TextHost<DateTimeOffset>), typeof(TextHost<DateOnly>),
+        typeof(TextHost<TimeOnly>), typeof(TextHost<TimeSpan>), typeof(TextHost<Colour>),
+        typeof(TextHost<Colour?>),
+    };
+
+    [Theory]
+    [MemberData(nameof(Accepted))]
+    public void A_property_type_the_interface_can_hold_scans(Type type)
+    {
+        var collection = MetadataScanner.ScanTypes([type]).Single();
+
+        collection.Fields.Select(f => f.Name).Should().Contain("value");
+    }
+
+    [Fact]
+    public void An_ignored_structured_property_is_not_checked()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(IgnoredList)]);
+
+        act.Should().NotThrow();
+    }
+
+    [CmsCollection("Ignored list", Name = "sfiIgnoredList")]
+    public sealed class IgnoredList
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Text)] public List<string> Value { get; set; } = [];
+    }
+
+    // ---- the shared predicate ----
+
+    public static TheoryData<Type, bool> Structured() => new()
+    {
+        { typeof(string), false }, { typeof(int), false }, { typeof(int?), false }, { typeof(bool), false },
+        { typeof(char), false }, { typeof(decimal), false }, { typeof(Guid?), false }, { typeof(DateTime), false },
+        { typeof(DateTimeOffset), false }, { typeof(DateOnly), false }, { typeof(TimeOnly?), false },
+        { typeof(TimeSpan), false }, { typeof(Colour), false }, { typeof(Colour?), false }, { typeof(byte[]), false },
+        { typeof(List<string>), true }, { typeof(IList<string>), true }, { typeof(string[]), true },
+        { typeof(int[]), true }, { typeof(Dictionary<string, string>), true }, { typeof(HashSet<string>), true },
+        { typeof(Custom), true }, { typeof(System.Text.Json.JsonElement), true },
+        { typeof((int, int)), true }, { typeof(object), true },
+    };
+
+    [Theory]
+    [MemberData(nameof(Structured))]
+    public void The_predicate_classifies_a_property_type(Type type, bool structured)
+    {
+        StructuredType.Is(type).Should().Be(structured);
+    }
+}

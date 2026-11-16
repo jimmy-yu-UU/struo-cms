@@ -99,7 +99,7 @@ public static class SqlSugarClientFactory
 
         ApplySidecarUniqueGroup(property, column, policy);
         ApplyNullabilityInference(property, column);
-        ApplyListAsJson(property, column);
+        ApplyStructuredAsJson(property, column);
 
         if (ApplyColumnShape(property, column, dbType)) return;
         if (ApplyZoneLessTimestamp(property, column, dbType)) return;
@@ -166,13 +166,14 @@ public static class SqlSugarClientFactory
         }
     }
 
-    // A List<> [CmsField] property is a JSON column on every interface. SqlSugar cannot map a list to a
-    // scalar column, so without IsJson every write fails or stores an empty list. The widening
-    // conventions below then give it the long-text type. [Navigate] and [CmsTranslations] lists carry
-    // no [CmsField] and are ignored columns, so they never reach this.
-    private static void ApplyListAsJson(PropertyInfo property, EntityColumnInfo column)
+    // A [CmsField] property of a structured type (StructuredType) is a JSON column on every interface.
+    // SqlSugar cannot map a list, array, dictionary or class to a scalar column, so without IsJson every
+    // write fails or stores nothing. The widening conventions below then give it the long-text type.
+    // [Navigate] and [CmsTranslations] lists carry no [CmsField] and are ignored columns, so they never
+    // reach this.
+    private static void ApplyStructuredAsJson(PropertyInfo property, EntityColumnInfo column)
     {
-        if (ListProperty.Is(property.PropertyType) && property.GetCustomAttribute<CmsFieldAttribute>() is not null)
+        if (StructuredType.Is(property.PropertyType) && property.GetCustomAttribute<CmsFieldAttribute>() is not null)
         {
             column.IsJson = true;
         }
