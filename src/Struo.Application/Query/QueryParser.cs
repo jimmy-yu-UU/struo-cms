@@ -111,23 +111,37 @@ public static class QueryParser
         _ => throw new QueryException("'search' must be a string."),
     };
 
+    // A key that shapes the result is read only as its own kind. JSON null means the key is not given;
+    // any other kind is a QueryException, because ignoring it would hand back an unfiltered result.
+    private static bool IsGiven(JsonElement owner, string name, JsonValueKind kind, string expected, string? relation,
+        out JsonElement value)
+    {
+        value = default;
+        if (!owner.TryGetProperty(name, out value) || value.ValueKind == JsonValueKind.Null) return false;
+        if (value.ValueKind != kind)
+            throw new QueryException($"'{name}' must be {expected}{Where(relation)}.");
+        return true;
+    }
+
+    private static List<string>? ReadStringsKey(JsonElement owner, string name, string? relation = null) =>
+        IsGiven(owner, name, JsonValueKind.Array, "an array of strings", relation, out var array)
+            ? ReadStrings(array, name, relation)
+            : null;
+
+    private static FilterNode? ReadFilterKey(JsonElement owner, string? relation = null) =>
+        IsGiven(owner, "filter", JsonValueKind.Object, "an object", relation, out var filter) ? ParseFilter(filter) : null;
+
     public static QueryModel ParseEnvelope(JsonElement env)
     {
         if (env.ValueKind != JsonValueKind.Object)
             throw new QueryException("'body' must be a JSON object.");
 
-        IReadOnlyList<string>? fields = null;
-        if (env.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
-            fields = ReadStrings(f, "fields");
-
-        FilterNode? filter = null;
-        if (env.TryGetProperty("filter", out var fl) && fl.ValueKind == JsonValueKind.Object)
-            filter = ParseFilter(fl);
+        IReadOnlyList<string>? fields = ReadStringsKey(env, "fields");
+        FilterNode? filter = ReadFilterKey(env);
 
         var sort = new List<SortField>();
-        if (env.TryGetProperty("sort", out var s) && s.ValueKind == JsonValueKind.Array)
-            foreach (var item in ReadStrings(s, "sort"))
-                sort.Add(ParseSortToken(item));
+        foreach (var item in ReadStringsKey(env, "sort") ?? [])
+            sort.Add(ParseSortToken(item));
 
         var limit = env.TryGetProperty("limit", out var l) ? ReadInt(l, "limit") : 0;
         var offset = env.TryGetProperty("offset", out var o) ? ReadInt(o, "offset") : 0;
@@ -138,11 +152,10 @@ public static class QueryParser
     }
 
     private static DeepSpec? ParseDeepEnvelope(JsonElement env) =>
-        env.TryGetProperty("deep", out var d) && d.ValueKind == JsonValueKind.Object
-            ? ParseDeepObject(d)
-            : null;
+        IsGiven(env, "deep", JsonValueKind.Object, "an object", null, out var d) ? ParseDeepObject(d, null) : null;
 
-    private static DeepSpec? ParseDeepObject(JsonElement d)
+    // path names the relation chain of a nested deep object, as in 'deep.articles.deep.tags'.
+    private static DeepSpec? ParseDeepObject(JsonElement d, string? path)
     {
         var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
         foreach (var rel in d.EnumerateObject())
@@ -153,22 +166,19 @@ public static class QueryParser
             FilterNode? filter = null;
             List<SortField>? sort = null;
             DeepSpec? nested = null;
+            var here = path is null ? rel.Name : path + ".deep." + rel.Name;
+            if (rel.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Null))
+                throw new QueryException($"'deep.{here}' must be an object.");
             if (rel.Value.ValueKind == JsonValueKind.Object)
             {
-                if (rel.Value.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
-                    fields = ReadStrings(f, "fields", rel.Name);
-                if (rel.Value.TryGetProperty("filter", out var fl) && fl.ValueKind == JsonValueKind.Object)
-                    filter = ParseFilter(fl);
-                if (rel.Value.TryGetProperty("sort", out var s) && s.ValueKind == JsonValueKind.Array)
-                {
-                    sort = new List<SortField>();
-                    foreach (var item in ReadStrings(s, "sort", rel.Name))
-                        sort.Add(ParseSortToken(item));
-                }
-                if (rel.Value.TryGetProperty("limit", out var l)) limit = ReadInt(l, "limit", rel.Name);
-                if (rel.Value.TryGetProperty("offset", out var o)) offset = ReadInt(o, "offset", rel.Name);
-                if (rel.Value.TryGetProperty("deep", out var nd) && nd.ValueKind == JsonValueKind.Object)
-                    nested = ParseDeepObject(nd);
+                fields = ReadStringsKey(rel.Value, "fields", here);
+                filter = ReadFilterKey(rel.Value, here);
+                if (ReadStringsKey(rel.Value, "sort", here) is { } sortTokens)
+                    sort = sortTokens.Select(ParseSortToken).ToList();
+                if (rel.Value.TryGetProperty("limit", out var l)) limit = ReadInt(l, "limit", here);
+                if (rel.Value.TryGetProperty("offset", out var o)) offset = ReadInt(o, "offset", here);
+                if (IsGiven(rel.Value, "deep", JsonValueKind.Object, "an object", here, out var nd))
+                    nested = ParseDeepObject(nd, here);
             }
             map[rel.Name] = new DeepRelationSpec(fields, limit, nested)
             {
