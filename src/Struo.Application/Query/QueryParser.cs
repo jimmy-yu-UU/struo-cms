@@ -1,4 +1,5 @@
 // src/Struo.Application/Query/QueryParser.cs
+using System.Collections.Frozen;
 using System.Text.Json;
 using Struo.Domain.Query;
 
@@ -19,8 +20,16 @@ public static class QueryParser
             ["_ends_with"] = QueryOperator.EndsWith,
         };
 
-    private static readonly IReadOnlyDictionary<QueryOperator, string> Tokens =
-        Operators.ToDictionary(pair => pair.Value, pair => pair.Key);
+    // The body and query-string keys that more than one place reads.
+    private const string KeyFields = "fields";
+    private const string KeyLimit = "limit";
+    private const string KeyOffset = "offset";
+    private const string KeyFilter = "filter";
+    private const string KeyDeep = "deep";
+    private const string KeySort = "sort";
+
+    private static readonly FrozenDictionary<QueryOperator, string> Tokens =
+        Operators.ToFrozenDictionary(pair => pair.Value, pair => pair.Key);
 
     /// <summary>The spelling of an operator in the query string and in JSON, the inverse of the parser's own table.</summary>
     public static string TokenOf(QueryOperator op) => Tokens.TryGetValue(op, out var token) ? token : op.ToString();
@@ -99,10 +108,12 @@ public static class QueryParser
                 : throw new QueryException($"'{name}' must be an array of strings{Where(relation)}."))
             .ToList();
 
-    private static int ReadInt(JsonElement value, string name, string? relation = null) =>
-        value.ValueKind == JsonValueKind.Number
-            ? value.TryGetInt32(out var number) ? number : 0
-            : throw new QueryException($"'{name}' must be an integer{Where(relation)}.");
+    private static int ReadInt(JsonElement value, string name, string? relation = null)
+    {
+        if (value.ValueKind != JsonValueKind.Number)
+            throw new QueryException($"'{name}' must be an integer{Where(relation)}.");
+        return value.TryGetInt32(out var number) ? number : 0;
+    }
 
     private static string? ReadSearch(JsonElement value) => value.ValueKind switch
     {
@@ -129,22 +140,22 @@ public static class QueryParser
             : null;
 
     private static FilterNode? ReadFilterKey(JsonElement owner, string? relation = null) =>
-        IsGiven(owner, "filter", JsonValueKind.Object, "an object", relation, out var filter) ? ParseFilter(filter) : null;
+        IsGiven(owner, KeyFilter, JsonValueKind.Object, "an object", relation, out var filter) ? ParseFilter(filter) : null;
 
     public static QueryModel ParseEnvelope(JsonElement env)
     {
         if (env.ValueKind != JsonValueKind.Object)
             throw new QueryException("'body' must be a JSON object.");
 
-        IReadOnlyList<string>? fields = ReadStringsKey(env, "fields");
+        IReadOnlyList<string>? fields = ReadStringsKey(env, KeyFields);
         FilterNode? filter = ReadFilterKey(env);
 
         var sort = new List<SortField>();
-        foreach (var item in ReadStringsKey(env, "sort") ?? [])
+        foreach (var item in ReadStringsKey(env, KeySort) ?? [])
             sort.Add(ParseSortToken(item));
 
-        var limit = env.TryGetProperty("limit", out var l) ? ReadInt(l, "limit") : 0;
-        var offset = env.TryGetProperty("offset", out var o) ? ReadInt(o, "offset") : 0;
+        var limit = env.TryGetProperty(KeyLimit, out var l) ? ReadInt(l, KeyLimit) : 0;
+        var offset = env.TryGetProperty(KeyOffset, out var o) ? ReadInt(o, KeyOffset) : 0;
         var search = env.TryGetProperty("search", out var se) ? ReadSearch(se) : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
@@ -152,7 +163,7 @@ public static class QueryParser
     }
 
     private static DeepSpec? ParseDeepEnvelope(JsonElement env) =>
-        IsGiven(env, "deep", JsonValueKind.Object, "an object", null, out var d) ? ParseDeepObject(d, null) : null;
+        IsGiven(env, KeyDeep, JsonValueKind.Object, "an object", null, out var d) ? ParseDeepObject(d, null) : null;
 
     // path names the relation chain of a nested deep object, as in 'deep.articles.deep.tags'.
     private static DeepSpec? ParseDeepObject(JsonElement d, string? path)
@@ -171,13 +182,13 @@ public static class QueryParser
                 throw new QueryException($"'deep.{here}' must be an object.");
             if (rel.Value.ValueKind == JsonValueKind.Object)
             {
-                fields = ReadStringsKey(rel.Value, "fields", here);
+                fields = ReadStringsKey(rel.Value, KeyFields, here);
                 filter = ReadFilterKey(rel.Value, here);
-                if (ReadStringsKey(rel.Value, "sort", here) is { } sortTokens)
+                if (ReadStringsKey(rel.Value, KeySort, here) is { } sortTokens)
                     sort = sortTokens.Select(ParseSortToken).ToList();
-                if (rel.Value.TryGetProperty("limit", out var l)) limit = ReadInt(l, "limit", here);
-                if (rel.Value.TryGetProperty("offset", out var o)) offset = ReadInt(o, "offset", here);
-                if (IsGiven(rel.Value, "deep", JsonValueKind.Object, "an object", here, out var nd))
+                if (rel.Value.TryGetProperty(KeyLimit, out var l)) limit = ReadInt(l, KeyLimit, here);
+                if (rel.Value.TryGetProperty(KeyOffset, out var o)) offset = ReadInt(o, KeyOffset, here);
+                if (IsGiven(rel.Value, KeyDeep, JsonValueKind.Object, "an object", here, out var nd))
                     nested = ParseDeepObject(nd, here);
             }
             map[rel.Name] = new DeepRelationSpec(fields, limit, nested)
@@ -192,7 +203,7 @@ public static class QueryParser
 
     private static DeepSpec? ParseDeepQueryString(IReadOnlyDictionary<string, string?> query)
     {
-        if (!query.TryGetValue("deep", out var dv) || string.IsNullOrWhiteSpace(dv)) return null;
+        if (!query.TryGetValue(KeyDeep, out var dv) || string.IsNullOrWhiteSpace(dv)) return null;
         var map = dv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToDictionary(n => n, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase);
         return map.Count == 0 ? null : new DeepSpec(map);
@@ -278,12 +289,12 @@ public static class QueryParser
 
     public static QueryModel ParseQueryString(IReadOnlyDictionary<string, string?> query)
     {
-        IReadOnlyList<string>? fields = query.TryGetValue("fields", out var fv) && !string.IsNullOrWhiteSpace(fv)
+        IReadOnlyList<string>? fields = query.TryGetValue(KeyFields, out var fv) && !string.IsNullOrWhiteSpace(fv)
             ? fv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : null;
 
         var sort = new List<SortField>();
-        if (query.TryGetValue("sort", out var sv) && !string.IsNullOrWhiteSpace(sv))
+        if (query.TryGetValue(KeySort, out var sv) && !string.IsNullOrWhiteSpace(sv))
             foreach (var t in sv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 sort.Add(ParseSortToken(t));
 
@@ -309,8 +320,8 @@ public static class QueryParser
             _ => new LogicalFilter(LogicalOperator.And, folded)
         };
 
-        var limit = query.TryGetValue("limit", out var lv) && int.TryParse(lv, out var li) ? li : 0;
-        var offset = query.TryGetValue("offset", out var ov) && int.TryParse(ov, out var oi) ? oi : 0;
+        var limit = query.TryGetValue(KeyLimit, out var lv) && int.TryParse(lv, out var li) ? li : 0;
+        var offset = query.TryGetValue(KeyOffset, out var ov) && int.TryParse(ov, out var oi) ? oi : 0;
         var search = query.TryGetValue("search", out var se) ? se : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
