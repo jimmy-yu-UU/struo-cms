@@ -252,11 +252,11 @@ public sealed class ColumnDeclarationGuardTests
         { typeof(ShapeOnStructured), "ShapeOnStructured.Items", "[ColumnShape] and a List<string> property" },
         { typeof(TrShapeOnStructured), "TrShapeOnStructuredTranslation.Items", "[ColumnShape] and a string[] property" },
         { typeof(LinkShapeOnStructured), "LinkShapeOnStructured.Items", "[ColumnShape] and a Dictionary<string, string> property" },
-        // G1: [ColumnShape] on a JSON interface
+        // G1: [ColumnShape] on a multi-value interface
         { typeof(ShapeOnJson), "ShapeOnJson.Tags", "[ColumnShape] and Interface = Tags" },
         { typeof(TrShapeOnJson), "TrShapeOnJsonTranslation.Tags", "[ColumnShape] and Interface = Tags" },
         { typeof(LinkShapeOnJson), "LinkShapeOnJson.Tags", "[ColumnShape] and Interface = Tags" },
-        // G3: ColumnDataType on a JSON interface
+        // G3: ColumnDataType on a multi-value interface
         { typeof(TypeOnJson), "TypeOnJson.Tags", "ColumnDataType = \"jsonb\")] and Interface = Tags" },
         { typeof(TrTypeOnJson), "TrTypeOnJsonTranslation.Tags", "ColumnDataType = \"jsonb\")] and Interface = Tags" },
         { typeof(LinkTypeOnJson), "LinkTypeOnJson.Tags", "ColumnDataType = \"jsonb\")] and Interface = Tags" },

@@ -31,11 +31,12 @@ internal static class ColumnDeclarationCheck
 
     // A structured value lives in a JSON column that only the multi-value interfaces and Hidden read and
     // write; the Json interface holds raw JSON text in a string; no interface reads back an object, alone or
-    // inside the property type.
+    // inside the property type. A bare object is reported first (its type is the problem), then a structured
+    // type on a single-value interface (the outer problem), then an object inside the type.
     private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string name)
     {
         var type = property.PropertyType;
-        var held = $"Field '{name}' is a {TypeName(type)} property with Interface = {field.Interface}";
+        var held = $"Field '{name}' is {WithArticle(TypeName(type))} property with Interface = {field.Interface}";
 
         if (field.Interface == FieldInterface.Json)
         {
@@ -50,20 +51,28 @@ internal static class ColumnDeclarationCheck
                 "Declare the concrete type of the value",
                 ObjectWhy);
 
+        var holdsStructured = field.Interface != FieldInterface.Hidden &&
+                              !FieldInterfaceSets.JsonColumnInterfaces.Contains(field.Interface) &&
+                              StructuredType.Is(type);
+        if (holdsStructured) throw RejectStructured(held);
+
         var nested = ObjectInType.Find(type);
         if (nested is not null)
             throw Reject(
                 $"{held}, which contains an object ({nested}).", "Declare the concrete type of the value", ObjectWhy);
+    }
 
-        if (field.Interface == FieldInterface.Hidden || FieldInterfaceSets.JsonColumnInterfaces.Contains(field.Interface)) return;
-        if (!StructuredType.Is(type)) return;
-
+    private static MetadataException RejectStructured(string held)
+    {
         var allowed = string.Join(", ", FieldInterfaceSets.JsonColumnInterfaces.Order()) + " or " + FieldInterface.Hidden;
-        throw Reject(
+        return Reject(
             $"{held}, which holds a single value.",
             $"Change the interface to one of {allowed}, or declare a single-value property",
             "a structured value is stored as a JSON column that only those interfaces read and write");
     }
+
+    private static string WithArticle(string typeName) =>
+        "aeiouAEIOU".Contains(typeName[0]) ? $"an {typeName}" : $"a {typeName}";
 
     private static void RequireConsistentType(PropertyInfo property, CmsFieldAttribute field, SugarColumn? sugar, string name)
     {
@@ -115,7 +124,7 @@ internal static class ColumnDeclarationCheck
     private static string? JsonStorageOf(PropertyInfo property, SugarColumn? sugar)
     {
         if (sugar is { IsJson: true }) return "[SugarColumn(IsJson = true)], which stores it as a JSON column";
-        return StructuredType.Is(property.PropertyType) ? $"a {TypeName(property.PropertyType)} property, which is stored as a JSON column" : null;
+        return StructuredType.Is(property.PropertyType) ? $"{WithArticle(TypeName(property.PropertyType))} property, which is stored as a JSON column" : null;
     }
 
     private static void RequireNullabilityConsistent(PropertyInfo property, string name)

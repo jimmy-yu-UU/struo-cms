@@ -148,6 +148,8 @@ public sealed class StructuredFieldInterfaceTests
         { typeof(JsonNumber), "JsonNumber.Value", "int", "Interface = Json", "Declare the property as string" },
     };
 
+    private static string Article(string typeName) => "aeiou".Contains(char.ToLowerInvariant(typeName[0])) ? "an" : "a";
+
     [Theory]
     [MemberData(nameof(Rejected))]
     public void A_property_type_the_interface_cannot_hold_fails_the_scan_naming_the_property_both_declarations_and_the_fix(
@@ -156,7 +158,7 @@ public sealed class StructuredFieldInterfaceTests
         var act = () => MetadataScanner.ScanTypes([type]);
 
         var message = act.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain($"'{property}'").And.Contain($"a {clrType} property")
+        message.Should().Contain($"'{property}'").And.Contain($"{Article(clrType)} {clrType} property")
             .And.Contain(declaredInterface).And.Contain(fix);
         message.All(c => c < 128).Should().BeTrue(message);
         message.Should().NotContain("Struo.Infrastructure");
@@ -331,8 +333,29 @@ public sealed class StructuredFieldInterfaceTests
         public object? Extra { get; set; }
     }
 
+    public sealed class ProbeWrapper<T>
+    {
+        public T? Value { get; set; }
+        public object? Extra { get; set; }
+    }
+
+    public sealed class RowWithUntyped
+    {
+        public System.Collections.ArrayList Items { get; set; } = [];
+    }
+
     public static TheoryData<Type, string> ObjectNestedRejected() => new()
     {
+        { typeof(HiddenHost<Systems.Foo.FooHolder>), "member FooHolder.Payload" },
+        { typeof(HiddenHost<MicrosoftPartner.Bar.BarHolder>), "member BarHolder.Payload" },
+        { typeof(HiddenHost<GlobalNamespaceHolder>), "member GlobalNamespaceHolder.Payload" },
+        { typeof(HiddenHost<ProbeWrapper<int>>), "member ProbeWrapper<int>.Extra" },
+        { typeof(HiddenHost<System.Collections.ArrayList>), "untyped elements of ArrayList" },
+        { typeof(HiddenHost<System.Collections.Hashtable>), "untyped elements of Hashtable" },
+        { typeof(HiddenHost<System.Collections.IList>), "untyped elements of IList" },
+        { typeof(HiddenHost<List<System.Collections.ArrayList>>), "untyped elements of ArrayList" },
+        { typeof(HiddenHost<RowWithUntyped>), "untyped elements of ArrayList" },
+        { typeof(RepeaterHost<List<RowWithUntyped>>), "untyped elements of ArrayList" },
         { typeof(HiddenHost<Dictionary<string, object>>), "type argument of Dictionary<string, object>" },
         { typeof(HiddenHost<List<object>>), "type argument of List<object>" },
         { typeof(HiddenHost<object[]>), "element type of object[]" },
@@ -369,6 +392,39 @@ public sealed class StructuredFieldInterfaceTests
 
         act.Should().Throw<MetadataException>().Which.Message
             .Should().Contain("raw JSON text").And.Contain("Declare the property as string");
+    }
+
+    [Fact]
+    public void An_object_inside_a_type_that_does_not_fit_a_single_value_interface_reports_the_interface_first()
+    {
+        foreach (var type in new[] { typeof(TextHost<Dictionary<string, object>>), typeof(TextHost<HolderWithObject>) })
+        {
+            var act = () => MetadataScanner.ScanTypes([type]);
+
+            var message = act.Should().Throw<MetadataException>().Which.Message;
+            message.Should().Contain("which holds a single value").And.NotContain("contains an object");
+        }
+    }
+
+    [Fact]
+    public void The_article_before_the_type_name_agrees_with_it()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(HiddenHost<object[][]>)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("is an object[][] property").And.NotContain("a object");
+    }
+
+    // A framework type is not walked: DictionaryEntry has object members that would be rejected if it were.
+    [Theory]
+    [InlineData(typeof(HiddenHost<System.Collections.DictionaryEntry>))]
+    [InlineData(typeof(HiddenHost<string>))]
+    [InlineData(typeof(HiddenHost<byte[]>))]
+    public void A_framework_type_is_not_walked_and_string_and_byte_array_are_not_untyped_collections(Type type)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        act.Should().NotThrow();
     }
 
     public sealed class SelfReferencing

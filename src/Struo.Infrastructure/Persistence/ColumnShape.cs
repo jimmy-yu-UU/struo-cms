@@ -40,10 +40,11 @@ public enum ColumnShape
 ///
 /// <para>
 /// On a <c>[CmsField]</c> property the metadata scan rejects the attribute together with an explicit
-/// <c>[SugarColumn(ColumnDataType = ...)]</c> and together with a JSON-column interface (the
-/// multi-value selects, <c>KeyValue</c>, <c>Files</c>, <c>Repeater</c>), at startup in every
-/// environment. For an entity the scan does not see, the column convention refuses the JSON-interface
-/// pairing with a <c>MetadataException</c> on first use.
+/// <c>[SugarColumn(ColumnDataType = ...)]</c> and together with a multi-value interface
+/// (<c>MultiSelect</c>, <c>CheckboxGroup</c>, <c>Tags</c>, <c>KeyValue</c>, <c>Files</c>,
+/// <c>Repeater</c>), at startup in every environment. For an entity the scan does not see, the
+/// column convention refuses the multi-value interface pairing with a <c>MetadataException</c> on
+/// first use.
 /// </para>
 /// <para>
 /// A content-bearing <c>[CmsField]</c> interface (<c>RichText</c>, <c>Textarea</c>, <c>Markdown</c>,
