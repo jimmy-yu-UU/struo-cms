@@ -55,10 +55,10 @@ fixed fields: `items`, `total`, `facets`, `aggregate`.
 
 Every other interface has a fixed SDL mapping: text-like interfaces map to `String`,
 `Boolean`/`Checkbox` map to `Boolean`, `Date`/`DateTime` map to the type of the same name, `Time`
-also maps to `String`, a multi-value field maps to an array, `Json`/`KeyValue` map to `Any`, and
-`File`/`Image`/`Uuid` map to `ID`; `Number`/`Slider`/`Rating` look at the actual CLR type rather
-than the interface itself — an integer CLR type maps to `Int` or `Long`, everything else to
-`Float`.
+also maps to `String`, a `MultiSelect`, `CheckboxGroup`, `Tags`, `Files` or `Repeater` field maps
+to an array, `Json`/`KeyValue` map to `Any`, and `File`/`Image`/`Uuid` map to `ID`;
+`Number`/`Slider`/`Rating` look at the actual CLR type rather than the interface itself — an
+integer CLR type maps to `Int` or `Long`, everything else to `Float`.
 
 `Tags` maps to `[TagItem!]`. `Repeater` generates its own type, `<X><Field>Item`, based on its
 sub-fields (omitted entirely when there are no sub-fields); `Password`, `Hidden`, and `Divider`
@@ -173,9 +173,11 @@ REST's `_null`/`_nnull`, this argument's value is actually read.
 
 The second is which field interfaces can be filtered at all: REST places no restriction on which
 interface can be filtered, checking only whether the field name is on the allowlist, while GraphQL
-only lets scalar interfaces be filtered — `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`,
-`MultiSelect`, `CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no
-filter fields in GraphQL at all.
+only gives filter fields to fields on `Text`, `Textarea`, `Slug`, `Email`, `Url`, `Color`, `Phone`,
+`Select`, `Radio`, `Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `DateTime`, `Time`
+and `Uuid`. `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`, `MultiSelect`, `CheckboxGroup`,
+`Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no filter fields in GraphQL at all
+(`Hidden`, `Divider` and `Password` fields are not in the GraphQL schema).
 
 The string filters carry `contains`, `startsWith` and `endsWith`, an id column such as `createdBy`
 included. Those three operators are accepted on a text field only. On any other field the request

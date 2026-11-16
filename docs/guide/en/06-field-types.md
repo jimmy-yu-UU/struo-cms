@@ -20,12 +20,22 @@ The tables below use a few shorthand terms under Database column:
 - `varchar(255)`: a `string` with no length, which `make:migration` writes as `AsString(255)`; on
   SQL Server it is `nvarchar(255)`.
 - Long text: the result of applying `ColumnShape.LongText`; each backend maps it to its own type.
-- JSON: long text plus `IsJson = true` — SqlSugar serializes and restores the whole CLR collection
+- JSON: a long text column holding JSON — SqlSugar serializes and restores the whole CLR value
   directly.
 - CLR default: numbers, `bool`, `Guid` keep FluentMigrator's and SqlSugar's ordinary mapping;
   nothing widens the length. For `DateTime` on each backend, see "Date and time".
 - `ColumnShape` has three members, `LongText`, `TimestampWithTimeZone` and `Timestamp` — there's no
   numeric shape.
+
+Terms used in this chapter:
+
+- Multi-value interfaces: the six interfaces `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`,
+  `Files` and `Repeater`, whose whole value is stored as one JSON column.
+- Single-value types: primitives, enums, `string`, `decimal`, `Guid`, `DateTime`, `DateTimeOffset`,
+  `DateOnly`, `TimeOnly`, `TimeSpan`, `byte[]`, and the `Nullable<T>` of each.
+- Structured types: every type other than a single-value type, for example `List<>`, `HashSet<>`,
+  `Dictionary<,>`, an array (except `byte[]`), a custom class or a struct.
+- Single-value interfaces: every interface except the multi-value interfaces, `Hidden` and `Json`.
 
 On MySQL/MariaDB, text columns use the database's default character set, so create the database as
 utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
@@ -46,9 +56,9 @@ utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backe
 | `Color` | `string` | `varchar(255)` | `TextField` |
 | `Phone` | `string` | `varchar(255)` | `TextField` |
 
-Five interfaces get their `string` property widened to long text automatically:
-`Textarea`, `RichText`, `Markdown`, `Code`, and `Json` (covered later); every other `string`
-interface stops at `varchar(255)`. Beyond `Required` and `MaxLength`, only `Email` and `Url` check
+The long-text interfaces are `Textarea`, `RichText`, `Markdown`, `Code`, and `Json` (covered
+later); every other `string` interface stops at `varchar(255)`. How the column is decided is in
+"How a property decides its column". Beyond `Required` and `MaxLength`, only `Email` and `Url` check
 their format; the other `string` interfaces, `Phone` included, accept any text.
 
 `Markdown` and `Code` are both plain text boxes, with no preview or syntax highlighting.
@@ -143,7 +153,7 @@ translation value, and a `Repeater` child field. A `Select` or `Radio` with no `
 accepts any string, and `null` and the empty string skip the check. A `Select` or `Radio` field
 whose property is not a `string` is not checked against its options.
 
-### Structured JSON
+### `Json`, `KeyValue` and `Repeater`
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
@@ -152,16 +162,21 @@ whose property is not a `string` is not checked against its options.
 | `Repeater` | `List<TChild>` | JSON | `RepeaterField` |
 
 `Json` is a `string` property holding raw JSON text; the API layer re-parses it on read and
-re-serializes it on write. The real JSON columns come from the six structured interfaces —
-`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, and `Repeater` — where SqlSugar
-(de)serializes the whole CLR collection directly against an `IsJson = true` column; a `KeyValue`
-key can't be blank.
+re-serializes it on write. The real JSON columns come from the multi-value interfaces and from a
+structured-type property on `Hidden`. SqlSugar (de)serializes the whole CLR value directly against
+a JSON column, and these properties need no `IsJson`; a `KeyValue` key can't be blank.
+
+A structured-type property can sit only on a multi-value interface or on `Hidden`; on any other
+interface the host fails at startup. A `Json` interface property must be a `string`, and no
+interface accepts a property whose type is `object`, contains `object` or holds untyped elements.
+The rules are in [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
-violating either throws a startup `MetadataException` naming the field. Child fields are limited
-to scalar interfaces — `Text`, `Textarea`, `Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`,
-`Phone`, `Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`,
-`Radio` — and can't be set translatable. None of these are allowed:
+violating either throws a startup `MetadataException` naming the field. Child fields can't be set
+translatable, and they can use only these interfaces, a narrower set than the single-value
+interfaces: `Text`, `Textarea`, `Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`,
+`Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`,
+`Radio`. The interfaces that are not allowed are:
 
 - A nested `Repeater`
 - `RichText`, `Json`, `KeyValue`
@@ -184,8 +199,8 @@ the same, and the admin picker can only fall back to showing the raw id.
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Hidden` | Any | Follows the property type | `ReadonlyField` |
-| `Divider` | Any | Follows the property type, or none | `DividerField` |
+| `Hidden` | Single-value or structured, no `object` inside | Follows the type; a structured type is JSON | `ReadonlyField` |
+| `Divider` | Single-value, or any type with `IsIgnore = true` | Follows the type; none with `IsIgnore` | `DividerField` |
 | `Uuid` | `Guid`/`Guid?` | CLR default | `ReadonlyField` |
 
 The `Hidden` here is the interface itself, rendering a read-only display component — it's a
@@ -205,41 +220,121 @@ Interfaces with no formatter, and so never shown in a list column, are `Password
 entirely from these interfaces has an empty list view. The GraphQL schema separately excludes three
 interfaces entirely: `Hidden`, `Divider`, and `Password`.
 
+## How a property decides its column
+
+The declarations on a property decide its database column and the default input limit when no
+`MaxLength` is written. Each row of the table is one way to declare a property.
+
+| Declaration | Column built | Default `MaxLength` |
+|---|---|---|
+| A `string` with nothing special | `varchar(255)` | 255 |
+| A `string` on a long-text interface | long text | none |
+| A multi-value interface | long text holding JSON | not applicable |
+| A structured-type property on `Hidden` | long text holding JSON | not applicable |
+| `[ColumnShape(ColumnShape.LongText)]` | long text | none |
+| `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
+| `[SugarColumn(ColumnDataType = "t", Length = n)]` | type `t`, length `n` | `n` |
+| `[SugarColumn(ColumnDataType = "t")]` | type `t`, as written | none |
+| `[SugarColumn(IsJson = true)]` | long text holding JSON | not applicable |
+
+The multi-value interfaces and structured types in the table are defined in
+[Interface overview](#interface-overview). Other terms:
+
+- Long-text interfaces: `Textarea`, `RichText`, `Markdown`, `Code`, `Json`.
+- `varchar(255)` and `varchar(n)` are `nvarchar` on SQL Server.
+- None: there is no limit. Not applicable: the property is not a `string`, so it cannot carry
+  `MaxLength`; the same declaration on a `string` property means none.
+- A `Length` on a long-text interface does not count; it needs a `ColumnDataType` beside it, as in
+  the `[SugarColumn(ColumnDataType = "t", Length = n)]` row.
+
+With an explicit `ColumnDataType`, the whole column definition is yours, including its length. A
+length written inside the type string, such as `varchar(500)`, is not read as the field's width;
+set `Length` for that.
+
+### Declarations rejected at startup
+
+These combinations contradict each other. The host fails at startup with a `MetadataException`
+that names the class, the property and the two declarations. It is the same in every environment;
+nothing waits for the table to be used.
+
+| Conflicting declarations | What to change |
+|---|---|
+| A multi-value interface with `[ColumnShape]` | Remove `[ColumnShape]` |
+| A multi-value interface with `ColumnDataType` | Remove `ColumnDataType` |
+| `IsJson = true` with `ColumnDataType` | Remove `ColumnDataType` |
+| `IsJson = true` with `[ColumnShape]` | Remove `[ColumnShape]` |
+| A structured-type property with `ColumnDataType` | Remove `ColumnDataType` |
+| A structured-type property with `[ColumnShape]` | Remove `[ColumnShape]` |
+| A structured-type property on a single-value interface | Use a multi-value interface or `Hidden` |
+| A `Json` interface property that is not a `string` | Declare the property as `string` |
+| `object`, or a type with `object` or untyped elements | Declare the concrete type |
+| `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
+| `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
+
+The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnDataType` cannot set
+it. The same goes for a structured-type property, which is stored as a JSON column.
+
+A structured-type property on a single-value interface is rejected whether or not it carries
+`IsJson`; declare a single-value type, or use a multi-value interface or `Hidden`. The `Json`
+interface stores raw JSON text, so its property is declared as `string`.
+
+An `object` is read back as a JSON node, not as the value written, so no interface accepts it, the
+multi-value interfaces and `Hidden` included. What is rejected is more than a property of type
+`object`: an `object` as a type argument (`Dictionary<string, object>`, `List<object>`), as an
+array element type, or as the type of a public property of a custom class or struct is rejected
+too, with or without `[CmsField]`, including the properties of a `Repeater` child type, at any
+depth. A non-generic collection (`ArrayList`, `Hashtable`, `IList`, or any type that implements
+`IEnumerable` without `IEnumerable<T>`) holds untyped elements and is rejected the same way;
+`string` and `byte[]` are not. The message says where the `object` or the untyped collection is.
+
+A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
+NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
+`List<string>?` and `byte[]?`, are not part of this check.
+
+The check covers `[CmsField]` properties of collections, translation entities and junction
+payloads. `[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives
+inside its parent's JSON value and has no column of its own, so the column checks skip it; the one
+check that reaches it is the `object` check, which rejects an `object` or an untyped collection in
+a `Repeater` child type. A property with `[SugarColumn(IsIgnore = true)]` is not checked at all.
+
+### Storing long text
+
+Use a long-text interface, or write `[ColumnShape(ColumnShape.LongText)]`. Do not write
+`[SugarColumn(ColumnDataType = "text")]`: `ColumnShape` is correct on every backend.
+
+### Widening a column of an existing table
+
+When a declaration widens a column that exists already and is narrower, the table needs its own
+`Alter.Column` migration. `migrate:check` reports the mismatch as an error. Lowering `MaxLength`,
+or adding `[SugarColumn(Length = n)]` to a column that is already wide enough, needs no migration.
+
 ## `MaxLength` behavior
 
-`MaxLength` is counted in UTF-16 code units; the admin input and write validation both use it, and a
-longer value is a 400. A negative value, or one set on a non-`string` property, throws a startup
-`MetadataException`. The effective `MaxLength` resolves in this order:
+`MaxLength` counts UTF-16 code units. The admin input and write validation both use it, and a longer
+value gets a 400. The admin binds the effective value to the native input's `maxlength` attribute.
 
-1. Explicitly set and greater than zero — use the explicit value.
-2. Otherwise, when the property is `string`, its column width: 255 for a `string` column with no
-   length, `n` for `[SugarColumn(Length = n)]`, also when the same attribute sets `ColumnDataType`.
-   On `Textarea`, `RichText`, `Markdown`, `Code` and `Json` a `Length` counts only beside an
-   explicit `ColumnDataType`; an interface stored as JSON ignores `Length`.
-3. `null`, meaning no length limit, when the column has no length to state: the six interfaces
-   stored as JSON, a property carrying `[ColumnShape]` or `IsJson = true`, `Textarea`, `RichText`,
-   `Markdown`, `Code` and `Json` with no explicit `ColumnDataType` (a `Length` does not change
-   that), and a property whose explicit `ColumnDataType` has no `Length`. A length written inside
-   the type string, as in `varchar(500)`, is not read; such a field needs `Length`. Set `MaxLength`
-   on the field to have a limit there.
+When it is unset (or 0), the default comes from the table in the previous section. The default does
+not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string` are 255 like the
+rest. For a field marked none that needs a limit, set `MaxLength` on its `[CmsField]`.
 
-The default does not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string`
-are 255 like the rest. An explicit `MaxLength` does not change the column width: one wider than
-the column width throws a startup `MetadataException` naming the class, the property, the
-`MaxLength` and the column width. Equal to or below the width is fine. Fields of collections,
-translation entities and junction payloads are checked; a field with no column width is not, and
-neither is a `Repeater` sub-field, which lives inside a JSON value and has no column of its own.
-A property with `[SugarColumn(IsIgnore = true)]` has no column either and is not checked. Storing
-a value longer than the default width means widening the column first (see Common pitfalls at the
-end of this chapter). The admin SPA binds the effective `MaxLength` directly to the native input's
-`maxlength` attribute.
+Startup checks:
+
+- A negative value, or one on a non-`string` property: `MetadataException`.
+- An explicit value above the column width: `MetadataException` naming the class, the property, the
+  `MaxLength` and the column width. A value equal to or below the width is fine.
+- Not checked: a property with no column width (the none and not-applicable rows), a `Repeater`
+  sub-field, and a property with `[SugarColumn(IsIgnore = true)]`.
+- Scope: the fields of collections, translation entities and junction payloads.
+
+To store a value longer than the default width, see "Storing long text" and "Widening a column of
+an existing table".
 
 ## Required, read-only, hidden, and system fields
 
 `Required` always demands the field on create; on update it validates the merged entity, not the
 request body itself — details are in [Chapter 5: Defining Collections](05-collections.md).
 
-For a collection-valued field (an array or an object), `Required` means "a value was supplied": an
+For a field whose value is an array or an object, `Required` means "a value was supplied": an
 empty `[]` or `{}` passes, on the frontend and the backend alike. Requiring at least one entry is a
 check the fork writes in a write interceptor.
 
@@ -326,63 +421,6 @@ Both rules are policy that `GanssHtmlSanitizer` enforces in one place, not a har
 allowing `noreferrer`, a percentage width, or a stored height means changing that class, not the
 editor's link dialog or any other allowlist. The same sanitizer also normalizes a table's
 `<thead>` on the way out; that's covered in [Chapter 19](19-admin-customization.md).
-
-## Common pitfalls
-
-**Writing long text is rejected, or startup reports a `MaxLength` wider than the column.** A
-`string` property with no explicit column type, whose interface isn't one of the five long-text
-ones, is written by `make:migration` as `AsString(255)` and has a default `MaxLength` of 255: a
-value over 255 characters is rejected with a 400 by the admin and the API. The startup error
-applies to any property whose declared column has a width: 255, the `Length` of its
-`[SugarColumn]`, also on a long-text interface with a `ColumnDataType` and a `Length`. An explicit,
-larger `MaxLength` on such a property throws a startup `MetadataException`, because the column
-cannot hold a value that passes validation.
-
-For the 400, the fix is switching to one of those five interfaces, or writing
-`[ColumnShape(ColumnShape.LongText)]` explicitly — not `[SugarColumn(ColumnDataType = "text")]`
-directly: `ColumnShape` works on every backend. For the startup error, lower `MaxLength` to the
-column width, or widen the column with `[SugarColumn(Length = n)]` or
-`[ColumnShape(ColumnShape.LongText)]`. Only when the declaration is widened and the table already
-exists with the narrower column, also write an `Alter.Column` migration that widens it;
-`migrate:check` reports the mismatch as an error. Lowering `MaxLength`, or adding the matching
-`[SugarColumn(Length = n)]` to a table whose column is already that wide, needs no migration.
-
-**Adding `[ColumnShape]` on a JSON-interface field is rejected.** When a property's `[CmsField]`
-interface is one of the six JSON interfaces, also carrying `[ColumnShape]` throws an
-`InvalidOperationException` naming the property and interface. For collections and framework
-entities it fails at the Development startup schema check, and in `make:migration` and
-`migrate:check` too; in Production it fails the first time that table is used. An entity that is
-not a collection fails on first use in every environment.
-
-The fix is removing `[ColumnShape]`: the JSON mapping already widens to long text and sets
-`IsJson` on its own, and the shape alone gets neither. `[ColumnShape]` combined with the five
-long-content interfaces (`Textarea`, `RichText`, `Markdown`, `Code`, `Json`) is legal and
-unaffected.
-
-When both `[ColumnShape]` and an explicit `ColumnDataType` sit on the same property,
-`ColumnDataType` is ignored, with no warning at all.
-
-**A `JsonElement` stops working once its `JsonDocument` is disposed.** Parsing a `Json` field's raw
-text with `using var doc = JsonDocument.Parse(raw)` and then returning `doc.RootElement` outside the
-`using` block throws `ObjectDisposedException` on the next read — a `JsonElement` is valid only
-while the `JsonDocument` that produced it is still alive.
-
-Using `JsonSerializer.Deserialize<JsonElement>(raw)` instead needs no `using`, and returns an
-independent value that's safe to hold onto.
-
-**A hand-declared `List<>` property needs `IsJson` written by hand.** A `List<>` property whose
-`[CmsField]` interface falls outside `MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/
-`Repeater` gets no JSON mapping from `SqlSugarClientFactory`'s column-mapping hook — SqlSugar can't
-map a list on its own, so it needs `[SugarColumn(IsJson = true)]` written explicitly.
-
-Once that's set, the bare-`IsJson` widening logic takes over and supplies the column type; when
-`ColumnDataType` is also written explicitly (a PostgreSQL-native `jsonb`, say), the widening logic
-respects it and leaves it alone — but that path has no test coverage, so its effect isn't
-guaranteed.
-
-The other way round, a property whose interface is already one of the six JSON interfaces gets
-`IsJson` plus long text unconditionally from the hook, which never reads a `ColumnDataType` you
-wrote — pinning `jsonb` on a `MultiSelect` field has no effect, and no warning either.
 
 ## Adding a custom field editor
 

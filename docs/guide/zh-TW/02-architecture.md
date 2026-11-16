@@ -20,8 +20,9 @@ fork 之後要加內容、要換元件，得先知道整個系統怎麼分層、
 屬性都不會出現在 domain 型別上。
 
 測試專案 `tests/Struo.Tests` 參照全部四個專案，另外還有 `tests/Struo.Tests.Support` 與只給測試用的
-`tests/Struo.Tests.Fixtures`；`Struo.Api`、`Struo.Application` 與 `Struo.Infrastructure` 都對它開放
-`InternalsVisibleTo`，fork 如果重新命名測試專案，這三個 `InternalsVisibleTo` 要一起改。
+`tests/Struo.Tests.Fixtures`、`tests/Struo.Tests.InvalidFixtures`。
+`Struo.Api`、`Struo.Application` 與 `Struo.Infrastructure` 都對它開放 `InternalsVisibleTo`，
+fork 如果重新命名測試專案，這三個 `InternalsVisibleTo` 要一起改。
 
 ## 核心與範例的界線
 
