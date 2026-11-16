@@ -277,6 +277,46 @@ public sealed class StructuredFieldInterfaceTests
         collection.Fields.Select(f => f.Name).Should().Contain("value");
     }
 
+    // ---- rejected: object reads back as a JSON node, on every interface ----
+
+    public static TheoryData<Type, string> ObjectRejected() => new()
+    {
+        { typeof(HiddenHost<object>), "Hidden" }, { typeof(TextHost<object>), "Text" },
+        { typeof(JsonHost<object>), "Json" }, { typeof(MultiSelectHost<object>), "MultiSelect" },
+        { typeof(CheckboxGroupHost<object>), "CheckboxGroup" }, { typeof(TagsHost<object>), "Tags" },
+        { typeof(KeyValueHost<object>), "KeyValue" }, { typeof(FilesHost<object>), "Files" },
+        { typeof(RepeaterHost<object>), "Repeater" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ObjectRejected))]
+    public void An_object_property_fails_the_scan_on_every_interface_and_asks_for_the_concrete_type(
+        Type type, string declaredInterface)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain(".Value'").And.Contain("an object property")
+            .And.Contain($"Interface = {declaredInterface}").And.Contain("Declare the concrete type");
+        message.All(c => c < 128).Should().BeTrue(message);
+    }
+
+    [Fact]
+    public void An_ignored_object_property_is_not_checked()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(IgnoredObject)]);
+
+        act.Should().NotThrow();
+    }
+
+    [CmsCollection("Ignored object", Name = "sfiIgnoredObject")]
+    public sealed class IgnoredObject
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)]
+        [CmsField(Label = "Value", Interface = FieldInterface.Hidden)] public object Value { get; set; } = new();
+    }
+
     [Fact]
     public void An_ignored_structured_property_is_not_checked()
     {

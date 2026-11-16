@@ -29,11 +29,17 @@ internal static class ColumnDeclarationCheck
     }
 
     // A structured value lives in a JSON column that only the multi-value interfaces and Hidden read and
-    // write; the Json interface holds raw JSON text in a string.
+    // write; the Json interface holds raw JSON text in a string; no interface reads back an object.
     private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string name)
     {
         var type = property.PropertyType;
         var held = $"Field '{name}' is a {TypeName(type)} property with Interface = {field.Interface}";
+
+        if (type == typeof(object))
+            throw Reject(
+                $"Field '{name}' is an object property with Interface = {field.Interface}.",
+                "Declare the concrete type of the value",
+                "a value read from an object property comes back as a JSON node, not as the value that was written");
 
         if (field.Interface == FieldInterface.Json)
         {
