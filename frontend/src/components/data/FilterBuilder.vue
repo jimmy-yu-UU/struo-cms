@@ -39,16 +39,16 @@ function isTextField(name: string): boolean {
 function operatorsFor(field: string): readonly Operator[] {
   return isTextField(field) ? OPERATORS : COMPARISON_OPERATORS
 }
-// The operator a row sends: its own when the field takes it, `_eq` when it does not.
+// The operator a row shows and sends: the one the user chose when the field takes it, `_eq` when it
+// does not. The row keeps the chosen operator, so fields that arrive after the row, or a switch back
+// to a text field, give it back.
 function effectiveOp(row: DraftRow): Operator {
   return operatorsFor(row.field).includes(row.op) ? row.op : '_eq'
 }
 
 function hydrate(spec: FilterSpec): void {
   draft.value = Object.entries(spec).map(([field, { op, value }]) => ({
-    field,
-    op: effectiveOp({ field, op: (OPERATORS as readonly string[]).includes(op) ? (op as Operator) : '_eq', value }),
-    value,
+    field, op: (OPERATORS as readonly string[]).includes(op) ? (op as Operator) : '_eq', value,
   }))
 }
 hydrate(props.applied)
@@ -96,9 +96,8 @@ function removeRow(index: number): void {
   draft.value = draft.value.filter((_, i) => i !== index)
 }
 function setDraftField(index: number, field: string): void {
-  // Changing the field invalidates the value: an enum value has no meaning on a text field. A
-  // "contains" row moves to "equals" when the new field is not text.
-  draft.value = draft.value.map((r, i) => (i === index ? { ...r, field, op: effectiveOp({ ...r, field }), value: '' } : r))
+  // Changing the field invalidates the value: an enum value has no meaning on a text field.
+  draft.value = draft.value.map((r, i) => (i === index ? { ...r, field, value: '' } : r))
 }
 function setDraftOperator(index: number, op: Operator): void {
   draft.value = draft.value.map((r, i) => (i === index ? { ...r, op } : r))

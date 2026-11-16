@@ -252,7 +252,7 @@ describe('FilterBuilder', () => {
     expect(w.emitted('apply')![0][0]).toEqual({ sort: { op: '_eq', value: '3' } })
   })
 
-  it('keeps a contains row when its field changes to another text field', async () => {
+  it('sends a contains row on another text field after the field changes', async () => {
     const w = mountBuilder({}, kindFields)
     await w.get('[data-testid="filter-add"]').trigger('click')
     await pickOption(w, selectTriggers(w, 0)[1], 'contains')
@@ -268,5 +268,27 @@ describe('FilterBuilder', () => {
     expect(selectTriggers(w, 0)[1].text()).toContain('equals')
     await w.get('[data-testid="filter-apply"]').trigger('click')
     expect(w.emitted('apply')![0][0]).toEqual({ sort: { op: '_eq', value: '3' } })
+  })
+
+  // The fields can arrive after the applied spec (the schema loads asynchronously). The row keeps the
+  // operator from the spec, so a contains row on a text field is still contains once the fields are there.
+  it('keeps a contains row from the applied spec when the fields arrive after it', async () => {
+    const w = mountBuilder({ title: { op: '_contains', value: 'abc' } }, [])
+    await flushPromises()
+    await w.setProps({ fields: kindFields })
+    await flushPromises()
+    expect(selectTriggers(w, 0)[1].text()).toContain('contains')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({ title: { op: '_contains', value: 'abc' } })
+  })
+
+  it('shows equals for a contains row on a field that is not text and contains again on a text field', async () => {
+    const w = mountBuilder({}, kindFields)
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await pickOption(w, selectTriggers(w, 0)[1], 'contains')
+    await pickOption(w, selectTriggers(w, 0)[0], 'Sort')
+    expect(selectTriggers(w, 0)[1].text()).toContain('equals')
+    await pickOption(w, selectTriggers(w, 0)[0], 'Slug')
+    expect(selectTriggers(w, 0)[1].text()).toContain('contains')
   })
 })
