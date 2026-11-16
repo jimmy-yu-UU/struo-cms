@@ -11,6 +11,8 @@ import type { FilterSpec } from '@/lib/buildListQuery'
 export type FilterField = {
   name: string
   label: string
+  /** Whether the column holds text; only a text field takes the "contains" operator. */
+  text: boolean
   /** Present for enumerated fields; renders a Select instead of a free-text Input. */
   options?: { label: string; value: string }[]
 }
@@ -18,6 +20,8 @@ export type FilterField = {
 /** Only the operators QueryParser.cs actually accepts (src/Struo.Application/Query/QueryParser.cs). */
 const OPERATORS = ['_eq', '_neq', '_contains'] as const
 type Operator = (typeof OPERATORS)[number]
+/** What every field takes; `_contains` is a string operator and the API answers 400 to it on any other. */
+const COMPARISON_OPERATORS: readonly Operator[] = ['_eq', '_neq']
 
 type DraftRow = { field: string; op: Operator; value: string }
 
@@ -29,9 +33,22 @@ const emit = defineEmits<{ apply: [FilterSpec] }>()
 // requests keystroke by keystroke.
 const draft = ref<DraftRow[]>([])
 
+function isTextField(name: string): boolean {
+  return props.fields.find((f) => f.name === name)?.text === true
+}
+function operatorsFor(field: string): readonly Operator[] {
+  return isTextField(field) ? OPERATORS : COMPARISON_OPERATORS
+}
+// The operator a row sends: its own when the field takes it, `_eq` when it does not.
+function effectiveOp(row: DraftRow): Operator {
+  return operatorsFor(row.field).includes(row.op) ? row.op : '_eq'
+}
+
 function hydrate(spec: FilterSpec): void {
   draft.value = Object.entries(spec).map(([field, { op, value }]) => ({
-    field, op: (OPERATORS as readonly string[]).includes(op) ? (op as Operator) : '_eq', value,
+    field,
+    op: effectiveOp({ field, op: (OPERATORS as readonly string[]).includes(op) ? (op as Operator) : '_eq', value }),
+    value,
   }))
 }
 hydrate(props.applied)
@@ -79,8 +96,9 @@ function removeRow(index: number): void {
   draft.value = draft.value.filter((_, i) => i !== index)
 }
 function setDraftField(index: number, field: string): void {
-  // Changing the field invalidates the value: an enum value has no meaning on a text field.
-  draft.value = draft.value.map((r, i) => (i === index ? { ...r, field, value: '' } : r))
+  // Changing the field invalidates the value: an enum value has no meaning on a text field. A
+  // "contains" row moves to "equals" when the new field is not text.
+  draft.value = draft.value.map((r, i) => (i === index ? { ...r, field, op: effectiveOp({ ...r, field }), value: '' } : r))
 }
 function setDraftOperator(index: number, op: Operator): void {
   draft.value = draft.value.map((r, i) => (i === index ? { ...r, op } : r))
@@ -98,7 +116,7 @@ function toSpec(): FilterSpec {
     // backend's `_eq`/`_neq`/`_contains` comparison.
     const value = row.value.trim()
     if (!row.field || value === '') continue
-    spec[row.field] = { op: row.op, value }
+    spec[row.field] = { op: effectiveOp(row), value }
   }
   return spec
 }
@@ -133,12 +151,12 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
         </SelectContent>
       </Select>
 
-      <Select :model-value="row.op" @update:model-value="setDraftOperator(index, $event as never)">
+      <Select :model-value="effectiveOp(row)" @update:model-value="setDraftOperator(index, $event as never)">
         <SelectTrigger class="w-36" :aria-label="$t('filterBuilder.operator')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="op in OPERATORS" :key="op" :value="op">
+          <SelectItem v-for="op in operatorsFor(row.field)" :key="op" :value="op">
             {{ $t(OPERATOR_LABEL[op]) }}
           </SelectItem>
         </SelectContent>

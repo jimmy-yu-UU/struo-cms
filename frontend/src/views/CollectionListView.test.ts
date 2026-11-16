@@ -873,4 +873,43 @@ describe('CollectionListView', () => {
     expect(status).toBeTruthy()
     expect(status!.options).toEqual([{ value: 'draft', label: 'Draft' }, { value: 'published', label: 'Published' }])
   })
+
+  // The API answers 400 to a string operator on a field that is not text, so FilterBuilder gets the
+  // flag for every field it offers, from the display columns and from the searchable-only group.
+  it('tells FilterBuilder which of its fields hold text', async () => {
+    const field = (name: string, iface: string, over: Record<string, unknown> = {}) => ({
+      name, label: name, interface: iface, required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over,
+    })
+    const article = {
+      name: 'article',
+      label: 'Article',
+      defaultDisplayField: 'title',
+      fields: [
+        field('title', 'text'), field('views', 'number'), field('live', 'boolean'),
+        field('publishedAt', 'dateTime'), field('tags', 'tags'),
+        field('status', 'select', { options: [{ value: 'draft', label: 'Draft' }] }),
+        field('body', 'richText', { searchable: true }),
+      ],
+      relations: [],
+    }
+    const schema = useSchemaStore()
+    schema.collections = [article]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [], total: 0 })
+
+    const w = mountView()
+    await flushPromises()
+
+    const fields = w.findComponent(FilterBuilder).props('fields') as { name: string; text: boolean }[]
+    const textOf = (name: string) => fields.find((f) => f.name === name)?.text
+    expect(textOf('title')).toBe(true)
+    expect(textOf('tags')).toBe(true)
+    expect(textOf('views')).toBe(false)
+    expect(textOf('live')).toBe(false)
+    expect(textOf('publishedAt')).toBe(false)
+    expect(textOf('status')).toBe(false)
+  })
 })

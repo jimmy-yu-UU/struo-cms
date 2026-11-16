@@ -8,15 +8,22 @@ import FilterBuilder from './FilterBuilder.vue'
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 const fields = [
-  { name: 'title', label: 'Title' },
-  { name: 'status', label: 'Status', options: [
+  { name: 'title', label: 'Title', text: true },
+  { name: 'status', label: 'Status', text: false, options: [
     { label: 'Draft', value: 'draft' }, { label: 'Published', value: 'published' },
   ] },
 ]
 
-function mountBuilder(applied = {}) {
+// Two more fields for the tests of which operators a field takes.
+const kindFields = [
+  ...fields,
+  { name: 'sort', label: 'Sort', text: false },
+  { name: 'slug', label: 'Slug', text: true },
+]
+
+function mountBuilder(applied = {}, offered = fields) {
   return mount(FilterBuilder, {
-    props: { fields, applied },
+    props: { fields: offered, applied },
     global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
   })
 }
@@ -199,9 +206,9 @@ describe('FilterBuilder', () => {
     const w = mountBuilder()
     await w.get('[data-testid="filter-add"]').trigger('click')
     await pickOption(w, selectTriggers(w, 0)[0], 'Status')
-    await pickOption(w, selectTriggers(w, 0)[1], 'contains')
+    await pickOption(w, selectTriggers(w, 0)[1], 'does not equal')
     expect(selectTriggers(w, 0)[0].text()).toContain('Status')
-    expect(selectTriggers(w, 0)[1].text()).toContain('contains')
+    expect(selectTriggers(w, 0)[1].text()).toContain('does not equal')
   })
 
   // `wrapper.vm` is not the right instrument here: Vue Test Utils' vm proxy reads through
@@ -212,5 +219,54 @@ describe('FilterBuilder', () => {
   it('exposes nothing: the component has no test-only surface', () => {
     const w = mountBuilder()
     expect(Object.keys(w.vm.$.exposed ?? {})).toEqual([])
+  })
+
+  // "contains" is a string operator and the API answers 400 to it on a field that is not text, so
+  // only a text field lists it.
+  async function operatorLabels(w: Wrapper, rowIndex: number): Promise<string[]> {
+    const trigger = selectTriggers(w, rowIndex)[1]
+    await trigger.trigger('pointerdown')
+    await flushPromises()
+    const content = w.find(`#${trigger.attributes('aria-controls')}`)
+    const labels = content.findAll('[role="option"]').map((o) => o.text())
+    await trigger.trigger('keydown', { key: 'Escape' })
+    return labels
+  }
+
+  it('lists contains for a text field and not for any other field', async () => {
+    const w = mountBuilder({}, kindFields)
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    expect(await operatorLabels(w, 0)).toEqual(['equals', 'does not equal', 'contains'])
+    await pickOption(w, selectTriggers(w, 0)[0], 'Sort')
+    expect(await operatorLabels(w, 0)).toEqual(['equals', 'does not equal'])
+  })
+
+  it('moves a contains row to equals when its field changes to one that is not text', async () => {
+    const w = mountBuilder({}, kindFields)
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await pickOption(w, selectTriggers(w, 0)[1], 'contains')
+    await pickOption(w, selectTriggers(w, 0)[0], 'Sort')
+    expect(selectTriggers(w, 0)[1].text()).toContain('equals')
+    await w.get('[aria-label="Value"]').setValue('3')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({ sort: { op: '_eq', value: '3' } })
+  })
+
+  it('keeps a contains row when its field changes to another text field', async () => {
+    const w = mountBuilder({}, kindFields)
+    await w.get('[data-testid="filter-add"]').trigger('click')
+    await pickOption(w, selectTriggers(w, 0)[1], 'contains')
+    await pickOption(w, selectTriggers(w, 0)[0], 'Slug')
+    await w.get('[aria-label="Value"]').setValue('abc')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({ slug: { op: '_contains', value: 'abc' } })
+  })
+
+  it('never emits contains for a field that is not text, even from an applied spec', async () => {
+    const w = mountBuilder({ sort: { op: '_contains', value: '3' } }, kindFields)
+    await flushPromises()
+    expect(selectTriggers(w, 0)[1].text()).toContain('equals')
+    await w.get('[data-testid="filter-apply"]').trigger('click')
+    expect(w.emitted('apply')![0][0]).toEqual({ sort: { op: '_eq', value: '3' } })
   })
 })
