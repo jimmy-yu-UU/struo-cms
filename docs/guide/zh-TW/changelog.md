@@ -89,8 +89,8 @@
     類別屬性每次寫入都失敗。已有 `varchar(1)` 欄位的表要寫一支 migration 改成長文字：
     `migrate:check` 在 PostgreSQL、MySQL 與 MariaDB 上報成錯誤，SQLite 不比對型別，SQL Server 的
     `varchar(max)` 只報警告。放在 `Hidden` 時，欄位會從 GraphQL schema 消失、不是後台清單的欄位、在
-    後台表單裡只是唯讀顯示，REST 仍回傳也仍接受它；多值介面有自己的後台編輯器。原本寫進去的列存的是
-    不是 JSON 的文字：在 SQLite 與 PostgreSQL 上存的是元素文字，SQLite 上空清單則存 `-1`，現在的版本
+    後台表單裡只是唯讀顯示，REST 仍回傳也仍接受它；多值介面有自己的後台編輯器。原本寫進去的列存的
+    不是 JSON 文字：在 SQLite 與 PostgreSQL 上存的是元素文字，SQLite 上空清單則存 `-1`，現在的版本
     讀不了。改用多值介面或 `Hidden`，欄位成為框架的 JSON 長文字型別；或改宣告成單一值屬性，欄位型別
     隨屬性型別，已建好的表要另寫一支 migration；並且在現在的版本讀取之前，把這樣的列改寫成 JSON：
     存著該元素的 JSON 陣列會保留它，`[]` 則丟掉它。
@@ -231,7 +231,7 @@
   MariaDB 只接受不超過一個字元的元素），`Dictionary<string, string>` 或自訂類別屬性每次寫入都
   失敗。表若已有這樣的欄位，要寫一支 migration 改成長文字：`migrate:check` 在 PostgreSQL、MySQL 與
   MariaDB 上把 `varchar(1)` 欄位報成錯誤，SQLite 不比對型別，SQL Server 的 `varchar(max)` 只報警告。
-  原本寫進去的列存的是不是 JSON 的文字：在 SQLite 與 PostgreSQL 上存的是元素文字，SQLite 上空清單則
+  原本寫進去的列存的不是 JSON 文字：在 SQLite 與 PostgreSQL 上存的是元素文字，SQLite 上空清單則
   存 `-1`，現在的版本讀不了。讀取之前要把這樣的列改寫成 JSON：存著該元素的 JSON 陣列會保留它，`[]`
   則丟掉它。已標 `IsJson` 的屬性不變，`[Navigate]` 與 `[CmsTranslations]` 的清單沒有 `[CmsField]`，
   不受影響。
