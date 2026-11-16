@@ -167,15 +167,15 @@ a JSON column, and these properties need no `IsJson`; a `KeyValue` key can't be 
 
 A structured-type property can sit only on a multi-value interface or on `Hidden`; on any other
 interface the host fails at startup. A `Json` interface property must be a `string`, and no
-interface accepts a property whose type is `object` or contains `object`. The rules are in
-[Declarations rejected at startup](#declarations-rejected-at-startup).
+interface accepts a property whose type is `object`, contains `object` or holds untyped elements.
+The rules are in [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
-violating either throws a startup `MetadataException` naming the field. Child fields can use only
-the interfaces below, a narrower set than the single-value interfaces — `Text`, `Textarea`,
-`Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`,
-`Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`, `Radio` — and can't be set
-translatable. None of these are allowed:
+violating either throws a startup `MetadataException` naming the field. Child fields can't be set
+translatable, and they can use only these interfaces, a narrower set than the single-value
+interfaces: `Text`, `Textarea`, `Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`,
+`Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`,
+`Radio`. The interfaces that are not allowed are:
 
 - A nested `Repeater`
 - `RichText`, `Json`, `KeyValue`
@@ -198,7 +198,7 @@ the same, and the admin picker can only fall back to showing the raw id.
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Hidden` | Single-value or structured, not `object` | Follows the type; a structured type is JSON | `ReadonlyField` |
+| `Hidden` | Single-value or structured, no `object` inside | Follows the type; a structured type is JSON | `ReadonlyField` |
 | `Divider` | Single-value, or any type with `IsIgnore = true` | Follows the type; none with `IsIgnore` | `DividerField` |
 | `Uuid` | `Guid`/`Guid?` | CLR default | `ReadonlyField` |
 
@@ -266,7 +266,7 @@ nothing waits for the table to be used.
 | A structured-type property with `[ColumnShape]` | Remove `[ColumnShape]` |
 | A structured-type property on a single-value interface | Use a multi-value interface or `Hidden` |
 | A `Json` interface property that is not a `string` | Declare the property as `string` |
-| A property whose type is or contains `object` | Declare the concrete type |
+| `object`, or a type with `object` or untyped elements | Declare the concrete type |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 
@@ -282,7 +282,9 @@ multi-value interfaces and `Hidden` included. What is rejected is more than a pr
 `object`: an `object` as a type argument (`Dictionary<string, object>`, `List<object>`), as an
 array element type, or as the type of a public property of a custom class or struct is rejected
 too, with or without `[CmsField]`, including the properties of a `Repeater` child type, at any
-depth. The message says where the `object` is.
+depth. A non-generic collection (`ArrayList`, `Hashtable`, `IList`, or any type that implements
+`IEnumerable` without `IEnumerable<T>`) holds untyped elements and is rejected the same way;
+`string` and `byte[]` are not. The message says where the `object` or the untyped collection is.
 
 A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
 NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
@@ -290,8 +292,9 @@ NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable t
 
 The check covers `[CmsField]` properties of collections, translation entities and junction
 payloads. `[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives
-inside its parent's JSON value and has no column of its own, so it is not checked; neither is a
-property with `[SugarColumn(IsIgnore = true)]`.
+inside its parent's JSON value and has no column of its own, so the column checks skip it; the one
+check that reaches it is the `object` check, which rejects an `object` or an untyped collection in
+a `Repeater` child type. A property with `[SugarColumn(IsIgnore = true)]` is not checked at all.
 
 ### Storing long text
 

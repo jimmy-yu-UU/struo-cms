@@ -150,14 +150,14 @@ UTC。
 （反）序列化整個 CLR 值，這些屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
 
 結構化型別的屬性只能放在多值介面或 `Hidden`，放在其他介面，主機啟動時就失敗；`Json` 介面的
-屬性則必須是 `string`。型別是 `object`，或型別裡含有 `object` 的屬性，任何介面都不收。規則見
-[啟動時被擋的宣告](#啟動時被擋的宣告)。
+屬性則必須是 `string`。型別是 `object`、型別裡含有 `object`，或元素沒有型別的屬性，任何介面都不
+收。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
-是點名該欄位的啟動期 `MetadataException`。子欄位只能用下列介面，範圍比單一值介面窄：
-`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、`Number`、
-`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、`Radio`，
-且不能設為可翻譯。以下都不允許：
+是點名該欄位的啟動期 `MetadataException`。子欄位不能設為可翻譯，也只能用下列介面，範圍比單一值
+介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、
+`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、
+`Radio`。不允許的介面有：
 
 - 巢狀 `Repeater`
 - `RichText`、`Json`、`KeyValue`
@@ -179,7 +179,7 @@ UTC。
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
-| `Hidden` | 單一值或結構化型別，`object` 除外 | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
+| `Hidden` | 單一值或結構化型別，裡面沒有 `object` | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
 | `Divider` | 單一值型別，或掛 `IsIgnore = true` 的任何型別 | 依屬性型別，`IsIgnore` 則無 | `DividerField` |
 | `Uuid` | `Guid`／`Guid?` | CLR 預設 | `ReadonlyField` |
 
@@ -238,7 +238,7 @@ UTC。
 | 結構化型別屬性加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
 | 單一值介面上的結構化型別屬性 | 改用多值介面或 `Hidden` |
 | `Json` 介面上不是 `string` 的屬性 | 屬性改宣告成 `string` |
-| 型別是 `object` 或含有 `object` 的屬性 | 改宣告成具體型別 |
+| `object`，或含有 `object` 或無型別元素的型別 | 改宣告成具體型別 |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 
@@ -251,15 +251,18 @@ JSON 欄位，同樣如此。
 `object` 讀回來的是 JSON 節點，不是寫入的值，所以包含多值介面與 `Hidden` 在內，任何介面都不收。
 被擋的不只型別本身是 `object` 的屬性：`object` 出現在型別參數（`Dictionary<string, object>`、
 `List<object>`）、陣列元素型別，或自訂類別與結構的公開屬性（不論有沒有 `[CmsField]`，也包含
-`Repeater` 子型別的屬性，層數不限）時同樣被擋，訊息指出 `object` 在哪裡。
+`Repeater` 子型別的屬性，層數不限）時同樣被擋。非泛型容器（`ArrayList`、`Hashtable`、`IList`，以及
+實作 `IEnumerable` 卻沒實作 `IEnumerable<T>` 的型別）的元素沒有型別，同樣被擋；`string` 與
+`byte[]` 不在此限。訊息指出 `object` 或無型別容器在哪裡。
 
 `Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
 就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與
 `byte[]?`，不在這條檢查裡。
 
 檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性。`[ColumnShape]` 加長文字介面
-照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，不檢查；掛
-`[SugarColumn(IsIgnore = true)]` 的屬性也不檢查。
+照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，欄位相關的檢查都略過它；唯一會檢查到它的
+是 `object` 檢查，`Repeater` 子型別裡的 `object` 或無型別容器會被擋。掛
+`[SugarColumn(IsIgnore = true)]` 的屬性完全不檢查。
 
 ### 存長文字
 

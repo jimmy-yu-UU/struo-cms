@@ -173,9 +173,11 @@ REST's `_null`/`_nnull`, this argument's value is actually read.
 
 The second is which field interfaces can be filtered at all: REST places no restriction on which
 interface can be filtered, checking only whether the field name is on the allowlist, while GraphQL
-only lets the interfaces that map to a GraphQL scalar type be filtered — `RichText`, `Markdown`,
-`Code`, `Json`, `KeyValue`, `MultiSelect`, `CheckboxGroup`, `Tags`, `Files`, `File`, `Image`, and
-`Repeater` fields have no filter fields in GraphQL at all.
+only gives filter fields to fields on `Text`, `Textarea`, `Slug`, `Email`, `Url`, `Color`, `Phone`,
+`Select`, `Radio`, `Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `DateTime`, `Time`
+and `Uuid`. `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`, `MultiSelect`, `CheckboxGroup`,
+`Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no filter fields in GraphQL at all
+(`Hidden`, `Divider` and `Password` fields are not in the GraphQL schema).
 
 A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
 `byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`

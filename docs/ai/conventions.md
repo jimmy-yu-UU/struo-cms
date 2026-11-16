@@ -375,8 +375,10 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
 - a property of the `Json` interface that is not a `string`;
 - a property whose type is `object`, or contains one (`ObjectInType.Find`: a type argument, an
   array element type, or a public property of a type outside the `System` and `Microsoft`
-  namespaces, to any depth, each type visited once), on any interface except `Json`, which gets
-  the `string` rule; the walk covers the child type of a `Repeater`;
+  namespaces and their sub-namespaces, to any depth, each type visited once; a type with no
+  namespace is walked) or holds untyped elements (a non-generic `IEnumerable`), on any interface
+  except `Json`, which gets the `string` rule; the walk covers the child type of a `Repeater`, and a
+  structured type on a single-value interface is reported for the interface before the `object`;
 - `[ColumnShape]` beside `ColumnDataType`;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
