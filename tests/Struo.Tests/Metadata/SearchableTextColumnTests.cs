@@ -40,13 +40,6 @@ public sealed class SearchableTextColumnTests
         [CmsField(Interface = FieldInterface.DateTime, Searchable = true)] public DateTime? At { get; set; }
     }
 
-    [CmsCollection("Search on a list of text", Name = "stcList")]
-    public sealed class SearchableList
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        [CmsField(Interface = FieldInterface.Number, Searchable = true)] public List<string> Names { get; set; } = [];
-    }
-
     [CmsCollection("Search on a boolean", Name = "stcBool")]
     public sealed class SearchableBool
     {
@@ -79,8 +72,7 @@ public sealed class SearchableTextColumnTests
         [CmsField(Interface = FieldInterface.Email, Searchable = true)] public string? Mail { get; set; }
         [CmsField(Interface = FieldInterface.Tags, Searchable = true)] public List<TagItem> Labels { get; set; } = [];
         [CmsField(Interface = FieldInterface.KeyValue, Searchable = true)] public Dictionary<string, string> Meta { get; set; } = new();
-        [SugarColumn(IsJson = true)]
-        [CmsField(Interface = FieldInterface.Number, Searchable = true)] public List<int> Numbers { get; set; } = [];
+        [CmsField(Interface = FieldInterface.Hidden, Searchable = true)] public List<int> Numbers { get; set; } = [];
     }
 
     [CmsCollection("Search on a repeater sub-field", Name = "stcRepeater")]
@@ -95,6 +87,23 @@ public sealed class SearchableTextColumnTests
         [CmsField(Interface = FieldInterface.Text, Searchable = true)] public string Question { get; set; } = "";
     }
 
+    [CmsCollection("Searchable structured and hidden fields", Name = "stcHidden")]
+    public sealed class HiddenSearchables
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        // A structured type on the Hidden interface is stored as JSON, so it is a text column.
+        [CmsField(Interface = FieldInterface.Hidden, Searchable = true)] public List<string> Labels { get; set; } = [];
+        // A field marked Hidden never joins the search whitelist, so its column type cannot break a search.
+        [CmsField(Interface = FieldInterface.Number, Hidden = true, Searchable = true)] public int Secret { get; set; }
+    }
+
+    [CmsCollection("Searchable number on the Hidden interface", Name = "stcHiddenNumber")]
+    public sealed class HiddenInterfaceNumber
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Hidden, Searchable = true)] public int Count { get; set; }
+    }
+
     [CmsCollection("Number that is not searchable", Name = "stcQuiet")]
     public sealed class QuietNumber
     {
@@ -107,7 +116,6 @@ public sealed class SearchableTextColumnTests
     [InlineData(typeof(SearchableGuid), "SearchableGuid.Ref", "Guid")]
     [InlineData(typeof(SearchableDate), "SearchableDate.At", "DateTime?")]
     [InlineData(typeof(SearchableBool), "SearchableBool.On", "bool")]
-    [InlineData(typeof(SearchableList), "SearchableList.Names", "List<string>")]
     [InlineData(typeof(TranslatedHost), "TranslatedNumberText.Rank", "int")]
     public void Searchable_on_a_column_that_is_not_text_fails_the_scan_and_says_what_to_change(
         Type type, string field, string columnType)
@@ -133,6 +141,31 @@ public sealed class SearchableTextColumnTests
         var meta = MetadataScanner.ScanTypes([typeof(SearchableText)]).Single();
         meta.Fields.Where(f => f.Searchable).Select(f => f.Name)
             .Should().BeEquivalentTo(["name", "mail", "labels", "meta", "numbers"]);
+    }
+
+    [Fact]
+    public void A_structured_hidden_field_and_a_field_marked_hidden_scan_with_Searchable()
+    {
+        var meta = MetadataScanner.ScanTypes([typeof(HiddenSearchables)]).Single();
+        meta.Fields.Where(f => f.Searchable).Select(f => f.Name).Should().BeEquivalentTo(["labels", "secret"]);
+    }
+
+    [Fact]
+    public void A_number_on_the_Hidden_interface_is_not_text_and_fails_with_Searchable()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(HiddenInterfaceNumber)]);
+        act.Should().Throw<MetadataException>().Which.Message.Should().Contain("HiddenInterfaceNumber.Count").And.Contain("int");
+    }
+
+    [Theory]
+    [InlineData(typeof(List<string>), "List<string>")]
+    [InlineData(typeof(Dictionary<string, int>), "Dictionary<string, int>")]
+    [InlineData(typeof(DateTime?), "DateTime?")]
+    [InlineData(typeof(Guid), "Guid")]
+    [InlineData(typeof(int), "int")]
+    public void The_type_label_reads_like_the_declaration(Type type, string label)
+    {
+        MetadataScanner.TypeLabel(type).Should().Be(label);
     }
 
     [Fact]
@@ -175,6 +208,7 @@ public sealed class TextColumnAgreementTests : IDisposable
         var types = CollectionTypes().ToList();
         var checkedFields = 0;
         var textFields = 0;
+        var compared = new HashSet<string>();
 
         foreach (var collection in MetadataScanner.ScanTypes(types))
         {
@@ -190,10 +224,13 @@ public sealed class TextColumnAgreementTests : IDisposable
                 var querySide = ConditionalModelTranslator.Target(field.Name, DescriptorOf(owner), db).IsText;
                 querySide.Should().Be(scannerSide, $"{collection.Name}.{field.Name} ({prop.PropertyType.Name}, {field.Interface})");
                 checkedFields++;
+                compared.Add($"{collection.Name}.{field.Name}");
                 if (scannerSide) textFields++;
             }
         }
 
+        // The Hidden structured fields, and the one on a translation entity, are compared too.
+        compared.Should().Contain(["fxStash.labels", "fxStash.numbers", "fxStash.scores", "fxStash.note", "fxGlossary.aliases"]);
         checkedFields.Should().BeGreaterThan(40);
         textFields.Should().BeGreaterThan(10).And.BeLessThan(checkedFields);
     }

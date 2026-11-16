@@ -428,20 +428,22 @@ public static class MetadataScanner
     }
 
     /// <summary>
-    /// Whether a field's column holds text: a <c>string</c> property, a JSON-column interface, or
-    /// <c>[SugarColumn(IsJson = true)]</c>. The query translator reaches the same answer from the ORM's
+    /// Whether a field's column holds text: a <c>string</c> property, a multi-value interface, a structured
+    /// type (which the framework stores as JSON, as on a <c>Hidden</c> field), or <c>[SugarColumn(IsJson = true)]</c>. The query translator reaches the same answer from the ORM's
     /// column info; <c>TextColumnAgreementTests</c> pins that the two agree.
     /// </summary>
     internal static bool IsTextColumn(PropertyInfo prop, FieldInterface fieldInterface) =>
         prop.PropertyType == typeof(string)
         || FieldInterfaceSets.JsonColumnInterfaces.Contains(fieldInterface)
-        || prop.GetCustomAttribute<SugarColumn>() is { IsJson: true };
+        || prop.GetCustomAttribute<SugarColumn>() is { IsJson: true }
+        || StructuredType.Is(prop.PropertyType);
 
     // Search matches text with a text operator, which no other column type accepts. A Repeater
     // sub-field is no column and is never searched.
     private static void RequireTextColumnForSearch(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
     {
-        if (!attr.Searchable) return;
+        // A field marked Hidden never joins the search whitelist, so its column cannot make a search fail.
+        if (!attr.Searchable || attr.Hidden) return;
         var name = $"{prop.DeclaringType?.Name}.{prop.Name}";
         if (!isColumn)
             throw new MetadataException(
@@ -453,7 +455,7 @@ public static class MetadataScanner
             "text only. Remove Searchable = true from it, or make the property a string.");
     }
 
-    private static string TypeLabel(Type type)
+    internal static string TypeLabel(Type type)
     {
         if (Nullable.GetUnderlyingType(type) is { } inner) return TypeLabel(inner) + "?";
         if (type.IsGenericType)

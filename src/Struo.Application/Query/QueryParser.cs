@@ -157,8 +157,8 @@ public static class QueryParser
         foreach (var item in ReadStringsKey(env, KeySort) ?? [])
             sort.Add(ParseSortToken(item));
 
-        var limit = Given(env, KeyLimit, out var l) ? ReadInt(l, KeyLimit) : 0;
-        var offset = Given(env, KeyOffset, out var o) ? ReadInt(o, KeyOffset) : 0;
+        var limit = ReadIntKey(env, KeyLimit, null) ?? 0;
+        var offset = ReadIntKey(env, KeyOffset, null) ?? 0;
         var search = env.TryGetProperty("search", out var se) ? ReadSearch(se) : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
@@ -173,36 +173,30 @@ public static class QueryParser
     {
         var map = new Dictionary<string, DeepRelationSpec>(StringComparer.OrdinalIgnoreCase);
         foreach (var rel in d.EnumerateObject())
-        {
-            IReadOnlyList<string>? fields = null;
-            int? limit = null;
-            int? offset = null;
-            FilterNode? filter = null;
-            List<SortField>? sort = null;
-            DeepSpec? nested = null;
-            var here = path is null ? rel.Name : path + ".deep." + rel.Name;
-            if (rel.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Null))
-                throw new QueryException($"'deep.{here}' must be an object.");
-            if (rel.Value.ValueKind == JsonValueKind.Object)
-            {
-                fields = ReadStringsKey(rel.Value, KeyFields, here);
-                filter = ReadFilterKey(rel.Value, here);
-                if (ReadStringsKey(rel.Value, KeySort, here) is { } sortTokens)
-                    sort = sortTokens.Select(ParseSortToken).ToList();
-                if (Given(rel.Value, KeyLimit, out var l)) limit = ReadInt(l, KeyLimit, here);
-                if (Given(rel.Value, KeyOffset, out var o)) offset = ReadInt(o, KeyOffset, here);
-                if (IsGiven(rel.Value, KeyDeep, JsonValueKind.Object, "an object", here, out var nd))
-                    nested = ParseDeepObject(nd, here);
-            }
-            map[rel.Name] = new DeepRelationSpec(fields, limit, nested)
-            {
-                Filter = filter,
-                Sort = sort,
-                Offset = offset
-            };
-        }
+            map[rel.Name] = ParseDeepRelation(rel.Value, path is null ? rel.Name : path + ".deep." + rel.Name);
         return map.Count == 0 ? null : new DeepSpec(map);
     }
+
+    // A null entry expands the relation with the defaults, the same as an empty object.
+    private static DeepRelationSpec ParseDeepRelation(JsonElement entry, string here)
+    {
+        if (entry.ValueKind == JsonValueKind.Null) return new DeepRelationSpec(null, null);
+        if (entry.ValueKind != JsonValueKind.Object)
+            throw new QueryException($"'deep.{here}' must be an object.");
+
+        var fields = ReadStringsKey(entry, KeyFields, here);
+        var filter = ReadFilterKey(entry, here);
+        var sort = ReadStringsKey(entry, KeySort, here)?.Select(ParseSortToken).ToList();
+        var limit = ReadIntKey(entry, KeyLimit, here);
+        var offset = ReadIntKey(entry, KeyOffset, here);
+        var nested = IsGiven(entry, KeyDeep, JsonValueKind.Object, "an object", here, out var nd)
+            ? ParseDeepObject(nd, here)
+            : null;
+        return new DeepRelationSpec(fields, limit, nested) { Filter = filter, Sort = sort, Offset = offset };
+    }
+
+    private static int? ReadIntKey(JsonElement owner, string name, string? relation) =>
+        Given(owner, name, out var value) ? ReadInt(value, name, relation) : null;
 
     private static DeepSpec? ParseDeepQueryString(IReadOnlyDictionary<string, string?> query)
     {
@@ -210,6 +204,17 @@ public static class QueryParser
         var map = dv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToDictionary(n => n, _ => new DeepRelationSpec(null, null), StringComparer.OrdinalIgnoreCase);
         return map.Count == 0 ? null : new DeepSpec(map);
+    }
+
+    private static List<FilterNode> ParseLogicalChildren(JsonProperty group)
+    {
+        if (group.Value.ValueKind != JsonValueKind.Array)
+            throw new QueryException($"'{group.Name}' must be an array.");
+        return group.Value.EnumerateArray()
+            .Select(child => child.ValueKind == JsonValueKind.Object
+                ? ParseFilter(child)
+                : throw new QueryException($"'{group.Name}' must be an array of objects."))
+            .ToList();
     }
 
     private static FilterNode ParseFilter(JsonElement obj)
@@ -221,14 +226,7 @@ public static class QueryParser
             if (prop.NameEquals("_and") || prop.NameEquals("_or"))
             {
                 var op = prop.NameEquals("_and") ? LogicalOperator.And : LogicalOperator.Or;
-                if (prop.Value.ValueKind != JsonValueKind.Array)
-                    throw new QueryException($"'{prop.Name}' must be an array.");
-                var children = prop.Value.EnumerateArray()
-                    .Select(child => child.ValueKind == JsonValueKind.Object
-                        ? ParseFilter(child)
-                        : throw new QueryException($"'{prop.Name}' must be an array of objects."))
-                    .ToList();
-                nodes.Add(new LogicalFilter(op, children));
+                nodes.Add(new LogicalFilter(op, ParseLogicalChildren(prop)));
                 continue;
             }
 
