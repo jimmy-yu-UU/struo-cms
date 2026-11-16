@@ -34,9 +34,11 @@ HTTP_STATUS:200
 }
 ```
 
-body 裡，`search` 是字串，`sort` 與 `fields` 是字串陣列，`limit` 與 `offset` 是數字（`deep` 裡也一樣
-），body 本身是一個 JSON 物件。鍵的 JSON 種類不對，回 400 並點名該鍵。帶小數或超出 32 位元範圍的數字
-，當成沒有給這個鍵，和查詢字串一樣。
+body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），`sort` 與 `fields` 是字串陣列，
+`search` 是字串，`limit` 與 `offset` 是數字（`deep` 裡也一樣），body 本身是一個 JSON 物件。鍵的 JSON
+種類不對，回 400 並點名該鍵，所以不是物件的 `filter` 不會回傳全部的列。`filter`、`deep`、`sort`、
+`fields`、`search` 的值是 `null`，表示沒有給這個鍵。帶小數或超出 32 位元範圍的數字，當成沒有給這個
+鍵，和查詢字串一樣。
 
 本章接下來的例子都用查詢字串形式。GraphQL 用同一套語意做同一件事，只是引數拼法不同——運算子從
 `_eq` 換成 `eq`，量詞從 `_some` 換成 `some`——拼法留給[GraphQL 一章](14-graphql.md)。

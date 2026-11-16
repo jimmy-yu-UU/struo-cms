@@ -104,6 +104,11 @@
     text, and a text field joined the list with commas; a query string is unchanged, since it
     carries strings and `_in`/`_nin` read a comma list. A client sends a string, a number or a
     boolean, and a list only to `_in` or `_nin`.
+  - A `POST /query` body whose `filter` or `deep` is not an object (nor each relation inside
+    `deep`), or whose `sort` or `fields` is not an array of strings, answers `400` and names the
+    key, also inside a `deep` relation; `null` still means not given. Such a key used to be ignored,
+    so the caller got every row. A caller that sent one fixes the body so the key has its kind, or
+    leaves the key out.
   - `Searchable = true` on a field whose column is not text (a number, boolean, `Guid`, enum or
     date-time property), or on a Repeater sub-field, stops the host at start with a
     `MetadataException` that names the property. It used to start: every `search=` request on that

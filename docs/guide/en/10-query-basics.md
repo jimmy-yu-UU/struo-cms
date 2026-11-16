@@ -37,10 +37,12 @@ the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/
 }
 ```
 
-In the body, `search` is a string, `sort` and `fields` are arrays of strings, and `limit` and
-`offset` are numbers, inside `deep` as well, and the body itself is one JSON object. A key of
-another JSON kind is a 400 that names the key. A number that has a fraction or is beyond the 32-bit
-range is read as if the key were missing, the same as in the query string.
+In the body, `filter` and `deep` are objects (so is each relation inside `deep`), `sort` and
+`fields` are arrays of strings, `search` is a string, and `limit` and `offset` are numbers, inside
+`deep` as well; the body itself is one JSON object. A key of another JSON kind is a 400 that names
+the key, so a filter that is not an object never answers every row. `null` for `filter`, `deep`,
+`sort`, `fields` or `search` means the key is not given. A number that has a fraction or is beyond
+the 32-bit range is read as if the key were missing, the same as in the query string.
 
 The rest of this chapter's examples use the query-string form. GraphQL does the same thing with
 the same semantics, only the argument spelling differs — the operator `_eq` becomes `eq`, and the
