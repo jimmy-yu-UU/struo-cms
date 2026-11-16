@@ -4,11 +4,11 @@
 
 A filter or id value reaches SQL only through `ValueConditions`
 (`src/Struo.Infrastructure/Query/ValueConditions.cs`), the one file in `src/` that names
-`ConditionalType.In` or `ConditionalType.NotIn`. It parses each value to the column's CLR type with
-the invariant culture and renders the parsed value; the caller's text is never passed on. The
-supported column types are `Guid`, `int`, `long`, `short`, `byte`, `bool`, `decimal`, `double`,
-`float`, `DateTime`, `DateTimeOffset`, enums and `string`. `_in`/`_nin` on any other type is a 400;
-the comparison operators on such a type keep passing the text as a bound value.
+`ConditionalType.In`, `ConditionalType.NotIn` or `ConditionalType.Equal`. It parses each value to
+the column's CLR type with the invariant culture and renders the parsed value; the caller's text is
+never passed on. The supported column types are `Guid`, `int`, `long`, `short`, `byte`, `bool`,
+`decimal`, `double`, `float`, `DateTime`, `DateTimeOffset`, enums and `string`. `_in`/`_nin` on any
+other type is a 400; the comparison operators on such a type keep passing the text as a bound value.
 
 - A set on a number, boolean, `Guid`, date or enum column stays `IN`/`NOT IN` with the rendered
   values (SqlSugar writes them into the statement as literals). A boolean set renders `1`/`0`.
@@ -30,9 +30,74 @@ the comparison operators on such a type keep passing the text as a bound value.
   relation in one write. The link count is checked before the write transaction opens, and a revision
   revert is exempt: its snapshot is the system's own data.
 - A text set takes strings: a number or a boolean element, a number or a boolean in place of a list,
-  and an empty element of a query-string list on a typed field are each a 400. `QueryParser.ReadValue`
-  reads a JSON object as its raw JSON text, so an object element is compared as that text; a string in
-  place of a list is split at its commas (`FilterValueList.Elements`).
+  and an empty element of a query-string list on a typed field are each a 400. A string in place of
+  a list is split at its commas (`FilterValueList.Elements`).
+- A JSON object is no value, alone or as a list element, for any operator: `QueryParser.ReadValue`
+  throws a `QueryException` naming the field and the operator, because the value leaves it as plain
+  objects and text and no later step could tell an object from a string. A query string carries
+  strings only.
+- A null value is a 400 for every operator but `_null`/`_nnull`, and the message points to those
+  two. A list given to an operator other than `_in`/`_nin` is a 400. GraphQL skips an operator key
+  whose value is null before it reaches `ValueConditions`.
+- A text column is a `string` property or a column stored as JSON (`ValueTarget.StoredAsJson`, read
+  from the ORM's column info: a multi-value interface, a structured type on `Hidden`, `IsJson`).
+  `_contains`, `_starts_with` and `_ends_with` on any other column are a 400 that names the field
+  and the operator and lists the operators the column takes, date-time columns included.
+  `MetadataScanner.IsTextColumn` (a `string` property, a multi-value interface, a structured type or
+  `IsJson`) gives the same answer from the entity type, and `Searchable = true` on a column that is
+  not text fails the scan with a `MetadataException`. `Searchable = true` together with
+  `Hidden = true` fails it too, whatever the property type: a hidden field is dropped from the
+  search whitelist and from the admin filter list, so the declaration does nothing; a field on the
+  `Hidden` interface without the flag joins the whitelist and follows the text rule.
+  `TextColumnAgreementTests` pins that both sides agree for every field of the core and fixture
+  collections, the `Hidden` structured ones included.
+- Every `Equal` on a text column (a `string` or a column stored as JSON) is a bound equality, the
+  way a set member is, so the word `null` is never a null test there. On a column of a type outside
+  the parsed set that is not text (`DateOnly`, `TimeOnly`, `TimeSpan`) the value goes into the
+  condition as written, except that `_eq` with `null` or `[null]` is a 400 pointing to
+  `_null`/`_nnull`: the ORM reads exactly those two texts (case-sensitive) of an `Equal` as a null
+  test and cannot be told otherwise. Whether these three types are parsed or refused is undecided.
+  `_eq`, the translation sidecar's locale condition (`FilterTranslator.TranslationSubquery`,
+  `TranslationStore`) and the id lookups all go through `ValueConditions`.
+  `ValueConditionsConventionTests` reads the text of `src/` and fails on another file that names
+  `ConditionalType.In`, `NotIn` or `Equal` (also with the `SqlSugar.` or `global::` qualifier or a
+  verbatim `@`), imports or aliases the enum, sets `ConditionalType = default`, or builds a
+  `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. Two files that
+  set `CustomConditionalFunc` are exempt from the initializer rule, because the ORM reads that
+  function before the condition type. The scan cannot see a cast from a number, a condition type
+  chosen through reflection or `Enum.Parse`, a condition type assigned in a separate statement, a
+  model filled in after `new ConditionalModel()`, or braces inside verbatim, raw or interpolated
+  strings or comments of an initializer body. An anonymous `new { }` and a generic `where T : new()`
+  constraint are not read as models.
+- `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
+  binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
+  it text" the same way.
+- `Searchable = true` on a Repeater sub-field fails the scan too: a sub-field has no column and is
+  never searched.
+- A `POST /query` body is read as follows. The body is an object, and `filter` and `deep` (and each
+  relation entry inside `deep`) are objects, `sort` and `fields` arrays of strings, `search` a
+  string, `limit` and `offset` numbers, the same inside `deep`; anything else is a `QueryException`
+  naming the key and, inside `deep`, the relation path. A key that is ignored would return
+  unfiltered rows to a caller who believes the result is filtered, and reading a wrong kind with
+  `GetString` or `TryGetInt32` would throw `InvalidOperationException`, which answers 500. For the
+  same reason a key the parser does not read is a 400: the body accepts `fields`, `filter`, `sort`,
+  `limit`, `offset`, `search`, `deep`, `facets` and `aggregate`, a `deep` relation entry (at any
+  depth) accepts `fields`, `filter`, `sort`, `limit`, `offset` and `deep`. Keys are matched as
+  written, case-sensitively, and a key with a `null` value is unknown too. One list per level in
+  `QueryParser` decides the unknown key and fills the message, which repeats at most 64 characters
+  of the key, cut between characters. Field and relation names are validated elsewhere, and an
+  unknown aggregate operation or filter operator is a 400 there. JSON `null` for a known key means
+  the key is not given; a `null` relation entry in `deep` is the same as `{}`. An element of
+  `_and`/`_or` that is not an object is a 400 naming the group. A number with a fraction or beyond
+  the 32-bit range is read as a missing `limit`/`offset`, as in the query string. A repeated key
+  takes the last value.
+- Text that cannot be read as text is a 400. System.Text.Json throws `InvalidOperationException`
+  from a property name or a string value that holds an escaped lone surrogate, so `ParseEnvelope`
+  walks the whole body once, before it reads any name or string, and answers with a `QueryException`
+  that does not repeat the text. The walk covers every property name and every string value at any
+  depth: body keys, filter field and operator names, `deep` relation names, aggregate operations,
+  and the strings of `search`, `fields`, `sort`, `facets`, filter values and `_in` elements. It is
+  the only place that catches that exception. A query string and GraphQL do not go through it.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.
@@ -50,9 +115,11 @@ names clash with a group's on the same column, and it takes its connector from i
 SqlSugar behaviours the group form has to work around:
 
 - A group's first entry carries the connector between the group and the condition before it.
-- An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the text
-  `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list request
-  renders twice (count, then page). The name check renders a copy for that reason.
+- An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the
+  text `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list
+  request renders twice (count, then page). The name check renders a copy for that reason. Inside a
+  subquery SqlSugar renders the null-test form without the `AND` that joins it to the condition
+  before it, so the statement is invalid.
 - One instance listed twice is numbered by its first position, which drops the closing parenthesis and
   repeats a parameter name.
 - An empty group renders nothing: the condition disappears, or the `AND` after it is left dangling.
@@ -97,8 +164,57 @@ Measured 2026-11-11 with the committed tests under `tests/Struo.Tests/Security/Q
   container on the container network: from the host, the connection to a throwaway SQL Server
   container timed out at the pre-login handshake on every port and client tried.
 
+Measured 2026-11-13 on main before the change, with scratch probes (not committed) on SQLite 3.53.3,
+PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.00.4305), through REST,
+`POST /query` and GraphQL:
+
+- `_eq` with `null` rendered `IS NULL`, and `[null]` rendered `= 'null'` the first time and
+  `IS NULL` on every later render of the same list. Count and page of one request therefore
+  differed: `meta.total` 1 and no row, on all five backends and all three entrances. `_neq` was
+  never special.
+- `filter[title][_eq]=null&locale=en` on a translatable field, `_eq: "null"` in a `deep` filter and
+  a `locale` equal to an existing language code `null` answered 500 on all five backends: the
+  rendered subquery was `WHERE Locale = @p Title is null`.
+- `_contains`, `_starts_with` and `_ends_with` on integer, boolean, decimal, floating point, `Guid`,
+  date-time, enum, `DateOnly` and `TimeOnly` columns answered 500 (`42883`) on PostgreSQL only; the
+  other four backends answered 200 with results that differed per backend (SQL Server matched 0 rows
+  for `_starts_with "2026"` on a `datetime` column). On a column stored as JSON they ran everywhere.
+  A `Searchable` field that is not text made every `search=` request answer 500 on PostgreSQL.
+- A JSON object as `_in` was compared as raw text: `{"a":1}` matched a row whose code was that text,
+  and `{"a":1,"b":2}` was split at its comma and matched nothing. A null value of `_eq`/`_neq` on a
+  typed column compared with the type's default (`= 0`, `= False`) and threw `ArgumentNullException`
+  (500) on a `Guid`. A list given to `_eq` on a text column was joined with commas.
+
+Measured 2026-11-16 with a scratch probe (not committed) on a text column through `_contains`,
+`_starts_with` and `_ends_with` on SQLite, PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL
+Server 2022 (16.0.4305): nothing escapes a value. `%` and `_` are wildcards on all five (a value of
+`%` matches every row, `100%` matches `100x`). `[` starts a character class on SQL Server only, so
+`[ab]` matches every row containing `a` or `b` there and only the stored text `x[ab]y` elsewhere. A
+backslash is an escape character on PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL
+Server; on PostgreSQL an `_ends_with` value of one backslash is refused with `22025` (a 500).
+
+Measured 2026-11-16 with a scratch probe (not committed) on a real table with `DateOnly`, `TimeOnly`
+and `TimeSpan` columns, through `_eq` with the value passed on as written, on SQLite, PostgreSQL
+17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.0.4305):
+
+| Backend | Date, time and duration values | `NULL` as a date |
+|---|---|---|
+| SQLite | the time and the duration match; the date text finds no row | no row |
+| PostgreSQL | every value fails with `42883` | `42883` |
+| MySQL | all three match | `Incorrect DATE value` |
+| MariaDB | all three match | no row |
+| SQL Server | all three match | `Conversion failed` |
+
+PostgreSQL names `date = text` and `time = text` in the `42883` message. The words `null` and
+`[null]` were not sent on these backends: the ORM reads exactly those two texts of an `Equal` as a
+null test, so they are refused before the statement.
+
 ## Unknowns
 
+- Whether `DateOnly`, `TimeOnly` and `TimeSpan` filter values should be parsed like the other types
+  or refused is undecided; on PostgreSQL every `_eq` on them fails with `42883`.
+- Whether a `_contains`, `_starts_with` or `_ends_with` value should have `%`, `_`, `[` and the
+  backslash escaped is not decided.
 - On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost
   of the group forms, collation equality of the `=` group against the inline list, or the 2100
   parameter limit with `MaxInValues` raised towards 900 plus the other conditions of a request.

@@ -34,6 +34,20 @@ HTTP_STATUS:200
 }
 ```
 
+body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），`sort` 與 `fields` 是字串陣列，
+`search` 是字串，`limit` 與 `offset` 是數字（`deep` 裡也一樣），body 本身是一個 JSON 物件。鍵的 JSON
+種類不對，回 400 並點名該鍵，所以不是物件的 `filter` 不會回傳全部的列。body 任何鍵的值是 `null`，
+表示沒有給這個鍵；`deep` 裡的關聯項目是 `null`，則以預設值展開該關聯，和 `{}` 相同。帶小數或超出
+32 位元範圍的數字，當成沒有給這個鍵，和查詢字串一樣。
+
+body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不是 `null`，都回 400，訊息點名該鍵（在
+`deep` 的關聯項目裡則帶上它的 `deep` 路徑），並列出該層接受的鍵。鍵照原樣比對，大小寫要一致：
+
+| 鍵 | body | `deep` 的關聯項目 |
+|---|---|---|
+| `fields`、`filter`、`sort`、`limit`、`offset`、`deep` | 可 | 可 |
+| `search`、`facets`、`aggregate` | 可 | 不可 |
+
 本章接下來的例子都用查詢字串形式。GraphQL 用同一套語意做同一件事，只是引數拼法不同——運算子從
 `_eq` 換成 `eq`，量詞從 `_some` 換成 `some`——拼法留給[GraphQL 一章](14-graphql.md)。
 
@@ -80,14 +94,48 @@ HTTP_STATUS:200
 **比對區分大小寫。** `_EQ` 或 `_startsWith` 會被拒絕，回 `Unknown operator '<token>'.`；欄位名稱則
 相反，到處都不分大小寫。
 
+**各欄位接受的運算子。** 欄位接受哪些運算子，看它的欄位怎麼存值：
+
+| 運算子 | 文字 | 結構化 | 其他 |
+|---|---|---|---|
+| `_eq`、`_neq` | 可 | 可 | 可 |
+| `_lt`、`_lte`、`_gt`、`_gte` | 可 | 可 | 可 |
+| `_in`、`_nin` | 可 | 400 | 可 |
+| `_null`、`_nnull` | 可 | 可 | 可 |
+| `_contains`、`_starts_with`、`_ends_with` | 可 | 可 | 400 |
+
+文字欄位是 `string` 屬性：`Json` 欄位，以及宣告了 `[SugarColumn(IsJson = true)]` 的 `string`，都算文
+字，接受 `_in`／`_nin`。結構化欄位是結構化型別的屬性，這個詞由[第 6 章](06-field-types.md#介面總覽)
+定義：它放在多值介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）或
+`Hidden` 上，存成 JSON。它的字串運算子比對的是存起來的 JSON 文字，`_in`／`_nin` 回 400。其他是所有剩
+下的欄位：數字、布林、`Guid`、列舉與日期時間。下面型別轉換表沒有涵蓋的型別，`_in`／`_nin`
+一樣回 400。
+
+字串運算子用在不接受它的欄位上，回 400，訊息點名欄位與運算子，並列出這個欄位接受的運算子。要比對
+`DateTime` 欄位上的某一天，改用範圍：
+`filter[createdAt][_gte]=2026-03-04&filter[createdAt][_lt]=2026-03-05`。
+
 **接受值的形狀。** `_in`／`_nin` 在查詢字串上是逗號清單、在 JSON 裡是陣列，兩者都當成同一種清單讀。
 查詢字串裡逗號是元素的分隔；陣列裡逗號留在元素內，`["a,b"]` 就是一個值。
 `_contains`／`_starts_with`／`_ends_with` 分別轉成 `LIKE '%v%'`、`LIKE 'v%'`、`LIKE '%v'`。
 
-**空清單、`null` 與重複值。** 空清單等於沒有值：`_in` 沒有值就不符合任何列，`_nin` 沒有值就不加條件。
+| 值 | 運算子 | 結果 |
+|---|---|---|
+| JSON `null` | `_null`、`_nnull` 以外的全部 | 400，訊息指向 `_null`、`_nnull` |
+| 文字 `null` 或 `[null]` | 全部，用在文字或結構化欄位 | 純文字 |
+| 文字 `null` 或 `[null]` | `DateOnly`、`TimeOnly`、`TimeSpan` 上的 `_eq` | 400 |
+| 清單 | `_in`、`_nin` | 各個元素 |
+| 清單 | `_null`、`_nnull` | 忽略 |
+| 清單 | 其他運算子 | 400 |
+| JSON 物件，單獨或放在清單裡 | 全部 | 400 |
+| 字串 | `_in`、`_nin` | 逗號清單 |
+
+查詢字串只帶得了字串，送不出 `null`、清單或物件。`filter[code][_eq]=null` 比對的是欄位內容等於
+`null` 這個字，不會測 NULL。要測 NULL，用 `_null` 或 `_nnull`。
+
+**空清單與重複值。** 空清單等於沒有值：`_in` 沒有值就不符合任何列，`_nin` 沒有值就不加條件。
 清單裡有 `null` 元素或巢狀陣列回 400；文字清單裡重複的值只綁一次。文字欄位上，數字或布林元素，
 或拿數字或布林代替清單，會回 400 並點名欄位。拿字串代替清單時，當成逗號清單讀，`"a,b"` 是兩個值。
-JSON 物件，不論是元素或代替清單，都以它的原始 JSON 文字比對，所以只符合內容剛好等於該文字的列。
 其他型別的欄位上，查詢字串清單的空元素（`1,,2`，或只有一個 `,`）也回 400。
 
 **文字清單。** 文字欄位的 `_in`／`_nin` 把每個值綁成參數，所以引號、反斜線、逗號、空字串，以及
@@ -99,9 +147,9 @@ JSON 物件，不論是元素或代替清單，都以它的原始 JSON 文字比
 加上尾端數字的欄位（`address` 與 `address2`），在同一個查詢裡可能得到同一個參數名。這樣的查詢會回
 400 並點名這兩個欄位，但只有參數名真的重複才會；同樣兩個欄位若在查詢裡沒有撞名，照常運作。
 
-**`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值本身完全不會被
-讀，所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，
-不會反過來變成「不是 null」：
+**`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值不會改變條件，
+所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，不會反過來變成「不是 null」。它們
+唯一拒絕的值是 JSON 物件，和其他每個運算子一樣回 400；`null` 與清單則被忽略：
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
@@ -111,10 +159,12 @@ HTTP_STATUS:200
 
 把 `_null]=true` 換成 `_null]=false`，回傳的是同一列，`meta.total` 一樣是 1。
 
-**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——
-`Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、
-`bool`、`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；
-`string` 與未涵蓋的型別，比較運算子維持文字比較，`_in`／`_nin` 則回 400。
+**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——`Guid`
+外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
+`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
+當成文字比對，轉換表沒有涵蓋的型別，`_in`／`_nin` 回 400。`string` 屬性或結構化欄位上，`_eq` 的值是
+`null` 這個字，比對的就是這個字，不會測 NULL。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值
+是 `null` 或 `[null]` 回 400，訊息指向 `_null` 與 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
 並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、
@@ -122,7 +172,7 @@ HTTP_STATUS:200
 
 **日期與時間欄位。** `DateTime` 欄位上的 `_eq`、`_neq`、`_gt`、`_gte`、`_lt`、`_lte`、`_in`、`_nin` 把值當成時刻：
 帶 `Z` 或時差的值照它指的時刻比，沒有時區的值當成 UTC，結果不受資料庫伺服器與 API 主機的時區影響。
-不是日期時間的文字回 400。`_contains`、`_starts_with`、`_ends_with` 仍是文字比較。
+不是日期時間的文字回 400，`_contains`、`_starts_with`、`_ends_with` 也回 400。
 
 REST 回應裡每個 `DateTime` 都是以 `Z` 結尾的 UTC 時刻。寫入時帶時差的值，存成它指的那個時刻；沒有時區的值
 當成 UTC：`2026-10-14T10:00:00+08:00` 存入、讀回都是 `2026-10-14T02:00:00Z`。

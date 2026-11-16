@@ -179,6 +179,15 @@ and `Uuid`. `RichText`, `Markdown`, `Code`, `Json`, `KeyValue`, `MultiSelect`, `
 `Tags`, `Files`, `File`, `Image`, and `Repeater` fields have no filter fields in GraphQL at all
 (`Hidden`, `Divider` and `Password` fields are not in the GraphQL schema).
 
+The string filters carry `contains`, `startsWith` and `endsWith`, an id column such as `createdBy`
+included. Those three operators are accepted on a text field only. On any other field the request
+fails with an `errors` entry whose code is `BAD_USER_INPUT` and whose message names the field and
+the operator. The message spells the operator the REST way (`_contains`, `_null`); the list of
+operator tokens above gives the GraphQL spelling of each (`contains`, `isNull`). Two other rules of
+Chapter 10 do not reach GraphQL: an operator whose value is `null` is skipped before the rule runs,
+and a list for a single-value operator such as `eq` is refused by the GraphQL schema with its own
+message.
+
 A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
 `byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`
 for any other number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an

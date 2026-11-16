@@ -160,18 +160,26 @@ public sealed class MediaFolderTests : IDisposable
         (await FolderIdsAsync(QueryOperator.Eq, aCreated, form)).Should().Equal(aId);
     }
 
-    // A text operator is not an instant comparison: a date-prefix _starts_with matches the column's
-    // text form where the backend compares it as text. PostgreSQL has no LIKE on timestamptz, and SQL
-    // Server's text form of datetimeoffset is its own, so neither is asserted here.
-    [NotOnBackendFact("the column's text form is not comparable as text", TestBackendKind.PostgreSQL, TestBackendKind.SqlServer)]
-    public async Task CreatedAt_starts_with_a_date_prefix_matches_as_text()
+    // A string operator on a date-time column is refused on every backend; a day is matched with a range.
+    [Fact]
+    public async Task CreatedAt_starts_with_is_refused_and_a_range_matches_the_day()
     {
         var id = await CreateFolderAsync("A");
-        var day = (await CreatedAtAsync(id)).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var created = await CreatedAtAsync(id);
+        var day = created.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var nextDay = created.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
-        var filter = new ComparisonFilter("createdAt", QueryOperator.StartsWith, day);
-        var result = await _svc.QueryAsync("mediafolder", new QueryModel(null, filter, [], 0, 0, null));
+        var prefix = new ComparisonFilter("createdAt", QueryOperator.StartsWith, day);
+        var refused = async () => await _svc.QueryAsync("mediafolder", new QueryModel(null, prefix, [], 0, 0, null));
+        (await refused.Should().ThrowAsync<QueryException>()).Which.Message
+            .Should().Contain("createdAt").And.Contain("_starts_with").And.Contain("_gte");
 
+        var range = new LogicalFilter(LogicalOperator.And,
+        [
+            new ComparisonFilter("createdAt", QueryOperator.Gte, day),
+            new ComparisonFilter("createdAt", QueryOperator.Lt, nextDay),
+        ]);
+        var result = await _svc.QueryAsync("mediafolder", new QueryModel(null, range, [], 0, 0, null));
         result.Data.Select(d => (Guid)d["id"]!).Should().Equal(id);
     }
 

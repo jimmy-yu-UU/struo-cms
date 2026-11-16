@@ -11,6 +11,8 @@ import type { FilterSpec } from '@/lib/buildListQuery'
 export type FilterField = {
   name: string
   label: string
+  /** Whether the column holds text; only a text field takes the "contains" operator. */
+  text: boolean
   /** Present for enumerated fields; renders a Select instead of a free-text Input. */
   options?: { label: string; value: string }[]
 }
@@ -18,6 +20,8 @@ export type FilterField = {
 /** Only the operators QueryParser.cs actually accepts (src/Struo.Application/Query/QueryParser.cs). */
 const OPERATORS = ['_eq', '_neq', '_contains'] as const
 type Operator = (typeof OPERATORS)[number]
+/** What every field takes; `_contains` is a string operator and the API answers 400 to it on any other. */
+const COMPARISON_OPERATORS: readonly Operator[] = ['_eq', '_neq']
 
 type DraftRow = { field: string; op: Operator; value: string }
 
@@ -28,6 +32,19 @@ const emit = defineEmits<{ apply: [FilterSpec] }>()
 // Enter) must happen before anything reaches the query — editing conditions must not fire
 // requests keystroke by keystroke.
 const draft = ref<DraftRow[]>([])
+
+function isTextField(name: string): boolean {
+  return props.fields.find((f) => f.name === name)?.text === true
+}
+function operatorsFor(field: string): readonly Operator[] {
+  return isTextField(field) ? OPERATORS : COMPARISON_OPERATORS
+}
+// The operator a row shows and sends: the one the user chose when the field takes it, `_eq` when it
+// does not. The row keeps the chosen operator, so fields that arrive after the row, or a switch back
+// to a text field, give it back.
+function effectiveOp(row: DraftRow): Operator {
+  return operatorsFor(row.field).includes(row.op) ? row.op : '_eq'
+}
 
 function hydrate(spec: FilterSpec): void {
   draft.value = Object.entries(spec).map(([field, { op, value }]) => ({
@@ -98,7 +115,7 @@ function toSpec(): FilterSpec {
     // backend's `_eq`/`_neq`/`_contains` comparison.
     const value = row.value.trim()
     if (!row.field || value === '') continue
-    spec[row.field] = { op: row.op, value }
+    spec[row.field] = { op: effectiveOp(row), value }
   }
   return spec
 }
@@ -133,12 +150,12 @@ const canAdd = computed(() => fieldOptionsFor(draft.value.length).length > 0)
         </SelectContent>
       </Select>
 
-      <Select :model-value="row.op" @update:model-value="setDraftOperator(index, $event as never)">
+      <Select :model-value="effectiveOp(row)" @update:model-value="setDraftOperator(index, $event as never)">
         <SelectTrigger class="w-36" :aria-label="$t('filterBuilder.operator')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="op in OPERATORS" :key="op" :value="op">
+          <SelectItem v-for="op in operatorsFor(row.field)" :key="op" :value="op">
             {{ $t(OPERATOR_LABEL[op]) }}
           </SelectItem>
         </SelectContent>

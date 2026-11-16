@@ -25,15 +25,14 @@ public static class ConditionalModelTranslator
     internal static OrTerms ToOrTerms(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
         ValueConditions.OrMembers(Target(c.FieldPath, d, db), c.Op, c.Value);
 
-    private static ValueTarget Target(string field, EntityDescriptor d, ISqlSugarClient db)
+    internal static ValueTarget Target(string field, EntityDescriptor d, ISqlSugarClient db)
     {
         var property = d.EntityType
             .GetProperty(d.FieldToProperty.GetValueOrDefault(field) ?? string.Empty,
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        var utcInstant = property is not null && UtcInstantConverter.IsUtcInstantProperty(property);
-        return new ValueTarget(
-            Column(d, db, field), field, property?.PropertyType ?? typeof(string),
-            db.CurrentConnectionConfig.DbType, utcInstant);
+        return property is null
+            ? new ValueTarget(Column(d, db, field), field, typeof(string), db.CurrentConnectionConfig.DbType)
+            : ValueTarget.Of(db, d.EntityType, property, field);
     }
 
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)

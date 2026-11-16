@@ -37,6 +37,23 @@ the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/
 }
 ```
 
+In the body, `filter` and `deep` are objects (so is each relation inside `deep`), `sort` and
+`fields` are arrays of strings, `search` is a string, and `limit` and `offset` are numbers, inside
+`deep` as well; the body itself is one JSON object. A key of another JSON kind is a 400 that names
+the key, so a filter that is not an object never answers every row. `null` for any key of the body
+means the key is not given, while a `null` relation entry in `deep` expands the relation with the
+defaults, the same as `{}`. A number that has a fraction or is beyond the 32-bit range is read as if
+the key were missing, the same as in the query string.
+
+The body takes these keys and no others. A key that is not listed, `null` value or not, is a 400
+that names it (with its `deep` path inside a relation entry) and lists the keys accepted at that
+level. Keys are matched as written, upper and lower case included:
+
+| Key | Body | Relation entry in `deep` |
+|---|---|---|
+| `fields`, `filter`, `sort`, `limit`, `offset`, `deep` | yes | yes |
+| `search`, `facets`, `aggregate` | yes | no |
+
 The rest of this chapter's examples use the query-string form. GraphQL does the same thing with
 the same semantics, only the argument spelling differs — the operator `_eq` becomes `eq`, and the
 quantifier `_some` becomes `some`. The spelling differences are left to
@@ -92,19 +109,54 @@ differently:
 **Matching is case-sensitive.** `_EQ` or `_startsWith` is rejected with
 `Unknown operator '<token>'.`. Field names are the opposite — case-insensitive everywhere.
 
+**Operators by field.** Which operators a field takes depends on how its column stores values:
+
+| Operators | Text | Structured | Other |
+|---|---|---|---|
+| `_eq`, `_neq` | yes | yes | yes |
+| `_lt`, `_lte`, `_gt`, `_gte` | yes | yes | yes |
+| `_in`, `_nin` | yes | 400 | yes |
+| `_null`, `_nnull` | yes | yes | yes |
+| `_contains`, `_starts_with`, `_ends_with` | yes | yes | 400 |
+
+A text field is a `string` property: `Json` fields, and a `string` declared with
+`[SugarColumn(IsJson = true)]`, are text and take `_in`/`_nin`. A structured field is a property of
+a structured type, a term [Chapter 6](06-field-types.md#interface-overview) defines: it sits on a
+multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`) or
+on `Hidden`, and is stored as JSON. Its string operators match the stored JSON text, and
+`_in`/`_nin` is a 400. Other is every other field: numbers, booleans, `Guid`, enums and date-times.
+`_in`/`_nin` on a type the conversion table below does not cover is a 400 too.
+
+The 400 for a string operator on a field it does not take names the field and the operator and lists
+the operators the field accepts. To match a date on a `DateTime` field, give a range:
+`filter[createdAt][_gte]=2026-03-04&filter[createdAt][_lt]=2026-03-05`.
+
 **Accepted value shapes.** `_in`/`_nin` are a comma list in the query string and an array in JSON;
 both are read as one list. In a query string a comma separates elements; in an array it stays
 inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends_with` translate to
 `LIKE '%v%'`, `LIKE 'v%'`, and `LIKE '%v'` respectively.
 
-**Empty lists, `null` and duplicates.** An empty list is no value at all: `_in` with no value
+| Value | Operators | Result |
+|---|---|---|
+| JSON `null` | all but `_null`, `_nnull` | 400 that names `_null` and `_nnull` |
+| the text `null` or `[null]` | all, on a text or structured field | plain text |
+| the text `null` or `[null]` | `_eq` on `DateOnly`, `TimeOnly`, `TimeSpan` | 400 |
+| a list | `_in`, `_nin` | the elements |
+| a list | `_null`, `_nnull` | ignored |
+| a list | every other operator | 400 |
+| a JSON object, alone or in a list | all | 400 |
+| a string | `_in`, `_nin` | a comma list |
+
+A query string carries only strings, so it cannot send `null`, a list or an object. The text
+`filter[code][_eq]=null` compares the column with the word `null`; it never tests for NULL. To
+test for NULL, use `_null` or `_nnull`.
+
+**Empty lists and duplicates.** An empty list is no value at all: `_in` with no value
 matches no row and `_nin` with no value adds no condition. A `null` element or a nested array is
 a 400; a value repeated in a text list is bound once. On a text field, a number or a boolean
 element, or a number or a boolean in place of the list, is a 400 naming the field. A string in
-place of a list is read as a comma list, so `"a,b"` is two values. A JSON object, as an element or
-in place of a list, is compared as its raw JSON text, so it matches only a row that holds exactly
-that text. On a field of another type, an empty element of a query-string list (`1,,2`, or a lone
-`,`) is a 400 as well.
+place of a list is read as a comma list, so `"a,b"` is two values. On a field of another type, an
+empty element of a query-string list (`1,,2`, or a lone `,`) is a 400 as well.
 
 **Text lists.** `_in`/`_nin` on a text field bind each value as a parameter, so a quote, a
 backslash, a comma, the empty string and the words `null` and `[null]` are plain text that matches
@@ -120,9 +172,10 @@ fields, but only when the parameter names really repeat; the same two fields in 
 their names apart work.
 
 **`_null`/`_nnull` ignore the value.** These two operators translate to a plain
-`IS NULL`/`IS NOT NULL`; the value itself is never read at all, so
+`IS NULL`/`IS NOT NULL`; the value does not change the condition, so
 `filter[publishedAt][_null]=false` and `=true` are the same request — it never flips to mean "is
-not null":
+not null". A JSON object is the one value they refuse: it is a 400 here as for every operator.
+`null` and a list are ignored:
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
@@ -132,12 +185,15 @@ HTTP_STATUS:200
 
 Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total` is still 1.
 
-**Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the
-field's real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as
-text. The conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
-`DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number);
-`string` and any uncovered type stay a text comparison for the comparison operators, and `_in`/`_nin`
-on an uncovered type is a 400.
+**Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the field's
+real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as text. The
+conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
+`DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number); a
+`string` is compared as text, and `_in`/`_nin` on a type the conversion table does not cover is a
+400. On a `string` property or a structured field, `_eq` with the word `null` compares that word and
+never tests for NULL. On a `DateOnly`, `TimeOnly` or `TimeSpan` field, `_eq` with `null` or `[null]`
+is a 400 that names `_null` and `_nnull`, because the ORM reads exactly those two texts as a null
+test.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the
@@ -147,8 +203,8 @@ boolean is `true`, `false`, `1` or `0`.
 **Date and time fields.** On a `DateTime` field, `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`
 and `_nin` compare the value as an instant: a value with `Z` or an offset is read at the instant it
 names, and a value without a zone is UTC. The result depends on neither the database server's zone
-nor the API host's. Text that is not a date-time is a 400. `_contains`, `_starts_with` and
-`_ends_with` stay text comparisons.
+nor the API host's. Text that is not a date-time is a 400, and so is `_contains`, `_starts_with` or
+`_ends_with`.
 
 REST responses carry every `DateTime` as a UTC instant ending in `Z`. A value written with an offset
 is stored as that instant, and one written without a zone is taken as UTC: `2026-10-14T10:00:00+08:00`

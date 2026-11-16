@@ -96,23 +96,21 @@ public class ConditionalModelTranslatorBackendTests
     [Theory]
     [InlineData("PostgreSQL")]
     [InlineData("SqlServer")]
-    public void Text_operators_and_null_checks_keep_the_general_path_and_unparseable_values_are_refused(string backend)
+    public void String_operators_and_null_values_are_refused_null_checks_render_a_plain_null_test_and_unparseable_values_are_refused(string backend)
     {
         var db = Client(backend);
 
-        var startsWith = SingleModel.Of(
-            new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Folder, db);
-        startsWith.ConditionalType.Should().Be(ConditionalType.LikeLeft);
-        startsWith.FieldValue.Should().Be("2026-03-04");
-        startsWith.CSharpTypeName.Should().Be("datetime");
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Folder, db))
+            .Should().Throw<QueryException>().WithMessage("*_starts_with*createdAt*_gte*");
 
         FluentActions.Invoking(() => SingleModel.Of(
                 new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Folder, db))
             .Should().Throw<QueryException>().WithMessage("*createdAt*");
 
-        var nullValue = SingleModel.Of(
-            new ComparisonFilter("createdAt", QueryOperator.Eq, null), Folder, db);
-        nullValue.FieldValue.Should().BeNull();
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("createdAt", QueryOperator.Eq, null), Folder, db))
+            .Should().Throw<QueryException>().WithMessage("*createdAt*_null*_nnull*");
 
         var isNull = SingleModel.Of(
             new ComparisonFilter("createdAt", QueryOperator.Null, null), Folder, db);
@@ -138,7 +136,7 @@ public class ConditionalModelTranslatorBackendTests
         // The first entry joins the group to what precedes it (And); the rest join inside the group (Or).
         children.Select(kv => kv.Key).Should().Equal(WhereType.And, WhereType.Or);
         children[0].Value.FieldValue.Should().Be("2026-03-04T05:06:07.0000000+00:00");
-        children[1].Value.FieldValue.Should().Be("A");
+        SingleModel.BoundValue(children[1].Value).Should().Be("A");
     }
 
     [Fact]

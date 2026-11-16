@@ -15,8 +15,8 @@ namespace Struo.Tests.Security.QueryValueInjection;
 /// <summary>
 /// A text set whose elements are numbers, booleans, null or nested lists, or whose value is a number or a
 /// boolean, is a 400 on every entrance, never a 500, and the answer never repeats the value. A JSON object
-/// (as an element or in place of a list) is read as its raw JSON text, and a string in place of a list is
-/// one comma-separated list.
+/// (as an element or in place of a list) is a 400 as well, and a string in place of a list is one
+/// comma-separated list.
 /// </summary>
 [Collection("ApiIntegration")]
 public sealed class SetElementShapeApiTests(ApiFactory factory)
@@ -59,6 +59,20 @@ public sealed class SetElementShapeApiTests(ApiFactory factory)
         text.Should().Contain("BAD_USER_INPUT").And.Contain("'code'");
     }
 
+    [Theory]
+    [InlineData("_in", """[{"a":987654}]""")]
+    [InlineData("_in", """{"a":987654}""")]
+    [InlineData("_in", """{"a":987654,"b":2}""")]
+    [InlineData("_in", """["x",{"a":987654}]""")]
+    [InlineData("_nin", """[{"a":987654}]""")]
+    [InlineData("_nin", """{"a":987654}""")]
+    public async Task A_JSON_object_as_an_element_or_in_place_of_a_list_is_a_400(string op, string value)
+    {
+        var (status, text) = await PostAsync(factory.CreateClient(), "{\"filter\":{\"code\":{\"" + op + "\":" + value + "}}}");
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain("BAD_USER_INPUT").And.Contain("'code'").And.Contain("JSON object").And.NotContain(Marker);
+    }
+
     // How a text field reads each JSON shape of a set. {C} is a code that exists; "match" is the rows with
     // that code, "none" no row, "all" every row and "rest" every row but the matching ones.
     [Theory]
@@ -66,19 +80,13 @@ public sealed class SetElementShapeApiTests(ApiFactory factory)
     [InlineData("_in", "\"{C}\"", "match")]
     [InlineData("_in", "\"{C},zz-none\"", "match")]
     [InlineData("_in", """["{C}","zz-none"]""", "match")]
-    [InlineData("_in", """[{"a":1}]""", "none")]
-    [InlineData("_in", """["{C}",{"a":1}]""", "match")]
-    [InlineData("_in", """{"a":1}""", "none")]
-    [InlineData("_in", """{"a":1,"b":2}""", "none")]
     [InlineData("_in", """[]""", "none")]
     [InlineData("_in", "\"\"", "none")]
     [InlineData("_nin", """["{C}"]""", "rest")]
     [InlineData("_nin", "\"{C}\"", "rest")]
-    [InlineData("_nin", """[{"a":1}]""", "all")]
-    [InlineData("_nin", """{"a":1}""", "all")]
     [InlineData("_nin", """[]""", "all")]
     [InlineData("_nin", "\"\"", "all")]
-    public async Task A_text_field_reads_a_string_as_a_comma_list_and_an_object_as_its_JSON_text(
+    public async Task A_text_field_reads_a_string_as_a_comma_list(
         string op, string value, string expected)
     {
         var db = factory.Services.GetRequiredService<ISqlSugarClient>();

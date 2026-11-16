@@ -123,9 +123,16 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 - **A filter or id value reaches SQL only through `ValueConditions`**
   (`src/Struo.Infrastructure/Query/ValueConditions.cs`). It parses each value to the column's CLR
   type with the invariant culture and renders the parsed value, so a numeric, boolean, Guid or date
-  column never takes caller text; a text set is a group of bound equalities. It is the only file that
-  names `ConditionalType.In` or `ConditionalType.NotIn` (`ValueConditionsConventionTests` fails
-  otherwise). See `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
+  column never takes caller text; a text set is a group of bound equalities, as is a text `_eq`. A
+  string operator on a column that is not text, a null value and a list given to a single-value
+  operator are 400s. It is the only file that names `ConditionalType.In`, `ConditionalType.NotIn` or
+  `ConditionalType.Equal`; `ValueConditionsConventionTests` reads the text of `src/` and fails on
+  another file that names them, imports or aliases the enum, sets `ConditionalType = default`, or
+  builds a `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. It
+  cannot see a cast from a number, a condition type chosen through reflection or `Enum.Parse`, a
+  condition type assigned in a separate statement, a model filled in after `new ConditionalModel()`,
+  or braces inside verbatim, raw or interpolated strings or comments of an initializer body. See
+  `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no
@@ -303,17 +310,18 @@ The verified backends, and how long the whole suite takes on each with
   type/column-semantics issues, exactly the class the ORM does *not* abstract away. Oracle has no
   verified run at all; a fork on Oracle needs its own live check before relying on a change.
 
-The portability rule that governs application code is
-"all DB access through SqlSugar, zero vendor SQL" (see Invariants). That rule keeps *query and
-command* code portable. It does not make *type mapping, column semantics, or DDL* portable, and this
-codebase has concrete counterexamples — which is why the verification above is per-backend rather
-than per-codebase. This codebase has documented, specific divergences: a `DateTime` property with no
-`[ColumnShape(TimestampWithTimeZone)]` maps to `timestamp without time zone` on PostgreSQL — the
-reason `UserSession.CreatedAt`/`ExpiresAt` carry that shape explicitly — while SQLite has no real
-column types to show the difference; and a SqlSugar `ConditionalType.Equal` filter that binds a text
-value against a `uuid`/`bigint` column throws `42883` on PostgreSQL ("operator does not exist") but
-passes silently on SQLite, whose loose typing accepts the comparison without complaint. The other
-documented divergences each have a decision file:
+The portability rule that governs application code is "all DB access through SqlSugar, zero vendor
+SQL" (see Invariants). That rule keeps *query and command* code portable. It does not make *type
+mapping, column semantics, or DDL* portable, and this codebase has concrete counterexamples — which
+is why the verification above is per-backend rather than per-codebase. This codebase has documented,
+specific divergences: a `DateTime` property with no `[ColumnShape(TimestampWithTimeZone)]` maps to
+`timestamp without time zone` on PostgreSQL — the reason `UserSession.CreatedAt`/`ExpiresAt` carry
+that shape explicitly — while SQLite has no real column types to show the difference; and a SqlSugar
+`ConditionalType.Equal` filter that binds a text value against a `uuid`/`bigint` column throws
+`42883` on PostgreSQL ("operator does not exist") but passes silently on SQLite, whose loose typing
+accepts the comparison without complaint. The filter DSL never builds that comparison: it parses
+each value to the column's type, and a string operator on a column that is not text is a 400 before
+any statement runs. The other documented divergences each have a decision file:
 
 - integer `AVG`/`SUM` on SQL Server — `docs/ai/decisions/aggregate-average-per-backend.md`;
 - `Guid` ordering on SQL Server — `docs/ai/decisions/guid-ordering-per-backend.md`;

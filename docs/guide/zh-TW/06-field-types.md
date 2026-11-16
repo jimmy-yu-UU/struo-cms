@@ -115,9 +115,9 @@ SQLite 不檢查型別名稱，`timestamptz` 照字面收下。
 UTC，`Unspecified` 的值當成 UTC。MySQL、MariaDB 與 SQLite 照原樣存下時鐘數字，寫入前要自己換成
 UTC。
 
-用比較運算子與 `_in`／`_nin` 篩選這些欄位時，值也當成時刻比較：帶 `Z` 或時差的值照它指的時刻，
-沒有時區的值當成 UTC。`_contains` 這類文字比對照欄位的文字形式比。Oracle 上沒有這層處理，也未經
-驗證。
+用比較運算子與 `_in`／`_nin` 篩選這些欄位時，值也當成時刻比較：帶 `Z` 或時差的值照它指的時刻，沒有時
+區的值當成 UTC。`_contains`、`_starts_with`、`_ends_with` 用在這種欄位上回 400；要比對某一天，改用
+`_gte` 加 `_lt` 的範圍。Oracle 上沒有這層處理，也未經驗證。
 
 ### 選擇
 

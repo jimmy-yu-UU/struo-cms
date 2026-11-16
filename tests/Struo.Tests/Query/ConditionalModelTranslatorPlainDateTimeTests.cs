@@ -97,7 +97,7 @@ public class ConditionalModelTranslatorPlainDateTimeTests
 
     [Theory]
     [MemberData(nameof(BackendNames))]
-    public void Other_input_keeps_the_general_path_and_unparseable_dates_are_refused(string backend)
+    public void Null_values_and_string_operators_are_refused_and_unparseable_dates_are_refused(string backend)
     {
         var db = Client(backend);
 
@@ -105,14 +105,13 @@ public class ConditionalModelTranslatorPlainDateTimeTests
                 new ComparisonFilter("createdAt", QueryOperator.Gt, "not-a-date"), Plain, db))
             .Should().Throw<QueryException>().WithMessage("*createdAt*");
 
-        var nullValue = SingleModel.Of(
-            new ComparisonFilter("deletedAt", QueryOperator.Eq, null), Plain, db);
-        nullValue.FieldValue.Should().BeNull();
-        nullValue.CSharpTypeName.Should().Be("datetime");
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("deletedAt", QueryOperator.Eq, null), Plain, db))
+            .Should().Throw<QueryException>().WithMessage("*deletedAt*_null*_nnull*");
 
-        var startsWith = SingleModel.Of(
-            new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Plain, db);
-        startsWith.FieldValue.Should().Be("2026-03-04");
+        FluentActions.Invoking(() => SingleModel.Of(
+                new ComparisonFilter("createdAt", QueryOperator.StartsWith, "2026-03-04"), Plain, db))
+            .Should().Throw<QueryException>().WithMessage("*_starts_with*createdAt*_gte*");
 
         var notDateTime = SingleModel.Of(
             new ComparisonFilter("size", QueryOperator.Eq, "5"), Plain, db);

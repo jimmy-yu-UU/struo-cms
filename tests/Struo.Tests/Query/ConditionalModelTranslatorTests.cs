@@ -45,7 +45,7 @@ public partial class ConditionalModelTranslatorTests
             var cm = (ConditionalModel)list[0];
             cm.FieldName.Should().Be("Status");
             cm.ConditionalType.Should().Be(ConditionalType.Equal);
-            cm.FieldValue.Should().Be("published");
+            SingleModel.BoundValue(cm).Should().Be("published");
         }
     }
 

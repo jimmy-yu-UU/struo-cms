@@ -34,6 +34,7 @@ import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION
 import type { CreatedUser } from '@/api/usersApi'
 import type { FilterSpec } from '@/lib/buildListQuery'
 import type { FieldMeta } from '../types/schema'
+import { isTextInterface } from '../lib/fieldTypes/textInterfaces'
 
 type Row = Record<string, unknown>
 
@@ -89,6 +90,9 @@ function cellValue(row: Row, field: FieldMeta): unknown {
 function isSelectField(colField: string): boolean {
   return String(fieldOf(colField)?.interface ?? '').toLowerCase() === 'select'
 }
+function isTextField(colField: string): boolean {
+  return isTextInterface(String(fieldOf(colField)?.interface ?? ''))
+}
 function tagSeverity(v: unknown): 'success' | 'secondary' {
   const s = primitiveText(v).toLowerCase()
   if (s === 'published') return 'success'
@@ -112,7 +116,10 @@ const filterFields = computed<FilterField[]>(() => {
   const listed = columns.value.map((c: ListColumn) => {
     const field = fieldOf(c.field)
     const choices = (field?.options as { label: string; value: string }[] | undefined)
-    return { name: c.field, label: c.header, options: isSelectField(c.field) ? choices : undefined }
+    return {
+      name: c.field, label: c.header, text: isTextField(c.field),
+      options: isSelectField(c.field) ? choices : undefined,
+    }
   })
   const listedNames = new Set(listed.map((f) => f.name))
   const searchableOnly = (meta.value?.fields ?? [])
@@ -120,6 +127,7 @@ const filterFields = computed<FilterField[]>(() => {
     .map((f) => ({
       name: f.name,
       label: f.label,
+      text: isTextInterface(String(f.interface)),
       options: isSelectField(f.name) ? (f.options as { label: string; value: string }[] | undefined) : undefined,
     }))
   return [...listed, ...searchableOnly]
