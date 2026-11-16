@@ -71,11 +71,10 @@ conditions — and it is not an error.
 A query is made up of these groups of parameters:
 
 - **`filter`** — filters rows by field or relation path; the subject of the rest of this chapter.
-- **`search`** — an OR group of `_contains` conditions over the collection's searchable,
-  non-hidden fields, ANDed with `filter`. The term is matched as plain text, like the value of
-  `_contains`. A collection with no searchable fields ignores it without error, and a translatable
-  field is matched through the translation sidecar, using the locale this query actually resolves
-  to.
+- **`search`** — an OR group of `_contains` conditions over the collection's searchable, non-hidden
+  fields, ANDed with `filter`. The term is matched like the value of `_contains`. A collection with
+  no searchable fields ignores it without error, and a translatable field is matched through the
+  translation sidecar, using the locale this query actually resolves to.
 - **`sort`** — orders by one or more fields; **`limit`/`offset`** — pagination. See "Sorting"
   and "Pagination and `meta`" below.
 - **`fields`** — keeps only the collection's own fields; left to
@@ -137,10 +136,16 @@ both are read as one list. In a query string a comma separates elements; in an a
 inside its element, so `["a,b"]` is one value.
 
 **String operators match plain text.** The value of `_contains`, `_starts_with` and `_ends_with`
-is text to find, not a pattern: `%`, `_`, `[` and `\` in it stand for themselves. `_contains=100%`
-finds the rows that hold the characters `100%`, and `_contains=a_c` does not find `abc`. An empty
-value matches every row that is not null. Upper and lower case, and accents, compare as the
-database's collation compares them.
+is text to find, not a pattern. On SQLite, PostgreSQL, MySQL, MariaDB and SQL Server, `%`, `_`,
+`[` and `\` in it stand for themselves: `_contains=100%` finds the rows that hold the characters
+`100%`, and `_contains=a_c` does not find `abc`. An empty value matches every row that is not
+null. Upper and lower case compare as follows:
+
+| Backend | `a` and `A` |
+|---|---|
+| SQLite | equal, for ASCII letters |
+| PostgreSQL | different |
+| MySQL, MariaDB, SQL Server | equal, with the default collation |
 
 | Value | Operators | Result |
 |---|---|---|

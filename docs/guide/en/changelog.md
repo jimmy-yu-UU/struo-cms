@@ -102,13 +102,14 @@
     test; every other value is unchanged. The two words used to test for NULL or to return no row. A
     client that relied on them sends `_null` or `_nnull`.
   - The value of `_contains`, `_starts_with` and `_ends_with`, and the term of `search=` when the
-    database runs it, is matched as plain text on every backend: `%`, `_`, `[` and a backslash in it
-    stand for themselves ([Chapter 10](10-query-basics.md)). They used to be read as pattern
-    characters: `%` and `_` were wildcards everywhere, `[` opened a character class on SQL Server,
-    and a backslash escaped the next character on PostgreSQL, MySQL and MariaDB. A client that
-    relied on `%` or `_` (or `[ab]` on SQL Server) matching more than itself sends the fixed part of
-    the text with `_starts_with` or `_ends_with`, lists the exact values with `_in`, or filters on
-    another field; no operator reads a pattern. Upper and lower case compare as before.
+    database runs it, is matched as plain text on SQLite, PostgreSQL, MySQL, MariaDB and SQL Server:
+    `%`, `_`, `[` and a backslash in it stand for themselves ([Chapter 10](10-query-basics.md)).
+    They used to be read as pattern characters: `%` and `_` were wildcards on all five, `[` opened a
+    character class on SQL Server, and a backslash escaped the next character on PostgreSQL, MySQL
+    and MariaDB. Upper and lower case compare as before, and no operator reads a pattern. A client
+    that relied on `%` or `_` (or `[ab]` on SQL Server) matching more than itself sends the fixed
+    part of the text with `_starts_with` or `_ends_with`, lists the exact values with `_in`, or
+    filters on another field.
   - A JSON `null` as the value of any operator but `_null` and `_nnull` answers `400` and says to
     use those two. It used to compare the column with `NULL`, with `0`, `false` or the earliest
     date, or answer `500` for a `Guid`; GraphQL still skips an operator whose value is `null`. A

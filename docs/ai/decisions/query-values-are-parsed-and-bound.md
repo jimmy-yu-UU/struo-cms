@@ -72,9 +72,10 @@ other type is a 400; the comparison operators on such a type keep passing the te
 - `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
   binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
   it text" the same way.
-- The value of `_contains`, `_starts_with` and `_ends_with` is matched as plain text, on a `string`
-  column and on a column stored as JSON, and so is the term of the built-in database `search`, which
-  reaches the same code. `ValueConditions.Like` escapes the characters a LIKE pattern reads, by
+- The value of `_contains`, `_starts_with` and `_ends_with` is matched as plain text on SQLite,
+  PostgreSQL, MySQL, MariaDB and SQL Server, on a `string` column and on a column stored as JSON,
+  and so is the term of the built-in database `search`, which reaches the same code.
+  `ValueConditions.Like` escapes the characters a LIKE pattern reads, by
   `ValueTarget.DbType`, and the ORM builds the condition from the escaped value:
 
   | Backend | Value | Reaches the statement as |
@@ -227,10 +228,16 @@ SQL Server 2022 (default collation `SQL_Latin1_General_CP1_CI_AS`): a value the 
 is, `%` and `_` are wildcards on all five (a value of `%` matches every row, `100%` matches
 `100x`). `[` starts a character class on SQL Server only. A backslash is an escape character on
 PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL Server; on PostgreSQL an
-`_ends_with` value of one backslash is refused with `22025`. 16 values (`%`, `_`, `[ab]`, `[`, a
-backslash, `d` and a backslash, a backslash and `%`, `^`, `'`, two quotes, the empty string, one
-CJK character, 200 letters, `a_c`, `100%`, two backslashes) by 3 operators by 2 columns are 96
-cases per backend; with the escapes above every one is a literal match on all five backends.
+`_ends_with` value of one backslash is refused with `22025`. The probe ran 16 values (`%`, `_`,
+`[ab]`, `[`, a backslash, `d` and a backslash, a backslash and `%`, `^`, `'`, two quotes, the empty
+string, one CJK character, 200 letters, `a_c`, `100%`, two backslashes) by 3 operators by 2 columns,
+96 cases per backend. Its second column was a string-typed twin of the JSON column's table, so it
+read the stored text; with the escapes above every case was a literal match on all five backends.
+A JSON property that is not a `string` is not part of that probe. `LikeLiteralConditionTests` pins
+it: `List<string>`, a class, an array and a dictionary match as plain text, which on SQLite the ORM
+renders as a cast to text. The same class runs the 16-value matrix against the stored text on the
+backend that executes it and passed on SQLite, PostgreSQL 17, MySQL 8.4, MariaDB 11.8 and SQL
+Server 2022.
 
 Measured 2026-11-16 with a scratch probe (not committed) on a real table with `DateOnly`, `TimeOnly`
 and `TimeSpan` columns, through `_eq` with the value passed on as written, on SQLite, PostgreSQL

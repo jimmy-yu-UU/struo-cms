@@ -126,10 +126,10 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   column never takes caller text; a text set is a group of bound equalities, as is a text `_eq`. A
   string operator on a column that is not text, a null value and a list given to a single-value
   operator are 400s. The value of a string operator is matched as plain text: `ValueConditions`
-  escapes the characters a LIKE pattern reads, per backend, and on SQLite a value with `%` or `_`
-  goes through a typed subquery (`LiteralLikeSubquery.cs`). It is the only file that names
-  `ConditionalType.In`, `NotIn`, `Equal`, `Like`, `LikeLeft` or `LikeRight`;
-  `ValueConditionsConventionTests` reads the text of `src/` and fails on
+  escapes the characters a LIKE pattern reads for SQLite, PostgreSQL, MySQL, MariaDB and SQL Server,
+  and on SQLite a value with `%` or `_` goes through a typed subquery (`LiteralLikeSubquery.cs`). It
+  is the only file that names `ConditionalType.In`, `NotIn`, `Equal`, `Like`, `LikeLeft` or
+  `LikeRight`; `ValueConditionsConventionTests` reads the text of `src/` and fails on
   another file that names them, imports or aliases the enum, sets `ConditionalType = default`, or
   builds a `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. It
   cannot see a cast from a number, a condition type chosen through reflection or `Enum.Parse`, a
