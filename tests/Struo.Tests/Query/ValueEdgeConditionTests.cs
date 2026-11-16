@@ -18,7 +18,10 @@ public sealed class VcJson
     [SugarColumn(IsJson = true)] public Dictionary<string, string> Meta { get; set; } = new();
 }
 
-/// <summary>Date, time and duration properties: types the filter parser does not cover and that are not text. Only the descriptor is used; no table is created.</summary>
+/// <summary>
+/// Date, time and duration properties: types the filter parser does not cover and that are not text.
+/// Only the descriptor is used; no table is created.
+/// </summary>
 [SugarTable("vc_dates")]
 public sealed class VcDates
 {
@@ -135,7 +138,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
             .And.Contain("'_null'").And.Contain("'_nnull'");
     }
 
-    // Any other value keeps the path it has always had: the text goes into the condition as it is.
+    // Any other value goes into the condition as the text the caller wrote.
     [Theory]
     [InlineData("day", "2026-03-04")]
     [InlineData("clock", "10:00:00")]

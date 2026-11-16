@@ -16,8 +16,10 @@ namespace Struo.Tests.Template;
 /// <c>@Equal</c>, and a <c>ConditionalModel</c> object initializer, typed or target-typed, that names no
 /// <c>ConditionalType</c> (the default is <c>Equal</c>). It cannot see what text does not show: a cast from a
 /// number, a condition type chosen through reflection or <c>Enum.Parse</c>, a model whose
-/// <c>ConditionalType</c> is assigned in a separate statement, or a model built with <c>new ConditionalModel()</c>
-/// and filled in afterwards.
+/// <c>ConditionalType</c> is assigned in a separate statement, a model built with <c>new ConditionalModel()</c>
+/// and filled in afterwards, and braces inside verbatim, raw or interpolated string literals or comments of an
+/// initializer body. An anonymous <c>new { }</c> and a generic <c>where T : new()</c> constraint are not read as
+/// models.
 /// </summary>
 public sealed partial class ValueConditionsConventionTests
 {
@@ -47,29 +49,53 @@ public sealed partial class ValueConditionsConventionTests
     [GeneratedRegex(@"\bConditionalType\s*=\s*default\b|\bdefault\s*\(\s*" + EnumName + @"\s*\)")]
     private static partial Regex DefaultType();
 
-    // new ConditionalModel { ... }, new SqlSugar.ConditionalModel() { ... } and the target-typed new() { ... }.
-    [GeneratedRegex(@"\bnew\s*(?<type>(?:global\s*::\s*)?(?:SqlSugar\s*\.\s*)?ConditionalModel)?\s*(?:\(\s*\))?\s*\{")]
+    // new ConditionalModel { ... }, new SqlSugar.ConditionalModel() { ... } and the target-typed new() { ... };
+    // an anonymous new { ... } is not a model.
+    [GeneratedRegex(@"\bnew\s*(?:(?<type>(?:global\s*::\s*)?(?:SqlSugar\s*\.\s*)?ConditionalModel)\s*(?:\(\s*\))?|\(\s*\))\s*\{")]
     private static partial Regex Initializer();
 
+    // A generic constraint such as "where T : class, new()" is followed by a method body, not an initializer.
+    [GeneratedRegex(@"\bwhere\s+\w+\s*:")]
+    private static partial Regex Constraint();
+
+    private static bool IsGenericConstraint(string text, Match match)
+    {
+        var statementStart = text.LastIndexOfAny([';', '{', '}'], Math.Max(match.Index - 1, 0)) + 1;
+        return Constraint().IsMatch(text[statementStart..match.Index]);
+    }
+
+    // The index after the closing quote of the regular string literal that opens at the given index.
+    private static int AfterString(string text, int open)
+    {
+        var index = open + 1;
+        while (index < text.Length && text[index] != '"') index += text[index] == '\\' ? 2 : 1;
+        return index + 1;
+    }
+
+    // The braces of the initializer body, skipping regular string literals.
     private static string BodyAfter(string text, Match match)
     {
         var start = match.Index + match.Length;
         var depth = 1;
-        var end = start;
-        while (end < text.Length && depth > 0)
+        var index = start;
+        while (index < text.Length && depth > 0)
         {
-            if (text[end] == '{') depth++;
-            else if (text[end] == '}') depth--;
-            end++;
+            switch (text[index])
+            {
+                case '"': index = AfterString(text, index); continue;
+                case '{': depth++; break;
+                case '}': depth--; break;
+            }
+            index++;
         }
-        return text[start..end];
+        return text[start..Math.Min(index, text.Length)];
     }
 
     // A typed initializer is a model whatever it sets; a target-typed one is read as a model when it sets
     // FieldName or FieldValue. Either way it must name ConditionalType.
     private static bool HasInitializerWithoutType(string text)
     {
-        foreach (Match match in Initializer().Matches(text))
+        foreach (Match match in Initializer().Matches(text).Where(m => !IsGenericConstraint(text, m)))
         {
             var body = BodyAfter(text, match);
             var isModel = match.Groups["type"].Success || body.Contains("FieldName", StringComparison.Ordinal)
@@ -145,6 +171,13 @@ public sealed partial class ValueConditionsConventionTests
     [InlineData("var m = new ConditionalModel();", false)]
     [InlineData("var list = new() { 1, 2 };", false)]
     [InlineData("var o = new Options { FieldName = c };", false)]
+    [InlineData("var a = new { FieldName = c, FieldValue = v };", false)]
+    [InlineData("static IQueryable<T> Apply<T>(IQueryable<T> q) where T : class, new()\n{ return q; }", false)]
+    [InlineData("static void Apply<T>() where T : class,\n    new()\n{ var a = 1; }", false)]
+    [InlineData("var m = new ConditionalModel { FieldName = \"}{\", ConditionalType = kind };", false)]
+    [InlineData("var m = new ConditionalModel { FieldName = \"}\", FieldValue = v };", true)]
+    [InlineData("static void Apply<T>() where T : class, new()\n{ var m = new ConditionalModel { FieldName = c }; }", true)]
+    [InlineData("static string Apply<T>(T x) where T : class, new()\n{ return x.FieldName; }", false)]
     [InlineData("List<string> l = new() { \"a\" };", false)]
     public void The_scan_reads_code_and_comments_and_nothing_else(string text, bool flagged)
     {

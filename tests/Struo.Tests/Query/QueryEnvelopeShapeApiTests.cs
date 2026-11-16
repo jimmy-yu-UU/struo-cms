@@ -194,13 +194,98 @@ public sealed class QueryEnvelopeShapeApiTests(ApiFactory factory)
         else text.Should().NotContain("(in 'deep");
     }
 
+    private static string MessageOf(string text) =>
+        JsonDocument.Parse(text).RootElement.GetProperty("error").GetProperty("message").GetString()!;
+
     [Fact]
     public async Task A_long_unknown_key_is_cut_in_the_message()
     {
         var key = new string('k', 300);
         var (status, text) = await PostAsync("{\"" + key + "\":1}");
         status.Should().Be(HttpStatusCode.BadRequest, text);
-        text.Should().Contain(new string('k', 64) + "…").And.NotContain(new string('k', 65));
+        var message = MessageOf(text);
+        message.Should().Contain(new string('k', 64) + "\u2026").And.NotContain(new string('k', 65));
+    }
+
+    // The cut falls on a character boundary: a pair of surrogates is never split into U+FFFD.
+    [Fact]
+    public async Task The_cut_of_a_long_unknown_key_keeps_a_surrogate_pair_whole()
+    {
+        var key = new string('a', 63) + "\\uD83D\\uDE00" + new string('b', 20);
+        var (status, text) = await PostAsync("{\"" + key + "\":1}");
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        var message = MessageOf(text);
+        message.Should().Contain(new string('a', 63) + "\u2026").And.NotContain("\uFFFD");
+        message.Any(char.IsSurrogate).Should().BeFalse("the cut keeps a surrogate pair whole or drops it");
+    }
+
+    // The last value of a repeated known key wins; a repeated or empty unknown key is unknown.
+    [Fact]
+    public async Task A_repeated_known_key_takes_the_last_value()
+    {
+        var (status, text) = await PostAsync("""{"limit":1,"limit":2}""");
+        status.Should().Be(HttpStatusCode.OK, text);
+        JsonDocument.Parse(text).RootElement.GetProperty("meta").GetProperty("limit").GetInt32().Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData("""{"zzz":1,"zzz":2}""", "zzz")]
+    [InlineData("""{"":1}""", "")]
+    public async Task A_repeated_or_empty_unknown_key_is_a_400(string body, string key)
+    {
+        var (status, text) = await PostAsync(body);
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain($"Unknown key '{key}'");
+    }
+
+    // Text that cannot be read as text (an escaped lone surrogate) is refused up front, in a name or in a
+    // value, wherever it sits, and the answer does not repeat it. The JSON holds the backslash-u escape
+    // as text, so this source holds no lone surrogate.
+    private const string Lone = @"\ud800";
+    private const string LoneLow = @"\udc00";
+
+    [Theory]
+    [InlineData("{\"" + Lone + "\":1}")]
+    [InlineData("{\"" + LoneLow + "\":1}")]
+    [InlineData("{\"filter\":{\"" + Lone + "\":{\"_eq\":\"a\"}}}")]
+    [InlineData("{\"filter\":{\"code\":{\"" + Lone + "\":\"a\"}}}")]
+    [InlineData("{\"filter\":{\"code\":{\"_eq\":\"" + Lone + "\"}}}")]
+    [InlineData("{\"filter\":{\"code\":{\"_in\":[\"" + Lone + "\"]}}}")]
+    [InlineData("{\"filter\":{\"_and\":[{\"code\":{\"_eq\":\"" + LoneLow + "\"}}]}}")]
+    [InlineData("{\"deep\":{\"" + Lone + "\":{}}}")]
+    [InlineData("{\"deep\":{\"x\":{\"" + Lone + "\":1}}}")]
+    [InlineData("{\"deep\":{\"x\":{\"deep\":{\"" + Lone + "\":{}}}}}")]
+    [InlineData("{\"deep\":{\"x\":{\"filter\":{\"code\":{\"_eq\":\"" + Lone + "\"}}}}}")]
+    [InlineData("{\"aggregate\":{\"" + Lone + "\":[\"code\"]}}")]
+    [InlineData("{\"aggregate\":{\"count\":[\"" + Lone + "\"]}}")]
+    [InlineData("{\"search\":\"" + Lone + "\"}")]
+    [InlineData("{\"fields\":[\"" + Lone + "\"]}")]
+    [InlineData("{\"sort\":[\"" + Lone + "\"]}")]
+    [InlineData("{\"facets\":[\"" + Lone + "\"]}")]
+    [InlineData("\"" + Lone + "\"")]
+    public async Task Text_that_cannot_be_read_is_a_400(string body)
+    {
+        var (status, text) = await PostAsync(body);
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain("BAD_USER_INPUT").And.Contain("not valid text");
+    }
+
+    [Fact]
+    public async Task A_long_key_that_ends_in_a_lone_surrogate_is_a_400()
+    {
+        var (status, text) = await PostAsync("{\"" + new string('k', 80) + Lone + "\":1}");
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain("not valid text");
+    }
+
+    [Fact]
+    public async Task A_valid_surrogate_pair_in_a_value_and_in_a_name_is_read()
+    {
+        var (status, text) = await PostAsync("{\"search\":\"\\uD83D\\uDE00\"}");
+        status.Should().Be(HttpStatusCode.OK, text);
+        var (unknown, unknownText) = await PostAsync("{\"\\uD83D\\uDE00\":1}");
+        unknown.Should().Be(HttpStatusCode.BadRequest, unknownText);
+        unknownText.Should().Contain("Unknown key");
     }
 
     [Fact]

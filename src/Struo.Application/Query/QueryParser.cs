@@ -40,15 +40,58 @@ public static class QueryParser
 
     private const int MaxEchoedKeyLength = 64;
 
-    // The key is the caller's text, so the message repeats at most MaxEchoedKeyLength characters of it.
+    // The key is the caller's text, so the message repeats at most MaxEchoedKeyLength characters of it, cut
+    // between characters so a surrogate pair stays whole.
+    private static string Echo(string key)
+    {
+        if (key.Length <= MaxEchoedKeyLength) return key;
+        var length = char.IsHighSurrogate(key[MaxEchoedKeyLength - 1]) ? MaxEchoedKeyLength - 1 : MaxEchoedKeyLength;
+        return key[..length] + "\u2026";
+    }
+
+    // Names are read only after RequireReadableText has proved that every name decodes.
     private static void RequireKnownKeys(JsonElement owner, string[] accepted, string? relation)
     {
-        foreach (var property in owner.EnumerateObject())
-        {
-            if (accepted.Contains(property.Name, StringComparer.Ordinal)) continue;
-            var echoed = property.Name.Length > MaxEchoedKeyLength ? property.Name[..MaxEchoedKeyLength] + "…" : property.Name;
+        var unknown = owner.EnumerateObject()
+            .Select(property => property.Name)
+            .FirstOrDefault(name => !accepted.Contains(name, StringComparer.Ordinal));
+        if (unknown is not null)
             throw new QueryException(
-                $"Unknown key '{echoed}'{Where(relation)}; the accepted keys are {string.Join(", ", accepted)}.");
+                $"Unknown key '{Echo(unknown)}'{Where(relation)}; the accepted keys are {string.Join(", ", accepted)}.");
+    }
+
+    // A name or string that holds an escaped lone surrogate cannot be read as text: System.Text.Json throws
+    // InvalidOperationException from Name and GetString, which would answer 500. The body is walked once,
+    // before anything reads a name or a string, and this is the only place that catches that exception.
+    private static void RequireReadableText(JsonElement body)
+    {
+        try
+        {
+            WalkText(body);
+        }
+        catch (InvalidOperationException)
+        {
+            throw new QueryException("The body holds a name or a value that is not valid text (a lone surrogate).");
+        }
+    }
+
+    private static void WalkText(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                _ = element.GetString();
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray()) WalkText(item);
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    _ = property.Name;
+                    WalkText(property.Value);
+                }
+                break;
         }
     }
 
@@ -171,6 +214,7 @@ public static class QueryParser
 
     public static QueryModel ParseEnvelope(JsonElement env)
     {
+        RequireReadableText(env);
         if (env.ValueKind != JsonValueKind.Object)
             throw new QueryException("'body' must be a JSON object.");
         RequireKnownKeys(env, BodyKeys, null);
