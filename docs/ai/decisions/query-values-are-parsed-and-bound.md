@@ -136,6 +136,24 @@ PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.00.4305),
   typed column compared with the type's default (`= 0`, `= False`) and threw `ArgumentNullException`
   (500) on a `Guid`. A list given to `_eq` on a text column was joined with commas.
 
+Measured 2026-11-16 with the committed tests `ValueEdgeConditionTests`, `ValueEdgeApiTests`,
+`SearchableTextColumnTests` and the rewritten translator and set-shape tests:
+
+- SQLite: the whole `Struo.Tests` project, 4353 passed and 234 skipped.
+- PostgreSQL 17.11: the whole project, 4302 passed, 240 skipped and 4 failed (a self-reference lock
+  test, an index-parity test, a key-value test and an image-variant purge test); the four classes
+  passed alone on a rerun, 50 of 50.
+- MySQL 8.4.13 and MariaDB 11.8.9: the query, filter, translator, search, GraphQL and metadata
+  classes, 1829 passed and 84 skipped on each.
+- SQL Server 2022 (16.0.4305), inside an SDK container on the container network: the same classes,
+  1827 passed and 85 skipped, with one failure: a `_starts_with` test whose value began with `[`.
+  `LIKE` on SQL Server reads `[` as the start of a character class and SqlSugar does not escape it, so
+  a string operator value that contains `[` matches differently there. The test value was changed and
+  the new tests passed, 188 of 188.
+- Mutation check on SQLite: turning off each of the string-operator rule, the null rule, the list
+  rule, the object rule, the bound `_eq`, the `Searchable` rule, the JSON-column detection and each
+  of the two locale conditions fails at least one test.
+
 ## Unknowns
 
 - On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost
