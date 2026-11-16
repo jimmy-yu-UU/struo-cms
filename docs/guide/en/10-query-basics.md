@@ -40,9 +40,10 @@ the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/
 In the body, `filter` and `deep` are objects (so is each relation inside `deep`), `sort` and
 `fields` are arrays of strings, `search` is a string, and `limit` and `offset` are numbers, inside
 `deep` as well; the body itself is one JSON object. A key of another JSON kind is a 400 that names
-the key, so a filter that is not an object never answers every row. `null` for `filter`, `deep`,
-`sort`, `fields` or `search` means the key is not given. A number that has a fraction or is beyond
-the 32-bit range is read as if the key were missing, the same as in the query string.
+the key, so a filter that is not an object never answers every row. `null` for any key of the body
+means the key is not given, while a `null` relation entry in `deep` expands the relation with the
+defaults, the same as `{}`. A number that has a fraction or is beyond the 32-bit range is read as if
+the key were missing, the same as in the query string.
 
 The rest of this chapter's examples use the query-string form. GraphQL does the same thing with
 the same semantics, only the argument spelling differs — the operator `_eq` becomes `eq`, and the
@@ -101,7 +102,7 @@ differently:
 
 **Operators by field.** Which operators a field takes depends on how its column stores values:
 
-| Operators | Text | List or map | Other |
+| Operators | Text | Structured | Other |
 |---|---|---|---|
 | `_eq`, `_neq` | yes | yes | yes |
 | `_lt`, `_lte`, `_gt`, `_gte` | yes | yes | yes |
@@ -110,11 +111,12 @@ differently:
 | `_contains`, `_starts_with`, `_ends_with` | yes | yes | 400 |
 
 A text field is a `string` property: `Json` fields, and a `string` declared with
-`[SugarColumn(IsJson = true)]`, are text and take `_in`/`_nin`. A list or map field is a list or
-dictionary property stored as JSON (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`,
-`Repeater`); its string operators match the stored JSON text, and `_in`/`_nin` is a 400. Other is
-every other field: numbers, booleans, `Guid`, enums and date-times. `_in`/`_nin` on a type the
-conversion table below does not cover is a 400 too.
+`[SugarColumn(IsJson = true)]`, are text and take `_in`/`_nin`. A structured field is a property of
+a structured type, a term [Chapter 6](06-field-types.md#interface-overview) defines: it sits on a
+multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`) or
+on `Hidden`, and is stored as JSON. Its string operators match the stored JSON text, and
+`_in`/`_nin` is a 400. Other is every other field: numbers, booleans, `Guid`, enums and date-times.
+`_in`/`_nin` on a type the conversion table below does not cover is a 400 too.
 
 The 400 for a string operator on a field it does not take names the field and the operator and lists
 the operators the field accepts. To match a date on a `DateTime` field, give a range:
@@ -128,7 +130,8 @@ inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends
 | Value | Operators | Result |
 |---|---|---|
 | JSON `null` | all but `_null`, `_nnull` | 400 that names `_null` and `_nnull` |
-| the text `null` or `[null]` | all, on a field compared as text | plain text |
+| the text `null` or `[null]` | all, on a text field | plain text |
+| the text `null` or `[null]` | `_eq` on `DateOnly`, `TimeOnly`, `TimeSpan` | 400 |
 | a list | `_in`, `_nin` | the elements |
 | a list | `_null`, `_nnull` | ignored |
 | a list | every other operator | 400 |
@@ -173,13 +176,15 @@ HTTP_STATUS:200
 
 Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total` is still 1.
 
-**Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the
-field's real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as
-text. The conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
+**Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the field's
+real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as text. The
+conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
 `DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number);
 `string` and any uncovered type (`DateOnly`, `TimeOnly`, `TimeSpan`) stay a text comparison for the
-comparison operators, and `_in`/`_nin` on an uncovered type is a 400. On a field compared as text,
-`_eq` with the word `null` compares that word; it never tests for NULL.
+comparison operators, and `_in`/`_nin` on an uncovered type is a 400. On a text field (a `string`
+property, or a field stored as JSON), `_eq` with the word `null` compares that word and never tests
+for NULL. On an uncovered type that is not text, `_eq` with `null` or `[null]` is a 400 that names
+`_null` and `_nnull`, and any other value is compared as it is written.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

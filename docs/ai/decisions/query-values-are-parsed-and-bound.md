@@ -40,28 +40,41 @@ other type is a 400; the comparison operators on such a type keep passing the te
   two. A list given to an operator other than `_in`/`_nin` is a 400. GraphQL skips an operator key
   whose value is null before it reaches `ValueConditions`.
 - A text column is a `string` property or a column stored as JSON (`ValueTarget.StoredAsJson`, read
-  from the ORM's column info). `_contains`, `_starts_with` and `_ends_with` on any other column are
-  a 400 that names the field and the operator and lists the operators the column takes, date-time
-  columns included. `MetadataScanner.IsTextColumn` (a `string` property, a JSON-column interface or
+  from the ORM's column info: a multi-value interface, a structured type on `Hidden`, `IsJson`).
+  `_contains`, `_starts_with` and `_ends_with` on any other column are a 400 that names the field
+  and the operator and lists the operators the column takes, date-time columns included.
+  `MetadataScanner.IsTextColumn` (a `string` property, a multi-value interface, a structured type or
   `IsJson`) gives the same answer from the entity type, and `Searchable = true` on a column that is
-  not text fails the scan with a `MetadataException`; `TextColumnAgreementTests` pins that both
-  sides agree for every field of the core and fixture collections.
-- Every `Equal` on a value compared as text (a `string`, a JSON column, or a type outside the parsed
-  set such as `DateOnly`, `TimeOnly` and `TimeSpan`) is a bound equality, the way a set member is,
-  so the word `null` is never a null test on any column. `_eq`, the translation sidecar's locale
-  condition (`FilterTranslator.TranslationSubquery`, `TranslationStore`) and the id lookups all go
-  through `ValueConditions`; `ValueConditionsConventionTests` fails when another file names
-  `ConditionalType.Equal`, as it does for `In` and `NotIn`.
+  not text fails the scan with a `MetadataException`; a field marked `Hidden = true` is exempt,
+  since it never joins the search whitelist. `TextColumnAgreementTests` pins that both sides agree
+  for every field of the core and fixture collections, the `Hidden` structured ones included.
+- Every `Equal` on a text column (a `string` or a column stored as JSON) is a bound equality, the
+  way a set member is, so the word `null` is never a null test there. On a column of a type outside
+  the parsed set that is not text (`DateOnly`, `TimeOnly`, `TimeSpan`) the value goes into the
+  condition as written, except that `_eq` with `null` or `[null]` is a 400 pointing to
+  `_null`/`_nnull`: binding the text would turn a date or time comparison into a database error on
+  PostgreSQL and SQL Server, and leaving the word alone would reach the ORM's null special case.
+  `_eq`, the translation sidecar's locale condition (`FilterTranslator.TranslationSubquery`,
+  `TranslationStore`) and the id lookups all go through `ValueConditions`.
+  `ValueConditionsConventionTests` reads the text of `src/` and fails on another file that names
+  `ConditionalType.In`, `NotIn` or `Equal`, imports or aliases the enum, or builds a
+  `ConditionalModel` initializer without a `ConditionalType`; it cannot see a cast from a number or
+  a type assigned in a separate statement.
 - `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
   binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
   it text" the same way.
 - `Searchable = true` on a Repeater sub-field fails the scan too: a sub-field has no column and is
   never searched.
-- A `POST /query` body key of the wrong JSON kind (`search`, `limit`, `offset`, an element of `sort`
-  or `fields`, also inside `deep`, or a body that is not an object) is a `QueryException` naming the
-  key; reading it with `GetString` or `TryGetInt32` would throw `InvalidOperationException`, which
-  answers 500. A number with a fraction or beyond the 32-bit range is read as a missing
-  `limit`/`offset`, as in the query string.
+- A `POST /query` body key is read only as its own kind: `filter` and `deep` (and each relation
+  entry inside `deep`) as objects, `sort` and `fields` as arrays of strings, `search` as a string,
+  `limit` and `offset` as numbers, the same inside `deep`, and the body as an object; anything else
+  is a `QueryException` naming the key and, inside `deep`, the relation path. A key that is ignored
+  instead returns unfiltered rows to a caller who believes the result is filtered, and reading a
+  wrong kind with `GetString` or `TryGetInt32` throws `InvalidOperationException`, which answers
+  500. JSON `null` for a key means the key is not given; a `null` relation entry in `deep` is the
+  same as `{}`. An element of `_and`/`_or` that is not an object is a 400 naming the group. A number
+  with a fraction or beyond the 32-bit range is read as a missing `limit`/`offset`, as in the query
+  string.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.

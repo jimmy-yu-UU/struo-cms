@@ -36,9 +36,9 @@ HTTP_STATUS:200
 
 body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），`sort` 與 `fields` 是字串陣列，
 `search` 是字串，`limit` 與 `offset` 是數字（`deep` 裡也一樣），body 本身是一個 JSON 物件。鍵的 JSON
-種類不對，回 400 並點名該鍵，所以不是物件的 `filter` 不會回傳全部的列。`filter`、`deep`、`sort`、
-`fields`、`search` 的值是 `null`，表示沒有給這個鍵。帶小數或超出 32 位元範圍的數字，當成沒有給這個
-鍵，和查詢字串一樣。
+種類不對，回 400 並點名該鍵，所以不是物件的 `filter` 不會回傳全部的列。body 任何鍵的值是 `null`，
+表示沒有給這個鍵；`deep` 裡的關聯項目是 `null`，則以預設值展開該關聯，和 `{}` 相同。帶小數或超出
+32 位元範圍的數字，當成沒有給這個鍵，和查詢字串一樣。
 
 本章接下來的例子都用查詢字串形式。GraphQL 用同一套語意做同一件事，只是引數拼法不同——運算子從
 `_eq` 換成 `eq`，量詞從 `_some` 換成 `some`——拼法留給[GraphQL 一章](14-graphql.md)。
@@ -88,7 +88,7 @@ body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），
 
 **各欄位接受的運算子。** 欄位接受哪些運算子，看它的欄位怎麼存值：
 
-| 運算子 | 文字 | 清單或字典 | 其他 |
+| 運算子 | 文字 | 結構化 | 其他 |
 |---|---|---|---|
 | `_eq`、`_neq` | 可 | 可 | 可 |
 | `_lt`、`_lte`、`_gt`、`_gte` | 可 | 可 | 可 |
@@ -97,10 +97,11 @@ body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），
 | `_contains`、`_starts_with`、`_ends_with` | 可 | 可 | 400 |
 
 文字欄位是 `string` 屬性：`Json` 欄位，以及宣告了 `[SugarColumn(IsJson = true)]` 的 `string`，都算文
-字，接受 `_in`／`_nin`。清單或字典欄位是存成 JSON 的清單或字典屬性（`MultiSelect`、`CheckboxGroup`、
-`Tags`、`KeyValue`、`Files`、`Repeater`）；它的字串運算子比對的是存起來的 JSON 文字，`_in`／`_nin`回
-400。其他是所有剩下的欄位：數字、布林、`Guid`、列舉與日期時間。下面型別轉換表沒有涵蓋的型別，`_in`／
-`_nin` 一樣回 400。
+字，接受 `_in`／`_nin`。結構化欄位是結構化型別的屬性，這個詞由[第 6 章](06-field-types.md#介面總覽)
+定義：它放在多值介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）或
+`Hidden` 上，存成 JSON。它的字串運算子比對的是存起來的 JSON 文字，`_in`／`_nin` 回 400。其他是所有剩
+下的欄位：數字、布林、`Guid`、列舉與日期時間。下面型別轉換表沒有涵蓋的型別，`_in`／`_nin`
+一樣回 400。
 
 字串運算子用在不接受它的欄位上，回 400，訊息點名欄位與運算子，並列出這個欄位接受的運算子。要比對
 `DateTime` 欄位上的某一天，改用範圍：
@@ -113,7 +114,8 @@ body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），
 | 值 | 運算子 | 結果 |
 |---|---|---|
 | JSON `null` | `_null`、`_nnull` 以外的全部 | 400，訊息指向 `_null`、`_nnull` |
-| 文字 `null` 或 `[null]` | 全部，用在當成文字比對的欄位 | 純文字 |
+| 文字 `null` 或 `[null]` | 全部，用在文字欄位 | 純文字 |
+| 文字 `null` 或 `[null]` | `DateOnly`、`TimeOnly`、`TimeSpan` 上的 `_eq` | 400 |
 | 清單 | `_in`、`_nin` | 各個元素 |
 | 清單 | `_null`、`_nnull` | 忽略 |
 | 清單 | 其他運算子 | 400 |
@@ -149,11 +151,14 @@ HTTP_STATUS:200
 
 把 `_null]=true` 換成 `_null]=false`，回傳的是同一列，`meta.total` 一樣是 1。
 
-**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對—— `Guid`
+**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——`Guid`
 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
-與未涵蓋的型別（`DateOnly`、`TimeOnly`、`TimeSpan`），比較運算子維持文字比較，`_in`／`_nin` 則回 400
-。當成文字比對的欄位上，`_eq` 的值是 `null` 這個字，比對的就是這個字，不會測 NULL。
+與未涵蓋的型別（`DateOnly`、`TimeOnly`、`TimeSpan`），比較運算子維持文字比較，`_in`／`_nin`
+則回 400。
+文字欄位（`string` 屬性，或存成 JSON 的欄位）上，`_eq` 的值是 `null` 這個字，
+比對的就是這個字，不會測 NULL。未涵蓋且不是文字的型別上，`_eq` 的值是 `null` 或 `[null]` 回 400，訊息指向 `_null` 與
+`_nnull`，其他值照寫的比對。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
 並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、
