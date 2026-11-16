@@ -45,21 +45,28 @@ other type is a 400; the comparison operators on such a type keep passing the te
   and the operator and lists the operators the column takes, date-time columns included.
   `MetadataScanner.IsTextColumn` (a `string` property, a multi-value interface, a structured type or
   `IsJson`) gives the same answer from the entity type, and `Searchable = true` on a column that is
-  not text fails the scan with a `MetadataException`; a field marked `Hidden = true` is exempt,
-  since it never joins the search whitelist. `TextColumnAgreementTests` pins that both sides agree
-  for every field of the core and fixture collections, the `Hidden` structured ones included.
+  not text fails the scan with a `MetadataException`. `Searchable = true` together with
+  `Hidden = true` fails it too, whatever the property type: a hidden field is dropped from the
+  search whitelist and from the admin filter list, so the declaration does nothing; a field on the
+  `Hidden` interface without the flag joins the whitelist and follows the text rule.
+  `TextColumnAgreementTests` pins that both sides agree for every field of the core and fixture
+  collections, the `Hidden` structured ones included.
 - Every `Equal` on a text column (a `string` or a column stored as JSON) is a bound equality, the
   way a set member is, so the word `null` is never a null test there. On a column of a type outside
   the parsed set that is not text (`DateOnly`, `TimeOnly`, `TimeSpan`) the value goes into the
   condition as written, except that `_eq` with `null` or `[null]` is a 400 pointing to
-  `_null`/`_nnull`: binding the text would turn a date or time comparison into a database error on
-  PostgreSQL and SQL Server, and leaving the word alone would reach the ORM's null special case.
+  `_null`/`_nnull`: the ORM reads exactly those two texts (case-sensitive) of an `Equal` as a null
+  test and cannot be told otherwise. Whether these three types are parsed or refused is undecided.
   `_eq`, the translation sidecar's locale condition (`FilterTranslator.TranslationSubquery`,
   `TranslationStore`) and the id lookups all go through `ValueConditions`.
   `ValueConditionsConventionTests` reads the text of `src/` and fails on another file that names
-  `ConditionalType.In`, `NotIn` or `Equal`, imports or aliases the enum, or builds a
-  `ConditionalModel` initializer without a `ConditionalType`; it cannot see a cast from a number or
-  a type assigned in a separate statement.
+  `ConditionalType.In`, `NotIn` or `Equal` (also with the `SqlSugar.` or `global::` qualifier or a
+  verbatim `@`), imports or aliases the enum, sets `ConditionalType = default`, or builds a
+  `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. Two files that
+  set `CustomConditionalFunc` are exempt from the initializer rule, because the ORM reads that
+  function before the condition type. The scan cannot see a cast from a number, `Enum.Parse` or
+  reflection, a type assigned in a separate statement, or a model filled in after
+  `new ConditionalModel()`.
 - `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
   binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
   it text" the same way.
@@ -71,10 +78,16 @@ other type is a 400; the comparison operators on such a type keep passing the te
   is a `QueryException` naming the key and, inside `deep`, the relation path. A key that is ignored
   instead returns unfiltered rows to a caller who believes the result is filtered, and reading a
   wrong kind with `GetString` or `TryGetInt32` throws `InvalidOperationException`, which answers
-  500. JSON `null` for a key means the key is not given; a `null` relation entry in `deep` is the
-  same as `{}`. An element of `_and`/`_or` that is not an object is a 400 naming the group. A number
-  with a fraction or beyond the 32-bit range is read as a missing `limit`/`offset`, as in the query
-  string.
+  500. For the same reason a key the parser does not read is a 400: the body accepts `fields`,
+  `filter`, `sort`, `limit`, `offset`, `search`, `deep`, `facets` and `aggregate`, a `deep` relation
+  entry (at any depth) accepts `fields`, `filter`, `sort`, `limit`, `offset` and `deep`. Keys are
+  matched as written, case-sensitively, and a key with a `null` value is still unknown. One list per
+  level in `QueryParser` decides the unknown key and fills the message, which repeats at most 64
+  characters of the key. Field and relation names are validated elsewhere, and an unknown aggregate
+  operation or filter operator was already a 400. JSON `null` for a known key means the key is not
+  given; a `null` relation entry in `deep` is the same as `{}`. An element of `_and`/`_or` that is
+  not an object is a 400 naming the group. A number with a fraction or beyond the 32-bit range is
+  read as a missing `limit`/`offset`, as in the query string.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.
@@ -170,8 +183,25 @@ Server 2022 (16.0.4305): nothing escapes a value. `%` and `_` are wildcards on a
 backslash is an escape character on PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL
 Server; on PostgreSQL an `_ends_with` value of one backslash is refused with `22025` (a 500).
 
+Measured 2026-11-16 with a scratch probe (not committed) on a real table with `DateOnly`, `TimeOnly`
+and `TimeSpan` columns, through `_eq` with the value passed on as written, on SQLite, PostgreSQL
+17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.0.4305):
+
+| Backend | Date, time and duration values | `NULL` as a date |
+|---|---|---|
+| SQLite | the time and the duration match; the date text finds no row | no row |
+| PostgreSQL | every value fails with `42883` (`date = text`, `time = text`) | `42883` |
+| MySQL | all three match | `Incorrect DATE value` |
+| MariaDB | all three match | no row |
+| SQL Server | all three match | `Conversion failed` |
+
+The words `null` and `[null]` were not sent on these backends: the ORM reads exactly those two texts
+of an `Equal` as a null test, so they are refused before the statement.
+
 ## Unknowns
 
+- Whether `DateOnly`, `TimeOnly` and `TimeSpan` filter values should be parsed like the other types
+  or refused is undecided; PostgreSQL fails every `_eq` on them today.
 - Whether a `_contains`, `_starts_with` or `_ends_with` value should have `%`, `_`, `[` and the
   backslash escaped is not decided.
 - On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost

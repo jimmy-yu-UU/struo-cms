@@ -45,6 +45,15 @@ means the key is not given, while a `null` relation entry in `deep` expands the 
 defaults, the same as `{}`. A number that has a fraction or is beyond the 32-bit range is read as if
 the key were missing, the same as in the query string.
 
+The body takes these keys and no others. A key that is not listed, `null` value or not, is a 400
+that names it (with its `deep` path inside a relation entry) and lists the keys accepted at that
+level. Keys are matched as written, upper and lower case included:
+
+| Key | Body | Relation entry in `deep` |
+|---|---|---|
+| `fields`, `filter`, `sort`, `limit`, `offset`, `deep` | yes | yes |
+| `search`, `facets`, `aggregate` | yes | no |
+
 The rest of this chapter's examples use the query-string form. GraphQL does the same thing with
 the same semantics, only the argument spelling differs — the operator `_eq` becomes `eq`, and the
 quantifier `_some` becomes `some`. The spelling differences are left to
@@ -130,7 +139,7 @@ inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends
 | Value | Operators | Result |
 |---|---|---|
 | JSON `null` | all but `_null`, `_nnull` | 400 that names `_null` and `_nnull` |
-| the text `null` or `[null]` | all, on a text field | plain text |
+| the text `null` or `[null]` | all, on a text or structured field | plain text |
 | the text `null` or `[null]` | `_eq` on `DateOnly`, `TimeOnly`, `TimeSpan` | 400 |
 | a list | `_in`, `_nin` | the elements |
 | a list | `_null`, `_nnull` | ignored |
@@ -181,10 +190,10 @@ real CLR type before comparison — a `Guid` foreign key is compared `uuid = uui
 conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
 `DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number);
 `string` and any uncovered type (`DateOnly`, `TimeOnly`, `TimeSpan`) stay a text comparison for the
-comparison operators, and `_in`/`_nin` on an uncovered type is a 400. On a text field (a `string`
-property, or a field stored as JSON), `_eq` with the word `null` compares that word and never tests
-for NULL. On an uncovered type that is not text, `_eq` with `null` or `[null]` is a 400 that names
-`_null` and `_nnull`, and any other value is compared as it is written.
+comparison operators, and `_in`/`_nin` on an uncovered type is a 400. On a `string` property or a
+structured field, `_eq` with the word `null` compares that word and never tests for NULL. On a
+`DateOnly`, `TimeOnly` or `TimeSpan` field, `_eq` with `null` or `[null]` is a 400 that names
+`_null` and `_nnull`, because the ORM reads exactly those two texts as a null test.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

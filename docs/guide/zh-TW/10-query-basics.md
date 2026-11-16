@@ -40,6 +40,14 @@ body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），
 表示沒有給這個鍵；`deep` 裡的關聯項目是 `null`，則以預設值展開該關聯，和 `{}` 相同。帶小數或超出
 32 位元範圍的數字，當成沒有給這個鍵，和查詢字串一樣。
 
+body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不是 `null`，都回 400，訊息點名該鍵（在
+`deep` 的關聯項目裡則帶上它的 `deep` 路徑），並列出該層接受的鍵。鍵照原樣比對，大小寫要一致：
+
+| 鍵 | body | `deep` 的關聯項目 |
+|---|---|---|
+| `fields`、`filter`、`sort`、`limit`、`offset`、`deep` | 可 | 可 |
+| `search`、`facets`、`aggregate` | 可 | 不可 |
+
 本章接下來的例子都用查詢字串形式。GraphQL 用同一套語意做同一件事，只是引數拼法不同——運算子從
 `_eq` 換成 `eq`，量詞從 `_some` 換成 `some`——拼法留給[GraphQL 一章](14-graphql.md)。
 
@@ -114,7 +122,7 @@ body 裡，`filter` 與 `deep` 是物件（`deep` 裡的每個關聯也是），
 | 值 | 運算子 | 結果 |
 |---|---|---|
 | JSON `null` | `_null`、`_nnull` 以外的全部 | 400，訊息指向 `_null`、`_nnull` |
-| 文字 `null` 或 `[null]` | 全部，用在文字欄位 | 純文字 |
+| 文字 `null` 或 `[null]` | 全部，用在文字或結構化欄位 | 純文字 |
 | 文字 `null` 或 `[null]` | `DateOnly`、`TimeOnly`、`TimeSpan` 上的 `_eq` | 400 |
 | 清單 | `_in`、`_nin` | 各個元素 |
 | 清單 | `_null`、`_nnull` | 忽略 |
@@ -155,11 +163,9 @@ HTTP_STATUS:200
 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
 與未涵蓋的型別（`DateOnly`、`TimeOnly`、`TimeSpan`），比較運算子維持文字比較，`_in`／`_nin`
-則回 400。
-文字欄位（`string` 屬性，或存成 JSON 的欄位）上，`_eq` 的值是 `null` 這個字，
-比對的就是這個字，不會測 NULL。
-未涵蓋且不是文字的型別上，`_eq` 的值是 `null` 或 `[null]` 回 400，訊息指向 `_null` 與
-`_nnull`，其他值照寫的比對。
+則回 400。`string` 屬性或結構化欄位上，`_eq` 的值是 `null` 這個字，比對的就是這個字，不會測
+NULL。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值是 `null` 或 `[null]` 回 400，訊息指向
+`_null` 與 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
 並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、

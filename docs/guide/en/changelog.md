@@ -92,11 +92,12 @@
     interfaces only, so it also leaves it out for `Select`, `Radio` and `Password` fields, which the
     API accepts it on when the property is a `string`. Send `_eq` or a range instead (`_gte` with
     `_lt`; to match a date, `_gte` the day and `_lt` the next).
-  - `_eq` with the text `null` or `[null]` on a text field compares the column with that text. It
-    used to test for NULL (`null`), or to count the rows holding the text and return none
-    (`[null]`). On a `DateOnly`, `TimeOnly` or `TimeSpan` column, which the filter compares with the
-    text as written, the same two words answer `400` and point to `_null`; any other value is
-    unchanged. A client that relied on `_eq=null` to find NULL rows sends `_null` or `_nnull`.
+  - `_eq` with the text `null` or `[null]` on a `string` property or a field stored as JSON compares
+    the column with that text. It used to test for NULL (`null`), or to count the rows holding the
+    text and return none (`[null]`). On a `DateOnly`, `TimeOnly` or `TimeSpan` column the same two
+    words answer `400` and point to `_null`, because the ORM reads exactly those two texts as a null
+    test; every other value is unchanged. A client that relied on `_eq=null` to find NULL rows sends
+    `_null` or `_nnull`.
   - A JSON `null` as the value of any operator but `_null` and `_nnull` answers `400` and says to
     use those two. It used to compare the column with `NULL`, with `0`, `false` or the earliest
     date, or answer `500` for a `Guid`; GraphQL still skips an operator whose value is `null`. A
@@ -111,13 +112,22 @@
     key, also inside a `deep` relation; `null` for a key means the key is not given. Such a key used
     to be ignored, so the caller got every row. A caller that sent one fixes the body so the key has
     its kind, or leaves the key out.
+  - A `POST /query` body key the parser does not read, at the top level or inside a `deep` relation
+    entry, answers `400` that names the key and lists the accepted ones (`fields`, `filter`, `sort`,
+    `limit`, `offset`, `search`, `deep`, `facets`, `aggregate` in the body; the same without
+    `search`, `facets` and `aggregate` in a relation entry). Such a key, a misspelled `filter` for
+    one, used to be ignored, so the caller got every row. A caller that sent one corrects or removes
+    the key.
   - `Searchable = true` on a field whose column is not text (a number, boolean, `Guid`, enum or
     date-time property), or on a Repeater sub-field, stops the host at start with a
-    `MetadataException` that names the property. A field marked `Hidden = true` is exempt, since it
-    never joins the search whitelist. It used to start: every `search=` request on that collection
-    answered `500` on PostgreSQL in the first case, and the flag did nothing in the second. No core
-    or Blog field is affected. A fork removes `Searchable` from that field, or makes the property a
-    `string`.
+    `MetadataException` that names the property. It used to start: every `search=` request on that
+    collection answered `500` on PostgreSQL in the first case, and the flag did nothing in the
+    second. No core or Blog field is affected. A fork removes `Searchable` from that field, or makes
+    the property a `string`.
+  - `Searchable = true` together with `Hidden = true` stops the host at start with a
+    `MetadataException` that names the property, whatever the property type. A hidden field is never
+    searched, so the declaration used to do nothing. No core, Blog or fixture field declares both. A
+    fork removes `Searchable` or `Hidden = true` from that field.
 - The scanner rejects contradicting column declarations at startup with a `MetadataException` that
   names "Class.Property" and the two declarations, for the `[CmsField]` properties of collections,
   translation entities and junction payloads in every environment (a `Repeater` sub-field and a

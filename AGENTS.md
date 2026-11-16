@@ -127,9 +127,10 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   string operator on a column that is not text, a null value and a list given to a single-value
   operator are 400s. It is the only file that names `ConditionalType.In`, `ConditionalType.NotIn` or
   `ConditionalType.Equal`; `ValueConditionsConventionTests` reads the text of `src/` and fails on
-  another file that names them, imports or aliases the enum, or builds a `ConditionalModel`
-  initializer without a `ConditionalType` (it cannot see a cast from a number). See
-  `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
+  another file that names them, imports or aliases the enum, sets `ConditionalType = default`, or
+  builds a `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. It
+  cannot see a cast from a number, reflection, or a model filled in after `new ConditionalModel()`.
+  See `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then
   parks a client on the pool thread for unrelated work. `CopyNew()` drops the configure action (no

@@ -72,10 +72,11 @@
     的文字形式，各後端結果不同，PostgreSQL 則回 `500`。後台清單只在文字介面提供「包含」，所以屬性是
     `string` 時 API 接受的 `Select`、`Radio`、`Password` 欄位上它也不提供。改送 `_eq` 或範圍
     （`_gte` 加 `_lt`；要比對某一天，就 `_gte` 當天、`_lt` 隔天）。
-  - 文字欄位上，`_eq` 的值是文字 `null` 或 `[null]`，比對的是欄位內容等於該文字。以前 `null` 會測
-    NULL，`[null]` 會用一個條件算出內容等於該文字的列數、換另一個條件取頁而回 0 列。`DateOnly`、
-    `TimeOnly`、`TimeSpan` 欄位，篩選把文字照寫比對，同樣兩個字回 `400` 並指向 `_null`；其他值不變。
-    靠 `_eq=null` 找 NULL 列的用戶端，改送 `_null` 或 `_nnull`。
+  - `string` 屬性或存成 JSON 的欄位上，`_eq` 的值是文字 `null` 或 `[null]`，比對的是欄位內容等於該
+    文字。以前 `null` 會測 NULL，`[null]` 會用一個條件算出內容等於該文字的列數、換另一個條件取頁而
+    回 0 列。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，同樣兩個字回 `400` 並指向 `_null`，因為 ORM
+    把剛好這兩段文字當成測 NULL；其他值不變。靠 `_eq=null` 找 NULL 列的用戶端，改送 `_null` 或
+    `_nnull`。
   - `_null`、`_nnull` 以外的任何運算子，值是 JSON `null`，回 `400` 並指向這兩個運算子。以前會拿
     欄位跟 `NULL`、跟 `0`、`false` 或最早的日期比，`Guid` 欄位則回 `500`；GraphQL 仍然略過值是
     `null` 的運算子。送 `null` 的用戶端改送 `_null` 或 `_nnull`。
@@ -86,11 +87,18 @@
     `fields` 不是字串陣列，回 `400` 並點名該鍵，`deep` 的關聯裡也一樣；鍵的值是 `null` 表示沒有給。
     這樣的鍵以前被忽略，呼叫端拿到全部的列。送過這種 body 的呼叫端把鍵改成對的種類，或乾脆不送
     這個鍵。
+  - `POST /query` 的 body 裡，解析器不讀的鍵，不論在最上層或 `deep` 的關聯項目裡，都回 `400`，訊息點
+    名該鍵並列出接受的鍵（body 是 `fields`、`filter`、`sort`、`limit`、`offset`、`search`、`deep`、
+    `facets`、 `aggregate`；關聯項目是同一份去掉 `search`、`facets`、`aggregate`）。這樣的鍵，例如拼
+    錯的 `filter`，以前被忽略，呼叫端拿到全部的列。送過的呼叫端把鍵改正或拿掉。
   - `Searchable = true` 用在欄位不是文字的屬性（數字、布林、`Guid`、列舉或日期時間屬性），或用在
-    Repeater 子欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名屬性。標了 `Hidden = true`
-    的欄位不受約束，因為它不會進搜尋白名單。以前能啟動：前者在該集合上每個 `search=` 請求在
-    PostgreSQL 都回 `500`，後者的旗標沒有作用。核心與 Blog 範例沒有受影響的欄位。fork 把那個欄位的
-    `Searchable` 拿掉，或把屬性改成 `string`。
+    Repeater 子欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名屬性。以前能啟動：前者在
+    該集合上每個 `search=` 請求在 PostgreSQL 都回 `500`，後者的旗標沒有作用。核心與 Blog 範例沒有
+    受影響的欄位。fork 把那個欄位的 `Searchable` 拿掉，或把屬性改成 `string`。
+  - `Searchable = true` 加上 `Hidden = true`，不論屬性型別，主機啟動時就停下並丟出
+    `MetadataException`，訊息點名屬性。隱藏的欄位不會被搜尋，所以這個宣告以前什麼也不做。核心、
+    Blog 範例與測試用的集合都沒有同時宣告兩者的欄位。fork 把那個欄位的 `Searchable` 或
+    `Hidden = true` 拿掉其一。
 - 掃描器在啟動時拒絕互相衝突的欄位宣告，丟出 `MetadataException`，訊息點名「類別.屬性」與兩個衝突
   的宣告，檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性，每個環境都一樣
   （`Repeater` 子欄位與掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，但 `Repeater` 子型別裡的
