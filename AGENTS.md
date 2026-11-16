@@ -91,7 +91,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   `migrate` runs; the third is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
   `SchemaChecker.Check`; the fourth is one read-only catalog query that runs only on SQL Server startup.
-  The first is the relation-filter pushdown's subquery wrapper
+  The first is the subquery wrapper of the relation-filter pushdown and of a string operator on SQLite
   (`src/Struo.Infrastructure/Query/SubQueryConditional.cs`, `OrOfSubqueriesConditional.cs`): SqlSugar's
   `ConditionalModel`/`ConditionalCollections` have no subquery member, so exactly four string forms are
   assembled around SqlSugar-generated SQL — `<col> IN (<sql>)`, `<col> NOT IN (<sql>)`,
@@ -125,8 +125,11 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   type with the invariant culture and renders the parsed value, so a numeric, boolean, Guid or date
   column never takes caller text; a text set is a group of bound equalities, as is a text `_eq`. A
   string operator on a column that is not text, a null value and a list given to a single-value
-  operator are 400s. It is the only file that names `ConditionalType.In`, `ConditionalType.NotIn` or
-  `ConditionalType.Equal`; `ValueConditionsConventionTests` reads the text of `src/` and fails on
+  operator are 400s. The value of a string operator is matched as plain text: `ValueConditions`
+  escapes the characters a LIKE pattern reads, per backend, and on SQLite a value with `%` or `_`
+  goes through a typed subquery (`LiteralLikeSubquery.cs`). It is the only file that names
+  `ConditionalType.In`, `NotIn`, `Equal`, `Like`, `LikeLeft` or `LikeRight`;
+  `ValueConditionsConventionTests` reads the text of `src/` and fails on
   another file that names them, imports or aliases the enum, sets `ConditionalType = default`, or
   builds a `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. It
   cannot see a cast from a number, a condition type chosen through reflection or `Enum.Parse`, a

@@ -101,6 +101,14 @@
     `400` and points to `_null` or `_nnull`, because the ORM reads exactly those two texts as a null
     test; every other value is unchanged. The two words used to test for NULL or to return no row. A
     client that relied on them sends `_null` or `_nnull`.
+  - The value of `_contains`, `_starts_with` and `_ends_with`, and the term of `search=` when the
+    database runs it, is matched as plain text on every backend: `%`, `_`, `[` and a backslash in it
+    stand for themselves ([Chapter 10](10-query-basics.md)). They used to be read as pattern
+    characters: `%` and `_` were wildcards everywhere, `[` opened a character class on SQL Server,
+    and a backslash escaped the next character on PostgreSQL, MySQL and MariaDB. A client that
+    relied on `%` or `_` (or `[ab]` on SQL Server) matching more than itself sends the fixed part of
+    the text with `_starts_with` or `_ends_with`, lists the exact values with `_in`, or filters on
+    another field; no operator reads a pattern. Upper and lower case compare as before.
   - A JSON `null` as the value of any operator but `_null` and `_nnull` answers `400` and says to
     use those two. It used to compare the column with `NULL`, with `0`, `false` or the earliest
     date, or answer `500` for a `Guid`; GraphQL still skips an operator whose value is `null`. A
@@ -341,6 +349,8 @@ transformed again on the first request.
 
 ### Fixed
 
+- `_ends_with` with a value that ends in one backslash answered `500` on PostgreSQL, which refused
+  the pattern. It answers `200` and matches the rows whose text ends in a backslash.
 - `filter[title][_eq]=null&locale=en` on a translatable field, `_eq: "null"` in a `deep` filter, and
   a `locale` parameter equal to the code of an enabled language that is named `null` answered `500`
   on every backend, because the rendered subquery lacked an `AND`. They compare the text like any

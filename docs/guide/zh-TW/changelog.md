@@ -78,6 +78,13 @@
   - `DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值是文字 `null` 或 `[null]`，回 `400` 並指向
     `_null` 或 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL；其他值不變。這兩個字以前會測 NULL 或
     不回任何列。靠它們找 NULL 列的用戶端，改送 `_null` 或 `_nnull`。
+  - `_contains`、`_starts_with`、`_ends_with` 的值，以及由資料庫執行的 `search=` 搜尋字串，在每個
+    後端都當純文字比對：值裡的 `%`、`_`、`[` 與反斜線都只代表它們自己（見
+    [第 10 章](10-query-basics.md)）。以前它們被當成樣式字元：`%` 與 `_` 在每個後端都是萬用字元，
+    `[` 在 SQL Server 上開啟字元集合，反斜線在 PostgreSQL、MySQL、MariaDB 上跳脫下一個字元。靠
+    `%` 或 `_`（或 SQL Server 上的 `[ab]`）比對出比自己更多內容的用戶端，改用 `_starts_with` 或
+    `_ends_with` 送固定的那一段文字、用 `_in` 列出確切的值，或改篩別的欄位；沒有任何運算子讀樣式。
+    大小寫的比較方式不變。
   - `_null`、`_nnull` 以外的任何運算子，值是 JSON `null`，回 `400` 並指向這兩個運算子。以前會拿
     欄位跟 `NULL`、跟 `0`、`false` 或最早的日期比，`Guid` 欄位則回 `500`；GraphQL 仍然略過值是
     `null` 的運算子。送 `null` 的用戶端改送 `_null` 或 `_nnull`。
@@ -261,6 +268,8 @@
 
 ### 修正
 
+- `_ends_with` 的值以一個反斜線結尾，在 PostgreSQL 上回 `500`，因為資料庫拒絕這個樣式。現在回
+  `200`，比對文字以反斜線結尾的列。
 - 可翻譯欄位上的 `filter[title][_eq]=null&locale=en`、`deep` 篩選裡的 `_eq: "null"`，以及 `locale`
   參數等於一個名為 `null` 的啟用語言代碼，在每個後端都回 `500`，原因是組出的子查詢少一個 `AND`。現在
   它們跟任何其他值一樣比對文字。沒有對應啟用語言的 `locale`（`null` 也一樣）回 `400`。
