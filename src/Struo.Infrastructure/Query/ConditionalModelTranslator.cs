@@ -32,7 +32,7 @@ public static class ConditionalModelTranslator
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         return property is null
             ? new ValueTarget(Column(d, db, field), field, typeof(string), db.CurrentConnectionConfig.DbType)
-            : ValueTarget.Of(db, d.EntityType, property, field);
+            : ValueTarget.Of(db, d.EntityType, property, field, d.IdProperty);
     }
 
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)

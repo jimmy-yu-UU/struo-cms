@@ -8,9 +8,11 @@ namespace Struo.Tests.Template;
 
 /// <summary>
 /// SqlSugar renders the values of <c>ConditionalType.In</c> and <c>ConditionalType.NotIn</c> as literals inside the
-/// SQL text, and reads the texts <c>null</c> and <c>[null]</c> of a <c>ConditionalType.Equal</c> value as a null
-/// test. <c>ValueConditions</c> parses each value to the column's CLR type and binds text before it builds one, so
-/// that file is the only place in <c>src/</c> meant to name any of the three members. The scan reads text, so
+/// SQL text, reads the texts <c>null</c> and <c>[null]</c> of a <c>ConditionalType.Equal</c> value as a null
+/// test, and reads the value of <c>ConditionalType.Like</c>, <c>LikeLeft</c> and <c>LikeRight</c> as a pattern.
+/// <c>ValueConditions</c> parses each value to the column's CLR type, binds text and escapes the pattern characters
+/// of a string operator's value before it builds one, so that file is the only place in <c>src/</c> meant to name
+/// any of the six members. The scan reads text, so
 /// it catches a mention in code or in a comment, a <c>using static</c> of the enum, an alias of it (each also
 /// with the <c>SqlSugar.</c> or <c>global::</c> qualifier), <c>default</c> as the condition type, a verbatim
 /// <c>@Equal</c>, and a <c>ConditionalModel</c> object initializer, typed or target-typed, that names no
@@ -37,7 +39,7 @@ public sealed partial class ValueConditionsConventionTests
     // Each pattern allows the qualifiers SqlSugar. and global::SqlSugar.
     private const string EnumName = @"(?:global\s*::\s*)?(?:SqlSugar\s*\.\s*)?ConditionalType";
 
-    [GeneratedRegex(EnumName + @"\s*\.\s*@?(In|NotIn|Equal)\b")]
+    [GeneratedRegex(EnumName + @"\s*\.\s*@?(In|NotIn|Equal|Like|LikeLeft|LikeRight)\b")]
     private static partial Regex SetMember();
 
     [GeneratedRegex(@"using\s+static\s+" + EnumName + @"\s*;")]
@@ -124,7 +126,7 @@ public sealed partial class ValueConditionsConventionTests
             .Select(f => f.Path).Order().ToList();
 
     [Fact]
-    public void Only_ValueConditions_names_the_in_not_in_and_equal_condition_types()
+    public void Only_ValueConditions_names_the_in_not_in_equal_and_like_condition_types()
     {
         var root = RepoRoot.Find();
         var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
@@ -136,7 +138,7 @@ public sealed partial class ValueConditionsConventionTests
             files.Should().Contain(f => f.Path == exempt, "the exempt file must exist where this test expects it");
 
         Offenders(files).Should().BeEmpty(
-            "only {0} may name ConditionalType.In, ConditionalType.NotIn or ConditionalType.Equal, import, alias or default " +
+            "only {0} may name ConditionalType.In, NotIn, Equal, Like, LikeLeft or LikeRight, import, alias or default " +
             "the enum, or build a ConditionalModel without a ConditionalType; every other site builds its condition through it",
             AllowedFile);
     }
@@ -151,6 +153,16 @@ public sealed partial class ValueConditionsConventionTests
     [InlineData("x = SqlSugar.ConditionalType.Equal;", true)]
     [InlineData("x = global::SqlSugar.ConditionalType.In;", true)]
     [InlineData("// ConditionalType.Equal reads the word null as a null test", true)]
+    [InlineData("x = ConditionalType.Like;", true)]
+    [InlineData("x = ConditionalType . LikeLeft;", true)]
+    [InlineData("x = ConditionalType.LikeRight;", true)]
+    [InlineData("x = ConditionalType.@Like;", true)]
+    [InlineData("x = SqlSugar.ConditionalType.LikeLeft;", true)]
+    [InlineData("x = global::SqlSugar.ConditionalType.LikeRight;", true)]
+    [InlineData("// ConditionalType.Like reads the value as a pattern", true)]
+    [InlineData("/// <see cref=\"ConditionalType.LikeRight\"/>", true)]
+    [InlineData("x = ConditionalType.NoLike;", false)]
+    [InlineData("x = ConditionalType.Likeness;", false)]
     [InlineData("x = ConditionalType.EqualNull;", false)]
     [InlineData("x = ConditionalType.NoEqual;", false)]
     [InlineData("x = ConditionalType.IsNot;", false)]
@@ -206,6 +218,7 @@ public sealed partial class ValueConditionsConventionTests
             Offenders([(file, typed)]).Should().BeEmpty();
             Offenders([(file, targetTyped)]).Should().BeEmpty();
             Offenders([(file, "x = ConditionalType.Equal;")]).Should().ContainSingle();
+            Offenders([(file, "x = ConditionalType.Like;")]).Should().ContainSingle();
             Offenders([(file, "using static SqlSugar.ConditionalType;")]).Should().ContainSingle();
         }
         Offenders([("another file", typed)]).Should().ContainSingle();
