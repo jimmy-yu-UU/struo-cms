@@ -211,15 +211,14 @@ internal static class ValueConditions
     }
 
     // A type outside the parsed set that is not text (DateOnly, TimeOnly, TimeSpan) is compared with the
-    // caller's text as it is. SqlSugar reads the words null and [null] of an Equal as a null test, and
-    // binding the text instead would turn a date or time comparison into a database error on PostgreSQL
-    // and SQL Server, so those two words are refused and every other value keeps its plain path.
+    // caller's text as it is. SqlSugar reads exactly the texts null and [null] of an Equal as a null test,
+    // so those two words cannot be passed on and are refused; every other value keeps its plain path.
     private static ConditionalModel UncoveredComparison(ValueTarget t, QueryOperator op, object value)
     {
         var text = ToText(value);
         if (op == QueryOperator.Eq && text is "null" or "[null]")
             throw new QueryException(
-                $"Field '{t.Label}' is compared as text, where the word '{text}' is no null test; use {NullTests} to test for null.");
+                $"'{Token(op)}' on field '{t.Label}' cannot take the word '{text}'; use {NullTests} to test for null.");
         return Plain(t, op, text, null);
     }
 

@@ -166,4 +166,52 @@ public sealed class QueryEnvelopeShapeApiTests(ApiFactory factory)
             "fxCategory");
         deepStatus.Should().Be(HttpStatusCode.OK, deepText);
     }
+
+    private const string BodyKeyList = "fields, filter, sort, limit, offset, search, deep, facets, aggregate";
+    private const string DeepKeyList = "fields, filter, sort, limit, offset, deep";
+
+    // A misspelled key must not be ignored: the request would answer every row.
+    [Theory]
+    [InlineData("""{"fitler":{"code":{"_eq":"en"}}}""", "fitler", null, BodyKeyList)]
+    [InlineData("""{"Filter":{"code":{"_eq":"en"}}}""", "Filter", null, BodyKeyList)]
+    [InlineData("""{"filter":{"code":{"_eq":"en"}},"limt":5}""", "limt", null, BodyKeyList)]
+    [InlineData("""{"unknown":null}""", "unknown", null, BodyKeyList)]
+    [InlineData("""{"where":{}}""", "where", null, BodyKeyList)]
+    [InlineData("""{"deep":{"x":{"fitler":{}}}}""", "fitler", "deep.x", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"search":"a"}}}""", "search", "deep.x", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"facets":[]}}}""", "facets", "deep.x", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"unknown":null}}}""", "unknown", "deep.x", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"limit":1,"Limit":2}}}""", "Limit", "deep.x", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"deep":{"y":{"serch":"a"}}}}}""", "serch", "deep.x.deep.y", DeepKeyList)]
+    [InlineData("""{"deep":{"x":{"deep":{"y":{"unknown":null}}}}}""", "unknown", "deep.x.deep.y", DeepKeyList)]
+    public async Task A_key_the_parser_does_not_read_is_a_400_that_names_it_and_lists_the_accepted_keys(
+        string body, string key, string? path, string accepted)
+    {
+        var (status, text) = await PostAsync(body);
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain("BAD_USER_INPUT").And.Contain($"Unknown key '{key}'").And.Contain($"the accepted keys are {accepted}.");
+        if (path is not null) text.Should().Contain($"(in '{path}')");
+        else text.Should().NotContain("(in 'deep");
+    }
+
+    [Fact]
+    public async Task A_long_unknown_key_is_cut_in_the_message()
+    {
+        var key = new string('k', 300);
+        var (status, text) = await PostAsync("{\"" + key + "\":1}");
+        status.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain(new string('k', 64) + "…").And.NotContain(new string('k', 65));
+    }
+
+    [Fact]
+    public async Task A_body_with_every_accepted_key_is_answered()
+    {
+        var (status, text) = await PostAsync(
+            """{"fields":["code"],"filter":{"code":{"_eq":"en"}},"sort":["code"],"limit":5,"offset":0,"search":"en","deep":{},"facets":[],"aggregate":{}}""");
+        status.Should().Be(HttpStatusCode.OK, text);
+        var (deepStatus, deepText) = await PostAsync(
+            """{"deep":{"articles":{"fields":["status"],"filter":{"status":{"_eq":"draft"}},"sort":["status"],"limit":2,"offset":0,"deep":{}}}}""",
+            "fxCategory");
+        deepStatus.Should().Be(HttpStatusCode.OK, deepText);
+    }
 }

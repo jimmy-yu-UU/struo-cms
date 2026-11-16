@@ -27,6 +27,30 @@ public static class QueryParser
     private const string KeyFilter = "filter";
     private const string KeyDeep = "deep";
     private const string KeySort = "sort";
+    private const string KeySearch = "search";
+    private const string KeyFacets = "facets";
+    private const string KeyAggregate = "aggregate";
+
+    // The keys each level of a POST /query body reads, matched as written (case-sensitive). The same list
+    // decides which key is unknown and fills the message, so the two cannot drift.
+    private static readonly string[] BodyKeys =
+        [KeyFields, KeyFilter, KeySort, KeyLimit, KeyOffset, KeySearch, KeyDeep, KeyFacets, KeyAggregate];
+
+    private static readonly string[] DeepEntryKeys = [KeyFields, KeyFilter, KeySort, KeyLimit, KeyOffset, KeyDeep];
+
+    private const int MaxEchoedKeyLength = 64;
+
+    // The key is the caller's text, so the message repeats at most MaxEchoedKeyLength characters of it.
+    private static void RequireKnownKeys(JsonElement owner, string[] accepted, string? relation)
+    {
+        foreach (var property in owner.EnumerateObject())
+        {
+            if (accepted.Contains(property.Name, StringComparer.Ordinal)) continue;
+            var echoed = property.Name.Length > MaxEchoedKeyLength ? property.Name[..MaxEchoedKeyLength] + "…" : property.Name;
+            throw new QueryException(
+                $"Unknown key '{echoed}'{Where(relation)}; the accepted keys are {string.Join(", ", accepted)}.");
+        }
+    }
 
     private static readonly FrozenDictionary<QueryOperator, string> Tokens =
         Operators.ToFrozenDictionary(pair => pair.Value, pair => pair.Key);
@@ -79,7 +103,7 @@ public static class QueryParser
 
     private static List<string>? ParseFacetsEnvelope(JsonElement env)
     {
-        if (!Given(env, "facets", out var f)) return null;
+        if (!Given(env, KeyFacets, out var f)) return null;
         if (f.ValueKind != JsonValueKind.Array || f.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String))
             throw new QueryException("'facets' must be an array of strings.");
         return f.EnumerateArray().Select(x => x.GetString()!).ToList();
@@ -87,7 +111,7 @@ public static class QueryParser
 
     private static AggregateSpec? ParseAggregateEnvelope(JsonElement env)
     {
-        if (!Given(env, "aggregate", out var a)) return null;
+        if (!Given(env, KeyAggregate, out var a)) return null;
         if (a.ValueKind != JsonValueKind.Object) throw new QueryException("'aggregate' must be an object.");
         var fields = new Dictionary<AggregateOp, IReadOnlyList<string>>();
         foreach (var prop in a.EnumerateObject())
@@ -149,6 +173,7 @@ public static class QueryParser
     {
         if (env.ValueKind != JsonValueKind.Object)
             throw new QueryException("'body' must be a JSON object.");
+        RequireKnownKeys(env, BodyKeys, null);
 
         IReadOnlyList<string>? fields = ReadStringsKey(env, KeyFields);
         FilterNode? filter = ReadFilterKey(env);
@@ -159,7 +184,7 @@ public static class QueryParser
 
         var limit = ReadIntKey(env, KeyLimit, null) ?? 0;
         var offset = ReadIntKey(env, KeyOffset, null) ?? 0;
-        var search = env.TryGetProperty("search", out var se) ? ReadSearch(se) : null;
+        var search = env.TryGetProperty(KeySearch, out var se) ? ReadSearch(se) : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
         return model with { Deep = ParseDeepEnvelope(env), Facets = ParseFacetsEnvelope(env), Aggregate = ParseAggregateEnvelope(env) };
@@ -183,6 +208,7 @@ public static class QueryParser
         if (entry.ValueKind == JsonValueKind.Null) return new DeepRelationSpec(null, null);
         if (entry.ValueKind != JsonValueKind.Object)
             throw new QueryException($"'deep.{here}' must be an object.");
+        RequireKnownKeys(entry, DeepEntryKeys, here);
 
         var fields = ReadStringsKey(entry, KeyFields, here);
         var filter = ReadFilterKey(entry, here);

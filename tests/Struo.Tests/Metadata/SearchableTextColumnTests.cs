@@ -93,7 +93,19 @@ public sealed class SearchableTextColumnTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         // A structured type on the Hidden interface is stored as JSON, so it is a text column.
         [CmsField(Interface = FieldInterface.Hidden, Searchable = true)] public List<string> Labels { get; set; } = [];
-        // A field marked Hidden never joins the search whitelist, so its column type cannot break a search.
+    }
+
+    [CmsCollection("Searchable text marked Hidden", Name = "stcHiddenText")]
+    public sealed class HiddenFlagText
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Text, Hidden = true, Searchable = true)] public string Secret { get; set; } = "";
+    }
+
+    [CmsCollection("Searchable number marked Hidden", Name = "stcHiddenNumberFlag")]
+    public sealed class HiddenFlagNumber
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [CmsField(Interface = FieldInterface.Number, Hidden = true, Searchable = true)] public int Secret { get; set; }
     }
 
@@ -144,10 +156,21 @@ public sealed class SearchableTextColumnTests
     }
 
     [Fact]
-    public void A_structured_hidden_field_and_a_field_marked_hidden_scan_with_Searchable()
+    public void A_structured_property_on_the_Hidden_interface_scans_with_Searchable()
     {
         var meta = MetadataScanner.ScanTypes([typeof(HiddenSearchables)]).Single();
-        meta.Fields.Where(f => f.Searchable).Select(f => f.Name).Should().BeEquivalentTo(["labels", "secret"]);
+        meta.Fields.Where(f => f.Searchable).Select(f => f.Name).Should().BeEquivalentTo(["labels"]);
+    }
+
+    // A field marked Hidden is dropped from the search whitelist, so Searchable on it does nothing.
+    [Theory]
+    [InlineData(typeof(HiddenFlagText), "HiddenFlagText.Secret")]
+    [InlineData(typeof(HiddenFlagNumber), "HiddenFlagNumber.Secret")]
+    public void Searchable_together_with_Hidden_fails_the_scan_whatever_the_property_type(Type type, string field)
+    {
+        var act = () => MetadataScanner.ScanTypes([type]);
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain(field).And.Contain("never searched").And.Contain("Remove Hidden = true or Searchable = true");
     }
 
     [Fact]

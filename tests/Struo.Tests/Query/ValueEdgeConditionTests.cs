@@ -18,7 +18,7 @@ public sealed class VcJson
     [SugarColumn(IsJson = true)] public Dictionary<string, string> Meta { get; set; } = new();
 }
 
-/// <summary>Date, time and duration columns: types the filter parser does not cover and that are not text.</summary>
+/// <summary>Date, time and duration properties: types the filter parser does not cover and that are not text. Only the descriptor is used; no table is created.</summary>
 [SugarTable("vc_dates")]
 public sealed class VcDates
 {
@@ -117,8 +117,8 @@ public sealed class ValueEdgeConditionTests : IDisposable
         Ids<VcString>(Db, [set], r => r.Id).Should().Equal(id);
     }
 
-    // Binding the word would make a date or time comparison a database error on PostgreSQL and SQL Server,
-    // and the ORM would read it as a null test, so the two words are refused on a column of such a type.
+    // The ORM reads exactly the texts null and [null] of an Equal as a null test, so the two words cannot
+    // be passed on for a date, time or duration column.
     [Theory]
     [InlineData("day", "null")]
     [InlineData("day", "[null]")]
@@ -128,14 +128,11 @@ public sealed class ValueEdgeConditionTests : IDisposable
     [InlineData("span", "[null]")]
     public void Eq_with_the_word_null_on_a_date_or_time_column_is_a_400_that_points_to_null_and_nnull(string field, string word)
     {
-        Reset<VcDates>(Db);
-        Db.Insertable(new VcDates { Id = 1, Day = new DateOnly(2026, 3, 4), Clock = new TimeOnly(10, 0), Span = TimeSpan.FromHours(1) })
-            .ExecuteCommand();
-        Db.Insertable(new VcDates { Id = 2 }).ExecuteCommand();
         var d = Descriptor<VcDates>("Id", "Day", "Clock", "Span");
         var act = () => Conds(Db, d, field, QueryOperator.Eq, word);
         act.Should().Throw<QueryException>().Which.Message
-            .Should().Contain($"'{field}'").And.Contain($"'{word}'").And.Contain("'_null'").And.Contain("'_nnull'");
+            .Should().Contain($"'{field}'").And.Contain($"'{word}'").And.Contain("'_eq'")
+            .And.Contain("'_null'").And.Contain("'_nnull'");
     }
 
     // Any other value keeps the path it has always had: the text goes into the condition as it is.
