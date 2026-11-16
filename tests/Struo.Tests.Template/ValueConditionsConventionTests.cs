@@ -72,7 +72,15 @@ public sealed partial class ValueConditionsConventionTests
         return index + 1;
     }
 
-    // The braces of the initializer body, skipping regular string literals.
+    // The index after the closing quote of the char literal that opens at the given index.
+    private static int AfterChar(string text, int open)
+    {
+        var index = open + (text[open + 1] == '\\' ? 3 : 2);
+        while (index < text.Length && text[index] != '\'') index++;
+        return index + 1;
+    }
+
+    // The braces of the initializer body, skipping regular string and char literals.
     private static string BodyAfter(string text, Match match)
     {
         var start = match.Index + match.Length;
@@ -83,6 +91,7 @@ public sealed partial class ValueConditionsConventionTests
             switch (text[index])
             {
                 case '"': index = AfterString(text, index); continue;
+                case '\'': index = AfterChar(text, index); continue;
                 case '{': depth++; break;
                 case '}': depth--; break;
             }
@@ -172,12 +181,14 @@ public sealed partial class ValueConditionsConventionTests
     [InlineData("var list = new() { 1, 2 };", false)]
     [InlineData("var o = new Options { FieldName = c };", false)]
     [InlineData("var a = new { FieldName = c, FieldValue = v };", false)]
-    [InlineData("static IQueryable<T> Apply<T>(IQueryable<T> q) where T : class, new()\n{ return q; }", false)]
-    [InlineData("static void Apply<T>() where T : class,\n    new()\n{ var a = 1; }", false)]
+    [InlineData("static IQueryable<T> Apply<T>(IQueryable<T> q) where T : class, new()\n{ var n = \"FieldName\"; return q; }", false)]
+    [InlineData("static void Apply<T>() where T : class,\n    new()\n{ var n = \"FieldName\"; }", false)]
     [InlineData("var m = new ConditionalModel { FieldName = \"}{\", ConditionalType = kind };", false)]
     [InlineData("var m = new ConditionalModel { FieldName = \"}\", FieldValue = v };", true)]
     [InlineData("static void Apply<T>() where T : class, new()\n{ var m = new ConditionalModel { FieldName = c }; }", true)]
     [InlineData("static string Apply<T>(T x) where T : class, new()\n{ return x.FieldName; }", false)]
+    [InlineData("var m = new ConditionalModel { FieldName = c, FieldValue = '\"' }; var x = new ConditionalModel { ConditionalType = kind };", true)]
+    [InlineData("var m = new ConditionalModel { FieldName = '}', ConditionalType = kind };", false)]
     [InlineData("List<string> l = new() { \"a\" };", false)]
     public void The_scan_reads_code_and_comments_and_nothing_else(string text, bool flagged)
     {
