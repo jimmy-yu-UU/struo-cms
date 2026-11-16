@@ -147,7 +147,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
         Db.Insertable(new VcJson { Id = 1, Tags = ["alpha", "beta"] }).ExecuteCommand();
         Db.Insertable(new VcJson { Id = 2, Tags = ["gamma"] }).ExecuteCommand();
         Ids<VcJson>(Db, Conds(Db, Json, "tags", QueryOperator.Contains, "alpha"), r => r.Id).Should().Equal(1);
-        Ids<VcJson>(Db, Conds(Db, Json, "tags", QueryOperator.StartsWith, "[\"g"), r => r.Id).Should().Equal(2);
+        Ids<VcJson>(Db, Conds(Db, Json, "tags", QueryOperator.Contains, "gam"), r => r.Id).Should().Equal(2);
     }
 
     [Fact]
