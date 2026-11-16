@@ -23,7 +23,9 @@ internal static class LiteralLikeSubquery
 
     private static readonly MethodInfo ToStringMethod = typeof(object).GetMethod(nameof(ToString), Type.EmptyTypes)!;
 
-    /// <summary>The value must already be escaped with a backslash before each backslash, percent sign and underscore.</summary>
+    /// <summary>
+    /// The value must already be escaped with a backslash before each backslash, percent sign and underscore.
+    /// </summary>
     public static ConditionalModel Create(LikeSource source, QueryOperator op, string escapedValue) =>
         Dispatcher.For(source.EntityType, ColumnSelectorFactory.PropertyType(source.EntityType, source.KeyProperty))(
             source, op, escapedValue);

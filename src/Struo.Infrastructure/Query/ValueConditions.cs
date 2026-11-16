@@ -44,12 +44,14 @@ internal sealed record OrTerms(IReadOnlyList<ConditionalModel> Models, string? N
 
 /// <summary>
 /// The one place a filter or id value becomes a SqlSugar condition, and the only place in <c>src/</c>
-/// that names <see cref="ConditionalType.In"/>, <see cref="ConditionalType.NotIn"/>, <see cref="ConditionalType.Equal"/>,
-/// <see cref="ConditionalType.Like"/>, <see cref="ConditionalType.LikeLeft"/> or <see cref="ConditionalType.LikeRight"/>. Each value is
+/// that names <see cref="ConditionalType.In"/>, <see cref="ConditionalType.NotIn"/>,
+/// <see cref="ConditionalType.Equal"/>, <see cref="ConditionalType.Like"/>,
+/// <see cref="ConditionalType.LikeLeft"/> or <see cref="ConditionalType.LikeRight"/>. Each value is
 /// parsed to the column's CLR type with the invariant culture and rendered again from the parsed value,
 /// so text the caller wrote never reaches the SQL of a numeric, boolean, Guid or date column. A string
-/// column takes a set as a group of parameterised equalities, and the value of a string operator is
-/// matched as plain text: the characters a LIKE pattern reads are escaped for the backend. Text that does not parse is a
+/// column takes a set as a group of parameterised equalities. On SQLite, PostgreSQL, MySQL, MariaDB
+/// and SQL Server the value of a string operator is matched as plain text: the characters a LIKE
+/// pattern reads are escaped for the backend. Text that does not parse is a
 /// <see cref="QueryException"/> naming the column, never the values. Measurements, the SqlSugar traps
 /// and the unverified parts (SQL Server) are in docs/ai/decisions/query-values-are-parsed-and-bound.md.
 /// </summary>
@@ -287,7 +289,8 @@ internal static class ValueConditions
         SqlSugar.DbType.SqlServer => Plain(t, op, EscapeWithBrackets(text), null),
         SqlSugar.DbType.Sqlite when HasLikeWildcard(text) => LiteralLikeSubquery.Create(
             t.Source ?? throw new InvalidOperationException(
-                $"Field '{t.Label}' has no entity to match its text with."), op, EscapeWithBackslash(text)),
+                $"Field '{t.Label}' has no key property for the plain-text subquery; " +
+                "describe the column with ValueTarget.Of and a keyProperty."), op, EscapeWithBackslash(text)),
         _ => Plain(t, op, text, null),
     };
 
