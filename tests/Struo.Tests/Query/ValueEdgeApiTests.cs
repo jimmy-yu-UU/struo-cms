@@ -26,6 +26,8 @@ public sealed class ValueEdgeApiTests : IDisposable
 
     private readonly ApiFactory _factory;
     private readonly Guid _categoryId = Guid.CreateVersion7();
+    private readonly Guid _otherCategoryId = Guid.CreateVersion7();
+    private readonly Guid _otherArticleId = Guid.CreateVersion7();
     private readonly List<Guid> _articleIds = [];
 
     public ValueEdgeApiTests(ApiFactory factory)
@@ -43,13 +45,17 @@ public sealed class ValueEdgeApiTests : IDisposable
         foreach (var code in SeedCodes)
             Db.Insertable(new Language { Code = code, Name = "edge-" + code, CreatedAt = now, UpdatedAt = now, Sort = 3 }).ExecuteCommand();
         Db.Insertable(new FxCategory { Id = _categoryId, Name = "null" }).ExecuteCommand();
+        // A second category whose only article has a SQL NULL attribute: it must not match the word null.
+        Db.Insertable(new FxCategory { Id = _otherCategoryId, Name = "other" }).ExecuteCommand();
+        Db.Insertable(new FxArticle { Id = _otherArticleId, Status = "draft", Attributes = null, CategoryId = _otherCategoryId }).ExecuteCommand();
         // attributes: the text null, the text [null], plain text, SQL NULL.
         string?[] attributes = ["null", "[null]", "plain-edge", null];
         foreach (var attribute in attributes)
         {
             var id = Guid.CreateVersion7();
             _articleIds.Add(id);
-            Db.Insertable(new FxArticle { Id = id, Status = "draft", Attributes = attribute, CategoryId = _categoryId }).ExecuteCommand();
+            var meta = _articleIds.Count == 1 ? new Dictionary<string, string> { ["edge"] = "marker" } : new Dictionary<string, string>();
+            Db.Insertable(new FxArticle { Id = id, Status = "draft", Attributes = attribute, CategoryId = _categoryId, Meta = meta }).ExecuteCommand();
             Db.Insertable(new FxArticleTranslation { FxArticleId = id, Locale = "en", Title = attribute ?? "sql-null" }).ExecuteCommand();
         }
         Db.Insertable(new FxArticleTranslation { FxArticleId = _articleIds[0], Locale = "null", Title = LocaleNullTitle }).ExecuteCommand();
@@ -58,12 +64,12 @@ public sealed class ValueEdgeApiTests : IDisposable
     private void Cleanup()
     {
         var codes = SeedCodes.ToList();
-        var articles = _articleIds.ToList();
-        var category = _categoryId;
+        var articles = _articleIds.Append(_otherArticleId).ToList();
+        var categories = new List<Guid> { _categoryId, _otherCategoryId };
         Db.Deleteable<Language>().Where(l => codes.Contains(l.Code)).ExecuteCommand();
         Db.Deleteable<FxArticleTranslation>().Where(t => articles.Contains(t.FxArticleId)).ExecuteCommand();
         Db.Deleteable<FxArticle>().Where(a => articles.Contains(a.Id)).ExecuteCommand();
-        Db.Deleteable<FxCategory>().Where(c => c.Id == category).ExecuteCommand();
+        Db.Deleteable<FxCategory>().Where(c => categories.Contains(c.Id)).ExecuteCommand();
     }
 
     public void Dispose() => Cleanup();
@@ -106,6 +112,9 @@ public sealed class ValueEdgeApiTests : IDisposable
 
     private static string Q(string s) => Uri.EscapeDataString(s);
 
+    private static List<string> Ids(Reply r) =>
+        r.Root.GetProperty("data").EnumerateArray().Select(row => row.GetProperty("id").ToString()).ToList();
+
     private static List<string?> Codes(Reply r) =>
         r.Root.GetProperty("data").EnumerateArray().Select(row => row.GetProperty("code").GetString()).ToList();
 
@@ -142,14 +151,18 @@ public sealed class ValueEdgeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Eq_with_the_word_null_does_not_select_the_sql_null_rows()
+    public async Task Eq_with_the_word_null_selects_the_row_that_holds_the_text_and_not_a_sql_null_row()
     {
+        var holdsNull = _articleIds[0].ToString();
+        var holdsBracketNull = _articleIds[1].ToString();
+
         var r = await GetAsync("/api/items/fxArticle?limit=100&filter[attributes][_eq]=null");
         r.Status.Should().Be(HttpStatusCode.OK, r.Text);
-        r.Rows.Should().Be(1);
+        Ids(r).Should().Equal(holdsNull);
         r.Total.Should().Be(1);
+
         var viaPost = await PostAsync("fxArticle", """{"filter":{"attributes":{"_eq":"[null]"}}}""");
-        viaPost.Rows.Should().Be(1);
+        Ids(viaPost).Should().Equal(holdsBracketNull);
         viaPost.Total.Should().Be(1);
     }
 
@@ -158,11 +171,12 @@ public sealed class ValueEdgeApiTests : IDisposable
     {
         var relation = await GetAsync("/api/items/fxArticle?limit=100&filter[category.name][_eq]=null");
         relation.Status.Should().Be(HttpStatusCode.OK, relation.Text);
-        relation.Rows.Should().Be(_articleIds.Count);
+        Ids(relation).Should().BeEquivalentTo(_articleIds.Select(id => id.ToString()));
 
+        // The category that holds the article with the text null, not the one whose article is SQL NULL.
         var some = await GetAsync("/api/items/fxCategory?limit=100&filter[articles._some.attributes][_eq]=null");
         some.Status.Should().Be(HttpStatusCode.OK, some.Text);
-        some.Rows.Should().Be(1);
+        Ids(some).Should().Equal(_categoryId.ToString());
 
         var or = await PostAsync("language", """{"filter":{"_or":[{"code":{"_eq":"null"}},{"code":{"_eq":"[null]"}}]}}""");
         or.Status.Should().Be(HttpStatusCode.OK, or.Text);
@@ -173,17 +187,18 @@ public sealed class ValueEdgeApiTests : IDisposable
     // ── the three 500s ───────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("null", 1)]
+    [InlineData("null", 0)]
     [InlineData("[null]", 1)]
-    public async Task A_translatable_field_compares_the_word_as_text(string word, int expected)
+    public async Task A_translatable_field_compares_the_word_as_text(string word, int holder)
     {
+        var expected = _articleIds[holder].ToString();
         var r = await GetAsync($"/api/items/fxArticle?limit=100&locale=en&filter[title][_eq]={Q(word)}");
         r.Status.Should().Be(HttpStatusCode.OK, r.Text);
-        r.Rows.Should().Be(expected);
-        r.Total.Should().Be(expected);
+        Ids(r).Should().Equal(expected);
+        r.Total.Should().Be(1);
         var post = await PostAsync("fxArticle", Filter("title", "_eq", J(word)), "?locale=en");
         post.Status.Should().Be(HttpStatusCode.OK, post.Text);
-        post.Rows.Should().Be(expected);
+        Ids(post).Should().Equal(expected);
     }
 
     [Fact]
@@ -218,7 +233,7 @@ public sealed class ValueEdgeApiTests : IDisposable
         plain.Status.Should().Be(HttpStatusCode.OK, plain.Text);
         var filtered = await GetAsync($"/api/items/fxArticle?limit=100&locale=null&filter[title][_eq]={LocaleNullTitle}");
         filtered.Status.Should().Be(HttpStatusCode.OK, filtered.Text);
-        filtered.Rows.Should().Be(1);
+        Ids(filtered).Should().Equal(_articleIds[0].ToString());
         filtered.Total.Should().Be(1);
         var otherLocale = await GetAsync($"/api/items/fxArticle?limit=100&locale=en&filter[title][_eq]={LocaleNullTitle}");
         otherLocale.Rows.Should().Be(0);
@@ -257,7 +272,7 @@ public sealed class ValueEdgeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task A_string_operator_still_works_on_text_and_on_JSON_stored_fields()
+    public async Task A_string_operator_matches_text_and_JSON_stored_fields()
     {
         var code = await GetAsync("/api/items/language?filter[code][_contains]=ull");
         code.Status.Should().Be(HttpStatusCode.OK, code.Text);
@@ -270,6 +285,17 @@ public sealed class ValueEdgeApiTests : IDisposable
         var title = await GetAsync("/api/items/fxArticle?limit=100&locale=en&filter[title][_contains]=plain");
         title.Status.Should().Be(HttpStatusCode.OK, title.Text);
         title.Rows.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("_starts_with", "{\"edge")]
+    [InlineData("_ends_with", "marker\"}")]
+    [InlineData("_contains", "edge")]
+    public async Task A_string_operator_matches_the_stored_text_of_a_key_value_field(string op, string value)
+    {
+        var r = await GetAsync($"/api/items/fxArticle?limit=100&filter[meta][{op}]={Q(value)}");
+        r.Status.Should().Be(HttpStatusCode.OK, r.Text);
+        Ids(r).Should().Equal(_articleIds[0].ToString());
     }
 
     [Theory]
@@ -312,15 +338,15 @@ public sealed class ValueEdgeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task The_null_operators_keep_working_on_every_entrance()
+    public async Task The_null_operators_test_for_null_on_every_entrance()
     {
         var mine = $"filter[categoryId][_eq]={_categoryId}";
         var rest = await GetAsync($"/api/items/fxArticle?limit=100&{mine}&filter[attributes][_null]=true");
         rest.Status.Should().Be(HttpStatusCode.OK, rest.Text);
-        rest.Rows.Should().Be(1);
+        Ids(rest).Should().Equal(_articleIds[3].ToString());
         var notNull = await PostAsync("fxArticle",
             "{\"filter\":{\"categoryId\":{\"_eq\":\"" + _categoryId + "\"},\"attributes\":{\"_nnull\":true}}}");
-        notNull.Rows.Should().Be(_articleIds.Count - 1);
+        Ids(notNull).Should().BeEquivalentTo(_articleIds.Take(3).Select(id => id.ToString()));
         var gqlNull = await GraphqlAsync("""{ fxArticles(limit: 100, filter: { publishedAt: { isNull: true } }) { items { id } } }""");
         gqlNull.Text.Should().NotContain("\"errors\"");
         gqlNull.Root.GetProperty("data").GetProperty("fxArticles").GetProperty("items").GetArrayLength()
@@ -355,7 +381,7 @@ public sealed class ValueEdgeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task A_list_is_still_the_value_of_a_set_operator()
+    public async Task A_list_is_the_value_of_a_set_operator()
     {
         var r = await PostAsync("language", """{"filter":{"code":{"_in":["null","[null]"]}}}""");
         r.Status.Should().Be(HttpStatusCode.OK, r.Text);
@@ -402,7 +428,7 @@ public sealed class ValueEdgeApiTests : IDisposable
     [InlineData("filter[code][_in]=%7B%22a%22%3A1%7D")]
     [InlineData("filter[code][_in]=%7B%22a%22%3A1%2C%22b%22%3A2%7D")]
     [InlineData("filter[code][_eq]=%7B%22a%22%3A1%7D")]
-    public async Task The_query_string_keeps_reading_a_string_as_text_or_a_comma_list(string query)
+    public async Task The_query_string_reads_a_string_as_text_or_a_comma_list(string query)
     {
         var r = await GetAsync("/api/items/language?" + query);
         r.Status.Should().Be(HttpStatusCode.OK, r.Text);

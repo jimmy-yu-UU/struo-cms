@@ -96,7 +96,7 @@ public class ConditionalModelTranslatorBackendTests
     [Theory]
     [InlineData("PostgreSQL")]
     [InlineData("SqlServer")]
-    public void String_operators_and_null_values_are_refused_null_checks_keep_the_general_path_and_unparseable_values_are_refused(string backend)
+    public void String_operators_and_null_values_are_refused_null_checks_render_a_plain_null_test_and_unparseable_values_are_refused(string backend)
     {
         var db = Client(backend);
 

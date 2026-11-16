@@ -8,22 +8,23 @@ namespace Struo.Tests.Template;
 
 /// <summary>
 /// SqlSugar renders the values of <c>ConditionalType.In</c> and <c>ConditionalType.NotIn</c> as literals inside the
-/// SQL text. <c>ValueConditions</c> parses each value to the column's CLR type before it builds one, so that file is
-/// the only place in <c>src/</c> allowed to name either member. A mention in a comment counts too: the scan reads
-/// text, so the rule holds for code written later without anyone remembering it.
+/// SQL text, and reads the texts <c>null</c> and <c>[null]</c> of a <c>ConditionalType.Equal</c> value as a null
+/// test. <c>ValueConditions</c> parses each value to the column's CLR type and binds text before it builds one, so
+/// that file is the only place in <c>src/</c> allowed to name any of the three members. A mention in a comment
+/// counts too: the scan reads text, so the rule holds for code written later without anyone remembering it.
 /// </summary>
 public sealed partial class ValueConditionsConventionTests
 {
     private const string AllowedFile = "src/Struo.Infrastructure/Query/ValueConditions.cs";
 
-    [GeneratedRegex(@"ConditionalType\s*\.\s*(In|NotIn)\b")]
+    [GeneratedRegex(@"ConditionalType\s*\.\s*(In|NotIn|Equal)\b")]
     private static partial Regex SetMember();
 
     internal static IReadOnlyList<string> Offenders(IEnumerable<(string Path, string Text)> files) =>
         files.Where(f => f.Path != AllowedFile && SetMember().IsMatch(f.Text)).Select(f => f.Path).Order().ToList();
 
     [Fact]
-    public void Only_ValueConditions_names_the_in_and_not_in_condition_types()
+    public void Only_ValueConditions_names_the_in_not_in_and_equal_condition_types()
     {
         var root = RepoRoot.Find();
         var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
@@ -33,7 +34,7 @@ public sealed partial class ValueConditionsConventionTests
         files.Should().Contain(f => f.Path == AllowedFile, "the allowed file must exist where this test expects it");
 
         Offenders(files).Should().BeEmpty(
-            "only {0} may name ConditionalType.In or ConditionalType.NotIn; every other site builds its condition through it", AllowedFile);
+            "only {0} may name ConditionalType.In, ConditionalType.NotIn or ConditionalType.Equal; every other site builds its condition through it", AllowedFile);
     }
 
     [Theory]
@@ -41,7 +42,10 @@ public sealed partial class ValueConditionsConventionTests
     [InlineData("x = ConditionalType . NotIn;", true)]
     [InlineData("// ConditionalType.In is the typed primitive", true)]
     [InlineData("/// <see cref=\"ConditionalType.NotIn\"/>", true)]
-    [InlineData("x = ConditionalType.Equal;", false)]
+    [InlineData("x = ConditionalType.Equal;", true)]
+    [InlineData("// ConditionalType.Equal reads the word null as a null test", true)]
+    [InlineData("x = ConditionalType.EqualNull;", false)]
+    [InlineData("x = ConditionalType.NoEqual;", false)]
     [InlineData("x = ConditionalType.IsNot;", false)]
     [InlineData("x = ConditionalType.InSingle;", false)]
     public void The_scan_reads_code_and_comments_and_nothing_else(string text, bool flagged)

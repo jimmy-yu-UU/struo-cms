@@ -76,6 +76,18 @@ public sealed class SearchableTextColumnTests
         [CmsField(Interface = FieldInterface.Number, Searchable = true)] public List<int> Numbers { get; set; } = [];
     }
 
+    [CmsCollection("Search on a repeater sub-field", Name = "stcRepeater")]
+    public sealed class SearchableSubField
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Interface = FieldInterface.Repeater)] public List<SearchableItem> Items { get; set; } = [];
+    }
+
+    public sealed class SearchableItem
+    {
+        [CmsField(Interface = FieldInterface.Text, Searchable = true)] public string Question { get; set; } = "";
+    }
+
     [CmsCollection("Number that is not searchable", Name = "stcQuiet")]
     public sealed class QuietNumber
     {
@@ -84,11 +96,11 @@ public sealed class SearchableTextColumnTests
     }
 
     [Theory]
-    [InlineData(typeof(SearchableNumber), "SearchableNumber.Count", "Int32")]
+    [InlineData(typeof(SearchableNumber), "SearchableNumber.Count", "int")]
     [InlineData(typeof(SearchableGuid), "SearchableGuid.Ref", "Guid")]
-    [InlineData(typeof(SearchableDate), "SearchableDate.At", "Nullable")]
-    [InlineData(typeof(SearchableBool), "SearchableBool.On", "Boolean")]
-    [InlineData(typeof(TranslatedHost), "TranslatedNumberText.Rank", "Int32")]
+    [InlineData(typeof(SearchableDate), "SearchableDate.At", "DateTime?")]
+    [InlineData(typeof(SearchableBool), "SearchableBool.On", "bool")]
+    [InlineData(typeof(TranslatedHost), "TranslatedNumberText.Rank", "int")]
     public void Searchable_on_a_column_that_is_not_text_fails_the_scan_and_says_what_to_change(
         Type type, string field, string columnType)
     {
@@ -96,6 +108,15 @@ public sealed class SearchableTextColumnTests
         var message = act.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain(field).And.Contain("Searchable").And.Contain("text only")
             .And.Contain(columnType).And.Contain("Remove Searchable");
+    }
+
+    [Fact]
+    public void Searchable_on_a_repeater_sub_field_fails_the_scan_and_says_so()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(SearchableSubField)]);
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("SearchableItem.Question").And.Contain("Repeater sub-field")
+            .And.Contain("never searched").And.Contain("Remove Searchable");
     }
 
     [Fact]
@@ -113,7 +134,7 @@ public sealed class SearchableTextColumnTests
     }
 
     [Fact]
-    public void The_core_the_fixtures_and_every_searchable_field_of_them_still_scan()
+    public void The_core_and_fixture_collections_scan_with_their_searchable_fields()
     {
         var core = MetadataScanner.ScanTypes(FrameworkEntityTypes.All);
         var fixtures = MetadataScanner.Scan(typeof(FxArticle).Assembly);

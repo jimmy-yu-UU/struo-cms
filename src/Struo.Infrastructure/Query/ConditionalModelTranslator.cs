@@ -30,16 +30,10 @@ public static class ConditionalModelTranslator
         var property = d.EntityType
             .GetProperty(d.FieldToProperty.GetValueOrDefault(field) ?? string.Empty,
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        var utcInstant = property is not null && UtcInstantConverter.IsUtcInstantProperty(property);
-        return new ValueTarget(
-            Column(d, db, field), field, property?.PropertyType ?? typeof(string),
-            db.CurrentConnectionConfig.DbType, utcInstant, IsJsonColumn(property, d, db));
+        return property is null
+            ? new ValueTarget(Column(d, db, field), field, typeof(string), db.CurrentConnectionConfig.DbType)
+            : ValueTarget.Of(db, d.EntityType, property, field);
     }
-
-    private static bool IsJsonColumn(PropertyInfo? property, EntityDescriptor d, ISqlSugarClient db) =>
-        property is not null &&
-        db.EntityMaintenance.GetEntityInfo(d.EntityType).Columns
-            .Any(column => column.PropertyName == property.Name && column.IsJson);
 
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)
     {

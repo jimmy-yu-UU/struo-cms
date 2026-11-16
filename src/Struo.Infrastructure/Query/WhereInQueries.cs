@@ -58,8 +58,7 @@ internal sealed class WhereInQueries(ISqlSugarClient db, IEntityRegistry registr
     {
         var info = entityType.GetProperty(clrProperty, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
             ?? throw new InvalidOperationException($"'{entityType.Name}' has no property '{clrProperty}'.");
-        var column = db.EntityMaintenance.GetDbColumnName(info.Name, entityType);
-        return new ValueTarget(column, column, info.PropertyType, db.CurrentConnectionConfig.DbType);
+        return ValueTarget.Of(db, entityType, info);
     }
 
     // `column IN (values)`; shared by the filtered and the windowed fetch. Every value must already be of

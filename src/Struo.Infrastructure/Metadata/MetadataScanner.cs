@@ -441,11 +441,32 @@ public static class MetadataScanner
     // sub-field is no column and is never searched.
     private static void RequireTextColumnForSearch(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
     {
-        if (!attr.Searchable || !isColumn || IsTextColumn(prop, attr.Interface)) return;
+        if (!attr.Searchable) return;
+        var name = $"{prop.DeclaringType?.Name}.{prop.Name}";
+        if (!isColumn)
+            throw new MetadataException(
+                $"Field '{name}' is a Repeater sub-field marked Searchable, but a sub-field has no column of its " +
+                "own and is never searched. Remove Searchable = true from it.");
+        if (IsTextColumn(prop, attr.Interface)) return;
         throw new MetadataException(
-            $"Field '{prop.DeclaringType?.Name}.{prop.Name}' is Searchable but its column is " +
-            $"{prop.PropertyType.Name}: search matches text only. Remove Searchable = true from it, " +
-            "or make the property a string.");
+            $"Field '{name}' is Searchable but its column is {TypeLabel(prop.PropertyType)}: search matches " +
+            "text only. Remove Searchable = true from it, or make the property a string.");
+    }
+
+    private static string TypeLabel(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is { } inner) return TypeLabel(inner) + "?";
+        if (type.IsGenericType)
+            return type.Name[..type.Name.IndexOf('`')] + "<" + string.Join(", ", type.GetGenericArguments().Select(TypeLabel)) + ">";
+        if (type == typeof(int)) return "int";
+        if (type == typeof(long)) return "long";
+        if (type == typeof(short)) return "short";
+        if (type == typeof(byte)) return "byte";
+        if (type == typeof(bool)) return "bool";
+        if (type == typeof(decimal)) return "decimal";
+        if (type == typeof(double)) return "double";
+        if (type == typeof(float)) return "float";
+        return type.Name;
     }
 
     // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.

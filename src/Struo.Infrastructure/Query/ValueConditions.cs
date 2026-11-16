@@ -1,6 +1,7 @@
 // src/Struo.Infrastructure/Query/ValueConditions.cs
 using System.Collections;
 using System.Globalization;
+using System.Reflection;
 using SqlSugar;
 using Struo.Application.Query;
 using Struo.Domain.Query;
@@ -19,6 +20,20 @@ internal readonly record struct ValueTarget(
     public Type Underlying => Nullable.GetUnderlyingType(ClrType) ?? ClrType;
 
     public bool IsText => Underlying == typeof(string) || StoredAsJson;
+
+    /// <summary>
+    /// The one way to describe a column: its database name, CLR type, UTC-instant binding and whether the
+    /// ORM stores it as JSON all come from the entity type and the property.
+    /// </summary>
+    public static ValueTarget Of(ISqlSugarClient db, Type entityType, PropertyInfo property, string? label = null)
+    {
+        var column = db.EntityMaintenance.GetDbColumnName(property.Name, entityType);
+        var storedAsJson = db.EntityMaintenance.GetEntityInfo(entityType).Columns
+            .Any(c => c.PropertyName == property.Name && c.IsJson);
+        return new ValueTarget(
+            column, label ?? column, property.PropertyType, db.CurrentConnectionConfig.DbType,
+            UtcInstantConverter.IsUtcInstantProperty(property), storedAsJson);
+    }
 }
 
 /// <summary>The terms a value operator contributes to an <c>_or</c> group, plus a column that proves the group empty.</summary>
@@ -26,7 +41,7 @@ internal sealed record OrTerms(IReadOnlyList<ConditionalModel> Models, string? N
 
 /// <summary>
 /// The one place a filter or id value becomes a SqlSugar condition, and the only place in <c>src/</c>
-/// that names <see cref="ConditionalType.In"/> or <see cref="ConditionalType.NotIn"/>. Each value is
+/// that names <see cref="ConditionalType.In"/>, <see cref="ConditionalType.NotIn"/> or <see cref="ConditionalType.Equal"/>. Each value is
 /// parsed to the column's CLR type with the invariant culture and rendered again from the parsed value,
 /// so text the caller wrote never reaches the SQL of a numeric, boolean, Guid or date column. A string
 /// column takes a set as a group of parameterised equalities. Text that does not parse is a
@@ -84,14 +99,7 @@ internal static class ValueConditions
         return string.Join(", ", accepted.Select(Token));
     }
 
-    private static string Token(QueryOperator op) => op switch
-    {
-        QueryOperator.Eq => "_eq", QueryOperator.Neq => "_neq", QueryOperator.Gt => "_gt", QueryOperator.Gte => "_gte",
-        QueryOperator.Lt => "_lt", QueryOperator.Lte => "_lte", QueryOperator.In => "_in", QueryOperator.Nin => "_nin",
-        QueryOperator.Contains => "_contains", QueryOperator.StartsWith => "_starts_with",
-        QueryOperator.EndsWith => "_ends_with", QueryOperator.Null => "_null", QueryOperator.NNull => "_nnull",
-        _ => throw new InvalidOperationException($"Unmapped operator: {op}"),
-    };
+    private static string Token(QueryOperator op) => QueryParser.TokenOf(op);
 
     /// <summary>Terms for an <c>_or</c> group: every term is one <see cref="ConditionalModel"/> joined with OR.</summary>
     public static OrTerms OrMembers(ValueTarget t, QueryOperator op, object? value)

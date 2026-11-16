@@ -275,7 +275,7 @@ public sealed class TypedValueConditionTests : IDisposable
     }
 
     [Fact]
-    public void Null_checks_are_unchanged_and_a_string_operator_on_a_typed_column_is_refused()
+    public void Null_checks_run_and_a_string_operator_on_a_typed_column_is_refused()
     {
         Run("id", QueryOperator.Null, null).Should().BeEmpty();
         Run("id", QueryOperator.NNull, null).Should().Equal(1, 2, 3);

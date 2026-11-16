@@ -15,6 +15,17 @@ public sealed class VcJson
 {
     [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
     [SugarColumn(IsJson = true)] public List<string> Tags { get; set; } = [];
+    [SugarColumn(IsJson = true)] public Dictionary<string, string> Meta { get; set; } = new();
+}
+
+/// <summary>Columns of types the filter parser does not cover; they are compared as text. No table is created.</summary>
+[SugarTable("vc_odd")]
+public sealed class VcOdd
+{
+    [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+    [SugarColumn(IsNullable = true)] public DateOnly? Day { get; set; }
+    [SugarColumn(IsNullable = true)] public TimeOnly? Clock { get; set; }
+    [SugarColumn(IsNullable = true)] public TimeSpan? Span { get; set; }
 }
 
 /// <summary>
@@ -27,7 +38,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
     private ISqlSugarClient Db => _handle.Db;
     private static readonly Struo.Application.Metadata.EntityDescriptor Strings = Descriptor<VcString>("Id", "Code", "Other");
     private static readonly Struo.Application.Metadata.EntityDescriptor Typed = Descriptor<VcTyped>(TypedProps);
-    private static readonly Struo.Application.Metadata.EntityDescriptor Json = Descriptor<VcJson>("Id", "Tags");
+    private static readonly Struo.Application.Metadata.EntityDescriptor Json = Descriptor<VcJson>("Id", "Tags", "Meta");
 
     public ValueEdgeConditionTests() => SeedStrings(Db);
 
@@ -71,7 +82,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
     }
 
     [Fact]
-    public void Neq_and_the_null_checks_are_unchanged()
+    public void Neq_compares_text_and_the_null_checks_test_for_null()
     {
         RunStrings("code", QueryOperator.Neq, "null").Should().NotContain(4);
         RunStrings("code", QueryOperator.Null, null).Should().Equal(3);
@@ -106,6 +117,22 @@ public sealed class ValueEdgeConditionTests : IDisposable
         Ids<VcString>(Db, [set], r => r.Id).Should().Equal(id);
     }
 
+    [Theory]
+    [InlineData("day", "null")]
+    [InlineData("day", "[null]")]
+    [InlineData("clock", "null")]
+    [InlineData("span", "null")]
+    public void Eq_with_the_word_null_on_a_type_the_filter_compares_as_text_binds_that_text(string field, string word)
+    {
+        var d = Descriptor<VcOdd>("Id", "Day", "Clock", "Span");
+        var conds = Conds(Db, d, field, QueryOperator.Eq, word);
+        var (sql, pars) = SqlOf<VcOdd>(Db, conds);
+        sql.Should().NotMatchRegex(@"(?i)\b" + field + @"\W+is null");
+        pars.Select(p => p.Value).Should().Contain(word);
+        var repeated = SqlOf<VcOdd>(Db, conds);
+        repeated.Sql.Should().Be(sql);
+    }
+
     // ── string operators ─────────────────────────────────────────────────
 
     private static readonly string[] TextOperatorTokens = ["_contains", "_starts_with", "_ends_with"];
@@ -137,7 +164,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
     }
 
     [Fact]
-    public void A_string_operator_on_a_text_column_and_on_a_JSON_column_still_runs()
+    public void A_string_operator_runs_on_a_text_column_and_on_a_JSON_column()
     {
         RunStrings("code", QueryOperator.Contains, "bc").Should().Equal(1);
         RunStrings("code", QueryOperator.StartsWith, "x").Should().Equal(7, 8);
@@ -150,8 +177,23 @@ public sealed class ValueEdgeConditionTests : IDisposable
         Ids<VcJson>(Db, Conds(Db, Json, "tags", QueryOperator.Contains, "gam"), r => r.Id).Should().Equal(2);
     }
 
+    // A key/value column is stored as {"key":"value"}, so its text starts with { and ends with } and the
+    // match values need no character that LIKE treats as a wildcard on any backend.
     [Fact]
-    public void Comparison_set_and_null_operators_still_run_on_every_non_text_field()
+    public void Starts_with_and_ends_with_match_the_stored_text_of_a_JSON_column()
+    {
+        Reset<VcJson>(Db);
+        Db.Insertable(new VcJson { Id = 1, Meta = new Dictionary<string, string> { ["alpha"] = "one" } }).ExecuteCommand();
+        Db.Insertable(new VcJson { Id = 2, Meta = new Dictionary<string, string> { ["beta"] = "two" } }).ExecuteCommand();
+        Ids<VcJson>(Db, Conds(Db, Json, "meta", QueryOperator.StartsWith, "{\"alp"), r => r.Id).Should().Equal(1);
+        Ids<VcJson>(Db, Conds(Db, Json, "meta", QueryOperator.StartsWith, "{\"be"), r => r.Id).Should().Equal(2);
+        Ids<VcJson>(Db, Conds(Db, Json, "meta", QueryOperator.EndsWith, "two\"}"), r => r.Id).Should().Equal(2);
+        Ids<VcJson>(Db, Conds(Db, Json, "meta", QueryOperator.EndsWith, "one\"}"), r => r.Id).Should().Equal(1);
+        Ids<VcJson>(Db, Conds(Db, Json, "meta", QueryOperator.EndsWith, "nope\"}"), r => r.Id).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Comparison_set_and_null_operators_run_on_every_non_text_field()
     {
         SeedTyped(Db);
         Ids<VcTyped>(Db, Conds(Db, Typed, "dateTimeCol", QueryOperator.Gte, "2026-03-05"), r => r.Id)
@@ -189,7 +231,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
     }
 
     [Fact]
-    public void The_null_operators_ignore_the_value_as_before()
+    public void The_null_operators_ignore_the_value()
     {
         RunStrings("code", QueryOperator.Null, null).Should().Equal(3);
         RunStrings("code", QueryOperator.Null, "ignored").Should().Equal(3);
@@ -216,7 +258,7 @@ public sealed class ValueEdgeConditionTests : IDisposable
     }
 
     [Fact]
-    public void A_list_is_still_the_value_of_a_set_operator()
+    public void A_list_is_the_value_of_a_set_operator()
     {
         RunStrings("code", QueryOperator.In, new List<object?> { "abc", "zz" }).Should().Equal(1, 9);
         RunStrings("code", QueryOperator.Nin, new List<object?> { "abc" }).Should().Contain(2);

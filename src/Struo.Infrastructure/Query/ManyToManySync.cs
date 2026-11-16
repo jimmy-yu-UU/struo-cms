@@ -63,7 +63,7 @@ internal sealed class ManyToManySync(ISqlSugarClient db, TransactionRunner trans
         var parentConditional = new List<IConditionalModel>
         {
             ValueConditions.BuildInternal(
-                new ValueTarget(parentColumn, parentColumn, parentProp.PropertyType, db.CurrentConnectionConfig.DbType),
+                ValueTarget.Of(db, typeof(T), parentProp, parentColumn),
                 QueryOperator.In, new[] { parentId })!
         };
 

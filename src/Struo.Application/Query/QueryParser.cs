@@ -19,6 +19,12 @@ public static class QueryParser
             ["_ends_with"] = QueryOperator.EndsWith,
         };
 
+    private static readonly IReadOnlyDictionary<QueryOperator, string> Tokens =
+        Operators.ToDictionary(pair => pair.Value, pair => pair.Key);
+
+    /// <summary>The spelling of an operator in the query string and in JSON, the inverse of the parser's own table.</summary>
+    public static string TokenOf(QueryOperator op) => Tokens.TryGetValue(op, out var token) ? token : op.ToString();
+
     public static readonly IReadOnlyDictionary<string, AggregateOp> AggregateOps =
         new Dictionary<string, AggregateOp>(StringComparer.Ordinal)
         {
@@ -82,11 +88,37 @@ public static class QueryParser
         return fields.Count == 0 ? null : new AggregateSpec(fields);
     }
 
+    // A body field of the wrong JSON kind is a QueryException naming the field; reading it with
+    // GetString or TryGetInt32 would throw InvalidOperationException, which answers 500.
+    private static string Where(string? relation) => relation is null ? "" : $" (in 'deep.{relation}')";
+
+    private static List<string> ReadStrings(JsonElement array, string name, string? relation = null) =>
+        array.EnumerateArray()
+            .Select(x => x.ValueKind == JsonValueKind.String
+                ? x.GetString()!
+                : throw new QueryException($"'{name}' must be an array of strings{Where(relation)}."))
+            .ToList();
+
+    private static int ReadInt(JsonElement value, string name, string? relation = null) =>
+        value.ValueKind == JsonValueKind.Number
+            ? value.TryGetInt32(out var number) ? number : 0
+            : throw new QueryException($"'{name}' must be an integer{Where(relation)}.");
+
+    private static string? ReadSearch(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Null => null,
+        _ => throw new QueryException("'search' must be a string."),
+    };
+
     public static QueryModel ParseEnvelope(JsonElement env)
     {
+        if (env.ValueKind != JsonValueKind.Object)
+            throw new QueryException("'body' must be a JSON object.");
+
         IReadOnlyList<string>? fields = null;
         if (env.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
-            fields = f.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+            fields = ReadStrings(f, "fields");
 
         FilterNode? filter = null;
         if (env.TryGetProperty("filter", out var fl) && fl.ValueKind == JsonValueKind.Object)
@@ -94,12 +126,12 @@ public static class QueryParser
 
         var sort = new List<SortField>();
         if (env.TryGetProperty("sort", out var s) && s.ValueKind == JsonValueKind.Array)
-            foreach (var item in s.EnumerateArray())
-                sort.Add(ParseSortToken(item.GetString() ?? ""));
+            foreach (var item in ReadStrings(s, "sort"))
+                sort.Add(ParseSortToken(item));
 
-        var limit = env.TryGetProperty("limit", out var l) && l.TryGetInt32(out var li) ? li : 0;
-        var offset = env.TryGetProperty("offset", out var o) && o.TryGetInt32(out var oi) ? oi : 0;
-        var search = env.TryGetProperty("search", out var se) ? se.GetString() : null;
+        var limit = env.TryGetProperty("limit", out var l) ? ReadInt(l, "limit") : 0;
+        var offset = env.TryGetProperty("offset", out var o) ? ReadInt(o, "offset") : 0;
+        var search = env.TryGetProperty("search", out var se) ? ReadSearch(se) : null;
 
         var model = new QueryModel(fields, filter, sort, limit, offset, search);
         return model with { Deep = ParseDeepEnvelope(env), Facets = ParseFacetsEnvelope(env), Aggregate = ParseAggregateEnvelope(env) };
@@ -124,17 +156,17 @@ public static class QueryParser
             if (rel.Value.ValueKind == JsonValueKind.Object)
             {
                 if (rel.Value.TryGetProperty("fields", out var f) && f.ValueKind == JsonValueKind.Array)
-                    fields = f.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                    fields = ReadStrings(f, "fields", rel.Name);
                 if (rel.Value.TryGetProperty("filter", out var fl) && fl.ValueKind == JsonValueKind.Object)
                     filter = ParseFilter(fl);
                 if (rel.Value.TryGetProperty("sort", out var s) && s.ValueKind == JsonValueKind.Array)
                 {
                     sort = new List<SortField>();
-                    foreach (var item in s.EnumerateArray())
-                        sort.Add(ParseSortToken(item.GetString() ?? ""));
+                    foreach (var item in ReadStrings(s, "sort", rel.Name))
+                        sort.Add(ParseSortToken(item));
                 }
-                if (rel.Value.TryGetProperty("limit", out var l) && l.TryGetInt32(out var li)) limit = li;
-                if (rel.Value.TryGetProperty("offset", out var o) && o.TryGetInt32(out var oi)) offset = oi;
+                if (rel.Value.TryGetProperty("limit", out var l)) limit = ReadInt(l, "limit", rel.Name);
+                if (rel.Value.TryGetProperty("offset", out var o)) offset = ReadInt(o, "offset", rel.Name);
                 if (rel.Value.TryGetProperty("deep", out var nd) && nd.ValueKind == JsonValueKind.Object)
                     nested = ParseDeepObject(nd);
             }
