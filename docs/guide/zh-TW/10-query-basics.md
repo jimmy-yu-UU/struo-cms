@@ -34,6 +34,10 @@ HTTP_STATUS:200
 }
 ```
 
+body 裡，`search` 是字串，`sort` 與 `fields` 是字串陣列，`limit` 與 `offset` 是數字（`deep` 裡也一樣
+），body 本身是一個 JSON 物件。鍵的 JSON 種類不對，回 400 並點名該鍵。帶小數或超出 32 位元範圍的數字
+，當成沒有給這個鍵，和查詢字串一樣。
+
 本章接下來的例子都用查詢字串形式。GraphQL 用同一套語意做同一件事，只是引數拼法不同——運算子從
 `_eq` 換成 `eq`，量詞從 `_some` 換成 `some`——拼法留給[GraphQL 一章](14-graphql.md)。
 
@@ -82,7 +86,7 @@ HTTP_STATUS:200
 
 **各欄位接受的運算子。** 欄位接受哪些運算子，看它的欄位怎麼存值：
 
-| 運算子 | 文字 | 存成 JSON | 其他 |
+| 運算子 | 文字 | 清單或字典 | 其他 |
 |---|---|---|---|
 | `_eq`、`_neq` | 可 | 可 | 可 |
 | `_lt`、`_lte`、`_gt`、`_gte` | 可 | 可 | 可 |
@@ -90,10 +94,11 @@ HTTP_STATUS:200
 | `_null`、`_nnull` | 可 | 可 | 可 |
 | `_contains`、`_starts_with`、`_ends_with` | 可 | 可 | 400 |
 
-文字欄位是 `string` 屬性，`Json` 欄位也算。存成 JSON 的欄位是 `MultiSelect`、`CheckboxGroup`、
-`Tags`、`KeyValue`、`Files`、`Repeater` 欄位，或宣告了 `[SugarColumn(IsJson = true)]` 的屬性；它的
-字串運算子比對的是存起來的 JSON 文字。其他是所有剩下的欄位：數字、布林、`Guid`、列舉與日期時間。
-下面型別轉換表沒有涵蓋的型別，`_in`／`_nin` 一樣回 400。
+文字欄位是 `string` 屬性：`Json` 欄位，以及宣告了 `[SugarColumn(IsJson = true)]` 的 `string`，都算文
+字，接受 `_in`／`_nin`。清單或字典欄位是存成 JSON 的清單或字典屬性（`MultiSelect`、`CheckboxGroup`、
+`Tags`、`KeyValue`、`Files`、`Repeater`）；它的字串運算子比對的是存起來的 JSON 文字，`_in`／`_nin`回
+400。其他是所有剩下的欄位：數字、布林、`Guid`、列舉與日期時間。下面型別轉換表沒有涵蓋的型別，`_in`／
+`_nin` 一樣回 400。
 
 字串運算子用在不接受它的欄位上，回 400，訊息點名欄位與運算子，並列出這個欄位接受的運算子。要比對
 `DateTime` 欄位上的某一天，改用範圍：
@@ -106,8 +111,9 @@ HTTP_STATUS:200
 | 值 | 運算子 | 結果 |
 |---|---|---|
 | JSON `null` | `_null`、`_nnull` 以外的全部 | 400，訊息指向 `_null`、`_nnull` |
-| 文字 `null` 或 `[null]` | 全部，用在文字欄位 | 純文字 |
+| 文字 `null` 或 `[null]` | 全部，用在當成文字比對的欄位 | 純文字 |
 | 清單 | `_in`、`_nin` | 各個元素 |
+| 清單 | `_null`、`_nnull` | 忽略 |
 | 清單 | 其他運算子 | 400 |
 | JSON 物件，單獨或放在清單裡 | 全部 | 400 |
 | 字串 | `_in`、`_nin` | 逗號清單 |
@@ -129,9 +135,9 @@ HTTP_STATUS:200
 加上尾端數字的欄位（`address` 與 `address2`），在同一個查詢裡可能得到同一個參數名。這樣的查詢會回
 400 並點名這兩個欄位，但只有參數名真的重複才會；同樣兩個欄位若在查詢裡沒有撞名，照常運作。
 
-**`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值本身完全不會被
-讀，所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，
-不會反過來變成「不是 null」：
+**`_null`／`_nnull` 不看值。** 這兩個運算子只轉成單純的 `IS NULL`／`IS NOT NULL`，值不會改變條件，
+所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，不會反過來變成「不是 null」。它們
+唯一拒絕的值是 JSON 物件，和其他每個運算子一樣回 400；`null` 與清單則被忽略：
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
@@ -141,10 +147,11 @@ HTTP_STATUS:200
 
 把 `_null]=true` 換成 `_null]=false`，回傳的是同一列，`meta.total` 一樣是 1。
 
-**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——
-`Guid` 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、
-`bool`、`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；
-`string` 與未涵蓋的型別，比較運算子維持文字比較，`_in`／`_nin` 則回 400。
+**型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對—— `Guid`
+外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
+`DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
+與未涵蓋的型別（`DateOnly`、`TimeOnly`、`TimeSpan`），比較運算子維持文字比較，`_in`／`_nin` 則回 400
+。當成文字比對的欄位上，`_eq` 的值是 `null` 這個字，比對的就是這個字，不會測 NULL。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400
 並點名欄位，不會送進資料庫。數字一律以小數點為小數分隔，不論伺服器的地區設定；布林是 `true`、`false`、

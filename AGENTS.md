@@ -124,8 +124,8 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   type with the invariant culture and renders the parsed value, so a numeric, boolean, Guid or date
   column never takes caller text; a text set is a group of bound equalities, as is a text `_eq`. A
   string operator on a column that is not text, a null value and a list given to a single-value
-  operator are 400s. It is the only file that names `ConditionalType.In` or `ConditionalType.NotIn`
-  (`ValueConditionsConventionTests` fails otherwise). See
+  operator are 400s. It is the only file that names `ConditionalType.In`, `ConditionalType.NotIn` or
+  `ConditionalType.Equal` (`ValueConditionsConventionTests` fails otherwise). See
   `docs/ai/decisions/query-values-are-parsed-and-bound.md`.
 - **`ISqlSugarClient` is one process-wide `SqlSugarScope`.** Database work runs in async methods: no
   DB access from a sync lambda in `Task.Run`, a timer callback or a sync job, because SqlSugar then

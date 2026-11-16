@@ -154,7 +154,8 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 `Searchable` 只能用在文字欄位：`string` 屬性，或存成 JSON 的欄位（`MultiSelect`、`CheckboxGroup`、
 `Tags`、`KeyValue`、`Files`、`Repeater` 欄位，或有 `[SugarColumn(IsJson = true)]` 的屬性），因為搜尋
 比對的是文字。用在其他欄位，主機啟動時就停下並丟出 `MetadataException`，訊息點名屬性；拿掉
-`Searchable`，或把屬性改成 `string`。`Sortable` 決定後台清單的表頭
+`Searchable`，或把屬性改成 `string`。`Repeater` 子欄位沒有自己的欄位、也不會被搜尋，所以在上面設
+`Searchable` 同樣讓主機啟動時停下；把它拿掉。`Sortable` 決定後台清單的表頭
 能不能點著排序；查詢語法的 `sort` 不看這個旗標，任何已知欄位都排得動。
 
 欄位對外的鍵名是 CLR 屬性名稱的 camelCase 形式；退回 PascalCase 屬性名時，不會自動加空格或

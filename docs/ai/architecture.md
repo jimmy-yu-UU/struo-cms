@@ -381,7 +381,8 @@ wrote. A text set is the exception: it becomes one bound equality (or inequality
 type before they reach this translator.
 
 `ValueConditions` (`src/Struo.Infrastructure/Query/ValueConditions.cs`) is the only file in `src/` that
-names `ConditionalType.In` or `ConditionalType.NotIn` (`ValueConditionsConventionTests`).
+names `ConditionalType.In`, `ConditionalType.NotIn` or `ConditionalType.Equal`
+(`ValueConditionsConventionTests`).
 `WhereInQueries`, `ManyToManySync`, `TranslationStore` and `PurgeOps` build their id conditions through
 it as well, with the column's CLR type as the target, and a value that is not of that type is an
 `InvalidOperationException`; a request value reaches them only after `ItemWriteSideSync` parsed it to

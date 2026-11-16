@@ -37,6 +37,11 @@ the only way to give a `deep` relation its own `fields`/`filter`/`sort`/`limit`/
 }
 ```
 
+In the body, `search` is a string, `sort` and `fields` are arrays of strings, and `limit` and
+`offset` are numbers, inside `deep` as well, and the body itself is one JSON object. A key of
+another JSON kind is a 400 that names the key. A number that has a fraction or is beyond the 32-bit
+range is read as if the key were missing, the same as in the query string.
+
 The rest of this chapter's examples use the query-string form. GraphQL does the same thing with
 the same semantics, only the argument spelling differs — the operator `_eq` becomes `eq`, and the
 quantifier `_some` becomes `some`. The spelling differences are left to
@@ -94,7 +99,7 @@ differently:
 
 **Operators by field.** Which operators a field takes depends on how its column stores values:
 
-| Operators | Text | JSON-stored | Other |
+| Operators | Text | List or map | Other |
 |---|---|---|---|
 | `_eq`, `_neq` | yes | yes | yes |
 | `_lt`, `_lte`, `_gt`, `_gte` | yes | yes | yes |
@@ -102,10 +107,11 @@ differently:
 | `_null`, `_nnull` | yes | yes | yes |
 | `_contains`, `_starts_with`, `_ends_with` | yes | yes | 400 |
 
-A text field is a `string` property, `Json` fields included. A JSON-stored field is a
-`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files` or `Repeater` field, or a property
-declared with `[SugarColumn(IsJson = true)]`; its string operators match the stored JSON text. Other
-is every other field: numbers, booleans, `Guid`, enums and date-times. `_in`/`_nin` on a type the
+A text field is a `string` property: `Json` fields, and a `string` declared with
+`[SugarColumn(IsJson = true)]`, are text and take `_in`/`_nin`. A list or map field is a list or
+dictionary property stored as JSON (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`,
+`Repeater`); its string operators match the stored JSON text, and `_in`/`_nin` is a 400. Other is
+every other field: numbers, booleans, `Guid`, enums and date-times. `_in`/`_nin` on a type the
 conversion table below does not cover is a 400 too.
 
 The 400 for a string operator on a field it does not take names the field and the operator and lists
@@ -120,8 +126,9 @@ inside its element, so `["a,b"]` is one value. `_contains`/`_starts_with`/`_ends
 | Value | Operators | Result |
 |---|---|---|
 | JSON `null` | all but `_null`, `_nnull` | 400 that names `_null` and `_nnull` |
-| the text `null` or `[null]` | all, on a text field | plain text |
+| the text `null` or `[null]` | all, on a field compared as text | plain text |
 | a list | `_in`, `_nin` | the elements |
+| a list | `_null`, `_nnull` | ignored |
 | a list | every other operator | 400 |
 | a JSON object, alone or in a list | all | 400 |
 | a string | `_in`, `_nin` | a comma list |
@@ -151,9 +158,10 @@ fields, but only when the parameter names really repeat; the same two fields in 
 their names apart work.
 
 **`_null`/`_nnull` ignore the value.** These two operators translate to a plain
-`IS NULL`/`IS NOT NULL`; the value itself is never read at all, so
+`IS NULL`/`IS NOT NULL`; the value does not change the condition, so
 `filter[publishedAt][_null]=false` and `=true` are the same request — it never flips to mean "is
-not null":
+not null". A JSON object is the one value they refuse: it is a 400 here as for every operator.
+`null` and a list are ignored:
 
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
@@ -167,8 +175,9 @@ Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total`
 field's real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as
 text. The conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
 `DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number);
-`string` and any uncovered type stay a text comparison for the comparison operators, and `_in`/`_nin`
-on an uncovered type is a 400.
+`string` and any uncovered type (`DateOnly`, `TimeOnly`, `TimeSpan`) stay a text comparison for the
+comparison operators, and `_in`/`_nin` on an uncovered type is a 400. On a field compared as text,
+`_eq` with the word `null` compares that word; it never tests for NULL.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

@@ -4,11 +4,11 @@
 
 A filter or id value reaches SQL only through `ValueConditions`
 (`src/Struo.Infrastructure/Query/ValueConditions.cs`), the one file in `src/` that names
-`ConditionalType.In` or `ConditionalType.NotIn`. It parses each value to the column's CLR type with
-the invariant culture and renders the parsed value; the caller's text is never passed on. The
-supported column types are `Guid`, `int`, `long`, `short`, `byte`, `bool`, `decimal`, `double`,
-`float`, `DateTime`, `DateTimeOffset`, enums and `string`. `_in`/`_nin` on any other type is a 400;
-the comparison operators on such a type keep passing the text as a bound value.
+`ConditionalType.In`, `ConditionalType.NotIn` or `ConditionalType.Equal`. It parses each value to
+the column's CLR type with the invariant culture and renders the parsed value; the caller's text is
+never passed on. The supported column types are `Guid`, `int`, `long`, `short`, `byte`, `bool`,
+`decimal`, `double`, `float`, `DateTime`, `DateTimeOffset`, enums and `string`. `_in`/`_nin` on any
+other type is a 400; the comparison operators on such a type keep passing the text as a bound value.
 
 - A set on a number, boolean, `Guid`, date or enum column stays `IN`/`NOT IN` with the rendered
   values (SqlSugar writes them into the statement as literals). A boolean set renders `1`/`0`.
@@ -46,9 +46,22 @@ the comparison operators on such a type keep passing the text as a bound value.
   `IsJson`) gives the same answer from the entity type, and `Searchable = true` on a column that is
   not text fails the scan with a `MetadataException`; `TextColumnAgreementTests` pins that both
   sides agree for every field of the core and fixture collections.
-- Every `Equal` on a text value is a bound equality, the way a set member is: `_eq`, the translation
-  sidecar's locale condition (`FilterTranslator.TranslationSubquery`, `TranslationStore`) and the id
-  lookups all go through `ValueConditions`, so no other file builds an `Equal` of its own.
+- Every `Equal` on a value compared as text (a `string`, a JSON column, or a type outside the parsed
+  set such as `DateOnly`, `TimeOnly` and `TimeSpan`) is a bound equality, the way a set member is,
+  so the word `null` is never a null test on any column. `_eq`, the translation sidecar's locale
+  condition (`FilterTranslator.TranslationSubquery`, `TranslationStore`) and the id lookups all go
+  through `ValueConditions`; `ValueConditionsConventionTests` fails when another file names
+  `ConditionalType.Equal`, as it does for `In` and `NotIn`.
+- `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
+  binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
+  it text" the same way.
+- `Searchable = true` on a Repeater sub-field fails the scan too: a sub-field has no column and is
+  never searched.
+- A `POST /query` body key of the wrong JSON kind (`search`, `limit`, `offset`, an element of `sort`
+  or `fields`, also inside `deep`, or a body that is not an object) is a `QueryException` naming the
+  key; reading it with `GetString` or `TryGetInt32` would throw `InvalidOperationException`, which
+  answers 500. A number with a fraction or beyond the 32-bit range is read as a missing
+  `limit`/`offset`, as in the query string.
 - The id lookups (`WhereInQueries`, `ManyToManySync`, `TranslationStore`, `PurgeOps`) take the column's
   CLR type from the entity and refuse a value that is not of it with an `InvalidOperationException`.
   A relation array is parsed to the target key type in `ItemWriteSideSync` before it gets there.
@@ -66,11 +79,11 @@ names clash with a group's on the same column, and it takes its connector from i
 SqlSugar behaviours the group form has to work around:
 
 - A group's first entry carries the connector between the group and the condition before it.
-- An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the text
-  `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list request
-  renders twice (count, then page). The name check renders a copy for that reason. Inside a subquery
-  the `IS NULL` form lost the `AND` that joins it to the locale condition, which made the statement
-  invalid.
+- An `Equal` whose `FieldValue` is the text `null` renders `IS NULL`; one whose `FieldValue` is the
+  text `[null]` rewrites `FieldValue` in place, so a second render of the same model differs. A list
+  request renders twice (count, then page). The name check renders a copy for that reason. Inside a
+  subquery SqlSugar renders the null-test form without the `AND` that joins it to the condition
+  before it, so the statement is invalid.
 - One instance listed twice is numbered by its first position, which drops the closing parenthesis and
   repeats a parameter name.
 - An empty group renders nothing: the condition disappears, or the `AND` after it is left dangling.
@@ -136,26 +149,18 @@ PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.00.4305),
   typed column compared with the type's default (`= 0`, `= False`) and threw `ArgumentNullException`
   (500) on a `Guid`. A list given to `_eq` on a text column was joined with commas.
 
-Measured 2026-11-16 with the committed tests `ValueEdgeConditionTests`, `ValueEdgeApiTests`,
-`SearchableTextColumnTests` and the rewritten translator and set-shape tests:
-
-- SQLite: the whole `Struo.Tests` project, 4353 passed and 234 skipped.
-- PostgreSQL 17.11: the whole project, 4302 passed, 240 skipped and 4 failed (a self-reference lock
-  test, an index-parity test, a key-value test and an image-variant purge test); the four classes
-  passed alone on a rerun, 50 of 50.
-- MySQL 8.4.13 and MariaDB 11.8.9: the query, filter, translator, search, GraphQL and metadata
-  classes, 1829 passed and 84 skipped on each.
-- SQL Server 2022 (16.0.4305), inside an SDK container on the container network: the same classes,
-  1827 passed and 85 skipped, with one failure: a `_starts_with` test whose value began with `[`.
-  `LIKE` on SQL Server reads `[` as the start of a character class and SqlSugar does not escape it, so
-  a string operator value that contains `[` matches differently there. The test value was changed and
-  the new tests passed, 188 of 188.
-- Mutation check on SQLite: turning off each of the string-operator rule, the null rule, the list
-  rule, the object rule, the bound `_eq`, the `Searchable` rule, the JSON-column detection and each
-  of the two locale conditions fails at least one test.
+Measured 2026-11-16 with a scratch probe (not committed) on a text column through `_contains`,
+`_starts_with` and `_ends_with` on SQLite, PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL
+Server 2022 (16.0.4305): nothing escapes a value. `%` and `_` are wildcards on all five (a value of
+`%` matches every row, `100%` matches `100x`). `[` starts a character class on SQL Server only, so
+`[ab]` matches every row containing `a` or `b` there and only the stored text `x[ab]y` elsewhere. A
+backslash is an escape character on PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL
+Server; on PostgreSQL an `_ends_with` value of one backslash is refused with `22025` (a 500).
 
 ## Unknowns
 
+- Whether a `_contains`, `_starts_with` or `_ends_with` value should have `%`, `_`, `[` and the
+  backslash escaped is not decided.
 - On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost
   of the group forms, collation equality of the `=` group against the inline list, or the 2100
   parameter limit with `MaxInValues` raised towards 900 plus the other conditions of a request.

@@ -180,7 +180,9 @@ filter fields in GraphQL at all.
 The string filters carry `contains`, `startsWith` and `endsWith`, an id column such as `createdBy`
 included. Those three operators are accepted on a text field only. On any other field the request
 fails with an `errors` entry whose code is `BAD_USER_INPUT` and whose message names the field and
-the operator, the same message REST answers with.
+the operator. The message spells the operator the REST way (`_contains`, `_null`); the list of
+operator tokens above gives the GraphQL spelling of each (`contains`, `isNull`). The other rules of
+Chapter 10 (a null value, a list for a single-value operator) answer the same way.
 
 A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
 `byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`

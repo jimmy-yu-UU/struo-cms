@@ -81,32 +81,35 @@
   `[SugarColumn(Length = n)]` to a column that is already that wide, needs none. The comparison
   uses the width declared on the property, not the width of the database column. Neither a core
   field nor the Blog sample is affected.
-- The query DSL checks a filter value against its field before it builds the condition, and an `_eq`
-  with the word `null` changes meaning. A client, a fork or a stored query changes what each case
-  below describes ([Chapter 10](10-query-basics.md) has the table of operators per field):
-  - `_contains`, `_starts_with` and `_ends_with` on a field that is not text answer `400`, in REST,
-    `POST /query` and GraphQL, the date-time fields included. A text field is a `string` property or
-    a field stored as JSON. They used to answer `200` with a match on the column's text form that
-    differed per backend, and `500` on PostgreSQL. Send `_eq` or a range (`_gte` with `_lt`)
-    instead; to match a date, `_gte` the day and `_lt` the next. The admin list offers "contains" on
-    text fields only.
-  - `_eq` with the text `null` or `[null]` on a text field compares the column with that text. It
+- The query DSL checks a filter value against its field before it builds the condition, so each case
+  below answers `400` or compares differently, and a client, a fork or a stored query changes what
+  the case names ([Chapter 10](10-query-basics.md) lists the operators each field takes):
+  - `_contains`, `_starts_with` and `_ends_with` on a field that is not text answer `400` in REST,
+    `POST /query` and GraphQL, date-time fields included; a text field is a `string` property or a
+    field stored as JSON. They used to answer `200` with a match on the column's text form that
+    differed per backend, and `500` on PostgreSQL. The admin list offers "contains" on text
+    interfaces only, so it also leaves it out for `Select`, `Radio` and `Password` fields, which the
+    API accepts it on. Send `_eq` or a range instead (`_gte` with `_lt`; to match a date, `_gte` the
+    day and `_lt` the next).
+  - `_eq` with the text `null` or `[null]` on a text field, or on a field of a type the filter
+    compares as text (`DateOnly`, `TimeOnly`, `TimeSpan`), compares the column with that text. It
     used to test for NULL (`null`), or to count the rows holding the text and return none
     (`[null]`). A client that relied on `_eq=null` to find NULL rows sends `_null` or `_nnull`.
   - A JSON `null` as the value of any operator but `_null` and `_nnull` answers `400` and says to
     use those two. It used to compare the column with `NULL`, with `0`, `false` or the earliest
-    date, or answer `500` for a `Guid`. A client that sends `null` sends `_null` or `_nnull`.
-    GraphQL still skips an operator whose value is `null`.
+    date, or answer `500` for a `Guid`; GraphQL still skips an operator whose value is `null`. A
+    client that sends `null` sends `_null` or `_nnull`.
   - A JSON object as a value, alone or inside a list, and a list given to an operator other than
-    `_in` and `_nin` answer `400`. The object used to be compared as its raw JSON text, and a text
-    field joined the list with commas. A client sends a string, a number or a boolean, and a list
-    only to `_in` or `_nin`. A query string is unchanged: it carries strings, and `_in`/`_nin` read
-    a comma list.
+    `_in`, `_nin`, `_null` and `_nnull` answer `400`. The object used to be compared as its raw JSON
+    text, and a text field joined the list with commas; a query string is unchanged, since it
+    carries strings and `_in`/`_nin` read a comma list. A client sends a string, a number or a
+    boolean, and a list only to `_in` or `_nin`.
   - `Searchable = true` on a field whose column is not text (a number, boolean, `Guid`, enum or
-    date-time property) stops the host at start with a `MetadataException` that names the property.
-    It used to start, and every `search=` request on that collection answered `500` on PostgreSQL. A
-    fork removes `Searchable` from that field or makes the property a `string`. No core or Blog
-    field is affected.
+    date-time property), or on a Repeater sub-field, stops the host at start with a
+    `MetadataException` that names the property. It used to start: every `search=` request on that
+    collection answered `500` on PostgreSQL in the first case, and the flag did nothing in the
+    second. No core or Blog field is affected. A fork removes `Searchable` from that field, or makes
+    the property a `string`.
 - A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
   stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
   the message names the assembly, the number of failed types, the type names the loader reports and
@@ -247,6 +250,9 @@ transformed again on the first request.
   a `locale` parameter equal to the code of an enabled language that is named `null` answered `500`
   on every backend, because the rendered subquery lacked an `AND`. They compare the text like any
   other value. A `locale` that names no enabled language, `null` included, answers `400`.
+- A `POST /query` body whose `search`, `limit` or `offset` was not of the right JSON kind, whose
+  `sort` or `fields` held a non-string element (these four also inside `deep`), or that was not a
+  JSON object answered `500`. Each answers `400` and names the field.
 - A request that filtered a text field with `_eq=[null]` counted its rows with one condition and
   returned the page with another, so `meta.total` and the rows disagreed. Both run the same
   condition.

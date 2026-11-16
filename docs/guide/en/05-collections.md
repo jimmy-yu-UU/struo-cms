@@ -173,8 +173,10 @@ A field with `Hidden = true` never joins the search whitelist, even with `Search
 `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files` or `Repeater` field, or a property with
 `[SugarColumn(IsJson = true)]`), because search matches text. On any other field the host stops at
 start with a `MetadataException` that names the property; remove `Searchable`, or make the property
-a `string`. `Sortable` decides only whether the admin list header can be clicked to sort; the query
-DSL's `sort` ignores the flag — any known field can be sorted on.
+a `string`. A `Repeater` sub-field has no column of its own and is never searched, so `Searchable`
+on one stops the host at start in the same way; remove it. `Sortable` decides only whether the admin
+list header can be clicked to sort; the query DSL's `sort` ignores the flag — any known field can be
+sorted on.
 
 A field's external key is the camelCase form of the CLR property name. A label that falls back
 to the PascalCase property name gets no inserted spaces and no case changes.
