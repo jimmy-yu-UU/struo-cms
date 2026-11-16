@@ -75,14 +75,29 @@
     建成 `text`）。拿掉 `ColumnDataType`，欄位不變。
   - `[ColumnShape]` 加 `ColumnDataType`。原本 `[ColumnShape]` 勝出，`ColumnDataType` 悄悄被丟掉。
     拿掉 `ColumnDataType`，欄位不變；要用自己的型別，改拿掉 `[ColumnShape]`，欄位型別會跟著變。
-  - `IsJson = true` 或 `List<>` 屬性加 `ColumnDataType`。`IsJson = true` 原本接受明寫的型別：
-    PostgreSQL 的 `jsonb` 讓 REST 對該欄位的篩選（`_eq`、`_contains`）回 `500`，MySQL 的 `json`
-    讓 `_eq` 比不到任何列。沒有 `IsJson` 的 `List<>` 屬性加 `ColumnDataType`，原本在 PostgreSQL、
-    MySQL 與 MariaDB 上每次寫入都失敗。拿掉 `ColumnDataType` 後，欄位成為框架的 JSON 長文字型別；
-    表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - `IsJson = true` 或結構化型別屬性（清單、陣列、字典、自訂類別）加 `ColumnDataType`。
+    `IsJson = true` 原本接受明寫的型別：PostgreSQL 的 `jsonb` 讓 REST 對該欄位的篩選（`_eq`、
+    `_contains`）回 `500`，MySQL 的 `json` 讓 `_eq` 比不到任何列。沒有 `IsJson` 的 `List<>` 屬性加
+    `ColumnDataType`，原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗。拿掉 `ColumnDataType`
+    後，欄位成為框架的 JSON 長文字型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支
+    migration 改成長文字。
   - `IsJson = true` 加 `[ColumnShape]`。原本通過，欄位型別取 shape 的型別（例如
     `timestamptz`），JSON 欄位因此不是長文字。拿掉 `[ColumnShape]` 後，欄位成為框架的 JSON 長文字
     型別；表若已用別的型別建好，`migrate:check` 會報不一致，要寫一支 migration 改成長文字。
+  - 結構化型別屬性加 `[ColumnShape]`，沒有 `IsJson`。原本通過檢查。拿掉 `[ColumnShape]` 後，欄位成為
+    框架的 JSON 長文字型別；原本 shape 的型別不是長文字、表已用該型別建好時，要寫一支 migration 改成
+    長文字。
+  - 結構化型別屬性放在 JSON 介面與 `Hidden` 以外的介面（例如 `Text`、`Select`），沒有 `IsJson`。
+    原本主機照常啟動，寫入卻失敗：`List<>` 在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗，
+    在 SQLite 與 SQL Server 上，0 或 1 個元素的清單寫得進去、讀回來是空清單；字典、陣列與自訂
+    類別的欄位在 SQLite、PostgreSQL、MySQL 與 MariaDB 上建成 `varchar(1)`，在 SQL Server 上建成
+    `varchar(max)`，含這類屬性的實體在每個後端每次寫入都失敗。改用 JSON 介面或 `Hidden`，欄位
+    成為框架的 JSON 長文字型別，後台編輯器隨介面改變；改宣告成單一值屬性，欄位型別隨屬性型別
+    改變，已建好的表要另寫一支 migration。
+  - 結構化型別屬性放在 JSON 介面與 `Hidden` 以外的介面，並寫了 `IsJson = true`。原本能正常運作，
+    欄位是 JSON 長文字。改用 JSON 介面或 `Hidden` 後欄位不變，後台編輯器隨介面改變。
+  - `Json` 介面的屬性不是 `string`（例如清單或數字）。原本沒有這項檢查。`Json` 介面存的是原始 JSON
+    文字，屬性改宣告成 `string` 後欄位是長文字；表已用別的型別建好時，要另寫一支 migration。
   - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加
     `[SugarColumn(IsNullable = false)]`。原本被忽略，欄位照樣可為 null，所以拿掉
     `IsNullable = false` 欄位不變。要 NOT NULL，把屬性宣告成不可為 null（`Guid`、`string`），
@@ -200,11 +215,14 @@
 
 ### 修正
 
-- `[CmsField]` 的 `List<>` 屬性，介面不是 JSON 介面、也沒寫 `IsJson`，由框架對映成 JSON 欄位
-  （`IsJson` 加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，`make:migration` 輸出
-  `.AsJson(Db)`。原本在 PostgreSQL、MySQL 與 MariaDB 上每次寫入都失敗；SQLite 與 SQL Server 上，
-  0 或 1 個元素的清單寫入成功，讀回來是空清單。已標 `IsJson` 的屬性不變，`[Navigate]` 與
-  `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
+- `Hidden` 介面上，型別為清單、陣列、字典或自訂類別的 `[CmsField]` 屬性，沒寫 `IsJson` 時由框架
+  對映成 JSON 欄位（`IsJson` 加長文字），結果與寫 `[SugarColumn(IsJson = true)]` 相同，
+  `make:migration` 輸出 `.AsJson(Db)`。原本 `List<>` 屬性在 PostgreSQL、MySQL 與 MariaDB 上每次
+  寫入都失敗；SQLite 與 SQL Server 上，0 或 1 個元素的清單寫入成功，讀回來是空清單。字典、陣列
+  與自訂類別屬性的欄位在 SQLite、PostgreSQL、MySQL 與 MariaDB 上建成 `varchar(1)`，在 SQL Server
+  上建成 `varchar(max)`，含這類屬性的實體在每個後端每次寫入都失敗，所以這些欄位沒有舊值要轉換；
+  表若已用這樣的 varchar 欄位建好，要寫一支 migration 改成長文字。已標 `IsJson` 的屬性不變，
+  `[Navigate]` 與 `[CmsTranslations]` 的清單沒有 `[CmsField]`，不受影響。
 - 主機因 `MetadataException` 建不起來，而命令列帶了指令時，印出一行 `<指令> failed: <訊息>` 並以 1
   結束，不帶 stack trace，也不寫 log。指令是 `migrate`、`migrate:status`、`migrate:preview`、
   `migrate:baseline`、`migrate:check`、`make:migration`、`files:sweep`、`auth:unlock` 任何一個；

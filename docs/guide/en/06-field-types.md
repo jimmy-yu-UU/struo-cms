@@ -152,9 +152,14 @@ whose property is not a `string` is not checked against its options.
 
 `Json` is a `string` property holding raw JSON text; the API layer re-parses it on read and
 re-serializes it on write. The real JSON columns come from the six structured interfaces —
-`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, and `Repeater` — and from a `List<>`
-property on any interface. SqlSugar (de)serializes the whole CLR collection directly against a JSON
-column, and a `List<>` property needs no `IsJson`; a `KeyValue` key can't be blank.
+`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, and `Repeater` — and from a property on
+`Hidden` whose type is a list, an array, a dictionary or a custom class. SqlSugar (de)serializes the
+whole CLR value directly against a JSON column, and these properties need no `IsJson`; a `KeyValue`
+key can't be blank.
+
+A field whose property type is not a single value can sit only on those six interfaces or on
+`Hidden`; on any other interface the host fails at startup. A `Json` interface property must be a
+`string`. The rules are in [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
 violating either throws a startup `MetadataException` naming the field. Child fields are limited
@@ -183,7 +188,7 @@ the same, and the admin picker can only fall back to showing the raw id.
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Hidden` | Any | Follows the property type | `ReadonlyField` |
+| `Hidden` | Any | Follows the type; a structured type is JSON | `ReadonlyField` |
 | `Divider` | Any | Follows the property type, or none | `DividerField` |
 | `Uuid` | `Guid`/`Guid?` | CLR default | `ReadonlyField` |
 
@@ -214,7 +219,7 @@ The declarations on a property decide its database column and the default input 
 | A `string` with nothing special | `varchar(255)` | 255 |
 | A `string` on a long-text interface | long text | none |
 | A JSON interface | long text holding JSON | not applicable |
-| A `List<>` property on any interface | long text holding JSON | not applicable |
+| A structured-type property on `Hidden` | long text holding JSON | not applicable |
 | `[ColumnShape(ColumnShape.LongText)]` | long text | none |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | type `t`, length `n` | `n` |
@@ -228,8 +233,12 @@ Terms in the table:
 - `varchar(255)` and `varchar(n)` are `nvarchar` on SQL Server.
 - None: there is no limit. Not applicable: the property is not a `string`, so it cannot carry
   `MaxLength`; the same declaration on a `string` property means none.
-- A `Length` on a long-text interface does not count; it needs a `ColumnDataType` beside it (the
-  seventh row).
+- Single-value types: primitives, enums, `string`, `decimal`, `Guid`, `DateTime`, `DateTimeOffset`,
+  `DateOnly`, `TimeOnly`, `TimeSpan`, `byte[]`, and the `Nullable<T>` of each. Every other type is a
+  structured type, for example a list, an array (except `byte[]`), a dictionary, a set or a custom
+  class.
+- A `Length` on a long-text interface does not count; it needs a `ColumnDataType` beside it, as in
+  the `[SugarColumn(ColumnDataType = "t", Length = n)]` row.
 
 With an explicit `ColumnDataType`, the whole column definition is yours, including its length. A
 length written inside the type string, such as `varchar(500)`, is not read as the field's width;
@@ -246,12 +255,19 @@ nothing waits for the table to be used.
 | A JSON interface with `[ColumnShape]` | Remove `[ColumnShape]` |
 | A JSON interface with `ColumnDataType` | Remove `ColumnDataType` |
 | `IsJson = true` with `ColumnDataType` | Remove `ColumnDataType` |
-| A `List<>` property with `ColumnDataType` | Remove `ColumnDataType` |
+| A structured-type property with `ColumnDataType` | Remove `ColumnDataType` |
+| A structured-type property with `[ColumnShape]` | Remove `[ColumnShape]` |
+| A structured-type property on a single-value interface | Use a JSON interface or `Hidden`, or a single-value type |
+| A `Json` interface property that is not a `string` | Declare the property as `string` |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 
 The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnDataType` cannot set
-it.
+it. The same goes for a structured-type property, which is stored as a JSON column.
+
+A single-value interface is every interface except the JSON interfaces, `Hidden` and `Json`. A
+structured-type property on a single-value interface is rejected whether or not it carries
+`IsJson`. The `Json` interface stores raw JSON text, so its property is declared as `string`.
 
 A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
 NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as

@@ -137,8 +137,11 @@ UTC。
 
 `Json` 是一個裝著原始 JSON 文字的 `string` 屬性，API 層讀取時重新解析、寫入時重新序列化。
 真正的 JSON 欄位是 `MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`
-這六個結構化介面，以及任何介面上的 `List<>` 屬性。SqlSugar 直接對 JSON 欄位（反）序列化整個
-CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
+這六個結構化介面，以及 `Hidden` 上型別為清單、陣列、字典或自訂類別的屬性。SqlSugar 直接對
+JSON 欄位（反）序列化整個 CLR 值，這些屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
+
+屬性型別不是單一值的欄位，只能放在這六個介面或 `Hidden`，放在其他介面，主機啟動時就失敗；
+`Json` 介面的屬性則必須是 `string`。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
@@ -166,7 +169,7 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
-| `Hidden` | 不限 | 依屬性型別 | `ReadonlyField` |
+| `Hidden` | 不限 | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
 | `Divider` | 不限 | 依屬性型別，或無 | `DividerField` |
 | `Uuid` | `Guid`／`Guid?` | CLR 預設 | `ReadonlyField` |
 
@@ -191,7 +194,7 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 | 沒有特別宣告的 `string` | `varchar(255)` | 255 |
 | 長文字介面上的 `string` | 長文字 | 不限 |
 | JSON 介面 | 長文字，存 JSON | 不適用 |
-| 任何介面上的 `List<>` 屬性 | 長文字，存 JSON | 不適用 |
+| `Hidden` 上的結構化型別屬性 | 長文字，存 JSON | 不適用 |
 | `[ColumnShape(ColumnShape.LongText)]` | 長文字 | 不限 |
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | 型別 `t`，長度 `n` | `n` |
@@ -205,7 +208,11 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 - `varchar(255)` 與 `varchar(n)` 在 SQL Server 上是 `nvarchar`。
 - 不限：沒有上限。不適用：屬性不是 `string`，不能設 `MaxLength`；同樣的宣告掛在 `string` 屬性上
   則是不限。
-- 長文字介面上的 `Length` 不算，要搭配 `ColumnDataType` 才算（第七列）。
+- 單一值型別：基本型別、列舉、`string`、`decimal`、`Guid`、`DateTime`、`DateTimeOffset`、
+  `DateOnly`、`TimeOnly`、`TimeSpan`、`byte[]`，以及它們的 `Nullable<T>`。其餘都是結構化型別，
+  例如清單、陣列（`byte[]` 除外）、字典、集合與自訂類別。
+- 長文字介面上的 `Length` 不算，要搭配 `ColumnDataType` 才算，也就是
+  `[SugarColumn(ColumnDataType = "t", Length = n)]` 那一列。
 
 寫了 `ColumnDataType`，整個欄位定義由你負責，包含長度。寫在型別字串裡的長度，例如
 `varchar(500)`，不會當成欄位寬度讀取；要寬度，另外設 `Length`。
@@ -220,11 +227,18 @@ CLR 集合，`List<>` 屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能�
 | JSON 介面加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
 | JSON 介面加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | `IsJson = true` 加 `ColumnDataType` | 拿掉 `ColumnDataType` |
-| `List<>` 屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| 結構化型別屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| 結構化型別屬性加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
+| 單一值介面上的結構化型別屬性 | 改用 JSON 介面或 `Hidden`，或宣告單一值屬性 |
+| `Json` 介面上不是 `string` 的屬性 | 屬性改宣告成 `string` |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 
-JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。
+JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。結構化型別屬性存成
+JSON 欄位，同樣如此。
+
+單一值介面是除了 JSON 介面、`Hidden` 與 `Json` 以外的所有介面。單一值介面上的結構化型別屬性，
+有沒有寫 `IsJson` 都被擋。`Json` 介面存的是原始 JSON 文字，所以屬性要宣告成 `string`。
 
 `Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
 就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與

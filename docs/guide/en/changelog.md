@@ -96,17 +96,38 @@
   - `[ColumnShape]` with `ColumnDataType`. `[ColumnShape]` used to win and `ColumnDataType` was
     dropped without a word. Remove `ColumnDataType` and the column does not change; to use your own
     type, remove `[ColumnShape]` instead and the column type changes with it.
-  - `IsJson = true`, or a `List<>` property, with `ColumnDataType`. `IsJson = true` used to accept
-    the declared type: PostgreSQL `jsonb` made REST filters on the column (`_eq`, `_contains`)
-    answer `500`, and MySQL `json` made `_eq` match no row. A `List<>` property without `IsJson` and
-    with `ColumnDataType` used to fail every write on PostgreSQL, MySQL and MariaDB. After you
-    remove `ColumnDataType` the column is the framework's JSON long-text type; a table built with
-    another type shows up in `migrate:check` and needs a migration that changes the column to long
-    text.
+  - `IsJson = true`, or a structured-type property (a list, an array, a dictionary or a custom
+    class), with `ColumnDataType`. `IsJson = true` used to accept the declared type: PostgreSQL
+    `jsonb` made REST filters on the column (`_eq`, `_contains`) answer `500`, and MySQL `json` made
+    `_eq` match no row. A `List<>` property without `IsJson` and with `ColumnDataType` used to fail
+    every write on PostgreSQL, MySQL and MariaDB. After you remove `ColumnDataType` the column is
+    the framework's JSON long-text type; a table built with another type shows up in `migrate:check`
+    and needs a migration that changes the column to long text.
   - `IsJson = true` with `[ColumnShape]`. It used to pass, and the column took the shape's type (for
     example `timestamptz`), so the JSON column was not long text. After you remove `[ColumnShape]`
     the column is the framework's JSON long-text type; a table built with another type shows up in
     `migrate:check` and needs a migration that changes the column to long text.
+  - A structured-type property with `[ColumnShape]` and no `IsJson`. It used to pass the check.
+    After you remove `[ColumnShape]` the column is the framework's JSON long-text type; if the
+    shape's type was not long text and the table was built with it, a migration must change the
+    column to long text.
+  - A structured-type property on an interface that is neither a JSON interface nor `Hidden` (for
+    example `Text` or `Select`), with no `IsJson`. The host used to start and writes failed: a
+    `List<>` failed every write on PostgreSQL, MySQL and MariaDB, and on SQLite and SQL Server a
+    list of 0 or 1 elements was written and read back empty; the column of a dictionary, an array or
+    a custom class was built as `varchar(1)` on SQLite, PostgreSQL, MySQL and MariaDB and as
+    `varchar(max)` on SQL Server, and an entity with such a property failed every write on every
+    backend. Move the property to a JSON interface or to `Hidden`
+    and the column is the framework's JSON long-text type, and the admin editor changes with the
+    interface; declare a single-value property instead and the column type follows the property
+    type, so a table that exists needs its own migration.
+  - A structured-type property on an interface that is neither a JSON interface nor `Hidden`, with
+    `IsJson = true`. It used to work, and the column was JSON long text. Move the property to a JSON
+    interface or to `Hidden`; the column does not change, and the admin editor changes with the
+    interface.
+  - A `Json` interface property that is not a `string` (for example a list or a number). There was
+    no check. The `Json` interface stores raw JSON text; after you declare the property as `string`
+    the column is long text, and a table built with another type needs its own migration.
   - A `Nullable<T>` (`Guid?`, `int?`) or `string?` property with
     `[SugarColumn(IsNullable = false)]`. It used to be ignored and the column was nullable anyway,
     so removing `IsNullable = false` changes nothing. For NOT NULL, declare the property
@@ -256,12 +277,17 @@ transformed again on the first request.
 
 ### Fixed
 
-- A `[CmsField]` `List<>` property whose interface is not a JSON interface and that has no `IsJson`
-  is mapped by the framework as a JSON column (`IsJson` plus long text), the same result as
-  `[SugarColumn(IsJson = true)]`, and `make:migration` writes `.AsJson(Db)`. It used to fail every
-  write on PostgreSQL, MySQL and MariaDB; on SQLite and SQL Server a list of 0 or 1 elements was
-  written and read back empty. A property already marked `IsJson` is unchanged, and `[Navigate]` and
-  `[CmsTranslations]` lists have no `[CmsField]` and are not affected.
+- A `[CmsField]` property on the `Hidden` interface whose type is a list, an array, a dictionary or
+  a custom class, with no `IsJson`, is mapped by the framework as a JSON column (`IsJson` plus long
+  text), the same result as `[SugarColumn(IsJson = true)]`, and `make:migration` writes
+  `.AsJson(Db)`. A `List<>` property used to fail every write on PostgreSQL, MySQL and MariaDB; on
+  SQLite and SQL Server a list of 0 or 1 elements was written and read back empty. The column of a
+  dictionary, an array or a custom class property was built as `varchar(1)` on SQLite, PostgreSQL,
+  MySQL and MariaDB and as `varchar(max)` on SQL Server, and an entity with one failed every write
+  on every backend, so these columns hold no old values to convert; a table already built with such
+  a varchar column needs a migration that changes the column to long text. A property already marked
+  `IsJson` is unchanged, and `[Navigate]` and `[CmsTranslations]` lists have no `[CmsField]` and are
+  not affected.
 - When the host cannot be built because of a `MetadataException` and a command was given on the
   command line, one line, `<command> failed: <message>`, is printed and the exit code is 1, with no
   stack trace and no log entry. The command is any of `migrate`, `migrate:status`,
