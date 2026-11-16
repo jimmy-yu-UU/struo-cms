@@ -16,7 +16,7 @@
 - `varchar(255)`：沒有指定長度的 `string`，`make:migration` 寫出 `AsString(255)`；SQL Server 上
   是 `nvarchar(255)`。
 - 長文字：套用 `ColumnShape.LongText` 之後的結果，各後端有自己的對應型別。
-- JSON：長文字加上 `IsJson = true`，整個 CLR 值由 SqlSugar 直接序列化與還原。
+- JSON：內容是 JSON 的長文字欄位，整個 CLR 值由 SqlSugar 直接序列化與還原。
 - CLR 預設：數值、`bool`、`Guid` 照 FluentMigrator 與 SqlSugar 原本的對應，長度不會被動到；
   `DateTime` 各後端的型別見〈日期時間〉。
 - `ColumnShape` 有三個成員：`LongText`、`TimestampWithTimeZone` 與 `Timestamp`，沒有數值形狀。
@@ -137,7 +137,7 @@ UTC。
 `Repeater` 子欄位都適用。沒有 `[CmsOptions]` 的 `Select` 或 `Radio` 接受任意字串，`null` 與空字串
 略過檢查。屬性型別不是 `string` 的 `Select` 或 `Radio` 欄位，不會拿去對照選項。
 
-### 結構化 JSON
+### `Json`、`KeyValue` 與 `Repeater`
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
@@ -150,13 +150,14 @@ UTC。
 （反）序列化整個 CLR 值，這些屬性不必另外標 `IsJson`；`KeyValue` 的鍵不能留白。
 
 結構化型別的屬性只能放在多值介面或 `Hidden`，放在其他介面，主機啟動時就失敗；`Json` 介面的
-屬性則必須是 `string`，任何介面都不收 `object`。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
+屬性則必須是 `string`。型別是 `object`，或型別裡含有 `object` 的屬性，任何介面都不收。規則見
+[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
-是點名該欄位的啟動期 `MetadataException`。子欄位僅限純量介面：`Text`、`Textarea`、
-`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、`Number`、`Slider`、
-`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、`Radio`，且不能設為
-可翻譯。以下都不允許：
+是點名該欄位的啟動期 `MetadataException`。子欄位只能用下列介面，範圍比單一值介面窄：
+`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、`Number`、
+`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、`Radio`，
+且不能設為可翻譯。以下都不允許：
 
 - 巢狀 `Repeater`
 - `RichText`、`Json`、`KeyValue`
@@ -232,20 +233,25 @@ UTC。
 | 多值介面加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
 | 多值介面加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | `IsJson = true` 加 `ColumnDataType` | 拿掉 `ColumnDataType` |
+| `IsJson = true` 加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
 | 結構化型別屬性加 `ColumnDataType` | 拿掉 `ColumnDataType` |
 | 結構化型別屬性加 `[ColumnShape]` | 拿掉 `[ColumnShape]` |
-| 單一值介面上的結構化型別屬性 | 改用多值介面或 `Hidden`，或宣告單一值型別的屬性 |
+| 單一值介面上的結構化型別屬性 | 改用多值介面或 `Hidden` |
 | `Json` 介面上不是 `string` 的屬性 | 屬性改宣告成 `string` |
-| 任何介面上的 `object` 屬性 | 屬性改宣告成實際的型別 |
+| 型別是 `object` 或含有 `object` 的屬性 | 改宣告成具體型別 |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 
 JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。結構化型別屬性存成
 JSON 欄位，同樣如此。
 
-單一值介面上的結構化型別屬性，有沒有寫 `IsJson` 都被擋。`Json` 介面存的是原始 JSON 文字，
-所以屬性要宣告成 `string`。`object` 屬性讀回來的是 JSON 節點，不是寫入的值，所以包含多值介面
-與 `Hidden` 在內，任何介面都不收。
+單一值介面上的結構化型別屬性，有沒有寫 `IsJson` 都被擋，要改成宣告單一值型別的屬性，或改用
+多值介面或 `Hidden`。`Json` 介面存的是原始 JSON 文字，所以屬性要宣告成 `string`。
+
+`object` 讀回來的是 JSON 節點，不是寫入的值，所以包含多值介面與 `Hidden` 在內，任何介面都不收。
+被擋的不只型別本身是 `object` 的屬性：`object` 出現在型別參數（`Dictionary<string, object>`、
+`List<object>`）、陣列元素型別，或自訂類別與結構的公開屬性（不論有沒有 `[CmsField]`，也包含
+`Repeater` 子型別的屬性，層數不限）時同樣被擋，訊息指出 `object` 在哪裡。
 
 `Nullable<T>`（`Guid?`、`int?`、`DateTime?`）與 `string?` 一律得到可為 null 的欄位。要 NOT NULL，
 就宣告成 `Guid`、`string`，不是 `Guid?`、`string?`。其他可為 null 的型別，例如 `List<string>?` 與

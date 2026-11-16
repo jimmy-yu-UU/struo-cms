@@ -131,7 +131,7 @@ this page's parents to their targets; a nested filter does not lower it, so requ
 - 時間與識別：`Date`、`DateTime`、`Time`、`Uuid`、`File`、`Image`
 
 長文字（`RichText`／`Markdown`／`Code`）、多值介面（`MultiSelect`／`CheckboxGroup`／`Tags`／
-`Repeater`）、結構化資料（`Json`／`KeyValue`／`Files`），以及 `Hidden`／`Divider`／`Password`
+`KeyValue`／`Files`／`Repeater`）、`Json`，以及 `Hidden`／`Divider`／`Password`
 都不能拿來當 facet。一個隱藏欄位拿到的訊息，跟一個不存在的欄位完全一樣，所以 facet 路徑不能被拿
 來探測一個隱藏欄位存不存在。
 

@@ -157,7 +157,7 @@ These field interfaces can be used as a facet; own fields and leaf fields share 
 - Date and identity: `Date`, `DateTime`, `Time`, `Uuid`, `File`, `Image`.
 
 Long text (`RichText`/`Markdown`/`Code`), multi-value interfaces
-(`MultiSelect`/`CheckboxGroup`/`Tags`/`Repeater`), structured data (`Json`/`KeyValue`/`Files`), and
+(`MultiSelect`/`CheckboxGroup`/`Tags`/`KeyValue`/`Files`/`Repeater`), `Json`, and
 `Hidden`/`Divider`/`Password` can't be used as a facet. A hidden field gets exactly the same message
 as a field that doesn't exist, so a facet path can't be used to probe whether a hidden field exists.
 

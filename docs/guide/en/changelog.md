@@ -82,59 +82,72 @@
   uses the width declared on the property, not the width of the database column. Neither a core
   field nor the Blog sample is affected.
 - The scanner rejects contradicting column declarations at startup with a `MetadataException` that
-  names "Class.Property" and the two declarations. It checks the `[CmsField]` properties of
-  collections, translation entities and junction payloads, in every environment; a `Repeater`
-  sub-field and a property with `[SugarColumn(IsIgnore = true)]` are not checked. A fork that
-  declares one of these combinations can no longer start the host. The terms multi-value
-  interface, single-value interface and structured type used below are defined in
-  [Chapter 6](06-field-types.md#interface-overview):
+  names "Class.Property" and the two declarations, for the `[CmsField]` properties of collections,
+  translation entities and junction payloads in every environment (a `Repeater` sub-field and a
+  property with `[SugarColumn(IsIgnore = true)]` are not checked, except that an `object` inside a
+  Repeater child type is rejected), so a fork that declares one of these combinations can no longer
+  start the host; [Chapter 6](06-field-types.md#declarations-rejected-at-startup) has the rules and
+  defines the terms multi-value interface, single-value interface and structured type used below:
   - A multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`,
-    `Repeater`) with `[ColumnShape]`. Remove `[ColumnShape]`; the column does not change.
-  - A multi-value interface with an explicit `ColumnDataType`. Remove `ColumnDataType`; the column
-    does not change.
-  - `[ColumnShape]` with `ColumnDataType`. Remove `ColumnDataType` and the column does not change;
-    to use your own type, remove `[ColumnShape]` instead and the column type changes with it.
-  - `IsJson = true`, or a structured-type property, with `ColumnDataType`. Remove
-    `ColumnDataType`; the column becomes the framework's JSON long-text type. A table built with
-    another type shows up in `migrate:check` and needs a migration that changes the column to long
-    text.
-  - `IsJson = true` with `[ColumnShape]`. Remove `[ColumnShape]`; the column becomes the
-    framework's JSON long-text type. A table built with another type shows up in `migrate:check` and
-    needs a migration that changes the column to long text.
-  - A structured-type property with `[ColumnShape]` and no `IsJson`. Remove `[ColumnShape]`; the
-    column becomes the framework's JSON long-text type. A table built with the shape's type needs a
-    migration that changes the column to long text.
+    `Repeater`) with `[ColumnShape]`. The column is the framework's JSON long-text type either way,
+    so it does not change; remove `[ColumnShape]`.
+  - A multi-value interface with an explicit `ColumnDataType`. The column is the framework's JSON
+    long-text type either way, so it does not change; remove `ColumnDataType`.
+  - `[ColumnShape]` with `ColumnDataType`. The column follows `[ColumnShape]`; to keep it, remove
+    `ColumnDataType`, or to use your own type remove `[ColumnShape]` instead and the column type
+    changes with it.
+  - `IsJson = true`, or a structured-type property, with `ColumnDataType`. The column becomes the
+    framework's JSON long-text type once `ColumnDataType` is gone, and a table built with another
+    type needs a migration that changes the column to long text; remove `ColumnDataType`.
+  - `IsJson = true` with `[ColumnShape]`. The column becomes the framework's JSON long-text type
+    once `[ColumnShape]` is gone, and a table built with another type needs a migration that changes
+    the column to long text; remove `[ColumnShape]`.
+  - A structured-type property with `[ColumnShape]` and no `IsJson`. The column becomes the
+    framework's JSON long-text type once `[ColumnShape]` is gone; remove `[ColumnShape]`, and when
+    the table was built with a shape type other than long text, add a migration that changes the
+    column to long text.
   - A structured-type property on a single-value interface (for example `Text` or `Select`; a
-    `[CmsField]` without `Interface` is `Text`), with no `IsJson`. The earlier release started
-    the host and derived a `varchar(1)` column for the property (`varchar(max)` on SQL Server); on
-    SQLite, PostgreSQL, MySQL, MariaDB and SQL Server a `List<string>` property then failed to write
-    with two elements and read back empty with one, and a `Dictionary<string, string>` or custom
-    class property failed every write. Move the property to a multi-value interface or to
-    `Hidden`, and the column becomes the framework's JSON long-text type. A table that has the
+    `[CmsField]` without `Interface` is `Text`), with no `IsJson`. The earlier release started the
+    host and derived a `varchar(1)` column for the property (`varchar(max)` on SQL Server). On
+    SQLite, PostgreSQL, MySQL, MariaDB and SQL Server a `List<string>` property with two elements
+    failed to write and one with a single element read back empty (SQLite and SQL Server accepted
+    any element, PostgreSQL, MySQL and MariaDB only one of at most one character), and a
+    `Dictionary<string, string>` or custom class property failed every write. A table that has the
     `varchar(1)` column needs a migration that changes it to long text: `migrate:check` reports it
-    as an error on PostgreSQL, MySQL and MariaDB, does not compare types on SQLite, and reports SQL
-    Server's `varchar(max)` as a warning only. A multi-value interface brings its own admin editor.
-    On `Hidden` the field leaves the GraphQL schema, is not a column of the admin list, and is a
-    read-only display in the admin form; REST still returns and accepts it. Or declare a
-    single-value property instead: the column type follows the property type, so a table that exists
-    needs its own migration.
-  - A structured-type property on a single-value interface, with `IsJson = true`. Move the property
-    to a multi-value interface or to `Hidden`; the column does not change, so no migration is
-    needed. A multi-value interface brings its own admin editor. On `Hidden` the field leaves the
-    GraphQL schema, is not a column of the admin list, and is a read-only display in the admin form;
-    REST still returns and accepts it.
+    as an error on PostgreSQL, MySQL and MariaDB, SQLite does not compare types, and SQL Server's
+    `varchar(max)` is a warning only. The rows the earlier release wrote hold the element's text, or
+    `-1` for an empty list on SQLite, neither of which the current release can read as JSON; on
+    SQLite and PostgreSQL, a read of them failed until the column of those rows was set to `[]`. On
+    `Hidden` the field leaves the GraphQL schema, is not a column of the admin list, and is a
+    read-only display in the admin form, while REST still returns and accepts it; a multi-value
+    interface brings its own admin editor. Move the property to a multi-value interface or to
+    `Hidden`, which makes the column the framework's JSON long-text type, or declare a single-value
+    property, which gives the column the property's type and needs a migration for a table that
+    exists.
+  - A structured-type property on a single-value interface, with `IsJson = true`. The column is
+    JSON long text and stays so, so no migration is needed. On `Hidden` the field leaves the GraphQL
+    schema, is not a column of the admin list, and is a read-only display in the admin form, while
+    REST still returns and accepts it; a multi-value interface brings its own admin editor. Move the
+    property to a multi-value interface or to `Hidden`.
   - A `Json` interface property that is not a `string` (a list or a number, for example), with or
-    without `IsJson`. Declare the property as `string`: the `Json` interface stores raw JSON text,
-    and the column is long text. A table built with another type needs its own migration.
-  - An `object` property on any interface. Declare the property as its concrete type (`string`, a
-    `List<>`, a custom class); the column follows that type as in the items above.
-  - A `Nullable<T>` (`Guid?`, `int?`) or `string?` property with
-    `[SugarColumn(IsNullable = false)]`. A nullable property always gets a nullable column, so
-    removing `IsNullable = false` changes nothing. For NOT NULL, declare the property non-nullable
-    (`Guid`, `string`); the column changes with it and a table that exists needs its own migration.
-
-  [Chapter 6](06-field-types.md#declarations-rejected-at-startup) has the rules and the change for
-  each combination.
+    without `IsJson`. The `Json` interface stores raw JSON text in a long-text column, and a table
+    built with another type needs its own migration; declare the property as `string`.
+  - A property declared `object`. A structured replacement type on `Hidden` or a multi-value
+    interface is the framework's JSON long-text type, and a table whose column has another type
+    needs a migration that changes it to long text; a single-value replacement type gives the column
+    that type, and a table whose column has another type needs a migration. Declare the concrete
+    type of the value (`string`, a `List<>`, a custom class).
+  - A property whose type contains `object` as a type argument (`Dictionary<string, object>`,
+    `List<object>`), as an array element type, or as a public property of a custom class or struct,
+    at any depth; the properties of a `Repeater` child type count too, with or without `[CmsField]`.
+    The property stays structured, so its column stays the framework's JSON long-text type and no
+    migration is needed, except for a table the earlier release built with a `varchar(1)` column,
+    which needs a migration that changes it to long text. Declare the type argument, the element or
+    the property with its concrete type.
+  - A `Nullable<T>` (`Guid?`, `int?`) or `string?` property with `[SugarColumn(IsNullable =
+    false)]`. A nullable property always gets a nullable column, so removing `IsNullable = false`
+    changes nothing; for NOT NULL declare the property non-nullable (`Guid`, `string`), which
+    changes the column and needs a migration for a table that exists.
 - A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
   stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
   the message names the assembly, the number of failed types, the type names the loader reports and
@@ -276,17 +289,21 @@ transformed again on the first request.
 
 ### Fixed
 
-- A `[CmsField]` property on the `Hidden` interface whose type is a list, an array, a dictionary or
-  a custom class, with no `IsJson`, is mapped by the framework as a JSON column (`IsJson` plus long
-  text), the same result as `[SugarColumn(IsJson = true)]`, and `make:migration` writes
-  `.AsJson(Db)`. The earlier release derived a `varchar(1)` column for such a property
-  (`varchar(max)` on SQL Server): on SQLite, PostgreSQL, MySQL, MariaDB and SQL Server a
-  `List<string>` property failed to write with two elements and read back empty with one, and a
-  `Dictionary<string, string>` property failed every write. A table that already has such a column
-  needs a migration that changes it to long text; `migrate:check` reports the column as an error on
-  PostgreSQL, MySQL and MariaDB, does not compare types on SQLite, and reports SQL Server's
-  `varchar(max)` as a warning only. A property already marked `IsJson` is unchanged, and
-  `[Navigate]` and `[CmsTranslations]` lists have no `[CmsField]` and are not affected.
+- A `[CmsField]` property on the `Hidden` interface whose type is a structured type, with no
+  `IsJson`, is mapped by the framework as a JSON column (`IsJson` plus long text), the same result
+  as `[SugarColumn(IsJson = true)]`, and `make:migration` writes `.AsJson(Db)`. The earlier release
+  derived a `varchar(1)` column for such a property (`varchar(max)` on SQL Server). On SQLite,
+  PostgreSQL, MySQL, MariaDB and SQL Server a `List<string>` property with two elements failed to
+  write and one with a single element read back empty (SQLite and SQL Server accepted any element,
+  PostgreSQL, MySQL and MariaDB only one of at most one character), and a `Dictionary<string,
+  string>` or custom class property failed every write. A table that already has such a column needs
+  a migration that changes it to long text: `migrate:check` reports a `varchar(1)` column as an
+  error on PostgreSQL, MySQL and MariaDB, SQLite does not compare types, and SQL Server's
+  `varchar(max)` is a warning only. The rows the earlier release wrote hold the element's text, or
+  `-1` for an empty list on SQLite, neither of which the current release can read as JSON; on SQLite
+  and PostgreSQL, a read of them failed until the column of those rows was set to `[]`. A property
+  already marked `IsJson` is unchanged, and `[Navigate]` and `[CmsTranslations]` lists have no
+  `[CmsField]` and are not affected.
 - When the host cannot be built because of a `MetadataException` and a command was given on the
   command line, one line, `<command> failed: <message>`, is printed and the exit code is 1, with no
   stack trace and no log entry. The command is any of `migrate`, `migrate:status`,

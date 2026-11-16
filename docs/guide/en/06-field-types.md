@@ -20,7 +20,7 @@ The tables below use a few shorthand terms under Database column:
 - `varchar(255)`: a `string` with no length, which `make:migration` writes as `AsString(255)`; on
   SQL Server it is `nvarchar(255)`.
 - Long text: the result of applying `ColumnShape.LongText`; each backend maps it to its own type.
-- JSON: long text plus `IsJson = true` — SqlSugar serializes and restores the whole CLR value
+- JSON: a long text column holding JSON — SqlSugar serializes and restores the whole CLR value
   directly.
 - CLR default: numbers, `bool`, `Guid` keep FluentMigrator's and SqlSugar's ordinary mapping;
   nothing widens the length. For `DateTime` on each backend, see "Date and time".
@@ -152,7 +152,7 @@ translation value, and a `Repeater` child field. A `Select` or `Radio` with no `
 accepts any string, and `null` and the empty string skip the check. A `Select` or `Radio` field
 whose property is not a `string` is not checked against its options.
 
-### Structured JSON
+### `Json`, `KeyValue` and `Repeater`
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
@@ -167,14 +167,15 @@ a JSON column, and these properties need no `IsJson`; a `KeyValue` key can't be 
 
 A structured-type property can sit only on a multi-value interface or on `Hidden`; on any other
 interface the host fails at startup. A `Json` interface property must be a `string`, and no
-interface accepts `object`. The rules are in
+interface accepts a property whose type is `object` or contains `object`. The rules are in
 [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
-violating either throws a startup `MetadataException` naming the field. Child fields are limited
-to scalar interfaces — `Text`, `Textarea`, `Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`,
-`Phone`, `Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`,
-`Radio` — and can't be set translatable. None of these are allowed:
+violating either throws a startup `MetadataException` naming the field. Child fields can use only
+the interfaces below, a narrower set than the single-value interfaces — `Text`, `Textarea`,
+`Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`,
+`Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`, `Radio` — and can't be set
+translatable. None of these are allowed:
 
 - A nested `Repeater`
 - `RichText`, `Json`, `KeyValue`
@@ -260,11 +261,12 @@ nothing waits for the table to be used.
 | A multi-value interface with `[ColumnShape]` | Remove `[ColumnShape]` |
 | A multi-value interface with `ColumnDataType` | Remove `ColumnDataType` |
 | `IsJson = true` with `ColumnDataType` | Remove `ColumnDataType` |
+| `IsJson = true` with `[ColumnShape]` | Remove `[ColumnShape]` |
 | A structured-type property with `ColumnDataType` | Remove `ColumnDataType` |
 | A structured-type property with `[ColumnShape]` | Remove `[ColumnShape]` |
-| A structured-type property on a single-value interface | Use a multi-value interface, `Hidden`, or a single-value type |
+| A structured-type property on a single-value interface | Use a multi-value interface or `Hidden` |
 | A `Json` interface property that is not a `string` | Declare the property as `string` |
-| An `object` property on any interface | Declare the property as the actual type |
+| A property whose type is or contains `object` | Declare the concrete type |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 
@@ -272,9 +274,15 @@ The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnData
 it. The same goes for a structured-type property, which is stored as a JSON column.
 
 A structured-type property on a single-value interface is rejected whether or not it carries
-`IsJson`. The `Json` interface stores raw JSON text, so its property is declared as `string`. An
-`object` property is read back as a JSON node, not as the value written, so no interface accepts
-it, the multi-value interfaces and `Hidden` included.
+`IsJson`; declare a single-value type, or use a multi-value interface or `Hidden`. The `Json`
+interface stores raw JSON text, so its property is declared as `string`.
+
+An `object` is read back as a JSON node, not as the value written, so no interface accepts it, the
+multi-value interfaces and `Hidden` included. What is rejected is more than a property of type
+`object`: an `object` as a type argument (`Dictionary<string, object>`, `List<object>`), as an
+array element type, or as the type of a public property of a custom class or struct is rejected
+too, with or without `[CmsField]`, including the properties of a `Repeater` child type, at any
+depth. The message says where the `object` is.
 
 A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a nullable column. For
 NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
