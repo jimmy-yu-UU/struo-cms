@@ -23,9 +23,9 @@ Dependencies flow one way only. `Struo.Domain` depends on nothing; `Struo.Applic
 SqlSugar's persistence attributes appear on domain types.
 
 The test project `tests/Struo.Tests` references all four projects, plus `tests/Struo.Tests.Support`
-and the test-only `tests/Struo.Tests.Fixtures`. `Struo.Api`, `Struo.Application` and
-`Struo.Infrastructure` each grant it `InternalsVisibleTo`; if a fork renames the test project, all
-three `InternalsVisibleTo` declarations need to change together.
+and the test-only `tests/Struo.Tests.Fixtures` and `tests/Struo.Tests.InvalidFixtures`. `Struo.Api`,
+`Struo.Application` and `Struo.Infrastructure` each grant it `InternalsVisibleTo`; if a fork
+renames the test project, all three `InternalsVisibleTo` declarations need to change together.
 
 ## The core/sample boundary
 

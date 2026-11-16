@@ -15,6 +15,8 @@ from the repository root:
   conventions, the template invariants, and the CI, Docker and health conventions. A fork can delete
   it (see [Chapter 25](25-after-forking.md)).
 - `tests/Struo.Tests.Fixtures` is a test-only content project, described below.
+- `tests/Struo.Tests.InvalidFixtures` is a test-only content project whose collections the metadata
+  scan rejects. A test names it as a content assembly to see the startup failure.
 - `tests/Struo.Tests.Support` is a class library, not a test project. It holds the helpers the test
   projects share.
 
@@ -125,9 +127,11 @@ server.
 
 `tests/Struo.Tests.Fixtures` is a small content project that exists only for the tests. It declares
 one collection of each shape the core has to handle: an article with a translation sidecar,
-revisions and soft delete, tags joined through a junction that carries its own payload, and a
-self-referencing category tree, plus a plain class used as a `Repeater` child type. It has its own
-migration, and `tests/Struo.Tests` pins it as its content assembly through
+revisions and soft delete, tags joined through a junction that carries its own payload, a
+self-referencing category tree, a stash whose `Hidden` fields hold a list, an array, a dictionary
+and a custom class, and a glossary whose translation sidecar has a `Hidden` list, plus two plain
+classes, one used as a `Repeater` child type and one as the stash's custom class. It has two
+migrations, and `tests/Struo.Tests` pins it as its content assembly through
 `ContentAssemblyEnvBootstrap`.
 
 No shipped host registers it. Its collections carry an `fx` prefix (`fxArticle`, `fxTag`) and its

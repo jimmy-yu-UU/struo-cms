@@ -42,7 +42,8 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 位：`items`、`total`、`facets`、`aggregate`。
 
 其餘介面到 SDL 有一份固定對照：文字類對應 `String`，`Boolean`／`Checkbox` 對應 `Boolean`，`Date`／
-`DateTime` 對應同名型別，`Time` 也對應 `String`，多值欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，
+`DateTime` 對應同名型別，`Time` 也對應 `String`，`MultiSelect`、`CheckboxGroup`、`Tags`、
+`Files`、`Repeater` 欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，
 `File`／`Image`／`Uuid` 對應 `ID`；`Number`／`Slider`／`Rating` 看的是實際 CLR 型別而不是介面本
 身，整數型對應 `Int` 或 `Long`，其餘對應 `Float`。
 
@@ -137,9 +138,11 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 
 拼法之外，有兩個地方是真正的行為差異。第一個是 `isNull`：不同於 REST 的 `_null`／`_nnull`，這個引
 數的值真的會被讀。第二個是哪些欄位介面可以拿來篩：REST 對哪個介面可以篩沒有限制，只看欄位名稱在不
-在白名單裡；GraphQL 只有純量介面能篩，`RichText`、`Markdown`、`Code`、`Json`、`KeyValue`、
-`MultiSelect`、`CheckboxGroup`、`Tags`、`Files`、`File`、`Image`、`Repeater` 這些欄位在 GraphQL
-完全沒有篩選欄位。
+在白名單裡；GraphQL 只替 `Text`、`Textarea`、`Slug`、`Email`、`Url`、`Color`、`Phone`、`Select`、
+`Radio`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`DateTime`、`Time`、`Uuid`
+介面的欄位產生篩選欄位。`RichText`、`Markdown`、`Code`、`Json`、`KeyValue`、`MultiSelect`、
+`CheckboxGroup`、`Tags`、`Files`、`File`、`Image`、`Repeater` 這些欄位在 GraphQL 完全沒有篩選
+欄位（`Hidden`、`Divider`、`Password` 欄位則根本不在 GraphQL schema 裡）。
 
 數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位
 （`long`，例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的
