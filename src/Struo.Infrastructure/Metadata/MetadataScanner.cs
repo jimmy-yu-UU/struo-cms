@@ -427,6 +427,27 @@ public static class MetadataScanner
             "if the table already exists with the narrower column, widening it also takes a migration.");
     }
 
+    /// <summary>
+    /// Whether a field's column holds text: a <c>string</c> property, a JSON-column interface, or
+    /// <c>[SugarColumn(IsJson = true)]</c>. The query translator reaches the same answer from the ORM's
+    /// column info; <c>TextColumnAgreementTests</c> pins that the two agree.
+    /// </summary>
+    internal static bool IsTextColumn(PropertyInfo prop, FieldInterface fieldInterface) =>
+        prop.PropertyType == typeof(string)
+        || FieldInterfaceSets.JsonColumnInterfaces.Contains(fieldInterface)
+        || prop.GetCustomAttribute<SugarColumn>() is { IsJson: true };
+
+    // Search matches text with a text operator, which no other column type accepts. A Repeater
+    // sub-field is no column and is never searched.
+    private static void RequireTextColumnForSearch(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
+    {
+        if (!attr.Searchable || !isColumn || IsTextColumn(prop, attr.Interface)) return;
+        throw new MetadataException(
+            $"Field '{prop.DeclaringType?.Name}.{prop.Name}' is Searchable but its column is " +
+            $"{prop.PropertyType.Name}: search matches text only. Remove Searchable = true from it, " +
+            "or make the property a string.");
+    }
+
     // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.
     private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
     {
@@ -447,6 +468,8 @@ public static class MetadataScanner
         if (attr.MaxLength > 0 && prop.PropertyType != typeof(string))
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
+
+        RequireTextColumnForSearch(prop, attr, isColumn);
 
         // Without an explicit MaxLength a string field is limited to its column's width, if it has one.
         var columnWidth = StringColumnWidth.Of(prop);

@@ -25,7 +25,7 @@ public static class ConditionalModelTranslator
     internal static OrTerms ToOrTerms(ComparisonFilter c, EntityDescriptor d, ISqlSugarClient db) =>
         ValueConditions.OrMembers(Target(c.FieldPath, d, db), c.Op, c.Value);
 
-    private static ValueTarget Target(string field, EntityDescriptor d, ISqlSugarClient db)
+    internal static ValueTarget Target(string field, EntityDescriptor d, ISqlSugarClient db)
     {
         var property = d.EntityType
             .GetProperty(d.FieldToProperty.GetValueOrDefault(field) ?? string.Empty,
@@ -33,8 +33,13 @@ public static class ConditionalModelTranslator
         var utcInstant = property is not null && UtcInstantConverter.IsUtcInstantProperty(property);
         return new ValueTarget(
             Column(d, db, field), field, property?.PropertyType ?? typeof(string),
-            db.CurrentConnectionConfig.DbType, utcInstant);
+            db.CurrentConnectionConfig.DbType, utcInstant, IsJsonColumn(property, d, db));
     }
+
+    private static bool IsJsonColumn(PropertyInfo? property, EntityDescriptor d, ISqlSugarClient db) =>
+        property is not null &&
+        db.EntityMaintenance.GetEntityInfo(d.EntityType).Columns
+            .Any(column => column.PropertyName == property.Name && column.IsJson);
 
     private static string Column(EntityDescriptor d, ISqlSugarClient db, string field)
     {

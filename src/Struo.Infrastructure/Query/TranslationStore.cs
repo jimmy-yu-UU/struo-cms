@@ -2,14 +2,15 @@
 using System.Reflection;
 using SqlSugar;
 using Struo.Application.Query;
+using Struo.Domain.Query;
 
 namespace Struo.Infrastructure.Query;
 
 internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner transactions)
 {
-    private static readonly GenericDispatcher<Func<TranslationStore, ValueTarget, IReadOnlyList<object>, string, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadDispatcher =
+    private static readonly GenericDispatcher<Func<TranslationStore, ValueTarget, IReadOnlyList<object>, ValueTarget, string?, CancellationToken, Task<IReadOnlyList<object>>>> LoadDispatcher =
         new(typeof(TranslationStore), nameof(LoadTranslationsGenericAsync),
-            [typeof(ValueTarget), typeof(IReadOnlyList<object>), typeof(string), typeof(string), typeof(CancellationToken)]);
+            [typeof(ValueTarget), typeof(IReadOnlyList<object>), typeof(ValueTarget), typeof(string), typeof(CancellationToken)]);
 
     private static readonly GenericDispatcher<Func<TranslationStore, TranslationSyncRequest, ValueTarget, CancellationToken, Task>> SyncDispatcher =
         new(typeof(TranslationStore), nameof(SyncTranslationsGenericAsync),
@@ -31,24 +32,19 @@ internal sealed class TranslationStore(ISqlSugarClient db, TransactionRunner tra
         if (parentIds.Count == 0) return [];
 
         var fkTarget = WhereInQueries.TargetOf(db, translationType, fkProperty);
-        var localeColumn = db.EntityMaintenance.GetDbColumnName(localeProperty, translationType);
-        return await LoadDispatcher.For(translationType)(this, fkTarget, parentIds, localeColumn, locale, ct);
+        var localeTarget = WhereInQueries.TargetOf(db, translationType, localeProperty);
+        return await LoadDispatcher.For(translationType)(this, fkTarget, parentIds, localeTarget, locale, ct);
     }
 
     private async Task<IReadOnlyList<object>> LoadTranslationsGenericAsync<T>(
-        ValueTarget fkTarget, IReadOnlyList<object> parentIds, string localeColumn, string? locale,
+        ValueTarget fkTarget, IReadOnlyList<object> parentIds, ValueTarget localeTarget, string? locale,
         CancellationToken ct) where T : class, new()
     {
         // The typed set primitive on the FK keeps "bigint IN (...)" Postgres-safe (no text coercion).
         var conditionals = new List<IConditionalModel> { WhereInQueries.InCondition(fkTarget, parentIds) };
         if (locale is not null)
         {
-            conditionals.Add(new ConditionalModel
-            {
-                FieldName = localeColumn,
-                ConditionalType = ConditionalType.Equal,
-                FieldValue = locale
-            });
+            conditionals.Add(ValueConditions.BuildInternal(localeTarget, QueryOperator.Eq, locale)!);
         }
         var rows = await db.Queryable<T>().Where(conditionals).ToListAsync(ct);
         return rows.Cast<object>().ToList();

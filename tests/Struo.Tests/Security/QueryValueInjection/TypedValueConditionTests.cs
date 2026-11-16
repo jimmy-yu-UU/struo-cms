@@ -275,12 +275,11 @@ public sealed class TypedValueConditionTests : IDisposable
     }
 
     [Fact]
-    public void Text_operators_and_null_checks_are_unchanged()
+    public void Null_checks_are_unchanged_and_a_string_operator_on_a_typed_column_is_refused()
     {
         Run("id", QueryOperator.Null, null).Should().BeEmpty();
         Run("id", QueryOperator.NNull, null).Should().Equal(1, 2, 3);
-        var like = Conds(Db, D, "dateTimeCol", QueryOperator.StartsWith, "2026-03-05");
-        like.Should().ContainSingle().Which.Should().BeOfType<ConditionalModel>()
-            .Which.ConditionalType.Should().Be(ConditionalType.LikeLeft);
+        var refused = () => Conds(Db, D, "dateTimeCol", QueryOperator.StartsWith, "2026-03-05");
+        refused.Should().Throw<Struo.Domain.Query.QueryException>().WithMessage("*_starts_with*dateTimeCol*_gte*");
     }
 }

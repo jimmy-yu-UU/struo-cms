@@ -8,11 +8,17 @@ using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Query;
 
-/// <summary>The column a filter value is compared with: its database name, the name shown in errors, and its CLR type.</summary>
+/// <summary>
+/// The column a filter value is compared with: its database name, the name shown in errors, its CLR type
+/// and whether it is stored as JSON text. A text column is a <c>string</c> property or a JSON column.
+/// </summary>
 internal readonly record struct ValueTarget(
-    string Column, string Label, Type ClrType, SqlSugar.DbType DbType, bool UtcInstant = false)
+    string Column, string Label, Type ClrType, SqlSugar.DbType DbType, bool UtcInstant = false,
+    bool StoredAsJson = false)
 {
     public Type Underlying => Nullable.GetUnderlyingType(ClrType) ?? ClrType;
+
+    public bool IsText => Underlying == typeof(string) || StoredAsJson;
 }
 
 /// <summary>The terms a value operator contributes to an <c>_or</c> group, plus a column that proves the group empty.</summary>
@@ -37,14 +43,54 @@ internal static class ValueConditions
         typeof(double), typeof(float), typeof(DateTime), typeof(DateTimeOffset), typeof(string),
     ];
 
-    public static IConditionalModel? Build(ValueTarget t, QueryOperator op, object? value) => op switch
+    public static IConditionalModel? Build(ValueTarget t, QueryOperator op, object? value)
     {
-        QueryOperator.Null or QueryOperator.NNull => Plain(t, op, null, null),
-        QueryOperator.In => SetCondition(t, true, value),
-        QueryOperator.Nin => SetCondition(t, false, value),
-        QueryOperator.Eq or QueryOperator.Neq or QueryOperator.Gt or QueryOperator.Gte
-            or QueryOperator.Lt or QueryOperator.Lte => Comparison(t, op, value),
-        _ => Plain(t, op, ToText(value), TextOperatorTypeName(t.Underlying)),
+        if (op is QueryOperator.Null or QueryOperator.NNull) return Plain(t, op, null, null);
+        RequireAcceptableValue(t, op, value);
+        return op switch
+        {
+            QueryOperator.In => SetCondition(t, true, value),
+            QueryOperator.Nin => SetCondition(t, false, value),
+            QueryOperator.Eq or QueryOperator.Neq or QueryOperator.Gt or QueryOperator.Gte
+                or QueryOperator.Lt or QueryOperator.Lte => Comparison(t, op, value!),
+            _ => Plain(t, op, ToText(value), null),
+        };
+    }
+
+    private static void RequireAcceptableValue(ValueTarget t, QueryOperator op, object? value)
+    {
+        if (value is null)
+            throw new QueryException(
+                $"Field '{t.Label}' cannot take null with '{Token(op)}'; use '_null' or '_nnull' to test for null.");
+        if (IsStringOperator(op) && !t.IsText)
+            throw new QueryException(
+                $"'{Token(op)}' matches text only and field '{t.Label}' is not a text field; " +
+                $"it accepts {string.Join(", ", AcceptedOperators(t))}.");
+        if (op is not (QueryOperator.In or QueryOperator.Nin) && value is IEnumerable and not string)
+            throw new QueryException($"'{Token(op)}' on field '{t.Label}' takes a single value, not a list.");
+    }
+
+    private static bool IsStringOperator(QueryOperator op) =>
+        op is QueryOperator.Contains or QueryOperator.StartsWith or QueryOperator.EndsWith;
+
+    private static string AcceptedOperators(ValueTarget t)
+    {
+        var accepted = new List<QueryOperator>
+        {
+            QueryOperator.Eq, QueryOperator.Neq, QueryOperator.Gt, QueryOperator.Gte, QueryOperator.Lt, QueryOperator.Lte,
+        };
+        if (IsSupported(t.Underlying)) accepted.AddRange([QueryOperator.In, QueryOperator.Nin]);
+        accepted.AddRange([QueryOperator.Null, QueryOperator.NNull]);
+        return string.Join(", ", accepted.Select(Token));
+    }
+
+    private static string Token(QueryOperator op) => op switch
+    {
+        QueryOperator.Eq => "_eq", QueryOperator.Neq => "_neq", QueryOperator.Gt => "_gt", QueryOperator.Gte => "_gte",
+        QueryOperator.Lt => "_lt", QueryOperator.Lte => "_lte", QueryOperator.In => "_in", QueryOperator.Nin => "_nin",
+        QueryOperator.Contains => "_contains", QueryOperator.StartsWith => "_starts_with",
+        QueryOperator.EndsWith => "_ends_with", QueryOperator.Null => "_null", QueryOperator.NNull => "_nnull",
+        _ => throw new InvalidOperationException($"Unmapped operator: {op}"),
     };
 
     /// <summary>Terms for an <c>_or</c> group: every term is one <see cref="ConditionalModel"/> joined with OR.</summary>
@@ -53,6 +99,7 @@ internal static class ValueConditions
         if (op is not (QueryOperator.In or QueryOperator.Nin))
             return new OrTerms([(ConditionalModel)Build(t, op, value)!]);
 
+        RequireAcceptableValue(t, op, value);
         var include = op == QueryOperator.In;
         if (!include && t.Underlying == typeof(string))
             throw new QueryException(
@@ -114,10 +161,6 @@ internal static class ValueConditions
         return null;
     }
 
-    // A text operator (`_contains` and the like) reads the value as text for every column; byte and enum
-    // columns carry no type name there.
-    private static string? TextOperatorTypeName(Type t) => t.IsEnum || t == typeof(byte) ? null : TypeName(t);
-
     private static bool IsSupported(Type t) => t.IsEnum || Supported.Contains(t);
 
     private static bool IsTyped(Type column, object value) =>
@@ -144,13 +187,13 @@ internal static class ValueConditions
         };
     }
 
-    private static ConditionalModel Comparison(ValueTarget t, QueryOperator op, object? value)
+    private static ConditionalModel Comparison(ValueTarget t, QueryOperator op, object value)
     {
         var type = t.Underlying;
-        if (value is null || !IsSupported(type) || type == typeof(string))
-            return Plain(t, op, ToText(value), type == typeof(string) ? null : TypeName(type));
-        if (value is IEnumerable and not string)
-            throw Invalid(t, "a single value");
+        if (!IsSupported(type) || type == typeof(string))
+            return op == QueryOperator.Eq
+                ? BoundEquality(t.Column, ConditionalType.Equal, ToText(value)!)
+                : Plain(t, op, ToText(value), null);
         var text = Format(t, value, forSet: false) ?? throw Invalid(t, Describe(type));
         return Plain(t, op, text, TypeNameFor(t));
     }
@@ -188,7 +231,7 @@ internal static class ValueConditions
     // A fresh instance for every call: SqlSugar numbers a group's members by their position in the list.
     // The value is bound through FieldValueConvertFunc and FieldValue holds a fixed word, because SqlSugar
     // reads the texts "null" and "[null]" in FieldValue of an Equal as a null test and rewrites the second
-    // in place.
+    // in place. Every Equal on a text value goes through here.
     private static ConditionalModel BoundEquality(string column, ConditionalType type, string value) => new()
     {
         FieldName = column,

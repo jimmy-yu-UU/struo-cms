@@ -203,7 +203,7 @@ public static class QueryParser
             }
             if (!Operators.TryGetValue(inner.Name, out var qop))
                 throw new QueryException($"Unknown operator '{inner.Name}'.");
-            nodes.Add(new ComparisonFilter(field, qop, ReadValue(inner.Value)));
+            nodes.Add(new ComparisonFilter(field, qop, ReadValue(field, inner.Name, inner.Value)));
             hasOperator = true;
         }
         if (hasQuantifier && hasOperator)
@@ -212,15 +212,18 @@ public static class QueryParser
             throw new QueryException($"Filter for field '{field}' has no operator.");
     }
 
-    private static object? ReadValue(JsonElement v) => v.ValueKind switch
+    // A JSON object is no filter value, alone or as an element: it is refused here because the value
+    // leaves this method as plain objects and text, so no later step could tell an object from a string.
+    private static object? ReadValue(string field, string op, JsonElement v) => v.ValueKind switch
     {
         JsonValueKind.String => v.GetString(),
         JsonValueKind.Number => v.TryGetInt64(out var n) ? n : v.GetDouble(),
         JsonValueKind.True => true,
         JsonValueKind.False => false,
         JsonValueKind.Null => null,
-        JsonValueKind.Array => v.EnumerateArray().Select(ReadValue).ToList(),
-        _ => v.GetRawText()
+        JsonValueKind.Array => v.EnumerateArray().Select(element => ReadValue(field, op, element)).ToList(),
+        _ => throw new QueryException(
+            $"'{op}' on field '{field}' does not take a JSON object; send a string, a number, a boolean or a list of them.")
     };
 
     private static SortField ParseSortToken(string token)
