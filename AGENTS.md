@@ -85,10 +85,10 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL and one typed
-  query that names its table with a string.** (Schema
-  changes and seed inserts are FluentMigrator migrations, see "Migrations are the only schema source"
-  below.) The first assembles portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
+- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL and one
+  typed query that names its table with a string.** (Schema changes and seed inserts are
+  FluentMigrator migrations, see "Migrations are the only schema source" below.) The first assembles
+  portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
   `migrate` runs; the third is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
   `SchemaChecker.Check`; the fourth is one read-only catalog query that runs only on SQL Server startup.
@@ -113,10 +113,11 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   `docs/ai/decisions/sqlserver-requires-read-committed-snapshot.md`.
   The string-carrying typed query is `CharacterSetCatalog.Read`
   (`src/Struo.Infrastructure/Migrations/Schema/CharacterSetCatalog.cs`), used by `migrate:check` and
-  `SchemaChecker.Check` on MySQL and MariaDB only: `Queryable<T>().AS("information_schema.COLUMNS")` with a
-  typed `Where` on the schema and the table name, which are bound parameters. The `AS` argument is the only
-  string, no other SQL text is built, and nothing is written; it reads each column's character set for
-  the utf8mb4 warning, see `docs/ai/decisions/mysql-string-columns-are-utf8mb4.md`.
+  `SchemaChecker.Check` on MySQL and MariaDB only: `Queryable<T>().AS("information_schema.COLUMNS")`
+  with a typed `Where` on the schema and the table name, which are bound parameters. The `AS`
+  argument is the only string, no other SQL text is built, and nothing is written; it reads each
+  column's character set for the utf8mb4 warning, see
+  `docs/ai/decisions/mysql-string-columns-are-utf8mb4.md`.
   Sorting assembles no SQL text: `OrderByExpressionBuilder` returns typed sort-key lambdas
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`, `SortExpressionFactory.cs`) that
   `SqlSugarItemRepository.RunQueryAsync` chains as typed `OrderBy` calls. A translatable-field sort is a
@@ -162,8 +163,8 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   it needs the application's DI-configured `ISqlSugarClient`, which supplies the table prefix and the
   translation-sidecar policy.
   On Oracle, `migrate:check` skips the type and length checks with one warning. On SQL Server it warns
-  about non-Unicode string columns, and on MySQL and MariaDB about string columns whose character set is
-  not utf8mb4. Application queries and writes stay on SqlSugar.
+  about non-Unicode string columns, and on MySQL and MariaDB about string columns whose character
+  set is not utf8mb4. Application queries and writes stay on SqlSugar.
 - **`files:sweep` removes orphaned blobs.** It is a command like the migration ones
   (`MigrationCli` dispatches it; `FilesSweepCommand` implements it): a dry run unless `--apply`,
   skipping blobs younger than `--min-age-hours` (default 24) and any blob a `files` row references,

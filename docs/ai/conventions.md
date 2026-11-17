@@ -399,8 +399,8 @@ column there whatever its interface; only the scanner checks the interface.
 Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
 `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite
 identity primary key) — the only spots in `src/` that assign one to a column. The migration runner's
-MySQL type map (`Utf8Mb4MySqlTypeMap`) also holds type literals, for the two text types only; it renders
-migration DDL and assigns nothing to an entity column. An empty MySQL/SQL
+MySQL type map (`Utf8Mb4MySqlTypeMap`) also holds type literals, for the two text types only; it
+renders migration DDL and assigns nothing to an entity column. An empty MySQL/SQL
 Server/Oracle database fails `InitTables` outright on a type name that only
 exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go
 through `[ColumnShape]` instead.
