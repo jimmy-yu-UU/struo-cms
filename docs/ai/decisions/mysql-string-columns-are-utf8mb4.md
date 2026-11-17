@@ -100,9 +100,10 @@ Comparison semantics of a string column, from `=` on hex-built values:
 | full-width `A` and `A` | different | equal | equal | equal |
 | `a` and `a` plus U+200B | different | equal | equal | equal |
 
-MySQL changes from `utf8mb3_general_ci` (PAD SPACE) to `utf8mb4_0900_ai_ci` (NO PAD): unique indexes
-no longer treat a trailing space as equal, and the sort order of punctuation changes. MariaDB keeps
-the `uca1400_ai_ci` family: no row compares differently and the sort order is the same.
+MySQL compares with `utf8mb3_general_ci` (PAD SPACE) before the conversion and `utf8mb4_0900_ai_ci`
+(NO PAD) after it: a unique index treats a trailing space as a difference, and the sort order of
+punctuation differs. MariaDB stays in the `uca1400_ai_ci` family: no row compares differently and
+the sort order is the same.
 
 Catalog read: `DbMaintenance.GetColumnInfosByTableName` returns the same `DbColumnInfo` for a
 utf8mb3 and a utf8mb4 column, so it cannot show the difference. The typed query returns
