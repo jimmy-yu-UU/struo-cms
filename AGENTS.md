@@ -168,13 +168,14 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   On Oracle, `migrate:check` skips the type and length checks with one warning. On SQL Server it warns
   about non-Unicode string columns, and on MySQL and MariaDB about string columns whose character
   set is not utf8mb4. Application queries and writes stay on SqlSugar.
-  On MySQL and MariaDB, `migrate` and `Database:MigrateOnStartup` read the default character set of
-  the database and the default collation of each existing core table when migrations are pending, in
-  `MigrationHost.ApplyAsync` before the runner executes anything (`Utf8Mb4Defaults`). If one is not
-  utf8mb4 they refuse with a `MigrationFailedException`: nothing is applied or changed, and the
-  message names what it found and the `ALTER DATABASE` and `ALTER TABLE ... CONVERT TO` statements
-  to run. The migration type map stays free of a character set, so a column takes its table's
-  default.
+  On MySQL and MariaDB, `migrate` and `Database:MigrateOnStartup` read the default character set
+  and collation of the database and the default collation of each existing core table when
+  migrations are pending, in `MigrationHost.ApplyAsync` before the runner executes anything
+  (`Utf8Mb4Defaults`). If one is not utf8mb4 they refuse with a `MigrationFailedException`: nothing
+  is applied or changed, and the message names what it found and the `ALTER DATABASE` and
+  `ALTER TABLE ... CONVERT TO` statements to run; when the database already defaults to utf8mb4 the
+  table statements end in its collation. The migration type map stays free of a character set, so a
+  column takes its table's default.
 - **`files:sweep` removes orphaned blobs.** It is a command like the migration ones
   (`MigrationCli` dispatches it; `FilesSweepCommand` implements it): a dry run unless `--apply`,
   skipping blobs younger than `--min-age-hours` (default 24) and any blob a `files` row references,

@@ -100,7 +100,7 @@ each framework table that exists, must be utf8mb4. Otherwise nothing is applied 
 found and the `ALTER` statements to run, and
 [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4) explains them. A new
 empty database is judged on its default alone. A table that does not exist yet, and a table of your
-fork, is not checked.
+fork, are not checked.
 
 `make:migration` is covered in "Writing a migration" below, `migrate:baseline` in Chapter 24.
 

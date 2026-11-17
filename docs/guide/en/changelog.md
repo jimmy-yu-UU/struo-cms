@@ -334,23 +334,25 @@ transformed again on the first request.
     `struo_user_sessions`), and the time grows with their size; on MariaDB 11.8 it converts them
     without a rebuild. Back up the database, stop the API, and run `migrate` when those tables can
     be unavailable.
-  - Collation (MySQL), for a column converted by `migrate` or by
-    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`: the column takes the character set's default
-    collation. On a MySQL 8 database created with the defaults that is `utf8mb4_0900_ai_ci`, which
-    replaces `utf8mb3_general_ci`. A value with a trailing space is not equal to the same value
-    without it, so `abc` and `abc ` can both be stored in a unique column and `_eq` on `abc` does
-    not match `abc `. The German sharp s equals `ss` and does not equal `s`; a full-width letter
-    equals its ASCII letter, and a value with a zero-width space equals the one without. The order
-    of punctuation in sorted results changes. MariaDB compares and sorts as before. Before you
-    convert, look in the unique columns for values that differ only by trailing spaces, by a sharp
-    s against `ss`, by full-width against ASCII letters, or by a zero-width character, and check the
-    code that relies on those comparisons.
-  - Duplicate values (MySQL): if `migrate` or a `CONVERT TO` statement stops with
+  - Collation: a column converted by `migrate` or by
+    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` changes collation, and which comparisons
+    change depends on the collation it had. Converting from `utf8mb3_general_ci` (the MySQL 8.4
+    default, and a MariaDB column whose collation is `utf8mb3_general_ci`) changes trailing-space,
+    German sharp s, full-width letter and zero-width space comparisons, and the order of punctuation
+    in sorted results; converting from `utf8mb3_uca1400_ai_ci` (the MariaDB 11.8 default) changes
+    none of them. Whether each pair of values is equal before and after is in the table in
+    [Chapter 24](24-upgrading-from-0-8.md#comparison-after-the-conversion). Before you convert, look
+    in the unique columns for pairs of values that become equal, and check the code that relies on
+    those comparisons.
+  - Duplicate values: if `migrate` or a `CONVERT TO` statement stops with
     `Duplicate entry '<value>' for key '<table>.<index>'`, two values of that unique column are
-    equal under the new collation; the message names the value and the index. MariaDB's comparison
-    does not change, so it does not stop there. Find the pairs, here for `struo_roles.name` (add
-    the other key columns for a composite index, and use your table's collation in place of
-    `utf8mb4_0900_ai_ci` when the database was created with another one):
+    equal under the new collation; the message names the value and the index. In the table of
+    Chapter 24, A and B have rows that go from "no" to "yes" and stop here; C has none. Find the
+    pairs, here for `struo_roles.name` (add the other key columns for a composite index). Use in the
+    query the collation the column will have: the one in the statement's `COLLATE`; for a
+    `CONVERT TO` without `COLLATE`, the default of the character set (`utf8mb4_0900_ai_ci` on MySQL,
+    `utf8mb4_uca1400_ai_ci` on MariaDB); for a column `migrate` re-declares, the default collation
+    of its table:
 
     ```sql
     SELECT a.name AS value_a, b.name AS value_b
@@ -361,33 +363,40 @@ transformed again on the first request.
     ```
 
     Change or delete one value of each pair, then run `migrate`, or the statement, again.
-  - The database or a core table does not default to utf8mb4: a database that v0.8.x created through
-    SqlSugar's `CreateDatabase` is utf8mb3, and a server whose default is latin1 gives latin1.
-    `migrate` and `Database:MigrateOnStartup` read those defaults before they apply anything. If one
-    is not utf8mb4 they apply nothing, change nothing, exit `1` or stop the host, and print what
-    they found and the statements to run. This is `migrate` on an empty latin1 database:
+  - The database or a core table does not default to utf8mb4: `migrate` and
+    `Database:MigrateOnStartup` read those defaults before they apply anything. If one is not
+    utf8mb4 they apply nothing, change nothing, exit `1` or stop the host, and print what they found
+    and the statements to run. A database whose default is utf8mb3 or latin1 is refused, for example
+    one created without `CHARACTER SET utf8mb4` on a server whose default is latin1. This is
+    `migrate` on an empty latin1 database:
 
     ```
     $ dotnet run --project src/Struo.Api -- migrate
-    migrate failed: Migrations on MySQL and MariaDB need utf8mb4 as the default character set
-    of the database and of the framework tables; this database does not have it.
-    Nothing was applied or changed.
+    migrate failed: Nothing was applied or changed: migrations on MySQL and MariaDB need utf8mb4 as the default
+    character set of the database and of the framework tables, and the items below do not have it.
     Database `struo` has the default character set latin1.
     Run these statements, then run 'migrate' again:
     ALTER DATABASE `struo` CHARACTER SET utf8mb4;
+    Tables of your own that do not default to utf8mb4 are converted the same way;
+    'migrate:check' lists their columns.
     ```
 
     Each core table that does not default to utf8mb4 adds a
     `Table ... has the default collation ...` line and an
-    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` statement. Run the statements the message
-    prints, as [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4)
-    explains, read the collation and duplicate-value items above first, then run `migrate`.
-  - Your fork's own tables are not converted by `migrate`. Its migrations that call `AsString`
-    create utf8mb4 columns from this release on, but the columns that already exist stay as they
-    are. `migrate:check` prints one warning per such column (`FindingKind.NonUtf8Mb4String`; a
-    warning, never an error). Until a column is converted, a supplementary-plane character such as an emoji
-    cannot be stored in it or compared with it. List the columns with `migrate:check`, read the
-    collation item above, then convert each table with the statement in
+    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` statement. When the database itself is
+    already utf8mb4 and only tables are not, the message has no `ALTER DATABASE` and each
+    `ALTER TABLE` ends in the collation of the database. The last two lines of the message say that
+    tables of your own that do not default to utf8mb4 are converted the same way and that
+    `migrate:check` lists their columns. Run the statements the message prints, as
+    [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4) explains, read the
+    collation and duplicate-value items above first, then run `migrate`.
+  - Your fork's own tables are not converted by `migrate`, and the refusal looks only at the
+    database and the core tables. Its migrations that call `AsString` create utf8mb4 columns from
+    this release on, but the columns that already exist stay as they are. `migrate:check` prints one
+    warning per such column (`FindingKind.NonUtf8Mb4String`; a warning, never an error). Until a
+    column is converted, a supplementary-plane character such as an emoji cannot be stored in it or
+    compared with it. List the columns with `migrate:check`, read the collation item above, then
+    convert each table with the statement in
     [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4).
 :::
 

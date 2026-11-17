@@ -188,16 +188,16 @@ ORDER BY TABLE_NAME;
 `migrate:check` 對每個這樣的欄位發一筆警告。沒有指定字元集的欄位沿用所在資料表的預設值，所以
 只有在資料庫與框架資料表的預設值都是 utf8mb4 時，`migrate` 才會轉換核心的字串欄位。
 
-套用任何東西之前，`migrate` 與 `Database:MigrateOnStartup` 的啟動都會先讀資料庫的預設字元集，
-以及每張已經存在的框架資料表的預設字元集。只要有一個不是 utf8mb4，就不套用、不改動任何東西，
-`migrate` 以代碼 `1` 結束，API 不啟動，訊息會寫出找到什麼，以及該執行的語句。v0.8.x 透過
-SqlSugar 的 `CreateDatabase` 建出來的資料庫是 utf8mb3，伺服器預設值是 latin1 的話則是 latin1。
-下面是在 MySQL 8.4 上，做完第 5 步後對一個 utf8mb3 資料庫跑 `migrate`：
+套用任何東西之前，`migrate` 與 `Database:MigrateOnStartup` 的啟動都會先讀資料庫的預設字元集與
+定序，以及每張已經存在的框架資料表的預設定序。資料庫或其中一張表的預設值不是 utf8mb4，就不
+套用、不改動任何東西，`migrate` 以代碼 `1` 結束，API 不啟動，訊息會寫出找到什麼，以及該執行的
+語句。預設值是 utf8mb3 或 latin1 的資料庫會被拒絕，例如伺服器預設值是 latin1、建立時又沒有指定
+`CHARACTER SET utf8mb4` 的資料庫。下面是在 MySQL 8.4 上，做完第 5 步後對一個 utf8mb3 資料庫跑
+`migrate`：
 
 ```
-migrate failed: Migrations on MySQL and MariaDB need utf8mb4 as the default character set
-of the database and of the framework tables; this database does not have it.
-Nothing was applied or changed.
+migrate failed: Nothing was applied or changed: migrations on MySQL and MariaDB need utf8mb4 as the default
+character set of the database and of the framework tables, and the items below do not have it.
 Database `u3` has the default character set utf8mb3.
 Table `struo_file_translations` has the default collation utf8mb3_general_ci.
 Table `struo_files` has the default collation utf8mb3_general_ci.
@@ -225,20 +225,37 @@ ALTER TABLE `struo_site_settings` CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE `struo_user_roles` CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE `struo_user_sessions` CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE `struo_users` CONVERT TO CHARACTER SET utf8mb4;
+Tables of your own that do not default to utf8mb4 are converted the same way;
+'migrate:check' lists their columns.
 ```
 
-執行訊息印出的語句，或用下面的查詢印出它們。查詢還會列出你的 fork 自己的表（訊息不會列），以及
-自己的預設值是 utf8mb4、卻含有非 utf8mb4 欄位的表。先改資料庫預設值，之後建的表才會沿用。這組語句
-在 MySQL 8.4 與 MariaDB 11.8 上，對 utf8mb3 與 latin1 的資料庫實際跑過：
+要執行哪些語句，看資料庫自己的預設值：
+
+| 資料庫的預設字元集 | 要執行的語句 |
+|---|---|
+| 不是 utf8mb4 | `ALTER DATABASE`，再對每張表一句 `ALTER TABLE` |
+| 是 utf8mb4（任何定序） | 每張表一句 `ALTER TABLE`，結尾帶資料庫的定序 |
+
+執行訊息印出的語句，或用下面的查詢印出 `ALTER TABLE` 語句。資料庫的預設值不是 utf8mb4（訊息會
+說）時，先執行 `ALTER DATABASE`，之後建的表才會沿用；已經是 utf8mb4 就跳過這一句。查詢還會列出
+你的 fork 自己的表（訊息不會列），以及自己的預設值是 utf8mb4、卻含有非 utf8mb4 欄位的表。每句
+`ALTER TABLE` 都以資料庫的預設定序結尾，所以轉換後的表與之後建的表定序一致，不同定序的欄位互相
+比對時不會出現 `Illegal mix of collations`。這組步驟在 MySQL 8.4 與 MariaDB 11.8 上，對 utf8mb3
+的資料庫、latin1 的資料庫，以及建成 `utf8mb4 COLLATE utf8mb4_unicode_ci`、表卻是 utf8mb3
+的資料庫都可行：
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;
+```
 
-SELECT CONCAT('ALTER TABLE `', t.TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4;') AS stmt
+```sql
+SELECT CONCAT('ALTER TABLE `', t.TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4 COLLATE ',
+              s.DEFAULT_COLLATION_NAME, ';') AS stmt
 FROM information_schema.TABLES t
+JOIN information_schema.SCHEMATA s ON s.SCHEMA_NAME = t.TABLE_SCHEMA
 WHERE t.TABLE_SCHEMA = DATABASE()
   AND t.TABLE_TYPE = 'BASE TABLE'
-  AND (t.TABLE_COLLATION NOT LIKE 'utf8mb4_%'
+  AND (t.TABLE_COLLATION NOT LIKE 'utf8mb4\_%'
        OR EXISTS (SELECT 1 FROM information_schema.COLUMNS c
                   WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
                     AND c.TABLE_NAME = t.TABLE_NAME
@@ -247,12 +264,47 @@ WHERE t.TABLE_SCHEMA = DATABASE()
 ORDER BY t.TABLE_NAME;
 ```
 
-`CONVERT TO` 轉換表裡每個文字欄位，保留索引、可否為 null、預設值與資料，並設定表的預設值。
-utf8mb3 欄位與 latin1 欄位裡的文字，轉換後讀出來一樣。連刻意宣告成其他字元集（例如 `ascii`）的
-欄位也會轉換，這類表的轉換語句要檢查過再執行。在 MySQL 上，它同時改變轉換後欄位的定序，如
-[版本紀錄](changelog.md)所列，所以會停在 `Duplicate entry`，成對的值與 `migrate` 遇到的相同；
-版本紀錄有找出它們的查詢。之後上面的查詢回傳零列，`migrate` 能跑，`migrate:check` 也不會有
-字元集警告。
+`CONVERT TO` 轉換表裡每個文字欄位，保留索引與可否為 null，並設定表的預設字元集與定序。utf8mb3
+欄位與 latin1 欄位裡的文字，轉換後讀出來一樣。連刻意宣告成其他字元集（例如 `ascii`）的欄位也會
+轉換，這類表的轉換語句要檢查過再執行。
+
+`CONVERT TO` 也會改變欄位型別：`TEXT` 欄位變成 `MEDIUMTEXT`（在 MySQL 8.4 與 MariaDB 11.8 上，
+latin1 與 utf8mb3 的欄位都是如此）。核心沒有 `TEXT` 欄位；fork 用 `AsString` 宣告 8193 到 65535
+的欄位就是 `TEXT`。
+轉換之後，`migrate:check` 對這個欄位沒有任何發現。
+
+之後上面的查詢回傳零列，`migrate` 能跑，`migrate:check` 也不會有字元集警告。你的 fork 自己的表
+（`migrate` 不會轉換）用同一句 `ALTER TABLE` 轉換，欄位由 `migrate:check` 列出。
+
+#### 轉換後的比對結果
+
+轉換後欄位的定序依路徑而定：
+
+| 路徑 | 欄位轉換後的定序 |
+|---|---|
+| `CONVERT TO` 沒有 `COLLATE` | 字元集的預設定序，與資料庫的定序無關 |
+| `CONVERT TO` 帶 `COLLATE <c>` | `<c>` |
+| `migrate` 重新宣告欄位 | 該表的預設定序 |
+
+字元集的預設定序在 MySQL 8.4 是 `utf8mb4_0900_ai_ci`，在 MariaDB 11.8 是
+`utf8mb4_uca1400_ai_ci`。下面的表是三種轉換在這兩個預設定序下的量測結果：
+
+- A：MySQL 8.4，`utf8mb3_general_ci` 轉成 `utf8mb4_0900_ai_ci`。
+- B：MariaDB 11.8，`utf8mb3_general_ci` 轉成 `utf8mb4_uca1400_ai_ci`。
+- C：MariaDB 11.8，`utf8mb3_uca1400_ai_ci` 轉成 `utf8mb4_uca1400_ai_ci`。
+
+每格是「轉換前 → 轉換後」，「是」表示兩個值相等；最後一列問的是 `a` 是否排在 `_` 之前：
+
+| 成對的值 | A | B | C |
+|---|---|---|---|
+| `a` 與 `a` 加結尾空白 | 是 → 否 | 是 → 是 | 是 → 是 |
+| sharp s 與 `ss` | 否 → 是 | 否 → 是 | 是 → 是 |
+| sharp s 與 `s` | 是 → 否 | 是 → 否 | 否 → 否 |
+| 全形 `Ａ` 與 `A` | 否 → 是 | 否 → 是 | 是 → 是 |
+| `a` 與 `a` 加 U+200B | 否 → 是 | 否 → 是 | 是 → 是 |
+| `a` 排在 `_` 之前 | 是 → 否 | 是 → 否 | 否 → 否 |
+
+資料庫用別的定序時，語句的 `COLLATE` 就是那個定序，上表不適用，找成對的值時要用它。
 
 ## 留下來的東西
 

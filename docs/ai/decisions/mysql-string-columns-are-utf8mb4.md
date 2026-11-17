@@ -19,18 +19,27 @@ and nullability. It produces no expression on any other backend. `Down` does not
 
 On MySQL and MariaDB, `MigrationHost.ApplyAsync` (the path of `migrate` and of
 `Database:MigrateOnStartup`) refuses before it applies anything. When migrations are pending it
-reads the database's default character set and the default collation of every core table that
-exists, the framework tables under `TablePrefix` and the version table, and refuses when one is not
-utf8mb4. A
-core table that does not exist yet is skipped, a new empty database is judged on its default alone,
-and a fork's tables are not part of it. The refusal is a `MigrationFailedException`: the CLI prints
-`migrate failed: <message>` and exits 1, and startup terminates the host. Nothing is applied, no
-version row is written and no table or column changes. The message names the database and its
-default character set when that offends, each offending table with its default collation, and gives
-`ALTER DATABASE` and one `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` per listed table.
-`Utf8Mb4Defaults` decides and builds the message; `DefaultCharacterSetCatalog` only reads.
-`migrate:status`, `migrate:preview`, `migrate:check`, `migrate:baseline` and `make:migration` do
-not run it.
+reads the database's default character set and collation and the default collation of every core
+table that exists, the framework tables under `TablePrefix` and the version table, and refuses when
+one is not utf8mb4. A core table that does not exist yet is skipped, a new empty database is judged
+on its default alone, a database whose `SCHEMATA` row is not visible is judged on its tables alone,
+and a fork's tables are not part of it (maintainer ruling). Only the catalog read sits inside the
+`try` that reports "Could not inspect the database"; the decision is made outside it. The refusal is
+a `MigrationFailedException`: the CLI prints `migrate failed: <message>` and exits 1, and startup
+terminates the host. Nothing is applied, no version row is written and no table or column changes.
+The message names the database and its default character set when that offends, each offending table
+with its default collation, and gives the statements. When the database itself offends:
+`ALTER DATABASE ... CHARACTER SET utf8mb4` and one
+`ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` per listed table, without `COLLATE` (both end at
+the character set's default). When only tables offend in a utf8mb4 database: one
+`ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4 COLLATE <database default collation>` per listed
+table, so the converted tables and the tables later migrations create share one collation. The last
+two lines say that a fork's own tables that do not default to utf8mb4 are converted the same way and
+that `migrate:check` lists their columns. `Utf8Mb4Defaults` decides and builds the message;
+`DefaultCharacterSetCatalog` only reads. The `migrate:check` warning quotes the table name with the
+same helper and says that `COLLATE` with the database's collation follows when that collation is not
+the character set's default. `migrate:status`, `migrate:preview`, `migrate:check`,
+`migrate:baseline` and `make:migration` do not run it.
 
 `migrate:check` reads each entity table's column character sets and collations with one typed
 query on `information_schema.COLUMNS` (`CharacterSetCatalog`) and warns
@@ -40,9 +49,9 @@ A fork's own tables are not converted by `migrate`: the warning names them and c
 statement.
 
 The two reads of `migrate` are typed queries of the same form on `information_schema.SCHEMATA`
-(`DEFAULT_CHARACTER_SET_NAME` of the connected schema) and `information_schema.TABLES`
-(`TABLE_NAME` and `TABLE_COLLATION` of the tables of the connected schema). Together with the
-`COLUMNS` read that makes three.
+(`DEFAULT_CHARACTER_SET_NAME` and `DEFAULT_COLLATION_NAME` of the connected schema) and
+`information_schema.TABLES` (`TABLE_NAME` and `TABLE_COLLATION` of the tables of the connected
+schema). Together with the `COLUMNS` read that makes three.
 
 The `AS("information_schema.<TABLE>")` call is the only string in each query; the schema and the
 table name are bound parameters. The maintainer approved exactly this form; it is not a raw SQL
@@ -109,12 +118,13 @@ replacement map renders `ALTER TABLE ... MODIFY COLUMN ... VARCHAR(n) NOT NULL` 
   `Duplicate entry 'strasse' for key '<prefix>roles.ux_<prefix>roles_name'` is the text `migrate`
   prints for the values `ss` and the German sharp s in a unique column; `Utf8Mb4CollisionLiveTests`
   runs it.
-- Under the old character set the same server version compared the pair as different (MySQL) or
-  equal (MariaDB), which is why MariaDB converts without a collision.
+- The pair `ss` and the sharp s is different under `utf8mb3_general_ci` (MySQL and MariaDB) and
+  equal under `utf8mb3_uca1400_ai_ci` (the MariaDB 11.8 default for utf8mb3); a MariaDB table that
+  is `utf8mb3_general_ci` converts with a collision like MySQL does (below).
 
 Comparison semantics of a string column, from `=` on hex-built values:
 
-| Pair | MySQL utf8mb3 | MySQL utf8mb4 | MariaDB utf8mb3 | MariaDB utf8mb4 |
+| Pair | MySQL utf8mb3 | MySQL utf8mb4 | MariaDB utf8mb3 (uca1400) | MariaDB utf8mb4 |
 |---|---|---|---|---|
 | `a` and `a` plus a trailing space | equal | different | equal | equal |
 | sharp s and `ss` | different | equal | equal | equal |
@@ -125,8 +135,42 @@ Comparison semantics of a string column, from `=` on hex-built values:
 
 MySQL compares with `utf8mb3_general_ci` (PAD SPACE) before the conversion and `utf8mb4_0900_ai_ci`
 (NO PAD) after it: a unique index treats a trailing space as a difference, and the sort order of
-punctuation differs. MariaDB stays in the `uca1400_ai_ci` family: no row compares differently and
-the sort order is the same.
+punctuation differs. A MariaDB column that is already in the `uca1400_ai_ci` family stays in it: no
+row compares differently and the sort order is the same. A MariaDB `utf8mb3_general_ci` column does
+not (next table).
+
+Three transitions, measured with hex-built values. Each cell is "equal before, equal after"; the
+last row asks whether `a` sorts before `_`:
+
+| Pair | A | B | C |
+|---|---|---|---|
+| `a` and `a` plus a trailing space | yes, no | yes, yes | yes, yes |
+| sharp s and `ss` | no, yes | no, yes | yes, yes |
+| sharp s and `s` | yes, no | yes, no | no, no |
+| full-width `A` and `A` | no, yes | no, yes | yes, yes |
+| `a` and `a` plus U+200B | no, yes | no, yes | yes, yes |
+| `a` sorts before `_` | yes, no | yes, no | no, no |
+
+A is MySQL 8.4 `utf8mb3_general_ci` to `utf8mb4_0900_ai_ci`; B is MariaDB 11.8 `utf8mb3_general_ci`
+to `utf8mb4_uca1400_ai_ci`; C is MariaDB 11.8 `utf8mb3_uca1400_ai_ci` to `utf8mb4_uca1400_ai_ci`. In
+B, a MariaDB `utf8mb3_general_ci` table with a unique column holding `ss` and the sharp s stops
+`CONVERT TO` with `Duplicate entry 'ss' for key 'ux_t_name'` and keeps its two rows, like A.
+
+Collation per path, measured in a database created `utf8mb4 COLLATE utf8mb4_unicode_ci`:
+
+| Path | MySQL 8.4 | MariaDB 11.8 |
+|---|---|---|
+| `CONVERT TO`, no `COLLATE` | `utf8mb4_0900_ai_ci` | `utf8mb4_uca1400_ai_ci` |
+| `CONVERT TO ... COLLATE utf8mb4_unicode_ci` | `utf8mb4_unicode_ci` | `utf8mb4_unicode_ci` |
+| `MODIFY COLUMN` in a unicode_ci or bin table | the table's | the table's |
+
+`CONVERT TO` without `COLLATE` gives the character set's default whatever the database collation,
+so a table converted that way sits beside tables created later with the database's collation, and
+comparing their columns raises `Illegal mix of collations`. The statements of the refusal and of the
+chapter 24 query end in `COLLATE <database default collation>`. A `TEXT` column of a latin1 or
+utf8mb3 table becomes `MEDIUMTEXT` under `CONVERT TO` on both servers; the core tables have no
+`TEXT` column, a fork's `AsString(8193..65535)` column is one, and `migrate:check` reports nothing
+for it afterwards (`Utf8Mb4TextWideningLiveTests`).
 
 Catalog read: `DbMaintenance.GetColumnInfosByTableName` returns the same `DbColumnInfo` for a
 utf8mb3 and a utf8mb4 column, so it cannot show the difference. The typed query returns
@@ -145,7 +189,7 @@ default latin1 and one with default utf8mb3, in a utf8mb4 database:
 
 | Table default | ASCII-only column after `MODIFY` | Column holding CJK after `MODIFY` |
 |---|---|---|
-| latin1 | becomes latin1 | fails with 1366 `Incorrect string value`; column stays utf8mb3 |
+| latin1 | becomes latin1 | fails with 1366; column stays utf8mb3 |
 | utf8mb3 | stays utf8mb3 | stays utf8mb3, text unchanged |
 
 A migration that did this would convert nothing in a utf8mb3 database and would stop partway in a
@@ -174,22 +218,25 @@ Every collation name starts with the name of its character set up to the first u
 none). `information_schema.SCHEMATA` returns `DEFAULT_CHARACTER_SET_NAME` directly: `utf8mb4` on
 both servers for a utf8mb4 database.
 
-Refusal, run through the CLI against utf8mb3 and latin1 databases on MySQL 8.4.13 and MariaDB
-11.8.9: the databases are built as v0.8.x built them (core migrations up to
-`SeedCoreData`, framework type map, no version table) with CJK text in `struo_roles.name` and
-`description` and in `struo_revisions.snapshot`. After `migrate:baseline`, `migrate` exits 1 with
-the database and the 12 tables in the message; the statements then run, `migrate` applies the four
-pending migrations, `migrate:check` prints `0 error(s), 0 warning(s)`, no column is outside
-utf8mb4 and every table defaults to utf8mb4. The stored bytes of the CJK text are identical before
-and after. In a latin1 database the long-text column is latin1 and cannot hold CJK, so it holds a
-latin1 character: its stored bytes change (latin1 to utf8) and the text read through a utf8mb4
-client is identical. A refusal on an empty latin1 database lists the database only; with
+Refusal and the written sequence of chapter 24, run through the CLI on MySQL 8.4.13 and MariaDB
+11.8.9 against three databases each: default utf8mb3, default latin1, and a database altered to
+`utf8mb4 COLLATE utf8mb4_unicode_ci` whose tables are utf8mb3. The fixtures hold the core migrations
+up to `SeedCoreData` applied with the framework type map and the version table removed, with CJK
+text in `struo_roles.name` and `description` and in `struo_revisions.CollectionName`. After
+`migrate:baseline`, `migrate` exits 1. The message lists the database only when its default is not
+utf8mb4 and `ALTER DATABASE` with it; the sequence runs `ALTER DATABASE` only then, then the query
+of the chapter, which prints one `ALTER TABLE ... COLLATE <database collation>` per table (11 or 12
+tables; the version table exists after the baseline and is listed when it is not utf8mb4). After the
+statements every table's default collation equals the database's, `migrate` applies the four pending
+migrations, `migrate:check` prints `0 error(s), 0 warning(s)`, no column is outside utf8mb4, no
+column's collation differs from the database's, and the stored bytes of the CJK text are identical
+before and after. A refusal on an empty latin1 database lists the database only; with
 `Database:MigrateOnStartup` the host terminates with the same message.
 
 `CONVERT TO CHARACTER SET utf8mb4` of a table that holds the values `ss` and the German sharp s in a
 unique column fails on MySQL 8.4 with `Duplicate entry` naming the value and the index and leaves
-the table unchanged; MariaDB stores no such pair in its utf8mb3 table, because it compares them as
-equal.
+the table unchanged; a MariaDB `utf8mb3_uca1400_ai_ci` table stores no such pair, because it
+compares them as equal, and a `utf8mb3_general_ci` one converts like MySQL (transition B above).
 
 Equivalence: a database created by the migrations with the replacement map, a database built with
 the framework map and then migrated, and a database built with the replacement map up to the release
@@ -220,17 +267,25 @@ outside utf8mb4.
 - `Utf8Mb4ColumnsTests`: the pure warning function, its message, and the backend gate: only MySQL
   reads the character sets.
 - `Utf8Mb4DefaultsTests`: the decision (database default by table default, case of names, skipped
-  tables, missing rows), the message (real names, only what offends, both statements, name order,
+  tables, missing rows, a non-default table prefix), the message (real names, only what offends,
+  both statements, the collation of the database, the fork line, the opening line, name order,
   quoting), the character set derived from each measured collation, and the gate: the catalog is
   read on MySQL only, for every `StruoDbType` value.
 - `MigrationDefaultsRefusalTests`: the apply path asks the check after it has found pending
-  migrations and before the runner creates a table; a refusal leaves no table and no version
-  table; an unreadable catalog is a `MigrationFailedException`; nothing pending asks nothing.
+  migrations and before the runner creates a table; a refusal leaves no table and no version table;
+  an unreadable catalog is a `MigrationFailedException` and a fault in the decision is not; nothing
+  pending asks nothing; on a backend other than MySQL and MariaDB the default check applies the
+  migrations (skipped on those two).
 - `Utf8Mb4DefaultsLiveTests` (MySQL and MariaDB when configured): a latin1 or utf8mb3 database
-  without tables, and with core tables built with the framework type map, is refused and
-  stays byte-identical in structure, character sets, data and applied versions; the statements of
-  the message make `migrate` succeed and the column character sets and collations equal a fresh
-  database's; a utf8mb4 database migrates; `MigrateOnStartup` surfaces the refusal.
+  without tables, and with core tables built with the framework type map, is refused and stays
+  byte-identical in structure, character sets, data and applied versions; the statements of the
+  message make `migrate` succeed and the column character sets and collations equal a fresh
+  database's, with the same column structure; a database created
+  `utf8mb4 COLLATE utf8mb4_unicode_ci` whose tables are utf8mb3 gets statements ending in that
+  collation and every table and column ends in it; the refusal leaves the tables' default collations
+  as they were; a utf8mb4 database migrates; `MigrateOnStartup` surfaces the refusal.
+- `Utf8Mb4TextWideningLiveTests` (MySQL and MariaDB when configured): `TEXT` becomes `MEDIUMTEXT`
+  and the schema check has no finding afterwards.
 - `Utf8Mb4LiveTests` and `Utf8Mb4CollisionLiveTests` (MySQL and MariaDB when configured): a fresh
   database, the upgrade (including each column's collation), the supplementary-plane round trip, the
   warning and the collision.
@@ -244,6 +299,8 @@ outside utf8mb4.
 - A fork's own `AsString` columns in an existing database are converted only by the fork. The mixed
   state (core converted, fork tables not) was measured for joins and `IN` subqueries, which work;
   GraphQL and the string operators were not measured in it.
+- A database built by v0.8.x CodeFirst was not measured; the fixtures hold the core migrations up
+  to `SeedCoreData` applied with the framework type map and the version table removed.
 - Oracle is not covered.
 
 ## Referenced from
