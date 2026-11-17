@@ -21,7 +21,7 @@ public sealed class CoreSchemaMigrationTests : IDisposable
     {
         var applied = await _h.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        applied.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version, AddLanguageCodeUniqueIndex.Version, CreateRoleCapabilities.Version, DropRoleCapabilities.Version);
+        applied.Select(m => m.Version).Should().Equal(CreateCoreSchema.Version, SeedCoreData.Version, AddLanguageCodeUniqueIndex.Version, CreateRoleCapabilities.Version, DropRoleCapabilities.Version, ConvertStringColumnsToUtf8Mb4.Version);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class CoreSchemaMigrationTests : IDisposable
 
         var applied = await second.Host(CoreMigrationHarness.Seed()).ApplyAsync(default);
 
-        applied.Should().HaveCount(5);
+        applied.Should().HaveCount(6);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class CoreSchemaMigrationTests : IDisposable
 
         var applied = await host.ApplyAsync(default);
 
-        applied.Select(m => m.Version).Should().Equal(DropRoleCapabilities.Version);
+        applied.Select(m => m.Version).Should().Equal(DropRoleCapabilities.Version, ConvertStringColumnsToUtf8Mb4.Version);
         _h.Db().DbMaintenance.IsAnyTable(RoleCapabilitiesTable, false).Should().BeFalse();
     }
 

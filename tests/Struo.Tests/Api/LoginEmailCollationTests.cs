@@ -36,14 +36,12 @@ public class LoginEmailCollationTests(ApiFactory factory)
     private static readonly Variant FullwidthO = new("fullwidth-o", s => s.Replace('o', '\uFF4F'), true);
     private static readonly Variant SoftHyphen = new("soft-hyphen", s => s.Insert(1, "\u00AD"), true);
     private static readonly Variant ZeroWidthSpace = new("zero-width-space", s => s.Insert(1, "\u200B"), true);
-    private static readonly Variant DotlessI = new("dotless-i", s => s.Replace('i', '\u0131'), true);
     private static readonly Variant DottedCapitalI = new("dotted-capital-i", s => s.Replace('i', '\u0130'), true);
-    private static readonly Variant SharpS = new("sharp-s", s => s.Replace('s', '\u00DF'), true);
 
     private static IReadOnlyList<Variant> Variants => TestBackend.Current switch
     {
-        TestBackendKind.MySql => [AccentE, UmlautO, DotlessI, DottedCapitalI, SharpS],
-        TestBackendKind.MariaDb => [AccentE, UmlautO, FullwidthO, SoftHyphen, ZeroWidthSpace, DottedCapitalI],
+        TestBackendKind.MySql or TestBackendKind.MariaDb =>
+            [AccentE, UmlautO, FullwidthO, SoftHyphen, ZeroWidthSpace, DottedCapitalI],
         TestBackendKind.SqlServer => [FullwidthO],
         _ => [AccentE with { FoldedByBackend = false }],
     };

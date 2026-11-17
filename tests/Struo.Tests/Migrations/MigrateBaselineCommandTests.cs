@@ -124,9 +124,9 @@ public sealed class MigrateBaselineCommandTests : IDisposable
         user.Password.Should().Be(passwordBefore);
         new Argon2idPasswordHasher().Verify(user.Password, AdminPassword).Should().BeTrue();
 
-        (await Run(sp, "migrate:status")).Out.Should().Contain("3 pending");
+        (await Run(sp, "migrate:status")).Out.Should().Contain("4 pending");
         var migrate = await Run(sp, "migrate");
-        migrate.Out.Should().Contain("Applied 202611030000").And.Contain("Applied 202611040000").And.Contain("Applied 202611060000").And.NotContain("202610080001");
+        migrate.Out.Should().Contain("Applied 202611030000").And.Contain("Applied 202611040000").And.Contain("Applied 202611060000").And.Contain("Applied 202611170000").And.NotContain("202610080001");
         (await Run(sp, "migrate")).Out.Should().Contain("Nothing to migrate.");
         (await Run(sp, "migrate:status")).Out.Should().Contain("0 pending");
         (await Run(sp, "migrate:baseline")).Code.Should().Be(MigrationCli.Failure);
@@ -215,7 +215,7 @@ public sealed class MigrateBaselineCommandTests : IDisposable
 
         result.Code.Should().Be(MigrationCli.Success, result.Err);
         result.Out.Should().Contain("202610090000").And.Contain("3 migration(s) recorded");
-        (await Run(sp, "migrate:status")).Out.Should().Contain("3 pending");
+        (await Run(sp, "migrate:status")).Out.Should().Contain("4 pending");
     }
 
     [Fact]

@@ -1,4 +1,7 @@
 using FluentMigrator.Runner;
+using FluentMigrator.Runner.Generators.MySql;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Struo.Application.Configuration;
 
 namespace Struo.Infrastructure.Migrations;
@@ -11,8 +14,15 @@ internal static class MigrationDialect
         StruoDbType.PostgreSQL => rb.AddPostgres(),
         StruoDbType.Sqlite => rb.AddSQLite(),
         StruoDbType.SqlServer => rb.AddSqlServer2016(),
-        StruoDbType.MySql => rb.AddMySql8(),
+        StruoDbType.MySql => AddMySql(rb),
         StruoDbType.Oracle => rb.AddOracle12CManaged(),
         _ => throw new ArgumentOutOfRangeException(nameof(db), db, "Unsupported DbType"),
     };
+
+    private static IMigrationRunnerBuilder AddMySql(IMigrationRunnerBuilder rb)
+    {
+        rb.AddMySql8();
+        rb.Services.Replace(ServiceDescriptor.Scoped<IMySqlTypeMap>(_ => new Utf8Mb4MySqlTypeMap()));
+        return rb;
+    }
 }

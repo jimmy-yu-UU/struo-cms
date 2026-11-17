@@ -31,6 +31,10 @@ internal static class SchemaTableComparer
 
         foreach (var finding in CompareUniqueIndexes(db, dbType, table, liveName))
             yield return finding;
+
+        if (dbType == StruoDbType.MySql)
+            foreach (var finding in Utf8Mb4Columns.Findings(table, CharacterSetCatalog.Read(db, liveName)))
+                yield return finding;
     }
 
     public static IReadOnlyList<SchemaFinding> UnsupportedIndexWarnings(StruoDbType dbType, IReadOnlyList<ExpectedTable> tables) =>

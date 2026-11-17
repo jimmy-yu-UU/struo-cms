@@ -81,7 +81,7 @@ public sealed class CoreMigrateCliTests : IDisposable
         var status = await Run(sp, "migrate:status");
 
         status.Code.Should().Be(MigrationCli.Success, status.Err);
-        status.Out.Should().Contain("5 pending");
+        status.Out.Should().Contain("6 pending");
     }
 
     private string[] Tables() => new SqlSugarClient(_db.RawConfig())
