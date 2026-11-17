@@ -24,7 +24,7 @@ internal static class Utf8Mb4Defaults
     /// <summary>The message naming every offending item and the statements that fix them, or null when there is none.</summary>
     public static string? Refusal(CatalogDefaults catalog, string tablePrefix)
     {
-        var schema = catalog.Schemata.FirstOrDefault();
+        var schema = catalog.Schemata.Count > 0 ? catalog.Schemata[0] : null;
         var databaseSet = schema?.DefaultCharacterSetName;
         var databaseOffends = databaseSet is not null && !IsUtf8Mb4(databaseSet);
         var core = CoreTableNames(tablePrefix);
