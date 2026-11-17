@@ -15,7 +15,8 @@ public enum FindingKind
     UndeclaredColumn,
     IndexCheckUnsupported,
     TypeCheckUnsupported,
-    NonUnicodeString
+    NonUnicodeString,
+    NonUtf8Mb4String
 }
 
 /// <summary>One difference between the live database and the entity metadata. <c>Column</c> is null for table-level findings.</summary>

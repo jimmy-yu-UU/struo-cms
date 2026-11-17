@@ -85,9 +85,10 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 
 ## Invariants
 
-- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL.** (Schema
-  changes and seed inserts are FluentMigrator migrations, see "Migrations are the only schema source"
-  below.) The first assembles portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
+- **All database access is through SqlSugar, with four deliberate exceptions for raw SQL and three
+  typed queries that name their table with a string.** (Schema changes and seed inserts are
+  FluentMigrator migrations, see "Migrations are the only schema source" below.) The first assembles
+  portable SQL text; the second is deliberately per-backend lock SQL that runs wherever
   `migrate` runs; the third is per-backend read-only catalog SQL that runs wherever `migrate:check`
   or the Development startup schema check runs, and wherever a fork's tests call
   `SchemaChecker.Check`; the fourth is one read-only catalog query that runs only on SQL Server startup.
@@ -110,6 +111,16 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   (`src/Struo.Infrastructure/Persistence/SqlServerIsolationCheck.cs`): one parameterless read-only query
   at SQL Server startup that warns when `READ_COMMITTED_SNAPSHOT` is off; see
   `docs/ai/decisions/sqlserver-requires-read-committed-snapshot.md`.
+  The string-carrying typed queries are three reads of the MySQL and MariaDB catalog, each
+  `Queryable<T>().AS("information_schema.<TABLE>")` with a typed `Where` whose values are bound
+  parameters. `CharacterSetCatalog.Read`
+  (`src/Struo.Infrastructure/Migrations/Schema/CharacterSetCatalog.cs`) reads
+  `information_schema.COLUMNS` by schema and table name, for the utf8mb4 warning of `migrate:check`
+  and `SchemaChecker.Check`. `DefaultCharacterSetCatalog.Read`
+  (`src/Struo.Infrastructure/Migrations/Schema/DefaultCharacterSetCatalog.cs`) reads
+  `information_schema.SCHEMATA` and `information_schema.TABLES` by schema name, for the refusal of
+  `migrate` below. The `AS` argument is the only string in each, no other SQL text is built, and
+  nothing is written; see `docs/ai/decisions/mysql-string-columns-are-utf8mb4.md`.
   Sorting assembles no SQL text: `OrderByExpressionBuilder` returns typed sort-key lambdas
   (`src/Struo.Infrastructure/Query/OrderByExpressionBuilder.cs`, `SortExpressionFactory.cs`) that
   `SqlSugarItemRepository.RunQueryAsync` chains as typed `OrderBy` calls. A translatable-field sort is a
@@ -117,7 +128,7 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   and a to-one relation-path sort is one nested typed subquery per hop.
   Nothing else may assemble SQL text, and SqlSugar's own string overloads
   (`Select<T>(string)`, `GroupBy(string)`, `OrderBy(string)`, `Where(string, …)`) count as hand-written
-  SQL outside the four exceptions above: use the typed lambda overloads, and when the typed surface
+  SQL outside the exceptions above: use the typed lambda overloads, and when the typed surface
   cannot express something, stop and get the maintainer's explicit approval instead of falling back to
   a string.
 - **A filter or id value reaches SQL only through `ValueConditions`**
@@ -155,7 +166,16 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   it needs the application's DI-configured `ISqlSugarClient`, which supplies the table prefix and the
   translation-sidecar policy.
   On Oracle, `migrate:check` skips the type and length checks with one warning. On SQL Server it warns
-  about non-Unicode string columns. Application queries and writes stay on SqlSugar.
+  about non-Unicode string columns, and on MySQL and MariaDB about string columns whose character
+  set is not utf8mb4. Application queries and writes stay on SqlSugar.
+  On MySQL and MariaDB, `migrate` and `Database:MigrateOnStartup` read the default character set
+  and collation of the database and the default collation of each existing core table when
+  migrations are pending, in `MigrationHost.ApplyAsync` before the runner executes anything
+  (`Utf8Mb4Defaults`). If one is not utf8mb4 they refuse with a `MigrationFailedException`: nothing
+  is applied or changed, and the message names what it found and the `ALTER DATABASE` and
+  `ALTER TABLE ... CONVERT TO` statements to run; when the database already defaults to utf8mb4 the
+  table statements end in its collation. The migration type map stays free of a character set, so a
+  column takes its table's default.
 - **`files:sweep` removes orphaned blobs.** It is a command like the migration ones
   (`MigrationCli` dispatches it; `FilesSweepCommand` implements it): a dry run unless `--apply`,
   skipping blobs younger than `--min-age-hours` (default 24) and any blob a `files` row references,

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Migrations;
@@ -28,6 +29,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
         if (MigrationInfo.OutOfOrderWarning(before) is { } outOfOrder) logger.LogWarning("{Warning}", outOfOrder);
+        RefuseNonUtf8Mb4Defaults();
         try
         {
             using var sp = BuildRunner(preview: false, new SqlSuppressingLoggerFactory(loggerFactory));
@@ -135,6 +137,26 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         {
             throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
         }
+    }
+
+    /// <summary>On MySQL and MariaDB the run needs utf8mb4 defaults on the database and the existing framework
+    /// tables; otherwise it stops here, before the runner has executed an expression or written a version row.</summary>
+    private void RefuseNonUtf8Mb4Defaults()
+    {
+        CatalogDefaults? catalog;
+        try
+        {
+            using var db = OpenClient();
+            catalog = options.DefaultsCatalog is { } supplied
+                ? supplied(db)
+                : Utf8Mb4Defaults.CatalogFor(options.DbType, () => DefaultCharacterSetCatalog.Read(db));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
+        }
+        if (catalog is not null && Utf8Mb4Defaults.Refusal(catalog, options.TablePrefix) is { } refusal)
+            throw new MigrationFailedException(refusal);
     }
 
     private void EnsureBaselineable()

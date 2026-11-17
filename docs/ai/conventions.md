@@ -396,12 +396,14 @@ explicit `ColumnDataType`, and `ColumnDataType` beside `IsJson` is honoured.
 `ColumnTypeMapTests` pins all three. The same hook maps a structured `[CmsField]` property to a JSON
 column there whatever its interface; only the scanner checks the interface.
 
-Core itself must never write a vendor type literal outside those two places — `ColumnTypeMap.cs`, and
-`SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets `DataType = "INTEGER"` on a SQLite
-identity primary key) — the only spots in `src/` that assign one to a column. An empty MySQL/SQL
-Server/Oracle database fails `InitTables` outright on a type name that only
-exists on PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go
-through `[ColumnShape]` instead.
+Core itself must never assign a vendor type literal to an entity column outside two places —
+`ColumnTypeMap.cs`, and `SqlSugarClientFactory`'s SQLite identity-column rewrite (which sets
+`DataType = "INTEGER"` on a SQLite identity primary key); they are the only spots in `src/` that do.
+The migration runner's MySQL type map (`Utf8Mb4MySqlTypeMap`) also holds type literals, for the two
+text types only, but it renders migration DDL and assigns nothing to an entity column. An empty
+MySQL/SQL Server/Oracle database fails `InitTables` outright on a type name that only exists on
+PostgreSQL, so any `[SugarColumn(ColumnDataType = ...)]` added to a framework entity must go through
+`[ColumnShape]` instead.
 
 ## Translation sidecar unique index
 

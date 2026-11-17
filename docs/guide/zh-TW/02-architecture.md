@@ -57,7 +57,8 @@ fork 如果重新命名測試專案，這三個 `InternalsVisibleTo` 要一起�
 框架資料表由 `Struo.Infrastructure` 裡的核心 migration 建立：`CreateCoreSchema` 建表，
 `SeedCoreData` 植入初始資料，`AddLanguageCodeUniqueIndex` 為語言的 `code` 加上唯一索引，
 `CreateRoleCapabilities` 建立一張表、`DropRoleCapabilities` 再把它刪掉，所以資料庫最後沒有
-`role_capabilities` 表；這些都由
+`role_capabilities` 表，`ConvertStringColumnsToUtf8Mb4` 把 MySQL／MariaDB 上核心資料表的字串欄位
+轉成 utf8mb4，在其他後端什麼都不做；這些都由
 `migrate` 或 `Database:MigrateOnStartup` 套用。API 不會照 entity 類別自己建表。fork 為自己的集合寫的
 migration 屬於那個 fork。
 
@@ -113,7 +114,11 @@ sidecar的唯一索引由 `TranslationSidecarIndexPolicy` 算出、由同一個 
 fork 不需要自己重算或重新註冊。
 
 所有資料庫存取都得經過 SqlSugar，結構變更與初始資料則是 FluentMigrator migration。只有四個刻
-意留下的例外會用字串 SQL：關聯篩選的子查詢包裝、migration 鎖 `MigrationLockSql`、`IndexCatalog` 讀索引用的唯讀系統目錄查詢，以及 SQL Server 啟動時讀一個系統目錄旗標的檢查。細節見
+意留下的例外會用字串 SQL：關聯篩選的子查詢包裝、migration 鎖 `MigrationLockSql`、
+`IndexCatalog` 讀索引用的唯讀系統目錄查詢，以及 SQL Server 啟動時讀一個系統目錄旗標的檢查。
+另有三個 MySQL／MariaDB 的目錄讀取，讀欄位字元集與資料庫及其資料表的預設字元集，都是型別化查詢，
+字串只有目錄資料表的名稱。
+細節見
 [第 21 章](21-schema-and-upgrades.md#核心的四個-raw-sql-例外)。
 
 ## 技術堆疊

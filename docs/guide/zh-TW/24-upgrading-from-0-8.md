@@ -56,13 +56,20 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    植入資料只被記錄、沒有執行，既有的使用者、角色與語言不受影響。它只新增版本表，v0.8.x 的
    執行個體還在服務時也能跑。資料庫裡已經有紀錄，或框架資料表不存在時，它拒絕並以代碼 `1`
    結束。
-6. **跑 `migrate`。** 比 `SeedCoreData` 新的核心 migration，例如 `AddLanguageCodeUniqueIndex`、
-   `CreateRoleCapabilities` 與 `DropRoleCapabilities`，以及 baseline 之後新增的 migration 都在這裡套用；
-   沒有待套用的就印
-   `Nothing to migrate.`。若有兩個語言代碼對資料庫來說相等，`AddLanguageCodeUniqueIndex`
-   會讓執行停下；怎麼找出並移除它們見[版本紀錄](changelog.md)。
-7. **跑 `migrate:check`。** PostgreSQL、MySQL 與 MariaDB 應該是 `0 error(s), 0 warning(s)`。
-   SQL Server 對每個 `varchar` 字串欄位發一筆警告：
+6. **只有 MySQL 與 MariaDB：把資料庫與框架資料表轉成 utf8mb4。** `migrate` 會拒絕預設字元集
+   （資料庫的，或框架資料表的）不是 utf8mb4 的資料庫，所以這一步要先做；語句在下面
+   〈MySQL／MariaDB：字元集換成 utf8mb4〉一節。PostgreSQL 與 SQL Server 直接進第 7 步。
+7. **跑 `migrate`。** 比 `SeedCoreData` 新的核心 migration，例如 `AddLanguageCodeUniqueIndex`、
+   `CreateRoleCapabilities`、`DropRoleCapabilities` 與 `ConvertStringColumnsToUtf8Mb4`，以及
+   baseline 之後新增的 migration 都在這裡套用；沒有待套用的就印 `Nothing to migrate.`。
+   若有兩個語言代碼對資料庫來說相等，`AddLanguageCodeUniqueIndex` 會讓執行停下；在 MySQL 與
+   MariaDB 上，唯一欄位裡有兩個值在 utf8mb4 的定序下相等時，
+   `ConvertStringColumnsToUtf8Mb4` 也會讓執行停下。怎麼找出並移除它們，見
+   [版本紀錄](changelog.md)；哪些欄位它不會轉換，見下面字元集那一節。若跳過了第 6 步，`migrate`
+   會在套用任何東西之前停下並印出該跑什麼；訊息的樣子見下面字元集那一節。
+8. **跑 `migrate:check`。** PostgreSQL 應該是 `0 error(s), 0 warning(s)`；MySQL 與 MariaDB 在每個
+   字串欄位都是 utf8mb4 時也是，否則每個不是的欄位發一筆警告。SQL Server 對每個 `varchar` 字串
+   欄位發一筆警告：
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:check
@@ -74,10 +81,10 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    警告的數量依你的表而定。任何錯誤都表示某個 entity 跟它的表不一致，通常是 entity 宣告了、表裡
    卻沒有的欄位，或某支 `.sql` 腳本改過、entity 沒有跟上的欄位。先修好再在 Development 啟動，
    Development 的啟動檢查遇到錯誤會拒絕啟動。
-8. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到這幾件事：SQL Server 的 access
-   token 索引、MySQL／MariaDB 的時間精度，以及資料庫的字元集。SQL Server 上先做完再啟動 API：
-   在那之前存進去的中文與 emoji 會變成 `?`，救不回來。
-9. **啟動 API。**
+9. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到 SQL Server 的 access token 索引
+   與 MySQL／MariaDB 的時間精度；在 MySQL 與 MariaDB 上，它會對不是 utf8mb4 的字串欄位發警告，第 6
+   步轉換它們。SQL Server 上先做完再啟動 API：在那之前存進去的中文與 emoji 會變成 `?`，救不回來。
+10. **啟動 API。**
 
 ## 各後端的後續處理
 
@@ -177,20 +184,144 @@ ORDER BY TABLE_NAME;
 
 ### MySQL／MariaDB：字元集換成 utf8mb4
 
-utf8mb3 或 latin1 的資料庫在嚴格模式下會拒絕 emoji 這類 4 位元組字元，API 回
-`INTERNAL_SERVER_ERROR`。先改資料庫預設值，之後 migration 建的表才會沿用；再印出每張還不是
-utf8mb4 的表的轉換語句，檢查後執行。這組語句在 MySQL 8.4 與 MariaDB 11.8 上實際跑過：
+不是 utf8mb4 的字串欄位會拒絕 emoji 這類 4 位元組字元，API 回 `INTERNAL_SERVER_ERROR`；
+`migrate:check` 對每個這樣的欄位發一筆警告。沒有指定字元集的欄位沿用所在資料表的預設值，所以
+只有在資料庫與框架資料表的預設值都是 utf8mb4 時，`migrate` 才會轉換核心的字串欄位。
+
+套用任何東西之前，`migrate` 與 `Database:MigrateOnStartup` 的啟動都會先讀資料庫的預設字元集與
+定序，以及每張已經存在的框架資料表的預設定序。資料庫或其中一張表的預設值不是 utf8mb4，就不
+套用、不改動任何東西，`migrate` 以代碼 `1` 結束，API 不啟動，訊息會寫出找到什麼，以及該執行的
+語句。預設值是 utf8mb3 或 latin1 的資料庫會被拒絕，例如伺服器預設值是 latin1、建立時又沒有指定
+`CHARACTER SET utf8mb4` 的資料庫。下面是在 MySQL 8.4 上，做完第 5 步後對一個 utf8mb3 資料庫跑
+`migrate`：
+
+```
+migrate failed: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
+Database `u3` has the default character set utf8mb3.
+Table `struo_file_translations` has the default collation utf8mb3_general_ci.
+Table `struo_files` has the default collation utf8mb3_general_ci.
+Table `struo_languages` has the default collation utf8mb3_general_ci.
+Table `struo_media_folders` has the default collation utf8mb3_general_ci.
+Table `struo_permissions` has the default collation utf8mb3_general_ci.
+Table `struo_revisions` has the default collation utf8mb3_general_ci.
+Table `struo_roles` has the default collation utf8mb3_general_ci.
+Table `struo_schema_versions` has the default collation utf8mb3_general_ci.
+Table `struo_site_settings` has the default collation utf8mb3_general_ci.
+Table `struo_user_roles` has the default collation utf8mb3_general_ci.
+Table `struo_user_sessions` has the default collation utf8mb3_general_ci.
+Table `struo_users` has the default collation utf8mb3_general_ci.
+Run these statements, then run 'migrate' again:
+ALTER DATABASE `u3` CHARACTER SET utf8mb4;
+ALTER TABLE `struo_file_translations` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_files` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_languages` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_media_folders` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_permissions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_revisions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_roles` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_schema_versions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_site_settings` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_user_roles` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_user_sessions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_users` CONVERT TO CHARACTER SET utf8mb4;
+Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
+'migrate:check' lists their columns.
+```
+
+要執行哪些語句，看資料庫自己的預設值：
+
+| 資料庫的預設字元集 | 要執行的語句 |
+|---|---|
+| 不是 utf8mb4 | `ALTER DATABASE`，再對每張表一句 `ALTER TABLE` |
+| 是 utf8mb4（任何定序） | 每張表一句 `ALTER TABLE`，帶資料庫的定序 |
+
+執行訊息印出的語句，或用下面的查詢印出 `ALTER TABLE` 語句。資料庫的預設值不是 utf8mb4（訊息會
+說）時，先執行 `ALTER DATABASE`，要在訊息的語句與下面的查詢之前：查詢讀的是資料庫的定序，在那之前
+它不是 utf8mb4 的定序，例如 `COLLATE latin1_swedish_ci` 接在 `CONVERT TO CHARACTER SET utf8mb4` 後面
+會被伺服器拒絕。資料庫已經是 utf8mb4 就跳過這一句。資料庫是 utf8mb4 時，訊息裡的語句結尾帶資料庫的
+定序；資料庫本身不是 utf8mb4 時，訊息裡的語句不帶 `COLLATE`；查詢印出的語句一律以資料庫的定序結尾。
+`ALTER DATABASE` 之後那個定序就是 utf8mb4 的預設定序，所以不論用哪一種，轉換後的表與之後建的表定序
+都一致，不同定序的欄位互相比對時不會出現 `Illegal mix of collations`。查詢還會列出你的 fork 自己的表
+（訊息不會列），以及自己的預設值是 utf8mb4、卻含有非 utf8mb4 欄位的表。這組步驟在 MySQL 8.4 與
+MariaDB 11.8 上，對 utf8mb3 的資料庫、latin1 的資料庫，以及 `utf8mb4_unicode_ci` 的資料庫（表是
+utf8mb3）都可行：
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;
-
-SELECT CONCAT('ALTER TABLE `', TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4;') AS stmt
-FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_TYPE = 'BASE TABLE'
-  AND TABLE_COLLATION NOT LIKE 'utf8mb4%'
-ORDER BY TABLE_NAME;
 ```
+
+```sql
+SELECT CONCAT('ALTER TABLE `', t.TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4 COLLATE ',
+              s.DEFAULT_COLLATION_NAME, ';') AS stmt
+FROM information_schema.TABLES t
+JOIN information_schema.SCHEMATA s ON s.SCHEMA_NAME = t.TABLE_SCHEMA
+WHERE t.TABLE_SCHEMA = DATABASE()
+  AND t.TABLE_TYPE = 'BASE TABLE'
+  AND (t.TABLE_COLLATION NOT LIKE 'utf8mb4\_%'
+       OR EXISTS (SELECT 1 FROM information_schema.COLUMNS c
+                  WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
+                    AND c.TABLE_NAME = t.TABLE_NAME
+                    AND c.CHARACTER_SET_NAME IS NOT NULL
+                    AND c.CHARACTER_SET_NAME <> 'utf8mb4'))
+ORDER BY t.TABLE_NAME;
+```
+
+`CONVERT TO` 轉換表裡每個文字欄位，保留索引與可否為 null，並設定表的預設字元集與定序。utf8mb3
+欄位與 latin1 欄位裡的文字，轉換後讀出來一樣。連刻意宣告成其他字元集（例如 `ascii`）的欄位也會
+轉換，這類表的轉換語句要檢查過再執行。
+
+`CONVERT TO` 也會改變欄位型別：`TEXT` 欄位變成 `MEDIUMTEXT`（在 MySQL 8.4 與 MariaDB 11.8 上，
+latin1 與 utf8mb3 的欄位都是如此），轉換之後 `migrate:check` 對這個欄位沒有任何發現。核心資料表沒有
+`TEXT` 欄位；你自己的表可以有，例如 migration 用 `AsString` 宣告長度 8193 到 65535，或用
+`AsFixedLengthString` 宣告長度 256 到 65535 的欄位。
+
+語句都執行完之後，上面的查詢回傳零列，`migrate` 能跑，`migrate:check` 也不會有字元集警告。
+
+#### 轉換後的比對結果
+
+轉換後欄位的定序依路徑而定：
+
+| 路徑 | 欄位轉換後的定序 |
+|---|---|
+| `CONVERT TO` 沒有 `COLLATE` | 字元集的預設定序 |
+| `CONVERT TO` 帶 `COLLATE <c>` | `<c>` |
+| `migrate` 重新宣告欄位 | 該表的預設定序 |
+
+字元集的預設定序在 MySQL 8.4 是 `utf8mb4_0900_ai_ci`，在 MariaDB 11.8 是
+`utf8mb4_uca1400_ai_ci`，與資料庫的定序無關。下面兩張表是五種轉換在這兩個預設定序下的量測結果：
+
+- A：MySQL 8.4，`utf8mb3_general_ci` 轉成 `utf8mb4_0900_ai_ci`。
+- B：MariaDB 11.8，`utf8mb3_general_ci` 轉成 `utf8mb4_uca1400_ai_ci`。
+- C：MariaDB 11.8，`utf8mb3_uca1400_ai_ci` 轉成 `utf8mb4_uca1400_ai_ci`。
+- D：MySQL 8.4，`latin1_swedish_ci` 轉成 `utf8mb4_0900_ai_ci`。
+- E：MariaDB 11.8，`latin1_swedish_ci` 轉成 `utf8mb4_uca1400_ai_ci`。
+
+每格是「轉換前 → 轉換後」，「是」表示兩個值相等；最後一列問的是 `a` 是否排在 `_` 之前。第一張
+表是 A、B 與 C：
+
+| 成對的值 | A | B | C |
+|---|---|---|---|
+| `a` 與 `a` 加結尾空白 | 是 → 否 | 是 → 是 | 是 → 是 |
+| sharp s 與 `ss` | 否 → 是 | 否 → 是 | 是 → 是 |
+| sharp s 與 `s` | 是 → 否 | 是 → 否 | 否 → 否 |
+| 全形 `Ａ` 與 `A` | 否 → 是 | 否 → 是 | 是 → 是 |
+| `a` 與 `a` 加 U+200B | 否 → 是 | 否 → 是 | 是 → 是 |
+| `a` 排在 `_` 之前 | 是 → 否 | 是 → 否 | 否 → 否 |
+
+第二張表是 D 與 E。破折號表示 latin1 存不下那一對值，沒有東西可轉換：
+
+| 成對的值 | D | E |
+|---|---|---|
+| `a` 與 `a` 加結尾空白 | 是 → 否 | 是 → 是 |
+| sharp s 與 `ss` | 否 → 是 | 否 → 是 |
+| sharp s 與 `s` | 否 → 否 | 否 → 否 |
+| 全形 `Ａ` 與 `A` | — | — |
+| `a` 與 `a` 加 U+200B | — | — |
+| `a` 排在 `_` 之前 | 是 → 否 | 是 → 否 |
+
+起點定序不在這兩張表裡，或 `COLLATE` 用的不是上面兩個預設定序時，這兩張表不適用。
+用[版本紀錄](changelog.md)裡 MySQL 與 MariaDB 字串欄位那一項的重複值查詢，以欄位轉換後會有的定序
+找出成對的值。
 
 ## 留下來的東西
 

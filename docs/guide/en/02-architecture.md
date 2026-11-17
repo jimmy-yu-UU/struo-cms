@@ -62,10 +62,11 @@ The core also has two folders outside `src/Struo.*` that a fork keeps:
 The framework tables come from the core migrations in `Struo.Infrastructure`: `CreateCoreSchema`
 creates the tables, `SeedCoreData` seeds the initial data, `AddLanguageCodeUniqueIndex` adds the
 unique index on the language `code`, and `CreateRoleCapabilities` creates a table that
-`DropRoleCapabilities` drops again, so a database ends without a `role_capabilities` table. All are
-applied by `migrate` or by `Database:MigrateOnStartup`. The
-API never builds a table from the entity classes. The migrations a fork writes for its own
-collections belong to that fork.
+`DropRoleCapabilities` drops again, so a database ends without a `role_capabilities` table, and
+`ConvertStringColumnsToUtf8Mb4` converts the string columns of the core tables on MySQL and MariaDB
+to utf8mb4 and does nothing on other backends. All are applied by `migrate` or by
+`Database:MigrateOnStartup`. The API never builds a table from the entity classes. The migrations a
+fork writes for its own collections belong to that fork.
 
 Framework code never references anything under `samples/`; a test enforces that boundary.
 
@@ -126,8 +127,10 @@ or re-register any of them.
 
 Every database access goes through SqlSugar; schema changes and seed data are FluentMigrator
 migrations. Only four deliberate exceptions use string SQL: the relation-filter subquery
-wrapper, the migration lock `MigrationLockSql`, `IndexCatalog`'s read-only catalog queries for indexes, and the
-SQL Server startup check that reads one catalog flag. See
+wrapper, the migration lock `MigrationLockSql`, `IndexCatalog`'s read-only catalog queries for
+indexes, and the SQL Server startup check that reads one catalog flag. Three more catalog reads on
+MySQL and MariaDB, of column character sets and of the default character set of the database and
+its tables, are typed queries whose only string is the catalog table's name. See
 [Chapter 21](21-schema-and-upgrades.md#the-four-raw-sql-exceptions-in-core) for details.
 
 ## Technology stack

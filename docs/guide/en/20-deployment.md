@@ -319,13 +319,34 @@ same fail-fast mechanism. Here is the API image starting against an empty SQLite
 
 ```
 …
-[06:21:22 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[03:59:46 FTL]  StruoCMS host terminated unexpectedly <s:>
+System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
 The process then exits with code `1`; the stack trace that follows is omitted here. The message
 itself names the command to run and the setting key.
+
+On MySQL and MariaDB, a database or framework table whose default character set is not utf8mb4 fails
+startup the same way when `Database:MigrateOnStartup` is `true`, before any migration is applied.
+The message names the database and each table it found and the statements that convert them; see
+[Chapter 21](21-schema-and-upgrades.md#what-startup-checks). This is the output of the API
+starting on MySQL 8.4 with `Database:MigrateOnStartup` set to `true` against an empty database
+whose default character set is latin1:
+
+```
+…
+[15:56:45 FTL]  StruoCMS host terminated unexpectedly <s:>
+Struo.Infrastructure.Migrations.MigrationFailedException: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
+Database `struo` has the default character set latin1.
+Run these statements, then run 'migrate' again:
+ALTER DATABASE `struo` CHARACTER SET utf8mb4;
+Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
+'migrate:check' lists their columns.
+…
+```
+
+The process exits with code `1` here too, and the stack trace is omitted.
 
 `DataProtection` fails the same way when `DataProtection:RequireKeyProtection` is `true` without a
 `DataProtection:Certificate:Path`, when a configured certificate file is missing or cannot be
@@ -676,7 +697,8 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
 `Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex`,
-`Applied 202611040000  CreateRoleCapabilities` and `Applied 202611060000  DropRoleCapabilities`.
+`Applied 202611040000  CreateRoleCapabilities`, `Applied 202611060000  DropRoleCapabilities` and
+`Applied 202611170000  ConvertStringColumnsToUtf8Mb4`.
 Without the bootstrap password the seed migration fails with `Auth__BootstrapAdmin__Password is required`.
 Without the `migrate` step, the `api` container exits with the message shown in
 "What fails fast at startup" above.

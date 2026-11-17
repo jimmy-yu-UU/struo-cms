@@ -243,6 +243,72 @@
   不搬移，第一次請求時重新轉換。
 
   名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
+- 在 MySQL 與 MariaDB 上，`AsString` 與 `AsFixedLengthString` 的欄位是 utf8mb4，不再是國際字元型別
+  （`NVARCHAR`、`NCHAR`；兩種伺服器都把它們存成 utf8mb3），`migrate` 也會在資料庫與核心資料表的
+  預設字元集是 utf8mb4 時，轉換核心資料表的字串欄位。新資料庫不用處理；既有的資料庫，跑 `migrate`
+  之前先從下面找出你屬於哪一種情況。
+  - 資料庫與核心資料表的預設字元集已經是 utf8mb4：核心 migration `ConvertStringColumnsToUtf8Mb4`
+    （`202611170000`）修改 22 個欄位，也就是核心資料表的 21 個字串欄位，加上版本表的 `description`
+    欄位。在 MySQL 8.4 上，它會重建有索引字串欄位的七張表（`struo_users`、`struo_roles`、
+    `struo_languages`、`struo_file_translations`、`struo_permissions`、`struo_revisions`、
+    `struo_user_sessions`），所需時間隨表的大小增加；在 MariaDB 11.8 上轉換時不重建。先備份資料庫、
+    停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
+  - 定序：被 `migrate` 或 `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` 轉換的欄位，定序會
+    改變，哪些比對跟著變，看轉換前的定序。從 `utf8mb3_general_ci` 轉換時（MySQL 8.4 的預設，以及
+    MariaDB 上定序為 `utf8mb3_general_ci` 的欄位），德文 sharp s、全形字母、零寬空白的比對，以及
+    標點符號的排序，在兩種伺服器上都會變；結尾空白的比對只在 MySQL 8.4 上會變，MariaDB 不變。從
+    `latin1_swedish_ci` 轉換時，sharp s 與 `ss` 的比對與標點符號的排序在兩種伺服器上都會變，結尾
+    空白的比對只在 MySQL 8.4 上會變；latin1 存不下全形字母與零寬空白。從 `utf8mb3_uca1400_ai_ci`
+    （MariaDB 11.8 的預設）轉換時，這些比對都不變。每一對值在轉換前後是否相等，列在
+    [第 24 章](24-upgrading-from-0-8.md#轉換後的比對結果)的表裡。轉換之前，在唯一欄位裡找出轉換後會
+    變成相等的成對的值，並檢查依賴這些比對的程式碼。
+  - 重複的值：如果 `migrate` 或某句 `CONVERT TO` 停在
+    `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個值在新的定序下相等；
+    訊息指出值與索引。轉換讓某一對值變成相等時才會停在這裡，也就是第 24 章的表裡有「否 → 是」
+    的列：A、B、D 與 E 有，C 沒有。下面找出成對的值，這裡以 `struo_roles.name` 為例（複合索引要把
+    其他索引欄位也加進去）。查詢裡的定序用欄位轉換後會有的那個：語句帶 `COLLATE` 就用它；
+    沒有 `COLLATE` 的 `CONVERT TO` 用字元集的預設定序（MySQL 是 `utf8mb4_0900_ai_ci`，MariaDB 是
+    `utf8mb4_uca1400_ai_ci`）；`migrate` 重新宣告的欄位用該表的預設定序：
+
+    ```sql
+    SELECT a.name AS value_a, b.name AS value_b
+    FROM struo_roles a JOIN struo_roles b
+      ON CONVERT(a.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+       = CONVERT(b.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+      AND a.id < b.id;
+    ```
+
+    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate` 或那句語句。
+  - 資料庫或某張核心資料表的預設字元集不是 utf8mb4：`migrate` 與 `Database:MigrateOnStartup` 在
+    套用任何東西之前先讀這些預設值。只要有一個不是 utf8mb4，就不套用、不改動任何東西，`migrate`
+    以代碼 `1` 結束、啟動則讓主機停止，並印出找到什麼以及該執行的語句。預設值是 utf8mb3 或 latin1
+    的資料庫會被拒絕，例如伺服器預設值是 latin1、建立時沒有指定 `CHARACTER SET utf8mb4` 的資料庫。
+    下面是對一個空的 latin1 資料庫跑 `migrate`：
+
+    ```
+    $ dotnet run --project src/Struo.Api -- migrate
+    migrate failed: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
+    Database `struo` has the default character set latin1.
+    Run these statements, then run 'migrate' again:
+    ALTER DATABASE `struo` CHARACTER SET utf8mb4;
+    Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
+    'migrate:check' lists their columns.
+    ```
+
+    每張預設字元集不是 utf8mb4 的核心資料表，會多一行
+    `Table ... has the default collation ...` 與一句
+    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`。
+    資料庫本身已經是 utf8mb4、只有表不是時，訊息沒有 `ALTER DATABASE`，每句 `ALTER TABLE` 結尾
+    帶資料庫的定序。訊息最後兩行給出轉換你自己、預設不是 utf8mb4 的表所用的 `ALTER TABLE` 語句，
+    `COLLATE` 與表的語句相同，並說明 `migrate:check` 會列出它們的欄位。執行訊息印出的語句，做法見
+    [第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)，先讀過上面的定序與重複值
+    兩項，再跑 `migrate`。
+  - 你的 fork 自己的表不會被 `migrate` 轉換，拒絕訊息也只看資料庫與核心資料表。它的 migration
+    呼叫 `AsString` 時，從這一版起建出 utf8mb4 欄位，但已經存在的欄位維持原樣。`migrate:check`
+    對每個這樣的欄位發一筆警告（`FindingKind.NonUtf8Mb4String`；是警告，不是錯誤）。欄位轉換之前，
+    emoji 這類補充平面字元無法存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的
+    定序說明，再用[第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)的語句逐表
+    轉換。
 :::
 
 ### 新增
@@ -268,6 +334,10 @@
 
 ### 修正
 
+- emoji 這類補充平面字元寫進字串欄位時，在 MySQL 與 MariaDB 上回 `500`：寫入失敗並出現
+  `Incorrect string value`，篩選或搜尋拿它比對欄位則出現 `Illegal mix of collations`。欄位當時是
+  utf8mb3。新資料庫與升級後的核心資料庫現在存得進去也比對得了；既有資料庫與 fork 自己的表怎麼轉換見
+  破壞性變更。
 - `_ends_with` 的值以一個反斜線結尾，在 PostgreSQL 上回 `500`，因為資料庫拒絕這個樣式。現在回
   `200`，比對文字以反斜線結尾的列。
 - 可翻譯欄位上的 `filter[title][_eq]=null&locale=en`、`deep` 篩選裡的 `_eq: "null"`，以及 `locale`

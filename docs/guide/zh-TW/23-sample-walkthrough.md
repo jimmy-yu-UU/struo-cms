@@ -244,16 +244,17 @@ bootstrap 管理員，見[第 22 章：測試與 CI](22-testing.md)）之外，�
    在 PostgreSQL、SQL Server、MySQL 與 MariaDB 上實際跑過；SQLite 的 `DROP TABLE` 一次只接受一
    張表，要拆成五道。
 
-第 4 步做完，`migrate:status` 只剩核心的四支：
+第 4 步做完，`migrate:status` 只剩核心的六支：
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
-202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
-5 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-17 04:53:52Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 04:53:52Z  SeedCoreData
+202611030000   Applied   2026-11-17 04:53:52Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 04:53:52Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 04:53:52Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 04:53:52Z  ConvertStringColumnsToUtf8Mb4
+6 applied, 0 pending, 0 orphaned
 ```
 
 移除完，依序跑這三道指令，確認乾淨：

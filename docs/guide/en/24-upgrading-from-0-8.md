@@ -64,14 +64,23 @@ The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB
    The seed is recorded, not run, so existing users, roles and languages are untouched. Baseline only
    adds the version table, so it can run while v0.8.x instances are still serving. It refuses, exiting
    `1`, when the database already has records or the framework tables don't exist.
-6. **Run `migrate`.** The core migrations newer than `SeedCoreData` are applied here, such as
-   `AddLanguageCodeUniqueIndex`, `CreateRoleCapabilities` and `DropRoleCapabilities`, and so are any
-   migrations added after the baseline; with none
+6. **MySQL and MariaDB only: convert the database and the framework tables to utf8mb4.** `migrate`
+   refuses a database whose default character set, or the default of a framework table, is not
+   utf8mb4, so this comes first; the section "MySQL/MariaDB: character set to utf8mb4" below has
+   the statements. On PostgreSQL and SQL Server, go on to step 7.
+7. **Run `migrate`.** The core migrations newer than `SeedCoreData` are applied here, such as
+   `AddLanguageCodeUniqueIndex`, `CreateRoleCapabilities`, `DropRoleCapabilities` and
+   `ConvertStringColumnsToUtf8Mb4`, and so are any migrations added after the baseline; with none
    pending it prints `Nothing to migrate.`. If two language codes are ones the database treats as
    equal, `AddLanguageCodeUniqueIndex` stops the run; the [changelog](changelog.md) says how to find
-   and remove them.
-7. **Run `migrate:check`.** PostgreSQL, MySQL and MariaDB should show `0 error(s), 0 warning(s)`.
-   SQL Server warns once per `varchar` string column:
+   and remove them. On MySQL and MariaDB, `ConvertStringColumnsToUtf8Mb4` stops the run when two
+   values in a unique column are equal under the utf8mb4 collation; the [changelog](changelog.md)
+   says how to find and remove them, and the section on the character set below says which
+   columns it leaves alone. If you skipped step 6, `migrate` stops before it applies anything and
+   prints what to run; the section on the character set below shows the message.
+8. **Run `migrate:check`.** PostgreSQL should show `0 error(s), 0 warning(s)`. MySQL and MariaDB do
+   too when every string column is utf8mb4, and otherwise warn once per column that is not. SQL
+   Server warns once per `varchar` string column:
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:check
@@ -84,11 +93,12 @@ The steps below were walked through on PostgreSQL, SQL Server, MySQL and MariaDB
    usually a column the entity declares that the table doesn't have, or a column a `.sql` script
    changed that the entity doesn't reflect. Fix it before starting in Development, where the startup
    check refuses on errors.
-8. **Do the follow-ups for your backend in the next section.** `migrate:check` cannot see these:
-   SQL Server's access-token index, MySQL/MariaDB timestamp precision, and the database character
-   set. On SQL Server, finish them before starting the API: Chinese or emoji text stored before the
-   conversion becomes `?` and cannot be recovered.
-9. **Start the API.**
+9. **Do the follow-ups for your backend in the next section.** `migrate:check` cannot see SQL
+   Server's access-token index or MySQL/MariaDB timestamp precision; on MySQL and MariaDB it warns
+   about string columns that are not utf8mb4, which step 6 converts. On SQL Server, finish the
+   follow-ups before starting the API: Chinese or emoji text stored before the conversion becomes
+   `?` and cannot be recovered.
+10. **Start the API.**
 
 ## Per-backend follow-ups
 
@@ -193,21 +203,155 @@ migration: a deployment that baselines later records it as applied without ever 
 
 ### MySQL/MariaDB: character set to utf8mb4
 
-A utf8mb3 or latin1 database in strict mode rejects 4-byte characters such as emoji, and the API
-answers `INTERNAL_SERVER_ERROR`. Change the database default first, so tables created by later
-migrations inherit it; then print a conversion statement for every table not yet utf8mb4, review, and
-run them. These statements were run on MySQL 8.4 and MariaDB 11.8:
+A string column that is not utf8mb4 rejects 4-byte characters such as emoji, and the API answers
+`INTERNAL_SERVER_ERROR`; `migrate:check` warns once for each such column. A column declared
+without a character set takes the default of its table, so `migrate` converts the core string
+columns only where the database and the framework tables default to utf8mb4.
+
+Before it applies anything, `migrate` and a `Database:MigrateOnStartup` start read the default
+character set and collation of the database and the default collation of every framework table that
+exists. If the database or one of those tables does not default to utf8mb4, nothing is applied or
+changed, `migrate` exits `1`, the API does not start, and the message names what it found and the
+statements to run. A database whose default is utf8mb3 or latin1 is refused, for example one
+created without `CHARACTER SET utf8mb4` on a server whose default is latin1. This is `migrate` on a
+utf8mb3 database right after step 5, on MySQL 8.4:
+
+```
+migrate failed: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
+Database `u3` has the default character set utf8mb3.
+Table `struo_file_translations` has the default collation utf8mb3_general_ci.
+Table `struo_files` has the default collation utf8mb3_general_ci.
+Table `struo_languages` has the default collation utf8mb3_general_ci.
+Table `struo_media_folders` has the default collation utf8mb3_general_ci.
+Table `struo_permissions` has the default collation utf8mb3_general_ci.
+Table `struo_revisions` has the default collation utf8mb3_general_ci.
+Table `struo_roles` has the default collation utf8mb3_general_ci.
+Table `struo_schema_versions` has the default collation utf8mb3_general_ci.
+Table `struo_site_settings` has the default collation utf8mb3_general_ci.
+Table `struo_user_roles` has the default collation utf8mb3_general_ci.
+Table `struo_user_sessions` has the default collation utf8mb3_general_ci.
+Table `struo_users` has the default collation utf8mb3_general_ci.
+Run these statements, then run 'migrate' again:
+ALTER DATABASE `u3` CHARACTER SET utf8mb4;
+ALTER TABLE `struo_file_translations` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_files` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_languages` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_media_folders` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_permissions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_revisions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_roles` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_schema_versions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_site_settings` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_user_roles` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_user_sessions` CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE `struo_users` CONVERT TO CHARACTER SET utf8mb4;
+Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
+'migrate:check' lists their columns.
+```
+
+Which statements to run depends on the default of the database itself:
+
+| The database default is | The statements to run |
+|---|---|
+| not utf8mb4 | `ALTER DATABASE`, then one `ALTER TABLE` per table |
+| utf8mb4 (any collation) | one `ALTER TABLE` per table, with the database collation |
+
+Run the statements the message prints, or print the `ALTER TABLE` statements with the query below.
+When the database default is not utf8mb4 (the message says so), run `ALTER DATABASE` before the
+statements of the message and before the query: the query reads the collation of the database,
+which until then is not a utf8mb4 collation, and `COLLATE latin1_swedish_ci`, for example, is
+rejected after `CONVERT TO CHARACTER SET utf8mb4`. When the database already is utf8mb4, skip that
+statement. The statements of the message end in the collation of the database when the database is
+utf8mb4 and carry no `COLLATE` when the database itself is not; the statements of the query always
+end in it. After `ALTER DATABASE` that collation is the default of utf8mb4, so either way a
+converted table and a table created later have the same collation, and comparing columns of the
+two does not raise `Illegal mix of collations`. The query also lists your fork's own tables, which
+the message does not, and a table that holds a column outside utf8mb4 although its own default is
+utf8mb4. These steps work on MySQL 8.4 and MariaDB 11.8 against a utf8mb3 database, a latin1
+database, and a `utf8mb4_unicode_ci` database whose tables are utf8mb3:
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;
-
-SELECT CONCAT('ALTER TABLE `', TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4;') AS stmt
-FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_TYPE = 'BASE TABLE'
-  AND TABLE_COLLATION NOT LIKE 'utf8mb4%'
-ORDER BY TABLE_NAME;
 ```
+
+```sql
+SELECT CONCAT('ALTER TABLE `', t.TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4 COLLATE ',
+              s.DEFAULT_COLLATION_NAME, ';') AS stmt
+FROM information_schema.TABLES t
+JOIN information_schema.SCHEMATA s ON s.SCHEMA_NAME = t.TABLE_SCHEMA
+WHERE t.TABLE_SCHEMA = DATABASE()
+  AND t.TABLE_TYPE = 'BASE TABLE'
+  AND (t.TABLE_COLLATION NOT LIKE 'utf8mb4\_%'
+       OR EXISTS (SELECT 1 FROM information_schema.COLUMNS c
+                  WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
+                    AND c.TABLE_NAME = t.TABLE_NAME
+                    AND c.CHARACTER_SET_NAME IS NOT NULL
+                    AND c.CHARACTER_SET_NAME <> 'utf8mb4'))
+ORDER BY t.TABLE_NAME;
+```
+
+`CONVERT TO` converts every text column of the table, keeps its indexes and nullability, and sets
+the default character set and collation of the table. The text of a utf8mb3 column and of a latin1
+column reads the same afterwards. A column declared on purpose with another character set such as
+`ascii` is converted too; review the generated statement for such a table before you run it.
+
+`CONVERT TO` also changes column types: a `TEXT` column becomes `MEDIUMTEXT` (on MySQL 8.4 and
+MariaDB 11.8, for latin1 and utf8mb3 columns alike), and afterwards `migrate:check` has no finding
+for that column. The core tables have no `TEXT` column; a table of your own can have them, for
+example a column that a migration declares with `AsString` for 8193 to 65535 characters or with
+`AsFixedLengthString` for 256 to 65535 characters.
+
+After the statements have run, the query returns no rows, `migrate` runs, and `migrate:check`
+reports no character-set warning.
+
+#### Comparison after the conversion
+
+The collation of a converted column depends on the path:
+
+| Path | Collation of the converted column |
+|---|---|
+| `CONVERT TO` without `COLLATE` | the default of the character set |
+| `CONVERT TO` with `COLLATE <c>` | `<c>` |
+| a column `migrate` re-declares | the default collation of its table |
+
+The default collation of the character set is `utf8mb4_0900_ai_ci` on MySQL 8.4 and
+`utf8mb4_uca1400_ai_ci` on MariaDB 11.8, whatever the database collation is. The tables below give
+the measured result of five conversions with these two defaults:
+
+- A: MySQL 8.4, `utf8mb3_general_ci` to `utf8mb4_0900_ai_ci`.
+- B: MariaDB 11.8, `utf8mb3_general_ci` to `utf8mb4_uca1400_ai_ci`.
+- C: MariaDB 11.8, `utf8mb3_uca1400_ai_ci` to `utf8mb4_uca1400_ai_ci`.
+- D: MySQL 8.4, `latin1_swedish_ci` to `utf8mb4_0900_ai_ci`.
+- E: MariaDB 11.8, `latin1_swedish_ci` to `utf8mb4_uca1400_ai_ci`.
+
+Each cell is "before the conversion → after it", and "yes" means the two values are equal; the last
+row asks whether `a` sorts before `_`. The first table is A, B and C:
+
+| Pair of values | A | B | C |
+|---|---|---|---|
+| `a` and `a` plus a trailing space | yes → no | yes → yes | yes → yes |
+| sharp s and `ss` | no → yes | no → yes | yes → yes |
+| sharp s and `s` | yes → no | yes → no | no → no |
+| full-width `Ａ` and `A` | no → yes | no → yes | yes → yes |
+| `a` and `a` plus U+200B | no → yes | no → yes | yes → yes |
+| `a` sorts before `_` | yes → no | yes → no | no → no |
+
+The second table is D and E. A dash means that latin1 cannot store the pair, so there is nothing to
+convert:
+
+| Pair of values | D | E |
+|---|---|---|
+| `a` and `a` plus a trailing space | yes → no | yes → yes |
+| sharp s and `ss` | no → yes | no → yes |
+| sharp s and `s` | no → no | no → no |
+| full-width `Ａ` and `A` | — | — |
+| `a` and `a` plus U+200B | — | — |
+| `a` sorts before `_` | yes → no | yes → no |
+
+A starting collation that is in neither table, or a `COLLATE` other than the two defaults above, is
+not covered. Find the pairs of values that become equal with the duplicate-value query in the
+[changelog](changelog.md) entry on MySQL and MariaDB string columns, under the collation the column
+will have.
 
 ## Leftovers
 

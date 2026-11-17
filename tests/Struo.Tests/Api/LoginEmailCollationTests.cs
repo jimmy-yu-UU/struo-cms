@@ -19,8 +19,9 @@ namespace Struo.Tests.Api;
 /// the presented one after normalizing, so a collation-equivalent variant neither reaches the account nor
 /// gets a login-lock counter of its own. The duplicate check on user create keeps the collation match.
 /// Each backend folds a different set of spellings; <see cref="Variants"/> lists the ones the selected
-/// backend folds. The class discriminates only on MySQL, MariaDB and SQL Server. On SQLite and PostgreSQL
-/// the list holds one spelling the database does not fold, so the variant is just another email and the
+/// backend folds; on MySQL it also lists two spellings the backend does not fold, which stay separate
+/// emails. The class discriminates only on MySQL, MariaDB and SQL Server. On SQLite and PostgreSQL the
+/// list holds one spelling the database does not fold, so the variant is just another email and the
 /// tests pass whether or not the normalized comparison exists. The comparison rule itself is covered on
 /// every backend by <c>AuthServiceTests</c> and <c>ExternalLoginServiceTests</c>.
 /// </summary>
@@ -42,8 +43,10 @@ public class LoginEmailCollationTests(ApiFactory factory)
 
     private static IReadOnlyList<Variant> Variants => TestBackend.Current switch
     {
-        TestBackendKind.MySql => [AccentE, UmlautO, DotlessI, DottedCapitalI, SharpS],
-        TestBackendKind.MariaDb => [AccentE, UmlautO, FullwidthO, SoftHyphen, ZeroWidthSpace, DottedCapitalI],
+        TestBackendKind.MySql =>
+            [AccentE, UmlautO, DotlessI with { FoldedByBackend = false }, DottedCapitalI, SharpS with { FoldedByBackend = false }],
+        TestBackendKind.MariaDb =>
+            [AccentE, UmlautO, FullwidthO, SoftHyphen, ZeroWidthSpace, DottedCapitalI],
         TestBackendKind.SqlServer => [FullwidthO],
         _ => [AccentE with { FoldedByBackend = false }],
     };
