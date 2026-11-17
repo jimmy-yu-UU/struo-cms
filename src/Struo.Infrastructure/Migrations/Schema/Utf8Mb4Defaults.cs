@@ -62,7 +62,9 @@ internal static class Utf8Mb4Defaults
     {
         var lines = new List<string>
         {
-            $"Migrations on MySQL and MariaDB need {Utf8Mb4} as the default character set of the database and of the framework tables; this database does not have it, so nothing was applied or changed.",
+            $"Migrations on MySQL and MariaDB need {Utf8Mb4} as the default character set",
+            "of the database and of the framework tables; this database does not have it.",
+            "Nothing was applied or changed.",
         };
         if (databaseSet is not null)
             lines.Add($"Database {Quote(database)} has the default character set {databaseSet}.");
