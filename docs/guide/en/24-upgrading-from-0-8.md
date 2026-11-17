@@ -301,7 +301,7 @@ for that column. The core tables have no `TEXT` column; a table of your own can 
 example a column that a migration declares with `AsString` for 8193 to 65535 characters or with
 `AsFixedLengthString` for 256 to 65535 characters.
 
-Once the statements have run, the query returns no rows, `migrate` runs, and `migrate:check`
+After the statements have run, the query returns no rows, `migrate` runs, and `migrate:check`
 reports no character-set warning.
 
 #### Comparison after the conversion
