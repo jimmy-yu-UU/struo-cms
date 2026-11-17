@@ -44,7 +44,8 @@ public sealed class Utf8Mb4ColumnsTests
         message.Should().Contain($"character set {characterSet}")
             .And.Contain("characters outside the Basic Multilingual Plane, such as emoji, cannot be stored or compared")
             .And.Contain("ALTER TABLE `t_docs` CONVERT TO CHARACTER SET utf8mb4")
-            .And.Contain("followed by COLLATE and the collation of the database when that collation is not the default of utf8mb4");
+            .And.Contain("followed by COLLATE and the collation of the database when the database is utf8mb4 with a collation other than the default of utf8mb4")
+            .And.NotContain("latin1_swedish_ci");
     }
 
     [Fact]

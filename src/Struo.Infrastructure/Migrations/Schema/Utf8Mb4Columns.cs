@@ -31,7 +31,8 @@ internal static class Utf8Mb4Columns
         new(FindingSeverity.Warning, FindingKind.NonUtf8Mb4String, table.PhysicalName, column,
             $"database column has character set {set}, not {Utf8Mb4}; {Consequence(set)}; "
             + $"run ALTER TABLE {Utf8Mb4Defaults.Quote(table.PhysicalName)} CONVERT TO CHARACTER SET {Utf8Mb4}, "
-            + "followed by COLLATE and the collation of the database when that collation is not the default of utf8mb4");
+            + "followed by COLLATE and the collation of the database when the database is utf8mb4 "
+            + "with a collation other than the default of utf8mb4");
 
     private static string Consequence(string set) =>
         set.Equals("utf8mb3", StringComparison.OrdinalIgnoreCase) || set.Equals("utf8", StringComparison.OrdinalIgnoreCase)

@@ -58,8 +58,8 @@ internal static class Utf8Mb4Defaults
     {
         var lines = new List<string>
         {
-            $"Nothing was applied or changed: migrations on MySQL and MariaDB need {Utf8Mb4} as the default",
-            "character set of the database and of the framework tables, and the items below do not have it.",
+            $"migrations on MySQL and MariaDB need {Utf8Mb4} as the default character set of the database and the framework tables, "
+            + "and the items below do not have it, so nothing was applied or changed.",
         };
         if (databaseSet is not null)
             lines.Add($"Database {Quote(database)} has the default character set {databaseSet}.");
@@ -69,7 +69,7 @@ internal static class Utf8Mb4Defaults
             lines.Add($"ALTER DATABASE {Quote(database)} CHARACTER SET {Utf8Mb4};");
         var collate = databaseCollation is null ? "" : $" COLLATE {databaseCollation}";
         lines.AddRange(tables.Select(t => $"ALTER TABLE {Quote(t.TableName)} CONVERT TO CHARACTER SET {Utf8Mb4}{collate};"));
-        lines.Add("Tables of your own that do not default to utf8mb4 are converted the same way;");
+        lines.Add($"Convert tables of your own that do not default to {Utf8Mb4} with ALTER TABLE ... CONVERT TO CHARACTER SET {Utf8Mb4}{collate};");
         lines.Add("'migrate:check' lists their columns.");
         return string.Join(Environment.NewLine, lines);
     }

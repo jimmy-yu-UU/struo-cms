@@ -137,24 +137,44 @@ public sealed class Utf8Mb4DefaultsTests
         Refusal(Schema("utf8mb4"), Table(UsersTable, Utf8Mb3Collation))!
             .Should().Contain("ALTER TABLE `struo_users` CONVERT TO CHARACTER SET utf8mb4;").And.NotContain("COLLATE");
 
-    [Fact]
-    public void The_message_ends_with_the_lines_about_tables_of_the_fork()
-    {
-        var lines = Refusal("latin1", Table(UsersTable, Latin1Collation))!.Split(Environment.NewLine);
+    private const string ForkLeadIn = "Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4";
+    private const string ForkTail = "'migrate:check' lists their columns.";
 
-        lines[^2].Should().Contain("Tables of your own").And.Contain("converted the same way");
-        lines[^1].Should().Contain("'migrate:check' lists their columns");
+    [Fact]
+    public void The_closing_lines_state_the_statement_for_tables_of_the_fork_as_the_database_only_shape_prints_it()
+    {
+        var lines = Refusal("latin1")!.Split(Environment.NewLine);
+
+        lines[^2].Should().Be(ForkLeadIn + ";");
+        lines[^1].Should().Be(ForkTail);
     }
+
+    [Fact]
+    public void The_closing_lines_carry_the_same_collation_suffix_as_the_table_statements()
+    {
+        var withCollation = Refusal(Schema("utf8mb4", UnicodeCollation), Table(UsersTable, Latin1Collation))!.Split(Environment.NewLine);
+        var withoutCollation = Refusal(Schema("utf8mb4"), Table(UsersTable, Latin1Collation))!.Split(Environment.NewLine);
+        var databaseAndTable = Refusal("latin1", Table(UsersTable, Latin1Collation))!.Split(Environment.NewLine);
+
+        withCollation[^2].Should().Be(ForkLeadIn + " COLLATE utf8mb4_unicode_ci;");
+        withoutCollation[^2].Should().Be(ForkLeadIn + ";");
+        databaseAndTable[^2].Should().Be(ForkLeadIn + ";");
+        withCollation[^1].Should().Be(ForkTail);
+    }
+
+    private const string OpeningLine =
+        "migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, "
+        + "and the items below do not have it, so nothing was applied or changed.";
 
     [Fact]
     public void The_opening_line_is_true_whichever_part_offends()
     {
         var databaseOnly = Refusal("latin1")!;
         var tablesOnly = Refusal("utf8mb4", Table(UsersTable, Latin1Collation))!;
+        var both = Refusal("latin1", Table(UsersTable, Latin1Collation))!;
 
-        foreach (var message in new[] { databaseOnly, tablesOnly })
-            message.Split(Environment.NewLine)[0].Should().StartWith("Nothing was applied or changed")
-                .And.NotContain("this database does not have it");
+        foreach (var message in new[] { databaseOnly, tablesOnly, both })
+            message.Split(Environment.NewLine)[0].Should().Be(OpeningLine);
     }
 
     [Fact]
@@ -164,7 +184,7 @@ public sealed class Utf8Mb4DefaultsTests
         var databaseOnly = Refusal("latin1")!;
 
         tablesOnly.Should().NotContain("ALTER DATABASE").And.NotContain("Database `");
-        databaseOnly.Should().Contain("ALTER DATABASE `web_cms` CHARACTER SET utf8mb4;").And.NotContain("ALTER TABLE").And.NotContain("Table `");
+        databaseOnly.Should().Contain("ALTER DATABASE `web_cms` CHARACTER SET utf8mb4;").And.NotContain("ALTER TABLE `").And.NotContain("Table `");
     }
 
     [Fact]
