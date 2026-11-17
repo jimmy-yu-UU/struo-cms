@@ -330,19 +330,18 @@ itself names the command to run and the setting key.
 On MySQL and MariaDB, a database or framework table whose default character set is not utf8mb4 fails
 startup the same way when `Database:MigrateOnStartup` is `true`, before any migration is applied.
 The message names the database and each table it found and the statements that convert them; see
-[Chapter 21](21-schema-and-upgrades.md#what-startup-checks). This is the API starting against an
-empty database whose default character set is latin1, with `Database:MigrateOnStartup` set to
-`true`, on MySQL 8.4:
+[Chapter 21](21-schema-and-upgrades.md#what-startup-checks). This is the output of the API
+starting on MySQL 8.4 with `Database:MigrateOnStartup` set to `true` against an empty database
+whose default character set is latin1:
 
 ```
 …
-[14:40:46 FTL]  StruoCMS host terminated unexpectedly <s:>
-Struo.Infrastructure.Migrations.MigrationFailedException: Nothing was applied or changed: migrations on MySQL and MariaDB need utf8mb4 as the default
-character set of the database and of the framework tables, and the items below do not have it.
+[15:56:45 FTL]  StruoCMS host terminated unexpectedly <s:>
+Struo.Infrastructure.Migrations.MigrationFailedException: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
 Database `struo` has the default character set latin1.
 Run these statements, then run 'migrate' again:
 ALTER DATABASE `struo` CHARACTER SET utf8mb4;
-Tables of your own that do not default to utf8mb4 are converted the same way;
+Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
 'migrate:check' lists their columns.
 …
 ```

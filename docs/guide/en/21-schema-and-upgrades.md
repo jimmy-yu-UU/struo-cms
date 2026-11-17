@@ -229,10 +229,10 @@ The invariant that all database access goes through SqlSugar (see
 Three more catalog reads are typed SqlSugar queries, not raw SQL, and run on MySQL and MariaDB only.
 `migrate:check` and the Development startup check read each column's character set from
 `information_schema.COLUMNS`, with a typed `Where` on the schema and the table name. `migrate` reads
-the database's default character set from `information_schema.SCHEMATA` and the default collation of
-its tables from `information_schema.TABLES`, with a typed `Where` on the schema name. Every value in
-a `Where` is bound as a parameter. The name of the catalog table is the only string in each query,
-and nothing is written.
+the default character set and collation of the database from `information_schema.SCHEMATA` and the
+default collation of its tables from `information_schema.TABLES`, with a typed `Where` on the schema
+name. Every value in a `Where` is bound as a parameter. The name of the catalog table is the only
+string in each query, and nothing is written.
 
 Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
 expressions, and a translated-field sort binds the language code as a SQL parameter.

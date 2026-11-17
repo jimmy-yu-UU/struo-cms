@@ -255,18 +255,20 @@
     停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
   - 定序：被 `migrate` 或 `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` 轉換的欄位，定序會
     改變，哪些比對跟著變，看轉換前的定序。從 `utf8mb3_general_ci` 轉換時（MySQL 8.4 的預設，以及
-    MariaDB 上定序為 `utf8mb3_general_ci` 的欄位），結尾空白、德文 sharp s、全形字母、零寬空白
-    的比對，以及標點符號的排序都會變；從 `utf8mb3_uca1400_ai_ci`（MariaDB 11.8 的預設）轉換時，
-    這些比對都不變。每一對值在轉換前後是否相等，列在
+    MariaDB 上定序為 `utf8mb3_general_ci` 的欄位），德文 sharp s、全形字母、零寬空白的比對，以及
+    標點符號的排序，在兩種伺服器上都會變；結尾空白的比對只在 MySQL 8.4 上會變，MariaDB 不變。從
+    `latin1_swedish_ci` 轉換時，sharp s 與 `ss` 的比對與標點符號的排序在兩種伺服器上都會變，結尾
+    空白的比對只在 MySQL 8.4 上會變；latin1 存不下全形字母與零寬空白。從 `utf8mb3_uca1400_ai_ci`
+    （MariaDB 11.8 的預設）轉換時，這些比對都不變。每一對值在轉換前後是否相等，列在
     [第 24 章](24-upgrading-from-0-8.md#轉換後的比對結果)的表裡。轉換之前，在唯一欄位裡找出轉換後會
     變成相等的成對的值，並檢查依賴這些比對的程式碼。
   - 重複的值：如果 `migrate` 或某句 `CONVERT TO` 停在
     `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個值在新的定序下相等；
-    訊息指出值與索引。第 24 章的表裡，A 與 B 有「否 → 是」的列，會停在這裡，C 沒有。下面找出成對
-    的值，這裡以 `struo_roles.name` 為例（複合索引要把其他索引欄位也加進去）。查詢裡的定序用欄位
-    轉換後會有的那個：語句帶 `COLLATE` 就用它；沒有 `COLLATE` 的 `CONVERT TO` 用字元集的預設定序
-    （MySQL 是 `utf8mb4_0900_ai_ci`，MariaDB 是 `utf8mb4_uca1400_ai_ci`）；`migrate` 重新宣告的
-    欄位用該表的預設定序：
+    訊息指出值與索引。轉換讓某一對值變成相等時才會停在這裡，也就是第 24 章的表裡有「否 → 是」
+    的列：A、B、D 與 E 有，C 沒有。下面找出成對的值，這裡以 `struo_roles.name` 為例（複合索引要把
+    其他索引欄位也加進去）。查詢裡的定序用欄位轉換後會有的那個：語句帶 `COLLATE` 就用它；
+    沒有 `COLLATE` 的 `CONVERT TO` 用字元集的預設定序（MySQL 是 `utf8mb4_0900_ai_ci`，MariaDB 是
+    `utf8mb4_uca1400_ai_ci`）；`migrate` 重新宣告的欄位用該表的預設定序：
 
     ```sql
     SELECT a.name AS value_a, b.name AS value_b
@@ -285,12 +287,11 @@
 
     ```
     $ dotnet run --project src/Struo.Api -- migrate
-    migrate failed: Nothing was applied or changed: migrations on MySQL and MariaDB need utf8mb4 as the default
-    character set of the database and of the framework tables, and the items below do not have it.
+    migrate failed: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
     Database `struo` has the default character set latin1.
     Run these statements, then run 'migrate' again:
     ALTER DATABASE `struo` CHARACTER SET utf8mb4;
-    Tables of your own that do not default to utf8mb4 are converted the same way;
+    Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
     'migrate:check' lists their columns.
     ```
 
@@ -298,8 +299,8 @@
     `Table ... has the default collation ...` 與一句
     `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`。
     資料庫本身已經是 utf8mb4、只有表不是時，訊息沒有 `ALTER DATABASE`，每句 `ALTER TABLE` 結尾
-    帶資料庫的定序。訊息最後兩行提醒：你自己的表預設不是 utf8mb4 時，用同樣的方式轉換，
-    `migrate:check` 會列出它們的欄位。執行訊息印出的語句，做法見
+    帶資料庫的定序。訊息最後兩行給出轉換你自己、預設不是 utf8mb4 的表所用的 `ALTER TABLE` 語句，
+    `COLLATE` 與表的語句相同，並說明 `migrate:check` 會列出它們的欄位。執行訊息印出的語句，做法見
     [第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)，先讀過上面的定序與重複值
     兩項，再跑 `migrate`。
   - 你的 fork 自己的表不會被 `migrate` 轉換，拒絕訊息也只看資料庫與核心資料表。它的 migration

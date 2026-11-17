@@ -260,20 +260,19 @@ System.InvalidOperationException: 6 migration(s) pending, the lowest is 20261008
 
 行程隨後以代碼 `1` 結束，後面的堆疊追蹤此處省略；訊息本身點名了要跑的命令與設定鍵。
 
-在 MySQL 與 MariaDB 上，`Database:MigrateOnStartup` 為 `true` 時，資料庫或框架資料表的預設字元集
-不是 utf8mb4，同樣讓啟動失敗，而且發生在套用任何 migration 之前。訊息會寫出資料庫與找到的每張
-表，以及轉換它們的語句；見[第 21 章](21-schema-and-upgrades.md#啟動時的檢查)。下面是 API 對一個
-預設字元集是 latin1 的空資料庫啟動，`Database:MigrateOnStartup` 為 `true`，在 MySQL 8.4 上：
+在 MySQL 與 MariaDB 上，`Database:MigrateOnStartup` 為 `true` 時，資料庫或框架資料表的預設字元集不是
+utf8mb4，同樣讓啟動失敗，而且發生在套用任何 migration 之前。訊息會寫出資料庫與找到的每張表，以及轉換
+它們的語句；見[第 21 章](21-schema-and-upgrades.md#啟動時的檢查)。下面是在 MySQL 8.4 上、
+`Database:MigrateOnStartup` 為 `true` 時，API 對一個預設字元集為 latin1 的空資料庫啟動的輸出：
 
 ```
 …
-[14:40:46 FTL]  StruoCMS host terminated unexpectedly <s:>
-Struo.Infrastructure.Migrations.MigrationFailedException: Nothing was applied or changed: migrations on MySQL and MariaDB need utf8mb4 as the default
-character set of the database and of the framework tables, and the items below do not have it.
+[15:56:45 FTL]  StruoCMS host terminated unexpectedly <s:>
+Struo.Infrastructure.Migrations.MigrationFailedException: migrations on MySQL and MariaDB need utf8mb4 as the default character set of the database and the framework tables, and the items below do not have it, so nothing was applied or changed.
 Database `struo` has the default character set latin1.
 Run these statements, then run 'migrate' again:
 ALTER DATABASE `struo` CHARACTER SET utf8mb4;
-Tables of your own that do not default to utf8mb4 are converted the same way;
+Convert tables of your own that do not default to utf8mb4 with ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4;
 'migrate:check' lists their columns.
 …
 ```
