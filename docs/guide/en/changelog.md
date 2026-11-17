@@ -322,6 +322,48 @@ transformed again on the first request.
 
   A directory named like a canonical lowercase GUID belongs to the cache, and everything in it is
   deleted when that file is permanently deleted.
+- On MySQL and MariaDB, `AsString` and `AsFixedLengthString` columns are utf8mb4, and `migrate`
+  converts the string columns of the core tables. Both calls used to render national types
+  (`NVARCHAR`, `NCHAR`), which both servers store as utf8mb3 whatever the database default is. A
+  new database is utf8mb4 from the start; an existing one changes as follows.
+  - The core migration `ConvertStringColumnsToUtf8Mb4` (`202611170000`) alters 21 string columns of
+    the core tables and the `description` column of the version table. On MySQL it rebuilds the
+    seven tables that have an indexed string column (`struo_users`, `struo_roles`,
+    `struo_languages`, `struo_file_translations`, `struo_permissions`, `struo_revisions`,
+    `struo_user_sessions`), and the time grows with their size; MariaDB converted them without a
+    rebuild. Back up the database, stop the API, and run `migrate` when those tables can be
+    unavailable.
+  - On MySQL the converted columns compare with `utf8mb4_0900_ai_ci` instead of
+    `utf8mb3_general_ci`. A value with a trailing space is no longer equal to the same value without
+    it, so `abc` and `abc ` can both be stored in a unique column and `_eq` on `abc` stops matching
+    `abc `. The German sharp s equals `ss` and no longer equals `s`; a full-width letter equals its
+    ASCII letter, and a value with a zero-width space equals the one without. The order of
+    punctuation in sorted results changes. MariaDB compares and sorts as before. Check your data and
+    code for rows that depend on the earlier comparisons before you migrate.
+  - If `migrate` stops with `Duplicate entry '<value>' for key '<table>.<index>'`, two values of
+    that unique column are equal under the new collation; the message names the table and the
+    index. Find the pairs, here for `struo_roles.name` (add the other key columns for a composite
+    index):
+
+    ```sql
+    SELECT a.name AS value_a, b.name AS value_b
+    FROM struo_roles a JOIN struo_roles b
+      ON CONVERT(a.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+       = CONVERT(b.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+      AND a.id < b.id;
+    ```
+
+    Change or delete one value of each pair, then run `migrate` again. The columns converted before
+    the stop stay converted and are declared again without change, and the migration is recorded
+    only when it completes.
+  - Your fork's own tables are not converted. Its migrations that call `AsString` create utf8mb4
+    columns from this release on, but the columns that already exist stay as they are, and so do
+    the core columns of a table whose own default character set is not utf8mb4. `migrate:check`
+    prints one warning per such column (`FindingKind.NonUtf8Mb4String`; a warning, never an
+    error). Until a column is converted, a supplementary-plane character such as an emoji cannot be
+    stored in it or compared with it. List the columns with `migrate:check`, read the comparison
+    item above, then convert each table with the statement in
+    [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4).
 :::
 
 ### Added
@@ -350,6 +392,11 @@ transformed again on the first request.
 
 ### Fixed
 
+- A supplementary-plane character, such as an emoji, in a string field answered `500` on MySQL and
+  MariaDB: writing it failed with `Incorrect string value`, and a filter or search that compared a
+  column with it failed with `Illegal mix of collations`. The columns were utf8mb3. A new database
+  and an upgraded core database store and compare it; Breaking says how an existing database and a
+  fork's own tables convert.
 - `_ends_with` with a value that ends in one backslash answered `500` on PostgreSQL, which refused
   the pattern. It answers `200` and matches the rows whose text ends in a backslash.
 - `filter[title][_eq]=null&locale=en` on a translatable field, `_eq: "null"` in a `deep` filter, and

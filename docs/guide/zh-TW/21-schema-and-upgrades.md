@@ -16,6 +16,8 @@ Migration 放在三個地方：
   `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
   `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code`
   加上唯一索引。`CreateRoleCapabilities` 建立角色系統權限表，`DropRoleCapabilities` 再把它刪掉。
+  `ConvertStringColumnsToUtf8Mb4` 把 MySQL／MariaDB 資料庫的字串欄位轉成 utf8mb4，在其他後端
+  什麼都不做。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
@@ -60,13 +62,14 @@ API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>`
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:59Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:59Z  SeedCoreData
-202610080100   Applied   2026-11-06 06:14:59Z  CreateBlogSchema
-202611030000   Applied   2026-11-06 06:14:59Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:59Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:59Z  DropRoleCapabilities
-6 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-17 02:15:51Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 02:15:51Z  SeedCoreData
+202610080100   Applied   2026-11-17 02:15:51Z  CreateBlogSchema
+202611030000   Applied   2026-11-17 02:15:51Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 02:15:51Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 02:15:51Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 02:15:51Z  ConvertStringColumnsToUtf8Mb4
+7 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` 是還沒套用，`Orphaned` 是版本表裡有紀錄、但掃描到的組件裡已經找不到那支
@@ -81,7 +84,8 @@ migration，例如把範例從 `Struo:ContentAssemblies` 拿掉之後。孤兒�
 `migrate:check` 比對實際資料表與 entity 宣告的結構，不拿鎖、不寫入，乾淨時只印
 `0 error(s), 0 warning(s)`。錯誤包括缺表、缺欄、可否為 null 不同、型別類別不同、字串長度不同，
 以及缺了該有的唯一索引；有任何錯誤就以代碼 `1` 結束。警告包括資料庫裡有、但沒有 entity 宣告的
-欄位，以及 SQL Server 上的非 Unicode 字串欄位。
+欄位、SQL Server 上的非 Unicode 字串欄位，以及 MySQL／MariaDB 上字元集不是 utf8mb4 的字串欄位
+（轉換語句見第 24 章）。
 
 `make:migration` 在〈撰寫 migration〉一節，`migrate:baseline` 在第 24 章。
 
@@ -92,7 +96,7 @@ API 開始服務之前，`StartupMigrationGate` 先看資料庫。`Database:Migr
 
 ```
 [13:39:44 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 5 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -187,6 +191,10 @@ public sealed class CreateTags : StruoMigration
   查詢，索引檢查以警告跳過。
 - **SQL Server 隔離檢查**：啟動時唯讀查詢一次，看 `READ_COMMITTED_SNAPSHOT` 有沒有開；見[第 20 章](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
 
+另有一個目錄讀取是型別化的 SqlSugar 查詢，不是 raw SQL。在 MySQL／MariaDB 上，`migrate:check` 與
+Development 的啟動檢查從 `information_schema.COLUMNS` 讀每個欄位的字元集，用型別化的 `Where` 比對
+結構描述與資料表名稱，兩者都以參數綁定。字串只有目錄資料表的名稱，也不寫入任何東西。
+
 排序不組 SQL 文字。欄位、關聯路徑與翻譯欄位三種排序都是型別化的 SqlSugar 運算式，翻譯欄位排序把語言代碼
 當成 SQL 參數綁定。
 
@@ -211,13 +219,14 @@ migration 而拒絕之前，會記下同一則警告。不會因為順序錯亂�
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
+202610080000   Applied   2026-11-17 02:14:57Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 02:14:57Z  SeedCoreData
 202610080100   Pending   -                     CreateBlogSchema  (out of order)
-202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
-5 applied, 1 pending, 0 orphaned
+202611030000   Applied   2026-11-17 02:14:57Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 02:14:57Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 02:14:57Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 02:14:57Z  ConvertStringColumnsToUtf8Mb4
+6 applied, 1 pending, 0 orphaned
 ```
 
 該怎麼做：用 `migrate:preview` 看那支 migration 的 SQL，確認它不依賴後來那支改過的東西，例如被改名或
@@ -227,8 +236,9 @@ $ dotnet run --project src/Struo.Api -- migrate:status
 
 ## 各後端的差異
 
-- **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值。建資料庫時明確指定
-  `CHARACTER SET utf8mb4`；SqlSugar 的 `CreateDatabase` 這類工具可能建出 utf8mb3，存不了 emoji。
+- **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值，`AsString` 欄位也是。建
+  資料庫時明確指定 `CHARACTER SET utf8mb4`；SqlSugar 的 `CreateDatabase` 這類工具可能建出
+  utf8mb3，存不了 emoji。`migrate:check` 對每個不是 utf8mb4 的字串欄位發警告，轉換語句見第 24 章。
   用伺服器預設的嚴格 `sql_mode`，非嚴格模式會悄悄截斷或替換值。
 - **SQL Server**：`migrate:check` 對 `varchar` 欄位發警告；超出定序字碼頁的字元存進去會變成 `?`。
 - **Oracle**：只有型別對應，沒有實測過。不拿鎖，`migrate:check` 跳過型別、長度與索引檢查並發警告。

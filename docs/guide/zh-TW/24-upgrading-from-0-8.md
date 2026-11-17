@@ -57,12 +57,15 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    執行個體還在服務時也能跑。資料庫裡已經有紀錄，或框架資料表不存在時，它拒絕並以代碼 `1`
    結束。
 6. **跑 `migrate`。** 比 `SeedCoreData` 新的核心 migration，例如 `AddLanguageCodeUniqueIndex`、
-   `CreateRoleCapabilities` 與 `DropRoleCapabilities`，以及 baseline 之後新增的 migration 都在這裡套用；
-   沒有待套用的就印
-   `Nothing to migrate.`。若有兩個語言代碼對資料庫來說相等，`AddLanguageCodeUniqueIndex`
-   會讓執行停下；怎麼找出並移除它們見[版本紀錄](changelog.md)。
-7. **跑 `migrate:check`。** PostgreSQL、MySQL 與 MariaDB 應該是 `0 error(s), 0 warning(s)`。
-   SQL Server 對每個 `varchar` 字串欄位發一筆警告：
+   `CreateRoleCapabilities`、`DropRoleCapabilities` 與 `ConvertStringColumnsToUtf8Mb4`，以及
+   baseline 之後新增的 migration 都在這裡套用；沒有待套用的就印 `Nothing to migrate.`。
+   若有兩個語言代碼對資料庫來說相等，`AddLanguageCodeUniqueIndex` 會讓執行停下；在 MySQL 與
+   MariaDB 上，唯一欄位裡有兩個值在 utf8mb4 的定序下相等時，
+   `ConvertStringColumnsToUtf8Mb4` 也會讓執行停下。怎麼找出並移除它們，見
+   [版本紀錄](changelog.md)；哪些欄位它不會轉換，見下面字元集那一節。
+7. **跑 `migrate:check`。** PostgreSQL 應該是 `0 error(s), 0 warning(s)`；MySQL 與 MariaDB 在每個
+   字串欄位都是 utf8mb4 時也是，否則每個不是的欄位發一筆警告。SQL Server 對每個 `varchar` 字串
+   欄位發一筆警告：
 
    ```
    $ dotnet run --project src/Struo.Api -- migrate:check
@@ -74,9 +77,9 @@ migration 記成已套用，但不執行。下面的步驟在 PostgreSQL、SQL S
    警告的數量依你的表而定。任何錯誤都表示某個 entity 跟它的表不一致，通常是 entity 宣告了、表裡
    卻沒有的欄位，或某支 `.sql` 腳本改過、entity 沒有跟上的欄位。先修好再在 Development 啟動，
    Development 的啟動檢查遇到錯誤會拒絕啟動。
-8. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到這幾件事：SQL Server 的 access
-   token 索引、MySQL／MariaDB 的時間精度，以及資料庫的字元集。SQL Server 上先做完再啟動 API：
-   在那之前存進去的中文與 emoji 會變成 `?`，救不回來。
+8. **做下一節屬於你那個後端的後續處理。** `migrate:check` 看不到 SQL Server 的 access token 索引
+   與 MySQL／MariaDB 的時間精度；在 MySQL 與 MariaDB 上，它會對不是 utf8mb4 的字串欄位發警告，下一
+   節轉換它們。SQL Server 上先做完再啟動 API：在那之前存進去的中文與 emoji 會變成 `?`，救不回來。
 9. **啟動 API。**
 
 ## 各後端的後續處理
@@ -177,20 +180,31 @@ ORDER BY TABLE_NAME;
 
 ### MySQL／MariaDB：字元集換成 utf8mb4
 
-utf8mb3 或 latin1 的資料庫在嚴格模式下會拒絕 emoji 這類 4 位元組字元，API 回
-`INTERNAL_SERVER_ERROR`。先改資料庫預設值，之後 migration 建的表才會沿用；再印出每張還不是
-utf8mb4 的表的轉換語句，檢查後執行。這組語句在 MySQL 8.4 與 MariaDB 11.8 上實際跑過：
+不是 utf8mb4 的字串欄位會拒絕 emoji 這類 4 位元組字元，API 回 `INTERNAL_SERVER_ERROR`；
+`migrate:check` 對每個這樣的欄位發一筆警告。`ConvertStringColumnsToUtf8Mb4` 只轉換預設字元集
+本來就是 utf8mb4 的資料表裡的核心欄位。v0.8.x 在 utf8mb3 的資料庫裡建的表，欄位與警告都留著，
+直到你轉換它；你的 fork 自己的表也一樣。先改資料庫預設值，之後 migration 建的表才會沿用；再印出
+每張含有非 utf8mb4 欄位的表的轉換語句，檢查後執行。這組語句在 MySQL 8.4 與 MariaDB 11.8 上
+實際跑過：
 
 ```sql
 ALTER DATABASE `<your database>` CHARACTER SET utf8mb4;
 
-SELECT CONCAT('ALTER TABLE `', TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4;') AS stmt
-FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_TYPE = 'BASE TABLE'
-  AND TABLE_COLLATION NOT LIKE 'utf8mb4%'
-ORDER BY TABLE_NAME;
+SELECT CONCAT('ALTER TABLE `', c.TABLE_NAME, '` CONVERT TO CHARACTER SET utf8mb4;') AS stmt
+FROM information_schema.COLUMNS c
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+WHERE c.TABLE_SCHEMA = DATABASE()
+  AND t.TABLE_TYPE = 'BASE TABLE'
+  AND c.CHARACTER_SET_NAME IS NOT NULL
+  AND c.CHARACTER_SET_NAME <> 'utf8mb4'
+GROUP BY c.TABLE_NAME
+ORDER BY c.TABLE_NAME;
 ```
+
+`CONVERT TO` 會轉換表裡每個文字欄位，保留索引、可否為 null 與預設值，並設定表的預設值。MySQL 上
+轉換後的欄位比對規則會變，列在[版本紀錄](changelog.md)。之後 `migrate:check` 印出
+`0 error(s), 0 warning(s)`，上面的查詢也不再回傳任何列。
 
 ## 留下來的東西
 

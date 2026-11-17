@@ -243,6 +243,39 @@
   不搬移，第一次請求時重新轉換。
 
   名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
+- 在 MySQL 與 MariaDB 上，`AsString` 與 `AsFixedLengthString` 的欄位是 utf8mb4，`migrate` 也會轉換
+  核心資料表的字串欄位。這兩個呼叫以前產生國際字元型別（`NVARCHAR`、`NCHAR`），兩種伺服器不管
+  資料庫預設值是什麼，都把它們存成 utf8mb3。新資料庫從一開始就是 utf8mb4；既有的資料庫依下面幾點
+  改變。
+  - 核心 migration `ConvertStringColumnsToUtf8Mb4`（`202611170000`）修改核心資料表的 21 個字串
+    欄位，以及版本表的 `description` 欄位。在 MySQL 上，它會重建有索引字串欄位的七張表
+    （`struo_users`、`struo_roles`、`struo_languages`、`struo_file_translations`、
+    `struo_permissions`、`struo_revisions`、`struo_user_sessions`），所需時間隨表的大小增加；
+    MariaDB 轉換時沒有重建。先備份資料庫、停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
+  - 在 MySQL 上，轉換後的欄位用 `utf8mb4_0900_ai_ci` 比對，不再是 `utf8mb3_general_ci`。結尾有空白
+    的值不再等於沒有空白的同一個值，所以 `abc` 與 `abc ` 可以同時存在唯一欄位裡，對 `abc` 的 `_eq`
+    也不再比對到 `abc `。德文的 sharp s 等於 `ss`，不再等於 `s`；全形字母等於對應的 ASCII 字母，
+    含零寬空白的值等於不含的那個。排序結果裡標點符號的順序也會改變。MariaDB 的比對與排序不變。
+    跑 `migrate` 之前，檢查你的資料與程式碼有沒有依賴以前比對方式的列。
+  - 如果 `migrate` 停在 `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個
+    值在新的定序下相等；訊息指出資料表與索引。下面找出成對的值，這裡以 `struo_roles.name` 為例
+    （複合索引要把其他索引欄位也加進去）：
+
+    ```sql
+    SELECT a.name AS value_a, b.name AS value_b
+    FROM struo_roles a JOIN struo_roles b
+      ON CONVERT(a.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+       = CONVERT(b.name USING utf8mb4) COLLATE utf8mb4_0900_ai_ci
+      AND a.id < b.id;
+    ```
+
+    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate`。停下之前已轉換的欄位維持已轉換，重跑時重新
+    宣告而不變，這支 migration 完整跑完才會被記錄。
+  - 你的 fork 自己的表不會被轉換。它的 migration 呼叫 `AsString` 時，從這一版起建出 utf8mb4 欄位，
+    但已經存在的欄位維持原樣，預設字元集不是 utf8mb4 的資料表裡的核心欄位也一樣。`migrate:check` 對
+    每個這樣的欄位發一筆警告（`FindingKind.NonUtf8Mb4String`；是警告，不是錯誤）。欄位轉換之前，
+    emoji 這類補充平面字元無法存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的
+    比對說明，再用[第 24 章](24-upgrading-from-0-8.md)的語句逐表轉換。
 :::
 
 ### 新增
@@ -268,6 +301,10 @@
 
 ### 修正
 
+- emoji 這類補充平面字元寫進字串欄位時，在 MySQL 與 MariaDB 上回 `500`：寫入失敗並出現
+  `Incorrect string value`，篩選或搜尋拿它比對欄位則出現 `Illegal mix of collations`。欄位當時是
+  utf8mb3。新資料庫與升級後的核心資料庫現在存得進去也比對得了；既有資料庫與 fork 自己的表怎麼轉換見
+  破壞性變更。
 - `_ends_with` 的值以一個反斜線結尾，在 PostgreSQL 上回 `500`，因為資料庫拒絕這個樣式。現在回
   `200`，比對文字以反斜線結尾的列。
 - 可翻譯欄位上的 `filter[title][_eq]=null&locale=en`、`deep` 篩選裡的 `_eq: "null"`，以及 `locale`

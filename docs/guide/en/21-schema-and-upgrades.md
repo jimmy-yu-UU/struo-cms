@@ -16,7 +16,8 @@ Migrations live in three places:
   tables; `SeedCoreData` seeds the languages, the `admin` and `public` roles, the bootstrap admin,
   and the public read grants listed in `Rbac:PublicReadCollections`. `AddLanguageCodeUniqueIndex` adds
   the unique index on the language `code`. `CreateRoleCapabilities` creates a role capabilities table and
-  `DropRoleCapabilities` drops it again.
+  `DropRoleCapabilities` drops it again. `ConvertStringColumnsToUtf8Mb4` converts the string
+  columns of a MySQL or MariaDB database to utf8mb4 and does nothing on other backends.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in the API host project itself, or in a content project that is listed in
@@ -65,13 +66,14 @@ line per migration it applied; with nothing pending it prints only `Nothing to m
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:59Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:59Z  SeedCoreData
-202610080100   Applied   2026-11-06 06:14:59Z  CreateBlogSchema
-202611030000   Applied   2026-11-06 06:14:59Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:59Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:59Z  DropRoleCapabilities
-6 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-17 02:15:51Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 02:15:51Z  SeedCoreData
+202610080100   Applied   2026-11-17 02:15:51Z  CreateBlogSchema
+202611030000   Applied   2026-11-17 02:15:51Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 02:15:51Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 02:15:51Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 02:15:51Z  ConvertStringColumnsToUtf8Mb4
+7 applied, 0 pending, 0 orphaned
 ```
 
 `Pending` means not applied yet. `Orphaned` means the version table has a record but no scanned
@@ -88,7 +90,8 @@ is `-- <n> migration(s) pending`.
 writes nothing; a clean run prints only `0 error(s), 0 warning(s)`. Errors are a missing table or
 column, a nullability, type-category or string-length difference, and a missing required unique
 index; any error makes it exit `1`. Warnings are a column the database has but no entity declares,
-and a non-Unicode string column on SQL Server.
+a non-Unicode string column on SQL Server, and on MySQL and MariaDB a string column whose character
+set is not utf8mb4 (Chapter 24 has the conversion statement).
 
 `make:migration` is covered in "Writing a migration" below, `migrate:baseline` in Chapter 24.
 
@@ -100,7 +103,7 @@ pending, exiting with code `1`:
 
 ```
 [13:39:44 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 5 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 
@@ -210,6 +213,11 @@ The invariant that all database access goes through SqlSugar (see
 - **The SQL Server isolation check**: one read-only query at startup that reads whether
   `READ_COMMITTED_SNAPSHOT` is on; see [Chapter 20](20-deployment.md#sql-server-turn-on-read-committed-snapshot).
 
+One more catalog read is a typed SqlSugar query, not raw SQL. On MySQL and MariaDB,
+`migrate:check` and the Development startup check read each column's character set from
+`information_schema.COLUMNS`, with a typed `Where` on the schema and the table name, both bound as
+parameters. The name of the catalog table is the only string in the query, and nothing is written.
+
 Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
 expressions, and a translated-field sort binds the language code as a SQL parameter.
 
@@ -236,13 +244,14 @@ For example, a database migrated with the sample off and then opened with the sa
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
+202610080000   Applied   2026-11-17 02:14:57Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 02:14:57Z  SeedCoreData
 202610080100   Pending   -                     CreateBlogSchema  (out of order)
-202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
-5 applied, 1 pending, 0 orphaned
+202611030000   Applied   2026-11-17 02:14:57Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 02:14:57Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 02:14:57Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 02:14:57Z  ConvertStringColumnsToUtf8Mb4
+6 applied, 1 pending, 0 orphaned
 ```
 
 What to do: read the migration's SQL with `migrate:preview` and check that it does not depend on anything
@@ -253,10 +262,12 @@ already ran the later migration.
 
 ## Backend differences
 
-- **MySQL/MariaDB**: migrations set no character set, so tables take the database default. Create the
-  database with `CHARACTER SET utf8mb4`; tooling such as SqlSugar's `CreateDatabase` can create
-  utf8mb3, which cannot store emoji. Run with the server's default strict `sql_mode`; non-strict mode
-  silently truncates or replaces values.
+- **MySQL/MariaDB**: migrations set no character set, so tables take the database default, and
+  so do `AsString` columns. Create the database with `CHARACTER SET utf8mb4`; tooling such as
+  SqlSugar's `CreateDatabase` can create utf8mb3, which cannot store emoji. `migrate:check` warns
+  about each string column that is not utf8mb4, and Chapter 24 has the conversion statement. Run
+  with the server's default strict `sql_mode`; non-strict mode silently truncates or replaces
+  values.
 - **SQL Server**: `migrate:check` warns about `varchar` columns; characters outside the collation's
   code page are stored as `?`.
 - **Oracle**: type-mapped only, never verified. No lock, and `migrate:check` skips the type, length and

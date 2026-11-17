@@ -109,19 +109,20 @@ dotnet run --project src/Struo.Api -- migrate
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[14:14:17 INF] Beginning Transaction
-[14:14:17 INF] Rolling back transaction
-[14:14:17 INF] VersionMigration migrating
-[14:14:17 INF] Beginning Transaction
+[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
+[10:14:57 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
+[10:14:57 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
+[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
 …
-[14:14:17 INF] Committing Transaction
-[14:14:17 INF] 202611060000: DropRoleCapabilities migrated
-[14:14:17 INF] => 0.0021538s
+[10:14:57 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
+[10:14:57 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
+[10:14:57 INF]  => 0.0019954s <s:FluentMigrator.Runner.MigrationRunner>
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
 Applied 202611040000  CreateRoleCapabilities
 Applied 202611060000  DropRoleCapabilities
+Applied 202611170000  ConvertStringColumnsToUtf8Mb4
 ```
 
 這一步不能省：複製過來的設定檔把 `Database:MigrateOnStartup` 設成 `false`，資料庫還有待套用的
@@ -156,7 +157,7 @@ FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied migra
 
 ```text
 [13:38:25 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 4 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
 

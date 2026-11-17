@@ -263,16 +263,17 @@ the core tests run on `tests/Struo.Tests.Fixtures`, not on the sample.
    between them, so no `CASCADE` is needed. Both statements were run on PostgreSQL, SQL Server,
    MySQL and MariaDB; SQLite's `DROP TABLE` takes one table at a time, so split it into five.
 
-After step 4, `migrate:status` lists only the five core migrations:
+After step 4, `migrate:status` lists only the six core migrations:
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-06 06:14:17Z  CreateCoreSchema
-202610080001   Applied   2026-11-06 06:14:17Z  SeedCoreData
-202611030000   Applied   2026-11-06 06:14:17Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-06 06:14:17Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-06 06:14:17Z  DropRoleCapabilities
-5 applied, 0 pending, 0 orphaned
+202610080000   Applied   2026-11-17 02:14:57Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 02:14:57Z  SeedCoreData
+202611030000   Applied   2026-11-17 02:14:57Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 02:14:57Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 02:14:57Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 02:14:57Z  ConvertStringColumnsToUtf8Mb4
+6 applied, 0 pending, 0 orphaned
 ```
 
 After removal, run these three commands, in order, to confirm it's clean:
