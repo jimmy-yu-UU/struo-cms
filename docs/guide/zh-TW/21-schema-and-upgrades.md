@@ -95,7 +95,7 @@ API 開始服務之前，`StartupMigrationGate` 先看資料庫。`Database:Migr
 預設都是 `false`：這時只要還有待套用的 migration，API 就拒絕啟動，以代碼 `1` 結束：
 
 ```
-[13:39:44 FTL] StruoCMS host terminated unexpectedly
+[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

@@ -182,7 +182,7 @@ ORDER BY TABLE_NAME;
 
 不是 utf8mb4 的字串欄位會拒絕 emoji 這類 4 位元組字元，API 回 `INTERNAL_SERVER_ERROR`；
 `migrate:check` 對每個這樣的欄位發一筆警告。`ConvertStringColumnsToUtf8Mb4` 只轉換預設字元集
-本來就是 utf8mb4 的資料表裡的核心欄位。v0.8.x 在 utf8mb3 的資料庫裡建的表，欄位與警告都留著，
+已是 utf8mb4 的資料表裡的核心欄位。v0.8.x 在 utf8mb3 的資料庫裡建的表，欄位與警告都留著，
 直到你轉換它；你的 fork 自己的表也一樣。先改資料庫預設值，之後 migration 建的表才會沿用；再印出
 每張含有非 utf8mb4 欄位的表的轉換語句，檢查後執行。這組語句在 MySQL 8.4 與 MariaDB 11.8 上
 實際跑過：
@@ -202,9 +202,10 @@ GROUP BY c.TABLE_NAME
 ORDER BY c.TABLE_NAME;
 ```
 
-`CONVERT TO` 會轉換表裡每個文字欄位，保留索引、可否為 null 與預設值，並設定表的預設值。MySQL 上
-轉換後的欄位比對規則會變，列在[版本紀錄](changelog.md)。之後 `migrate:check` 印出
-`0 error(s), 0 warning(s)`，上面的查詢也不再回傳任何列。
+`CONVERT TO` 會轉換表裡每個文字欄位，保留索引、可否為 null 與預設值，並設定表的預設值。連刻意宣告成
+其他字元集（例如 `ascii`）的欄位也會轉換，這類表的轉換語句要檢查過再執行。在 MySQL 上，它同時改變
+轉換後欄位的定序，如[版本紀錄](changelog.md)所列，所以會停在 `Duplicate entry`，成對的值與 `migrate`
+遇到的相同；版本紀錄有找出它們的查詢。之後 `migrate:check` 不會有字元集警告，上面的查詢也回傳零列。
 
 ## 留下來的東西
 

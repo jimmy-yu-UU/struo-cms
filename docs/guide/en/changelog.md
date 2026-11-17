@@ -322,28 +322,33 @@ transformed again on the first request.
 
   A directory named like a canonical lowercase GUID belongs to the cache, and everything in it is
   deleted when that file is permanently deleted.
-- On MySQL and MariaDB, `AsString` and `AsFixedLengthString` columns are utf8mb4, and `migrate`
-  converts the string columns of the core tables. Both calls used to render national types
-  (`NVARCHAR`, `NCHAR`), which both servers store as utf8mb3 whatever the database default is. A
-  new database is utf8mb4 from the start; an existing one changes as follows.
-  - The core migration `ConvertStringColumnsToUtf8Mb4` (`202611170000`) alters 21 string columns of
-    the core tables and the `description` column of the version table. On MySQL it rebuilds the
-    seven tables that have an indexed string column (`struo_users`, `struo_roles`,
+- On MySQL and MariaDB, `AsString` and `AsFixedLengthString` columns are utf8mb4 instead of the
+  national types (`NVARCHAR`, `NCHAR`), which both servers store as utf8mb3, and `migrate` converts
+  the string columns of the core tables. A new database needs nothing; on an existing one, read each
+  case before you run `migrate`.
+  - Time: the core migration `ConvertStringColumnsToUtf8Mb4` (`202611170000`) alters 21 string
+    columns of the core tables and the `description` column of the version table. On MySQL 8.4 it
+    rebuilds the seven tables that have an indexed string column (`struo_users`, `struo_roles`,
     `struo_languages`, `struo_file_translations`, `struo_permissions`, `struo_revisions`,
-    `struo_user_sessions`), and the time grows with their size; MariaDB converted them without a
-    rebuild. Back up the database, stop the API, and run `migrate` when those tables can be
-    unavailable.
-  - On MySQL the converted columns compare with `utf8mb4_0900_ai_ci` instead of
-    `utf8mb3_general_ci`. A value with a trailing space is no longer equal to the same value without
-    it, so `abc` and `abc ` can both be stored in a unique column and `_eq` on `abc` stops matching
-    `abc `. The German sharp s equals `ss` and no longer equals `s`; a full-width letter equals its
-    ASCII letter, and a value with a zero-width space equals the one without. The order of
-    punctuation in sorted results changes. MariaDB compares and sorts as before. Check your data and
-    code for rows that depend on the earlier comparisons before you migrate.
-  - If `migrate` stops with `Duplicate entry '<value>' for key '<table>.<index>'`, two values of
-    that unique column are equal under the new collation; the message names the table and the
-    index. Find the pairs, here for `struo_roles.name` (add the other key columns for a composite
-    index):
+    `struo_user_sessions`), and the time grows with their size; on MariaDB 11.8 it converts them
+    without a rebuild. Back up the database, stop the API, and run `migrate` when those tables
+    can be unavailable.
+  - Collation (MySQL): a converted column takes the table's default collation. On a MySQL 8 database
+    created with the defaults that is `utf8mb4_0900_ai_ci`, which replaces `utf8mb3_general_ci`. A
+    value with a trailing space is not equal to the same value without it, so `abc` and `abc ` can
+    both be stored in a unique column and `_eq` on `abc` does not match `abc `. The German sharp s
+    equals `ss` and does not equal `s`; a full-width letter equals its ASCII letter, and a value
+    with a zero-width space equals the one without. The order of punctuation in sorted results
+    changes. MariaDB compares and sorts as before. Before you run `migrate`, look in the unique
+    columns for values that differ only by trailing spaces, by a sharp s against `ss`, by
+    full-width against ASCII letters, or by a zero-width character, and check the code that relies
+    on those comparisons.
+  - Duplicate values (MySQL): if `migrate` stops with
+    `Duplicate entry '<value>' for key '<table>.<index>'`, two values of that unique column are
+    equal under the new collation; the message names the table and the index. MariaDB's comparison
+    does not change, so it does not stop there. Find the pairs, here for `struo_roles.name` (add
+    the other key columns for a composite index, and use your table's collation in place of
+    `utf8mb4_0900_ai_ci` when the database was created with another one):
 
     ```sql
     SELECT a.name AS value_a, b.name AS value_b
@@ -353,9 +358,7 @@ transformed again on the first request.
       AND a.id < b.id;
     ```
 
-    Change or delete one value of each pair, then run `migrate` again. The columns converted before
-    the stop stay converted and are declared again without change, and the migration is recorded
-    only when it completes.
+    Change or delete one value of each pair, then run `migrate` again.
   - Your fork's own tables are not converted. Its migrations that call `AsString` create utf8mb4
     columns from this release on, but the columns that already exist stay as they are, and so do
     the core columns of a table whose own default character set is not utf8mb4. `migrate:check`

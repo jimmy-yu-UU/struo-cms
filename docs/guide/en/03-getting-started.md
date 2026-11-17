@@ -175,7 +175,7 @@ If startup fails, the log prints a single Fatal entry and the process exits with
 the previous step looks like this (stack trace omitted):
 
 ```text
-[13:38:25 FTL] StruoCMS host terminated unexpectedly
+[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

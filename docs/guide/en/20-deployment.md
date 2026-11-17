@@ -319,7 +319,7 @@ same fail-fast mechanism. Here is the API image starting against an empty SQLite
 
 ```
 …
-[06:21:22 FTL] StruoCMS host terminated unexpectedly
+[03:59:46 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

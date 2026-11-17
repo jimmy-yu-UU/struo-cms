@@ -253,7 +253,7 @@ API 專案自己只送一個安全回應標頭：`X-Content-Type-Options: nosnif
 
 ```
 …
-[06:21:22 FTL] StruoCMS host terminated unexpectedly
+[03:59:46 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

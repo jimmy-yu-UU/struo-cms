@@ -243,23 +243,25 @@
   不搬移，第一次請求時重新轉換。
 
   名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
-- 在 MySQL 與 MariaDB 上，`AsString` 與 `AsFixedLengthString` 的欄位是 utf8mb4，`migrate` 也會轉換
-  核心資料表的字串欄位。這兩個呼叫以前產生國際字元型別（`NVARCHAR`、`NCHAR`），兩種伺服器不管
-  資料庫預設值是什麼，都把它們存成 utf8mb3。新資料庫從一開始就是 utf8mb4；既有的資料庫依下面幾點
-  改變。
-  - 核心 migration `ConvertStringColumnsToUtf8Mb4`（`202611170000`）修改核心資料表的 21 個字串
-    欄位，以及版本表的 `description` 欄位。在 MySQL 上，它會重建有索引字串欄位的七張表
+- 在 MySQL 與 MariaDB 上，`AsString` 與 `AsFixedLengthString` 的欄位是 utf8mb4，不再是國際字元型別
+  （`NVARCHAR`、`NCHAR`；兩種伺服器都把它們存成 utf8mb3），`migrate` 也會轉換核心資料表的字串欄位。
+  新資料庫不用處理；既有的資料庫，跑 `migrate` 之前先讀下面每一種情況。
+  - 時間：核心 migration `ConvertStringColumnsToUtf8Mb4`（`202611170000`）修改核心資料表的 21 個
+    字串欄位，以及版本表的 `description` 欄位。在 MySQL 8.4 上，它會重建有索引字串欄位的七張表
     （`struo_users`、`struo_roles`、`struo_languages`、`struo_file_translations`、
-    `struo_permissions`、`struo_revisions`、`struo_user_sessions`），所需時間隨表的大小增加；
-    MariaDB 轉換時沒有重建。先備份資料庫、停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
-  - 在 MySQL 上，轉換後的欄位用 `utf8mb4_0900_ai_ci` 比對，不再是 `utf8mb3_general_ci`。結尾有空白
-    的值不再等於沒有空白的同一個值，所以 `abc` 與 `abc ` 可以同時存在唯一欄位裡，對 `abc` 的 `_eq`
-    也不再比對到 `abc `。德文的 sharp s 等於 `ss`，不再等於 `s`；全形字母等於對應的 ASCII 字母，
-    含零寬空白的值等於不含的那個。排序結果裡標點符號的順序也會改變。MariaDB 的比對與排序不變。
-    跑 `migrate` 之前，檢查你的資料與程式碼有沒有依賴以前比對方式的列。
-  - 如果 `migrate` 停在 `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個
-    值在新的定序下相等；訊息指出資料表與索引。下面找出成對的值，這裡以 `struo_roles.name` 為例
-    （複合索引要把其他索引欄位也加進去）：
+    `struo_permissions`、`struo_revisions`、`struo_user_sessions`），所需時間隨表的大小增加；在
+    MariaDB 11.8 上轉換時不重建。先備份資料庫、停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
+  - 定序（MySQL）：轉換後的欄位採用資料表的預設定序。用預設值建立的 MySQL 8 資料庫，那個定序是
+    `utf8mb4_0900_ai_ci`，取代 `utf8mb3_general_ci`。結尾有空白的值不等於沒有空白的同一個值，所以
+    `abc` 與 `abc ` 可以同時存在唯一欄位裡，對 `abc` 的 `_eq` 也不會比對到 `abc `。德文的 sharp s
+    等於 `ss`，不等於 `s`；全形字母等於對應的 ASCII 字母，含零寬空白的值等於不含的那個。排序結果裡
+    標點符號的順序也會改變。MariaDB 的比對與排序不變。跑 `migrate` 之前，在唯一欄位裡找出只差在結尾
+    空白、sharp s 對 `ss`、全形對 ASCII 字母、或零寬字元的值，並檢查依賴這些比對的程式碼。
+  - 重複的值（MySQL）：如果 `migrate` 停在
+    `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個值在新的定序下
+    相等；訊息指出資料表與索引。MariaDB 的比對不變，不會停在這裡。
+    下面找出成對的值，這裡以 `struo_roles.name` 為例（複合索引要把其他索引欄位也加進去；資料庫建立時
+    用了別的定序，就用你的資料表的定序取代 `utf8mb4_0900_ai_ci`）：
 
     ```sql
     SELECT a.name AS value_a, b.name AS value_b
@@ -269,13 +271,13 @@
       AND a.id < b.id;
     ```
 
-    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate`。停下之前已轉換的欄位維持已轉換，重跑時重新
-    宣告而不變，這支 migration 完整跑完才會被記錄。
+    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate`。
   - 你的 fork 自己的表不會被轉換。它的 migration 呼叫 `AsString` 時，從這一版起建出 utf8mb4 欄位，
     但已經存在的欄位維持原樣，預設字元集不是 utf8mb4 的資料表裡的核心欄位也一樣。`migrate:check` 對
     每個這樣的欄位發一筆警告（`FindingKind.NonUtf8Mb4String`；是警告，不是錯誤）。欄位轉換之前，
     emoji 這類補充平面字元無法存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的
-    比對說明，再用[第 24 章](24-upgrading-from-0-8.md)的語句逐表轉換。
+    比對說明，再用
+    [第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)的語句逐表轉換。
 :::
 
 ### 新增

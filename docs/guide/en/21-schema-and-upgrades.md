@@ -102,7 +102,7 @@ defaults to `false` in every environment, and then the API refuses to start whil
 pending, exiting with code `1`:
 
 ```
-[13:39:44 FTL] StruoCMS host terminated unexpectedly
+[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```

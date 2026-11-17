@@ -223,9 +223,12 @@ ORDER BY c.TABLE_NAME;
 ```
 
 `CONVERT TO` converts every text column of the table, keeps its indexes, nullability and defaults,
-and sets the table's default. On MySQL the converted columns compare differently, as the
-[changelog](changelog.md) lists. Afterwards `migrate:check` prints `0 error(s), 0 warning(s)` and
-the statement above returns no rows.
+and sets the table's default. That includes a column declared on purpose with another character set
+such as `ascii`; review the generated statement for such a table before you run it. On MySQL it
+also changes the collation of the converted columns, as the [changelog](changelog.md) lists, so it
+stops with `Duplicate entry` on the same pairs `migrate` does; the changelog has the query that
+finds them. Afterwards `migrate:check`
+reports no character-set warning and the statement above returns no rows.
 
 ## Leftovers
 

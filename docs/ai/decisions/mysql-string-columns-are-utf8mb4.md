@@ -15,10 +15,10 @@ The core migration `ConvertStringColumnsToUtf8Mb4` (`202611170000`) re-declares 
 columns and the version table's `description` with `Alter.Column(...).AsString(n)`, restating length
 and nullability. It produces no expression on any other backend. `Down` does nothing.
 
-`migrate:check` reads each entity table's column character sets with one typed query on
-`information_schema.COLUMNS` (`CharacterSetCatalog`) and warns (`FindingKind.NonUtf8Mb4String`) for
-a column an entity declares as String or LongText whose character set is not utf8mb4. The warning
-never fails the check. A fork's own tables are not converted by `migrate`: the warning names them
+`migrate:check` reads each entity table's column character sets and collations with one typed
+query on `information_schema.COLUMNS` (`CharacterSetCatalog`) and warns
+(`FindingKind.NonUtf8Mb4String`) for a column an entity declares as String or LongText whose
+character set is not utf8mb4. The warning never fails the check. A fork's own tables are not converted by `migrate`: the warning names them
 and chapter 24 gives the statement.
 
 The `AS("information_schema.COLUMNS")` call is the only string in the query; the schema and the
@@ -151,9 +151,11 @@ outside utf8mb4.
   set.
 - `ConvertStringColumnsToUtf8Mb4Tests`: no expression off MySQL, 22 alterations on MySQL, each
   restating a column the creating migration declares.
-- `Utf8Mb4ColumnsTests`: the pure warning function.
+- `Utf8Mb4ColumnsTests`: the pure warning function, its message, and the backend gate: only MySQL
+  reads the character sets.
 - `Utf8Mb4LiveTests` and `Utf8Mb4CollisionLiveTests` (MySQL and MariaDB when configured): a fresh
-  database, the upgrade, the supplementary-plane round trip, the warning and the collision.
+  database, the upgrade (including each column's collation), the supplementary-plane round trip, the
+  warning and the collision.
 
 ## Unknowns
 

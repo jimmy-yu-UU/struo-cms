@@ -156,7 +156,7 @@ FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied migra
 啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。漏了上一步，訊息是這樣（堆疊追蹤省略）：
 
 ```text
-[13:38:25 FTL] StruoCMS host terminated unexpectedly
+[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
