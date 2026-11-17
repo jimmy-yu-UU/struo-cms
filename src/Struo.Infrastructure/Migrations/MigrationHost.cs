@@ -143,21 +143,21 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
     /// tables; otherwise it stops here, before the runner has executed an expression or written a version row.</summary>
     private void RefuseNonUtf8Mb4Defaults()
     {
-        string? refusal;
+        CatalogDefaults? catalog;
         try
         {
             using var db = OpenClient();
-            refusal = (options.DefaultsRefusal ?? DefaultRefusal)(db);
+            catalog = options.DefaultsCatalog is { } supplied
+                ? supplied(db)
+                : Utf8Mb4Defaults.CatalogFor(options.DbType, () => DefaultCharacterSetCatalog.Read(db));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
         }
-        if (refusal is not null) throw new MigrationFailedException(refusal);
+        if (catalog is not null && Utf8Mb4Defaults.Refusal(catalog, options.TablePrefix) is { } refusal)
+            throw new MigrationFailedException(refusal);
     }
-
-    private string? DefaultRefusal(ISqlSugarClient db) =>
-        Utf8Mb4Defaults.RefusalFor(options.DbType, options.TablePrefix, () => DefaultCharacterSetCatalog.Read(db));
 
     private void EnsureBaselineable()
     {

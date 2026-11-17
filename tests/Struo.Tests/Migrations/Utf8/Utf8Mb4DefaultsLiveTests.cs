@@ -3,6 +3,7 @@ using Struo.Infrastructure.Migrations;
 using Struo.Infrastructure.Migrations.Core;
 using Struo.Infrastructure.Metadata;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -48,7 +49,8 @@ public sealed class Utf8Mb4DefaultsLiveTests
         using var database = Utf8LiveDatabase.CreateOn(backend, server.Connection);
         database.ApplyLegacy();
         database.InsertSamples();
-        var (structure, sets, values, applied) = (database.Structure(), database.CharacterSets(), database.SampleValues(), AppliedCount(database));
+        var (structure, sets, values, applied, collations) =
+            (database.Structure(), database.CharacterSets(), database.SampleValues(), AppliedCount(database), database.TableCollations());
 
         var failure = await Assert.ThrowsAsync<MigrationFailedException>(database.ApplyAsync);
 
@@ -57,6 +59,7 @@ public sealed class Utf8Mb4DefaultsLiveTests
             .And.Contain($"ALTER TABLE `{database.Prefix}users` CONVERT TO CHARACTER SET utf8mb4;");
         database.Structure().Should().Equal(structure);
         database.CharacterSets().Should().Equal(sets);
+        database.TableCollations().Should().Equal(collations);
         database.SampleValues().Should().Equal(values);
         AppliedCount(database).Should().Be(applied);
     }
@@ -81,7 +84,34 @@ public sealed class Utf8Mb4DefaultsLiveTests
         legacy.NonUtf8Mb4Columns().Should().BeEmpty();
         legacy.SampleValues().Should().Equal(values);
         legacy.CharacterSets().Should().NotBeEmpty().And.Equal(fresh.CharacterSets());
+        legacy.Structure().Should().NotBeEmpty().And.Equal(fresh.Structure());
         legacy.Host().GetStatus().Should().OnlyContain(m => m.State == MigrationState.Applied);
+    }
+
+    [LiveBackendTheory, MemberData(nameof(Backends))]
+    public async Task In_a_utf8mb4_database_with_its_own_collation_the_statements_leave_every_table_in_that_collation(string backend)
+    {
+        const string collation = "utf8mb4_unicode_ci";
+        using var server = CharacterSetDatabase.Create(backend, "utf8mb3");
+        using var database = Utf8LiveDatabase.CreateOn(backend, server.Connection);
+        database.ApplyLegacy();
+        database.InsertSamples();
+        var values = database.SampleValues();
+        server.AlterDefault("utf8mb4", collation);
+
+        var failure = await Assert.ThrowsAsync<MigrationFailedException>(database.ApplyAsync);
+
+        var statements = Statements(failure.Message);
+        statements.Should().NotBeEmpty().And.OnlyContain(s => s.StartsWith("ALTER TABLE") && s.EndsWith($"CONVERT TO CHARACTER SET utf8mb4 COLLATE {collation};"));
+        failure.Message.Should().NotContain("ALTER DATABASE").And.NotContain("Database `");
+        foreach (var statement in statements) database.Db.Ado.ExecuteCommand(statement.TrimEnd(';'));
+        database.TableCollations().Should().OnlyContain(c => c.EndsWith(collation));
+        await database.ApplyAsync();
+
+        database.TableCollations().Should().OnlyContain(c => c.EndsWith(collation));
+        database.CharacterSets().Should().NotBeEmpty().And.OnlyContain(c => c.Contains(" utf8mb4 " + collation));
+        database.NonUtf8Mb4Columns().Should().BeEmpty();
+        database.SampleValues().Should().Equal(values);
     }
 
     [LiveBackendTheory, MemberData(nameof(Backends))]

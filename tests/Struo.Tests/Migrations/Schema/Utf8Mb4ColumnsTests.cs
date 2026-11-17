@@ -43,7 +43,18 @@ public sealed class Utf8Mb4ColumnsTests
 
         message.Should().Contain($"character set {characterSet}")
             .And.Contain("characters outside the Basic Multilingual Plane, such as emoji, cannot be stored or compared")
-            .And.Contain("ALTER TABLE `t_docs` CONVERT TO CHARACTER SET utf8mb4");
+            .And.Contain("ALTER TABLE `t_docs` CONVERT TO CHARACTER SET utf8mb4")
+            .And.Contain("followed by COLLATE and the collation of the database when that collation is not the default of utf8mb4");
+    }
+
+    [Fact]
+    public void The_table_name_in_the_statement_has_its_backticks_doubled()
+    {
+        var table = new ExpectedTable(typeof(object), "t`docs", "docs", true,
+            [new ExpectedColumn("title", ColumnCategory.String, true, null, false, false, false)], [], null);
+
+        Utf8Mb4Columns.Findings(table, [new ColumnCharacterSet("title", "latin1", null)]).Single().Message
+            .Should().Contain("ALTER TABLE `t``docs` CONVERT");
     }
 
     [Fact]

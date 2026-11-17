@@ -10,6 +10,7 @@ internal sealed class SchemataRow
 {
     [SugarColumn(ColumnName = "SCHEMA_NAME")] public string SchemaName { get; set; } = "";
     [SugarColumn(ColumnName = "DEFAULT_CHARACTER_SET_NAME")] public string? DefaultCharacterSetName { get; set; }
+    [SugarColumn(ColumnName = "DEFAULT_COLLATION_NAME")] public string? DefaultCollationName { get; set; }
 }
 
 /// <summary>A row of <c>information_schema.TABLES</c>; it is in no entity list and carries no collection attribute.</summary>
@@ -21,7 +22,7 @@ internal sealed class TablesRow
 }
 
 /// <summary>
-/// Reads the default character set of the connected database and the default collation of its tables from
+/// Reads the default character set and collation of the connected database and the default collation of its tables from
 /// <c>information_schema.SCHEMATA</c> and <c>information_schema.TABLES</c>, on MySQL and MariaDB. Both are
 /// typed queries: the catalog table name is the only string, passed to <c>AS</c>; the schema name is a bound
 /// parameter. The decision is made by <see cref="Utf8Mb4Defaults"/>. Evidence:

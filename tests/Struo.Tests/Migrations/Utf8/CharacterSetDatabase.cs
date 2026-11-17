@@ -27,18 +27,34 @@ internal sealed partial class CharacterSetDatabase : IDisposable
     /// <summary>The connection string of this database.</summary>
     public string Connection { get; }
 
-    public static CharacterSetDatabase Create(string backend, string characterSet)
+    public static CharacterSetDatabase Create(string backend, string characterSet, string? collation = null)
     {
         if (characterSet is not ("latin1" or "utf8mb3" or "utf8mb4"))
             throw new ArgumentException($"Unsupported character set '{characterSet}'.", nameof(characterSet));
+        var collate = CollateClause(collation);
         var (_, _, configured) = LiveBackend.Get(backend).Configured();
         LiveDatabases.GuardDisposable(configured);
         var name = "struo_test_cs_" + Guid.NewGuid().ToString("N")[..10];
         if (!NamePattern().IsMatch(name)) throw new InvalidOperationException($"Unexpected database name '{name}'.");
-        Execute(configured, $"CREATE DATABASE `{name}` CHARACTER SET {characterSet}");
+        Execute(configured, $"CREATE DATABASE `{name}` CHARACTER SET {characterSet}{collate}");
         var connection = new MySqlConnectionStringBuilder(configured) { Database = name, CharacterSet = "utf8mb4" }.ConnectionString;
         return new CharacterSetDatabase(name, configured, connection);
     }
+
+    /// <summary>Changes the default of this database, which leaves the defaults of its existing tables as they are.</summary>
+    public void AlterDefault(string characterSet, string collation)
+    {
+        if (characterSet is not ("latin1" or "utf8mb3" or "utf8mb4"))
+            throw new ArgumentException($"Unsupported character set '{characterSet}'.", nameof(characterSet));
+        Execute(_administration, $"ALTER DATABASE `{Name}` CHARACTER SET {characterSet}{CollateClause(collation)}");
+    }
+
+    private static string CollateClause(string? collation) => collation switch
+    {
+        null => "",
+        "utf8mb4_unicode_ci" => " COLLATE utf8mb4_unicode_ci",
+        _ => throw new ArgumentException($"Unsupported collation '{collation}'.", nameof(collation)),
+    };
 
     public void Dispose()
     {
