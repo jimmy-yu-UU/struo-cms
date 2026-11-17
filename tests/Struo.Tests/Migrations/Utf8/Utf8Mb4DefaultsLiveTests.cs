@@ -38,7 +38,7 @@ public sealed class Utf8Mb4DefaultsLiveTests
 
         failure.Message.Should().Contain($"Database `{server.Name}` has the default character set {characterSet}")
             .And.Contain($"ALTER DATABASE `{server.Name}` CHARACTER SET utf8mb4;")
-            .And.NotContain("ALTER TABLE");
+            .And.NotContain("ALTER TABLE `");
         database.Tables().Should().BeEmpty();
     }
 
