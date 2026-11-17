@@ -1,4 +1,7 @@
 using AwesomeAssertions;
+using SqlSugar;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Migrations.Schema;
 using Xunit;
 
@@ -60,5 +63,15 @@ public sealed class Utf8Mb4ColumnsTests
         var findings = Check(Table(("title", ColumnCategory.String)), ("title", "utf8mb3"));
 
         new SchemaCheckReport(findings).HasErrors.Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_catalog_read_model_is_not_a_table_or_a_collection()
+    {
+        var model = typeof(CharacterSetCatalog.InformationSchemaColumn);
+
+        model.GetCustomAttributes(typeof(SugarTable), inherit: true).Should().BeEmpty();
+        model.GetCustomAttributes(typeof(CmsCollectionAttribute), inherit: true).Should().BeEmpty();
+        FrameworkEntityTypes.All.Should().NotContain(model);
     }
 }
