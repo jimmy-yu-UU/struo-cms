@@ -44,7 +44,7 @@ internal static class Utf8Mb4Defaults
     /// <summary>The character set a collation belongs to: the collation name up to its first underscore.</summary>
     public static string CharacterSetOf(string collation)
     {
-        var end = collation.IndexOf('_');
+        var end = collation.IndexOf('_', StringComparison.Ordinal);
         return end < 0 ? collation : collation[..end];
     }
 
@@ -54,7 +54,7 @@ internal static class Utf8Mb4Defaults
             .Append(StruoVersionTableMetaData.TableNameFor(tablePrefix)), StringComparer.OrdinalIgnoreCase);
 
     private static string LogicalName(Type entityType) =>
-        (entityType.GetCustomAttribute<SugarTable>()?.TableName ?? entityType.Name).ToLowerInvariant();
+        entityType.GetCustomAttribute<SugarTable>()?.TableName ?? entityType.Name;
 
     private static bool IsUtf8Mb4(string characterSet) => characterSet.Equals(Utf8Mb4, StringComparison.OrdinalIgnoreCase);
 
