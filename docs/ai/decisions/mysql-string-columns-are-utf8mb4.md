@@ -3,7 +3,9 @@
 ## Decision
 
 On MySQL and MariaDB, `AsString(n)` and `AsFixedLengthString(n)` render types without a character
-set, so a column takes the database's default, utf8mb4 on a database created as the manual says. The
+set, so a column takes the default of its table, which for a new table is the database's, utf8mb4 on
+a database created as the manual says. `migrate` refuses a database or a core table whose default is
+not utf8mb4 (below). The
 migration runner's MySQL type map is `Utf8Mb4MySqlTypeMap`
 (`src/Struo.Infrastructure/Migrations/Utf8Mb4MySqlTypeMap.cs`), a subclass of FluentMigrator's
 `MySql8TypeMap` that restates every key of `DbType.String` and `DbType.StringFixedLength`.
@@ -15,6 +17,21 @@ The core migration `ConvertStringColumnsToUtf8Mb4` (`202611170000`) re-declares 
 columns and the version table's `description` with `Alter.Column(...).AsString(n)`, restating length
 and nullability. It produces no expression on any other backend. `Down` does nothing.
 
+On MySQL and MariaDB, `MigrationHost.ApplyAsync` (the path of `migrate` and of
+`Database:MigrateOnStartup`) refuses before it applies anything. When migrations are pending it
+reads the database's default character set and the default collation of every core table that
+exists, the framework tables under `TablePrefix` and the version table, and refuses when one is not
+utf8mb4. A
+core table that does not exist yet is skipped, a new empty database is judged on its default alone,
+and a fork's tables are not part of it. The refusal is a `MigrationFailedException`: the CLI prints
+`migrate failed: <message>` and exits 1, and startup terminates the host. Nothing is applied, no
+version row is written and no table or column changes. The message names the database and its
+default character set when that offends, each offending table with its default collation, and gives
+`ALTER DATABASE` and one `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` per listed table.
+`Utf8Mb4Defaults` decides and builds the message; `DefaultCharacterSetCatalog` only reads.
+`migrate:status`, `migrate:preview`, `migrate:check`, `migrate:baseline` and `make:migration` do
+not run it.
+
 `migrate:check` reads each entity table's column character sets and collations with one typed
 query on `information_schema.COLUMNS` (`CharacterSetCatalog`) and warns
 (`FindingKind.NonUtf8Mb4String`) for a column an entity declares as String or LongText whose
@@ -22,7 +39,12 @@ character set is not utf8mb4. The warning never fails the check.
 A fork's own tables are not converted by `migrate`: the warning names them and chapter 24 gives the
 statement.
 
-The `AS("information_schema.COLUMNS")` call is the only string in the query; the schema and the
+The two reads of `migrate` are typed queries of the same form on `information_schema.SCHEMATA`
+(`DEFAULT_CHARACTER_SET_NAME` of the connected schema) and `information_schema.TABLES`
+(`TABLE_NAME` and `TABLE_COLLATION` of the tables of the connected schema). Together with the
+`COLUMNS` read that makes three.
+
+The `AS("information_schema.<TABLE>")` call is the only string in each query; the schema and the
 table name are bound parameters. The maintainer approved exactly this form; it is not a raw SQL
 statement and no other string overload is approved.
 
@@ -108,23 +130,66 @@ the sort order is the same.
 
 Catalog read: `DbMaintenance.GetColumnInfosByTableName` returns the same `DbColumnInfo` for a
 utf8mb3 and a utf8mb4 column, so it cannot show the difference. The typed query returns
-`COLUMN_NAME` and `CHARACTER_SET_NAME` of every column on both servers. Filtering `TABLE_COLLATION`
-of `information_schema.TABLES` finds nothing on a database whose tables are utf8mb4 but whose string
-columns are utf8mb3.
+`COLUMN_NAME` and `CHARACTER_SET_NAME` of every column on both servers. The table collation shows
+nothing on a database whose tables are utf8mb4 but whose string columns are utf8mb3, which is why
+`migrate:check` reads the columns and `migrate` reads the table defaults: a column takes the
+default of its table.
 
 Index key length: the longest core key is `struo_revisions` (two 255-character columns and a
 bigint), 2048 bytes under utf8mb4; MySQL's limit is 3072 and all core indexes are created on both
 servers.
 
 Table default character set: `MODIFY COLUMN ... VARCHAR(n)` without a character set takes the
-table's default, so the migration converts a column only where the table's default is utf8mb4. In a
-database created as utf8mb3, whose tables therefore default to utf8mb3, the migration is recorded,
-58 columns stay utf8mb3 on both servers and `migrate:check` prints 23 warnings (the 21 string
-columns and the two long-text columns `revisions.snapshot` and `site_settings.brandname`). After
-`ALTER DATABASE ... CHARACTER SET utf8mb4` and `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` on
-the 12 tables that have such a column, no column is outside utf8mb4 and `migrate:check` prints
-`0 error(s), 0 warning(s)`; chapter 24 prints those statements from `information_schema.COLUMNS` and
-they were run on both servers.
+table's default. Measured on both servers, with two tables holding `NVARCHAR` columns, one with
+default latin1 and one with default utf8mb3, in a utf8mb4 database:
+
+| Table default | ASCII-only column after `MODIFY` | Column holding CJK after `MODIFY` |
+|---|---|---|
+| latin1 | becomes latin1 | fails with 1366 `Incorrect string value`; column stays utf8mb3 |
+| utf8mb3 | stays utf8mb3 | stays utf8mb3, text unchanged |
+
+A migration that did this would convert nothing in a utf8mb3 database and would stop partway in a
+latin1 database, because the run is not transactional, which is why `migrate` refuses such a
+database before it applies anything. A new `AsString` column in a latin1 database is latin1 for the
+same reason.
+
+`information_schema.TABLES` has `TABLE_COLLATION` and no character set. Measured on MySQL 8.4.13 and
+MariaDB 11.8.9, tables created with each default:
+
+| Table default | MySQL `TABLE_COLLATION` | MariaDB `TABLE_COLLATION` |
+|---|---|---|
+| none, in a utf8mb4 database | `utf8mb4_0900_ai_ci` | `utf8mb4_uca1400_ai_ci` |
+| utf8mb4 | `utf8mb4_0900_ai_ci` | `utf8mb4_uca1400_ai_ci` |
+| utf8mb3 | `utf8mb3_general_ci` | `utf8mb3_uca1400_ai_ci` |
+| utf8 | n/a | `utf8mb3_uca1400_ai_ci` |
+| latin1 | `latin1_swedish_ci` | `latin1_swedish_ci` |
+
+Tables created with an explicit collation report it as given: `utf8mb4_general_ci`,
+`utf8mb4_unicode_ci` and `utf8mb4_bin` on both servers, and on MariaDB `utf8mb4_uca1400_as_cs`,
+`utf8mb4_uca1400_nopad_ai_ci` and `utf8mb4_nopad_bin`. An ascii, binary and utf16 table reports
+`ascii_general_ci`, `binary` and `utf16_general_ci` (MariaDB `utf16_uca1400_ai_ci`).
+
+Every collation name starts with the name of its character set up to the first underscore, and
+`binary` has none, so the rule is the text before the first underscore (the whole name when there is
+none). `information_schema.SCHEMATA` returns `DEFAULT_CHARACTER_SET_NAME` directly: `utf8mb4` on
+both servers for a utf8mb4 database.
+
+Refusal, run through the CLI against utf8mb3 and latin1 databases on MySQL 8.4.13 and MariaDB
+11.8.9: the databases are built as v0.8.x built them (core migrations up to
+`SeedCoreData`, framework type map, no version table) with CJK text in `struo_roles.name` and
+`description` and in `struo_revisions.snapshot`. After `migrate:baseline`, `migrate` exits 1 with
+the database and the 12 tables in the message; the statements then run, `migrate` applies the four
+pending migrations, `migrate:check` prints `0 error(s), 0 warning(s)`, no column is outside
+utf8mb4 and every table defaults to utf8mb4. The stored bytes of the CJK text are identical before
+and after. In a latin1 database the long-text column is latin1 and cannot hold CJK, so it holds a
+latin1 character: its stored bytes change (latin1 to utf8) and the text read through a utf8mb4
+client is identical. A refusal on an empty latin1 database lists the database only; with
+`Database:MigrateOnStartup` the host terminates with the same message.
+
+`CONVERT TO CHARACTER SET utf8mb4` of a table that holds the values `ss` and the German sharp s in a
+unique column fails on MySQL 8.4 with `Duplicate entry` naming the value and the index and leaves
+the table unchanged; MariaDB stores no such pair in its utf8mb3 table, because it compares them as
+equal.
 
 Equivalence: a database created by the migrations with the replacement map, a database built with
 the framework map and then migrated, and a database built with the replacement map up to the release
@@ -154,6 +219,18 @@ outside utf8mb4.
   restating a column the creating migration declares.
 - `Utf8Mb4ColumnsTests`: the pure warning function, its message, and the backend gate: only MySQL
   reads the character sets.
+- `Utf8Mb4DefaultsTests`: the decision (database default by table default, case of names, skipped
+  tables, missing rows), the message (real names, only what offends, both statements, name order,
+  quoting), the character set derived from each measured collation, and the gate: the catalog is
+  read on MySQL only, for every `StruoDbType` value.
+- `MigrationDefaultsRefusalTests`: the apply path asks the check after it has found pending
+  migrations and before the runner creates a table; a refusal leaves no table and no version
+  table; an unreadable catalog is a `MigrationFailedException`; nothing pending asks nothing.
+- `Utf8Mb4DefaultsLiveTests` (MySQL and MariaDB when configured): a latin1 or utf8mb3 database
+  without tables, and with core tables built with the framework type map, is refused and
+  stays byte-identical in structure, character sets, data and applied versions; the statements of
+  the message make `migrate` succeed and the column character sets and collations equal a fresh
+  database's; a utf8mb4 database migrates; `MigrateOnStartup` surfaces the refusal.
 - `Utf8Mb4LiveTests` and `Utf8Mb4CollisionLiveTests` (MySQL and MariaDB when configured): a fresh
   database, the upgrade (including each column's collation), the supplementary-plane round trip, the
   warning and the collision.
@@ -173,5 +250,7 @@ outside utf8mb4.
 
 - `src/Struo.Infrastructure/Migrations/Utf8Mb4MySqlTypeMap.cs`
 - `src/Struo.Infrastructure/Migrations/Schema/CharacterSetCatalog.cs`
+- `src/Struo.Infrastructure/Migrations/Schema/DefaultCharacterSetCatalog.cs`
+- `src/Struo.Infrastructure/Migrations/Schema/Utf8Mb4Defaults.cs`
 - `src/Struo.Infrastructure/Migrations/Core/202611170000_ConvertStringColumnsToUtf8Mb4.cs`
 - `AGENTS.md` ("Invariants")

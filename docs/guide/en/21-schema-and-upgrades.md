@@ -17,7 +17,7 @@ Migrations live in three places:
   and the public read grants listed in `Rbac:PublicReadCollections`. `AddLanguageCodeUniqueIndex` adds
   the unique index on the language `code`. `CreateRoleCapabilities` creates a role capabilities table and
   `DropRoleCapabilities` drops it again. `ConvertStringColumnsToUtf8Mb4` converts the string
-  columns of a MySQL or MariaDB database to utf8mb4 and does nothing on other backends.
+  columns of the core tables on MySQL and MariaDB to utf8mb4 and does nothing on other backends.
 - **The sample**: `CreateBlogSchema` in `samples/Struo.Sample.Blog/Migrations/`, scanned only when
   the sample is listed in `Struo:ContentAssemblies`.
 - **Your fork**: in the API host project itself, or in a content project that is listed in
@@ -93,6 +93,15 @@ index; any error makes it exit `1`. Warnings are a column the database has but n
 a non-Unicode string column on SQL Server, and on MySQL and MariaDB a string column whose character
 set is not utf8mb4 (Chapter 24 has the conversion statement).
 
+On MySQL and MariaDB, `migrate` and `Database:MigrateOnStartup` check the character set when
+migrations are pending, before they apply anything. The default of the database, and the default of
+each framework table that exists, must be utf8mb4. Otherwise nothing is applied or changed,
+`migrate` exits `1` and the API does not start; the message names the database and each table it
+found and the `ALTER` statements to run, and
+[Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4) explains them. A new
+empty database is judged on its default alone. A table that does not exist yet, and a table of your
+fork, is not checked.
+
 `make:migration` is covered in "Writing a migration" below, `migrate:baseline` in Chapter 24.
 
 ## What startup checks
@@ -113,6 +122,10 @@ local Compose stack runs this way.
 
 When the framework tables exist but there is no version table, both settings refuse to start, and
 the message says to run `migrate:baseline` once — see [Chapter 24](24-upgrading-from-0-8.md).
+
+With `MigrateOnStartup` set to `true` on MySQL or MariaDB, a database or framework table whose
+default character set is not utf8mb4 stops startup the same way, before the first migration is
+applied; the message is the one `migrate` prints.
 
 In Development, startup also runs the same comparison as `migrate:check` and refuses to start on any
 error. Other environments skip that step, so run `migrate:check` yourself.
@@ -213,10 +226,13 @@ The invariant that all database access goes through SqlSugar (see
 - **The SQL Server isolation check**: one read-only query at startup that reads whether
   `READ_COMMITTED_SNAPSHOT` is on; see [Chapter 20](20-deployment.md#sql-server-turn-on-read-committed-snapshot).
 
-One more catalog read is a typed SqlSugar query, not raw SQL. On MySQL and MariaDB,
+Three more catalog reads are typed SqlSugar queries, not raw SQL, and run on MySQL and MariaDB only.
 `migrate:check` and the Development startup check read each column's character set from
-`information_schema.COLUMNS`, with a typed `Where` on the schema and the table name, both bound as
-parameters. The name of the catalog table is the only string in the query, and nothing is written.
+`information_schema.COLUMNS`, with a typed `Where` on the schema and the table name. `migrate` reads
+the database's default character set from `information_schema.SCHEMATA` and the default collation of
+its tables from `information_schema.TABLES`, with a typed `Where` on the schema name. Every value in
+a `Where` is bound as a parameter. The name of the catalog table is the only string in each query,
+and nothing is written.
 
 Sorting assembles no SQL text. Column, relation-path and translated-field sorts are typed SqlSugar
 expressions, and a translated-field sort binds the language code as a SQL parameter.
@@ -262,12 +278,13 @@ already ran the later migration.
 
 ## Backend differences
 
-- **MySQL/MariaDB**: migrations set no character set, so tables take the database default, and
-  so do `AsString` columns. Create the database with `CHARACTER SET utf8mb4`; tooling such as
-  SqlSugar's `CreateDatabase` can create utf8mb3, which cannot store emoji. `migrate:check` warns
-  about each string column that is not utf8mb4, and Chapter 24 has the conversion statement. Run
-  with the server's default strict `sql_mode`; non-strict mode silently truncates or replaces
-  values.
+- **MySQL/MariaDB**: migrations set no character set, so a table takes the database default, and
+  an `AsString` column takes its table's. Create the database with `CHARACTER SET utf8mb4`; tooling
+  such as SqlSugar's `CreateDatabase` can create utf8mb3, which cannot store emoji. `migrate`
+  refuses a database, or a framework table, whose default is not utf8mb4 and prints the statements
+  that convert it. `migrate:check` warns about each string column that is not utf8mb4, and
+  Chapter 24 has the conversion statement. Run with the server's default strict `sql_mode`;
+  non-strict mode silently truncates or replaces values.
 - **SQL Server**: `migrate:check` warns about `varchar` columns; characters outside the collation's
   code page are stored as `?`.
 - **Oracle**: type-mapped only, never verified. No lock, and `migrate:check` skips the type, length and

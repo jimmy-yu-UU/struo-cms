@@ -327,6 +327,11 @@ System.InvalidOperationException: 6 migration(s) pending, the lowest is 20261008
 The process then exits with code `1`; the stack trace that follows is omitted here. The message
 itself names the command to run and the setting key.
 
+On MySQL and MariaDB, a database or framework table whose default character set is not utf8mb4 fails
+startup the same way when `Database:MigrateOnStartup` is `true`, before any migration is applied.
+The message names the database and each table it found and the statements that convert them; see
+[Chapter 21](21-schema-and-upgrades.md#what-startup-checks).
+
 `DataProtection` fails the same way when `DataProtection:RequireKeyProtection` is `true` without a
 `DataProtection:Certificate:Path`, when a configured certificate file is missing or cannot be
 opened, or when `Certificate:Previous` is set without `Certificate:Path`.

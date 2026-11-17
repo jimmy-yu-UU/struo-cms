@@ -267,12 +267,12 @@ After step 4, `migrate:status` lists only the six core migrations:
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status
-202610080000   Applied   2026-11-17 02:14:57Z  CreateCoreSchema
-202610080001   Applied   2026-11-17 02:14:57Z  SeedCoreData
-202611030000   Applied   2026-11-17 02:14:57Z  AddLanguageCodeUniqueIndex
-202611040000   Applied   2026-11-17 02:14:57Z  CreateRoleCapabilities
-202611060000   Applied   2026-11-17 02:14:57Z  DropRoleCapabilities
-202611170000   Applied   2026-11-17 02:14:57Z  ConvertStringColumnsToUtf8Mb4
+202610080000   Applied   2026-11-17 04:53:52Z  CreateCoreSchema
+202610080001   Applied   2026-11-17 04:53:52Z  SeedCoreData
+202611030000   Applied   2026-11-17 04:53:52Z  AddLanguageCodeUniqueIndex
+202611040000   Applied   2026-11-17 04:53:52Z  CreateRoleCapabilities
+202611060000   Applied   2026-11-17 04:53:52Z  DropRoleCapabilities
+202611170000   Applied   2026-11-17 04:53:52Z  ConvertStringColumnsToUtf8Mb4
 6 applied, 0 pending, 0 orphaned
 ```
 

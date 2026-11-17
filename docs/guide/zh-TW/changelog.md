@@ -244,22 +244,25 @@
 
   名稱是標準小寫 GUID 的目錄屬於快取，連同裡面的內容會在該檔案永久刪除時刪除。
 - 在 MySQL 與 MariaDB 上，`AsString` 與 `AsFixedLengthString` 的欄位是 utf8mb4，不再是國際字元型別
-  （`NVARCHAR`、`NCHAR`；兩種伺服器都把它們存成 utf8mb3），`migrate` 也會轉換核心資料表的字串欄位。
-  新資料庫不用處理；既有的資料庫，跑 `migrate` 之前先讀下面每一種情況。
-  - 時間：核心 migration `ConvertStringColumnsToUtf8Mb4`（`202611170000`）修改核心資料表的 21 個
-    字串欄位，以及版本表的 `description` 欄位。在 MySQL 8.4 上，它會重建有索引字串欄位的七張表
-    （`struo_users`、`struo_roles`、`struo_languages`、`struo_file_translations`、
-    `struo_permissions`、`struo_revisions`、`struo_user_sessions`），所需時間隨表的大小增加；在
-    MariaDB 11.8 上轉換時不重建。先備份資料庫、停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
-  - 定序（MySQL）：轉換後的欄位採用資料表的預設定序。用預設值建立的 MySQL 8 資料庫，那個定序是
+  （`NVARCHAR`、`NCHAR`；兩種伺服器都把它們存成 utf8mb3），`migrate` 也會在資料庫與核心資料表的
+  預設字元集是 utf8mb4 時，轉換核心資料表的字串欄位。新資料庫不用處理；既有的資料庫，跑 `migrate`
+  之前先從下面找出你屬於哪一種情況。
+  - 資料庫與核心資料表的預設字元集已經是 utf8mb4：核心 migration `ConvertStringColumnsToUtf8Mb4`
+    （`202611170000`）修改 22 個欄位，也就是核心資料表的 21 個字串欄位，加上版本表的 `description`
+    欄位。在 MySQL 8.4 上，它會重建有索引字串欄位的七張表（`struo_users`、`struo_roles`、
+    `struo_languages`、`struo_file_translations`、`struo_permissions`、`struo_revisions`、
+    `struo_user_sessions`），所需時間隨表的大小增加；在 MariaDB 11.8 上轉換時不重建。先備份資料庫、
+    停掉 API，在這些表可以暫時不能用的時段跑 `migrate`。
+  - 定序（MySQL），適用於被 `migrate` 或 `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4` 轉換的
+    欄位：欄位採用該字元集的預設定序。用預設值建立的 MySQL 8 資料庫，那個定序是
     `utf8mb4_0900_ai_ci`，取代 `utf8mb3_general_ci`。結尾有空白的值不等於沒有空白的同一個值，所以
     `abc` 與 `abc ` 可以同時存在唯一欄位裡，對 `abc` 的 `_eq` 也不會比對到 `abc `。德文的 sharp s
     等於 `ss`，不等於 `s`；全形字母等於對應的 ASCII 字母，含零寬空白的值等於不含的那個。排序結果裡
-    標點符號的順序也會改變。MariaDB 的比對與排序不變。跑 `migrate` 之前，在唯一欄位裡找出只差在結尾
-    空白、sharp s 對 `ss`、全形對 ASCII 字母、或零寬字元的值，並檢查依賴這些比對的程式碼。
-  - 重複的值（MySQL）：如果 `migrate` 停在
+    標點符號的順序也會改變。MariaDB 的比對與排序不變。轉換之前，在唯一欄位裡找出只差在結尾空白、
+    sharp s 對 `ss`、全形對 ASCII 字母、或零寬字元的值，並檢查依賴這些比對的程式碼。
+  - 重複的值（MySQL）：如果 `migrate` 或某句 `CONVERT TO` 停在
     `Duplicate entry '<值>' for key '<資料表>.<索引>'`，表示那個唯一欄位有兩個值在新的定序下
-    相等；訊息指出資料表與索引。MariaDB 的比對不變，不會停在這裡。
+    相等；訊息指出值與索引。MariaDB 的比對不變，不會停在這裡。
     下面找出成對的值，這裡以 `struo_roles.name` 為例（複合索引要把其他索引欄位也加進去；資料庫建立時
     用了別的定序，就用你的資料表的定序取代 `utf8mb4_0900_ai_ci`）：
 
@@ -271,12 +274,32 @@
       AND a.id < b.id;
     ```
 
-    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate`。
-  - 你的 fork 自己的表不會被轉換。它的 migration 呼叫 `AsString` 時，從這一版起建出 utf8mb4 欄位，
-    但已經存在的欄位維持原樣，預設字元集不是 utf8mb4 的資料表裡的核心欄位也一樣。`migrate:check` 對
-    每個這樣的欄位發一筆警告（`FindingKind.NonUtf8Mb4String`；是警告，不是錯誤）。欄位轉換之前，
-    emoji 這類補充平面字元無法存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的
-    比對說明，再用
+    把每一對裡的一個值改掉或刪掉，再跑一次 `migrate` 或那句語句。
+  - 資料庫或某張核心資料表的預設字元集不是 utf8mb4：v0.8.x 透過 SqlSugar 的 `CreateDatabase` 建出來
+    的資料庫是 utf8mb3，伺服器預設值是 latin1 的話則是 latin1。`migrate` 與
+    `Database:MigrateOnStartup` 在套用任何東西之前先讀這些預設值。只要有一個不是 utf8mb4，就不套用、
+    不改動任何東西，`migrate` 以代碼 `1` 結束、啟動則讓主機停止，並印出找到什麼以及該執行的語句。
+    下面是對一個空的 latin1 資料庫跑 `migrate`：
+
+    ```
+    $ dotnet run --project src/Struo.Api -- migrate
+    migrate failed: Migrations on MySQL and MariaDB need utf8mb4 as the default character set
+    of the database and of the framework tables; this database does not have it.
+    Nothing was applied or changed.
+    Database `struo` has the default character set latin1.
+    Run these statements, then run 'migrate' again:
+    ALTER DATABASE `struo` CHARACTER SET utf8mb4;
+    ```
+
+    每張預設字元集不是 utf8mb4 的核心資料表，會多一行
+    `Table ... has the default collation ...` 與一句
+    `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`。執行訊息印出的語句，做法見
+    [第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)，先讀過上面的定序與重複值
+    兩項，再跑 `migrate`。
+  - 你的 fork 自己的表不會被 `migrate` 轉換。它的 migration 呼叫 `AsString` 時，從這一版起建出
+    utf8mb4 欄位，但已經存在的欄位維持原樣。`migrate:check` 對每個這樣的欄位發一筆警告
+    （`FindingKind.NonUtf8Mb4String`；是警告，不是錯誤）。欄位轉換之前，emoji 這類補充平面字元無法
+    存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的定序說明，再用
     [第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)的語句逐表轉換。
 :::
 

@@ -16,8 +16,8 @@ Migration 放在三個地方：
   `SeedCoreData` 植入語言、`admin` 與 `public` 兩個角色、bootstrap 管理員，以及
   `Rbac:PublicReadCollections` 列出的公開讀取權限。`AddLanguageCodeUniqueIndex` 為語言的 `code`
   加上唯一索引。`CreateRoleCapabilities` 建立角色系統權限表，`DropRoleCapabilities` 再把它刪掉。
-  `ConvertStringColumnsToUtf8Mb4` 把 MySQL／MariaDB 資料庫的字串欄位轉成 utf8mb4，在其他後端
-  什麼都不做。
+  `ConvertStringColumnsToUtf8Mb4` 把 MySQL／MariaDB 上核心資料表的字串欄位轉成 utf8mb4，在其他
+  後端什麼都不做。
 - **範例**：`samples/Struo.Sample.Blog/Migrations/` 的 `CreateBlogSchema`，只有範例列在
   `Struo:ContentAssemblies` 裡時才會被掃到。
 - **你的 fork**：放在 API 專案本身，或放在列在 `Struo:ContentAssemblies`、並參照
@@ -87,6 +87,13 @@ migration，例如把範例從 `Struo:ContentAssemblies` 拿掉之後。孤兒�
 欄位、SQL Server 上的非 Unicode 字串欄位，以及 MySQL／MariaDB 上字元集不是 utf8mb4 的字串欄位
 （轉換語句見第 24 章）。
 
+在 MySQL 與 MariaDB 上，有 migration 待套用時，`migrate` 與 `Database:MigrateOnStartup` 會在套用任何
+東西之前先檢查字元集：資料庫的預設值，以及每張已經存在的框架資料表的預設值，都必須是 utf8mb4。
+否則不套用、不改動任何東西，`migrate` 以代碼 `1` 結束，API 不啟動；訊息會寫出資料庫與找到的每張
+表，以及該執行的 `ALTER` 語句，說明見
+[第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)。全新的空資料庫只看它的
+預設值。還不存在的表與 fork 自己的表不檢查。
+
 `make:migration` 在〈撰寫 migration〉一節，`migrate:baseline` 在第 24 章。
 
 ## 啟動時的檢查
@@ -105,6 +112,9 @@ System.InvalidOperationException: 6 migration(s) pending, the lowest is 20261008
 
 框架資料表已經存在、卻沒有版本表時，兩種設定都拒絕啟動，訊息要你先跑一次
 `migrate:baseline`，見[第 24 章](24-upgrading-from-0-8.md)。
+
+在 MySQL 或 MariaDB 上把 `MigrateOnStartup` 設成 `true`，資料庫或框架資料表的預設字元集不是
+utf8mb4 時，啟動同樣會在套用第一支 migration 之前停下；訊息就是 `migrate` 印出的那一則。
 
 在 Development，啟動還會跑一次跟 `migrate:check` 相同的比對，有錯誤就拒絕啟動。其他環境不跑
 這一步，要自己跑 `migrate:check`。
@@ -191,9 +201,11 @@ public sealed class CreateTags : StruoMigration
   查詢，索引檢查以警告跳過。
 - **SQL Server 隔離檢查**：啟動時唯讀查詢一次，看 `READ_COMMITTED_SNAPSHOT` 有沒有開；見[第 20 章](20-deployment.md#sql-server-開啟-read-committed-snapshot)。
 
-另有一個目錄讀取是型別化的 SqlSugar 查詢，不是 raw SQL。在 MySQL／MariaDB 上，`migrate:check` 與
-Development 的啟動檢查從 `information_schema.COLUMNS` 讀每個欄位的字元集，用型別化的 `Where` 比對
-結構描述與資料表名稱，兩者都以參數綁定。字串只有目錄資料表的名稱，也不寫入任何東西。
+另有三個目錄讀取是型別化的 SqlSugar 查詢，不是 raw SQL，只在 MySQL／MariaDB 上執行。
+`migrate:check` 與 Development 的啟動檢查從 `information_schema.COLUMNS` 讀每個欄位的字元集，用
+型別化的 `Where` 比對結構描述與資料表名稱。`migrate` 從 `information_schema.SCHEMATA` 讀資料庫的預設
+字元集，從 `information_schema.TABLES` 讀資料表的預設定序，用型別化的 `Where` 比對結構描述名稱。
+`Where` 裡的每個值都以參數綁定。每支查詢裡的字串只有目錄資料表的名稱，也不寫入任何東西。
 
 排序不組 SQL 文字。欄位、關聯路徑與翻譯欄位三種排序都是型別化的 SqlSugar 運算式，翻譯欄位排序把語言代碼
 當成 SQL 參數綁定。
@@ -236,9 +248,10 @@ $ dotnet run --project src/Struo.Api -- migrate:status
 
 ## 各後端的差異
 
-- **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值，`AsString` 欄位也是。建
-  資料庫時明確指定 `CHARACTER SET utf8mb4`；SqlSugar 的 `CreateDatabase` 這類工具可能建出
-  utf8mb3，存不了 emoji。`migrate:check` 對每個不是 utf8mb4 的字串欄位發警告，轉換語句見第 24 章。
+- **MySQL／MariaDB**：migration 不指定字元集，資料表沿用資料庫的預設值，`AsString` 欄位沿用所在
+  資料表的預設值。建資料庫時明確指定 `CHARACTER SET utf8mb4`；SqlSugar 的 `CreateDatabase` 這類
+  工具可能建出 utf8mb3，存不了 emoji。`migrate` 會拒絕預設值不是 utf8mb4 的資料庫或框架資料表，並
+  印出轉換它的語句。`migrate:check` 對每個不是 utf8mb4 的字串欄位發警告，轉換語句見第 24 章。
   用伺服器預設的嚴格 `sql_mode`，非嚴格模式會悄悄截斷或替換值。
 - **SQL Server**：`migrate:check` 對 `varchar` 欄位發警告；超出定序字碼頁的字元存進去會變成 `?`。
 - **Oracle**：只有型別對應，沒有實測過。不拿鎖，`migrate:check` 跳過型別、長度與索引檢查並發警告。
