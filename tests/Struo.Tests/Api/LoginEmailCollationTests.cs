@@ -19,8 +19,9 @@ namespace Struo.Tests.Api;
 /// the presented one after normalizing, so a collation-equivalent variant neither reaches the account nor
 /// gets a login-lock counter of its own. The duplicate check on user create keeps the collation match.
 /// Each backend folds a different set of spellings; <see cref="Variants"/> lists the ones the selected
-/// backend folds. The class discriminates only on MySQL, MariaDB and SQL Server. On SQLite and PostgreSQL
-/// the list holds one spelling the database does not fold, so the variant is just another email and the
+/// backend folds; on MySQL it also lists two spellings the backend does not fold, which stay separate
+/// emails. The class discriminates only on MySQL, MariaDB and SQL Server. On SQLite and PostgreSQL the
+/// list holds one spelling the database does not fold, so the variant is just another email and the
 /// tests pass whether or not the normalized comparison exists. The comparison rule itself is covered on
 /// every backend by <c>AuthServiceTests</c> and <c>ExternalLoginServiceTests</c>.
 /// </summary>
@@ -36,11 +37,15 @@ public class LoginEmailCollationTests(ApiFactory factory)
     private static readonly Variant FullwidthO = new("fullwidth-o", s => s.Replace('o', '\uFF4F'), true);
     private static readonly Variant SoftHyphen = new("soft-hyphen", s => s.Insert(1, "\u00AD"), true);
     private static readonly Variant ZeroWidthSpace = new("zero-width-space", s => s.Insert(1, "\u200B"), true);
+    private static readonly Variant DotlessI = new("dotless-i", s => s.Replace('i', '\u0131'), true);
     private static readonly Variant DottedCapitalI = new("dotted-capital-i", s => s.Replace('i', '\u0130'), true);
+    private static readonly Variant SharpS = new("sharp-s", s => s.Replace('s', '\u00DF'), true);
 
     private static IReadOnlyList<Variant> Variants => TestBackend.Current switch
     {
-        TestBackendKind.MySql or TestBackendKind.MariaDb =>
+        TestBackendKind.MySql =>
+            [AccentE, UmlautO, DotlessI with { FoldedByBackend = false }, DottedCapitalI, SharpS with { FoldedByBackend = false }],
+        TestBackendKind.MariaDb =>
             [AccentE, UmlautO, FullwidthO, SoftHyphen, ZeroWidthSpace, DottedCapitalI],
         TestBackendKind.SqlServer => [FullwidthO],
         _ => [AccentE with { FoldedByBackend = false }],

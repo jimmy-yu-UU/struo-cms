@@ -63,7 +63,7 @@ public sealed class ConvertStringColumnsToUtf8Mb4Tests
     }
 
     [Fact]
-    public void The_tables_with_colliding_unique_values_come_first()
+    public void The_users_and_roles_tables_come_first()
     {
         var tables = MigrationExpressions.Up(new ConvertStringColumnsToUtf8Mb4(), StruoDbType.MySql)
             .Cast<AlterColumnExpression>().Select(e => e.TableName).Distinct().ToList();

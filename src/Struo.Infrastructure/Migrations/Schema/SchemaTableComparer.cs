@@ -32,8 +32,7 @@ internal static class SchemaTableComparer
         foreach (var finding in CompareUniqueIndexes(db, dbType, table, liveName))
             yield return finding;
 
-        if (dbType == StruoDbType.MySql)
-            foreach (var finding in Utf8Mb4Columns.Findings(table, CharacterSetCatalog.Read(db, liveName)))
+        foreach (var finding in Utf8Mb4Columns.FindingsFor(dbType, table, () => CharacterSetCatalog.Read(db, liveName)))
                 yield return finding;
     }
 

@@ -3,7 +3,7 @@ using SqlSugar;
 namespace Struo.Infrastructure.Migrations.Schema;
 
 /// <summary>
-/// Reads the character set of each column of one table from <c>information_schema.COLUMNS</c> of the
+/// Reads the character set and collation of each column of one table from <c>information_schema.COLUMNS</c> of the
 /// connected database, on MySQL and MariaDB. It is a typed query: the catalog table name is the only
 /// string, passed to <c>AS</c>; the schema and the table name are bound parameters. Evidence:
 /// docs/ai/decisions/mysql-string-columns-are-utf8mb4.md.
@@ -19,16 +19,17 @@ internal static class CharacterSetCatalog
             .AS(CatalogTable)
             .Where(c => c.TableSchema == schema && c.TableName == table)
             .ToList()
-            .Select(c => new ColumnCharacterSet(c.ColumnName, c.CharacterSetName))
+            .Select(c => new ColumnCharacterSet(c.ColumnName, c.CharacterSetName, c.CollationName))
             .ToList();
     }
 
-    /// <summary>Read-only projection of the catalog table. It carries no <c>[SugarTable]</c>, so the entity scan never treats it as a table.</summary>
+    /// <summary>Read-only projection of the catalog table; it is in no entity list and carries no collection attribute.</summary>
     internal sealed class InformationSchemaColumn
     {
         [SugarColumn(ColumnName = "TABLE_SCHEMA")] public string TableSchema { get; set; } = "";
         [SugarColumn(ColumnName = "TABLE_NAME")] public string TableName { get; set; } = "";
         [SugarColumn(ColumnName = "COLUMN_NAME")] public string ColumnName { get; set; } = "";
         [SugarColumn(ColumnName = "CHARACTER_SET_NAME")] public string? CharacterSetName { get; set; }
+        [SugarColumn(ColumnName = "COLLATION_NAME")] public string? CollationName { get; set; }
     }
 }

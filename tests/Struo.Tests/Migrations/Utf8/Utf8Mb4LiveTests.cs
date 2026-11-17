@@ -54,6 +54,7 @@ public sealed class Utf8Mb4LiveTests
         valuesBefore.Should().Contain($"role|{Utf8LiveDatabase.Cjk} role|{Utf8LiveDatabase.Snowman}");
         legacy.Structure().Should().Equal(structureBefore);
         legacy.Structure().Should().Equal(fresh.Structure());
+        legacy.CharacterSets().Should().NotBeEmpty().And.Equal(fresh.CharacterSets());
     }
 
     [LiveBackendTheory, MemberData(nameof(Backends))]

@@ -73,6 +73,12 @@ internal sealed class Utf8LiveDatabase : IDisposable
         .Select(x => $"{x.Table[Prefix.Length..]}.{x.Column.Column}={x.Column.CharacterSet}")
         .Order().ToList();
 
+    /// <summary>Per text column: table, column, character set and collation; the prefix is stripped.</summary>
+    public List<string> CharacterSets() => Tables()
+        .SelectMany(t => CharacterSetCatalog.Read(Db, t).Where(c => c.CharacterSet is not null)
+            .Select(c => $"{t[Prefix.Length..]}.{c.Column} {c.CharacterSet} {c.Collation}"))
+        .Order().ToList();
+
     public List<string> Tables() => Db.DbMaintenance.GetTableInfoList(false)
         .Select(t => t.Name).Where(n => n.StartsWith(Prefix, StringComparison.Ordinal)).Order().ToList();
 

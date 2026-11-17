@@ -8,8 +8,8 @@ namespace Struo.Infrastructure.Migrations.Core;
 /// On MySQL and MariaDB, re-declares every core string column with <c>AsString</c>, which the migration
 /// type map renders as a utf8mb4 type, so a database that was migrated earlier ends in the same character
 /// set as a new one. Each statement restates the column's length and nullability; none of these columns
-/// has a default. The tables with unique string columns that can collide under the new collation come
-/// first. It produces no expression on other backends. <see cref="Down"/> does nothing. Evidence:
+/// has a default. The users and roles tables, whose unique values people type, come first.
+/// It produces no expression on other backends. <see cref="Down"/> does nothing. Evidence:
 /// docs/ai/decisions/mysql-string-columns-are-utf8mb4.md.
 /// </summary>
 [Migration(Version, "ConvertStringColumnsToUtf8Mb4")]

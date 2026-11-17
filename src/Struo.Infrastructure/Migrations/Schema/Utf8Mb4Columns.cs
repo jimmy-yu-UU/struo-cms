@@ -1,13 +1,20 @@
+using Struo.Application.Configuration;
+
 namespace Struo.Infrastructure.Migrations.Schema;
 
 /// <summary>
-/// The warning for a column an entity declares as text whose live character set is not utf8mb4: a
-/// character outside the Basic Multilingual Plane, an emoji for example, can neither be stored in it nor
-/// compared with it. Pure: the character sets come from <see cref="CharacterSetCatalog"/>.
+/// The warning for a column an entity declares as text whose live character set is not utf8mb4. The
+/// message names the set, what it cannot hold and the conversion of the table. Pure: the character sets
+/// come from a delegate, which <see cref="FindingsFor"/> invokes on MySQL and MariaDB only.
 /// </summary>
 internal static class Utf8Mb4Columns
 {
     private const string Utf8Mb4 = "utf8mb4";
+
+    /// <summary>The findings for one table; the delegate that reads the character sets runs only on MySQL and MariaDB.</summary>
+    public static IEnumerable<SchemaFinding> FindingsFor(
+        StruoDbType dbType, ExpectedTable table, Func<IReadOnlyList<ColumnCharacterSet>> readCharacterSets) =>
+        dbType == StruoDbType.MySql ? Findings(table, readCharacterSets()) : [];
 
     public static IEnumerable<SchemaFinding> Findings(ExpectedTable table, IReadOnlyList<ColumnCharacterSet> live)
     {
@@ -18,7 +25,13 @@ internal static class Utf8Mb4Columns
             if (!sets.TryGetValue(column.Name, out var set) || set is null
                 || set.Equals(Utf8Mb4, StringComparison.OrdinalIgnoreCase)) continue;
             yield return new SchemaFinding(FindingSeverity.Warning, FindingKind.NonUtf8Mb4String, table.PhysicalName, column.Name,
-                $"database column has character set {set}, not {Utf8Mb4}; characters outside the Basic Multilingual Plane, such as emoji, cannot be stored or compared; convert the column to {Utf8Mb4}");
+                $"database column has character set {set}, not {Utf8Mb4}; {Consequence(set)}; "
+                + $"run ALTER TABLE `{table.PhysicalName}` CONVERT TO CHARACTER SET {Utf8Mb4}");
         }
     }
+
+    private static string Consequence(string set) =>
+        set.Equals("utf8mb3", StringComparison.OrdinalIgnoreCase) || set.Equals("utf8", StringComparison.OrdinalIgnoreCase)
+            ? "characters outside the Basic Multilingual Plane, such as emoji, cannot be stored or compared"
+            : $"characters that {set} does not contain cannot be stored";
 }
