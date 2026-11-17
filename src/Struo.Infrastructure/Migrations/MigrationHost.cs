@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 using Struo.Application.Configuration;
+using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Migrations;
@@ -28,6 +29,7 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
         var before = GetStatus();
         if (before.All(m => m.State != MigrationState.Pending)) return [];
         if (MigrationInfo.OutOfOrderWarning(before) is { } outOfOrder) logger.LogWarning("{Warning}", outOfOrder);
+        RefuseNonUtf8Mb4Defaults();
         try
         {
             using var sp = BuildRunner(preview: false, new SqlSuppressingLoggerFactory(loggerFactory));
@@ -136,6 +138,26 @@ public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory l
             throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
         }
     }
+
+    /// <summary>On MySQL and MariaDB the run needs utf8mb4 defaults on the database and the existing framework
+    /// tables; otherwise it stops here, before the runner has executed an expression or written a version row.</summary>
+    private void RefuseNonUtf8Mb4Defaults()
+    {
+        string? refusal;
+        try
+        {
+            using var db = OpenClient();
+            refusal = (options.DefaultsRefusal ?? DefaultRefusal)(db);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new MigrationFailedException($"Could not inspect the database: {Innermost(ex).Message}", ex);
+        }
+        if (refusal is not null) throw new MigrationFailedException(refusal);
+    }
+
+    private string? DefaultRefusal(ISqlSugarClient db) =>
+        Utf8Mb4Defaults.RefusalFor(options.DbType, options.TablePrefix, () => DefaultCharacterSetCatalog.Read(db));
 
     private void EnsureBaselineable()
     {

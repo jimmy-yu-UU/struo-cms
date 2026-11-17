@@ -45,6 +45,14 @@ internal sealed class Utf8LiveDatabase : IDisposable
         return new Utf8LiveDatabase(dbType, conn, "t" + Guid.NewGuid().ToString("N")[..8] + "_");
     }
 
+    /// <summary>The same, over another database of the backend, such as one from <see cref="CharacterSetDatabase"/>.</summary>
+    public static Utf8LiveDatabase CreateOn(string backend, string connection)
+    {
+        var (_, dbType, _) = LiveBackend.Get(backend).Configured();
+        LiveDatabases.GuardDisposable(connection);
+        return new Utf8LiveDatabase(dbType, connection, "t" + Guid.NewGuid().ToString("N")[..8] + "_");
+    }
+
     public MigrationHost Host(bool frameworkTypeMap = false) => new(
         new MigrationHostOptions(DbType, Connection, Prefix, [typeof(StruoMigration).Assembly], LockTimeoutSeconds: 30)
         {

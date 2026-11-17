@@ -6,8 +6,9 @@ namespace Struo.Infrastructure.Migrations;
 /// <summary>
 /// The MySQL and MariaDB type map of the migration runner. The framework map renders <c>AsString</c> and
 /// <c>AsFixedLengthString</c> as national types, which both servers store as utf8mb3; this map renders them
-/// without a character set, so a column takes the database's utf8mb4 default. Every key of the two text
-/// types is restated, because a key that is not restated keeps the framework template. Evidence:
+/// without a character set, so a column takes the default of its table, which for a new table is the
+/// database's; <c>migrate</c> refuses a database or core table whose default is not utf8mb4. Every key of
+/// the two text types is restated, because a key that is not restated keeps the framework template. Evidence:
 /// docs/ai/decisions/mysql-string-columns-are-utf8mb4.md.
 /// </summary>
 internal sealed class Utf8Mb4MySqlTypeMap : MySql8TypeMap

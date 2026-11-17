@@ -20,15 +20,17 @@ internal static class Utf8Mb4Columns
     {
         var sets = live.GroupBy(c => c.Column, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().CharacterSet, StringComparer.OrdinalIgnoreCase);
-        foreach (var column in table.Columns.Where(c => c.Category is ColumnCategory.String or ColumnCategory.LongText))
-        {
-            if (!sets.TryGetValue(column.Name, out var set) || set is null
-                || set.Equals(Utf8Mb4, StringComparison.OrdinalIgnoreCase)) continue;
-            yield return new SchemaFinding(FindingSeverity.Warning, FindingKind.NonUtf8Mb4String, table.PhysicalName, column.Name,
-                $"database column has character set {set}, not {Utf8Mb4}; {Consequence(set)}; "
-                + $"run ALTER TABLE `{table.PhysicalName}` CONVERT TO CHARACTER SET {Utf8Mb4}");
-        }
+        return table.Columns
+            .Where(c => c.Category is ColumnCategory.String or ColumnCategory.LongText)
+            .Select(c => (c.Name, Set: sets.GetValueOrDefault(c.Name)))
+            .Where(c => c.Set is not null && !c.Set.Equals(Utf8Mb4, StringComparison.OrdinalIgnoreCase))
+            .Select(c => Finding(table, c.Name, c.Set!));
     }
+
+    private static SchemaFinding Finding(ExpectedTable table, string column, string set) =>
+        new(FindingSeverity.Warning, FindingKind.NonUtf8Mb4String, table.PhysicalName, column,
+            $"database column has character set {set}, not {Utf8Mb4}; {Consequence(set)}; "
+            + $"run ALTER TABLE `{table.PhysicalName}` CONVERT TO CHARACTER SET {Utf8Mb4}");
 
     private static string Consequence(string set) =>
         set.Equals("utf8mb3", StringComparison.OrdinalIgnoreCase) || set.Equals("utf8", StringComparison.OrdinalIgnoreCase)

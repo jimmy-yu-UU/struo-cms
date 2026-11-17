@@ -16,6 +16,9 @@ public sealed record MigrationHostOptions(
     /// <summary>Lets tests replace services of the runner container, for example to inject a failure.</summary>
     internal Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? ConfigureRunnerServices { get; init; }
 
+    /// <summary>Lets tests replace the check of the database defaults that runs before the first migration is applied.</summary>
+    internal Func<SqlSugar.ISqlSugarClient, string?>? DefaultsRefusal { get; init; }
+
     /// <summary>Inputs of the core seed migration; the seed migration fails when this is null.</summary>
     public CoreSeedData? Seed { get; init; }
 

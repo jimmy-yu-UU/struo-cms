@@ -33,7 +33,7 @@ internal static class SchemaTableComparer
             yield return finding;
 
         foreach (var finding in Utf8Mb4Columns.FindingsFor(dbType, table, () => CharacterSetCatalog.Read(db, liveName)))
-                yield return finding;
+            yield return finding;
     }
 
     public static IReadOnlyList<SchemaFinding> UnsupportedIndexWarnings(StruoDbType dbType, IReadOnlyList<ExpectedTable> tables) =>
