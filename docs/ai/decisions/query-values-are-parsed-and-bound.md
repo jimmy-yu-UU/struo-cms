@@ -4,7 +4,7 @@
 
 A filter or id value reaches SQL only through `ValueConditions`
 (`src/Struo.Infrastructure/Query/ValueConditions.cs`), the one file in `src/` that names
-`ConditionalType.In`, `ConditionalType.NotIn` or `ConditionalType.Equal`. It parses each value to
+`ConditionalType.In`, `NotIn`, `Equal`, `Like`, `LikeLeft` or `LikeRight`. It parses each value to
 the column's CLR type with the invariant culture and renders the parsed value; the caller's text is
 never passed on. The supported column types are `Guid`, `int`, `long`, `short`, `byte`, `bool`,
 `decimal`, `double`, `float`, `DateTime`, `DateTimeOffset`, enums and `string`. `_in`/`_nin` on any
@@ -60,18 +60,55 @@ other type is a 400; the comparison operators on such a type keep passing the te
   `_eq`, the translation sidecar's locale condition (`FilterTranslator.TranslationSubquery`,
   `TranslationStore`) and the id lookups all go through `ValueConditions`.
   `ValueConditionsConventionTests` reads the text of `src/` and fails on another file that names
-  `ConditionalType.In`, `NotIn` or `Equal` (also with the `SqlSugar.` or `global::` qualifier or a
-  verbatim `@`), imports or aliases the enum, sets `ConditionalType = default`, or builds a
-  `ConditionalModel` initializer, typed or target-typed, without a `ConditionalType`. Two files that
-  set `CustomConditionalFunc` are exempt from the initializer rule, because the ORM reads that
-  function before the condition type. The scan cannot see a cast from a number, a condition type
-  chosen through reflection or `Enum.Parse`, a condition type assigned in a separate statement, a
-  model filled in after `new ConditionalModel()`, or braces inside verbatim, raw or interpolated
-  strings or comments of an initializer body. An anonymous `new { }` and a generic `where T : new()`
-  constraint are not read as models.
+  `ConditionalType.In`, `NotIn`, `Equal`, `Like`, `LikeLeft` or `LikeRight` (also with the
+  `SqlSugar.` or `global::` qualifier or a verbatim `@`), imports or aliases the enum, sets
+  `ConditionalType = default`, or builds a `ConditionalModel` initializer, typed or target-typed,
+  without a `ConditionalType`. Two files that set `CustomConditionalFunc` are exempt from the
+  initializer rule, because the ORM reads that function before the condition type. The scan cannot
+  see a cast from a number, a condition type chosen through reflection or `Enum.Parse`, a condition
+  type assigned in a separate statement, a model filled in after `new ConditionalModel()`, or braces
+  inside verbatim, raw or interpolated strings or comments of an initializer body. An anonymous
+  `new { }` and a generic `where T : new()` constraint are not read as models.
 - `ValueTarget.Of` is the one way to describe a column (database name, CLR type, UTC-instant
   binding, stored-as-JSON), so a request filter, an id lookup and the translation store answer "is
   it text" the same way.
+- The value of `_contains`, `_starts_with` and `_ends_with` is matched as plain text on SQLite,
+  PostgreSQL, MySQL, MariaDB and SQL Server, on a `string` column and on a column stored as JSON,
+  and so is the term of the built-in database `search`, which reaches the same code.
+  `ValueConditions.Like` escapes the characters a LIKE pattern reads, by
+  `ValueTarget.DbType`, and the ORM builds the condition from the escaped value:
+
+  | Backend | Value | Reaches the statement as |
+  |---|---|---|
+  | PostgreSQL, MySQL, MariaDB | `\`, `%`, `_` get a backslash | the ORM's LIKE, value bound |
+  | SQL Server | `[`, `%`, `_` become `[[]`, `[%]`, `[_]` | the ORM's LIKE, value bound |
+  | SQLite | no `%` and no `_` | the ORM's LIKE, value bound |
+  | SQLite | has `%` or `_` | a typed subquery, below |
+  | Oracle | as written | the ORM's LIKE; not measured |
+
+  The ORM's `Utilities.EscapeLikeValue` is not used: it never escapes the backslash, so a backslash
+  before a wildcard leaves a live wildcard on PostgreSQL, MySQL and MariaDB, and on SQL Server it
+  escapes the output of its own previous character. A `ConditionalModel` renders no ESCAPE clause
+  and has no member to set one, and SQLite has no default escape character, so a pre-escaped value
+  cannot work there. A typed `Contains`, `StartsWith` or `EndsWith` on the column does render
+  `escape '\'`, but SqlSugar 5.1.4.221's SQLite method does so only when the value holds the two
+  characters backslash and `%`, or backslash and `_`. `LiteralLikeSubquery`
+  (`src/Struo.Infrastructure/Query/LiteralLikeSubquery.cs`) therefore builds that expression only
+  for a value with `%` or `_`, escaped with backslashes, which always holds such a pair; a value
+  with neither takes the plain path, because a blanket escape would turn a lone backslash into a
+  wrong match. The expression runs as `key IN (SELECT key FROM entity WHERE ...)`, wrapped by
+  `SubQueryConditional`, which renames the subquery's parameters; the entity's global soft-delete
+  filter is cleared inside it, because the outer query applies its own. The key is
+  `EntityDescriptor.IdProperty`, so a translation sidecar or junction collection works the same way.
+  A column that is stored as JSON and is not a `string` property uses `ToString()`, which the ORM
+  renders as `CAST(column AS TEXT)`. A value with `%` or `_` on a `ValueTarget` that carries no
+  entity is an `InvalidOperationException`, never a wildcard match. `LikeLiteralConditionTests` pins
+  the behaviour on whichever backend runs it: 16 values by 3 operators on a text and a JSON column
+  against an ordinal oracle read from the stored text, which a change to the ORM's SQLite method
+  fails; `LikeLiteralApiTests` and `LikeLiteralTranslatorTests` pin every entrance and group.
+  Escaping does not change case or accent behaviour: SQLite folds ASCII case on both of its paths,
+  PostgreSQL is case-sensitive, and MySQL, MariaDB and SQL Server fold case under their default
+  collations. An empty value matches every row that is not null.
 - `Searchable = true` on a Repeater sub-field fails the scan too: a sub-field has no column and is
   never searched.
 - A `POST /query` body is read as follows. The body is an object, and `filter` and `deep` (and each
@@ -185,13 +222,22 @@ PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL Server 2022 (16.00.4305),
   typed column compared with the type's default (`= 0`, `= False`) and threw `ArgumentNullException`
   (500) on a `Guid`. A list given to `_eq` on a text column was joined with commas.
 
-Measured 2026-11-16 with a scratch probe (not committed) on a text column through `_contains`,
-`_starts_with` and `_ends_with` on SQLite, PostgreSQL 17.11, MySQL 8.4.13, MariaDB 11.8.9 and SQL
-Server 2022 (16.0.4305): nothing escapes a value. `%` and `_` are wildcards on all five (a value of
-`%` matches every row, `100%` matches `100x`). `[` starts a character class on SQL Server only, so
-`[ab]` matches every row containing `a` or `b` there and only the stored text `x[ab]y` elsewhere. A
-backslash is an escape character on PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL
-Server; on PostgreSQL an `_ends_with` value of one backslash is refused with `22025` (a 500).
+Measured 2026-11-16 with a scratch probe (not committed) on a text column and a JSON column through
+`_contains`, `_starts_with` and `_ends_with` on SQLite, PostgreSQL 17, MySQL 8.4, MariaDB 11.8 and
+SQL Server 2022 (default collation `SQL_Latin1_General_CP1_CI_AS`): a value the ORM passes on as it
+is, `%` and `_` are wildcards on all five (a value of `%` matches every row, `100%` matches
+`100x`). `[` starts a character class on SQL Server only. A backslash is an escape character on
+PostgreSQL, MySQL and MariaDB and a literal on SQLite and SQL Server; on PostgreSQL an
+`_ends_with` value of one backslash is refused with `22025`. The probe ran 16 values (`%`, `_`,
+`[ab]`, `[`, a backslash, `d` and a backslash, a backslash and `%`, `^`, `'`, two quotes, the empty
+string, one CJK character, 200 letters, `a_c`, `100%`, two backslashes) by 3 operators by 2 columns,
+96 cases per backend. Its second column was a string-typed twin of the JSON column's table, so it
+read the stored text; with the escapes above every case was a literal match on all five backends.
+A JSON property that is not a `string` is not part of that probe. `LikeLiteralConditionTests` pins
+it: `List<string>`, a class, an array and a dictionary match as plain text, which on SQLite the ORM
+renders as a cast to text. The same class runs the 16-value matrix against the stored text on the
+backend that executes it and passed on SQLite, PostgreSQL 17, MySQL 8.4, MariaDB 11.8 and SQL
+Server 2022.
 
 Measured 2026-11-16 with a scratch probe (not committed) on a real table with `DateOnly`, `TimeOnly`
 and `TimeSpan` columns, through `_eq` with the value passed on as written, on SQLite, PostgreSQL
@@ -213,8 +259,10 @@ null test, so they are refused before the statement.
 
 - Whether `DateOnly`, `TimeOnly` and `TimeSpan` filter values should be parsed like the other types
   or refused is undecided; on PostgreSQL every `_eq` on them fails with `42883`.
-- Whether a `_contains`, `_starts_with` or `_ends_with` value should have `%`, `_`, `[` and the
-  backslash escaped is not decided.
+- Not measured for the plain-text match: MySQL with `NO_BACKSLASH_ESCAPES` in `sql_mode` (the
+  backslash escape would not apply), SQL Server databases with a case-sensitive or accent-sensitive
+  collation, and Oracle, which has no instance here and takes the ORM's LIKE with the value as
+  written. A SqlSugar upgrade can change the SQLite method the typed path depends on.
 - On SQL Server the injection was not reproduced before the fix, and nothing is measured for the cost
   of the group forms, collation equality of the `=` group against the inline list, or the 2100
   parameter limit with `MaxInValues` raised towards 900 plus the other conditions of a request.
@@ -228,5 +276,6 @@ null test, so they are refused before the statement.
 ## Referenced from
 
 - `src/Struo.Infrastructure/Query/ValueConditions.cs`
+- `src/Struo.Infrastructure/Query/LiteralLikeSubquery.cs`
 - `AGENTS.md`
 - `docs/ai/architecture.md`

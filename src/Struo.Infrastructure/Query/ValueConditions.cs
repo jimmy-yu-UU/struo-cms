@@ -12,10 +12,11 @@ namespace Struo.Infrastructure.Query;
 /// <summary>
 /// The column a filter value is compared with: its database name, the name shown in errors, its CLR type
 /// and whether it is stored as JSON text. A text column is a <c>string</c> property or a JSON column.
+/// <paramref name="Source"/> names the entity, property and key a typed subquery over the column needs.
 /// </summary>
 internal readonly record struct ValueTarget(
     string Column, string Label, Type ClrType, SqlSugar.DbType DbType, bool UtcInstant = false,
-    bool StoredAsJson = false)
+    bool StoredAsJson = false, LikeSource? Source = null)
 {
     public Type Underlying => Nullable.GetUnderlyingType(ClrType) ?? ClrType;
 
@@ -25,14 +26,16 @@ internal readonly record struct ValueTarget(
     /// The one way to describe a column: its database name, CLR type, UTC-instant binding and whether the
     /// ORM stores it as JSON all come from the entity type and the property.
     /// </summary>
-    public static ValueTarget Of(ISqlSugarClient db, Type entityType, PropertyInfo property, string? label = null)
+    public static ValueTarget Of(
+        ISqlSugarClient db, Type entityType, PropertyInfo property, string? label = null, string? keyProperty = null)
     {
         var column = db.EntityMaintenance.GetDbColumnName(property.Name, entityType);
         var storedAsJson = db.EntityMaintenance.GetEntityInfo(entityType).Columns
             .Any(c => c.PropertyName == property.Name && c.IsJson);
         return new ValueTarget(
             column, label ?? column, property.PropertyType, db.CurrentConnectionConfig.DbType,
-            UtcInstantConverter.IsUtcInstantProperty(property), storedAsJson);
+            UtcInstantConverter.IsUtcInstantProperty(property), storedAsJson,
+            keyProperty is null ? null : new LikeSource(db, entityType, property.Name, keyProperty));
     }
 }
 
@@ -41,10 +44,14 @@ internal sealed record OrTerms(IReadOnlyList<ConditionalModel> Models, string? N
 
 /// <summary>
 /// The one place a filter or id value becomes a SqlSugar condition, and the only place in <c>src/</c>
-/// that names <see cref="ConditionalType.In"/>, <see cref="ConditionalType.NotIn"/> or <see cref="ConditionalType.Equal"/>. Each value is
+/// that names <see cref="ConditionalType.In"/>, <see cref="ConditionalType.NotIn"/>,
+/// <see cref="ConditionalType.Equal"/>, <see cref="ConditionalType.Like"/>,
+/// <see cref="ConditionalType.LikeLeft"/> or <see cref="ConditionalType.LikeRight"/>. Each value is
 /// parsed to the column's CLR type with the invariant culture and rendered again from the parsed value,
 /// so text the caller wrote never reaches the SQL of a numeric, boolean, Guid or date column. A string
-/// column takes a set as a group of parameterised equalities. Text that does not parse is a
+/// column takes a set as a group of parameterised equalities. On SQLite, PostgreSQL, MySQL, MariaDB
+/// and SQL Server the value of a string operator is matched as plain text: the characters a LIKE
+/// pattern reads are escaped for the backend. Text that does not parse is a
 /// <see cref="QueryException"/> naming the column, never the values. Measurements, the SqlSugar traps
 /// and the unverified parts (SQL Server) are in docs/ai/decisions/query-values-are-parsed-and-bound.md.
 /// </summary>
@@ -68,6 +75,7 @@ internal static class ValueConditions
             QueryOperator.Nin => SetCondition(t, false, value),
             QueryOperator.Eq or QueryOperator.Neq or QueryOperator.Gt or QueryOperator.Gte
                 or QueryOperator.Lt or QueryOperator.Lte => Comparison(t, op, value!),
+            QueryOperator.Contains or QueryOperator.StartsWith or QueryOperator.EndsWith => Like(t, op, ToText(value)!),
             _ => Plain(t, op, ToText(value), null),
         };
     }
@@ -271,6 +279,30 @@ internal static class ValueConditions
         FieldValue = value,
         CSharpTypeName = typeName,
     };
+
+    // The value of a string operator is matched as plain text: the characters LIKE reads as a pattern are
+    // escaped for the backend. SQLite has no default escape character, so a value with a percent sign or
+    // an underscore goes through a typed expression that makes the ORM render an ESCAPE clause.
+    private static ConditionalModel Like(ValueTarget t, QueryOperator op, string text) => t.DbType switch
+    {
+        SqlSugar.DbType.PostgreSQL or SqlSugar.DbType.MySql => Plain(t, op, EscapeWithBackslash(text), null),
+        SqlSugar.DbType.SqlServer => Plain(t, op, EscapeWithBrackets(text), null),
+        SqlSugar.DbType.Sqlite when HasLikeWildcard(text) => LiteralLikeSubquery.Create(
+            t.Source ?? throw new InvalidOperationException(
+                $"Field '{t.Label}' has no key property for the plain-text subquery; " +
+                "describe the column with ValueTarget.Of and a keyProperty."), op, EscapeWithBackslash(text)),
+        _ => Plain(t, op, text, null),
+    };
+
+    private static bool HasLikeWildcard(string text) => text.AsSpan().IndexOfAny('%', '_') >= 0;
+
+    private static string EscapeWithBackslash(string text) =>
+        text.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal);
+
+    private static string EscapeWithBrackets(string text) =>
+        text.Replace("[", "[[]", StringComparison.Ordinal)
+            .Replace("%", "[%]", StringComparison.Ordinal).Replace("_", "[_]", StringComparison.Ordinal);
 
     private static ConditionalModel IsNullTest(string column) =>
         new() { FieldName = column, ConditionalType = ConditionalType.EqualNull };
