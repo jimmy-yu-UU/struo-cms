@@ -18,8 +18,9 @@ and nullability. It produces no expression on any other backend. `Down` does not
 `migrate:check` reads each entity table's column character sets and collations with one typed
 query on `information_schema.COLUMNS` (`CharacterSetCatalog`) and warns
 (`FindingKind.NonUtf8Mb4String`) for a column an entity declares as String or LongText whose
-character set is not utf8mb4. The warning never fails the check. A fork's own tables are not converted by `migrate`: the warning names them
-and chapter 24 gives the statement.
+character set is not utf8mb4. The warning never fails the check.
+A fork's own tables are not converted by `migrate`: the warning names them and chapter 24 gives the
+statement.
 
 The `AS("information_schema.COLUMNS")` call is the only string in the query; the schema and the
 table name are bound parameters. The maintainer approved exactly this form; it is not a raw SQL
