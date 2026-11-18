@@ -112,6 +112,10 @@ internal sealed class CollectionSchemaBuilder(
         return new BuiltCollection(types, _createdNames.ToList());
     }
 
+    /// <summary>Stops startup with a message about the collection when its create input type would have no field.</summary>
+    internal void RequireWritableFields(CollectionMetadata meta) =>
+        WritableInput.RequireAny(meta, registry.Get(meta.Name), PayloadRelations(meta));
+
     private List<M2MDescriptor> PayloadRelations(CollectionMetadata meta) =>
         m2mSource.M2MDescriptors(meta.Name)
             .Where(d => HasExposablePayload(d, metadataProvider))
@@ -167,7 +171,11 @@ internal sealed class CollectionSchemaBuilder(
 
         // translations map (always present in projection when the collection has a sidecar).
         if (meta.Translation is not null)
-            config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx))));
+        {
+            var timeFields = meta.Fields.Where(f => f is { Translatable: true, Interface: FieldInterface.Time })
+                .Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+            config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx), timeFields)));
+        }
 
         return NewObject(config);
     }
@@ -233,13 +241,8 @@ internal sealed class CollectionSchemaBuilder(
             SchemaTypeMapper.RepeaterItemInputTypeName(collection, repeater.Name), null,
             typeof(IReadOnlyDictionary<string, object?>));
         foreach (var sub in repeater.Fields!)
-        {
-            if (sub.Hidden || sub.ReadOnly || sub.IsSystem) continue;
-            // Lean scalar sub-field set; input hint is string (same as the read side's BuildRepeaterItemType).
-            var sdl = SchemaTypeMapper.WritableInputSdl(sub.Interface, typeof(string));
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
-        }
+            if (WritableInput.SubField(sub).Sdl is { } sdl)
+                config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
         return NewInput(config);
     }
 
@@ -291,7 +294,7 @@ internal sealed class CollectionSchemaBuilder(
     // Shared lookup used by both the read (BuildObjectType) and write (AddWritableFields) relation
     // loops to find a relation's payload descriptor, if any, among the collection's already-filtered
     // payloadRelations (see Build).
-    private static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
+    internal static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
         payloadRelations.FirstOrDefault(d => string.Equals(d.RelationName, relationName, StringComparison.OrdinalIgnoreCase));
 
     // Builds the per-parent-relation wrapper type used when an M2M relation carries junction
@@ -353,14 +356,9 @@ internal sealed class CollectionSchemaBuilder(
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.TranslationFieldsInputName(meta.Name), null,
             typeof(IReadOnlyDictionary<string, object?>));
-        foreach (var f in meta.Fields)
-        {
-            if (!f.Translatable) continue;
-            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            var sdl = SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name));
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
-        }
+        foreach (var f in meta.Fields.Where(f => f.Translatable && !f.IsSystem))
+            if (WritableInput.TranslatedField(f, desc).Sdl is { } sdl)
+                config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         return NewInput(config);
     }
 
@@ -382,7 +380,8 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
             ctx => ctx.Parent<PagedResultView>().Items));
         config.Fields.Add(Field("total", "Int!", ctx => ctx.Parent<PagedResultView>().Total));
-        config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => ctx.Parent<PagedResultView>().Facets));
+        var timeFields = meta.Fields.Where(f => f.Interface == FieldInterface.Time).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => WithTimeText(ctx.Parent<PagedResultView>().Facets, timeFields)));
         config.Fields.Add(Field("aggregate", "Any", ctx => ctx.Parent<PagedResultView>().Aggregate));
         return NewObject(config);
     }
@@ -519,59 +518,8 @@ internal sealed class CollectionSchemaBuilder(
     private void AddWritableFields(
         InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
-        var desc = registry.Get(meta.Name);
-        AddWritableOwnFields(config, meta, desc);
-        AddWritableRelationFields(config, meta, payloadRelations);
-
-        // Typed translations input — only when the collection has a translation sidecar.
-        // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
-        // carried here instead.
-        if (meta.Translation is not null)
-            config.Fields.Add(new InputFieldConfiguration(
-                "translations", null,
-                TypeReference.Parse($"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]")));
-    }
-
-    private static void AddWritableOwnFields(InputObjectTypeConfiguration config, CollectionMetadata meta, EntityDescriptor? desc)
-    {
-        foreach (var f in meta.Fields)
-        {
-            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            if (f.Translatable) continue; // handled by the typed translations input below
-
-            string? sdl = f.Interface switch
-            {
-                FieldInterface.Tags => $"[{SchemaTypeMapper.TagItemInputName}!]",
-                FieldInterface.Repeater when f.Fields is { Count: > 0 } =>
-                    $"[{SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)}!]",
-                _ => SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name)),
-            };
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
-        }
-    }
-
-    // M2O foreign keys (as ID) + M2M relations (as [ID!] target-id arrays).
-    private static void AddWritableRelationFields(
-        InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
-    {
-        foreach (var rel in meta.Relations)
-        {
-            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
-            else if (rel.Kind == RelationKind.ManyToMany)
-            {
-                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
-
-                // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>LinkInput!]`
-                // alongside the plain `[ID!]` field above (untouched).
-                var descriptor = DescriptorFor(payloadRelations, rel.Name);
-                if (descriptor is not null)
-                    config.Fields.Add(new InputFieldConfiguration(
-                        SchemaTypeMapper.LinksFieldName(rel.Name), null,
-                        TypeReference.Parse($"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]")));
-            }
-        }
+        foreach (var field in WritableInput.Fields(meta, registry.Get(meta.Name), payloadRelations))
+            config.Fields.Add(new InputFieldConfiguration(field.Name, null, TypeReference.Parse(field.Sdl)));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).
@@ -584,7 +532,7 @@ internal sealed class CollectionSchemaBuilder(
 
     // MUST use TryGetValue (never the indexer): the fixtures deliberately omit translatable fields
     // (e.g. "title") from FieldToProperty, mirroring the real scanner — an indexer lookup would throw.
-    private static Type? ClrType(EntityDescriptor? desc, string fieldName)
+    internal static Type? ClrType(EntityDescriptor? desc, string fieldName)
     {
         if (desc is null) return null;
         return desc.FieldToProperty.TryGetValue(fieldName, out var prop)
@@ -592,7 +540,7 @@ internal sealed class CollectionSchemaBuilder(
             : null;
     }
 
-    private static List<object> TranslationList(IReadOnlyDictionary<string, object?> parent)
+    private static List<object> TranslationList(IReadOnlyDictionary<string, object?> parent, IReadOnlySet<string> timeFields)
     {
         // ItemService.OverlayTranslationsAsync projects translations as the CONCRETE type
         // Dictionary<string, Dictionary<string, object?>> — which does not implement the generic
@@ -608,14 +556,29 @@ internal sealed class CollectionSchemaBuilder(
             result.Add(new Dictionary<string, object?>
             {
                 ["locale"] = entry.Key,
-                ["fields"] = entry.Value
+                ["fields"] = WithTimeText(entry.Value, timeFields)
             });
         }
         return result;
     }
 
+    // A facet value is an Any value; the buckets of a Time field print as TimeText prints it.
+    private static IReadOnlyList<FacetResult> WithTimeText(IReadOnlyList<FacetResult> facets, HashSet<string> timeFields) =>
+        timeFields.Count == 0
+            ? facets
+            : facets.Select(f => timeFields.Contains(f.Field)
+                ? f with { Values = f.Values.Select(b => b with { Value = TimeText.Of(b.Value) }).ToList() }
+                : f).ToList();
+
+    // The fields of a translation are an Any value; a Time field in it is printed as TimeText prints it.
+    private static object? WithTimeText(object? fields, IReadOnlySet<string> timeFields) =>
+        timeFields.Count > 0 && fields is IDictionary<string, object?> dict
+            ? dict.ToDictionary(kv => kv.Key, kv => timeFields.Contains(kv.Key) ? TimeText.Of(kv.Value) : kv.Value)
+            : fields;
+
+    // A String field that holds a DateTime is a Time field: its text is the UTC instant (see TimeText).
     internal static ObjectFieldConfiguration Field(string name, string sdl, PureFieldDelegate pure)
-        => new(name, null, TypeReference.Parse(sdl), pureResolver: pure);
+        => new(name, null, TypeReference.Parse(sdl), pureResolver: sdl == "String" ? ctx => TimeText.Of(pure(ctx)) : pure);
 }
 
 /// <summary>Adapter so the ArticleList type reads items/total/facets/aggregate from the

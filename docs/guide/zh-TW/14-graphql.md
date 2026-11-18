@@ -42,10 +42,10 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 位：`items`、`total`、`facets`、`aggregate`。
 
 其餘介面到 SDL 有一份固定對照：文字類對應 `String`，`Boolean`／`Checkbox` 對應 `Boolean`，`Date`／
-`DateTime` 對應同名型別，`Time` 也對應 `String`，`MultiSelect`、`CheckboxGroup`、`Tags`、
-`Files`、`Repeater` 欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，
-`File`／`Image`／`Uuid` 對應 `ID`；`Number`／`Slider`／`Rating` 看的是實際 CLR 型別而不是介面本
-身，整數型對應 `Int` 或 `Long`，其餘對應 `Float`。
+`DateTime` 對應同名型別，`Time` 也對應 `String`，內容是以 `Z` 結尾的 UTC 時刻，`MultiSelect`、
+`CheckboxGroup`、`Tags`、`Files`、`Repeater` 欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，`File`／
+`Image`／`Uuid` 對應 `ID`；`Number`／`Slider`／`Rating` 看的是實際 CLR 型別而不是介面本身，整數型對
+應 `Int` 或 `Long`，其餘對應 `Float`。
 
 `Tags` 對應成 `[TagItem!]`，`Repeater` 依子欄位另外產生一個型別 `<X><Field>Item`（沒有子欄位就整個
 省略）；`Password`、`Hidden`、`Divider` 完全不出現在 schema 裡。
@@ -150,7 +150,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 拼法（`contains`、`isNull`）。第 10 章另外兩條規則在 GraphQL 碰不到：值是 `null` 的運算子在規則執行
 前就被略過，單值運算子（例如 `eq`）收到清單則由 GraphQL schema 以它自己的訊息拒絕。
 
-數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位
+數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`）用 `IntFilter`，`Long` 欄位
 （`long`，例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的
 運算元可以超過 2^31 − 1，`Int` 的不行。
 

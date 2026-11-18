@@ -2,6 +2,7 @@ using SqlSugar;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Persistence;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.InvalidFixtures;
 
@@ -17,5 +18,5 @@ public sealed class InvalidShapeOnJsonCollection
 
     [ColumnShape(ColumnShape.LongText)]
     [CmsField(Label = "Tags", Interface = FieldInterface.Tags)]
-    public List<string> Tags { get; set; } = [];
+    public List<TagItem> Tags { get; set; } = [];
 }

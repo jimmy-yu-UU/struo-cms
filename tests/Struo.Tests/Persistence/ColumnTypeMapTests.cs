@@ -13,6 +13,7 @@ using Struo.Infrastructure.Settings;
 using Struo.Tests.Migrations.Schema;
 using Struo.Tests.Support;
 using Xunit;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.Persistence;
 
@@ -288,7 +289,7 @@ public class ColumnTypeMapTests
         // [CmsField] 介面。這個組合永遠不是正確的宣告，所以 hook 必須拒絕而非靜默解析。
         [ColumnShape(ColumnShape.LongText)]
         [CmsField(Label = "Tags", Interface = FieldInterface.Tags)]
-        public List<string> Tags { get; set; } = [];
+        public List<TagItem> Tags { get; set; } = [];
     }
 
     /// <summary>

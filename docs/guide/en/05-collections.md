@@ -85,6 +85,17 @@ NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and 
 [Chapter 6, "Declarations rejected at startup"](06-field-types.md#declarations-rejected-at-startup).
 `[SugarColumn(IsNullable = true)]` gives a non-nullable `string` property a nullable column.
 
+GraphQL has three input types, and each needs at least one item that counts, or the host stops at
+startup with a message that names the subject and the fields that do not count and says what to
+change; a writable field is one that sets neither `Hidden = true` nor `ReadOnly = true` and whose
+interface is not `Hidden`, `Divider` or `Password`:
+
+| Input type | Fields that count | Relations that count | Startup message |
+|---|---|---|---|
+| The collection's create input | Writable, non-translatable field | Many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
+| Translations input (translation sidecar) | Writable, translatable field | None | `Collection '<name>' has a translation sidecar, ...` |
+| A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | None | `Repeater '<collection>.<field>' has no sub-field ...` |
+
 ## `[CmsCollection]` options
 
 `[CmsCollection]` has these settable members:
@@ -277,8 +288,9 @@ Adding a collection, in order:
    host references.
 2. Put `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
    `[SugarColumn(IsPrimaryKey = true)]`.
-3. Add `[CmsField]` to every property you want to expose, and `[CmsOptions]` on any interface that
-   needs an option list.
+3. Add `[CmsField]` to every property you want to expose, make every GraphQL input type have an item
+   that counts (see the table in "A minimal collection"), and add `[CmsOptions]` on any interface
+   that needs an option list; `MultiSelect` and `CheckboxGroup` always do.
 4. Implement `ISoftDeletable`, or set `Revisions = true`, if you need them.
 5. Add `[CmsRelation]` and `[Navigate]` if you have relations (see
    [Chapter 8: Relations](08-relations.md)).

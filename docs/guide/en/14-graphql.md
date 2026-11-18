@@ -53,12 +53,12 @@ itself (`heroImageId` → `heroImage`; a name with no `Id` suffix instead gets a
 appended), and a `Files` field gets an extra `<name>Files: [File!]`. The list wrapper carries four
 fixed fields: `items`, `total`, `facets`, `aggregate`.
 
-Every other interface has a fixed SDL mapping: text-like interfaces map to `String`,
-`Boolean`/`Checkbox` map to `Boolean`, `Date`/`DateTime` map to the type of the same name, `Time`
-also maps to `String`, a `MultiSelect`, `CheckboxGroup`, `Tags`, `Files` or `Repeater` field maps
-to an array, `Json`/`KeyValue` map to `Any`, and `File`/`Image`/`Uuid` map to `ID`;
-`Number`/`Slider`/`Rating` look at the actual CLR type rather than the interface itself — an
-integer CLR type maps to `Int` or `Long`, everything else to `Float`.
+Every other interface has a fixed SDL mapping: text-like interfaces map to `String`, `Boolean`/
+`Checkbox` map to `Boolean`, `Date`/`DateTime` map to the type of the same name, `Time` also maps to
+`String` holding the UTC instant, ending in `Z`, a `MultiSelect`, `CheckboxGroup`, `Tags`, `Files`
+or `Repeater` field maps to an array, `Json`/`KeyValue` map to `Any`, and `File`/`Image`/`Uuid` map
+to `ID`; `Number`/`Slider`/`Rating` look at the actual CLR type rather than the interface itself —
+an integer CLR type maps to `Int` or `Long`, everything else to `Float`.
 
 `Tags` maps to `[TagItem!]`. `Repeater` generates its own type, `<X><Field>Item`, based on its
 sub-fields (omitted entirely when there are no sub-fields); `Password`, `Hidden`, and `Divider`
@@ -188,10 +188,9 @@ Chapter 10 do not reach GraphQL: an operator whose value is `null` is skipped be
 and a list for a single-value operator such as `eq` is refused by the GraphQL schema with its own
 message.
 
-A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
-`byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`
-for any other number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an
-`Int` operand may not.
+A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`), `LongFilter`
+for a `Long` field (`long`, for example the size of a file) and `FloatFilter` for any other number.
+Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an `Int` operand may not.
 
 A many-to-one relation contributes two fields to the filter input: its own foreign key as an
 `IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus the

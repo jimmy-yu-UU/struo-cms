@@ -102,8 +102,6 @@ public sealed class MaxLengthColumnWidthTests
         [CmsField(Interface = FieldInterface.Json, MaxLength = 5000)] public string? Raw { get; set; }
         [ColumnShape(ColumnShape.LongText)]
         [CmsField(Interface = FieldInterface.Text, MaxLength = 5000)] public string? Shaped { get; set; }
-        [SugarColumn(IsJson = true)]
-        [CmsField(Interface = FieldInterface.Text, MaxLength = 5000)] public string? JsonColumn { get; set; }
         [SugarColumn(ColumnDataType = "text")]
         [CmsField(Interface = FieldInterface.Text, MaxLength = 5000)] public string? TypedNoLength { get; set; }
     }
@@ -222,7 +220,7 @@ public sealed class MaxLengthColumnWidthTests
     {
         var fields = MetadataScanner.ScanTypes([typeof(NoWidth)]).Single().Fields;
 
-        foreach (var name in new[] { "content", "raw", "shaped", "jsonColumn", "typedNoLength" })
+        foreach (var name in new[] { "content", "raw", "shaped", "typedNoLength" })
             fields.Single(f => f.Name == name).MaxLength.Should().Be(5000, name);
     }
 

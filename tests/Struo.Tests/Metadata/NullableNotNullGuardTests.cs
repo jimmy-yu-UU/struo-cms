@@ -5,6 +5,7 @@ using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
 using Xunit;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.Metadata;
 
@@ -94,7 +95,7 @@ public sealed class NullableNotNullGuardTests
         [SugarColumn(IsNullable = false)]
         [CmsField(Label = "E", Interface = FieldInterface.Text)] public string NonNullableNotNull { get; set; } = "";
         [SugarColumn(IsNullable = false)]
-        [CmsField(Label = "F", Interface = FieldInterface.Tags)] public List<string>? ListNotNull { get; set; }
+        [CmsField(Label = "F", Interface = FieldInterface.Tags)] public List<TagItem>? ListNotNull { get; set; }
         [SugarColumn(IsNullable = false)]
         [CmsField(Label = "G", Interface = FieldInterface.Number)] public int Count { get; set; }
     }

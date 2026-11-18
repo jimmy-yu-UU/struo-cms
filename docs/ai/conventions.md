@@ -379,11 +379,37 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   namespace is walked) or holds untyped elements (a non-generic `IEnumerable`), on any interface
   except `Json`, which gets the `string` rule; the walk covers the child type of a `Repeater`, and a
   structured type on a single-value interface is reported for the interface before the `object`;
+- a property whose type its interface does not accept (`InterfacePropertyTypes`,
+  `src/Struo.Infrastructure/Metadata/InterfacePropertyTypes.cs`: one table, matched on the exact
+  type, so `List<string>` is not `string[]` or `IList<string>`), including a type no interface
+  accepts (`DateOnly`, `TimeOnly`, `TimeSpan`, `char`, `DateTimeOffset`, enums, `short`, `byte` and
+  the unsigned integers, with their `Nullable<T>`); the message names the types the interface holds
+  and the interfaces that hold the property's type. Chapter 6 of the manual lists the types per
+  interface;
+- `[SugarColumn(IsJson = true)]` on a property that is not of a structured type;
+- `[ColumnShape(LongText)]` on a property that is not `string`, `[ColumnShape(Timestamp)]` or
+  `[ColumnShape(TimestampWithTimeZone)]` on one that is not `DateTime` or `DateTime?`;
 - `[ColumnShape]` beside `ColumnDataType`;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 
-A `Repeater` sub-field has no column and is not checked, apart from the `object` walk above.
+A `Repeater` sub-field has no column, so only the type checks run on it
+(`ColumnDeclarationCheck.RequireSubFieldType`: the interface table and the `object` walk above), and
+none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = true)]`. A
+`MultiSelect` or `CheckboxGroup` property with no `[CmsOptions]`, or one that lists no value, is
+rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property's `[Navigate]` is
+checked by `NavigateShape`: a many-to-one or one-to-one foreign-key name must be a property of the
+declaring entity and a one-to-many one a property of the list's element type, compared without
+regard to case; a many-to-many names its two keys on the junction type, and they are not checked.
+`InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests` and
+`NavigateForeignKeyTests` pin these.
+
+`WritableInput.RequireAny` (`src/Struo.Api/GraphQl/WritableInput.cs`) stops the host at startup,
+with a message that names the collection, when its GraphQL create input type would have no field,
+when a collection with a translation sidecar has no writable translatable field, and when a
+`Repeater` has no sub-field that is neither `Hidden = true` nor `ReadOnly = true`;
+`WritableFieldsStartupTests` pins it.
+
 `ColumnDeclarationGuardTests` and `NullableNotNullGuardTests` pin each rule and the allowed
 neighbours. A `[CmsField]` property of a structured type is mapped as a JSON column without `IsJson`
 (`ApplyStructuredAsJson`); `[Navigate]` and `[CmsTranslations]` lists carry no `[CmsField]` and are

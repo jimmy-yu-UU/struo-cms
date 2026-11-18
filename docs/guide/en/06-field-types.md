@@ -31,11 +31,17 @@ Terms used in this chapter:
 
 - Multi-value interfaces: the six interfaces `MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`,
   `Files` and `Repeater`, whose whole value is stored as one JSON column.
-- Single-value types: primitives, enums, `string`, `decimal`, `Guid`, `DateTime`, `DateTimeOffset`,
-  `DateOnly`, `TimeOnly`, `TimeSpan`, `byte[]`, and the `Nullable<T>` of each.
-- Structured types: every type other than a single-value type, for example `List<>`, `HashSet<>`,
-  `Dictionary<,>`, an array (except `byte[]`), a custom class or a struct.
+- Single-value types: `string`, `bool`, `int`, `long`, `decimal`, `double`, `float`, `Guid`,
+  `DateTime`, `byte[]`, and the `Nullable<T>` of each value type among them. Which of these an
+  interface accepts is in the tables of the groups below.
+- Structured types: a type that is not a primitive, an enum, `string`, `decimal`, `Guid`, a date or
+  time type or `byte[]`, for example `List<>`, `HashSet<>`, `Dictionary<,>`, an array, a custom
+  class or a struct.
 - Single-value interfaces: every interface except the multi-value interfaces, `Hidden` and `Json`.
+
+A property's type must fit its interface, and it must be the exact type: `MultiSelect` takes
+`List<string>`, not `string[]` or `IList<string>`. A declaration that does not fit stops the host
+at startup; see [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 On MySQL/MariaDB, text columns use the database's default character set, so create the database as
 utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backend-differences).
@@ -44,7 +50,7 @@ utf8mb4; see [Chapter 21, "Backend differences"](21-schema-and-upgrades.md#backe
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Text` | `string` | `varchar(255)` | `TextField` |
+| `Text` | `string`/`Guid`/`Guid?` | `varchar(255)`; `Guid`: CLR default | `TextField` |
 | `Textarea` | `string` | Long text | `TextareaField` |
 | `RichText` | `string` | Long text | `RichTextField` |
 | `Markdown` | `string` | Long text | `TextareaField` |
@@ -86,11 +92,14 @@ reports `MaxLength`, then the format, and `Required` after both. A translation v
 
 | Interface | CLR type | Database column | Admin editor |
 |---|---|---|---|
-| `Number` | `int`/`long`/`decimal`/`double` | CLR default | `NumberField` |
-| `Slider` | Numeric | CLR default | `NumberField` |
-| `Rating` | Numeric | CLR default | `NumberField` |
-| `Boolean` | `bool` | CLR default | `BooleanField` |
-| `Checkbox` | `bool` | CLR default | `BooleanField` |
+| `Number` | `int`/`long`/`decimal`/`double`/`float` | CLR default | `NumberField` |
+| `Slider` | Same as `Number` | CLR default | `NumberField` |
+| `Rating` | Same as `Number` | CLR default | `NumberField` |
+| `Boolean` | `bool`/`bool?` | CLR default | `BooleanField` |
+| `Checkbox` | `bool`/`bool?` | CLR default | `BooleanField` |
+
+The nullable forms of the numeric types (`int?`, `decimal?` and so on) are accepted too. `short`,
+`byte` and the unsigned integers are not; use `int` or `long`.
 
 `Slider` and `Rating` reuse `Number`'s editor — there's no slider or star-rating component in the
 admin SPA. `Checkbox` reuses `Boolean`'s editor.
@@ -142,16 +151,19 @@ gets none of this and is unverified.
 | `CheckboxGroup` | `List<string>` | JSON | `CheckboxGroupField` |
 | `Tags` | `List<TagItem>` | JSON | `TagsField` |
 
-`Select`, `MultiSelect`, `Radio`, and `CheckboxGroup` need `[CmsOptions]` to have anything to pick
-from; `Tags` can pair with `[CmsOptions]` too, but it's optional and usually left free-form. How to
-declare `[CmsOptions]` is in [Chapter 5: Defining Collections](05-collections.md).
+`MultiSelect` and `CheckboxGroup` must carry a `[CmsOptions]` that lists values; without the
+attribute, or with one that lists none, the host fails at startup, because with no options every
+value would be rejected. `Select` and `Radio` need `[CmsOptions]` to
+have anything to pick from; `Tags` can pair with `[CmsOptions]` too, but it's optional and usually
+left free-form. How to declare `[CmsOptions]` is in
+[Chapter 5: Defining Collections](05-collections.md).
 
 On write, `MultiSelect`, `CheckboxGroup`, `Select`, and `Radio` check each value against the option
 list. A `Select` or `Radio` value must equal one option's value exactly, case included:
 `Field '{name}' value '{value}' is not in its options.` The check applies to a top-level field, a
 translation value, and a `Repeater` child field. A `Select` or `Radio` with no `[CmsOptions]`
-accepts any string, and `null` and the empty string skip the check. A `Select` or `Radio` field
-whose property is not a `string` is not checked against its options.
+accepts any string, and `null` and the empty string skip the check. For a fixed set of values,
+declare a `string` and list the values in `[CmsOptions]`; an enum property is not accepted.
 
 ### `Json`, `KeyValue` and `Repeater`
 
@@ -173,10 +185,10 @@ The rules are in [Declarations rejected at startup](#declarations-rejected-at-st
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
 violating either throws a startup `MetadataException` naming the field. Child fields can't be set
-translatable, and they can use only these interfaces, a narrower set than the single-value
-interfaces: `Text`, `Textarea`, `Markdown`, `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`,
-`Number`, `Slider`, `Rating`, `Boolean`, `Checkbox`, `Date`, `Time`, `DateTime`, `Select`,
-`Radio`. The interfaces that are not allowed are:
+translatable, their property types are checked against the interface tables, and they can use only
+these interfaces, a narrower set than the single-value interfaces: `Text`, `Textarea`, `Markdown`,
+`Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`, `Boolean`,
+`Checkbox`, `Date`, `Time`, `DateTime`, `Select`, `Radio`. The interfaces that are not allowed are:
 
 - A nested `Repeater`
 - `RichText`, `Json`, `KeyValue`
@@ -209,6 +221,9 @@ interface. `Divider` ignores the field's value; it's usually paired with
 `[SugarColumn(IsIgnore = true)]` so it never becomes a real column at all. `Uuid` just displays a
 GUID read-only.
 
+`Hidden` accepts the single-value types `string`, the numeric types, `bool`, `DateTime`, `Guid`,
+their nullable forms and `byte[]`. `Divider` accepts the same set without `byte[]`.
+
 ### List columns and GraphQL exclusions
 
 A collection's list view shows at most six columns, picked only from fields that are non-system and
@@ -235,7 +250,7 @@ The declarations on a property decide its database column and the default input 
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | type `t`, length `n` | `n` |
 | `[SugarColumn(ColumnDataType = "t")]` | type `t`, as written | none |
-| `[SugarColumn(IsJson = true)]` | long text holding JSON | not applicable |
+| A structured-type property with `[SugarColumn(IsJson = true)]` | long text holding JSON | not applicable |
 
 The multi-value interfaces and structured types in the table are defined in
 [Interface overview](#interface-overview). Other terms:
@@ -253,9 +268,10 @@ set `Length` for that.
 
 ### Declarations rejected at startup
 
-These combinations contradict each other. The host fails at startup with a `MetadataException`
-that names the class, the property and the two declarations. It is the same in every environment;
-nothing waits for the table to be used.
+These declarations contradict each other, or the property's type does not fit its interface or
+column shape. The host fails at startup with a `MetadataException` that names the class, the
+property and the declaration at fault. It is the same in every environment; nothing waits for the
+table to be used.
 
 | Conflicting declarations | What to change |
 |---|---|
@@ -270,13 +286,42 @@ nothing waits for the table to be used.
 | `object`, or a type with `object` or untyped elements | Declare the concrete type |
 | `[ColumnShape]` with `ColumnDataType` | Keep only one of them |
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
+| A property type the interface does not accept | Declare a type it accepts, or change the interface |
+| A property type no interface accepts | See "Types no interface accepts" |
+| `IsJson = true` on a single-value property | Remove `IsJson` |
+| `[ColumnShape(LongText)]` on a non-`string` property | Remove it, or declare `string` |
+| `Timestamp` or `TimestampWithTimeZone` on a non-`DateTime` | Remove it, or declare `DateTime` |
+| `MultiSelect` or `CheckboxGroup` without `[CmsOptions]` | Add `[CmsOptions]` with the allowed values |
 
 The framework chooses the type of a JSON column; `[ColumnShape]` and `ColumnDataType` cannot set
 it. The same goes for a structured-type property, which is stored as a JSON column.
 
 A structured-type property on a single-value interface is rejected whether or not it carries
 `IsJson`; declare a single-value type, or use a multi-value interface or `Hidden`. The `Json`
-interface stores raw JSON text, so its property is declared as `string`.
+interface stores raw JSON text, so its property is declared as `string`. Conversely, a property of a
+single-value type cannot carry `IsJson`, on any interface; a structured-type property on `Hidden` or
+a multi-value interface needs none.
+
+Each `[ColumnShape]` member has the types it fits: `LongText` only `string`, and `Timestamp` and
+`TimestampWithTimeZone` only `DateTime` and `DateTime?`.
+
+The tables under "Interface overview" list the property types each interface accepts. The type must
+be the exact one, so `List<string>` on `Tags` is rejected and `Tags` is declared as
+`List<TagItem>`; `string[]` or `IList<string>` does not stand in for `List<string>`. The message
+gives the property's type, what the interface accepts and which interfaces accept the type.
+
+### Types no interface accepts
+
+No interface accepts the types below, nor their `Nullable<T>`; a `[CmsField]` property of one of
+them is rejected.
+
+| Type | Use instead |
+|---|---|
+| `DateOnly`, `DateTimeOffset` | `DateTime` with `Date`, `Time` or `DateTime` |
+| `TimeOnly`, `TimeSpan` | `DateTime` (`Time`), or a `string` holding text (`Text`) |
+| `char` | `string` |
+| An enum | `string` with `Select` or `Radio`, values in `[CmsOptions]` |
+| `short`, `byte`, unsigned integers | `int` or `long` (`Number`) |
 
 An `object` is read back as a JSON node, not as the value written, so no interface accepts it, the
 multi-value interfaces and `Hidden` included. What is rejected is more than a property of type
@@ -291,11 +336,14 @@ A `Nullable<T>` (`Guid?`, `int?`, `DateTime?`) and a `string?` always get a null
 NOT NULL, declare `Guid` or `string`, not `Guid?` or `string?`. Other nullable types, such as
 `List<string>?` and `byte[]?`, are not part of this check.
 
-The check covers `[CmsField]` properties of collections, translation entities and junction
-payloads. `[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives
-inside its parent's JSON value and has no column of its own, so the column checks skip it; the one
-check that reaches it is the `object` check, which rejects an `object` or an untyped collection in
-a `Repeater` child type. A property with `[SugarColumn(IsIgnore = true)]` is not checked at all.
+The check covers `[CmsField]` properties of collections, translation entities and junction payloads.
+`[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives inside its
+parent's JSON value and has no column of its own, so the column declaration checks (`[ColumnShape]`,
+`ColumnDataType`) skip it; the check that the property type fits the interface and the `object` and
+untyped-collection checks still run on it. A property with `[SugarColumn(IsIgnore = true)]` is
+exempt from these declaration checks, and when a `Repeater` property carries it, its sub-field types
+are not checked either; the GraphQL rule that a `Repeater` needs a writable sub-field applies
+whatever the flag says, see [Chapter 5](05-collections.md).
 
 ### Storing long text
 
@@ -314,8 +362,8 @@ or adding `[SugarColumn(Length = n)]` to a column that is already wide enough, n
 value gets a 400. The admin binds the effective value to the native input's `maxlength` attribute.
 
 When it is unset (or 0), the default comes from the table in the previous section. The default does
-not depend on the interface: `Hidden`, `Time` and a `Uuid` declared on a `string` are 255 like the
-rest. For a field marked none that needs a limit, set `MaxLength` on its `[CmsField]`.
+not depend on the interface: a `string` on `Hidden` is 255, like one on `Text`. For a field marked
+none that needs a limit, set `MaxLength` on its `[CmsField]`.
 
 Startup checks:
 

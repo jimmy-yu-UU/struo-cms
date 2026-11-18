@@ -33,20 +33,23 @@ public sealed class ForkHost : IAsyncDisposable
 
     public HttpClient CreateClient() => App.GetTestClient();
 
-    /// <summary>Starts a host; any startup failure propagates to the caller.</summary>
+    /// <summary>
+    /// Starts a host; any startup failure propagates to the caller. The database is a SQLite temp file, or a
+    /// database of the backend <c>STRUO_TEST_BACKEND</c> selects when <paramref name="onSelectedBackend"/> is set.
+    /// </summary>
     public static async Task<ForkHost> StartAsync(
         Action<StruoCmsBuilder>? configure = null, Action<Dictionary<string, string?>>? mutate = null,
         Action<IServiceCollection>? afterAddStruoCms = null, Action<WebApplication>? mapEndpoints = null,
-        string environment = "Development")
+        string environment = "Development", bool onSelectedBackend = false)
     {
-        var db = TestBackend.CreateSqliteDatabase();
+        var db = onSelectedBackend ? TestBackend.CreateDatabase("fork") : TestBackend.CreateSqliteDatabase();
         var filesRoot = Path.Combine(Path.GetTempPath(), "struo-forkhost-" + Guid.NewGuid().ToString("N"));
         WebApplication? app = null;
         try
         {
             var settings = new Dictionary<string, string?>
             {
-                ["Database:DbType"] = "Sqlite",
+                ["Database:DbType"] = db.DbType.ToString(),
                 ["Database:ConnectionString"] = db.ConnectionString,
                 ["Database:MigrateOnStartup"] = "true",
                 ["Auth:BootstrapAdmin:Password"] = TestBootstrapAdmin.Password,
@@ -62,6 +65,9 @@ public sealed class ForkHost : IAsyncDisposable
             builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(settings);
             builder.AddStruoCms(configure);
+            // The controllers live in the Struo.Api assembly; naming it the application would also load its
+            // user secrets in Development.
+            builder.Services.AddControllers().AddApplicationPart(typeof(StruoCmsHostingExtensions).Assembly);
             afterAddStruoCms?.Invoke(builder.Services);
             app = builder.Build();
             await app.UseStruoCmsAsync();

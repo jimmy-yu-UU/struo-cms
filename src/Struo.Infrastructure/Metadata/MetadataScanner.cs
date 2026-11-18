@@ -476,6 +476,20 @@ public static class MetadataScanner
         return type.Name;
     }
 
+    // MultiSelect and CheckboxGroup validate every value against the options, so without any they
+    // reject all input.
+    private static void RequireOptionsForChoice(PropertyInfo prop, CmsFieldAttribute attr, IReadOnlyList<FieldOption>? options)
+    {
+        if (attr.Interface is not (FieldInterface.MultiSelect or FieldInterface.CheckboxGroup)) return;
+        if (options is { Count: > 0 }) return;
+        if (prop.GetCustomAttribute<SugarColumn>() is { IsIgnore: true }) return;
+        var lack = options is null ? "no [CmsOptions]" : "a [CmsOptions] that lists no value";
+        throw new MetadataException(
+            $"Field '{prop.DeclaringType?.Name}.{prop.Name}' has Interface = {attr.Interface} but {lack}, " +
+            "so every value would be rejected as not one of its options. " +
+            "Add [CmsOptions(\"value:Label\", ...)] listing the allowed values.");
+    }
+
     // isColumn is false for a Repeater sub-field, which lives inside its parent's JSON value.
     private static FieldMetadata BuildField(PropertyInfo prop, CmsFieldAttribute attr, bool isColumn)
     {
@@ -492,6 +506,7 @@ public static class MetadataScanner
 
         // A Repeater sub-field has no column of its own, so its column declarations mean nothing.
         if (isColumn) ColumnDeclarationCheck.Require(prop, attr);
+        RequireOptionsForChoice(prop, attr, options);
 
         if (attr.MaxLength < 0)
             throw new MetadataException(
@@ -509,7 +524,7 @@ public static class MetadataScanner
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
-            childFields = BuildRepeaterChildFields(prop);
+            childFields = BuildRepeaterChildFields(prop, prop.GetCustomAttribute<SugarColumn>() is not { IsIgnore: true });
 
         return new FieldMetadata
         {
@@ -539,7 +554,7 @@ public static class MetadataScanner
     /// <see cref="RepeaterAllowedInterfaces"/> and must not be translatable. Fails fast on any
     /// violation of these guards.
     /// </summary>
-    private static List<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop)
+    private static List<FieldMetadata> BuildRepeaterChildFields(PropertyInfo prop, bool checkTypes)
     {
         var t = prop.PropertyType;
         var isList = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>);
@@ -566,6 +581,7 @@ public static class MetadataScanner
             if (subAttr.Translatable)
                 throw new MetadataException(
                     $"Repeater field '{Camel(prop.Name)}' sub-field '{Camel(sub.Name)}' cannot be translatable.");
+            if (checkTypes) ColumnDeclarationCheck.RequireSubFieldType(sub, subAttr, $"{prop.DeclaringType?.Name}.{prop.Name}");
             fields.Add(BuildField(sub, subAttr, isColumn: false));
         }
         return fields;

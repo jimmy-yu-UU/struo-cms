@@ -157,6 +157,30 @@
   - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加 `[SugarColumn(IsNullable = false)]`。
     可為 null 的屬性一律得到可為 null 的欄位，所以拿掉 `IsNullable = false` 欄位不變；要 NOT NULL，
     把屬性宣告成不可為 null（`Guid`、`string`），欄位會跟著變，已建好的表要另寫一支 migration。
+- 掃描器在啟動時檢查每個 `[CmsField]` 屬性的型別、欄位形狀、`IsJson` 與 `[CmsOptions]` 的宣告，不合
+  的丟出點名「類別.屬性」的 `MetadataException`；下列宣告原本都能啟動，欄位要嘛之後才失敗，要嘛存下
+  錯的值，所以有這些宣告的 fork，主機會無法啟動，每個介面收的型別見[第 6 章](06-field-types.md)。
+  - 屬性型別不是介面收的型別，型別要完全相同（檢查對象是集合、翻譯實體與 junction payload 的屬性，
+    以及 `Repeater` 子欄位；掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，`Repeater` 屬性
+    掛了它，子欄位也不檢查）。例如 `Tags` 上的 `List<string>`、`Text` 上的 `int`、`Select` 上的
+    列舉、`MultiSelect` 上的 `string[]` 或 `IList<string>`。屬性改宣告成介面收的型別（`Tags` 是
+    `List<TagItem>`），或換成收這個型別的介面。
+  - 沒有任何介面收的型別：`DateOnly`、`TimeOnly`、`TimeSpan`、`char`、`DateTimeOffset`、列舉、
+    `short`、`byte`、無號整數，以及它們的 `Nullable<T>`。`DateOnly` 與 `DateTimeOffset` 改成
+    `DateTime`（`Date`、`Time` 或 `DateTime`）；`TimeOnly` 與 `TimeSpan` 改成
+    `DateTime`（`Time`），或存文字的 `string`（`Text`）；`char` 改成 `string`；列舉改成
+    `string`，介面用 `Select` 或 `Radio`，值列在 `[CmsOptions]`；小整數改成 `int` 或 `long`。
+    已建好的表，欄位型別若隨屬性型別而變，要另寫一支 migration。
+  - 單一值型別的屬性加 `[SugarColumn(IsJson = true)]`，任何介面都一樣。值會存成 JSON 文字而讀回
+    時多一層引號；拿掉 `IsJson`，或改宣告成結構化型別。
+  - `[ColumnShape(LongText)]` 用在不是 `string` 的屬性，或 `Timestamp`、`TimestampWithTimeZone`
+    用在不是 `DateTime`、`DateTime?` 的屬性。拿掉 `[ColumnShape]`，或把屬性改成對應的型別。
+  - `MultiSelect` 或 `CheckboxGroup` 沒有 `[CmsOptions]`，或 `[CmsOptions]` 一個項目都沒有。沒有
+    選項時每個值都被拒絕；加上 `[CmsOptions]` 並列出可選的值。
+- `[CmsRelation]` 屬性的 `[Navigate]` 外鍵名稱必須是一個屬性，不然主機在啟動時失敗，訊息點名關聯、
+  外鍵名稱與該找的型別：多對一與一對一要是宣告它的實體上的屬性，一對多要是清單元素型別上的屬性，
+  不分大小寫；多對多的鍵不在這項檢查裡。原本啟動時不檢查，之後的查詢與寫入才失敗。改成實際存在的
+  屬性名稱，或在該型別上補上外鍵屬性。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
   `MetadataException`。原因是依賴的組件缺少或版本不符；訊息帶出組件名稱、載入失敗的型別數、載入器
   回報的型別名稱與去重後的載入錯誤，後兩者各最多列五個，其餘只給數量。型別載得起來但讀不了成員或
@@ -334,6 +358,24 @@
 
 ### 修正
 
+- GraphQL 讀出的 `Time` 欄位，值帶著主機時區的偏移量（寫入 `05:06:07Z` 讀到 `05:06:07.000+08:00`），
+  所以主機不在 UTC 時，GraphQL 用戶端看到的時刻與 REST 用戶端不同；現在是以 `Z` 結尾的 UTC 時刻，
+  `Repeater` 子欄位、`translations` 與 facets 裡也一樣。
+- GraphQL 的輸入型別會是空的時候，主機在啟動時停下，訊息點名集合、不計入的欄位與改法；
+  `Repeater` 則點名集合與屬性。下列情況都算：
+  - 集合沒有任何 GraphQL 寫得進去的欄位，也沒有多對一或多對多的關聯：欄位全是稽核欄位、
+    `Hidden = true`、`ReadOnly = true`，或介面是 `Hidden`、`Divider`、`Password`，或只能翻譯。
+    加一個寫得進去的欄位或這類關聯。
+  - 集合有翻譯 sidecar，可翻譯欄位卻全寫不進去。至少讓一個可翻譯欄位不設 `Hidden = true`、
+    `ReadOnly = true`，介面不是 `Hidden`、`Divider`、`Password`。
+  - `Repeater` 的子欄位全是 `Hidden = true` 或 `ReadOnly = true`，不論 `Repeater` 本身有沒有設
+    `Hidden = true`。讓一個子欄位寫得進去，或拿掉那個 `Repeater`。
+
+  0.30.1 在這些情況停在讀不懂的函式庫例外，它的訊息含下面這一行：
+
+  ```
+  Type 'System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.Object]' does not have a default constructor
+  ```
 - emoji 這類補充平面字元寫進字串欄位時，在 MySQL 與 MariaDB 上回 `500`：寫入失敗並出現
   `Incorrect string value`，篩選或搜尋拿它比對欄位則出現 `Illegal mix of collations`。欄位當時是
   utf8mb3。新資料庫與升級後的核心資料庫現在存得進去也比對得了；既有資料庫與 fork 自己的表怎麼轉換見

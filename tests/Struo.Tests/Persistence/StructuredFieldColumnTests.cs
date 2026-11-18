@@ -7,6 +7,7 @@ using Struo.Infrastructure.Migrations.Schema;
 using Struo.Infrastructure.Persistence;
 using Struo.Tests.Support;
 using Xunit;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.Persistence;
 
@@ -31,7 +32,7 @@ public sealed class StructuredFieldColumnTests
         [CmsField(Label = "Array", Interface = FieldInterface.Hidden)] public string[] Array { get; set; } = [];
         [CmsField(Label = "Map", Interface = FieldInterface.Hidden)] public Dictionary<string, string> Map { get; set; } = new();
         [CmsField(Label = "Custom", Interface = FieldInterface.Hidden)] public ListFieldItem Custom { get; set; } = new();
-        [CmsField(Label = "Marked", Interface = FieldInterface.Tags)] public List<string> Marked { get; set; } = [];
+        [CmsField(Label = "Marked", Interface = FieldInterface.Tags)] public List<TagItem> Marked { get; set; } = [];
         [SugarColumn(IsJson = true)]
         [CmsField(Label = "Annotated", Interface = FieldInterface.Hidden)] public List<string> Annotated { get; set; } = [];
         [SugarColumn(IsNullable = true)]

@@ -56,7 +56,8 @@ other type is a 400; the comparison operators on such a type keep passing the te
   the parsed set that is not text (`DateOnly`, `TimeOnly`, `TimeSpan`) the value goes into the
   condition as written, except that `_eq` with `null` or `[null]` is a 400 pointing to
   `_null`/`_nnull`: the ORM reads exactly those two texts (case-sensitive) of an `Equal` as a null
-  test and cannot be told otherwise. Whether these three types are parsed or refused is undecided.
+  test and cannot be told otherwise. No `[CmsField]` property can have these types (startup rejects
+  them), so only a many-to-one foreign-key property reaches this path.
   `_eq`, the translation sidecar's locale condition (`FilterTranslator.TranslationSubquery`,
   `TranslationStore`) and the id lookups all go through `ValueConditions`.
   `ValueConditionsConventionTests` reads the text of `src/` and fails on another file that names
@@ -257,8 +258,9 @@ null test, so they are refused before the statement.
 
 ## Unknowns
 
-- Whether `DateOnly`, `TimeOnly` and `TimeSpan` filter values should be parsed like the other types
-  or refused is undecided; on PostgreSQL every `_eq` on them fails with `42883`.
+- A `DateOnly`, `TimeOnly` or `TimeSpan` column is reachable only as a many-to-one foreign-key
+  property, because startup rejects those types on a `[CmsField]` property. Filter values for such a
+  column are passed on as written, and on PostgreSQL every `_eq` on one fails with `42883`.
 - Not measured for the plain-text match: MySQL with `NO_BACKSLASH_ESCAPES` in `sql_mode` (the
   backslash escape would not apply), SQL Server databases with a case-sensitive or accent-sensitive
   collation, and Oracle, which has no instance here and takes the ORM's LIKE with the value as
