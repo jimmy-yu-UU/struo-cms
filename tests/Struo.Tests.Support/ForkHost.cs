@@ -61,14 +61,13 @@ public sealed class ForkHost : IAsyncDisposable
             // Program.cs installs a fresh bootstrap logger before each host; a second UseSerilog on the same
             // one would find it frozen.
             Log.Logger = new LoggerConfiguration().CreateBootstrapLogger();
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-            {
-                EnvironmentName = environment,
-                ApplicationName = typeof(StruoCmsHostingExtensions).Assembly.GetName().Name,
-            });
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment });
             builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(settings);
             builder.AddStruoCms(configure);
+            // The controllers live in the Struo.Api assembly; naming it the application would also load its
+            // user secrets in Development.
+            builder.Services.AddControllers().AddApplicationPart(typeof(StruoCmsHostingExtensions).Assembly);
             afterAddStruoCms?.Invoke(builder.Services);
             app = builder.Build();
             await app.UseStruoCmsAsync();
