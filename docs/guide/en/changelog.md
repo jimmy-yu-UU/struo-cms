@@ -435,6 +435,15 @@ transformed again on the first request.
     compared with it. List the columns with `migrate:check`, read the collation item above, then
     convert each table with the statement in
     [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4).
+- A test host built on `Struo.Tests.Support` does not read the user secrets of the developer's
+  machine. `TestHostEnvironment.Pin` points `APPDATA` of the test process, and of every process the
+  tests start, at a directory that holds no file, and `StruoApiFactory` removes the user-secrets
+  source from its host's configuration.
+  - A fork whose tests relied on a setting stored in user secrets supplies it from the test
+    settings or an environment variable.
+  - A test host of your own that derives `WebApplicationFactory<Program>` directly calls
+    `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`; the source is gone once
+    the host is built.
 :::
 
 ### Added
@@ -455,17 +464,15 @@ transformed again on the first request.
   - `ForkHost.StartAsync` and `ForkHost.StartupErrorAsync` (`Struo.Tests.Support`) gained the
     optional parameter `environment`, a binary-level change; a test project that references
     `Struo.Tests.Support` must be rebuilt.
+  - `HostIsolation.RemoveUserSecrets`, `HostIsolation.IsUserSecretsSource`,
+    `HostIsolation.UserSecretsSources`, `HostIsolation.UserSecretsFileName` and
+    `TestHostEnvironment.EmptyAppDataRoot` (`Struo.Tests.Support`); Breaking says how the first
+    is used.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
-
-### Changed
-
-- `StruoApiFactory` no longer adds the developer's user-secrets file to the test host's configuration.
-  A test host of your own that derives `WebApplicationFactory<Program>` calls
-  `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
 
 ### Fixed
 

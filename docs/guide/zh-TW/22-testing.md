@@ -36,9 +36,13 @@
 環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個 initializer 是
 `ContentAssemblyEnvBootstrap`。
 
-`StruoApiFactory` 也會把開發者的 user-secrets 檔從主機的設定來源拿掉，因為那個檔裡是真實連線。自己
-另寫、直接繼承 `WebApplicationFactory<Program>` 的測試主機，要在 `ConfigureAppConfiguration` 裡呼叫
-`HostIsolation.RemoveUserSecrets`。
+測試程序不會讀開發者的 user secrets，那個檔裡放的是真實連線。`Pin` 把 `APPDATA` 指到一個不存在的
+目錄，框架要找的檔案就不在那裡；測試啟動的每個子程序也繼承這個值。`StruoApiFactory` 另外在主機
+建好時，把 user-secrets 來源從它的設定中移除。自己另寫、直接繼承 `WebApplicationFactory<Program>`
+的測試主機，要在 `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
+
+Development 環境的測試主機，會載入 API 專案那份不進版本控制的 `appsettings.Development.json`
+（檔案存在時）。
 
 `tests/Struo.Tests` 的 `ApiFactory` 繼承 `StruoApiFactory`，並指定主機公開可讀的集合。fork 的測試
 專案照樣做；設定方式見[第 25 章](25-after-forking.md)。

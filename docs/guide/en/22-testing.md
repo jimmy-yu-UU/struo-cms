@@ -43,9 +43,15 @@ load. `Pin` also turns off the Redis connection and the two shipped OIDC provide
 fork adds is not touched. It sets environment variables, because they are the only override that
 reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is `ContentAssemblyEnvBootstrap`.
 
-`StruoApiFactory` also drops the developer's user-secrets file from the host's configuration sources,
-because that file holds real connections. A test host of your own that derives
-`WebApplicationFactory<Program>` calls `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
+The test process does not read the developer's user secrets, which hold real connections. `Pin`
+points `APPDATA` at a directory that does not exist, so the file the framework looks for is not
+there; every process the tests start inherits that value. `StruoApiFactory` also removes the
+user-secrets source from its host's configuration when the host is built. A test host of your own
+that derives `WebApplicationFactory<Program>` directly calls `HostIsolation.RemoveUserSecrets` from
+`ConfigureAppConfiguration`.
+
+A test host in the Development environment loads the gitignored `appsettings.Development.json` of
+the API project when the file exists.
 
 `ApiFactory` in `tests/Struo.Tests` derives from `StruoApiFactory` and names the collections the host
 makes publicly readable. A fork's test project does the same; [Chapter 25](25-after-forking.md) shows
