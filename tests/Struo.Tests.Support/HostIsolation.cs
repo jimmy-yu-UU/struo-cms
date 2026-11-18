@@ -1,4 +1,7 @@
 // tests/Struo.Tests.Support/HostIsolation.cs
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Json;
+
 namespace Struo.Tests.Support;
 
 /// <summary>
@@ -21,4 +24,19 @@ public static class HostIsolation
         ["Oidc:Providers:microsoft:Enabled"] = "false",
         ["Oidc:Providers:google:Enabled"] = "false",
     };
+
+    /// <summary>
+    /// Drops the developer's user-secrets file from the configuration sources. A Development host whose
+    /// application assembly carries a <c>UserSecretsId</c> adds that file, which holds real connections.
+    /// Call it from <c>ConfigureAppConfiguration</c> of every host that starts <c>Program</c>.
+    /// </summary>
+    public static void RemoveUserSecrets(IConfigurationBuilder configuration)
+    {
+        var sources = configuration.Sources
+            .OfType<JsonConfigurationSource>()
+            .Where(s => s.Path?.Contains("secrets.json", StringComparison.OrdinalIgnoreCase) == true)
+            .ToList();
+        foreach (var source in sources)
+            configuration.Sources.Remove(source);
+    }
 }

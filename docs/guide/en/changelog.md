@@ -461,6 +461,12 @@ transformed again on the first request.
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
 
+### Changed
+
+- `StruoApiFactory` no longer adds the developer's user-secrets file to the test host's configuration.
+  A test host of your own that derives `WebApplicationFactory<Program>` calls
+  `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
+
 ### Fixed
 
 - A `Time` field read through GraphQL printed its value with the host's time-zone offset

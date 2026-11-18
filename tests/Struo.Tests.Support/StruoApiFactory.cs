@@ -39,6 +39,7 @@ public class StruoApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.ConfigureAppConfiguration((_, config) => HostIsolation.RemoveUserSecrets(config));
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(HostIsolation.ExternalTargets(FilesRoot, ImageCacheRoot)));
         builder.ConfigureAppConfiguration((_, config) =>

@@ -716,6 +716,9 @@ destructive actions, the user is left with a blocked action and no working way t
   live in `tests/Struo.Tests.Support`, a class library that is not a test project; each test project
   that hosts the API pins its own content assemblies from a `[ModuleInitializer]` that calls
   `TestHostEnvironment.Pin` (`tests/Struo.Tests/Support/ContentAssemblyEnvBootstrap.cs`).
+  A test host that derives `WebApplicationFactory<Program>` removes the user-secrets source with
+  `HostIsolation.RemoveUserSecrets`; `StruoApiFactory` does it, and `TestHostUserSecretsTests` fails for
+  a host file that derives the factory directly without it.
   `tests/Struo.Tests.Template` holds the template's own repository guards (`Documentation/`,
   `TemplateInvariantsTests`, `CiWorkflowConventionTests`, `DockerIgnoreConventionTests`,
   `HealthcheckConventionTests`); `tests/Struo.Tests.Template/TemplateInvariantsTests.cs` guards

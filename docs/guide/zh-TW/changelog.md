@@ -356,6 +356,12 @@
 
   自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
 
+### 變更
+
+- `StruoApiFactory` 不再把開發者的 user-secrets 檔加進測試主機的設定。自己另寫、直接繼承
+  `WebApplicationFactory<Program>` 的測試主機，要在 `ConfigureAppConfiguration` 裡呼叫
+  `HostIsolation.RemoveUserSecrets`。
+
 ### 修正
 
 - GraphQL 讀出的 `Time` 欄位，值帶著主機時區的偏移量（寫入 `05:06:07Z` 讀到 `05:06:07.000+08:00`），
