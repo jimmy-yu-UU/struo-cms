@@ -146,6 +146,23 @@ internal sealed class NavigateShape
 
         if (string.IsNullOrWhiteSpace(ForeignKey))
             throw Unsupported(property, "the foreign key is null, empty or blank");
+
+        RequireForeignKeyProperty(property, isList);
+    }
+
+    // A many-to-one or one-to-one relation keeps its key on the declaring entity; a one-to-many relation
+    // keeps it on the list's element type. Names match without regard to case.
+    private void RequireForeignKeyProperty(PropertyInfo property, bool isList)
+    {
+        var owner = isList ? property.PropertyType.GetGenericArguments()[0] : property.DeclaringType!;
+        var exists = owner.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Any(p => string.Equals(p.Name, ForeignKey, StringComparison.OrdinalIgnoreCase));
+        if (exists) return;
+
+        throw new MetadataException(
+            $"Relation '{property.DeclaringType?.Name}.{property.Name}' declares the foreign key '{ForeignKey}' " +
+            $"in [Navigate], but {owner.Name} has no property with that name. " +
+            $"Name a property of {owner.Name} that holds the key, or add '{ForeignKey}' to {owner.Name}.");
     }
 
     private static MetadataException Unsupported(PropertyInfo property, string found) =>
