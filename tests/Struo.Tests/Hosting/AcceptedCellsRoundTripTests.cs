@@ -189,6 +189,7 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
             var id = await CreateAsync(client, collection, body, failures, face);
             if (id is null) continue;
             checkedCells += await VerifyAsync(client, collection, id, face, body, failures);
+            await VerifyNullsAsync(client, collection, id, face, failures);
             graphQlInterfaces += await GraphQlAsync(client, face, collection, body, failures);
         }
 
@@ -274,6 +275,57 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         return count;
     }
 
+    // The nullable cells written as null read back as null, and the null filters tell the two rows apart.
+    private static async Task VerifyNullsAsync(
+        HttpClient client, string collection, string valueId, FieldInterface face, List<string> failures)
+    {
+        var nullable = (face == FieldInterface.Repeater ? SubCells() : OwnCells(face)).Where(c => c.Id.EndsWith('?')).ToList();
+        if (nullable.Count == 0) return;
+
+        var body = new JsonObject { ["anchor"] = "null" };
+        if (face == FieldInterface.Repeater)
+        {
+            var row = new JsonObject();
+            foreach (var c in SubCells()) row[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(c.Face, c.Id));
+            body["rows"] = new JsonArray(row);
+        }
+        else
+        {
+            // A column that is not nullable has no null to write: the row carries a value for every other cell.
+            foreach (var c in OwnCells(face))
+                body[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(face, c.Id));
+        }
+
+        var nullId = await CreateAsync(client, collection, body, failures, face);
+        if (nullId is null) return;
+
+        var read = await client.GetAsync($"/api/items/{collection}/{nullId}");
+        var data = JsonNode.Parse(await read.Content.ReadAsStringAsync())!["data"]!.AsObject();
+        foreach (var c in nullable)
+        {
+            var got = face == FieldInterface.Repeater ? data["rows"]?[0]?[Camel(c.Name)] : data[Camel(c.Name)];
+            if (got is not null) failures.Add($"{face}|{c.Id}: written as null, read back {got.ToJsonString()}");
+            if (face == FieldInterface.Repeater || !Filterable.Contains(face)) continue;
+
+            var key = Camel(c.Name);
+            var nulls = await IdsAsync(client, collection, $"filter[{key}][_null]=true");
+            var values = await IdsAsync(client, collection, $"filter[{key}][_nnull]=true");
+            if (!nulls.Contains(nullId) || nulls.Contains(valueId))
+                failures.Add($"{face}|{c.Id}: _null did not select exactly the null row");
+            if (values.Contains(nullId) || !values.Contains(valueId))
+                failures.Add($"{face}|{c.Id}: _nnull did not select exactly the row with a value");
+        }
+    }
+
+    private static async Task<HashSet<string>> IdsAsync(HttpClient client, string collection, string query)
+    {
+        var response = await client.GetAsync($"/api/items/{collection}?{query}&limit=100");
+        var text = await response.Content.ReadAsStringAsync();
+        return response.StatusCode == HttpStatusCode.OK
+            ? JsonNode.Parse(text)!["data"]!.AsArray().Select(n => n!["id"]!.GetValue<string>()).ToHashSet()
+            : [];
+    }
+
     private static void CompareValue(List<string> failures, string cell, JsonNode? sent, JsonNode? got)
     {
         if (!JsonNode.DeepEquals(sent, got))
@@ -315,7 +367,54 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         var mutation = $"mutation($input: {pascal}CreateInput!) {{ create{pascal}(input: $input) {{ id }} }}";
         var created = await PostGraphQlAsync(client, mutation, new JsonObject { ["input"] = input });
         AddGraphQlErrors(failures, $"{face}: GraphQL create", created);
+        if (created["data"]?[$"create{pascal}"]?["id"]?.GetValue<string>() is not { } id)
+        {
+            failures.Add($"{face}: GraphQL create returned no id: {created.ToJsonString()}");
+            return 1;
+        }
+
+        var single = await PostGraphQlAsync(client, $"{{ {collection}(id: \"{id}\") {{ {selection} }} }}", null);
+        AddGraphQlErrors(failures, $"{face}: GraphQL read of the created row", single);
+        if (single["data"]?[collection] is not JsonObject row)
+        {
+            failures.Add($"{face}: GraphQL read of the created row returned no row: {single.ToJsonString()}");
+            return 1;
+        }
+
+        foreach (var name in exposed)
+            CompareQueried(failures, face, name, input[name], row[name]);
         return 1;
+    }
+
+    // A Repeater compares row by row and sub-field by sub-field; every other field as one value.
+    private static void CompareQueried(List<string> failures, FieldInterface face, string name, JsonNode? written, JsonNode? queried)
+    {
+        if (face != FieldInterface.Repeater)
+        {
+            if (!SameValue(written, queried))
+                failures.Add($"{face}.{name}: GraphQL wrote {written?.ToJsonString()}, read {queried?.ToJsonString() ?? "(missing)"}");
+            return;
+        }
+
+        foreach (var c in SubCells())
+        {
+            var key = Camel(c.Name);
+            if (!SameValue(written?[0]?[key], queried?[0]?[key]))
+                failures.Add($"Repeater sub-field {c.Face}|{c.Id}: GraphQL wrote {written?[0]?[key]?.ToJsonString()}, read {queried?[0]?[key]?.ToJsonString() ?? "(missing)"}");
+        }
+    }
+
+    // Equal as JSON, with numbers compared by value and date-times by instant: GraphQL prints a DateTime
+    // with milliseconds, REST without.
+    private static bool SameValue(JsonNode? a, JsonNode? b)
+    {
+        if (JsonNode.DeepEquals(a, b)) return true;
+        if (a is not JsonValue || b is not JsonValue) return false;
+        if (a.GetValueKind() == JsonValueKind.Number && b.GetValueKind() == JsonValueKind.Number)
+            return a.GetValue<decimal>() == b.GetValue<decimal>();
+        return a.GetValueKind() == JsonValueKind.String && b.GetValueKind() == JsonValueKind.String
+            && DateTimeOffset.TryParse(a.GetValue<string>(), out var left)
+            && DateTimeOffset.TryParse(b.GetValue<string>(), out var right) && left.UtcDateTime == right.UtcDateTime;
     }
 
     private static List<string> SchemaExposed(FieldInterface face) =>
