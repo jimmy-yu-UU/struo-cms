@@ -24,19 +24,27 @@ internal static class ColumnDeclarationCheck
         if (sugar is { IsIgnore: true }) return;
 
         var name = $"{property.DeclaringType?.Name}.{property.Name}";
-        RequireTypeFitsInterface(property, field, name);
+        RequireTypeFitsInterface(property, field, $"Field '{name}'");
         RequireConsistentType(property, field, sugar, name);
         RequireNullabilityConsistent(property, name);
     }
+
+    /// <summary>
+    /// The type checks of <see cref="Require"/> for a Repeater sub-field, which has no column and so no
+    /// column declarations to check.
+    /// </summary>
+    internal static void RequireSubFieldType(PropertyInfo property, CmsFieldAttribute field, string repeater) =>
+        RequireTypeFitsInterface(
+            property, field, $"Sub-field '{property.DeclaringType?.Name}.{property.Name}' of Repeater '{repeater}'");
 
     // A structured value lives in a JSON column that only the multi-value interfaces and Hidden read and
     // write; the Json interface holds raw JSON text in a string; no interface reads back an object, alone or
     // inside the property type. A bare object is reported first (its type is the problem), then a structured
     // type on a single-value interface (the outer problem), then an object inside the type.
-    private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string name)
+    private static void RequireTypeFitsInterface(PropertyInfo property, CmsFieldAttribute field, string subject)
     {
         var type = property.PropertyType;
-        var held = $"Field '{name}' is {WithArticle(TypeName(type))} property with Interface = {field.Interface}";
+        var held = $"{subject} is {WithArticle(TypeName(type))} property with Interface = {field.Interface}";
 
         if (field.Interface == FieldInterface.Json)
         {
@@ -47,7 +55,7 @@ internal static class ColumnDeclarationCheck
 
         if (type == typeof(object))
             throw Reject(
-                $"Field '{name}' is an object property with Interface = {field.Interface}.",
+                $"{subject} is an object property with Interface = {field.Interface}.",
                 "Declare the concrete type of the value",
                 ObjectWhy);
 
@@ -60,6 +68,41 @@ internal static class ColumnDeclarationCheck
         if (nested is not null)
             throw Reject(
                 $"{held}, which contains an object ({nested}).", "Declare the concrete type of the value", ObjectWhy);
+
+        // A Repeater's list type is checked, with its own message, where the child fields are read.
+        if (field.Interface != FieldInterface.Repeater && !InterfacePropertyTypes.Accepts(field.Interface, type))
+            throw RejectTypeMismatch(held, field.Interface, type);
+    }
+
+    private const string TypeWhy = "a field value is read and written as the property type its interface expects";
+
+    private static MetadataException RejectTypeMismatch(string held, FieldInterface member, Type type)
+    {
+        var accepting = InterfacePropertyTypes.Accepting(type);
+        var accepted = InterfacePropertyTypes.Describe(member);
+        if (accepting.Count == 0)
+            return Reject(
+                $"{held}, and no field interface accepts {InterfacePropertyTypes.Display(type)}.", Suggest(type), TypeWhy);
+
+        var others = InterfacePropertyTypes.JoinOr(accepting.Select(i => i.ToString()));
+        return Reject(
+            $"{held}, but {member} holds {accepted}.",
+            $"Declare the property as {accepted}, or change the interface to {others}",
+            TypeWhy);
+    }
+
+    private static string Suggest(Type type)
+    {
+        var single = Nullable.GetUnderlyingType(type) ?? type;
+        if (single.IsEnum)
+            return "Declare the property as string with Interface = Select or Radio and the values in [CmsOptions]";
+        if (single == typeof(DateOnly) || single == typeof(DateTimeOffset))
+            return "Declare the property as DateTime (Interface = Date, Time or DateTime)";
+        if (single == typeof(TimeOnly) || single == typeof(TimeSpan))
+            return "Declare the property as DateTime (Interface = Time), or as string (Interface = Text) to hold the text";
+        if (single == typeof(char)) return "Declare the property as string";
+        if (single.IsPrimitive) return "Declare the property as int or long (Interface = Number)";
+        return "Declare the property as one of the types in the field types chapter of the manual";
     }
 
     private static MetadataException RejectStructured(string held)
@@ -100,6 +143,32 @@ internal static class ColumnDeclarationCheck
 
         if (hasType && stored is not null)
             throw Reject($"Field '{name}' has {typeText} and {stored}.", "Remove ColumnDataType", JsonOwner);
+
+        RequireShapeFitsType(property, shape, name);
+        if (sugar is { IsJson: true } && !StructuredType.Is(property.PropertyType))
+            throw Reject(
+                $"Field '{name}' is {WithArticle(TypeName(property.PropertyType))} property with [SugarColumn(IsJson = true)], which holds a single value.",
+                "Remove IsJson, or declare a structured property (List<T>, Dictionary<K, V> or a class)",
+                "IsJson stores the value as JSON, and a single value comes back with an extra layer of quotes");
+    }
+
+    private static void RequireShapeFitsType(PropertyInfo property, ColumnShape? shape, string name)
+    {
+        var type = property.PropertyType;
+        var single = Nullable.GetUnderlyingType(type) ?? type;
+        var onWrongType = shape switch
+        {
+            ColumnShape.LongText => type != typeof(string),
+            ColumnShape.Timestamp or ColumnShape.TimestampWithTimeZone => single != typeof(DateTime),
+            _ => false,
+        };
+        if (!onWrongType) return;
+
+        var wants = shape == ColumnShape.LongText ? "string" : "DateTime";
+        throw Reject(
+            $"Field '{name}' has [ColumnShape({shape})] and is {WithArticle(TypeName(type))} property.",
+            $"Remove [ColumnShape], or declare the property as {wants}",
+            $"the shape gives the column a {(shape == ColumnShape.LongText ? "text" : "date-time")} type that a {InterfacePropertyTypes.Display(type)} cannot be read from");
     }
 
     internal static string TypeName(Type type)

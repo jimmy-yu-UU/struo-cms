@@ -208,6 +208,7 @@ public sealed class StructuredFieldInterfaceTests
     public sealed class MultiSelectHost<T>
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsOptions("a:A", "b:B")]
         [CmsField(Label = "Value", Interface = FieldInterface.MultiSelect)] public T Value { get; set; } = default!;
     }
 
@@ -215,6 +216,7 @@ public sealed class StructuredFieldInterfaceTests
     public sealed class CheckboxGroupHost<T>
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsOptions("a:A", "b:B")]
         [CmsField(Label = "Value", Interface = FieldInterface.CheckboxGroup)] public T Value { get; set; } = default!;
     }
 
@@ -257,17 +259,10 @@ public sealed class StructuredFieldInterfaceTests
         typeof(HiddenHost<Dictionary<string, string>>), typeof(HiddenHost<Custom>),
         typeof(JsonHost<string>), typeof(JsonHost<string?>),
         typeof(MultiSelectHost<List<string>>), typeof(CheckboxGroupHost<List<string>>),
-        typeof(TagsHost<List<string>>), typeof(TagsHost<List<Struo.Domain.Metadata.Models.TagItem>>),
+        typeof(TagsHost<List<Struo.Domain.Metadata.Models.TagItem>>),
         typeof(KeyValueHost<Dictionary<string, string>>), typeof(FilesHost<List<Guid>>),
         typeof(RepeaterHost<List<RepeaterRow>>),
-        typeof(TextHost<byte[]>), typeof(TextHost<string>), typeof(TextHost<string?>),
-        typeof(TextHost<int>), typeof(TextHost<int?>), typeof(TextHost<long>), typeof(TextHost<bool>),
-        typeof(TextHost<short>), typeof(TextHost<byte>), typeof(TextHost<double>), typeof(TextHost<float>),
-        typeof(TextHost<char>), typeof(TextHost<decimal>), typeof(TextHost<decimal?>),
-        typeof(TextHost<Guid>), typeof(TextHost<Guid?>), typeof(TextHost<DateTime>),
-        typeof(TextHost<DateTime?>), typeof(TextHost<DateTimeOffset>), typeof(TextHost<DateOnly>),
-        typeof(TextHost<TimeOnly>), typeof(TextHost<TimeSpan>), typeof(TextHost<Colour>),
-        typeof(TextHost<Colour?>),
+        typeof(TextHost<string>), typeof(TextHost<string?>), typeof(TextHost<Guid>), typeof(TextHost<Guid?>),
     };
 
     [Theory]

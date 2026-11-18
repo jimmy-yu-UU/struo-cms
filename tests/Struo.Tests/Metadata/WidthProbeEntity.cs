@@ -24,11 +24,11 @@ public sealed class WidthProbeEntity : AuditableEntity
     public string? HiddenText { get; set; }
 
     [SugarColumn(IsNullable = true)]
-    [CmsField(Label = "Clock", Interface = FieldInterface.Time)]
+    [CmsField(Label = "Clock", Interface = FieldInterface.Text)]
     public string? ClockText { get; set; }
 
     [SugarColumn(IsNullable = true)]
-    [CmsField(Label = "Uuid", Interface = FieldInterface.Uuid)]
+    [CmsField(Label = "Uuid", Interface = FieldInterface.Text)]
     public string? UuidText { get; set; }
 
     [SugarColumn(IsNullable = true)]

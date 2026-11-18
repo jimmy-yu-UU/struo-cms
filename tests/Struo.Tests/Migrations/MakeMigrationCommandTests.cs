@@ -12,6 +12,7 @@ using Struo.Infrastructure.Revisions;
 using Struo.Tests.Migrations.Schema;
 using Struo.Tests.Support;
 using Xunit;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.Migrations
 {
@@ -343,7 +344,7 @@ namespace Struo.Tests.Migrations
     {
         [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
         [ColumnShape(ColumnShape.LongText)]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [SugarTable("unmappable")]

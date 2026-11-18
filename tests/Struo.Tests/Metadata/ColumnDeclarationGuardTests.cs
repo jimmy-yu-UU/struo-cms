@@ -6,6 +6,7 @@ using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
 using Struo.Infrastructure.Persistence;
 using Xunit;
+using Struo.Domain.Metadata.Models;
 
 namespace Struo.Tests.Metadata;
 
@@ -21,7 +22,7 @@ public sealed class ColumnDeclarationGuardTests
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [ColumnShape(ColumnShape.LongText)]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Type on JSON", Name = "cdgTypeOnJson")]
@@ -29,7 +30,7 @@ public sealed class ColumnDeclarationGuardTests
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [SugarColumn(ColumnDataType = "jsonb")]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Shape and type", Name = "cdgShapeAndType")]
@@ -82,7 +83,7 @@ public sealed class ColumnDeclarationGuardTests
         public long TrShapeOnJsonId { get; set; }
         public string Locale { get; set; } = "";
         [ColumnShape(ColumnShape.LongText)]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Tr type on JSON", Name = "cdgTrTypeOnJson")]
@@ -99,7 +100,7 @@ public sealed class ColumnDeclarationGuardTests
         public long TrTypeOnJsonId { get; set; }
         public string Locale { get; set; } = "";
         [SugarColumn(ColumnDataType = "jsonb")]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Tr shape and type", Name = "cdgTrShapeAndType")]
@@ -164,7 +165,7 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
         [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
         [ColumnShape(ColumnShape.LongText)]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Link type on JSON", Name = "cdgLinkTypeOnJson", Hidden = true)]
@@ -174,7 +175,7 @@ public sealed class ColumnDeclarationGuardTests
         [CmsField(Label = "Left", Interface = FieldInterface.Uuid)] public Guid LeftId { get; set; }
         [CmsField(Label = "Right", Interface = FieldInterface.Uuid)] public Guid RightId { get; set; }
         [SugarColumn(ColumnDataType = "jsonb")]
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
     }
 
     [CmsCollection("Link shape and type", Name = "cdgLinkShapeAndType", Hidden = true)]
@@ -321,7 +322,7 @@ public sealed class ColumnDeclarationGuardTests
 
         [CmsField(Label = "Unmarked", Interface = FieldInterface.Hidden)] public List<string> Unmarked { get; set; } = [];
 
-        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<string> Tags { get; set; } = [];
+        [CmsField(Label = "Tags", Interface = FieldInterface.Tags)] public List<TagItem> Tags { get; set; } = [];
 
         [ColumnShape(ColumnShape.LongText)]
         [SugarColumn(IsIgnore = true, ColumnDataType = "varchar(7)")]
