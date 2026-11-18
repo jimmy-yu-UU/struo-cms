@@ -471,8 +471,8 @@ transformed again on the first request.
   the `min` or `max` of an aggregate over a column that is not `TimestampWithTimeZone`, did not
   print as the field does. Where the field prints `2026-03-04` or `2026-03-04T05:06:07.25Z`, they
   printed `2026-03-04T00:00:00` and `2026-03-04T05:06:07.25`; a facet on a `TimestampWithTimeZone`
-  column on PostgreSQL printed the host's offset, such as `2026-11-18T16:22:06.932897+08:00`. They
-  print as the field does, also in a facet on a field of a related collection such as
+  column on PostgreSQL printed the host's local time and offset, ending in `+08:00` on a host at
+  UTC+8. They print as the field does, also in a facet on a field of a related collection such as
   `articles.publishedAt` on `categories`.
 - When a GraphQL input type would have no field, the host stops at startup with a message that names
   the collection, the fields that do not count and what to change; for a `Repeater` it names the
