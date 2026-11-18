@@ -92,7 +92,7 @@ public sealed class GraphQlTimeFieldTests(ITestOutputHelper output)
         return created["data"]!["createTimeProbe"]!["id"]!.GetValue<string>();
     }
 
-    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    [Fact]
     public async Task A_Time_value_written_with_or_without_an_offset_is_stored_as_the_instant_REST_stores()
     {
         var (host, client) = await StartAsync();
@@ -113,7 +113,7 @@ public sealed class GraphQlTimeFieldTests(ITestOutputHelper output)
         }
     }
 
-    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    [Fact]
     public async Task A_Time_value_read_through_GraphQL_is_the_UTC_instant_ending_in_Z_everywhere_it_leaves()
     {
         var (host, client) = await StartAsync();
@@ -131,7 +131,7 @@ public sealed class GraphQlTimeFieldTests(ITestOutputHelper output)
         row["translations"]![0]!["fields"]!["clock"]!.GetValue<string>().Should().Be(Instant);
     }
 
-    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    [Fact]
     public async Task A_Time_facet_prints_the_instant_in_UTC()
     {
         var (host, client) = await StartAsync();
