@@ -151,8 +151,9 @@ gets none of this and is unverified.
 | `CheckboxGroup` | `List<string>` | JSON | `CheckboxGroupField` |
 | `Tags` | `List<TagItem>` | JSON | `TagsField` |
 
-`MultiSelect` and `CheckboxGroup` must carry `[CmsOptions]`; without it the host fails at startup,
-because with no options every value would be rejected. `Select` and `Radio` need `[CmsOptions]` to
+`MultiSelect` and `CheckboxGroup` must carry a `[CmsOptions]` that lists values; without the
+attribute, or with one that lists none, the host fails at startup, because with no options every
+value would be rejected. `Select` and `Radio` need `[CmsOptions]` to
 have anything to pick from; `Tags` can pair with `[CmsOptions]` too, but it's optional and usually
 left free-form. How to declare `[CmsOptions]` is in
 [Chapter 5: Defining Collections](05-collections.md).
@@ -340,7 +341,8 @@ The check covers `[CmsField]` properties of collections, translation entities an
 parent's JSON value and has no column of its own, so the column declaration checks (`[ColumnShape]`,
 `ColumnDataType`) skip it; the check that the property type fits the interface and the `object` and
 untyped-collection checks still run on it. A property with `[SugarColumn(IsIgnore = true)]` is not
-checked at all.
+checked at all, and when a `Repeater` property carries it, its sub-field types are not checked
+either.
 
 ### Storing long text
 

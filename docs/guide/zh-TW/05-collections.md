@@ -75,10 +75,14 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 [第 6 章〈啟動時被擋的宣告〉](06-field-types.md#啟動時被擋的宣告)。
 `[SugarColumn(IsNullable = true)]` 能讓不可為 null 的 `string` 屬性得到可為 null 的欄位。
 
-GraphQL 的建立輸入型別至少要有一個欄位。要有欄位，集合得有一個 GraphQL 寫得進去的 `[CmsField]`，
-也就是不是稽核欄位、沒設 `Hidden = true` 或 `ReadOnly = true`、介面不是 `Hidden`、`Divider`、
-`Password`，也不是只能翻譯而沒有翻譯 sidecar；或者有多對一或多對多的關聯。一個欄位都湊不出來時，主機
-啟動就停下，訊息點名集合並說明怎麼改。
+GraphQL 的建立輸入型別至少要有一個欄位。要有欄位，集合得有一個 GraphQL 寫得進去的 `[CmsField]`，也就
+是不是稽核欄位、沒設 `Hidden = true` 或 `ReadOnly = true`、介面不是 `Hidden`、`Divider`、`Password`
+，也不是只能翻譯的欄位；或者有多對一或多對多的關聯。`Repeater` 屬性要至少有一個子欄位沒設
+`Hidden = true` 或 `ReadOnly = true`，否則不算。有翻譯 sidecar 的集合，可翻譯欄位裡要至少有一個寫得
+進去：沒設 `Hidden = true` 或 `ReadOnly = true`，介面不是 `Hidden`、`Divider`、`Password`。
+`Repeater` 的子欄位全寫不進去時，不論這個 `Repeater` 本身有沒有設 `Hidden = true`，主機啟動都停下；
+整個集合湊不出可寫的欄位時也一樣。訊息點名集合（`Repeater` 則點名集合與屬性）與不算數的欄位，並說明
+怎麼改。
 
 ## `[CmsCollection]` 選項
 

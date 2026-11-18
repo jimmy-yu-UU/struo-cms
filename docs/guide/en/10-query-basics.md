@@ -124,8 +124,10 @@ A text field is a `string` property: `Json` fields, and a `string` declared with
 a structured type, a term [Chapter 6](06-field-types.md#interface-overview) defines: it sits on a
 multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `Files`, `Repeater`) or
 on `Hidden`, and is stored as JSON. Its string operators match the stored JSON text, and
-`_in`/`_nin` is a 400. Other is every other field: numbers, booleans, `Guid`, enums and date-times.
-`_in`/`_nin` on a type the conversion table below does not cover is a 400 too.
+`_in`/`_nin` is a 400. Other is every other field: numbers, booleans, `Guid` and date-times, and the
+foreign-key property of a many-to-one relation, which carries no `[CmsField]` and whose type the
+interface tables do not limit. `_in`/`_nin` on a type the conversion table below does not cover is a
+400 too.
 
 The 400 for a string operator on a field it does not take names the field and the operator and lists
 the operators the field accepts. To match a date on a `DateTime` field, give a range:
@@ -151,7 +153,7 @@ null. Upper and lower case compare as follows:
 |---|---|---|
 | JSON `null` | all but `_null`, `_nnull` | 400 that names `_null` and `_nnull` |
 | the text `null` or `[null]` | all, on a text or structured field | plain text |
-| the text `null` or `[null]` | `_eq` on `DateOnly`, `TimeOnly`, `TimeSpan` | 400 |
+| the text `null` or `[null]` | `_eq` on a non-text foreign key outside the table | 400 |
 | a list | `_in`, `_nin` | the elements |
 | a list | `_null`, `_nnull` | ignored |
 | a list | every other operator | 400 |
@@ -201,10 +203,11 @@ real CLR type before comparison — a `Guid` foreign key is compared `uuid = uui
 conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`,
 `DateTimeOffset`, `decimal`, `double`, `float` and enum fields (a member name or its number); a
 `string` is compared as text, and `_in`/`_nin` on a type the conversion table does not cover is a
-400. On a `string` property or a structured field, `_eq` with the word `null` compares that word and
-never tests for NULL. On a `DateOnly`, `TimeOnly` or `TimeSpan` field, `_eq` with `null` or `[null]`
-is a 400 that names `_null` and `_nnull`, because the ORM reads exactly those two texts as a null
-test.
+400. `short`, `byte`, `DateTimeOffset` and enums occur only on a foreign-key property, since a
+`[CmsField]` field does not take them. On a `string` property or a structured field, `_eq` with
+the word `null` compares that word and never tests for NULL. On a non-text foreign-key property
+that the conversion table does not cover, `_eq` with `null` or `[null]` is a 400 that names
+`_null` and `_nnull`, because the ORM reads exactly those two texts as a null test.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

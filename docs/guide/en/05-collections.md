@@ -87,9 +87,14 @@ NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and 
 
 The collection's GraphQL create input type needs at least one field. That takes a `[CmsField]` that
 GraphQL can write: not an audit field, not `Hidden = true` or `ReadOnly = true`, an interface other
-than `Hidden`, `Divider` or `Password`, and not translatable-only without a translation sidecar; or
-a many-to-one or many-to-many relation. When none qualifies, the host stops at startup with a
-message that names the collection and says what to change.
+than `Hidden`, `Divider` or `Password`, and not translatable-only; or a many-to-one or many-to-many
+relation. A `Repeater` property counts only when at least one of its sub-fields does not set
+`Hidden = true` or `ReadOnly = true`. A collection with a translation sidecar needs at least one
+translatable field GraphQL can write: no `Hidden = true` or `ReadOnly = true`, and an interface
+other than `Hidden`, `Divider` or `Password`. A `Repeater` whose sub-fields all fail that test stops
+the host at startup whether or not the `Repeater` itself sets `Hidden = true`, and so does a
+collection whose fields give nothing to write. The message names the collection (for a `Repeater`,
+the collection and the property) and the fields that do not count, and says what to change.
 
 ## `[CmsCollection]` options
 

@@ -188,10 +188,9 @@ Chapter 10 do not reach GraphQL: an operator whose value is `null` is skipped be
 and a list for a single-value operator such as `eq` is refused by the GraphQL schema with its own
 message.
 
-A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`, `short`,
-`byte`), `LongFilter` for a `Long` field (`long`, for example the size of a file) and `FloatFilter`
-for any other number. Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an
-`Int` operand may not.
+A number field's filter input follows its type: `IntFilter` for an `Int` field (`int`), `LongFilter`
+for a `Long` field (`long`, for example the size of a file) and `FloatFilter` for any other number.
+Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an `Int` operand may not.
 
 A many-to-one relation contributes two fields to the filter input: its own foreign key as an
 `IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus the

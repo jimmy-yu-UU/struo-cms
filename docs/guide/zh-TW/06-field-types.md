@@ -135,14 +135,14 @@ UTC。
 | `CheckboxGroup` | `List<string>` | JSON | `CheckboxGroupField` |
 | `Tags` | `List<TagItem>` | JSON | `TagsField` |
 
-`MultiSelect` 與 `CheckboxGroup` 一定要掛 `[CmsOptions]`，沒掛的話主機啟動失敗，因為沒有選項
-就會拒絕每一個值。`Select` 與 `Radio` 掛了 `[CmsOptions]` 才有值可選；`Tags` 可以搭配
-`[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
-[第 5 章：定義集合](05-collections.md)。寫入時，`MultiSelect`、`CheckboxGroup`、
-`Select`、`Radio` 都會拿每個值對照選項清單。`Select` 或 `Radio` 的值必須與某個選項的值完全相同，
-大小寫也要一致：`Field '{name}' value '{value}' is not in its options.` 頂層欄位、翻譯值與
-`Repeater` 子欄位都適用。沒有 `[CmsOptions]` 的 `Select` 或 `Radio` 接受任意字串，`null` 與空字串
-略過檢查。要用一組固定的值，宣告成 `string`，再用 `[CmsOptions]` 列出值；列舉型別的屬性不收。
+`MultiSelect` 與 `CheckboxGroup` 一定要掛有項目的 `[CmsOptions]`，沒掛、或掛了卻一個項目都沒有，主機
+啟動都失敗，因為沒有選項就會拒絕每一個值。`Select` 與 `Radio` 掛了 `[CmsOptions]` 才有值可選；`Tags`
+可以搭配`[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
+[第 5 章：定義集合](05-collections.md)。寫入時，`MultiSelect`、`CheckboxGroup`、`Select`、`Radio` 都
+會拿每個值對照選項清單。`Select` 或 `Radio` 的值必須與某個選項的值完全相同，大小寫也要一致：
+`Field '{name}' value '{value}' is not in its options.` 頂層欄位、翻譯值與`Repeater` 子欄位都適用。
+沒有 `[CmsOptions]` 的 `Select` 或 `Radio` 接受任意字串，`null` 與空字串略過檢查。要用一組固定的值，
+宣告成 `string`，再用 `[CmsOptions]` 列出值；列舉型別的屬性不收。
 
 ### `Json`、`KeyValue` 與 `Repeater`
 
@@ -298,7 +298,7 @@ JSON 欄位，同樣如此。
 檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性。`[ColumnShape]` 加長文字介面
 照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，`[ColumnShape]`、`ColumnDataType` 這類
 欄位宣告的檢查略過它；屬性型別是否對得上介面、`object` 與無型別容器的檢查，子欄位照做。掛
-`[SugarColumn(IsIgnore = true)]` 的屬性完全不檢查。
+`[SugarColumn(IsIgnore = true)]` 的屬性完全不檢查，`Repeater` 屬性掛了它，子欄位的型別也不檢查。
 
 ### 存長文字
 

@@ -150,7 +150,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 拼法（`contains`、`isNull`）。第 10 章另外兩條規則在 GraphQL 碰不到：值是 `null` 的運算子在規則執行
 前就被略過，單值運算子（例如 `eq`）收到清單則由 GraphQL schema 以它自己的訊息拒絕。
 
-數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`、`short`、`byte`）用 `IntFilter`，`Long` 欄位
+數字欄位的篩選輸入跟著它的型別走：`Int` 欄位（`int`）用 `IntFilter`，`Long` 欄位
 （`long`，例如檔案大小）用 `LongFilter`，其他數字用 `FloatFilter`。各自吃自己的純量，所以 `Long` 的
 運算元可以超過 2^31 − 1，`Int` 的不行。
 

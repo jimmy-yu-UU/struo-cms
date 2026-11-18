@@ -109,8 +109,8 @@ body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不
 字，接受 `_in`／`_nin`。結構化欄位是結構化型別的屬性，這個詞由[第 6 章](06-field-types.md#介面總覽)
 定義：它放在多值介面（`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater`）或
 `Hidden` 上，存成 JSON。它的字串運算子比對的是存起來的 JSON 文字，`_in`／`_nin` 回 400。其他是所有剩
-下的欄位：數字、布林、`Guid`、列舉與日期時間。下面型別轉換表沒有涵蓋的型別，`_in`／`_nin`
-一樣回 400。
+下的欄位：數字、布林、`Guid` 與日期時間，也包含多對一關聯的外鍵屬性，它沒有 `[CmsField]`，
+型別不受介面表限制。下面型別轉換表沒有涵蓋的型別，`_in`／`_nin` 一樣回 400。
 
 字串運算子用在不接受它的欄位上，回 400，訊息點名欄位與運算子，並列出這個欄位接受的運算子。要比對
 `DateTime` 欄位上的某一天，改用範圍：
@@ -134,7 +134,7 @@ body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不
 |---|---|---|
 | JSON `null` | `_null`、`_nnull` 以外的全部 | 400，訊息指向 `_null`、`_nnull` |
 | 文字 `null` 或 `[null]` | 全部，用在文字或結構化欄位 | 純文字 |
-| 文字 `null` 或 `[null]` | `DateOnly`、`TimeOnly`、`TimeSpan` 上的 `_eq` | 400 |
+| 文字 `null` 或 `[null]` | 轉換表外的非文字外鍵屬性上的 `_eq` | 400 |
 | 清單 | `_in`、`_nin` | 各個元素 |
 | 清單 | `_null`、`_nnull` | 忽略 |
 | 清單 | 其他運算子 | 400 |
@@ -173,8 +173,9 @@ HTTP_STATUS:200
 **型別轉換。** 除了 `_null`／`_nnull` 以外，每個運算子的值都會轉成欄位真正的 CLR 型別再比對——`Guid`
 外鍵用 `uuid = uuid` 比，不是文字比對；轉換表涵蓋 `Guid`、`int`、`long`、`short`、`byte`、`bool`、
 `DateTime`、`DateTimeOffset`、`decimal`、`double`、`float` 與列舉欄位（成員名稱或其數字）；`string`
-當成文字比對，轉換表沒有涵蓋的型別，`_in`／`_nin` 回 400。`string` 屬性或結構化欄位上，`_eq` 的值是
-`null` 這個字，比對的就是這個字，不會測 NULL。`DateOnly`、`TimeOnly`、`TimeSpan` 欄位上，`_eq` 的值
+當成文字比對，轉換表沒有涵蓋的型別，`_in`／`_nin` 回 400。`short`、`byte`、`DateTimeOffset` 與列舉
+只會出現在外鍵屬性上，`[CmsField]` 欄位不收這些型別。`string` 屬性或結構化欄位上，`_eq` 的值是
+`null` 這個字，比對的就是這個字，不會測 NULL。轉換表沒有涵蓋的非文字外鍵屬性上，`_eq` 的值
 是 `null` 或 `[null]` 回 400，訊息指向 `_null` 與 `_nnull`，因為 ORM 把剛好這兩段文字當成測 NULL。
 
 值不是該型別——整數欄位收到 `abc`、超出型別範圍的數字、浮點欄位收到 `NaN`、不是日期的文字——回 400

@@ -209,36 +209,37 @@
     `[SugarColumn(IsNullable = false)]`. A nullable property always gets a nullable column, so
     removing `IsNullable = false` changes nothing; for NOT NULL declare the property non-nullable
     (`Guid`, `string`), which changes the column and needs a migration for a table that exists.
-- The scanner checks that the type of each `[CmsField]` property fits its interface, and that the
-  column shape, `IsJson` and `[CmsOptions]` declarations fit the property, and throws a
-  `MetadataException` that names "Class.Property". The check covers the properties of collections,
-  translation entities and junction payloads, and `Repeater` sub-fields; a property with
-  `[SugarColumn(IsIgnore = true)]` is not checked. Each declaration below used to start the host and
-  then fail later or store a wrong value, so a fork that has one can no longer start the host;
-  [Chapter 6](06-field-types.md) has the type each interface accepts:
+- The scanner checks the type of each `[CmsField]` property, its column shape, and its `IsJson` and
+  `[CmsOptions]` declarations, and throws a `MetadataException` that names "Class.Property" when one
+  does not fit. The check covers the properties of collections, translation entities and junction
+  payloads, and `Repeater` sub-fields; a property with `[SugarColumn(IsIgnore = true)]` is not
+  checked, and neither are the sub-fields of a `Repeater` property that carries it. Each declaration
+  below used to start the host and then fail later or store a wrong value, so a fork that has one
+  can no longer start the host; [Chapter 6](06-field-types.md) has the type each interface accepts:
   - A property type the interface does not accept; the match is on the exact type. Examples are
     `List<string>` on `Tags`, `int` on `Text`, an enum on `Select`, and `string[]` or
     `IList<string>` on `MultiSelect`. Declare a type the interface accepts (`List<TagItem>` for
     `Tags`), or change to an interface that accepts the type.
-  - A type no interface accepts: `DateOnly`, `TimeOnly`, `TimeSpan`, `char`, `DateTimeOffset`, an enum,
-    `short`, `byte`, the unsigned integers, and the `Nullable<T>` of each. Use `DateTime` (`Date`,
-    `Time` or `DateTime`) for `DateOnly` and `DateTimeOffset`; `DateTime` (`Time`) or a `string`
-    (`Text`) for `TimeOnly` and `TimeSpan`; `string` for `char`; `string` with `Select` or `Radio`
-    and the values in `[CmsOptions]` for an enum; `int` or `long` for the small integers. A table that
-    already exists needs a migration when the column type follows the property type.
+  - A type no interface accepts: `DateOnly`, `TimeOnly`, `TimeSpan`, `char`, `DateTimeOffset`, an
+    enum, `short`, `byte`, the unsigned integers, and the `Nullable<T>` of each. Use `DateTime`
+    (`Date`, `Time` or `DateTime`) for `DateOnly` and `DateTimeOffset`; `DateTime` (`Time`) or a
+    `string` (`Text`) for `TimeOnly` and `TimeSpan`; `string` for `char`; `string` with `Select` or
+    `Radio` and the values in `[CmsOptions]` for an enum; `int` or `long` for the small integers. A
+    table that already exists needs a migration when the column type follows the property type.
   - `[SugarColumn(IsJson = true)]` on a single-value property, on any interface. The value is stored
     as JSON text and read back with an extra layer of quotes; remove `IsJson`, or declare a
     structured type.
   - `[ColumnShape(LongText)]` on a property that is not `string`, or `Timestamp` or
     `TimestampWithTimeZone` on one that is not `DateTime` or `DateTime?`. Remove `[ColumnShape]`, or
     declare the matching type.
-  - `MultiSelect` or `CheckboxGroup` without `[CmsOptions]`. With no options every value is
-    rejected; add `[CmsOptions]` listing the allowed values.
-  - A `[Navigate]` foreign-key name on a `[CmsRelation]` property that is not a property: for
-    many-to-one and one-to-one, one of the declaring entity; for one-to-many, one of the list's
-    element type; the match ignores case, and many-to-many is unchanged. Startup did not check it,
-    and queries and writes failed later. Name a property that exists, or add the key property to the
-    type.
+  - `MultiSelect` or `CheckboxGroup` without `[CmsOptions]`, or with a `[CmsOptions]` that lists no
+    value. With no options every value is rejected; add `[CmsOptions]` listing the allowed values.
+- The `[Navigate]` foreign-key name on a `[CmsRelation]` property must be a property, or the host
+  fails at startup with a message that names the relation, the foreign key and the type to look in.
+  For many-to-one and one-to-one it is a property of the declaring entity, for one-to-many a
+  property of the list's element type, compared without regard to case; the keys of a many-to-many
+  are not part of the check. Startup did not check it, and queries and writes failed later. Name a
+  property that exists, or add the key property to the type.
 - A type that cannot load in a scanned assembly (a content assembly, the framework's or the host's)
   stops the host at start with a `MetadataException`. The cause is a missing or mismatched dependency;
   the message names the assembly, the number of failed types, the type names the loader reports and
@@ -461,12 +462,24 @@ transformed again on the first request.
 
 ### Fixed
 
-- A collection whose GraphQL create input type would have no field (every field is an audit field,
-  `Hidden = true`, `ReadOnly = true`, a `Hidden`, `Divider` or `Password` interface, or translatable
-  without a sidecar, and there is no many-to-one or many-to-many relation) stops the host at startup
-  with a message that names the collection and says what to change. In 0.30.1 the host stopped with
-  an unreadable library exception,
-  ``System.ArgumentException: Type 'System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.Object]' does not have a default constructor``.
+- When a GraphQL input type would have no field, the host stops at startup with a message that names
+  the collection, the fields that do not count and what to change; for a `Repeater` it names the
+  collection and the property. These cases count:
+  - The collection has no field GraphQL can write and no many-to-one or many-to-many relation: every
+    field is an audit field, `Hidden = true`, `ReadOnly = true`, a `Hidden`, `Divider` or `Password`
+    interface, or translatable-only. Add a writable field or such a relation.
+  - The collection has a translation sidecar and none of its translatable fields can be written.
+    Let at least one translatable field avoid `Hidden = true` and `ReadOnly = true`, and use an
+    interface other than `Hidden`, `Divider` and `Password`.
+  - Every sub-field of a `Repeater` is `Hidden = true` or `ReadOnly = true`, whether or not the
+    `Repeater` itself sets `Hidden = true`. Make one sub-field writable, or remove the `Repeater`.
+
+  In 0.30.1 the host stopped in these cases with an unreadable library exception whose message
+  contains this line:
+
+  ```
+  Type 'System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.Object]' does not have a default constructor
+  ```
 - A supplementary-plane character, such as an emoji, in a string field answered `500` on MySQL and
   MariaDB: writing it failed with `Incorrect string value`, and a filter or search that compared a
   column with it failed with `Illegal mix of collations`. The columns were utf8mb3. A new database
