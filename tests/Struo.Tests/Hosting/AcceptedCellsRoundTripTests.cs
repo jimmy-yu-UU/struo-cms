@@ -282,19 +282,7 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         var nullable = (face == FieldInterface.Repeater ? SubCells() : OwnCells(face)).Where(c => c.Id.EndsWith('?')).ToList();
         if (nullable.Count == 0) return;
 
-        var body = new JsonObject { ["anchor"] = "null" };
-        if (face == FieldInterface.Repeater)
-        {
-            var row = new JsonObject();
-            foreach (var c in SubCells()) row[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(c.Face, c.Id));
-            body["rows"] = new JsonArray(row);
-        }
-        else
-        {
-            // A column that is not nullable has no null to write: the row carries a value for every other cell.
-            foreach (var c in OwnCells(face))
-                body[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(face, c.Id));
-        }
+        var body = NullBody(face);
 
         var nullId = await CreateAsync(client, collection, body, failures, face);
         if (nullId is null) return;
@@ -315,6 +303,29 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
             if (values.Contains(nullId) || !values.Contains(valueId))
                 failures.Add($"{face}|{c.Id}: _nnull did not select exactly the row with a value");
         }
+    }
+
+    private static bool HasNullable(FieldInterface face) =>
+        (face == FieldInterface.Repeater ? SubCells() : OwnCells(face)).Any(c => c.Id.EndsWith('?'));
+
+    // The body of a row that writes null into every nullable cell and a value into every other one.
+    private static JsonObject NullBody(FieldInterface face)
+    {
+        var nullable = (face == FieldInterface.Repeater ? SubCells() : OwnCells(face)).Where(c => c.Id.EndsWith('?')).ToList();
+        var body = new JsonObject { ["anchor"] = "null" };
+        if (face == FieldInterface.Repeater)
+        {
+            var row = new JsonObject();
+            foreach (var c in SubCells()) row[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(c.Face, c.Id));
+            body["rows"] = new JsonArray(row);
+        }
+        else
+        {
+            // A column that is not nullable has no null to write: the row carries a value for every other cell.
+            foreach (var c in OwnCells(face))
+                body[Camel(c.Name)] = c.Id.EndsWith('?') ? null : JsonNode.Parse(SampleJson(face, c.Id));
+        }
+        return body;
     }
 
     private static async Task<HashSet<string>> IdsAsync(HttpClient client, string collection, string query)
@@ -357,42 +368,55 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         if (exposed.Count == 0) return 0;
 
         var selection = "id anchor " + string.Join(" ", exposed.Select(n => Selection(face, n)));
-        var pascal = char.ToUpperInvariant(collection[0]) + collection[1..];
-        var query = $"{{ {collection}s {{ items {{ {selection} }} }} }}";
-        var queried = await PostGraphQlAsync(client, query, null);
-        AddGraphQlErrors(failures, $"{face}: GraphQL query", queried);
-
-        var input = new JsonObject { ["anchor"] = "gql" };
-        foreach (var name in exposed) input[name] = GraphQlValue(face, body[name]);
-        var mutation = $"mutation($input: {pascal}CreateInput!) {{ create{pascal}(input: $input) {{ id }} }}";
-        var created = await PostGraphQlAsync(client, mutation, new JsonObject { ["input"] = input });
-        AddGraphQlErrors(failures, $"{face}: GraphQL create", created);
-        if (created["data"]?[$"create{pascal}"]?["id"]?.GetValue<string>() is not { } id)
-        {
-            failures.Add($"{face}: GraphQL create returned no id: {created.ToJsonString()}");
-            return 1;
-        }
-
-        var single = await PostGraphQlAsync(client, $"{{ {collection}(id: \"{id}\") {{ {selection} }} }}", null);
-        AddGraphQlErrors(failures, $"{face}: GraphQL read of the created row", single);
-        if (single["data"]?[collection] is not JsonObject row)
-        {
-            failures.Add($"{face}: GraphQL read of the created row returned no row: {single.ToJsonString()}");
-            return 1;
-        }
-
-        foreach (var name in exposed)
-            CompareQueried(failures, face, name, input[name], row[name]);
+        var rows = new List<(string Label, JsonObject Source)> { ("values", body) };
+        if (HasNullable(face)) rows.Add(("nulls", NullBody(face)));
+        foreach (var (label, source) in rows)
+            await GraphQlRowAsync(client, face, collection, exposed, selection, label, source, failures);
         return 1;
     }
 
+    // Creates a row through GraphQL, then compares what it reads with what was written: the single-row query
+    // and the same row in the list query.
+    private static async Task GraphQlRowAsync(
+        HttpClient client, FieldInterface face, string collection, List<string> exposed, string selection,
+        string label, JsonObject source, List<string> failures)
+    {
+        var pascal = char.ToUpperInvariant(collection[0]) + collection[1..];
+        var input = new JsonObject { ["anchor"] = "gql-" + label };
+        foreach (var name in exposed) input[name] = GraphQlValue(face, source[name]);
+        var mutation = $"mutation($input: {pascal}CreateInput!) {{ create{pascal}(input: $input) {{ id }} }}";
+        var created = await PostGraphQlAsync(client, mutation, new JsonObject { ["input"] = input });
+        AddGraphQlErrors(failures, $"{face}: GraphQL create ({label})", created);
+        if (created["data"]?[$"create{pascal}"]?["id"]?.GetValue<string>() is not { } id)
+        {
+            failures.Add($"{face}: GraphQL create ({label}) returned no id: {created.ToJsonString()}");
+            return;
+        }
+
+        var single = await PostGraphQlAsync(client, $"{{ {collection}(id: \"{id}\") {{ {selection} }} }}", null);
+        AddGraphQlErrors(failures, $"{face}: GraphQL read of the created row ({label})", single);
+        if (single["data"]?[collection] is not JsonObject row)
+            failures.Add($"{face}: GraphQL read of the created row ({label}) returned no row: {single.ToJsonString()}");
+        else
+            foreach (var name in exposed) CompareQueried(failures, face, $"{name} ({label}, single)", name, input[name], row[name]);
+
+        var list = await PostGraphQlAsync(client, $"{{ {collection}s(limit: 100) {{ items {{ {selection} }} }} }}", null);
+        AddGraphQlErrors(failures, $"{face}: GraphQL list query ({label})", list);
+        var listed = list["data"]?[$"{collection}s"]?["items"]?.AsArray().FirstOrDefault(n => n?["id"]?.GetValue<string>() == id);
+        if (listed is not JsonObject listedRow)
+            failures.Add($"{face}: GraphQL list query ({label}) did not return the created row");
+        else
+            foreach (var name in exposed) CompareQueried(failures, face, $"{name} ({label}, list)", name, input[name], listedRow[name]);
+    }
+
     // A Repeater compares row by row and sub-field by sub-field; every other field as one value.
-    private static void CompareQueried(List<string> failures, FieldInterface face, string name, JsonNode? written, JsonNode? queried)
+    private static void CompareQueried(
+        List<string> failures, FieldInterface face, string label, string name, JsonNode? written, JsonNode? queried)
     {
         if (face != FieldInterface.Repeater)
         {
             if (!SameValue(written, queried))
-                failures.Add($"{face}.{name}: GraphQL wrote {written?.ToJsonString()}, read {queried?.ToJsonString() ?? "(missing)"}");
+                failures.Add($"{face}.{label}: GraphQL wrote {written?.ToJsonString()}, read {queried?.ToJsonString() ?? "(missing)"}");
             return;
         }
 
@@ -435,7 +459,7 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         if (face != FieldInterface.Repeater || copy is not JsonArray rows) return copy;
 
         foreach (var c in SubCells().Where(c => c.Face == FieldInterface.Date))
-            rows[0]![Camel(c.Name)] = JsonValue.Create(rows[0]![Camel(c.Name)]!.GetValue<string>()[..10]);
+            if (rows[0]![Camel(c.Name)] is JsonValue date) rows[0]![Camel(c.Name)] = JsonValue.Create(date.GetValue<string>()[..10]);
         return rows;
     }
 
