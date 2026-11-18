@@ -75,14 +75,15 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 [第 6 章〈啟動時被擋的宣告〉](06-field-types.md#啟動時被擋的宣告)。
 `[SugarColumn(IsNullable = true)]` 能讓不可為 null 的 `string` 屬性得到可為 null 的欄位。
 
-GraphQL 的建立輸入型別至少要有一個欄位。要有欄位，集合得有一個 GraphQL 寫得進去的 `[CmsField]`，也就
-是不是稽核欄位、沒設 `Hidden = true` 或 `ReadOnly = true`、介面不是 `Hidden`、`Divider`、`Password`
-，也不是只能翻譯的欄位；或者有多對一或多對多的關聯。`Repeater` 屬性要至少有一個子欄位沒設
-`Hidden = true` 或 `ReadOnly = true`，否則不算。有翻譯 sidecar 的集合，可翻譯欄位裡要至少有一個寫得
-進去：沒設 `Hidden = true` 或 `ReadOnly = true`，介面不是 `Hidden`、`Divider`、`Password`。
-`Repeater` 的子欄位全寫不進去時，不論這個 `Repeater` 本身有沒有設 `Hidden = true`，主機啟動都停下；
-整個集合湊不出可寫的欄位時也一樣。訊息點名集合（`Repeater` 則點名集合與屬性）與不算數的欄位，並說明
-怎麼改。
+GraphQL 有三種輸入型別，各自至少要有一個算數的項目，否則主機啟動時停下，訊息點名對象與不算數的欄位，
+並說明怎麼改；寫得進去的欄位，指沒設 `Hidden = true`、沒設 `ReadOnly = true`，介面也不是 `Hidden`、
+`Divider`、`Password` 的欄位：
+
+| 輸入型別 | 算數的項目 | 啟動回報 |
+|---|---|---|
+| 集合的建立輸入 | 不可翻譯的可寫欄位、多對一外鍵、多對多關聯 | `Collection '<name>' has nothing GraphQL can write ...` |
+| 翻譯輸入（有翻譯 sidecar） | 可翻譯的可寫欄位 | `Collection '<name>' has a translation sidecar, ...` |
+| `Repeater` 的項目輸入 | 可寫的子欄位，`Repeater` 自己設 `Hidden = true` 也要有 | `Repeater '<collection>.<field>' has no sub-field ...` |
 
 ## `[CmsCollection]` 選項
 
@@ -254,8 +255,9 @@ dotnet run --project src/Struo.Api -- migrate
 1. 決定內容類別放哪：直接放進 API 專案，或放進 API 專案參照的類別庫。
 2. 在 entity 上掛 `[SugarTable]`、`[CmsCollection]`，並有一個掛了
    `[SugarColumn(IsPrimaryKey = true)]` 的主鍵。
-3. 幫每個要曝露的屬性加 `[CmsField]`，至少一個是 GraphQL 寫得進去的；需要選項清單的介面加上
-   `[CmsOptions]`，`MultiSelect` 與 `CheckboxGroup` 一定要有。
+3. 幫每個要曝露的屬性加 `[CmsField]`，並讓 GraphQL 的輸入型別都有算數的項目
+   （見〈最小集合〉的表）；需要選項清單的介面加上 `[CmsOptions]`，`MultiSelect` 與
+   `CheckboxGroup` 一定要有。
 4. 需要的話實作 `ISoftDeletable`，或設 `Revisions = true`。
 5. 有關聯的話加 `[CmsRelation]` 和 `[Navigate]`（見[第 8 章：關聯](08-relations.md)）。
 6. 加專案參照，並把項目加進 `Struo:ContentAssemblies`（獨立類別庫才需要）。

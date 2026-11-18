@@ -85,16 +85,16 @@ NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and 
 [Chapter 6, "Declarations rejected at startup"](06-field-types.md#declarations-rejected-at-startup).
 `[SugarColumn(IsNullable = true)]` gives a non-nullable `string` property a nullable column.
 
-The collection's GraphQL create input type needs at least one field. That takes a `[CmsField]` that
-GraphQL can write: not an audit field, not `Hidden = true` or `ReadOnly = true`, an interface other
-than `Hidden`, `Divider` or `Password`, and not translatable-only; or a many-to-one or many-to-many
-relation. A `Repeater` property counts only when at least one of its sub-fields does not set
-`Hidden = true` or `ReadOnly = true`. A collection with a translation sidecar needs at least one
-translatable field GraphQL can write: no `Hidden = true` or `ReadOnly = true`, and an interface
-other than `Hidden`, `Divider` or `Password`. A `Repeater` whose sub-fields all fail that test stops
-the host at startup whether or not the `Repeater` itself sets `Hidden = true`, and so does a
-collection whose fields give nothing to write. The message names the collection (for a `Repeater`,
-the collection and the property) and the fields that do not count, and says what to change.
+GraphQL has three input types, and each needs at least one item that counts, or the host stops at
+startup with a message that names the subject and the fields that do not count and says what to
+change; a writable field is one that sets neither `Hidden = true` nor `ReadOnly = true` and whose
+interface is not `Hidden`, `Divider` or `Password`:
+
+| Input type | What counts | Startup message |
+|---|---|---|
+| The collection's create input | Writable field, many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
+| Translations input (translation sidecar) | Translatable writable field (not in the create input) | `Collection '<name>' has a translation sidecar, ...` |
+| A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | `Repeater '<collection>.<field>' has no sub-field ...` |
 
 ## `[CmsCollection]` options
 
@@ -288,9 +288,9 @@ Adding a collection, in order:
    host references.
 2. Put `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
    `[SugarColumn(IsPrimaryKey = true)]`.
-3. Add `[CmsField]` to every property you want to expose, at least one of them writable through
-   GraphQL, and `[CmsOptions]` on any interface that needs an option list; `MultiSelect` and
-   `CheckboxGroup` always do.
+3. Add `[CmsField]` to every property you want to expose, make every GraphQL input type have an item
+   that counts (see the table in "A minimal collection"), and add `[CmsOptions]` on any interface
+   that needs an option list; `MultiSelect` and `CheckboxGroup` always do.
 4. Implement `ISoftDeletable`, or set `Revisions = true`, if you need them.
 5. Add `[CmsRelation]` and `[Navigate]` if you have relations (see
    [Chapter 8: Relations](08-relations.md)).

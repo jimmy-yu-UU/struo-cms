@@ -53,12 +53,12 @@ itself (`heroImageId` → `heroImage`; a name with no `Id` suffix instead gets a
 appended), and a `Files` field gets an extra `<name>Files: [File!]`. The list wrapper carries four
 fixed fields: `items`, `total`, `facets`, `aggregate`.
 
-Every other interface has a fixed SDL mapping: text-like interfaces map to `String`,
-`Boolean`/`Checkbox` map to `Boolean`, `Date`/`DateTime` map to the type of the same name, `Time`
-also maps to `String`, a `MultiSelect`, `CheckboxGroup`, `Tags`, `Files` or `Repeater` field maps
-to an array, `Json`/`KeyValue` map to `Any`, and `File`/`Image`/`Uuid` map to `ID`;
-`Number`/`Slider`/`Rating` look at the actual CLR type rather than the interface itself — an
-integer CLR type maps to `Int` or `Long`, everything else to `Float`.
+Every other interface has a fixed SDL mapping: text-like interfaces map to `String`, `Boolean`/
+`Checkbox` map to `Boolean`, `Date`/`DateTime` map to the type of the same name, `Time` also maps to
+`String` holding the UTC instant, ending in `Z`, a `MultiSelect`, `CheckboxGroup`, `Tags`, `Files`
+or `Repeater` field maps to an array, `Json`/`KeyValue` map to `Any`, and `File`/`Image`/`Uuid` map
+to `ID`; `Number`/`Slider`/`Rating` look at the actual CLR type rather than the interface itself —
+an integer CLR type maps to `Int` or `Long`, everything else to `Float`.
 
 `Tags` maps to `[TagItem!]`. `Repeater` generates its own type, `<X><Field>Item`, based on its
 sub-fields (omitted entirely when there are no sub-fields); `Password`, `Hidden`, and `Divider`

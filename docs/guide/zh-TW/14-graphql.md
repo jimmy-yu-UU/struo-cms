@@ -42,10 +42,10 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 位：`items`、`total`、`facets`、`aggregate`。
 
 其餘介面到 SDL 有一份固定對照：文字類對應 `String`，`Boolean`／`Checkbox` 對應 `Boolean`，`Date`／
-`DateTime` 對應同名型別，`Time` 也對應 `String`，`MultiSelect`、`CheckboxGroup`、`Tags`、
-`Files`、`Repeater` 欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，
-`File`／`Image`／`Uuid` 對應 `ID`；`Number`／`Slider`／`Rating` 看的是實際 CLR 型別而不是介面本
-身，整數型對應 `Int` 或 `Long`，其餘對應 `Float`。
+`DateTime` 對應同名型別，`Time` 也對應 `String`，內容是以 `Z` 結尾的 UTC 時刻，`MultiSelect`、
+`CheckboxGroup`、`Tags`、`Files`、`Repeater` 欄位對應陣列，`Json`／`KeyValue` 對應 `Any`，`File`／
+`Image`／`Uuid` 對應 `ID`；`Number`／`Slider`／`Rating` 看的是實際 CLR 型別而不是介面本身，整數型對
+應 `Int` 或 `Long`，其餘對應 `Float`。
 
 `Tags` 對應成 `[TagItem!]`，`Repeater` 依子欄位另外產生一個型別 `<X><Field>Item`（沒有子欄位就整個
 省略）；`Password`、`Hidden`、`Divider` 完全不出現在 schema 裡。
