@@ -467,6 +467,11 @@ transformed again on the first request.
   (`05:06:07.000+08:00` for a value written as `05:06:07Z`), so on a host that is not in UTC a
   GraphQL client saw a different instant than a REST client; it is the UTC instant ending in `Z`,
   also in a `Repeater` sub-field, in `translations` and in facets.
+- In 0.30.1, a `Date` or `DateTime` value in a GraphQL `translations` entry, in a facet value or
+  as the `min` or `max` of an aggregate had no `Z`, and a `Date` carried a `T00:00:00` time:
+  `2026-03-04T00:00:00` and `2026-03-04T05:06:07.25`, where the field itself prints `2026-03-04`
+  and `2026-03-04T05:06:07.25Z`. They print as the field does, also in a facet on a field of a
+  related collection such as `category.publishedAt`.
 - When a GraphQL input type would have no field, the host stops at startup with a message that names
   the collection, the fields that do not count and what to change; for a `Repeater` it names the
   collection and the property. These cases count:
