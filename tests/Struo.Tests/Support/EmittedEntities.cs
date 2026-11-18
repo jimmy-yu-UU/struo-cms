@@ -1,0 +1,145 @@
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.Loader;
+using SqlSugar;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
+
+namespace Struo.Tests.Support;
+
+/// <summary>
+/// One <c>[CmsField]</c> property of an emitted type. <paramref name="Child"/> gives it the child type
+/// instead of <paramref name="Type"/>: a <c>List</c> of it, or the child itself when
+/// <paramref name="ChildIsList"/> is false.
+/// </summary>
+public sealed record EmittedProperty(
+    string Name, Type? Type, FieldInterface Interface, bool WithOptions = false, EmittedChild? Child = null,
+    bool ChildIsList = true);
+
+/// <summary>A class used as a Repeater child or as a structured value; a plain one declares no <c>[CmsField]</c>.</summary>
+public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Properties, bool Plain = false);
+
+/// <summary>A <c>[CmsCollection]</c> entity with a Guid <c>Id</c> and the given properties.</summary>
+public sealed record EmittedEntity(string Name, IReadOnlyList<EmittedProperty> Properties);
+
+/// <summary>
+/// Builds collections from a description, so a test can declare one property per (interface, type) pair
+/// without a class per pair. The assembly is saved and loaded like a compiled one, and a host can name it
+/// in <c>Struo:ContentAssemblies</c>.
+/// </summary>
+public static class EmittedEntities
+{
+    private static readonly Dictionary<string, Assembly> Loaded = new(StringComparer.Ordinal);
+    private static int _hooked;
+    private static int _sequence;
+
+    public static Assembly Build(string assemblyName, IReadOnlyList<EmittedEntity> entities)
+    {
+        var name = new AssemblyName(assemblyName);
+        var assembly = new PersistedAssemblyBuilder(name, typeof(object).Assembly);
+        var module = assembly.DefineDynamicModule(assemblyName);
+        var children = new Dictionary<EmittedChild, TypeBuilder>();
+
+        foreach (var child in entities.SelectMany(e => e.Properties).Select(p => p.Child).OfType<EmittedChild>().Distinct())
+        {
+            var builder = DefineClass(module, child.Name, null);
+            children[child] = builder;
+            foreach (var property in child.Properties) AddProperty(builder, property, children, plain: child.Plain);
+            builder.CreateType();
+        }
+
+        foreach (var entity in entities)
+        {
+            var lower = char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..];
+            var builder = DefineClass(module, entity.Name, [
+                Attribute(typeof(CmsCollectionAttribute), [entity.Name], Named(nameof(CmsCollectionAttribute.Name), lower)),
+                Attribute(typeof(SugarTable), [lower]),
+            ]);
+            AddProperty(builder, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
+            foreach (var property in entity.Properties) AddProperty(builder, property, children);
+            builder.CreateType();
+        }
+
+        using var stream = new MemoryStream();
+        assembly.Save(stream);
+        stream.Position = 0;
+        EnsureHook();
+        var loaded = AssemblyLoadContext.Default.LoadFromStream(stream);
+        lock (Loaded) Loaded[assemblyName] = loaded;
+        return loaded;
+    }
+
+    /// <summary>An assembly name no earlier call used.</summary>
+    public static string UniqueName(string prefix) => $"{prefix}_{Guid.NewGuid().ToString("N")[..8]}_{Interlocked.Increment(ref _sequence)}";
+
+    private static TypeBuilder DefineClass(ModuleBuilder module, string name, CustomAttributeBuilder[]? attributes)
+    {
+        var builder = module.DefineType("Emitted." + name, TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, typeof(object));
+        builder.DefineDefaultConstructor(MethodAttributes.Public);
+        foreach (var attribute in attributes ?? []) builder.SetCustomAttribute(attribute);
+        return builder;
+    }
+
+    private static void AddProperty(
+        TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children,
+        bool isKey = false, bool plain = false)
+    {
+        var type = spec.Child is not { } child ? spec.Type!
+            : spec.ChildIsList ? typeof(List<>).MakeGenericType(children[child]) : children[child];
+        var field = owner.DefineField("_" + spec.Name, type, FieldAttributes.Private);
+        var property = owner.DefineProperty(spec.Name, PropertyAttributes.None, type, null);
+        const MethodAttributes Accessor = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+
+        var getter = owner.DefineMethod("get_" + spec.Name, Accessor, type, Type.EmptyTypes);
+        var il = getter.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, field);
+        il.Emit(OpCodes.Ret);
+
+        var setter = owner.DefineMethod("set_" + spec.Name, Accessor, null, [type]);
+        il = setter.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, field);
+        il.Emit(OpCodes.Ret);
+
+        property.SetGetMethod(getter);
+        property.SetSetMethod(setter);
+
+        if (isKey)
+        {
+            property.SetCustomAttribute(Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsPrimaryKey), true)));
+            return;
+        }
+
+        if (plain) return;
+        property.SetCustomAttribute(Attribute(
+            typeof(CmsFieldAttribute), [],
+            Named(nameof(CmsFieldAttribute.Label), spec.Name), Named(nameof(CmsFieldAttribute.Interface), spec.Interface)));
+        if (spec.WithOptions)
+            property.SetCustomAttribute(Attribute(typeof(CmsOptionsAttribute), [new[] { "a:A", "b:B", "hello:Hello" }]));
+    }
+
+    private static (string Name, object Value) Named(string name, object value) => (name, value);
+
+    private static CustomAttributeBuilder Attribute(Type type, object[] constructorArguments, params (string Name, object Value)[] named)
+    {
+        var constructor = type.GetConstructors().Single(c => c.GetParameters().Length == constructorArguments.Length);
+        var properties = named.Select(n => type.GetProperty(n.Name)!).ToArray();
+        return new CustomAttributeBuilder(constructor, constructorArguments, properties, named.Select(n => n.Value).ToArray());
+    }
+
+    private static void EnsureHook()
+    {
+        if (Interlocked.Exchange(ref _hooked, 1) == 1) return;
+        AssemblyLoadContext.Default.Resolving += (_, requested) =>
+        {
+            lock (Loaded) return requested.Name is null ? null : Loaded.GetValueOrDefault(requested.Name);
+        };
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+        {
+            var requested = new AssemblyName(args.Name).Name!;
+            lock (Loaded) return Loaded.GetValueOrDefault(requested);
+        };
+    }
+}
