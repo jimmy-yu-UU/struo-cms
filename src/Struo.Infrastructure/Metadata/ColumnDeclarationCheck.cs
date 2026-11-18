@@ -79,30 +79,40 @@ internal static class ColumnDeclarationCheck
     private static MetadataException RejectTypeMismatch(string held, FieldInterface member, Type type)
     {
         var accepting = InterfacePropertyTypes.Accepting(type);
-        var accepted = InterfacePropertyTypes.Describe(member);
         if (accepting.Count == 0)
-            return Reject(
-                $"{held}, and no field interface accepts {InterfacePropertyTypes.Display(type)}.", Suggest(type), TypeWhy);
+            return new MetadataException(
+                $"{held}, and no field interface accepts {InterfacePropertyTypes.Display(type)}; {Suggest(type)}: {TypeWhy}.");
 
-        var others = InterfacePropertyTypes.JoinOr(accepting.Select(i => i.ToString()));
-        return Reject(
-            $"{held}, but {member} holds {accepted}.",
-            $"Declare the property as {accepted}, or change the interface to {others}",
-            TypeWhy);
+        // Hidden holds a value but shows no editor, and Divider holds none, so neither is offered as a way out.
+        var others = accepting.Where(i => i is not (FieldInterface.Hidden or FieldInterface.Divider)).ToList();
+        var instead = others.Count == 0 ? "" : $", or change the interface to {Offer(others, type)}";
+        return new MetadataException(
+            $"{held}, but {member} holds {InterfacePropertyTypes.Describe(member)}; " +
+            $"declare the property as {InterfacePropertyTypes.Declare(member)}{instead}: {TypeWhy}.");
     }
 
+    private const int OfferedInterfaces = 4;
+
+    private static string Offer(IReadOnlyList<FieldInterface> interfaces, Type type) =>
+        interfaces.Count <= OfferedInterfaces
+            ? InterfacePropertyTypes.JoinOr(interfaces.Select(i => i.ToString()))
+            : string.Join(", ", interfaces.Take(OfferedInterfaces)) +
+              $" or another interface that holds {InterfacePropertyTypes.Display(type)} " +
+              "(the field types chapter of the manual lists them)";
+
+    // Reached only by a single-value type that no interface holds: an enum, a date or time type other than
+    // DateTime, char, or a primitive other than the table's numbers and bool.
     private static string Suggest(Type type)
     {
         var single = Nullable.GetUnderlyingType(type) ?? type;
         if (single.IsEnum)
-            return "Declare the property as string with Interface = Select or Radio and the values in [CmsOptions]";
+            return "declare the property as string with Interface = Select or Radio and the values in [CmsOptions]";
         if (single == typeof(DateOnly) || single == typeof(DateTimeOffset))
-            return "Declare the property as DateTime (Interface = Date, Time or DateTime)";
+            return "declare the property as DateTime (Interface = Date, Time or DateTime)";
         if (single == typeof(TimeOnly) || single == typeof(TimeSpan))
-            return "Declare the property as DateTime (Interface = Time), or as string (Interface = Text) to hold the text";
-        if (single == typeof(char)) return "Declare the property as string";
-        if (single.IsPrimitive) return "Declare the property as int or long (Interface = Number)";
-        return "Declare the property as one of the types in the field types chapter of the manual";
+            return "declare the property as DateTime (Interface = Time), or as string (Interface = Text) to hold the text";
+        if (single == typeof(char)) return "declare the property as string";
+        return "declare the property as int or long (Interface = Number)";
     }
 
     private static MetadataException RejectStructured(string held)
@@ -114,8 +124,11 @@ internal static class ColumnDeclarationCheck
             "a structured value is stored as a JSON column that only those interfaces read and write");
     }
 
-    private static string WithArticle(string typeName) =>
-        "aeiouAEIOU".Contains(typeName[0]) ? $"an {typeName}" : $"a {typeName}";
+    // "an" before the sounds of a, e, i and o; "uint" and "ushort" start with the sound of "you".
+    internal static string WithArticle(string typeName) =>
+        "aeiouAEIOU".Contains(typeName[0]) && !typeName.StartsWith('u') && !typeName.StartsWith('U')
+            ? $"an {typeName}"
+            : $"a {typeName}";
 
     private static void RequireConsistentType(PropertyInfo property, CmsFieldAttribute field, SugarColumn? sugar, string name)
     {
@@ -168,11 +181,12 @@ internal static class ColumnDeclarationCheck
         throw Reject(
             $"Field '{name}' has [ColumnShape({shape})] and is {WithArticle(TypeName(type))} property.",
             $"Remove [ColumnShape], or declare the property as {wants}",
-            $"the shape gives the column a {(shape == ColumnShape.LongText ? "text" : "date-time")} type that a {InterfacePropertyTypes.Display(type)} cannot be read from");
+            $"the shape gives the column a {(shape == ColumnShape.LongText ? "text" : "date-time")} type that {WithArticle(InterfacePropertyTypes.Display(type))} cannot be read from");
     }
 
     internal static string TypeName(Type type)
     {
+        if (Nullable.GetUnderlyingType(type) is { } inner) return TypeName(inner) + "?";
         if (type.IsArray) return TypeName(type.GetElementType()!) + "[]";
         if (!type.IsGenericType) return Keywords.GetValueOrDefault(type, type.Name);
 
@@ -185,6 +199,7 @@ internal static class ColumnDeclarationCheck
         [typeof(string)] = "string", [typeof(int)] = "int", [typeof(long)] = "long", [typeof(bool)] = "bool",
         [typeof(decimal)] = "decimal", [typeof(double)] = "double", [typeof(float)] = "float",
         [typeof(short)] = "short", [typeof(byte)] = "byte", [typeof(char)] = "char", [typeof(object)] = "object",
+        [typeof(uint)] = "uint", [typeof(ushort)] = "ushort", [typeof(ulong)] = "ulong", [typeof(sbyte)] = "sbyte",
     };
 
     private static MetadataException Reject(string declarations, string fix, string why) =>

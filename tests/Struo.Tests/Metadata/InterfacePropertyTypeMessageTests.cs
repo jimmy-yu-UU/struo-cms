@@ -25,43 +25,49 @@ public sealed class InterfacePropertyTypeMessageTests
         return act.Should().Throw<MetadataException>().Which.Message;
     }
 
-    [Theory]
-    [InlineData(typeof(DateOnly), "DateOnly", "DateTime")]
-    [InlineData(typeof(DateOnly?), "DateOnly?", "DateTime")]
-    [InlineData(typeof(DateTimeOffset), "DateTimeOffset", "DateTime")]
-    [InlineData(typeof(TimeOnly), "TimeOnly", "string")]
-    [InlineData(typeof(TimeSpan), "TimeSpan", "string")]
-    [InlineData(typeof(char), "char", "string")]
-    [InlineData(typeof(Colour), "Colour", "[CmsOptions]")]
-    [InlineData(typeof(Colour?), "Colour?", "[CmsOptions]")]
-    [InlineData(typeof(short), "short", "int or long")]
-    public void A_type_no_interface_accepts_is_named_with_the_type_to_use_instead(Type type, string shown, string instead)
-    {
-        var message = ScanOne(FieldInterface.Text, type);
+    private const string Why = ": a field value is read and written as the property type its interface expects.";
 
-        message.Should().Contain("Field 'Probe.V'")
-            .And.Contain($"no field interface accepts {shown}")
-            .And.Contain("Declare the property as").And.Contain(instead);
+    public static TheoryData<FieldInterface, Type, string> Messages() => new()
+    {
+        { FieldInterface.Text, typeof(DateOnly), "Field 'Probe.V' is a DateOnly property with Interface = Text, and no field interface accepts DateOnly; declare the property as DateTime (Interface = Date, Time or DateTime)" + Why },
+        { FieldInterface.Date, typeof(DateTimeOffset?), "Field 'Probe.V' is a DateTimeOffset? property with Interface = Date, and no field interface accepts DateTimeOffset?; declare the property as DateTime (Interface = Date, Time or DateTime)" + Why },
+        { FieldInterface.Time, typeof(TimeOnly?), "Field 'Probe.V' is a TimeOnly? property with Interface = Time, and no field interface accepts TimeOnly?; declare the property as DateTime (Interface = Time), or as string (Interface = Text) to hold the text" + Why },
+        { FieldInterface.Number, typeof(TimeSpan), "Field 'Probe.V' is a TimeSpan property with Interface = Number, and no field interface accepts TimeSpan; declare the property as DateTime (Interface = Time), or as string (Interface = Text) to hold the text" + Why },
+        { FieldInterface.Text, typeof(char), "Field 'Probe.V' is a char property with Interface = Text, and no field interface accepts char; declare the property as string" + Why },
+        { FieldInterface.Select, typeof(Colour), "Field 'Probe.V' is a Colour property with Interface = Select, and no field interface accepts Colour; declare the property as string with Interface = Select or Radio and the values in [CmsOptions]" + Why },
+        { FieldInterface.Select, typeof(Colour?), "Field 'Probe.V' is a Colour? property with Interface = Select, and no field interface accepts Colour?; declare the property as string with Interface = Select or Radio and the values in [CmsOptions]" + Why },
+        { FieldInterface.Number, typeof(short), "Field 'Probe.V' is a short property with Interface = Number, and no field interface accepts short; declare the property as int or long (Interface = Number)" + Why },
+        { FieldInterface.Number, typeof(uint), "Field 'Probe.V' is a uint property with Interface = Number, and no field interface accepts uint; declare the property as int or long (Interface = Number)" + Why },
+        { FieldInterface.Number, typeof(ushort?), "Field 'Probe.V' is a ushort? property with Interface = Number, and no field interface accepts ushort?; declare the property as int or long (Interface = Number)" + Why },
+        { FieldInterface.Number, typeof(sbyte), "Field 'Probe.V' is a sbyte property with Interface = Number, and no field interface accepts sbyte; declare the property as int or long (Interface = Number)" + Why },
+        { FieldInterface.Text, typeof(int?), "Field 'Probe.V' is an int? property with Interface = Text, but Text holds string, Guid or Guid?; declare the property as string, Guid or Guid?, or change the interface to Number, Slider or Rating" + Why },
+        { FieldInterface.Tags, typeof(bool), "Field 'Probe.V' is a bool property with Interface = Tags, but Tags holds List<TagItem>; declare the property as List<TagItem>, or change the interface to Boolean or Checkbox" + Why },
+        { FieldInterface.Tags, typeof(List<string>), "Field 'Probe.V' is a List<string> property with Interface = Tags, but Tags holds List<TagItem>; declare the property as List<TagItem>, or change the interface to MultiSelect or CheckboxGroup" + Why },
+        { FieldInterface.MultiSelect, typeof(List<int>), "Field 'Probe.V' is a List<int> property with Interface = MultiSelect, but MultiSelect holds List<string>; declare the property as List<string>" + Why },
+        { FieldInterface.Number, typeof(Guid), "Field 'Probe.V' is a Guid property with Interface = Number, but Number holds int, int?, long, long?, decimal, decimal?, double, double?, float or float?; declare the property as one of those types, or change the interface to Text, File, Image or Uuid" + Why },
+        { FieldInterface.Uuid, typeof(string), "Field 'Probe.V' is a string property with Interface = Uuid, but Uuid holds Guid or Guid?; declare the property as Guid or Guid?, or change the interface to Text, Textarea, RichText, Markdown or another interface that holds string (the field types chapter of the manual lists them)" + Why },
+        { FieldInterface.Divider, typeof(byte[]), "Field 'Probe.V' is a byte[] property with Interface = Divider, but Divider holds the single-value types the other interfaces hold, except byte[]; declare the property as one of those types" + Why },
+        { FieldInterface.Date, typeof(int), "Field 'Probe.V' is an int property with Interface = Date, but Date holds DateTime or DateTime?; declare the property as DateTime or DateTime?, or change the interface to Number, Slider or Rating" + Why },
+    };
+
+    [Theory]
+    [MemberData(nameof(Messages))]
+    public void A_property_type_the_interface_cannot_hold_is_reported_with_what_to_change(
+        FieldInterface face, Type type, string expected)
+    {
+        ScanOne(face, type).Should().Be(expected);
     }
 
-    [Theory]
-    [InlineData(FieldInterface.Tags, typeof(bool), "Tags holds List<TagItem>", "Boolean, Checkbox, Hidden or Divider")]
-    [InlineData(FieldInterface.Tags, typeof(List<string>), "Tags holds List<TagItem>", "MultiSelect, CheckboxGroup or Hidden")]
-    [InlineData(FieldInterface.MultiSelect, typeof(string), "MultiSelect holds List<string>", "Text, Textarea")]
-    [InlineData(FieldInterface.Files, typeof(List<string>), "Files holds List<Guid>", "MultiSelect")]
-    [InlineData(FieldInterface.KeyValue, typeof(Dictionary<string, int>), "KeyValue holds Dictionary<string, string>", "Hidden")]
-    [InlineData(FieldInterface.Number, typeof(string), "Number holds int, int?, long", "Text, Textarea")]
-    [InlineData(FieldInterface.Date, typeof(int), "Date holds DateTime or DateTime?", "Number, Slider, Rating")]
-    [InlineData(FieldInterface.Text, typeof(int), "Text holds string, Guid or Guid?", "Number")]
-    [InlineData(FieldInterface.Uuid, typeof(string), "Uuid holds Guid or Guid?", "Text")]
-    [InlineData(FieldInterface.Divider, typeof(byte[]), "Divider holds string", "Hidden")]
-    public void A_type_that_does_not_fit_the_interface_lists_what_fits_each_way(
-        FieldInterface face, Type type, string holds, string others)
+    [Fact]
+    public void No_message_names_an_internal_class_and_none_ends_a_type_with_a_full_stop()
     {
-        var message = ScanOne(face, type, options: face is FieldInterface.MultiSelect);
-
-        message.Should().Contain("Field 'Probe.V'").And.Contain(holds)
-            .And.Contain("or change the interface to").And.Contain(others);
+        foreach (var (face, type) in new (FieldInterface, Type)[]
+                 { (FieldInterface.Text, typeof(int?)), (FieldInterface.Time, typeof(TimeOnly?)), (FieldInterface.Number, typeof(Guid)) })
+        {
+            var message = ScanOne(face, type);
+            message.Should().NotContain("Struo.").And.NotContain("InterfacePropertyTypes").And.NotContain("Nullable<")
+                .And.NotContain("?.");
+        }
     }
 
     [Theory]
@@ -280,5 +286,62 @@ public sealed class InterfacePropertyTypeMessageTests
         var act = () => MetadataScanner.ScanTypes([type]);
 
         act.Should().Throw<MetadataException>().Which.Message.Should().Contain(subject).And.Contain(problem);
+    }
+
+    // ---- [CmsOptions] with no entry ----
+
+    [CmsCollection("Empty options", Name = "iptEmptyOptions")]
+    public sealed class EmptyOptions
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsOptions]
+        [CmsField(Label = "Pick", Interface = FieldInterface.MultiSelect)] public List<string> Pick { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_choice_of_several_with_an_empty_options_attribute_is_rejected()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(EmptyOptions)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'EmptyOptions.Pick' has Interface = MultiSelect but a [CmsOptions] that lists no value, so every value " +
+            "would be rejected as not one of its options. Add [CmsOptions(\"value:Label\", ...)] listing the allowed values.");
+    }
+
+    [Fact]
+    public void The_message_for_a_choice_without_the_attribute_says_so()
+    {
+        ScanOne(FieldInterface.CheckboxGroup, typeof(List<string>)).Should().Be(
+            "Field 'Probe.V' has Interface = CheckboxGroup but no [CmsOptions], so every value would be rejected as not " +
+            "one of its options. Add [CmsOptions(\"value:Label\", ...)] listing the allowed values.");
+    }
+
+    [Fact]
+    public void The_article_before_a_type_follows_the_word_that_is_printed()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(LongTextOnInt)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'LongTextOnInt.Count' has [ColumnShape(LongText)] and is an int property. Remove [ColumnShape], or " +
+            "declare the property as string: the shape gives the column a text type that an int cannot be read from.");
+    }
+
+    // ---- an ignored Repeater ----
+
+    [CmsCollection("Ignored repeater", Name = "iptIgnoredRepeater")]
+    public sealed class IgnoredRepeater
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+        [SugarColumn(IsIgnore = true)]
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<RepeaterRowWithDate> Rows { get; set; } = [];
+    }
+
+    [Fact]
+    public void The_sub_fields_of_an_ignored_Repeater_are_not_checked()
+    {
+        var fields = MetadataScanner.ScanTypes([typeof(IgnoredRepeater)]).Single().Fields.Select(f => f.Name);
+
+        fields.Should().Contain(["name", "rows"]);
     }
 }

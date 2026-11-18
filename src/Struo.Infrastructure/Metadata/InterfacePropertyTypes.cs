@@ -81,22 +81,26 @@ internal static class InterfacePropertyTypes
     internal static IReadOnlyList<FieldInterface> Accepting(Type propertyType) =>
         Enum.GetValues<FieldInterface>().Where(m => Accepts(m, propertyType)).ToList();
 
-    /// <summary>The accepted types of <paramref name="member"/> as a phrase for a message.</summary>
+    private const int ListedTypes = 3;
+
+    /// <summary>What <paramref name="member"/> holds, as a phrase for a message.</summary>
     internal static string Describe(FieldInterface member)
     {
         if (Closed.TryGetValue(member, out var types)) return JoinOr(types.Select(Display));
         return member switch
         {
-            FieldInterface.Hidden => JoinOr([.. HiddenSingles.Select(Display), "a structured type such as List<T> or a class"]),
-            FieldInterface.Divider => JoinOr(DividerSingles.Select(Display)),
-            FieldInterface.Repeater => "List<TChild>, where TChild is a class with [CmsField] properties",
-            _ => throw new NotSupportedException($"No property-type entry for field interface '{member}'."),
+            FieldInterface.Hidden => "any value the other interfaces hold, byte[] or a structured type",
+            FieldInterface.Divider => "the single-value types the other interfaces hold, except byte[]",
+            _ => "List<TChild>, where TChild is a class with [CmsField] properties",
         };
     }
 
+    /// <summary>The type to declare for <paramref name="member"/>: the types themselves when there are few.</summary>
+    internal static string Declare(FieldInterface member) =>
+        Closed.TryGetValue(member, out var types) && types.Length <= ListedTypes ? Describe(member) : "one of those types";
+
     /// <summary>A type as a fork author writes it: <c>int?</c>, <c>List&lt;Guid&gt;</c>, <c>byte[]</c>.</summary>
-    internal static string Display(Type type) =>
-        Nullable.GetUnderlyingType(type) is { } inner ? ColumnDeclarationCheck.TypeName(inner) + "?" : ColumnDeclarationCheck.TypeName(type);
+    internal static string Display(Type type) => ColumnDeclarationCheck.TypeName(type);
 
     internal static string JoinOr(IEnumerable<string> items)
     {
