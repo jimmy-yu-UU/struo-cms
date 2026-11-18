@@ -193,6 +193,12 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
   `EnvelopeResultFilter.cs`).
 - **Metadata is scanned once at startup and cached** in a singleton `IMetadataProvider` — the scan
   itself never re-runs per request (`MetadataScanner.Scan`, called from `AddStruoMetadata`).
+- **Contradicting or mismatched field declarations stop startup.** A `[CmsField]` property whose
+  type its interface does not accept, `IsJson` on a single-value property, `[ColumnShape]` on the
+  wrong type, `MultiSelect`/`CheckboxGroup` without `[CmsOptions]`, a `[Navigate]` foreign-key name
+  that is not a property, and a collection with no field GraphQL can write each throw at startup,
+  never later; the rules are in `docs/ai/conventions.md`, "Contradicting declarations are rejected
+  at startup".
 - **Query DSL paths are whitelist-validated** against scanned metadata before any SQL is built
   (`QueryValidator`) — an unknown filter/sort/relation path is rejected, never passed through.
   `QueryValidator` also enforces RBAC on every collection a relation path traverses, not just the root

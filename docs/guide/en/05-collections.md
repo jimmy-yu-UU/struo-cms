@@ -85,6 +85,12 @@ NOT NULL column, declare the property as non-nullable: `Guid`, not `Guid?`, and 
 [Chapter 6, "Declarations rejected at startup"](06-field-types.md#declarations-rejected-at-startup).
 `[SugarColumn(IsNullable = true)]` gives a non-nullable `string` property a nullable column.
 
+The collection's GraphQL create input type needs at least one field. That takes a `[CmsField]` that
+GraphQL can write: not an audit field, not `Hidden = true` or `ReadOnly = true`, an interface other
+than `Hidden`, `Divider` or `Password`, and not translatable-only without a translation sidecar; or
+a many-to-one or many-to-many relation. When none qualifies, the host stops at startup with a
+message that names the collection and says what to change.
+
 ## `[CmsCollection]` options
 
 `[CmsCollection]` has these settable members:
@@ -277,8 +283,9 @@ Adding a collection, in order:
    host references.
 2. Put `[SugarTable]` and `[CmsCollection]` on the entity, with a primary key carrying
    `[SugarColumn(IsPrimaryKey = true)]`.
-3. Add `[CmsField]` to every property you want to expose, and `[CmsOptions]` on any interface that
-   needs an option list.
+3. Add `[CmsField]` to every property you want to expose, at least one of them writable through
+   GraphQL, and `[CmsOptions]` on any interface that needs an option list; `MultiSelect` and
+   `CheckboxGroup` always do.
 4. Implement `ISoftDeletable`, or set `Revisions = true`, if you need them.
 5. Add `[CmsRelation]` and `[Navigate]` if you have relations (see
    [Chapter 8: Relations](08-relations.md)).

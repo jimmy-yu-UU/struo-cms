@@ -32,6 +32,11 @@ empty or blank key or junction type, and a subclass of `Navigate` (the CMS reads
 itself). The message names the entity class, the property, the declaration it found and the two
 forms.
 
+The foreign key's name must match a property, without regard to case: for many-to-one and
+one-to-one, a property of the entity that declares the relation; for one-to-many, a property of the
+list's element type. When none matches, startup fails with a message naming the relation, the
+foreign key and the type to look in. The keys of a many-to-many are not part of this check.
+
 The check applies to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
 junction collection exposes both keys as writable fields and that every junction type declares one

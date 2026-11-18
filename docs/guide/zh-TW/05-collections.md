@@ -75,6 +75,11 @@ entity 的 metadata 已經記下這件事，`make:migration` 照它寫出 `.Null
 [第 6 章〈啟動時被擋的宣告〉](06-field-types.md#啟動時被擋的宣告)。
 `[SugarColumn(IsNullable = true)]` 能讓不可為 null 的 `string` 屬性得到可為 null 的欄位。
 
+GraphQL 的建立輸入型別至少要有一個欄位。要有欄位，集合得有一個 GraphQL 寫得進去的 `[CmsField]`，
+也就是不是稽核欄位、沒設 `Hidden = true` 或 `ReadOnly = true`、介面不是 `Hidden`、`Divider`、
+`Password`，也不是只能翻譯而沒有翻譯 sidecar；或者有多對一或多對多的關聯。一個欄位都湊不出來時，主機
+啟動就停下，訊息點名集合並說明怎麼改。
+
 ## `[CmsCollection]` 選項
 
 `[CmsCollection]` 可以設的成員：
@@ -245,7 +250,8 @@ dotnet run --project src/Struo.Api -- migrate
 1. 決定內容類別放哪：直接放進 API 專案，或放進 API 專案參照的類別庫。
 2. 在 entity 上掛 `[SugarTable]`、`[CmsCollection]`，並有一個掛了
    `[SugarColumn(IsPrimaryKey = true)]` 的主鍵。
-3. 幫每個要曝露的屬性加 `[CmsField]`，需要選項清單的介面加上 `[CmsOptions]`。
+3. 幫每個要曝露的屬性加 `[CmsField]`，至少一個是 GraphQL 寫得進去的；需要選項清單的介面加上
+   `[CmsOptions]`，`MultiSelect` 與 `CheckboxGroup` 一定要有。
 4. 需要的話實作 `ISoftDeletable`，或設 `Revisions = true`。
 5. 有關聯的話加 `[CmsRelation]` 和 `[Navigate]`（見[第 8 章：關聯](08-relations.md)）。
 6. 加專案參照，並把項目加進 `Struo:ContentAssemblies`（獨立類別庫才需要）。

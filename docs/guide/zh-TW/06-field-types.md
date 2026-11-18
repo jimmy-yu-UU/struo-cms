@@ -25,11 +25,14 @@
 
 - 多值介面：`MultiSelect`、`CheckboxGroup`、`Tags`、`KeyValue`、`Files`、`Repeater` 這六個
   介面，值整個存成一個 JSON 欄位。
-- 單一值型別：基本型別、列舉、`string`、`decimal`、`Guid`、`DateTime`、`DateTimeOffset`、
-  `DateOnly`、`TimeOnly`、`TimeSpan`、`byte[]`，以及它們的 `Nullable<T>`。
-- 結構化型別：單一值型別以外的型別，例如 `List<>`、`HashSet<>`、`Dictionary<,>`、陣列
-  （`byte[]` 除外）、自訂類別與結構。
+- 單一值型別：`string`、`bool`、`int`、`long`、`decimal`、`double`、`float`、`Guid`、
+  `DateTime`、`byte[]`，以及前面這些值型別的 `Nullable<T>`。各介面收其中哪幾種，見下面各組的表。
+- 結構化型別：不是基本型別、列舉、`string`、`decimal`、`Guid`、日期或時間型別、`byte[]` 的型別，
+  例如 `List<>`、`HashSet<>`、`Dictionary<,>`、陣列、自訂類別與結構。
 - 單一值介面：除了多值介面、`Hidden` 與 `Json` 以外的介面。
+
+屬性型別要跟介面對得上，而且要完全相同：`MultiSelect` 收 `List<string>`，不收 `string[]` 或
+`IList<string>`。對不上的宣告在主機啟動時就被擋下，見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資料庫時要指定 utf8mb4，見
 [第 21 章〈各後端的差異〉](21-schema-and-upgrades.md#各後端的差異)。
@@ -38,7 +41,7 @@ MySQL／MariaDB 上，文字欄位用的是資料庫的預設字元集，建資�
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
-| `Text` | `string` | `varchar(255)` | `TextField` |
+| `Text` | `string`／`Guid`／`Guid?` | `varchar(255)`；`Guid` 為 CLR 預設 | `TextField` |
 | `Textarea` | `string` | 長文字 | `TextareaField` |
 | `RichText` | `string` | 長文字 | `RichTextField` |
 | `Markdown` | `string` | 長文字 | `TextareaField` |
@@ -76,11 +79,14 @@ GraphQL schema 裡。`Color` 同樣是純文字輸入，沒有色票選色器。
 
 | 介面 | CLR 型別 | 資料庫欄位 | 後台編輯器 |
 |---|---|---|---|
-| `Number` | `int`／`long`／`decimal`／`double` | CLR 預設 | `NumberField` |
-| `Slider` | 數值 | CLR 預設 | `NumberField` |
-| `Rating` | 數值 | CLR 預設 | `NumberField` |
-| `Boolean` | `bool` | CLR 預設 | `BooleanField` |
-| `Checkbox` | `bool` | CLR 預設 | `BooleanField` |
+| `Number` | `int`／`long`／`decimal`／`double`／`float` | CLR 預設 | `NumberField` |
+| `Slider` | 同 `Number` | CLR 預設 | `NumberField` |
+| `Rating` | 同 `Number` | CLR 預設 | `NumberField` |
+| `Boolean` | `bool`／`bool?` | CLR 預設 | `BooleanField` |
+| `Checkbox` | `bool`／`bool?` | CLR 預設 | `BooleanField` |
+
+數值型別的可為 null 形式（`int?`、`decimal?` 等）一樣收。`short`、`byte`、無號整數不收，要用
+`int` 或 `long`。
 
 `Slider` 與 `Rating` 沿用 `Number` 的編輯器，後台沒有滑桿或星級元件。`Checkbox` 沿用
 `Boolean` 的編輯器。
@@ -129,13 +135,14 @@ UTC。
 | `CheckboxGroup` | `List<string>` | JSON | `CheckboxGroupField` |
 | `Tags` | `List<TagItem>` | JSON | `TagsField` |
 
-`Select`／`MultiSelect`／`Radio`／`CheckboxGroup` 要掛 `[CmsOptions]` 才有值可選；`Tags`
-可以搭配 `[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
+`MultiSelect` 與 `CheckboxGroup` 一定要掛 `[CmsOptions]`，沒掛的話主機啟動失敗，因為沒有選項
+就會拒絕每一個值。`Select` 與 `Radio` 掛了 `[CmsOptions]` 才有值可選；`Tags` 可以搭配
+`[CmsOptions]`，但不是必要，通常留自由輸入。`[CmsOptions]` 的宣告方式見
 [第 5 章：定義集合](05-collections.md)。寫入時，`MultiSelect`、`CheckboxGroup`、
 `Select`、`Radio` 都會拿每個值對照選項清單。`Select` 或 `Radio` 的值必須與某個選項的值完全相同，
 大小寫也要一致：`Field '{name}' value '{value}' is not in its options.` 頂層欄位、翻譯值與
 `Repeater` 子欄位都適用。沒有 `[CmsOptions]` 的 `Select` 或 `Radio` 接受任意字串，`null` 與空字串
-略過檢查。屬性型別不是 `string` 的 `Select` 或 `Radio` 欄位，不會拿去對照選項。
+略過檢查。要用一組固定的值，宣告成 `string`，再用 `[CmsOptions]` 列出值；列舉型別的屬性不收。
 
 ### `Json`、`KeyValue` 與 `Repeater`
 
@@ -154,10 +161,10 @@ UTC。
 收。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
-是點名該欄位的啟動期 `MetadataException`。子欄位不能設為可翻譯，也只能用下列介面，範圍比單一值
-介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、`Url`、`Color`、`Phone`、
-`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、`DateTime`、`Select`、
-`Radio`。不允許的介面有：
+是點名該欄位的啟動期 `MetadataException`。子欄位不能設為可翻譯，屬性型別照各介面的表檢查，
+也只能用下列介面，範圍比單一值介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、
+`Url`、`Color`、`Phone`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、
+`DateTime`、`Select`、`Radio`。不允許的介面有：
 
 - 巢狀 `Repeater`
 - `RichText`、`Json`、`KeyValue`
@@ -182,6 +189,9 @@ UTC。
 | `Hidden` | 單一值或結構化型別，裡面沒有 `object` | 依屬性型別；結構化型別存成 JSON | `ReadonlyField` |
 | `Divider` | 單一值型別，或掛 `IsIgnore = true` 的任何型別 | 依屬性型別，`IsIgnore` 則無 | `DividerField` |
 | `Uuid` | `Guid`／`Guid?` | CLR 預設 | `ReadonlyField` |
+
+`Hidden` 收的單一值型別有 `string`、數值型別、`bool`、`DateTime`、`Guid`、它們的可為 null 形式與
+`byte[]`。`Divider` 收同一批，但不含 `byte[]`。
 
 這裡的 `Hidden` 是介面本身，用來渲染一個唯讀的顯示元件，跟下一節的
 `[CmsField(Hidden = true)]` 是兩回事——後者能掛在任何介面上。`Divider` 忽略欄位值，通常另外
@@ -209,7 +219,7 @@ UTC。
 | `[SugarColumn(Length = n)]` | `varchar(n)` | `n` |
 | `[SugarColumn(ColumnDataType = "t", Length = n)]` | 型別 `t`，長度 `n` | `n` |
 | `[SugarColumn(ColumnDataType = "t")]` | 型別 `t`，照字面 | 不限 |
-| `[SugarColumn(IsJson = true)]` | 長文字，存 JSON | 不適用 |
+| 結構化型別屬性加 `[SugarColumn(IsJson = true)]` | 長文字，存 JSON | 不適用 |
 
 表裡的多值介面與結構化型別，定義見[介面總覽](#介面總覽)。其他用語：
 
@@ -225,8 +235,8 @@ UTC。
 
 ### 啟動時被擋的宣告
 
-下面的組合互相衝突。主機啟動時就失敗，丟出 `MetadataException`，訊息點名類別、屬性和兩個衝突
-的宣告。每個環境都一樣，不用等到用到那張表。
+下面的宣告互相衝突，或屬性型別跟介面、欄位形狀對不上。主機啟動時就失敗，丟出
+`MetadataException`，訊息點名類別、屬性和有問題的宣告。每個環境都一樣，不用等到用到那張表。
 
 | 衝突的宣告 | 怎麼改 |
 |---|---|
@@ -241,12 +251,38 @@ UTC。
 | `object`，或含有 `object` 或無型別元素的型別 | 改宣告成具體型別 |
 | `[ColumnShape]` 加 `ColumnDataType` | 兩個只留一個 |
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
+| 屬性型別不是該介面收的型別 | 改宣告成該介面收的型別，或換介面 |
+| 沒有任何介面收的屬性型別 | 見〈沒有介面收的型別〉 |
+| 單一值型別屬性加 `IsJson = true` | 拿掉 `IsJson` |
+| `[ColumnShape(LongText)]` 在不是 `string` 的屬性上 | 拿掉，或屬性改成 `string` |
+| `Timestamp`、`TimestampWithTimeZone` 在不是 `DateTime` 的屬性上 | 拿掉，或屬性改成 `DateTime` |
+| `MultiSelect`、`CheckboxGroup` 沒有 `[CmsOptions]` | 加上 `[CmsOptions]` 列出可選的值 |
 
 JSON 欄位的型別由框架決定，不能用 `[ColumnShape]` 或 `ColumnDataType` 指定。結構化型別屬性存成
 JSON 欄位，同樣如此。
 
 單一值介面上的結構化型別屬性，有沒有寫 `IsJson` 都被擋，要改成宣告單一值型別的屬性，或改用
-多值介面或 `Hidden`。`Json` 介面存的是原始 JSON 文字，所以屬性要宣告成 `string`。
+多值介面或 `Hidden`。`Json` 介面存的是原始 JSON 文字，所以屬性要宣告成 `string`。反過來，單一值
+型別的屬性不能標 `IsJson`，任何介面都一樣；結構化型別的屬性放在 `Hidden` 或多值介面，不必標。
+
+`[ColumnShape]` 的三個成員各有適用的型別：`LongText` 只能用在 `string`，`Timestamp` 與
+`TimestampWithTimeZone` 只能用在 `DateTime` 與 `DateTime?`。
+
+每個介面收哪些屬性型別，列在〈介面總覽〉各組的表。型別要完全相同，所以 `List<string>` 放在
+`Tags` 上被擋，`Tags` 要宣告成 `List<TagItem>`；`string[]` 或 `IList<string>` 也不能代替
+`List<string>`。訊息指出屬性的型別、介面收什麼，以及哪些介面收這個型別。
+
+### 沒有介面收的型別
+
+下面的型別，包含它們的 `Nullable<T>`，沒有任何介面收，宣告成這些型別的 `[CmsField]` 屬性都被擋：
+
+| 型別 | 改用 |
+|---|---|
+| `DateOnly`、`DateTimeOffset` | `DateTime`，介面用 `Date`、`Time` 或 `DateTime` |
+| `TimeOnly`、`TimeSpan` | `DateTime`（`Time`），或存文字的 `string`（`Text`） |
+| `char` | `string` |
+| 列舉 | `string`，介面用 `Select` 或 `Radio`，值列在 `[CmsOptions]` |
+| `short`、`byte`、無號整數 | `int` 或 `long`（`Number`） |
 
 `object` 讀回來的是 JSON 節點，不是寫入的值，所以包含多值介面與 `Hidden` 在內，任何介面都不收。
 被擋的不只型別本身是 `object` 的屬性：`object` 出現在型別參數（`Dictionary<string, object>`、
@@ -260,8 +296,8 @@ JSON 欄位，同樣如此。
 `byte[]?`，不在這條檢查裡。
 
 檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]` 屬性。`[ColumnShape]` 加長文字介面
-照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，欄位相關的檢查都略過它；唯一會檢查到它的
-是 `object` 檢查，`Repeater` 子型別裡的 `object` 或無型別容器會被擋。掛
+照常可用。`Repeater` 子欄位存在 JSON 裡，沒有自己的欄位，`[ColumnShape]`、`ColumnDataType` 這類
+欄位宣告的檢查略過它；屬性型別是否對得上介面、`object` 與無型別容器的檢查，子欄位照做。掛
 `[SugarColumn(IsIgnore = true)]` 的屬性完全不檢查。
 
 ### 存長文字
@@ -280,8 +316,8 @@ JSON 欄位，同樣如此。
 `MaxLength` 以 UTF-16 code unit 計。後台輸入與寫入驗證都以它為準，超過回 400。後台把有效的值綁到
 原生輸入的 `maxlength` 屬性上。
 
-沒有明寫（或寫 0）時，預設值照上一節的表。預設跟介面無關：`Hidden`、`Time` 與宣告在 `string`
-上的 `Uuid` 一樣是 255。要上限的「不限」欄位，在 `[CmsField]` 上設 `MaxLength`。
+沒有明寫（或寫 0）時，預設值照上一節的表。預設跟介面無關：`Hidden` 上的 `string` 跟 `Text` 一樣是
+255。要上限的「不限」欄位，在 `[CmsField]` 上設 `MaxLength`。
 
 啟動時的檢查：
 

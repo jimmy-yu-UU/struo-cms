@@ -157,6 +157,29 @@
   - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加 `[SugarColumn(IsNullable = false)]`。
     可為 null 的屬性一律得到可為 null 的欄位，所以拿掉 `IsNullable = false` 欄位不變；要 NOT NULL，
     把屬性宣告成不可為 null（`Guid`、`string`），欄位會跟著變，已建好的表要另寫一支 migration。
+- 掃描器在啟動時檢查每個 `[CmsField]` 屬性的型別是否對得上介面，以及欄位形狀與 `IsJson`、
+  `[CmsOptions]` 的宣告，丟出 `MetadataException`，訊息點名「類別.屬性」。檢查對象是集合、翻譯實體
+  與 junction payload 的屬性，以及 `Repeater` 子欄位；掛 `[SugarColumn(IsIgnore = true)]` 的屬性
+  不檢查。下列宣告原本都能啟動，欄位要嘛之後才失敗，要嘛存下錯的值，所以有這些宣告的 fork，主機會
+  無法啟動；每個介面收的型別見[第 6 章](06-field-types.md)：
+  - 屬性型別不是介面收的型別，型別要完全相同。例如 `Tags` 上的 `List<string>`、`Text` 上的
+    `int`、`Select` 上的列舉、`MultiSelect` 上的 `string[]` 或 `IList<string>`。屬性改宣告成
+    介面收的型別（`Tags` 是 `List<TagItem>`），或換成收這個型別的介面。
+  - 沒有任何介面收的型別：`DateOnly`、`TimeOnly`、`TimeSpan`、`char`、`DateTimeOffset`、列舉、
+    `short`、`byte`、無號整數，以及它們的 `Nullable<T>`。`DateOnly` 與 `DateTimeOffset` 改成
+    `DateTime`（`Date`、`Time` 或 `DateTime`）；`TimeOnly` 與 `TimeSpan` 改成 `DateTime`
+    （`Time`），或存文字的 `string`（`Text`）；`char` 改成 `string`；列舉改成 `string`，
+    介面用 `Select` 或 `Radio`，值列在 `[CmsOptions]`；小整數改成 `int` 或 `long`。已建好的表，
+    欄位型別若隨屬性型別而變，要另寫一支 migration。
+  - 單一值型別的屬性加 `[SugarColumn(IsJson = true)]`，任何介面都一樣。值會存成 JSON 文字而讀回
+    時多一層引號；拿掉 `IsJson`，或改宣告成結構化型別。
+  - `[ColumnShape(LongText)]` 用在不是 `string` 的屬性，或 `Timestamp`、`TimestampWithTimeZone`
+    用在不是 `DateTime`、`DateTime?` 的屬性。拿掉 `[ColumnShape]`，或把屬性改成對應的型別。
+  - `MultiSelect` 或 `CheckboxGroup` 沒有 `[CmsOptions]`。沒有選項時每個值都被拒絕；加上
+    `[CmsOptions]` 列出可選的值。
+  - `[CmsRelation]` 屬性的 `[Navigate]` 外鍵名稱不是屬性：多對一與一對一要是宣告它的實體上的屬性，
+    一對多要是清單元素型別上的屬性，不分大小寫；多對多不變。原本啟動時不檢查，之後的查詢與寫入才
+    失敗。改成實際存在的屬性名稱，或在該型別上補上外鍵屬性。
 - 被掃描的組件裡有載入不起來的型別，不論是內容組件、框架本身或宿主，都讓主機在啟動時失敗，丟出
   `MetadataException`。原因是依賴的組件缺少或版本不符；訊息帶出組件名稱、載入失敗的型別數、載入器
   回報的型別名稱與去重後的載入錯誤，後兩者各最多列五個，其餘只給數量。型別載得起來但讀不了成員或
@@ -334,6 +357,10 @@
 
 ### 修正
 
+- 集合的 GraphQL 建立輸入型別沒有任何欄位時（欄位全是稽核欄位、`Hidden = true`、`ReadOnly = true`，
+  或介面是 `Hidden`、`Divider`、`Password`，或只能翻譯而沒有翻譯 sidecar，又沒有多對一或多對多的
+  關聯），主機啟動時停下，訊息點名該集合並說明怎麼改。0.30.1 停在讀不懂的函式庫例外，
+  ``System.ArgumentException: Type 'System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.Object]' does not have a default constructor``。
 - emoji 這類補充平面字元寫進字串欄位時，在 MySQL 與 MariaDB 上回 `500`：寫入失敗並出現
   `Incorrect string value`，篩選或搜尋拿它比對欄位則出現 `Illegal mix of collations`。欄位當時是
   utf8mb3。新資料庫與升級後的核心資料庫現在存得進去也比對得了；既有資料庫與 fork 自己的表怎麼轉換見
