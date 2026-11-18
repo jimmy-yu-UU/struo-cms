@@ -211,15 +211,16 @@
     (`Guid`, `string`), which changes the column and needs a migration for a table that exists.
 - The scanner checks the type of each `[CmsField]` property, its column shape, and its `IsJson` and
   `[CmsOptions]` declarations, and throws a `MetadataException` that names "Class.Property" when one
-  does not fit. The check covers the properties of collections, translation entities and junction
-  payloads, and `Repeater` sub-fields; a property with `[SugarColumn(IsIgnore = true)]` is not
-  checked, and neither are the sub-fields of a `Repeater` property that carries it. Each declaration
-  below used to start the host and then fail later or store a wrong value, so a fork that has one
-  can no longer start the host; [Chapter 6](06-field-types.md) has the type each interface accepts:
-  - A property type the interface does not accept; the match is on the exact type. Examples are
-    `List<string>` on `Tags`, `int` on `Text`, an enum on `Select`, and `string[]` or
-    `IList<string>` on `MultiSelect`. Declare a type the interface accepts (`List<TagItem>` for
-    `Tags`), or change to an interface that accepts the type.
+  does not fit; each declaration below used to start the host and then fail later or store a wrong
+  value, so a fork that has one can no longer start the host, and [Chapter 6](06-field-types.md) has
+  the type each interface accepts.
+  - A property type the interface does not accept; the match is on the exact type (the check covers
+    the properties of collections, translation entities and junction payloads, and `Repeater`
+    sub-fields; a property with `[SugarColumn(IsIgnore = true)]` is not checked, and neither are the
+    sub-fields of a `Repeater` property that carries it). Examples are `List<string>` on `Tags`,
+    `int` on `Text`, an enum on `Select`, and `string[]` or `IList<string>` on `MultiSelect`.
+    Declare a type the interface accepts (`List<TagItem>` for `Tags`), or change to an interface
+    that accepts the type.
   - A type no interface accepts: `DateOnly`, `TimeOnly`, `TimeSpan`, `char`, `DateTimeOffset`, an
     enum, `short`, `byte`, the unsigned integers, and the `Nullable<T>` of each. Use `DateTime`
     (`Date`, `Time` or `DateTime`) for `DateOnly` and `DateTimeOffset`; `DateTime` (`Time`) or a
@@ -462,8 +463,8 @@ transformed again on the first request.
 
 ### Fixed
 
-- A `Time` field read through GraphQL printed its value with the host's time-zone offset (
-  `05:06:07.000+08:00` for a value written as `05:06:07Z`), so on a host that is not in UTC a
+- A `Time` field read through GraphQL printed its value with the host's time-zone offset
+  (`05:06:07.000+08:00` for a value written as `05:06:07Z`), so on a host that is not in UTC a
   GraphQL client saw a different instant than a REST client; it is the UTC instant ending in `Z`,
   also in a `Repeater` sub-field, in `translations` and in facets.
 - When a GraphQL input type would have no field, the host stops at startup with a message that names

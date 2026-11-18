@@ -126,7 +126,7 @@ multi-value interface (`MultiSelect`, `CheckboxGroup`, `Tags`, `KeyValue`, `File
 on `Hidden`, and is stored as JSON. Its string operators match the stored JSON text, and
 `_in`/`_nin` is a 400. Other is every other field: numbers, booleans, `Guid` and date-times. The
 foreign-key property of a many-to-one relation can be filtered too, and the conversion table below
-applies to it; `short` and `byte` are common there. `_in`/`_nin` on a type the conversion table
+applies to it. `_in`/`_nin` on a type the conversion table
 below does not cover is a 400 too.
 
 The 400 for a string operator on a field it does not take names the field and the operator and lists
@@ -200,9 +200,9 @@ Swapping `_null]=true` for `_null]=false` returns the same row, and `meta.total`
 **Type conversion.** Except for `_null`/`_nnull`, every operator's value is converted to the field's
 real CLR type before comparison — a `Guid` foreign key is compared `uuid = uuid`, not as text. The
 conversion table covers `Guid`, `int`, `long`, `short`, `byte`, `bool`, `DateTime`, `decimal`,
-`double` and `float`; a `string` is compared as text, and `_in`/`_nin` on a type the conversion table
-does not cover is a 400. On a `string` property or a structured field, `_eq` with the word `null`
-compares that word and never tests for NULL.
+`double` and `float`; a `string` is compared as text, and `_in`/`_nin` on a type the conversion
+table does not cover is a 400. On a `string` property or a structured field, `_eq` with the word
+`null` compares that word and never tests for NULL.
 
 A value that is not of that type — `abc` for an integer, a number outside the type's range, `NaN`
 for a float, text that is not a date — is a 400 that names the field. It never reaches the

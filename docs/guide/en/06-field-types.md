@@ -340,9 +340,10 @@ The check covers `[CmsField]` properties of collections, translation entities an
 `[ColumnShape]` on a long-text interface works as usual. A `Repeater` sub-field lives inside its
 parent's JSON value and has no column of its own, so the column declaration checks (`[ColumnShape]`,
 `ColumnDataType`) skip it; the check that the property type fits the interface and the `object` and
-untyped-collection checks still run on it. A property with `[SugarColumn(IsIgnore = true)]` is not
-checked at all, and when a `Repeater` property carries it, its sub-field types are not checked
-either.
+untyped-collection checks still run on it. A property with `[SugarColumn(IsIgnore = true)]` is
+exempt from these declaration checks, and when a `Repeater` property carries it, its sub-field types
+are not checked either; the GraphQL rule that a `Repeater` needs a writable sub-field applies
+whatever the flag says, see [Chapter 5](05-collections.md).
 
 ### Storing long text
 

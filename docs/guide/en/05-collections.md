@@ -90,11 +90,11 @@ startup with a message that names the subject and the fields that do not count a
 change; a writable field is one that sets neither `Hidden = true` nor `ReadOnly = true` and whose
 interface is not `Hidden`, `Divider` or `Password`:
 
-| Input type | What counts | Startup message |
-|---|---|---|
-| The collection's create input | Writable field, many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
-| Translations input (translation sidecar) | Translatable writable field (not in the create input) | `Collection '<name>' has a translation sidecar, ...` |
-| A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | `Repeater '<collection>.<field>' has no sub-field ...` |
+| Input type | Fields that count | Relations that count | Startup message |
+|---|---|---|---|
+| The collection's create input | Writable, non-translatable field | Many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
+| Translations input (translation sidecar) | Writable, translatable field | None | `Collection '<name>' has a translation sidecar, ...` |
+| A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | None | `Repeater '<collection>.<field>' has no sub-field ...` |
 
 ## `[CmsCollection]` options
 

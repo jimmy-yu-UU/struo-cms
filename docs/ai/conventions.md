@@ -393,8 +393,8 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 
-A `Repeater` sub-field has no column, so only the type checks run on it (
-`ColumnDeclarationCheck.RequireSubFieldType`: the interface table and the `object` walk above), and
+A `Repeater` sub-field has no column, so only the type checks run on it
+(`ColumnDeclarationCheck.RequireSubFieldType`: the interface table and the `object` walk above), and
 none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = true)]`. A
 `MultiSelect` or `CheckboxGroup` property with no `[CmsOptions]`, or one that lists no value, is
 rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property's `[Navigate]` is

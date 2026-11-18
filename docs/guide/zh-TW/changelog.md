@@ -157,20 +157,20 @@
   - `Nullable<T>`（`Guid?`、`int?`）或 `string?` 的屬性加 `[SugarColumn(IsNullable = false)]`。
     可為 null 的屬性一律得到可為 null 的欄位，所以拿掉 `IsNullable = false` 欄位不變；要 NOT NULL，
     把屬性宣告成不可為 null（`Guid`、`string`），欄位會跟著變，已建好的表要另寫一支 migration。
-- 掃描器在啟動時檢查每個 `[CmsField]` 屬性的型別、欄位形狀、`IsJson` 與 `[CmsOptions]` 的宣告，
-  不合的丟出 `MetadataException`，訊息點名「類別.屬性」。檢查對象是集合、翻譯實體與 junction
-  payload 的屬性，以及 `Repeater` 子欄位；掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，
-  `Repeater` 屬性掛了它，子欄位也不檢查。下列宣告原本都能啟動，欄位要嘛之後才失敗，要嘛存下錯的
-  值，所以有這些宣告的 fork，主機會無法啟動；每個介面收的型別見[第 6 章](06-field-types.md)：
-  - 屬性型別不是介面收的型別，型別要完全相同。例如 `Tags` 上的 `List<string>`、`Text` 上的
-    `int`、`Select` 上的列舉、`MultiSelect` 上的 `string[]` 或 `IList<string>`。屬性改宣告成
-    介面收的型別（`Tags` 是 `List<TagItem>`），或換成收這個型別的介面。
+- 掃描器在啟動時檢查每個 `[CmsField]` 屬性的型別、欄位形狀、`IsJson` 與 `[CmsOptions]` 的宣告，不合
+  的丟出點名「類別.屬性」的 `MetadataException`；下列宣告原本都能啟動，欄位要嘛之後才失敗，要嘛存下
+  錯的值，所以有這些宣告的 fork，主機會無法啟動，每個介面收的型別見[第 6 章](06-field-types.md)。
+  - 屬性型別不是介面收的型別，型別要完全相同（檢查對象是集合、翻譯實體與 junction payload 的屬性，
+    以及 `Repeater` 子欄位；掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，`Repeater` 屬性
+    掛了它，子欄位也不檢查）。例如 `Tags` 上的 `List<string>`、`Text` 上的 `int`、`Select` 上的
+    列舉、`MultiSelect` 上的 `string[]` 或 `IList<string>`。屬性改宣告成介面收的型別（`Tags` 是
+    `List<TagItem>`），或換成收這個型別的介面。
   - 沒有任何介面收的型別：`DateOnly`、`TimeOnly`、`TimeSpan`、`char`、`DateTimeOffset`、列舉、
     `short`、`byte`、無號整數，以及它們的 `Nullable<T>`。`DateOnly` 與 `DateTimeOffset` 改成
-    `DateTime`（`Date`、`Time` 或 `DateTime`）；`TimeOnly` 與 `TimeSpan` 改成 `DateTime`
-    （`Time`），或存文字的 `string`（`Text`）；`char` 改成 `string`；列舉改成 `string`，
-    介面用 `Select` 或 `Radio`，值列在 `[CmsOptions]`；小整數改成 `int` 或 `long`。已建好的表，
-    欄位型別若隨屬性型別而變，要另寫一支 migration。
+    `DateTime`（`Date`、`Time` 或 `DateTime`）；`TimeOnly` 與 `TimeSpan` 改成
+    `DateTime`（`Time`），或存文字的 `string`（`Text`）；`char` 改成 `string`；列舉改成
+    `string`，介面用 `Select` 或 `Radio`，值列在 `[CmsOptions]`；小整數改成 `int` 或 `long`。
+    已建好的表，欄位型別若隨屬性型別而變，要另寫一支 migration。
   - 單一值型別的屬性加 `[SugarColumn(IsJson = true)]`，任何介面都一樣。值會存成 JSON 文字而讀回
     時多一層引號；拿掉 `IsJson`，或改宣告成結構化型別。
   - `[ColumnShape(LongText)]` 用在不是 `string` 的屬性，或 `Timestamp`、`TimestampWithTimeZone`
