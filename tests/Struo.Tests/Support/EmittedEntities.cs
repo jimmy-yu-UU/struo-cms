@@ -143,8 +143,10 @@ public static class EmittedEntities
             Named(nameof(CmsFieldAttribute.Hidden), spec.Hidden), Named(nameof(CmsFieldAttribute.ReadOnly), spec.ReadOnly),
             Named(nameof(CmsFieldAttribute.Translatable), spec.Translatable)));
         if (spec.WithOptions)
-            property.SetCustomAttribute(Attribute(typeof(CmsOptionsAttribute), [new[] { "a:A", "b:B", "hello:Hello" }]));
+            property.SetCustomAttribute(Attribute(typeof(CmsOptionsAttribute), [Options]));
     }
+
+    private static readonly string[] Options = ["a:A", "b:B", "hello:Hello"];
 
     private static (string Name, object Value) Named(string name, object value) => (name, value);
 

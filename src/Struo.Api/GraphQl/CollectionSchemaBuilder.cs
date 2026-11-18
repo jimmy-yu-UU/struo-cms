@@ -563,7 +563,7 @@ internal sealed class CollectionSchemaBuilder(
     }
 
     // A facet value is an Any value; the buckets of a Time field print as TimeText prints it.
-    private static IReadOnlyList<FacetResult> WithTimeText(IReadOnlyList<FacetResult> facets, IReadOnlySet<string> timeFields) =>
+    private static IReadOnlyList<FacetResult> WithTimeText(IReadOnlyList<FacetResult> facets, HashSet<string> timeFields) =>
         timeFields.Count == 0
             ? facets
             : facets.Select(f => timeFields.Contains(f.Field)

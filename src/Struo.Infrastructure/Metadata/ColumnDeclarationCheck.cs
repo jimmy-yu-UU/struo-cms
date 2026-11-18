@@ -93,7 +93,7 @@ internal static class ColumnDeclarationCheck
 
     private const int OfferedInterfaces = 4;
 
-    private static string Offer(IReadOnlyList<FieldInterface> interfaces, Type type) =>
+    private static string Offer(List<FieldInterface> interfaces, Type type) =>
         interfaces.Count <= OfferedInterfaces
             ? InterfacePropertyTypes.JoinOr(interfaces.Select(i => i.ToString()))
             : string.Join(", ", interfaces.Take(OfferedInterfaces)) +
@@ -126,7 +126,7 @@ internal static class ColumnDeclarationCheck
 
     // "an" before the sounds of a, e, i and o; "uint" and "ushort" start with the sound of "you".
     internal static string WithArticle(string typeName) =>
-        "aeiouAEIOU".Contains(typeName[0]) && !typeName.StartsWith('u') && !typeName.StartsWith('U')
+        "aeiouAEIOU".Contains(typeName[0], StringComparison.Ordinal) && !typeName.StartsWith('u') && !typeName.StartsWith('U')
             ? $"an {typeName}"
             : $"a {typeName}";
 

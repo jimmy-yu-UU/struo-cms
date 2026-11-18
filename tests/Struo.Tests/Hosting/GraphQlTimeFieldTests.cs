@@ -34,7 +34,7 @@ public sealed class GraphQlTimeFieldTests(ITestOutputHelper output)
         ],
         [new EmittedProperty("Clock", typeof(DateTime?), FieldInterface.Time)]);
 
-    private async Task<(ForkHost Host, HttpClient Client)> StartAsync()
+    private static async Task<(ForkHost Host, HttpClient Client)> StartAsync()
     {
         var assembly = EmittedEntities.Build(EmittedEntities.UniqueName("timefield"), [Entity]);
         var host = await ForkHost.StartAsync(

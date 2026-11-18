@@ -24,11 +24,12 @@ internal static class WritableInput
 
     private static Decision Skipped(string reason) => new(null, reason);
 
-    private static string? FlagReason(FieldMetadata f) =>
-        f.IsSystem ? "an audit field"
-        : f.Hidden ? "Hidden = true"
-        : f.ReadOnly ? "ReadOnly = true"
-        : null;
+    private static string? FlagReason(FieldMetadata f)
+    {
+        if (f.IsSystem) return "an audit field";
+        if (f.Hidden) return "Hidden = true";
+        return f.ReadOnly ? "ReadOnly = true" : null;
+    }
 
     private static Decision NeverWritten(FieldMetadata f, string? sdl) =>
         sdl is null ? Skipped($"Interface = {f.Interface}, which is never written") : new Decision(sdl, null);
@@ -141,7 +142,7 @@ internal static class WritableInput
             "Make at least one sub-field writable: it must not set Hidden = true or ReadOnly = true.");
     }
 
-    private static string Bounded(IReadOnlyList<string> items) =>
+    private static string Bounded(List<string> items) =>
         items.Count <= ListedFields
             ? string.Join(", ", items)
             : $"{string.Join(", ", items.Take(ListedFields))} and {items.Count - ListedFields} more";
