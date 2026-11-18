@@ -21,11 +21,10 @@ public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Pr
 
 /// <summary>
 /// A <c>[CmsCollection]</c> entity with a Guid <c>Id</c> and the given properties. <paramref name="Translations"/>
-/// gives it a translation sidecar with those translatable properties; <paramref name="Revisions"/> turns revisions on.
+/// gives it a translation sidecar with those translatable properties.
 /// </summary>
 public sealed record EmittedEntity(
-    string Name, IReadOnlyList<EmittedProperty> Properties, IReadOnlyList<EmittedProperty>? Translations = null,
-    bool Revisions = false);
+    string Name, IReadOnlyList<EmittedProperty> Properties, IReadOnlyList<EmittedProperty>? Translations = null);
 
 /// <summary>
 /// Builds collections from a description, so a test can declare one property per (interface, type) pair
@@ -57,7 +56,7 @@ public static class EmittedEntities
         {
             var lower = char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..];
             var builder = DefineClass(module, entity.Name, [
-                Attribute(typeof(CmsCollectionAttribute), [entity.Name], Named(nameof(CmsCollectionAttribute.Name), lower), Named(nameof(CmsCollectionAttribute.Revisions), entity.Revisions)),
+                Attribute(typeof(CmsCollectionAttribute), [entity.Name], Named(nameof(CmsCollectionAttribute.Name), lower)),
                 Attribute(typeof(SugarTable), [lower]),
             ]);
             AddProperty(builder, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);

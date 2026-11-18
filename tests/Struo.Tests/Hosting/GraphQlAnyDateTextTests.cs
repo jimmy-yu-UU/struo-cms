@@ -1,10 +1,5 @@
-using System.Net;
-using System.Text;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using SqlSugar;
-using Struo.Application.Metadata;
 using Struo.Domain.Metadata.Enums;
 using Struo.Tests.Support;
 using Xunit;
@@ -14,10 +9,9 @@ namespace Struo.Tests.Hosting;
 
 /// <summary>
 /// A <c>Date</c>, <c>DateTime</c> or <c>Time</c> field that GraphQL prints inside an <c>Any</c> value (a
-/// translation's fields, a facet value, an aggregate value, a revision snapshot) has the text the own field
-/// prints: <c>Date</c> as the date, <c>DateTime</c> and <c>Time</c> as the UTC instant ending in Z, with
-/// fractional seconds only when there are some. A null stays null. Runs on the backend
-/// <c>STRUO_TEST_BACKEND</c> selects.
+/// translation's fields, a facet value, an aggregate value) has the text the own field prints: <c>Date</c> as
+/// the date, <c>DateTime</c> and <c>Time</c> as the UTC instant ending in Z, with fractional seconds only when
+/// there are some. A null is null. Runs on the backend <c>STRUO_TEST_BACKEND</c> selects.
 /// </summary>
 [Collection("ApiIntegration")]
 public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
@@ -29,6 +23,7 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
 
     private static readonly string[] ValueOps = ["min", "max"];
     private static readonly string[] Aggregatable = ["day", "moment"];
+    private static readonly string[] AllFields = ["day", "moment", "clock"];
 
     private static readonly EmittedChild Row = new(
         "DateRow",
@@ -51,27 +46,24 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
             new EmittedProperty("LocaleDay", typeof(DateTime?), FieldInterface.Date),
             new EmittedProperty("LocaleMoment", typeof(DateTime?), FieldInterface.DateTime),
             new EmittedProperty("LocaleClock", typeof(DateTime?), FieldInterface.Time),
-        ],
-        Revisions: true);
+        ]);
+
+    // Two date fields whose names differ only in case: `stamp` (DateTime) and `sTAMP` (Date).
+    private static readonly EmittedEntity CaseEntity = new(
+        "CaseProbe",
+        [
+            new EmittedProperty("Name", typeof(string), FieldInterface.Text),
+            new EmittedProperty("Stamp", typeof(DateTime?), FieldInterface.DateTime),
+            new EmittedProperty("STAMP", typeof(DateTime?), FieldInterface.Date),
+        ]);
 
     private sealed record Probe(HttpClient Client, string FractionalId, string WholeId, string NullId);
 
     private static async Task<(ForkHost Host, Probe Probe)> StartAsync()
     {
-        var assembly = EmittedEntities.Build(EmittedEntities.UniqueName("anydate"), [Entity]);
-        var host = await ForkHost.StartAsync(
-            mutate: s =>
-            {
-                s["Struo:ContentAssemblies:1"] = assembly.GetName().Name;
-                s["Auth:Cookie:RequireSecure"] = "false";
-                s["RateLimiting:Login:Enabled"] = "false";
-                s["GraphQl:ExposeSchema"] = "true";
-            },
-            environment: "Production", onSelectedBackend: true);
+        var (host, client) = await EmittedGraphQlHost.StartAsync(Entity, "anydate");
         try
         {
-            CreateTables(host);
-            var client = await LoginAsync(host);
             var probe = new Probe(
                 client,
                 await CreateAsync(client, FractionalDay, FractionalInstant),
@@ -86,32 +78,8 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
         }
     }
 
-    private static void CreateTables(ForkHost host)
-    {
-        var registry = host.App.Services.GetRequiredService<IEntityRegistry>();
-        var sidecar = host.App.Services.GetRequiredService<IMetadataProvider>().GetCollection("dateProbe")!.Translation!.TranslationEntityType;
-        using var scope = host.App.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
-        db.CodeFirst.InitTables(registry.Get("dateProbe")!.EntityType);
-        db.CodeFirst.InitTables(sidecar);
-    }
-
-    private static async Task<HttpClient> LoginAsync(ForkHost host)
-    {
-        var client = host.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
-        var login = await client.PostAsync(
-            "/api/auth/login",
-            new StringContent($"{{\"email\":\"admin@admin.com\",\"password\":\"{TestBootstrapAdmin.Password}\"}}", Encoding.UTF8, "application/json"));
-        login.StatusCode.Should().Be(HttpStatusCode.OK, await login.Content.ReadAsStringAsync());
-        client.DefaultRequestHeaders.Add("Cookie", string.Join("; ", login.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0])));
-        return client;
-    }
-
-    // Written through REST, which stores the value as sent and is not under test.
-    private static async Task<string> CreateAsync(HttpClient client, string? day, string? instant)
-    {
-        var body = new JsonObject
+    private static Task<string> CreateAsync(HttpClient client, string? day, string? instant) =>
+        EmittedGraphQlHost.CreateAsync(client, "dateProbe", new JsonObject
         {
             ["name"] = day ?? "null",
             ["day"] = day,
@@ -122,27 +90,18 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
             {
                 ["en"] = new JsonObject { ["localeDay"] = day, ["localeMoment"] = instant, ["localeClock"] = instant },
             },
-        };
-        var response = await client.PostAsync("/api/items/dateProbe", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
-        var text = await response.Content.ReadAsStringAsync();
-        response.StatusCode.Should().Be(HttpStatusCode.Created, text);
-        return JsonNode.Parse(text)!["data"]!["id"]!.GetValue<string>();
-    }
+        });
 
-    private async Task<JsonNode> QueryAsync(HttpClient client, string query)
-    {
-        var request = new JsonObject { ["query"] = query };
-        var response = await client.PostAsync("/graphql", new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"));
-        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
-        output.WriteLine(json.ToJsonString());
-        json["errors"].Should().BeNull(json.ToJsonString());
-        return json;
-    }
+    private Task<JsonNode> QueryAsync(HttpClient client, string query) => EmittedGraphQlHost.QueryAsync(client, output, query);
 
     private static string Text(JsonNode? node) => node is null ? "(null)" : node.GetValue<string>();
 
     private async Task<JsonNode> ItemAsync(Probe p, string id, string selection) =>
         (await QueryAsync(p.Client, $$"""{ dateProbe(id: "{{id}}") { {{selection}} } }"""))["data"]!["dateProbe"]!;
+
+    // The text of the non-null values of one own field over all items.
+    private static List<string> Own(JsonNode list, string field) =>
+        list["items"]!.AsArray().Where(i => i![field] is not null).Select(i => i![field]!.GetValue<string>()).ToList();
 
     [Fact]
     public async Task The_own_fields_print_the_text_the_Any_positions_are_compared_with()
@@ -200,19 +159,27 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
         await using var _ = host;
 
         var json = await QueryAsync(p.Client, """
-            { dateProbes(facets: ["day", "moment", "clock"]) { facets { field values { value count } } } }
+            { dateProbes(facets: ["day", "moment", "clock"]) { items { day moment clock } facets { field values { value count } } } }
             """);
 
-        var facets = json["data"]!["dateProbes"]!["facets"]!.AsArray();
-        Values(facets, "day").Should().BeEquivalentTo(FractionalDay, WholeDay);
-        Values(facets, "moment").Should().BeEquivalentTo(FractionalInstant, WholeInstant);
-        Values(facets, "clock").Should().BeEquivalentTo(FractionalInstant, WholeInstant);
+        var list = json["data"]!["dateProbes"]!;
+        var facets = list["facets"]!.AsArray();
+        Values(facets, "day").Should().BeEquivalentTo(Own(list, "day")).And.BeEquivalentTo(FractionalDay, WholeDay);
+        Values(facets, "moment").Should().BeEquivalentTo(Own(list, "moment")).And.BeEquivalentTo(FractionalInstant, WholeInstant);
+        Values(facets, "clock").Should().BeEquivalentTo(Own(list, "clock")).And.BeEquivalentTo(FractionalInstant, WholeInstant);
+        foreach (var field in AllFields)
+            NullBuckets(facets, field).Should().Be(1, $"the row without a {field} is one null bucket");
     }
 
     // The text of each non-null bucket of one field.
     private static List<string> Values(JsonArray facets, string field) =>
-        facets.Single(f => f!["field"]!.GetValue<string>() == field)!["values"]!.AsArray()
-            .Where(v => v!["value"] is not null).Select(v => v!["value"]!.GetValue<string>()).ToList();
+        Buckets(facets, field).Where(v => v!["value"] is not null).Select(v => v!["value"]!.GetValue<string>()).ToList();
+
+    // How many buckets of one field have the value null (not a string).
+    private static int NullBuckets(JsonArray facets, string field) => Buckets(facets, field).Count(v => v!["value"] is null);
+
+    private static JsonArray Buckets(JsonArray facets, string field) =>
+        facets.Single(f => f!["field"]!.GetValue<string>() == field)!["values"]!.AsArray();
 
     [Fact]
     public async Task An_aggregate_min_and_max_print_Date_and_DateTime_as_the_own_fields_do()
@@ -221,14 +188,16 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
         await using var _ = host;
 
         var json = await QueryAsync(p.Client, """
-            { dateProbes(aggregate: { min: ["day", "moment"], max: ["day", "moment"], count: ["moment"] }) { aggregate } }
+            { dateProbes(aggregate: { min: ["day", "moment"], max: ["day", "moment"], count: ["moment"] }) {
+                items { day moment } aggregate } }
             """);
 
-        var aggregate = json["data"]!["dateProbes"]!["aggregate"]!;
-        Text(aggregate["min"]!["day"]).Should().Be(FractionalDay);
-        Text(aggregate["min"]!["moment"]).Should().Be(FractionalInstant);
-        Text(aggregate["max"]!["day"]).Should().Be(WholeDay);
-        Text(aggregate["max"]!["moment"]).Should().Be(WholeInstant);
+        var list = json["data"]!["dateProbes"]!;
+        var aggregate = list["aggregate"]!;
+        Text(aggregate["min"]!["day"]).Should().Be(FractionalDay).And.Be(Own(list, "day").Min());
+        Text(aggregate["min"]!["moment"]).Should().Be(FractionalInstant).And.Be(Own(list, "moment").Min());
+        Text(aggregate["max"]!["day"]).Should().Be(WholeDay).And.Be(Own(list, "day").Max());
+        Text(aggregate["max"]!["moment"]).Should().Be(WholeInstant).And.Be(Own(list, "moment").Max());
         aggregate["count"]!["moment"]!.GetValue<long>().Should().Be(2);
     }
 
@@ -239,13 +208,15 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
         await using var _ = host;
 
         var json = await QueryAsync(p.Client, """
-            { dateProbes(facets: ["Moment"], aggregate: { min: ["Day"], max: ["Moment"] }) { facets { field values { value } } aggregate } }
+            { dateProbes(facets: ["Moment"], aggregate: { min: ["Day"], max: ["Moment"] }) {
+                items { day moment } facets { field values { value } } aggregate } }
             """);
 
         var list = json["data"]!["dateProbes"]!;
-        Values(list["facets"]!.AsArray(), "Moment").Should().BeEquivalentTo(FractionalInstant, WholeInstant);
-        Text(list["aggregate"]!["min"]!["Day"]).Should().Be(FractionalDay);
-        Text(list["aggregate"]!["max"]!["Moment"]).Should().Be(WholeInstant);
+        Values(list["facets"]!.AsArray(), "Moment").Should().BeEquivalentTo(Own(list, "moment"))
+            .And.BeEquivalentTo(FractionalInstant, WholeInstant);
+        Text(list["aggregate"]!["min"]!["Day"]).Should().Be(FractionalDay).And.Be(Own(list, "day").Min());
+        Text(list["aggregate"]!["max"]!["Moment"]).Should().Be(WholeInstant).And.Be(Own(list, "moment").Max());
     }
 
     [Fact]
@@ -262,5 +233,27 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
         foreach (var op in ValueOps)
             foreach (var field in Aggregatable)
                 aggregate[op]![field].Should().BeNull($"{op} of {field}");
+    }
+
+    [Fact]
+    public async Task Two_date_fields_named_in_different_case_start_and_a_facet_prints_the_first_one_like_the_field()
+    {
+        var (host, client) = await EmittedGraphQlHost.StartAsync(CaseEntity, "anydatecase");
+        await using var _ = host;
+        await EmittedGraphQlHost.CreateAsync(client, "caseProbe", new JsonObject
+        {
+            ["name"] = "c", ["stamp"] = FractionalInstant, ["sTAMP"] = WholeDay,
+        });
+
+        var json = await QueryAsync(client, """
+            { caseProbes(facets: ["stamp", "sTAMP"]) { items { stamp sTAMP } facets { field values { value } } } }
+            """);
+
+        var list = json["data"]!["caseProbes"]!;
+        Text(list["items"]![0]!["stamp"]).Should().Be(FractionalInstant);
+        Text(list["items"]![0]!["sTAMP"]).Should().Be(WholeDay);
+        var facets = list["facets"]!.AsArray();
+        Values(facets, "stamp").Should().Equal(FractionalInstant);
+        Values(facets, "sTAMP").Should().Equal(FractionalInstant, "a name that matches two fields ignoring case reads the first field");
     }
 }
