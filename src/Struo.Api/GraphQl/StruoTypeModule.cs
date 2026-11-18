@@ -37,6 +37,9 @@ public sealed class StruoTypeModule(
 
         var collections = BuildCollections();
         GraphQlNameValidator.Validate(collections.Select(c => c.Surface).ToList());
+        var builder = new CollectionSchemaBuilder(registry, metadata, m2mSource);
+        foreach (var meta in metadata.GetCollections())
+            builder.RequireWritableFields(meta);
         foreach (var collection in collections)
             types.AddRange(collection.Types);
 

@@ -112,6 +112,10 @@ internal sealed class CollectionSchemaBuilder(
         return new BuiltCollection(types, _createdNames.ToList());
     }
 
+    /// <summary>Stops startup with a message about the collection when its create input type would have no field.</summary>
+    internal void RequireWritableFields(CollectionMetadata meta) =>
+        WritableInput.RequireAny(meta, registry.Get(meta.Name), PayloadRelations(meta));
+
     private List<M2MDescriptor> PayloadRelations(CollectionMetadata meta) =>
         m2mSource.M2MDescriptors(meta.Name)
             .Where(d => HasExposablePayload(d, metadataProvider))
@@ -291,7 +295,7 @@ internal sealed class CollectionSchemaBuilder(
     // Shared lookup used by both the read (BuildObjectType) and write (AddWritableFields) relation
     // loops to find a relation's payload descriptor, if any, among the collection's already-filtered
     // payloadRelations (see Build).
-    private static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
+    internal static M2MDescriptor? DescriptorFor(IReadOnlyList<M2MDescriptor> payloadRelations, string relationName) =>
         payloadRelations.FirstOrDefault(d => string.Equals(d.RelationName, relationName, StringComparison.OrdinalIgnoreCase));
 
     // Builds the per-parent-relation wrapper type used when an M2M relation carries junction
@@ -519,59 +523,8 @@ internal sealed class CollectionSchemaBuilder(
     private void AddWritableFields(
         InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
-        var desc = registry.Get(meta.Name);
-        AddWritableOwnFields(config, meta, desc);
-        AddWritableRelationFields(config, meta, payloadRelations);
-
-        // Typed translations input — only when the collection has a translation sidecar.
-        // Translatable own-fields stay excluded above (`if (f.Translatable) continue;`); they are
-        // carried here instead.
-        if (meta.Translation is not null)
-            config.Fields.Add(new InputFieldConfiguration(
-                "translations", null,
-                TypeReference.Parse($"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]")));
-    }
-
-    private static void AddWritableOwnFields(InputObjectTypeConfiguration config, CollectionMetadata meta, EntityDescriptor? desc)
-    {
-        foreach (var f in meta.Fields)
-        {
-            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            if (f.Translatable) continue; // handled by the typed translations input below
-
-            string? sdl = f.Interface switch
-            {
-                FieldInterface.Tags => $"[{SchemaTypeMapper.TagItemInputName}!]",
-                FieldInterface.Repeater when f.Fields is { Count: > 0 } =>
-                    $"[{SchemaTypeMapper.RepeaterItemInputTypeName(meta.Name, f.Name)}!]",
-                _ => SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name)),
-            };
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
-        }
-    }
-
-    // M2O foreign keys (as ID) + M2M relations (as [ID!] target-id arrays).
-    private static void AddWritableRelationFields(
-        InputObjectTypeConfiguration config, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> payloadRelations)
-    {
-        foreach (var rel in meta.Relations)
-        {
-            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("ID")));
-            else if (rel.Kind == RelationKind.ManyToMany)
-            {
-                config.Fields.Add(new InputFieldConfiguration(rel.Name, null, TypeReference.Parse("[ID!]")));
-
-                // M2M relation carrying junction payload -> additive `<rel>Links: [<Rel>LinkInput!]`
-                // alongside the plain `[ID!]` field above (untouched).
-                var descriptor = DescriptorFor(payloadRelations, rel.Name);
-                if (descriptor is not null)
-                    config.Fields.Add(new InputFieldConfiguration(
-                        SchemaTypeMapper.LinksFieldName(rel.Name), null,
-                        TypeReference.Parse($"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]")));
-            }
-        }
+        foreach (var field in WritableInput.Fields(meta, registry.Get(meta.Name), payloadRelations))
+            config.Fields.Add(new InputFieldConfiguration(field.Name, null, TypeReference.Parse(field.Sdl)));
     }
 
     // Filterable own-field interfaces: scalars only (parity with REST; multi-value/json/kv/files/repeater excluded).
@@ -584,7 +537,7 @@ internal sealed class CollectionSchemaBuilder(
 
     // MUST use TryGetValue (never the indexer): the fixtures deliberately omit translatable fields
     // (e.g. "title") from FieldToProperty, mirroring the real scanner — an indexer lookup would throw.
-    private static Type? ClrType(EntityDescriptor? desc, string fieldName)
+    internal static Type? ClrType(EntityDescriptor? desc, string fieldName)
     {
         if (desc is null) return null;
         return desc.FieldToProperty.TryGetValue(fieldName, out var prop)
