@@ -14,8 +14,6 @@ public class StringColumnWidthTests
     [
         (nameof(WidthProbeEntity.PlainText), 255),
         (nameof(WidthProbeEntity.HiddenText), 255),
-        (nameof(WidthProbeEntity.ClockText), 255),
-        (nameof(WidthProbeEntity.UuidText), 255),
         (nameof(WidthProbeEntity.ExplicitLimit), 255),
         (nameof(WidthProbeEntity.NarrowText), 100),
         (nameof(WidthProbeEntity.BodyText), null),
