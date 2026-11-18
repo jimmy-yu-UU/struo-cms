@@ -361,7 +361,7 @@
 - GraphQL 讀出的 `Time` 欄位，值帶著主機時區的偏移量（寫入 `05:06:07Z` 讀到 `05:06:07.000+08:00`），
   所以主機不在 UTC 時，GraphQL 用戶端看到的時刻與 REST 用戶端不同；現在是以 `Z` 結尾的 UTC 時刻，
   `Repeater` 子欄位、`translations` 與 facets 裡也一樣。
-- GraphQL 的輸入型別會是空的時候，主機在啟動時停下，訊息點名集合、不算數的欄位與改法；
+- GraphQL 的輸入型別會是空的時候，主機在啟動時停下，訊息點名集合、不計入的欄位與改法；
   `Repeater` 則點名集合與屬性。下列情況都算：
   - 集合沒有任何 GraphQL 寫得進去的欄位，也沒有多對一或多對多的關聯：欄位全是稽核欄位、
     `Hidden = true`、`ReadOnly = true`，或介面是 `Hidden`、`Divider`、`Password`，或只能翻譯。
