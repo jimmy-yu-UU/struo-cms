@@ -19,7 +19,7 @@ internal static class TemporalText
 {
     private static readonly string[] AggregateValueOps = ["min", "max"];
 
-    internal static bool IsTemporal(FieldInterface face) =>
+    private static bool IsTemporal(FieldInterface face) =>
         face is FieldInterface.Date or FieldInterface.DateTime or FieldInterface.Time;
 
     // A String field that holds a DateTime is a Time field.
@@ -31,17 +31,23 @@ internal static class TemporalText
         return face == FieldInterface.Date ? FormatDate(dateTime) : FormatInstant(dateTime);
     }
 
-    internal static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    internal static string FormatInstant(DateTime value)
+    private static string FormatInstant(DateTime value)
     {
         var utc = value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value;
         return utc.ToString("yyyy-MM-dd'T'HH':'mm':'ss.FFFFFFF'Z'", CultureInfo.InvariantCulture);
     }
 
     /// <summary>The temporal fields among <paramref name="fields"/>, by name.</summary>
-    internal static IReadOnlyDictionary<string, FieldInterface> Kinds(IEnumerable<FieldMetadata> fields, StringComparer names) =>
-        fields.Where(f => IsTemporal(f.Interface)).ToDictionary(f => f.Name, f => f.Interface, names);
+    internal static IReadOnlyDictionary<string, FieldInterface> Kinds(IEnumerable<FieldMetadata> fields, StringComparer names)
+    {
+        // A name that two fields share (ignoring case, when `names` does) reads the first field, as the query
+        // validator and the facet path do.
+        var first = new Dictionary<string, FieldInterface>(names);
+        foreach (var field in fields) first.TryAdd(field.Name, field.Interface);
+        return first.Where(kv => IsTemporal(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value, names);
+    }
 
     /// <summary>The fields of one translation: a temporal field is printed by its interface.</summary>
     internal static object? InFields(object? fields, IReadOnlyDictionary<string, FieldInterface> kinds) =>

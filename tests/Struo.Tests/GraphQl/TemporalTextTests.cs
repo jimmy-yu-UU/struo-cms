@@ -19,11 +19,11 @@ public sealed class TemporalTextTests
     [InlineData(DateTimeKind.Utc)]
     [InlineData(DateTimeKind.Unspecified)]
     public void An_instant_of_Utc_or_unspecified_kind_prints_as_it_is_with_a_Z(DateTimeKind kind) =>
-        TemporalText.FormatInstant(DateTime.SpecifyKind(Moment, kind)).Should().Be("2026-03-04T05:06:07Z");
+        TemporalText.Of(FieldInterface.DateTime, DateTime.SpecifyKind(Moment, kind)).Should().Be("2026-03-04T05:06:07Z");
 
     [Fact]
     public void An_instant_of_Local_kind_prints_as_the_UTC_instant() =>
-        TemporalText.FormatInstant(LocalMoment()).Should().Be("2026-03-04T05:06:07Z");
+        TemporalText.Of(FieldInterface.DateTime, LocalMoment()).Should().Be("2026-03-04T05:06:07Z");
 
     [Theory]
     [InlineData(0L, "2026-03-04T05:06:07Z")]
@@ -32,14 +32,14 @@ public sealed class TemporalTextTests
     [InlineData(1L, "2026-03-04T05:06:07.0000001Z")]
     [InlineData(1_234_567L, "2026-03-04T05:06:07.1234567Z")]
     public void Fractional_seconds_print_only_when_there_are_some_and_without_trailing_zeros(long ticks, string expected) =>
-        TemporalText.FormatInstant(Moment.AddTicks(ticks)).Should().Be(expected);
+        TemporalText.Of(FieldInterface.DateTime, Moment.AddTicks(ticks)).Should().Be(expected);
 
     [Theory]
     [InlineData(DateTimeKind.Utc)]
     [InlineData(DateTimeKind.Unspecified)]
     [InlineData(DateTimeKind.Local)]
     public void A_date_prints_the_date_part_of_the_value_without_a_zone_conversion(DateTimeKind kind) =>
-        TemporalText.FormatDate(new DateTime(2026, 3, 4, 23, 30, 0, kind)).Should().Be("2026-03-04");
+        TemporalText.Of(FieldInterface.Date, new DateTime(2026, 3, 4, 23, 30, 0, kind)).Should().Be("2026-03-04");
 
     [Fact]
     public void The_interface_of_the_field_decides_the_form()

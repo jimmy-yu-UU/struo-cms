@@ -10,12 +10,14 @@ using Xunit.Abstractions;
 namespace Struo.Tests.Support;
 
 /// <summary>
-/// A host with one emitted collection on the backend <c>STRUO_TEST_BACKEND</c> selects, its tables created and
-/// an admin signed in, for tests that read and write the collection through REST and GraphQL.
+/// A host with one emitted collection on the backend <c>STRUO_TEST_BACKEND</c> selects and an admin signed in,
+/// for tests that read and write the collection through REST and GraphQL. Its tables are created unless
+/// <c>createTables</c> is false.
 /// </summary>
 internal static class EmittedGraphQlHost
 {
-    public static async Task<(ForkHost Host, HttpClient Client)> StartAsync(EmittedEntity entity, string assemblyPrefix)
+    public static async Task<(ForkHost Host, HttpClient Client)> StartAsync(
+        EmittedEntity entity, string assemblyPrefix, bool createTables = true)
     {
         var collection = char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..];
         var assembly = EmittedEntities.Build(EmittedEntities.UniqueName(assemblyPrefix), [entity]);
@@ -30,7 +32,7 @@ internal static class EmittedGraphQlHost
             environment: "Production", onSelectedBackend: true);
         try
         {
-            CreateTables(host, collection);
+            if (createTables) CreateTables(host, collection);
             return (host, await LoginAsync(host));
         }
         catch
