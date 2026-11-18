@@ -237,13 +237,8 @@ internal sealed class CollectionSchemaBuilder(
             SchemaTypeMapper.RepeaterItemInputTypeName(collection, repeater.Name), null,
             typeof(IReadOnlyDictionary<string, object?>));
         foreach (var sub in repeater.Fields!)
-        {
-            if (sub.Hidden || sub.ReadOnly || sub.IsSystem) continue;
-            // Lean scalar sub-field set; input hint is string (same as the read side's BuildRepeaterItemType).
-            var sdl = SchemaTypeMapper.WritableInputSdl(sub.Interface, typeof(string));
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
-        }
+            if (WritableInput.SubField(sub).Sdl is { } sdl)
+                config.Fields.Add(new InputFieldConfiguration(sub.Name, null, TypeReference.Parse(sdl)));
         return NewInput(config);
     }
 
@@ -357,14 +352,9 @@ internal sealed class CollectionSchemaBuilder(
         var config = new InputObjectTypeConfiguration(
             SchemaTypeMapper.TranslationFieldsInputName(meta.Name), null,
             typeof(IReadOnlyDictionary<string, object?>));
-        foreach (var f in meta.Fields)
-        {
-            if (!f.Translatable) continue;
-            if (f.Hidden || f.ReadOnly || f.IsSystem) continue;
-            var sdl = SchemaTypeMapper.WritableInputSdl(f.Interface, ClrType(desc, f.Name));
-            if (sdl is null) continue;
-            config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
-        }
+        foreach (var f in meta.Fields.Where(f => f.Translatable && !f.IsSystem))
+            if (WritableInput.TranslatedField(f, desc).Sdl is { } sdl)
+                config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(sdl)));
         return NewInput(config);
     }
 

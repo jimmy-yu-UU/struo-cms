@@ -55,4 +55,69 @@ public sealed class WritableFieldsStartupTests(ITestOutputHelper output)
 
         error.Should().BeNull();
     }
+
+    private static EmittedProperty Name => new("Name", typeof(string), FieldInterface.Text);
+
+    private static async Task<Exception?> StartAsync(EmittedEntity entity) =>
+        await ForkHost.StartupErrorAsync(
+            mutate: s => s["Struo:ContentAssemblies:1"] = ContentWith(entity), environment: "Production");
+
+    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    public async Task A_sidecar_whose_translatable_fields_are_all_Hidden_fails_at_host_start()
+    {
+        var error = await StartAsync(new EmittedEntity(
+            "SideHidden", [Name], [new EmittedProperty("Title", typeof(string), FieldInterface.Text, Hidden: true)]));
+
+        output.WriteLine(error?.ToString());
+        error.Should().BeOfType<MetadataException>().Which.Message
+            .Should().Contain("Collection 'sideHidden' has a translation sidecar")
+            .And.Contain("'title' (Hidden = true)").And.Contain("Make at least one translatable field writable");
+    }
+
+    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    public async Task A_sidecar_whose_translatable_fields_are_all_Password_fails_at_host_start()
+    {
+        var error = await StartAsync(new EmittedEntity(
+            "SidePassword", [Name], [new EmittedProperty("Secret", typeof(string), FieldInterface.Password)]));
+
+        error.Should().BeOfType<MetadataException>().Which.Message
+            .Should().Contain("Collection 'sidePassword' has a translation sidecar")
+            .And.Contain("'secret' (Interface = Password, which is never written)");
+    }
+
+    private static EmittedEntity WithRows(string name, params EmittedProperty[] subs) =>
+        new(name, [Name, new EmittedProperty("Rows", null, FieldInterface.Repeater, false, new EmittedChild(name + "Row", subs))]);
+
+    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    public async Task A_Repeater_whose_sub_fields_are_all_Hidden_fails_at_host_start()
+    {
+        var error = await StartAsync(WithRows(
+            "RowsHidden", new EmittedProperty("Label", typeof(string), FieldInterface.Text, Hidden: true)));
+
+        output.WriteLine(error?.ToString());
+        error.Should().BeOfType<MetadataException>().Which.Message
+            .Should().Contain("Repeater 'rowsHidden.rows' has no sub-field GraphQL can write")
+            .And.Contain("'label' (Hidden = true)").And.Contain("Make at least one sub-field writable");
+    }
+
+    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    public async Task A_Repeater_whose_sub_fields_are_all_ReadOnly_fails_at_host_start()
+    {
+        var error = await StartAsync(WithRows(
+            "RowsReadOnly", new EmittedProperty("Label", typeof(string), FieldInterface.Text, ReadOnly: true)));
+
+        error.Should().BeOfType<MetadataException>().Which.Message
+            .Should().Contain("Repeater 'rowsReadOnly.rows' has no sub-field GraphQL can write")
+            .And.Contain("'label' (ReadOnly = true)");
+    }
+
+    [SqliteOnlyFact("starts a host on a SQLite temp database")]
+    public async Task A_collection_whose_only_input_is_the_translations_starts_the_host()
+    {
+        var error = await StartAsync(new EmittedEntity(
+            "OnlyTranslations", [new EmittedProperty("Secret", typeof(string), FieldInterface.Hidden)],
+            [new EmittedProperty("Title", typeof(string), FieldInterface.Text)]));
+
+        error.Should().BeNull();
+    }
 }

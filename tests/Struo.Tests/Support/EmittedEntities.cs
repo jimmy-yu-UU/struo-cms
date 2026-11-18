@@ -14,13 +14,17 @@ namespace Struo.Tests.Support;
 /// </summary>
 public sealed record EmittedProperty(
     string Name, Type? Type, FieldInterface Interface, bool WithOptions = false, EmittedChild? Child = null,
-    bool ChildIsList = true);
+    bool ChildIsList = true, bool Hidden = false, bool ReadOnly = false, bool Translatable = false);
 
 /// <summary>A class used as a Repeater child or as a structured value; a plain one declares no <c>[CmsField]</c>.</summary>
 public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Properties, bool Plain = false);
 
-/// <summary>A <c>[CmsCollection]</c> entity with a Guid <c>Id</c> and the given properties.</summary>
-public sealed record EmittedEntity(string Name, IReadOnlyList<EmittedProperty> Properties);
+/// <summary>
+/// A <c>[CmsCollection]</c> entity with a Guid <c>Id</c> and the given properties. <paramref name="Translations"/>
+/// gives it a translation sidecar with those translatable properties.
+/// </summary>
+public sealed record EmittedEntity(
+    string Name, IReadOnlyList<EmittedProperty> Properties, IReadOnlyList<EmittedProperty>? Translations = null);
 
 /// <summary>
 /// Builds collections from a description, so a test can declare one property per (interface, type) pair
@@ -57,6 +61,7 @@ public static class EmittedEntities
             ]);
             AddProperty(builder, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
             foreach (var property in entity.Properties) AddProperty(builder, property, children);
+            if (entity.Translations is { } translated) AddSidecar(module, builder, entity.Name, translated, children);
             builder.CreateType();
         }
 
@@ -72,6 +77,23 @@ public static class EmittedEntities
     /// <summary>An assembly name no earlier call used.</summary>
     public static string UniqueName(string prefix) => $"{prefix}_{Guid.NewGuid().ToString("N")[..8]}_{Interlocked.Increment(ref _sequence)}";
 
+    private static void AddSidecar(
+        ModuleBuilder module, TypeBuilder owner, string ownerName, IReadOnlyList<EmittedProperty> fields,
+        Dictionary<EmittedChild, TypeBuilder> children)
+    {
+        var sidecar = DefineClass(module, ownerName + "Translation", null);
+        AddProperty(sidecar, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
+        AddProperty(sidecar, new EmittedProperty(ownerName + "Id", typeof(Guid), FieldInterface.Text), children, plain: true);
+        AddProperty(sidecar, new EmittedProperty("Locale", typeof(string), FieldInterface.Text), children, plain: true);
+        foreach (var field in fields) AddProperty(sidecar, field with { Translatable = true }, children);
+        sidecar.CreateType();
+
+        var list = new EmittedProperty("Translations", typeof(object), FieldInterface.Text);
+        AddProperty(
+            owner, list, children, plain: true, listOf: sidecar,
+            extra: [Attribute(typeof(CmsTranslationsAttribute), [sidecar]), Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true))]);
+    }
+
     private static TypeBuilder DefineClass(ModuleBuilder module, string name, CustomAttributeBuilder[]? attributes)
     {
         var builder = module.DefineType("Emitted." + name, TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, typeof(object));
@@ -82,9 +104,10 @@ public static class EmittedEntities
 
     private static void AddProperty(
         TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children,
-        bool isKey = false, bool plain = false)
+        bool isKey = false, bool plain = false, TypeBuilder? listOf = null, CustomAttributeBuilder[]? extra = null)
     {
-        var type = spec.Child is not { } child ? spec.Type!
+        var type = listOf is not null ? typeof(List<>).MakeGenericType(listOf)
+            : spec.Child is not { } child ? spec.Type!
             : spec.ChildIsList ? typeof(List<>).MakeGenericType(children[child]) : children[child];
         var field = owner.DefineField("_" + spec.Name, type, FieldAttributes.Private);
         var property = owner.DefineProperty(spec.Name, PropertyAttributes.None, type, null);
@@ -112,10 +135,13 @@ public static class EmittedEntities
             return;
         }
 
+        foreach (var attribute in extra ?? []) property.SetCustomAttribute(attribute);
         if (plain) return;
         property.SetCustomAttribute(Attribute(
             typeof(CmsFieldAttribute), [],
-            Named(nameof(CmsFieldAttribute.Label), spec.Name), Named(nameof(CmsFieldAttribute.Interface), spec.Interface)));
+            Named(nameof(CmsFieldAttribute.Label), spec.Name), Named(nameof(CmsFieldAttribute.Interface), spec.Interface),
+            Named(nameof(CmsFieldAttribute.Hidden), spec.Hidden), Named(nameof(CmsFieldAttribute.ReadOnly), spec.ReadOnly),
+            Named(nameof(CmsFieldAttribute.Translatable), spec.Translatable)));
         if (spec.WithOptions)
             property.SetCustomAttribute(Attribute(typeof(CmsOptionsAttribute), [new[] { "a:A", "b:B", "hello:Hello" }]));
     }
