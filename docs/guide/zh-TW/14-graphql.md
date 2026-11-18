@@ -97,6 +97,13 @@ GraphQL 的 `null` 對應 REST 的 404，意圖一樣，形狀不同。清單欄
 欄位的 `total` 都是不可為 null 的 `Int!`；只有 `count` 另外套了一層 checked cast，bucket 大到不合
 理時會丟例外而不是悄悄溢位，`total` 則只是共用同一個 32 位元上限。
 
+翻譯的欄位與 facet 值裡的 `Date`、`DateTime`、`Time`，文字跟欄位本身印出來的一樣。`Date` 是
+`2026-03-04`；`DateTime` 與 `Time` 是以 `Z` 結尾的 UTC 時刻，例如
+`2026-03-04T05:06:07.25Z`，有小數秒才印小數秒。彙總的 `min` 與 `max` 作用在 `Date` 或 `DateTime`
+欄位時印法相同，`Time` 欄位不能做 `min`／`max`。對關聯集合的欄位做 facet，例如 `categories`
+上的 `articles.publishedAt`，印法相同。null 值就是 `null`。版本紀錄的 `snapshot` 也是 `Any`，
+它怎麼印日期時間見[第 9 章](09-revisions-and-trash.md)。
+
 下面這個查詢示範單筆欄位、多對一關聯（不帶引數）跟巢狀 to-many 清單自己的 `sort`／`limit` 引數；後
 面例子延用同一批測試資料，id 是資料本身的，讀者環境會不同：
 

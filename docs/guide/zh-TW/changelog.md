@@ -371,6 +371,12 @@
 - GraphQL 讀出的 `Time` 欄位，值帶著主機時區的偏移量（寫入 `05:06:07Z` 讀到 `05:06:07.000+08:00`），
   所以主機不在 UTC 時，GraphQL 用戶端看到的時刻與 REST 用戶端不同；現在是以 `Z` 結尾的 UTC 時刻，
   `Repeater` 子欄位、`translations` 與 facets 裡也一樣。
+- 0.30.1 的 GraphQL 裡，`Date`、`DateTime` 欄位的值在 `translations` 項目與 facet 值裡，印法和
+  欄位本身不同；對不是 `TimestampWithTimeZone` 的欄位取彙總的 `min`、`max` 也是。欄位本身印
+  `2026-03-04` 或 `2026-03-04T05:06:07.25Z`，這些位置印成 `2026-03-04T00:00:00` 與
+  `2026-03-04T05:06:07.25`；PostgreSQL 上 `TimestampWithTimeZone` 欄位的 facet 印的是主機當地
+  時間加偏移量，主機在 UTC+8 時以 `+08:00` 結尾。現在都跟欄位本身一樣，對關聯集合的欄位做
+  facet（例如 `categories` 上的 `articles.publishedAt`）也是。
 - GraphQL 的輸入型別會是空的時候，主機在啟動時停下，訊息點名集合、不計入的欄位與改法；
   `Repeater` 則點名集合與屬性。下列情況都算：
   - 集合沒有任何 GraphQL 寫得進去的欄位，也沒有多對一或多對多的關聯：欄位全是稽核欄位、
