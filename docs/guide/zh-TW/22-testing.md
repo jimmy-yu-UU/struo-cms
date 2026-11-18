@@ -77,8 +77,8 @@
 PostgreSQL 的測試連線建議加上 `GSS Encryption Mode=Disable`。不加的話，每條新連線都會先試一次 GSS，
 連線一多，等待時間有上限的測試（例如 migration 鎖的測試）就可能逾時。
 
-測試程序的 `APPDATA` 指向一個空目錄（見 [Support 類別庫](#support-類別庫)），Windows 上 Npgsql
-用它定位 `%APPDATA%\postgresql\` 裡的 PostgreSQL 用戶端檔案。放在那裡的 `pgpass.conf` 與用戶端、
+測試程序的 `APPDATA` 指向一個不存在的目錄（見 [Support 類別庫](#support-類別庫)），Windows 上
+Npgsql 用它定位 `%APPDATA%\postgresql\` 裡的 PostgreSQL 用戶端檔案。放在那裡的 `pgpass.conf` 與用戶端、
 根憑證都找不到，所以 PostgreSQL 的測試連線字串要自帶密碼，或用連線字串鍵 `Passfile`、
 `SSL Certificate`、`SSL Key`、`Root Certificate` 指明檔案。
 

@@ -93,7 +93,7 @@ Add `GSS Encryption Mode=Disable` to the PostgreSQL test connection. Otherwise e
 tries GSS first, and with many connections, tests that wait under a timeout, such as the migration
 lock tests, can time out.
 
-The test process's `APPDATA` points at an empty directory (see
+The test process's `APPDATA` points at a directory that does not exist (see
 [The Support library](#the-support-library)), and on Windows Npgsql finds the PostgreSQL client
 files in `%APPDATA%\postgresql\` through it. A `pgpass.conf` and client or root certificates kept
 there are not found, so a PostgreSQL test connection carries its password, or names the files with
