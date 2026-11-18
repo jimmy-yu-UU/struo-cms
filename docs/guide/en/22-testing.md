@@ -50,8 +50,9 @@ user-secrets source from its host's configuration when the host is built. A test
 that derives `WebApplicationFactory<Program>` directly calls `HostIsolation.RemoveUserSecrets` from
 `ConfigureAppConfiguration`.
 
-A test host in the Development environment loads the gitignored `appsettings.Development.json` of
-the API project when the file exists.
+A `StruoApiFactory` host in the Development environment loads the gitignored
+`appsettings.Development.json` from the API project's directory when the file exists. A `ForkHost`
+loads the copy of that file the build placed in the test output directory, when there is one.
 
 `ApiFactory` in `tests/Struo.Tests` derives from `StruoApiFactory` and names the collections the host
 makes publicly readable. A fork's test project does the same; [Chapter 25](25-after-forking.md) shows
@@ -91,6 +92,12 @@ drop them at the end.
 Add `GSS Encryption Mode=Disable` to the PostgreSQL test connection. Otherwise every new connection
 tries GSS first, and with many connections, tests that wait under a timeout, such as the migration
 lock tests, can time out.
+
+The test process's `APPDATA` points at an empty directory (see
+[The Support library](#the-support-library)), and on Windows Npgsql finds the PostgreSQL client
+files in `%APPDATA%\postgresql\` through it. A `pgpass.conf` and client or root certificates kept
+there are not found, so a PostgreSQL test connection carries its password, or names the files with
+the connection string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
 
 `PgTestConnectionString.DisablePooling` separately turns off Npgsql's connection pooling,
 isolating a socket interruption observed under the test host — a phenomenon measured there, not

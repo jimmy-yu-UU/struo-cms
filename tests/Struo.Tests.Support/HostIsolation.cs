@@ -12,7 +12,7 @@ namespace Struo.Tests.Support;
 public static class HostIsolation
 {
     /// <summary>The path the framework gives the user-secrets source: the file name, without a directory.</summary>
-    public const string UserSecretsFileName = "secrets.json";
+    private const string UserSecretsFileName = "secrets.json";
 
     public static Dictionary<string, string?> ExternalTargets(string filesRoot, string imageCacheRoot) => new()
     {

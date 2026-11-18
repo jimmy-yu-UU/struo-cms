@@ -19,6 +19,8 @@ namespace Struo.Tests.Hosting;
 [Collection("ApiIntegration")]
 public sealed partial class TestHostUserSecretsTests(ApiFactory factory)
 {
+    private static readonly string[] ScannedDirectories = ["tests", "samples"];
+
     private static IReadOnlyList<string> SourcesOf(IServiceProvider services) =>
         HostIsolation.UserSecretsSources(services.GetRequiredService<IConfiguration>());
 
@@ -86,13 +88,16 @@ public sealed partial class TestHostUserSecretsTests(ApiFactory factory)
         configuration.Sources.Should().HaveCount(removed ? 0 : 1);
     }
 
+    // A file counts a host for each base-class or `new` use of the factory, target-typed `new()` included,
+    // and needs as many calls outside comments. A `using` alias, a generic base and a call in another file
+    // are not recognized.
     [Fact]
     public void Every_test_class_that_derives_WebApplicationFactory_of_Program_uses_the_shared_removal()
     {
         var root = RepoRoot.Find();
-        var offenders = new[] { "tests", "samples" }
+        var offenders = ScannedDirectories
             .SelectMany(dir => Directory.EnumerateFiles(Path.Combine(root, dir), "*.cs", SearchOption.AllDirectories))
-            .Where(path => !IsBuildOutput(path) && !path.EndsWith(nameof(TestHostUserSecretsTests) + ".cs"))
+            .Where(path => !IsBuildOutput(path) && !path.EndsWith(nameof(TestHostUserSecretsTests) + ".cs", StringComparison.Ordinal))
             .Where(path => HostsWithoutRemoval(File.ReadAllText(path)))
             .Select(path => Path.GetRelativePath(root, path))
             .ToList();
@@ -111,18 +116,22 @@ public sealed partial class TestHostUserSecretsTests(ApiFactory factory)
     [InlineData("class A : WebApplicationFactory<Program> { void F(){ HostIsolation . RemoveUserSecrets (c); } }", false)]
     [InlineData("class A : WebApplicationFactory<Program> { void F(){ HostIsolation.RemoveUserSecrets(c); } }\n" +
                 "class B : WebApplicationFactory<Program> { }", true)]
+    [InlineData("WebApplicationFactory<Program> f = new();", true)]
+    [InlineData("private readonly WebApplicationFactory<Program> _f = new ();", true)]
     [InlineData("class A : StruoApiFactory { }", false)]
+    [InlineData("private WebApplicationFactory<Program> CreateHost() => factory.WithWebHostBuilder(_ => { });", false)]
     public void The_scan_recognizes_a_host_without_the_removal(string source, bool offends) =>
         HostsWithoutRemoval(source).Should().Be(offends);
 
     private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}");
+        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 
     private static bool HostsWithoutRemoval(string source)
     {
         var code = CommentRegex().Replace(source, " ");
-        return FactoryRegex().Matches(code).Count > RemovalRegex().Matches(code).Count;
+        var factories = FactoryRegex().Count(code) + TargetTypedFactoryRegex().Count(code);
+        return factories > RemovalRegex().Count(code);
     }
 
     [GeneratedRegex(@"//[^\r\n]*|/\*.*?\*/", RegexOptions.Singleline)]
@@ -130,6 +139,9 @@ public sealed partial class TestHostUserSecretsTests(ApiFactory factory)
 
     [GeneratedRegex(@"(:\s*|\bnew\s+)(global::)?(\w+\s*\.\s*)*WebApplicationFactory\s*<\s*(global::)?(\w+\s*\.\s*)*Program\s*>")]
     private static partial Regex FactoryRegex();
+
+    [GeneratedRegex(@"WebApplicationFactory\s*<\s*(global::)?(\w+\s*\.\s*)*Program\s*>\s*\w+\s*=\s*new\s*\(")]
+    private static partial Regex TargetTypedFactoryRegex();
 
     [GeneratedRegex(@"HostIsolation\s*\.\s*RemoveUserSecrets\s*\(")]
     private static partial Regex RemovalRegex();

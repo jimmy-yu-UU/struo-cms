@@ -436,14 +436,16 @@ transformed again on the first request.
     convert each table with the statement in
     [Chapter 24](24-upgrading-from-0-8.md#mysql-mariadb-character-set-to-utf8mb4).
 - A test host built on `Struo.Tests.Support` does not read the user secrets of the developer's
-  machine. `TestHostEnvironment.Pin` points `APPDATA` of the test process, and of every process the
-  tests start, at a directory that holds no file, and `StruoApiFactory` removes the user-secrets
-  source from its host's configuration.
+  machine. `TestHostEnvironment.Pin` points `APPDATA` of the test process and of the processes it
+  starts at a directory that holds no file, and `StruoApiFactory` removes the user-secrets source
+  from its host's configuration once the host is built.
   - A fork whose tests relied on a setting stored in user secrets supplies it from the test
     settings or an environment variable.
+  - A PostgreSQL test connection that relied on `pgpass.conf` or on certificates under
+    `%APPDATA%\postgresql\` on Windows carries its password, or names the files with the connection
+    string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
   - A test host of your own that derives `WebApplicationFactory<Program>` directly calls
-    `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`; the source is gone once
-    the host is built.
+    `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
 :::
 
 ### Added
@@ -465,9 +467,8 @@ transformed again on the first request.
     optional parameter `environment`, a binary-level change; a test project that references
     `Struo.Tests.Support` must be rebuilt.
   - `HostIsolation.RemoveUserSecrets`, `HostIsolation.IsUserSecretsSource`,
-    `HostIsolation.UserSecretsSources`, `HostIsolation.UserSecretsFileName` and
-    `TestHostEnvironment.EmptyAppDataRoot` (`Struo.Tests.Support`); Breaking says how the first
-    is used.
+    `HostIsolation.UserSecretsSources` and `TestHostEnvironment.EmptyAppDataRoot`
+    (`Struo.Tests.Support`); Breaking says how the first is used.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
