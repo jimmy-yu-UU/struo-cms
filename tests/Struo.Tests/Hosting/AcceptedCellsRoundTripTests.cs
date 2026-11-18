@@ -404,18 +404,12 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         }
     }
 
-    // Equal as JSON, with numbers compared by value and date-times by instant: GraphQL prints a DateTime
-    // with milliseconds, REST without.
-    private static bool SameValue(JsonNode? a, JsonNode? b)
-    {
-        if (JsonNode.DeepEquals(a, b)) return true;
-        if (a is not JsonValue || b is not JsonValue) return false;
-        if (a.GetValueKind() == JsonValueKind.Number && b.GetValueKind() == JsonValueKind.Number)
-            return a.GetValue<decimal>() == b.GetValue<decimal>();
-        return a.GetValueKind() == JsonValueKind.String && b.GetValueKind() == JsonValueKind.String
-            && DateTimeOffset.TryParse(a.GetValue<string>(), out var left)
-            && DateTimeOffset.TryParse(b.GetValue<string>(), out var right) && left.UtcDateTime == right.UtcDateTime;
-    }
+    // Equal as JSON, with numbers compared by value. A date-time compares as text: GraphQL prints the UTC
+    // instant in the form it was written.
+    private static bool SameValue(JsonNode? a, JsonNode? b) =>
+        JsonNode.DeepEquals(a, b)
+        || (a is JsonValue && b is JsonValue && a.GetValueKind() == JsonValueKind.Number && b.GetValueKind() == JsonValueKind.Number
+            && a.GetValue<decimal>() == b.GetValue<decimal>());
 
     private static List<string> SchemaExposed(FieldInterface face) =>
         face is FieldInterface.Hidden or FieldInterface.Divider or FieldInterface.Password

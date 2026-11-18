@@ -171,7 +171,11 @@ internal sealed class CollectionSchemaBuilder(
 
         // translations map (always present in projection when the collection has a sidecar).
         if (meta.Translation is not null)
-            config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx))));
+        {
+            var timeFields = meta.Fields.Where(f => f is { Translatable: true, Interface: FieldInterface.Time })
+                .Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+            config.Fields.Add(Field("translations", "[Translation!]", ctx => TranslationList(ParentDict(ctx), timeFields)));
+        }
 
         return NewObject(config);
     }
@@ -376,7 +380,8 @@ internal sealed class CollectionSchemaBuilder(
         config.Fields.Add(Field("items", $"[{SchemaTypeMapper.TypeName(meta.Name)}!]!",
             ctx => ctx.Parent<PagedResultView>().Items));
         config.Fields.Add(Field("total", "Int!", ctx => ctx.Parent<PagedResultView>().Total));
-        config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => ctx.Parent<PagedResultView>().Facets));
+        var timeFields = meta.Fields.Where(f => f.Interface == FieldInterface.Time).Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        config.Fields.Add(Field("facets", "[FacetResult!]!", ctx => WithTimeText(ctx.Parent<PagedResultView>().Facets, timeFields)));
         config.Fields.Add(Field("aggregate", "Any", ctx => ctx.Parent<PagedResultView>().Aggregate));
         return NewObject(config);
     }
@@ -535,7 +540,7 @@ internal sealed class CollectionSchemaBuilder(
             : null;
     }
 
-    private static List<object> TranslationList(IReadOnlyDictionary<string, object?> parent)
+    private static List<object> TranslationList(IReadOnlyDictionary<string, object?> parent, IReadOnlySet<string> timeFields)
     {
         // ItemService.OverlayTranslationsAsync projects translations as the CONCRETE type
         // Dictionary<string, Dictionary<string, object?>> — which does not implement the generic
@@ -551,14 +556,29 @@ internal sealed class CollectionSchemaBuilder(
             result.Add(new Dictionary<string, object?>
             {
                 ["locale"] = entry.Key,
-                ["fields"] = entry.Value
+                ["fields"] = WithTimeText(entry.Value, timeFields)
             });
         }
         return result;
     }
 
+    // A facet value is an Any value; the buckets of a Time field print as TimeText prints it.
+    private static IReadOnlyList<FacetResult> WithTimeText(IReadOnlyList<FacetResult> facets, IReadOnlySet<string> timeFields) =>
+        timeFields.Count == 0
+            ? facets
+            : facets.Select(f => timeFields.Contains(f.Field)
+                ? f with { Values = f.Values.Select(b => b with { Value = TimeText.Of(b.Value) }).ToList() }
+                : f).ToList();
+
+    // The fields of a translation are an Any value; a Time field in it is printed as TimeText prints it.
+    private static object? WithTimeText(object? fields, IReadOnlySet<string> timeFields) =>
+        timeFields.Count > 0 && fields is IDictionary<string, object?> dict
+            ? dict.ToDictionary(kv => kv.Key, kv => timeFields.Contains(kv.Key) ? TimeText.Of(kv.Value) : kv.Value)
+            : fields;
+
+    // A String field that holds a DateTime is a Time field: its text is the UTC instant (see TimeText).
     internal static ObjectFieldConfiguration Field(string name, string sdl, PureFieldDelegate pure)
-        => new(name, null, TypeReference.Parse(sdl), pureResolver: pure);
+        => new(name, null, TypeReference.Parse(sdl), pureResolver: sdl == "String" ? ctx => TimeText.Of(pure(ctx)) : pure);
 }
 
 /// <summary>Adapter so the ArticleList type reads items/total/facets/aggregate from the
