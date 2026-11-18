@@ -27,6 +27,9 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
     private const string FractionalDay = "2026-03-04";
     private const string WholeDay = "2026-03-05";
 
+    private static readonly string[] ValueOps = ["min", "max"];
+    private static readonly string[] Aggregatable = ["day", "moment"];
+
     private static readonly EmittedChild Row = new(
         "DateRow",
         [
@@ -230,6 +233,22 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task A_facet_and_an_aggregate_named_in_another_case_print_the_same_text()
+    {
+        var (host, p) = await StartAsync();
+        await using var _ = host;
+
+        var json = await QueryAsync(p.Client, """
+            { dateProbes(facets: ["Moment"], aggregate: { min: ["Day"], max: ["Moment"] }) { facets { field values { value } } aggregate } }
+            """);
+
+        var list = json["data"]!["dateProbes"]!;
+        Values(list["facets"]!.AsArray(), "Moment").Should().BeEquivalentTo(FractionalInstant, WholeInstant);
+        Text(list["aggregate"]!["min"]!["Day"]).Should().Be(FractionalDay);
+        Text(list["aggregate"]!["max"]!["Moment"]).Should().Be(WholeInstant);
+    }
+
+    [Fact]
     public async Task An_aggregate_over_rows_without_a_value_prints_null()
     {
         var (host, p) = await StartAsync();
@@ -240,8 +259,8 @@ public sealed class GraphQlAnyDateTextTests(ITestOutputHelper output)
             """);
 
         var aggregate = json["data"]!["dateProbes"]!["aggregate"]!;
-        foreach (var op in new[] { "min", "max" })
-            foreach (var field in new[] { "day", "moment" })
+        foreach (var op in ValueOps)
+            foreach (var field in Aggregatable)
                 aggregate[op]![field].Should().BeNull($"{op} of {field}");
     }
 }
