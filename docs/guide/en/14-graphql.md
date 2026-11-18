@@ -125,11 +125,13 @@ number, not a string. `FacetValue.count` and a list field's `total` are both non
 only `count` also carries an extra checked cast on top, throwing rather than silently overflowing
 when a bucket count is unreasonably large — `total` just shares the same 32-bit ceiling.
 
-A `Date`, `DateTime` or `Time` value inside an `Any` has the text the field itself prints: a field
-of a translation, a facet value, the `min` or `max` of an aggregate. A `Date` is `2026-03-04`; a
-`DateTime` or `Time` is the UTC instant ending in `Z`, such as `2026-03-04T05:06:07.25Z`, with
-fractional seconds only when there are some. A facet on a field of a related collection, such as
-`category.publishedAt`, prints the same way, and a null stays `null`.
+A `Date`, `DateTime` or `Time` field in a translation's fields or in a facet value prints the text
+the field itself prints. A `Date` is `2026-03-04`; a `DateTime` or `Time` is the UTC instant ending
+in `Z`, such as `2026-03-04T05:06:07.25Z`, with fractional seconds only when there are some. The
+`min` and `max` of an aggregate print the same way over a `Date` or `DateTime` field; they do not
+accept a `Time` field. A facet on a field of a related collection, such as `articles.publishedAt`
+on `categories`, prints the same way. A null value is `null`. A revision's `snapshot` is also an
+`Any`; [Chapter 9](09-revisions-and-trash.md) describes how it prints date-times.
 
 The query below shows a single-item field, a many-to-one relation (with no arguments), and a
 nested to-many list with its own `sort`/`limit` arguments; later examples reuse the same test
