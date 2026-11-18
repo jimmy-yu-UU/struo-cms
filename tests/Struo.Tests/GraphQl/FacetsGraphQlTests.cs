@@ -49,6 +49,21 @@ public class FacetsGraphQlTests(ApiFactory factory)
         data.GetProperty("fxArticles").GetProperty("facets").GetArrayLength().Should().Be(0);
         data.GetProperty("fxArticles").GetProperty("aggregate").ValueKind.Should().Be(JsonValueKind.Null);
     }
+    [Fact]
+    public async Task A_facet_on_a_DateTime_of_a_related_collection_prints_the_text_the_own_field_prints()
+    {
+        var (client, cat, _) = await FacetSeed.SeedAsync(_factory);
+        var data = await Data(client, $$"""
+            { fxCategories(filter: { id: { eq: "{{cat}}" } }, facets: ["articles.publishedAt"]) { facets { field values { value count } } }
+              fxArticles(filter: { categoryId: { eq: "{{cat}}" } }) { items { publishedAt } } }
+            """);
+
+        var facet = data.GetProperty("fxCategories").GetProperty("facets")[0];
+        var buckets = facet.GetProperty("values").EnumerateArray().Select(v => v.GetProperty("value").GetString()!).Order().ToList();
+        var own = data.GetProperty("fxArticles").GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("publishedAt").GetString()!).Distinct().Order().ToList();
+        buckets.Should().Equal("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z").And.Equal(own);
+    }
 
     [Fact]
     public async Task Invalid_facet_path_is_a_BAD_USER_INPUT_error()
