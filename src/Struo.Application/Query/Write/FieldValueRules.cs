@@ -4,7 +4,7 @@ using Struo.Domain.Query;
 namespace Struo.Application.Query;
 
 /// <summary>
-/// Shared Required / MaxLength primitives for the write path. The parent-field variants are called
+/// Shared Required / NOT NULL / MaxLength primitives for the write path. The parent-field variants are called
 /// from <see cref="ItemDeserializer"/>, the per-locale translation variants from
 /// <see cref="ItemWriteSideSync"/>.
 /// </summary>
@@ -25,7 +25,19 @@ internal static class FieldValueRules
             throw new QueryException($"Field '{fieldName}' is required.");
     }
 
+    // A null for a NOT NULL column is refused with the Required message; unlike Required, blank text passes.
+    internal static void RequireNotNull(string fieldName, object? value)
+    {
+        if (value is null)
+            throw new QueryException($"Field '{fieldName}' is required.");
+    }
+
     internal static bool IsTranslationMissing(bool present, object? value) => !present || IsMissing(value);
+
+    // A NOT NULL translation column ends up null when the request sends null, or sends nothing for a row
+    // that does not exist yet and starts null. A stored row keeps the value of a field the request omits.
+    internal static bool IsNotNullTranslationMissing(bool sent, object? value, bool rowStored, bool startsNull) =>
+        sent ? value is null : !rowStored && startsNull;
 
     internal static QueryErrorDetail MissingTranslationDetail(string fieldName, string locale) =>
         new(fieldName, locale, $"Required translation field '{fieldName}' is missing for locale '{locale}'.");

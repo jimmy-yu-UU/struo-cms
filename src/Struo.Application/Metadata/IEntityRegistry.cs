@@ -17,6 +17,12 @@ public sealed record EntityDescriptor(
     /// </summary>
     public IReadOnlyDictionary<string, PropertyInfo> Properties { get; } = BuildProperties(EntityType);
 
+    /// <summary>
+    /// CLR names of the writable properties whose column is NOT NULL and whose type can hold null: a
+    /// write that leaves one null is refused before it reaches the database.
+    /// </summary>
+    public IReadOnlySet<string> NotNullProperties { get; init; } = new HashSet<string>();
+
     private static Dictionary<string, PropertyInfo> BuildProperties(Type entityType)
     {
         // TryAdd is first-wins on name collisions (e.g. a `new`-shadowed property), keeping

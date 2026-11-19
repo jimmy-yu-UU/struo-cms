@@ -1,10 +1,12 @@
 using System.Reflection;
+using SqlSugar;
 
 namespace Struo.Infrastructure.Metadata;
 
 /// <summary>
-/// Which properties get a nullable column from their CLR type alone. The column convention applies
-/// it to every property and the scanner reads it to reject a contradicting <c>IsNullable = false</c>.
+/// Which properties get a nullable column. The column convention applies <see cref="GivesNullableColumn"/>
+/// to every property, the scanner reads it to reject a contradicting <c>IsNullable = false</c>, and the
+/// write path derives the NOT NULL columns from <see cref="ColumnIsNullable"/>.
 /// </summary>
 internal static class ClrNullability
 {
@@ -20,4 +22,11 @@ internal static class ClrNullability
         // NullabilityInfoContext is not thread-safe, so each call uses its own instance.
         return new NullabilityInfoContext().Create(property).WriteState == NullabilityState.Nullable;
     }
+
+    /// <summary>
+    /// True when the column of the property accepts null: its type gives a nullable column, or it declares
+    /// <c>[SugarColumn(IsNullable = true)]</c>.
+    /// </summary>
+    internal static bool ColumnIsNullable(PropertyInfo property) =>
+        GivesNullableColumn(property) || property.GetCustomAttribute<SugarColumn>() is { IsNullable: true };
 }

@@ -250,7 +250,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // validated per-locale in SyncTranslationsAsync, not on the parent). Called only by ItemService,
     // for create and update, against the merged entity after the write interceptors' BeforeWriteAsync —
     // an update only fails Required when the client explicitly wipes the field (null/blank/Guid.Empty),
-    // never merely by omitting it.
+    // never merely by omitting it. A property whose column is NOT NULL and whose value is still null then
+    // fails with the same message.
     internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {
         foreach (var fieldName in meta.Fields.Where(f => f.Required && !f.Translatable).Select(f => f.Name))
@@ -258,6 +259,13 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             var pi = d.FieldToProperty.TryGetValue(fieldName, out var prop) ? d.Properties.GetValueOrDefault(prop) : null;
             var value = pi?.GetValue(entity);
             FieldValueRules.RequireParent(fieldName, value);
+        }
+
+        // After every Required check, so a Required field keeps its place in the error order.
+        foreach (var field in meta.Fields.Where(f => !f.Translatable && !f.IsSystem && !f.ReadOnly))
+        {
+            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop) || !d.NotNullProperties.Contains(prop)) continue;
+            FieldValueRules.RequireNotNull(field.Name, d.Properties.GetValueOrDefault(prop)?.GetValue(entity));
         }
     }
 
