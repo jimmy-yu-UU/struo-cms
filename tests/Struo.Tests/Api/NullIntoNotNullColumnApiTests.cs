@@ -385,6 +385,12 @@ public sealed class NullIntoNotNullColumnApiTests(ApiFactory factory)
         var update = await client.PutAsync($"{Probes}/{id}", Json("{\"tags\":[\"" + tag + "\"]}"));
 
         update.StatusCode.Should().Be(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        var probeId = Guid.Parse(id);
+        var links = await db.Queryable<Struo.Tests.Fixtures.FxNullProbeTag>().Where(l => l.ProbeId == probeId).ToListAsync();
+        links.Should().ContainSingle().Which.Remark.Should().Be("r");
     }
 
     [Fact]

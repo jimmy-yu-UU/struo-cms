@@ -13,5 +13,4 @@ public sealed class FxNullProbeTranslation
 
     [CmsField(Label = "Heading", Interface = FieldInterface.Text, Sort = 1)]
     public string Heading { get; set; } = null!;
-
 }

@@ -30,7 +30,7 @@ internal static class NotNullColumns
             .ToFrozenDictionary(p => p, p => p.GetValue(fresh) is null);
     }
 
-    internal static bool IsNotNullReference(PropertyInfo property) =>
+    private static bool IsNotNullReference(PropertyInfo property) =>
         !property.PropertyType.IsValueType
         && property.CanWrite
         && property.GetCustomAttribute<SugarColumn>() is not { IsIgnore: true } and not { IsPrimaryKey: true }

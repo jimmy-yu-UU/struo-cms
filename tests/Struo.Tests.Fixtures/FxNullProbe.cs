@@ -31,7 +31,6 @@ public sealed class FxNullProbe : AuditableEntity
     [CmsField(Label = "Declared nullable", Interface = FieldInterface.Text, Sort = 4)]
     public string Declared { get; set; } = null!;
 
-
     [Navigate(typeof(FxNullProbeTag), nameof(FxNullProbeTag.ProbeId), nameof(FxNullProbeTag.TagId))]
     [CmsRelation(Interface = RelationInterface.TagSelect, DisplayTemplate = "{Name}")]
     [SugarColumn(IsIgnore = true)]

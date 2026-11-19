@@ -89,8 +89,10 @@ public sealed class ItemWriteSideSync(
         var seenLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // On update a required field is judged on the merged value (stored + sent), because the store keeps
-        // the stored value of a field the request omits.
-        var stored = isCreate || (requiredFields.Count == 0 && tm.NotNullFields.Count == 0)
+        // the stored value of a field the request omits. A NOT NULL field reads the stored row only when a new
+        // row would start it null.
+        var storedRowMatters = requiredFields.Count > 0 || tm.NotNullFields.Values.Any(startsNull => startsNull);
+        var stored = isCreate || !storedRowMatters
             ? new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
             : await LoadStoredTranslationsAsync(tm, parentId, ct);
 
