@@ -234,4 +234,24 @@ public class NestedTranslationsTests(ApiFactory factory)
         await Get(c, $"/api/items/fxArticle?filter[id][_eq]={s.Both}&deep=category");
         capture.Matching("fx_article_translations").Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task A_target_the_caller_cannot_read_is_pruned_without_a_translation_query()
+    {
+        var (_, s) = await SeedAsync();
+        var (blind, _) = await factory.CreateEditorClientAsync(["fxLexicon"], []);
+        var (sighted, _) = await factory.CreateEditorClientAsync(["fxLexicon", "fxGlossary"], []);
+        using var capture = SqlCapture.Attach(factory.Services);
+
+        capture.Clear();
+        var pruned = await Get(blind, $"/api/items/fxLexicon/{s.Lexicon}?deep=glossary,glossaries");
+        var prunedQueries = capture.Matching("fx_glossary_translations").Count;
+        var visible = await Get(sighted, $"/api/items/fxLexicon/{s.Lexicon}?deep=glossary,glossaries");
+
+        pruned.TryGetProperty("glossary", out _).Should().BeFalse();
+        pruned.TryGetProperty("glossaries", out _).Should().BeFalse();
+        prunedQueries.Should().Be(0);
+        Locales(visible.GetProperty("glossary")).Should().Equal("en", "zh-TW");
+        Locales(ById(visible.GetProperty("glossaries"), s.GlossaryEnOnly)).Should().Equal("en");
+    }
 }
