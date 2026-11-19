@@ -6,8 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="HotChocolate.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="xunit" />
   </ItemGroup>
 
