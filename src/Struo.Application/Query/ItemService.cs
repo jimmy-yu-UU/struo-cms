@@ -64,7 +64,7 @@ public sealed class ItemService(
     private readonly TranslationOverlay overlay =
         new(repository, registry, new(registry, permissions, metadata), permissions);
     private readonly DeepExpansionCoordinator deepExpansion =
-        new(options, graph, metadata, registry, expander, new(registry, permissions, metadata), permissions);
+        new(repository, options, graph, metadata, registry, expander, new(registry, permissions, metadata), permissions);
     // U5: consulted once per list request by QueryAsync; null (direct construction in tests) means
     // the built-in LIKE search only, exactly what the DI default NullSearchProvider also yields.
     private readonly SearchCandidateResolver searchCandidates =
@@ -100,7 +100,7 @@ public sealed class ItemService(
         var entities = result.Rows;
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
         if (deepSpec is not null)
-            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, locale, ct);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
         var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
         var aggregate = validated.Aggregate is null ? null
@@ -148,7 +148,7 @@ public sealed class ItemService(
         var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
         var queryLocale = locale ?? await languages.DefaultCodeAsync();
         if (deepSpec is not null)
-            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, locale, ct);
         await overlay.ApplyAsync(meta, [entity], [projected], locale, ct);
         return projected;
     }

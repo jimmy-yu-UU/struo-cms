@@ -15,6 +15,7 @@ namespace Struo.Application.Query;
 /// (<see cref="ExpandPreparedAsync"/>). Both are no-ops when <c>deep</c> is null/empty.
 /// </summary>
 public sealed class DeepExpansionCoordinator(
+    IItemRepository repository,
     StruoQueryOptions options,
     IRelationshipGraph graph,
     IMetadataProvider metadata,
@@ -23,6 +24,8 @@ public sealed class DeepExpansionCoordinator(
     ItemProjector projector,
     IPermissionService permissions)
 {
+    private readonly TranslationOverlay translations = new(repository, registry, projector, permissions);
+
     /// <summary>
     /// Prunes the requested relations to the readable ones and validates the whole nested tree
     /// (nesting depth, relation names, per-level filter/sort/limit/offset, the shared filter
@@ -47,12 +50,14 @@ public sealed class DeepExpansionCoordinator(
 
     /// <summary>
     /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
-    /// each projected parent dictionary. No-op when there are no parent rows.
+    /// each projected parent dictionary, and gives every expanded row of a collection with a
+    /// translation sidecar its <c>translations</c>, filtered to <paramref name="translationLocale"/>
+    /// when that is set. No-op when there are no parent rows.
     /// </summary>
     public async Task ExpandPreparedAsync(
         string collection, DeepSpec visible,
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, CancellationToken ct)
+        string? locale, string? translationLocale, CancellationToken ct)
     {
         if (entities.Count == 0) return;
 
@@ -69,7 +74,10 @@ public sealed class DeepExpansionCoordinator(
         // never comes back through this coordinator.
         var nested = await expander.ExpandAsync(
             collection, entities, visible,
-            new EntityAccessors(projector.ProjectFor, ParentId, PropertyAccessorCache.Read),
+            new EntityAccessors(
+                projector.ProjectFor, ParentId, PropertyAccessorCache.Read,
+                (target, targetEntities, targetRows, token) =>
+                    translations.ApplyAsync(Meta(target), targetEntities, targetRows, translationLocale, token)),
             locale, permissions.CanRead, ct);
 
         for (var i = 0; i < entities.Count; i++)
