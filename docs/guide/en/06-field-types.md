@@ -78,10 +78,11 @@ domain that is neither its first nor its last character, and no whitespace anywh
 with a host and no whitespace: `Field '{name}' must be a valid http or https URL.` `null` and the
 empty string skip the check. So does whitespace-only text in a `Required` field, which `Required`
 reports as missing; in any other field whitespace-only text is checked and fails. A junction payload
-row does not run the `Required` check, so a `Required` field's empty or whitespace-only value is not
-rejected there. A stored value is never re-checked on read; it is checked only when a write sends
-that field. A field that must hold relative paths belongs on `Text`, not `Url`. The same rules apply
-to translation values and to `Email` and `Url` child fields of a `Repeater`.
+row does not run the `Required` check, so an empty or whitespace-only value of a `Required` field is
+not rejected there; a `null` sent to a column that is NOT NULL is rejected (see
+[Chapter 8](08-relations.md)). A stored value is never re-checked on read; it is checked only when a
+write sends that field. A field that must hold relative paths belongs on `Text`, not `Url`. The same
+rules apply to translation values and to `Email` and `Url` child fields of a `Repeater`.
 
 When one value breaks several rules, which error comes first depends on the path. A root field
 reports `MaxLength`, then the format, and `Required` after both. A translation value reports

@@ -161,10 +161,11 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個
 不可為 null 的 `Guid` 欄位，`Guid.Empty` 也算缺漏，而且這種欄位本來就傳不了 `null`。
 
-欄位對應的資料庫欄位不可為 null 時，null 不會送進資料庫：建立時帶 `null` 或省略沒有初始值的
-欄位，更新時帶 `null`，都回 `400` `BAD_USER_INPUT`，訊息與 `Required` 的相同：
-`Field '{name}' is required.` 還原一份帶 null 的快照也是這樣。資料庫欄位可不可為 null 看屬性宣告，
-和建表用同一條規則：型別是 `Nullable<T>`、宣告成 `string?`，或掛了
+可寫入的欄位（唯讀欄位與系統欄位不檢查），資料庫欄位不可為 null 時就存不進 null：建立時帶
+`null` 或省略沒有初始值的欄位，更新時帶 `null`，都回 `400` `BAD_USER_INPUT`，訊息與 `Required`
+的相同：`Field '{name}' is required.` 還原一份帶 null 的快照也是這樣。資料庫欄位可不可為 null
+看屬性宣告（見[第 6 章〈啟動時被擋的宣告〉](06-field-types.md#啟動時被擋的宣告)）：型別是
+`Nullable<T>`、宣告成 `string?`，或掛了
 `[SugarColumn(IsNullable = true)]`，欄位就可為 null，其餘都不可。和 `Required` 不同的是，只有空白的
 字串照常存入。下表是沒有設 `Required` 的欄位：
 

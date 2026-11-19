@@ -180,14 +180,15 @@ stored value and passes, while an explicit `null` or a blank string (including w
 fails. On create, the field must always be supplied. For a non-nullable `Guid` field, `Guid.Empty`
 also counts as missing, and such a field can never be sent as `null` at all.
 
-When the database column behind a field is NOT NULL, a null never reaches the database: `null` on
-create, a field with no initial value left out on create, and `null` on update all answer `400`
-`BAD_USER_INPUT` with the message `Required` uses: `Field '{name}' is required.` Reverting a
-snapshot that holds a null does the same. Whether the column accepts null follows the property
-declaration, by the same rule as table creation: a `Nullable<T>`, a property declared `string?`, or
-one marked `[SugarColumn(IsNullable = true)]` has a nullable column, and every other property does
-not. Unlike `Required`, a string of only whitespace is stored as sent. The table covers fields that
-do not set `Required`:
+A writable field whose database column is NOT NULL cannot store a null (read-only and system fields
+are not checked): `null` on create, a field with no initial value left out on create, and `null` on
+update all answer `400` `BAD_USER_INPUT` with the message `Required` uses:
+`Field '{name}' is required.` Reverting a snapshot that holds a null does the same. Whether the
+column accepts null follows the property declaration (see [Chapter 6, "Declarations rejected at
+startup"](06-field-types.md#declarations-rejected-at-startup)): a `Nullable<T>`, a property
+declared `string?`, or one marked `[SugarColumn(IsNullable = true)]` has a nullable column, and
+every other property does not. Unlike `Required`, a string of only whitespace is stored as sent. The
+table covers fields that do not set `Required`:
 
 | Declaration | Request | Result |
 |---|---|---|

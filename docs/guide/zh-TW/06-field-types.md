@@ -66,8 +66,9 @@ GraphQL schema 裡。`Color` 同樣是純文字輸入，沒有色票選色器。
 不能有空白：`Field '{name}' must be a valid email address.` Url 必須是帶主機、不含空白的絕對
 `http` 或 `https` 網址：`Field '{name}' must be a valid http or https URL.` `null` 與空字串略過
 檢查。`Required` 欄位裡只有空白的文字也略過，由 `Required` 回報為缺漏；其他欄位裡只有空白的
-文字會被檢查，且不通過。關聯表的 payload 列不跑 `Required` 檢查，所以 `Required` 欄位的空值或只有
-空白的值在那裡不會被拒絕。已存的值讀取時不會重新檢查，只有寫入送出該欄位時才檢查。需要存相對路徑
+文字會被檢查，且不通過。關聯表的 payload 列不跑 `Required` 檢查，所以 `Required` 欄位的空字串或只有
+空白的文字在那裡不會被拒絕；送給不可為 null 的資料庫欄位的 `null` 則會被拒絕，見
+[第 8 章](08-relations.md)。已存的值讀取時不會重新檢查，只有寫入送出該欄位時才檢查。需要存相對路徑
 的欄位應該用 `Text`，而不是 `Url`。同樣的規則也適用於翻譯值，以及 `Repeater` 裡的 `Email` 與
 `Url` 子欄位。
 
