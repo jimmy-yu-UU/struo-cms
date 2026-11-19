@@ -262,10 +262,10 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
 
         // After every Required check, so a Required field keeps its place in the error order.
-        foreach (var field in meta.Fields.Where(f => !f.Translatable && !f.IsSystem && !f.ReadOnly))
+        foreach (var fieldName in meta.Fields.Where(f => !f.Translatable && !f.IsSystem && !f.ReadOnly).Select(f => f.Name))
         {
-            if (!d.FieldToProperty.TryGetValue(field.Name, out var prop) || !d.NotNullProperties.Contains(prop)) continue;
-            FieldValueRules.RequireNotNull(field.Name, d.Properties.GetValueOrDefault(prop)?.GetValue(entity));
+            if (!d.FieldToProperty.TryGetValue(fieldName, out var prop) || !d.NotNullProperties.Contains(prop)) continue;
+            FieldValueRules.RequireNotNull(fieldName, d.Properties.GetValueOrDefault(prop)?.GetValue(entity));
         }
     }
 
