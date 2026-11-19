@@ -161,6 +161,25 @@ api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之�
 通過檢查，明確傳入 `null` 或空白字串（含只有空格）才會失敗；建立時則一定要帶這個欄位。對一個
 不可為 null 的 `Guid` 欄位，`Guid.Empty` 也算缺漏，而且這種欄位本來就傳不了 `null`。
 
+欄位對應的資料庫欄位不可為 null 時，null 不會送進資料庫：建立時帶 `null` 或省略沒有初始值的
+欄位，更新時帶 `null`，都回 `400` `BAD_USER_INPUT`，訊息與 `Required` 的相同：
+`Field '{name}' is required.` 還原一份帶 null 的快照也是這樣。資料庫欄位可不可為 null 看屬性宣告，
+和建表用同一條規則：型別是 `Nullable<T>`、宣告成 `string?`，或掛了
+`[SugarColumn(IsNullable = true)]`，欄位就可為 null，其餘都不可。和 `Required` 不同的是，只有空白的
+字串照常存入。下表是沒有設 `Required` 的欄位：
+
+| 宣告 | 請求 | 結果 |
+|---|---|---|
+| `string`，沒有初始值 | 建立時省略，或帶 `null` | `400` |
+| `string`，沒有初始值 | 更新時帶 `null` | `400` |
+| `string = ""` | 建立時省略 | `201`，存 `""` |
+| `string = ""` | 帶 `null` | `400` |
+| `string?` | 省略，或帶 `null` | 存 `null` |
+| `string` 加 `[SugarColumn(IsNullable = true)]` | 省略，或帶 `null` | 存 `null` |
+| 結構化型別（如 `List<string>`），沒有初始值 | 建立時省略，或帶 `null` | `400` |
+| 結構化型別（如 `List<string>`），沒有初始值 | 更新時帶 `null` | `400` |
+| 任何型別 | 更新時省略 | 沿用既有值 |
+
 `Hidden = true` 的欄位不會被搜尋，所以掃描拒絕 `Searchable` 加上 `Hidden = true`：主機啟動時就停下並
 丟出 `MetadataException`，訊息點名屬性；兩個拿掉一個。放在 `Hidden` 介面上、沒有那個旗標的欄位，和
 其他欄位一樣進搜尋白名單。搜尋比對的是文字，所以 `Searchable` 只能用在 `string` 屬性，或欄位存 JSON
