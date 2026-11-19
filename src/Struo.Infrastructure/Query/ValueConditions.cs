@@ -241,7 +241,7 @@ internal static class ValueConditions
         var result = new List<string>();
         foreach (var element in FilterValueList.Elements(value))
         {
-            if (element is null or (IEnumerable and not string))
+            if (element is null || element is IEnumerable and not string)
                 throw new QueryException($"Field '{t.Label}' takes a list of plain values; null and nested lists are not allowed.");
             var text = type == typeof(string)
                 ? element as string ?? throw new QueryException($"Field '{t.Label}' takes a list of text values.")

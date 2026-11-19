@@ -166,8 +166,9 @@ public class SessionRevocationRaceTests(ApiFactory factory)
         if (!response.Headers.TryGetValues("Set-Cookie", out var values)) return null;
         var prefix = SessionCookieName.Default + "=";
         var line = values.LastOrDefault(v => v.StartsWith(prefix, StringComparison.Ordinal));
-        var value = line?[prefix.Length..].Split(';')[0];
-        return string.IsNullOrEmpty(value) ? null : value;
+        if (line is null) return null;
+        var value = line[prefix.Length..].Split(';')[0];
+        return value.Length == 0 ? null : value;
     }
 
     private static HttpRequestMessage Request(HttpMethod method, string url, string? cookie, object? body = null)
