@@ -6,6 +6,15 @@ public sealed class FacetRow<TValue>
     public long Count { get; set; }
 }
 
+// The facet row of a zone-aware instant column. SqlSugar keeps one row binder per result type and column
+// signature for the whole process, and such a column reaches the reader under another provider type than
+// a plain one of the same CLR type; a row type of its own keeps the two binders apart.
+public sealed class InstantFacetRow<TValue>
+{
+    public TValue? Value { get; set; }
+    public long Count { get; set; }
+}
+
 public sealed class AggregateRow
 {
     public const int SlotCount = 10;
