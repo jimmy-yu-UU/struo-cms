@@ -6,9 +6,9 @@ public sealed class FacetRow<TValue>
     public long Count { get; set; }
 }
 
-// The facet row of a zone-aware instant column. SqlSugar keeps one row binder per result type and column
-// signature for the whole process, and such a column reaches the reader under another provider type than
-// a plain one of the same CLR type; a row type of its own keeps the two binders apart.
+// The facet row of a zone-aware instant column. SqlSugar caches a row binder by result type plus each reader
+// column's name and the first two letters of its CLR type name; DateTime and DateTimeOffset both give "Da",
+// so a datetime and a datetimeoffset column would share one binder unless their row types differ.
 public sealed class InstantFacetRow<TValue>
 {
     public TValue? Value { get; set; }

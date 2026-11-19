@@ -7,9 +7,8 @@ using Xunit;
 
 namespace Struo.Tests.Query;
 
-// fxArticle.createdAt is a plain datetime column and mediaFolder.createdAt a zone-aware one on PostgreSQL
-// and SQL Server. Facets over the two must answer in either order inside one process; the order is the
-// part that mattered, so each test runs the pair one way round. SQLite keeps no zone, so there is
+// fxArticle.createdAt is a zone-less date-time column and mediaFolder.createdAt a zone-aware one on PostgreSQL
+// and SQL Server. Each test facets both in one process, one way round; SQLite keeps no zone, so there is
 // nothing to tell the two columns apart there.
 [Collection("ApiIntegration")]
 public class FacetSameNamedColumnTests(ApiFactory factory)
