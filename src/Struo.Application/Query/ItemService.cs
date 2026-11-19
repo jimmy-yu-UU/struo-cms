@@ -63,11 +63,8 @@ public sealed class ItemService(
     private readonly ItemProjector projector = new(registry, permissions, metadata);
     private readonly TranslationOverlay overlay =
         new(repository, registry, new(registry, permissions, metadata), permissions);
-    // Built on first use: a field initializer cannot reference the sibling `overlay` field (CS0236),
-    // and the coordinator shares that one overlay.
-    private DeepExpansionCoordinator? deepExpansionInstance;
-    private DeepExpansionCoordinator DeepExpansion => deepExpansionInstance ??=
-        new(overlay, options, graph, metadata, registry, expander, projector, permissions);
+    private readonly DeepExpansionCoordinator deepExpansion =
+        new(options, graph, metadata, registry, expander, new(registry, permissions, metadata), permissions);
     // U5: consulted once per list request by QueryAsync; null (direct construction in tests) means
     // the built-in LIKE search only, exactly what the DI default NullSearchProvider also yields.
     private readonly SearchCandidateResolver searchCandidates =
@@ -90,7 +87,7 @@ public sealed class ItemService(
         var budget = new FilterBudget();
         var validated = QueryValidator.Validate(raw, meta, options, graph, metadata, permissions, budget);
         // The deep tree shares the filter budget and is refused before any search or root query runs.
-        var deepSpec = DeepExpansion.Prepare(collection, raw.Deep, budget);
+        var deepSpec = deepExpansion.Prepare(collection, raw.Deep, budget);
         var searchable = QueryValidator.SearchableFields(meta);
         // A registered ISearchProvider may answer the search with candidate ids (spec §3.2); the same
         // `validated` then feeds the list, every facet and the aggregate, so all three agree (R3).
@@ -103,7 +100,7 @@ public sealed class ItemService(
         var entities = result.Rows;
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
         if (deepSpec is not null)
-            await DeepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, locale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, AttachTranslations(locale), ct);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
         var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
         var aggregate = validated.Aggregate is null ? null
@@ -144,14 +141,14 @@ public sealed class ItemService(
         if (!permissions.CanRead(collection)) throw new PermissionDeniedException(ReadNotPermitted);
         DeletedAccessGuard.EnsureCanViewDeleted(permissions, collection, deleted);
         locale = await ValidateLocaleAsync(locale);
-        var deepSpec = DeepExpansion.Prepare(collection, deep, budget: null);
+        var deepSpec = deepExpansion.Prepare(collection, deep, budget: null);
         var entity = await repository.GetByIdAsync(collection, id, deleted, ct);
         if (entity is null) return null;
 
         var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
         var queryLocale = locale ?? await languages.DefaultCodeAsync();
         if (deepSpec is not null)
-            await DeepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, locale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, AttachTranslations(locale), ct);
         await overlay.ApplyAsync(meta, [entity], [projected], locale, ct);
         return projected;
     }
@@ -694,6 +691,10 @@ public sealed class ItemService(
         set.Add(collection, id.ToString()!, kind);
         return set;
     }
+
+    private Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>
+        AttachTranslations(string? locale) =>
+        (target, entities, rows, ct) => overlay.ApplyAsync(Meta(target), entities, rows, locale, ct);
 
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);

@@ -342,10 +342,10 @@
     指明檔案。
   - 自己另寫、直接繼承 `WebApplicationFactory<Program>` 的測試主機，要在
     `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
-- 展開出來的物件帶上 `translations`，改了 `DeepExpansionCoordinator` 的下列公開成員。
-  - 建構式在最前面多了 `TranslationOverlay translations` 參數。自己建構這個類別的 fork 要補上。
-  - `ExpandPreparedAsync` 在 `locale` 之後多了 `string? translationLocale` 參數（`?locale=` 的值，沒
-    給就是 `null`）。自己呼叫它的 fork 要補上。
+- 展開出來的物件帶上 `translations`，改了 `DeepExpansionCoordinator` 的一個公開成員。
+  - `ExpandPreparedAsync` 在 `locale` 之後多了 `attachTranslations` 參數，型別與
+    `EntityAccessors.AttachTranslations` 相同。自己呼叫它的 fork 要補上：傳入替展開列加上
+    `translations` 的委派，傳 `null` 則不加。
 :::
 
 ### 新增

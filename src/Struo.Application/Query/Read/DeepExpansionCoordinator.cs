@@ -15,7 +15,6 @@ namespace Struo.Application.Query;
 /// (<see cref="ExpandPreparedAsync"/>). Both are no-ops when <c>deep</c> is null/empty.
 /// </summary>
 public sealed class DeepExpansionCoordinator(
-    TranslationOverlay translations,
     StruoQueryOptions options,
     IRelationshipGraph graph,
     IMetadataProvider metadata,
@@ -48,14 +47,18 @@ public sealed class DeepExpansionCoordinator(
 
     /// <summary>
     /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
-    /// each projected parent dictionary, and gives every expanded row of a collection with a
-    /// translation sidecar its <c>translations</c>, filtered to <paramref name="translationLocale"/>
-    /// when that is set. No-op when there are no parent rows.
+    /// each projected parent dictionary. <paramref name="attachTranslations"/> adds
+    /// <c>translations</c> to the rows expanded from each target collection (see
+    /// <see cref="EntityAccessors.AttachTranslations"/>); <c>null</c> attaches nothing. No-op when
+    /// there are no parent rows.
     /// </summary>
     public async Task ExpandPreparedAsync(
         string collection, DeepSpec visible,
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, string? translationLocale, CancellationToken ct)
+        string? locale,
+        Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>?
+            attachTranslations,
+        CancellationToken ct)
     {
         if (entities.Count == 0) return;
 
@@ -72,11 +75,9 @@ public sealed class DeepExpansionCoordinator(
         // never comes back through this coordinator.
         var nested = await expander.ExpandAsync(
             collection, entities, visible,
-            new EntityAccessors(
-                projector.ProjectFor, ParentId, PropertyAccessorCache.Read)
+            new EntityAccessors(projector.ProjectFor, ParentId, PropertyAccessorCache.Read)
             {
-                AttachTranslations = (target, targetEntities, targetRows, token) =>
-                    translations.ApplyAsync(Meta(target), targetEntities, targetRows, translationLocale, token),
+                AttachTranslations = attachTranslations,
             },
             locale, permissions.CanRead, ct);
 

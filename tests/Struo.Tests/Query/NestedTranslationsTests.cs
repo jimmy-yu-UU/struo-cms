@@ -12,6 +12,8 @@ namespace Struo.Tests.Query;
 [Collection("ApiIntegration")]
 public class NestedTranslationsTests(ApiFactory factory)
 {
+    private static readonly string[] IdField = ["id"];
+
     private static JsonElement Root(string b) => JsonDocument.Parse(b).RootElement;
 
     private static async Task<string> Post(HttpClient c, string collection, object body)
@@ -130,7 +132,7 @@ public class NestedTranslationsTests(ApiFactory factory)
         var articles = (await Query(c, "fxCategory", new
         {
             filter = IdEquals(s.Category),
-            deep = new { articles = new { fields = new[] { "id" } } },
+            deep = new { articles = new { fields = IdField } },
         }))[0].GetProperty("articles");
 
         ById(articles, s.Both).TryGetProperty("status", out _).Should().BeFalse();

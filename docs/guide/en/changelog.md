@@ -446,12 +446,11 @@ transformed again on the first request.
     string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
   - A test host of your own that derives `WebApplicationFactory<Program>` directly calls
     `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
-- Expanded objects carry `translations`, which changes these public members of
+- Expanded objects carry `translations`, which changes one public member of
   `DeepExpansionCoordinator`.
-  - The constructor takes a `TranslationOverlay translations` parameter first. A fork that builds
-    the class adds it.
-  - `ExpandPreparedAsync` takes a `string? translationLocale` parameter after `locale` (the value of
-    `?locale=`, `null` when absent). A fork that calls it adds the argument.
+  - `ExpandPreparedAsync` takes an `attachTranslations` parameter after `locale`, of the same type
+    as `EntityAccessors.AttachTranslations`. A fork that calls it adds the argument: a delegate
+    that adds `translations` to the expanded rows, or `null` to add none.
 :::
 
 ### Added
