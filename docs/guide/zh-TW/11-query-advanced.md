@@ -135,8 +135,7 @@ this page's parents to their targets; a nested filter does not lower it, so requ
 都不能拿來當 facet。一個隱藏欄位拿到的訊息，跟一個不存在的欄位完全一樣，所以 facet 路徑不能被拿
 來探測一個隱藏欄位存不存在。
 
-可翻譯的自有欄位，值存在翻譯列上、每個 locale 一份，不能當 facet。要看這類欄位的分佈，改用一跳
-關聯＋葉欄位，例如 `facets=articles.title`，依查詢 locale 計算。
+可翻譯的自有欄位，值存在翻譯列上、每個 locale 一份，不能當 facet。
 
 一跳關聯＋葉欄位如果葉欄位可翻譯，一律需要一個有效的查詢 locale——沒帶 `locale=` 就用站台預設
 值，永遠有值可用。

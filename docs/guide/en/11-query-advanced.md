@@ -161,10 +161,8 @@ Long text (`RichText`/`Markdown`/`Code`), multi-value interfaces
 `Hidden`/`Divider`/`Password` can't be used as a facet. A hidden field gets exactly the same message
 as a field that doesn't exist, so a facet path can't be used to probe whether a hidden field exists.
 
-An own field that is translatable keeps its value on the translation row, one per locale, and can't
-be used as a facet. To see the distribution of such a field, use the
-one-hop-relation-plus-leaf-field form, for example `facets=articles.title`, which counts in the
-query locale.
+An own field that is translatable keeps its value on the translation row, one per locale, and
+can't be used as a facet.
 
 For the one-hop-relation-plus-leaf-field form, a translatable leaf field always needs a valid query
 locale — without `locale=`, the site default is used, so a value is always available.
