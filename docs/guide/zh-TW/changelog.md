@@ -333,6 +333,15 @@
     emoji 這類補充平面字元無法存進去，也無法拿來比對。用 `migrate:check` 列出這些欄位，讀過上面的
     定序說明，再用[第 24 章](24-upgrading-from-0-8.md#mysql-mariadb-字元集換成-utf8mb4)的語句逐表
     轉換。
+- 建在 `Struo.Tests.Support` 上的測試主機不會讀開發者本機的 user secrets。`TestHostEnvironment.Pin`
+  把測試程序與它啟動的子程序的 `APPDATA` 指到一個沒有任何檔案的目錄，`StruoApiFactory` 在主機建好
+  時，另外把 user-secrets 來源從它的主機設定中移除。
+  - fork 的測試若原本靠 user secrets 裡的某個設定，改由測試設定或環境變數提供。
+  - Windows 上，PostgreSQL 測試連線若原本靠 `%APPDATA%\postgresql\` 底下的 `pgpass.conf` 或憑證，
+    連線字串要自帶密碼，或用連線字串鍵 `Passfile`、`SSL Certificate`、`SSL Key`、`Root Certificate`
+    指明檔案。
+  - 自己另寫、直接繼承 `WebApplicationFactory<Program>` 的測試主機，要在
+    `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
 :::
 
 ### 新增
@@ -351,6 +360,9 @@
     見修正。
   - `ForkHost.StartAsync` 與 `ForkHost.StartupErrorAsync`（`Struo.Tests.Support`）多了選用參數
     `environment`，這是二進位層級的變更；參照 `Struo.Tests.Support` 的測試專案要重新編譯。
+  - `HostIsolation.RemoveUserSecrets`、`HostIsolation.IsUserSecretsSource`、
+    `HostIsolation.UserSecretsSources` 與 `TestHostEnvironment.EmptyAppDataRoot`
+    （`Struo.Tests.Support`），第一個的用法見破壞性變更。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 

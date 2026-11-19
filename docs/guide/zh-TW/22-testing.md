@@ -36,6 +36,15 @@
 環境變數是唯一趕得上 `AddStruoCms` 的覆寫方式。`tests/Struo.Tests` 裡這個 initializer 是
 `ContentAssemblyEnvBootstrap`。
 
+測試程序不會讀開發者的 user secrets，那個檔裡放的是真實連線。`Pin` 把 `APPDATA` 指到一個不存在的
+目錄，框架要找的檔案就不在那裡；測試啟動的每個子程序也繼承這個值。`StruoApiFactory` 另外在主機
+建好時，把 user-secrets 來源從它的設定中移除。自己另寫、直接繼承 `WebApplicationFactory<Program>`
+的測試主機，要在 `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
+
+`StruoApiFactory` 建出的 Development 主機，會從 API 專案的目錄載入那份不進版本控制的
+`appsettings.Development.json`（檔案存在時）。`ForkHost` 載入的是建置時複製到測試輸出目錄的那一份
+（有的話）。
+
 `tests/Struo.Tests` 的 `ApiFactory` 繼承 `StruoApiFactory`，並指定主機公開可讀的集合。fork 的測試
 專案照樣做；設定方式見[第 25 章](25-after-forking.md)。
 
@@ -67,6 +76,11 @@
 
 PostgreSQL 的測試連線建議加上 `GSS Encryption Mode=Disable`。不加的話，每條新連線都會先試一次 GSS，
 連線一多，等待時間有上限的測試（例如 migration 鎖的測試）就可能逾時。
+
+測試程序的 `APPDATA` 指向一個不存在的目錄（見 [Support 類別庫](#support-類別庫)），Windows 上
+Npgsql 用它定位 `%APPDATA%\postgresql\` 裡的 PostgreSQL 用戶端檔案。放在那裡的 `pgpass.conf`
+與用戶端、根憑證都找不到，所以 PostgreSQL 的測試連線字串要自帶密碼，或用連線字串鍵
+`Passfile`、`SSL Certificate`、`SSL Key`、`Root Certificate` 指明檔案。
 
 `PgTestConnectionString.DisablePooling` 另外把 Npgsql 的連線池關掉，隔開測試主機底下看過的
 socket 中斷；那是測試主機上量到的現象，不是正式環境也有這個風險的證據。

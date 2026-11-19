@@ -1,6 +1,4 @@
 using AwesomeAssertions;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Json;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -13,19 +11,12 @@ namespace Struo.Tests.Hosting;
 [Collection("ApiIntegration")]
 public sealed class ForkHostConfigurationTests
 {
-    internal static IReadOnlyList<string> UserSecretsSources(IConfiguration configuration) =>
-        ((IConfigurationRoot)configuration).Providers
-            .OfType<JsonConfigurationProvider>()
-            .Where(p => p.Source.Path?.Contains("secrets.json", StringComparison.OrdinalIgnoreCase) == true)
-            .Select(p => p.Source.Path!)
-            .ToList();
-
     [SqliteOnlyFact("starts a host on a SQLite temp database")]
     public async Task A_ForkHost_in_Development_has_no_user_secrets_source()
     {
         await using var host = await ForkHost.StartAsync(environment: "Development");
 
-        UserSecretsSources(host.App.Configuration).Should().BeEmpty();
+        HostIsolation.UserSecretsSources(host.App.Configuration).Should().BeEmpty();
     }
 
     [SqliteOnlyFact("starts a host on a SQLite temp database")]

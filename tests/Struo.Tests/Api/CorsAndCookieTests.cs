@@ -30,6 +30,7 @@ public class CorsAndCookieTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) => HostIsolation.RemoveUserSecrets(config));
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(HostIsolation.ExternalTargets(_filesRoot, Path.Combine(_filesRoot, "image-cache"))));
             builder.ConfigureAppConfiguration((_, config) =>

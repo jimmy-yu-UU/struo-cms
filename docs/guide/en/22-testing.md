@@ -43,6 +43,17 @@ load. `Pin` also turns off the Redis connection and the two shipped OIDC provide
 fork adds is not touched. It sets environment variables, because they are the only override that
 reaches `AddStruoCms` in time. In `tests/Struo.Tests` that initializer is `ContentAssemblyEnvBootstrap`.
 
+The test process does not read the developer's user secrets, which hold real connections. `Pin`
+points `APPDATA` at a directory that does not exist, so the file the framework looks for is not
+there; every process the tests start inherits that value. `StruoApiFactory` also removes the
+user-secrets source from its host's configuration when the host is built. A test host of your own
+that derives `WebApplicationFactory<Program>` directly calls `HostIsolation.RemoveUserSecrets` from
+`ConfigureAppConfiguration`.
+
+A `StruoApiFactory` host in the Development environment loads the gitignored
+`appsettings.Development.json` from the API project's directory when the file exists. A `ForkHost`
+loads the copy of that file the build placed in the test output directory, when there is one.
+
 `ApiFactory` in `tests/Struo.Tests` derives from `StruoApiFactory` and names the collections the host
 makes publicly readable. A fork's test project does the same; [Chapter 25](25-after-forking.md) shows
 the setup.
@@ -81,6 +92,12 @@ drop them at the end.
 Add `GSS Encryption Mode=Disable` to the PostgreSQL test connection. Otherwise every new connection
 tries GSS first, and with many connections, tests that wait under a timeout, such as the migration
 lock tests, can time out.
+
+The test process's `APPDATA` points at a directory that does not exist (see
+[The Support library](#the-support-library)), and on Windows Npgsql finds the PostgreSQL client
+files in `%APPDATA%\postgresql\` through it. A `pgpass.conf` and client or root certificates kept
+there are not found, so a PostgreSQL test connection carries its password, or names the files with
+the connection string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
 
 `PgTestConnectionString.DisablePooling` separately turns off Npgsql's connection pooling,
 isolating a socket interruption observed under the test host — a phenomenon measured there, not
