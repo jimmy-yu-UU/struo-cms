@@ -243,6 +243,13 @@ The junction's write grant — the junction collection's own write grant, plus s
 `AdminOnly` — is checked before any payload value is bound, so a caller without it gets a `403`
 rather than a `400` leaking out of the payload's own field rules.
 
+A payload field whose column is NOT NULL (the rule is in [Chapter 5](05-collections.md)) cannot be
+null: an object element that sets it to `null` is rejected, and a target that is not linked yet
+needs a value for every such field that has no initial value, so a bare id and an object that leaves
+the field out are both rejected. The message is
+`Relation '{relation}', target '{id}': Field '{name}' is required.` A target that is already linked
+keeps the value of a field the element omits.
+
 ## Every `OnDelete` value
 
 `OnDelete` decides what happens when the target is deleted. Trashing (soft delete) and purging

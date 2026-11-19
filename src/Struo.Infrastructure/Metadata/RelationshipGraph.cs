@@ -238,11 +238,16 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         if (meta is null) return (null, null);
 
         var props = junctionType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var notNull = NotNullColumns.WithStartsNull(junctionType, props);
         var payload = (r.JunctionPayloadFields ?? [])
             .Select(name => (
                 Field: meta.Fields.First(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)),
                 Prop: props.First(p => string.Equals(System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name), name, StringComparison.OrdinalIgnoreCase))))
-            .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop.Name, x.Field.Hidden))
+            .Select(x => new JunctionPayloadField(x.Field.Name, x.Prop.Name, x.Field.Hidden)
+            {
+                NotNull = notNull.ContainsKey(x.Prop),
+                StartsNull = notNull.GetValueOrDefault(x.Prop),
+            })
             .ToList();
         return (meta.Name, payload);
     }

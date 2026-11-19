@@ -17,4 +17,11 @@ public sealed record TranslationMetadata
     public required string ForeignKeyProperty { get; init; }   // CLR name, e.g. "ArticleId"
     public required string LocaleProperty { get; init; }       // CLR name, e.g. "Locale"
     public required IReadOnlyList<string> Fields { get; init; } // camelCase translatable field names
+
+    /// <summary>
+    /// The translatable fields whose column is NOT NULL and whose CLR type can hold null, by camelCase
+    /// name. The value is true when a new row holds null for the field until a request sets it.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, bool> NotNullFields { get; init; } = new Dictionary<string, bool>();
 }

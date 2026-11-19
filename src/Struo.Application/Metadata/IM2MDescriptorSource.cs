@@ -2,7 +2,14 @@ namespace Struo.Application.Metadata;
 
 /// <summary>One payload column of a junction collection: the camelCase field name the API exposes and
 /// the CLR property it binds to. FK and sort columns are never payload.</summary>
-public sealed record JunctionPayloadField(string Name, string Property, bool Hidden);
+public sealed record JunctionPayloadField(string Name, string Property, bool Hidden)
+{
+    /// <summary>True when the column is NOT NULL and its CLR type can hold null.</summary>
+    public bool NotNull { get; init; }
+
+    /// <summary>True when a new junction row holds null for a <see cref="NotNull"/> field until a request sets it.</summary>
+    public bool StartsNull { get; init; }
+}
 
 /// <summary>
 /// Carries the junction-table information needed by <see cref="Struo.Application.Query.ItemService"/>

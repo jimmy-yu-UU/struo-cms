@@ -89,8 +89,10 @@ public sealed class ItemWriteSideSync(
         var seenLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // On update a required field is judged on the merged value (stored + sent), because the store keeps
-        // the stored value of a field the request omits.
-        var stored = isCreate || requiredFields.Count == 0
+        // the stored value of a field the request omits. A NOT NULL field reads the stored row only when a new
+        // row would start it null.
+        var storedRowMatters = requiredFields.Count > 0 || tm.NotNullFields.Values.Any(startsNull => startsNull);
+        var stored = isCreate || !storedRowMatters
             ? new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase)
             : await LoadStoredTranslationsAsync(tm, parentId, ct);
 
@@ -131,6 +133,7 @@ public sealed class ItemWriteSideSync(
                 if (FieldValueRules.IsTranslationMissing(has, v))
                     missing.Add(FieldValueRules.MissingTranslationDetail(rf, locale));
             }
+            AddNotNullTranslationFields(tm, requiredFields, fieldValues, storedValues is not null, locale, missing);
 
             perLocale[locale] = fieldValues;
         }
@@ -173,6 +176,22 @@ public sealed class ItemWriteSideSync(
                     tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, tm.Fields, parentId, perLocale)
                 { DeleteLocales = deleteLocales },
                 ct);
+    }
+
+    // A NOT NULL column that a Required check has not already judged: the field must not end up null. The
+    // error is the Required one for the same field and locale.
+    private static void AddNotNullTranslationFields(
+        TranslationMetadata tm, List<string> requiredFields, Dictionary<string, object?> fieldValues,
+        bool rowStored, string locale, List<QueryErrorDetail> missing)
+    {
+        foreach (var field in tm.Fields)
+        {
+            if (!tm.NotNullFields.TryGetValue(field, out var startsNull)) continue;
+            if (requiredFields.Contains(field, StringComparer.OrdinalIgnoreCase)) continue;
+            var sent = fieldValues.TryGetValue(field, out var value);
+            if (FieldValueRules.IsNotNullTranslationMissing(sent, value, rowStored, startsNull))
+                missing.Add(FieldValueRules.MissingTranslationDetail(field, locale));
+        }
     }
 
     // Null and the empty string are not checked, nor is whitespace-only text of a Required field. The error
@@ -290,6 +309,7 @@ public sealed class ItemWriteSideSync(
             var targetIds = links.Select(l => l.TargetId).ToList();
 
             await ValidateTargetsExistAsync(desc, targetIds, includeDeleted, ct);
+            await RequirePayloadForNewLinksAsync(desc, links, parentId, ct);
 
             await repository.SyncManyToManyAsync(
                 desc.JunctionType,
@@ -384,10 +404,45 @@ public sealed class ItemWriteSideSync(
                     // links needs to know which relation and which target row the field belonged to.
                     throw new QueryException($"Relation '{desc.RelationName}', target '{id}': {ex.Message}");
                 }
+                RequirePayloadNotNull(desc, id, bound);
                 return new JunctionLink(id, bound);
             }
             default:
                 throw new QueryException($"One or more ids in '{desc.RelationName}' are not valid.");
+        }
+    }
+
+    // A payload field the request sends as null cannot be stored when its column is NOT NULL. The message
+    // is the payload binder's, with the relation and the target.
+    private static void RequirePayloadNotNull(M2MDescriptor desc, object id, IReadOnlyDictionary<string, object?> bound)
+    {
+        foreach (var field in desc.JunctionPayload!.Where(f => f.NotNull))
+        {
+            if (bound.TryGetValue(field.Property, out var value) && value is null)
+                throw PayloadRequired(desc, id, field);
+        }
+    }
+
+    private static QueryException PayloadRequired(M2MDescriptor desc, object id, JunctionPayloadField field) =>
+        new($"Relation '{desc.RelationName}', target '{id}': Field '{field.Name}' is required.");
+
+    // A link to a target that is not linked yet inserts a row, so every NOT NULL payload column that starts
+    // null needs a value in the request. A link that exists keeps the stored values of the fields it omits.
+    private async Task RequirePayloadForNewLinksAsync(
+        M2MDescriptor desc, IReadOnlyList<JunctionLink> links, object parentId, CancellationToken ct)
+    {
+        var startsNull = desc.JunctionPayload?.Where(f => f.NotNull && f.StartsNull).ToList();
+        if (startsNull is not { Count: > 0 }) return;
+
+        var rows = await repository.QueryEntityWhereInAsync(desc.JunctionType, desc.ParentFkProperty, [parentId], ct: ct);
+        var linked = rows
+            .Select(row => PropertyAccessorCache.Read(row, desc.TargetFkProperty))
+            .OfType<object>()
+            .ToHashSet();
+        foreach (var link in links.Where(l => !linked.Contains(l.TargetId)))
+        {
+            var missing = startsNull.FirstOrDefault(f => link.Payload is null || !link.Payload.ContainsKey(f.Property));
+            if (missing is not null) throw PayloadRequired(desc, link.TargetId, missing);
         }
     }
 

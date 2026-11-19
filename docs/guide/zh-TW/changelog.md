@@ -488,6 +488,13 @@
   的變體也會刪掉。寫入用的暫存檔原本不計入容量、也從不刪除，現在超過一小時的暫存檔在啟動時與每次
   容量清理時刪除，且不計入容量。轉換進行當中檔案被永久刪除時，剛寫入的變體也會被移除。快取只清掉處
   理請求的那個副本的本機磁碟，其他副本的變體留到被淘汰。
+- 0.30.1 的 REST 寫入裡，不可為 null 的字串欄位若在建立時收到 `null`、建立時沒帶又沒有初始值，或更新
+  時收到 `null`，會回 `500` `INTERNAL_SERVER_ERROR`，資料庫的 NOT NULL 錯誤只出現在伺服器日誌。
+  現在回 `400` `BAD_USER_INPUT`，訊息是 `Field '{name}' is required.`，規則見
+  [第 5 章](05-collections.md)。
+  GraphQL 的建立與更新、還原、結構化型別欄位、翻譯欄位與多對多 payload 欄位也一樣；翻譯欄位的訊息
+  是 `Required translation field '{name}' is missing for locale '{locale}'.`，payload 欄位的是
+  `Relation '{relation}', target '{id}': Field '{name}' is required.`
 
 ### 安全性
 
