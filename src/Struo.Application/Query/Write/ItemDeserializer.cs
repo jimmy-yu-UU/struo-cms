@@ -250,7 +250,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // validated per-locale in SyncTranslationsAsync, not on the parent). Called only by ItemService,
     // for create and update, against the merged entity after the write interceptors' BeforeWriteAsync —
     // an update only fails Required when the client explicitly wipes the field (null/blank/Guid.Empty),
-    // never merely by omitting it. A property whose column is NOT NULL and whose value is still null then
+    // never merely by omitting it. A property whose column is NOT NULL and whose value is null then
     // fails with the same message.
     internal static void EnforceRequiredFields(CollectionMetadata meta, EntityDescriptor d, object entity)
     {

@@ -5,7 +5,7 @@ using SqlSugar;
 namespace Struo.Infrastructure.Metadata;
 
 /// <summary>
-/// Which properties map to a NOT NULL column that a null can still reach: a writable, mapped, non-key
+/// Which properties map to a NOT NULL column that a null can reach: a writable, mapped, non-key
 /// property whose CLR type holds null and whose column <see cref="ClrNullability.ColumnIsNullable"/> leaves
 /// NOT NULL. The sets are built once at startup and the write path reads them.
 /// </summary>
