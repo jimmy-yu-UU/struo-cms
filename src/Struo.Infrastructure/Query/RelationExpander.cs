@@ -57,7 +57,7 @@ public sealed class RelationExpander(
         // IItemRepository.QueryWhereInFilteredAsync and QueryWhereInWindowAsync.
         ArgumentNullException.ThrowIfNull(options);
 
-        var (projectTarget, parentId, readProp, _) = accessors;
+        var (projectTarget, parentId, readProp) = accessors;
         var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);
         var levelRows = new List<(string Collection, object Entity, Dictionary<string, object?> Dict)>();
         var result = new Dictionary<object, Dictionary<string, object?>>();
@@ -148,7 +148,8 @@ public sealed class RelationExpander(
         return result;
     }
 
-    // One call per target collection for the whole level, however many relations or rows it has.
+    // One call per target collection for the rows this ExpandAsync call expanded; relations expanded
+    // on the same parent rows share it, and a nested deep recurses into its own call.
     private static async Task AttachTranslationsAsync(
         EntityAccessors accessors,
         List<(string Collection, object Entity, Dictionary<string, object?> Dict)> levelRows,

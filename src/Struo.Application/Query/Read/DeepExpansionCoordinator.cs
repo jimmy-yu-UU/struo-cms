@@ -15,7 +15,7 @@ namespace Struo.Application.Query;
 /// (<see cref="ExpandPreparedAsync"/>). Both are no-ops when <c>deep</c> is null/empty.
 /// </summary>
 public sealed class DeepExpansionCoordinator(
-    IItemRepository repository,
+    TranslationOverlay translations,
     StruoQueryOptions options,
     IRelationshipGraph graph,
     IMetadataProvider metadata,
@@ -24,8 +24,6 @@ public sealed class DeepExpansionCoordinator(
     ItemProjector projector,
     IPermissionService permissions)
 {
-    private readonly TranslationOverlay translations = new(repository, registry, projector, permissions);
-
     /// <summary>
     /// Prunes the requested relations to the readable ones and validates the whole nested tree
     /// (nesting depth, relation names, per-level filter/sort/limit/offset, the shared filter
@@ -75,9 +73,11 @@ public sealed class DeepExpansionCoordinator(
         var nested = await expander.ExpandAsync(
             collection, entities, visible,
             new EntityAccessors(
-                projector.ProjectFor, ParentId, PropertyAccessorCache.Read,
-                (target, targetEntities, targetRows, token) =>
-                    translations.ApplyAsync(Meta(target), targetEntities, targetRows, translationLocale, token)),
+                projector.ProjectFor, ParentId, PropertyAccessorCache.Read)
+            {
+                AttachTranslations = (target, targetEntities, targetRows, token) =>
+                    translations.ApplyAsync(Meta(target), targetEntities, targetRows, translationLocale, token),
+            },
             locale, permissions.CanRead, ct);
 
         for (var i = 0; i < entities.Count; i++)

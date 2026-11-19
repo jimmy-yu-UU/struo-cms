@@ -36,14 +36,18 @@ public interface IRelationExpander
 /// <param name="ProjectTarget"><c>(targetCollection, targetEntity, fields?) -&gt; camelCase dict</c>.</param>
 /// <param name="ParentId">Reads the primary-key value off a parent entity.</param>
 /// <param name="ReadProp">Reads a property value off an entity by CLR/camel name.</param>
-/// <param name="AttachTranslations">
-/// <c>(targetCollection, entities, projectedRows, ct)</c>: adds <c>translations</c> to the projected
-/// rows of one target collection. The expander calls it once per expansion level and target
-/// collection, after the level's rows are complete. <c>null</c> attaches nothing.
-/// </param>
 public sealed record EntityAccessors(
     Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> ProjectTarget,
     Func<object, object> ParentId,
-    Func<object, string, object?> ReadProp,
-    Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>?
-        AttachTranslations = null);
+    Func<object, string, object?> ReadProp)
+{
+    /// <summary>
+    /// <c>(targetCollection, entities, projectedRows, ct)</c>: adds <c>translations</c> to the projected
+    /// rows of one target collection. The expander calls it once per target collection for each set
+    /// of rows one <c>ExpandAsync</c> call expands, so relations expanded on the same parent rows
+    /// share one call and a nested <c>deep</c> makes its own. The call count never depends on the
+    /// number of rows. <c>null</c> attaches nothing.
+    /// </summary>
+    public Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>?
+        AttachTranslations { get; init; }
+}
