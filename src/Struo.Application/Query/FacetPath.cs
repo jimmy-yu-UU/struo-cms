@@ -53,6 +53,8 @@ public static class FacetPathResolver
         var field = VisibleField(root, raw);
         if (field is not null)
         {
+            if (field.Translatable)
+                throw new QueryException($"Field '{field.Name}' on collection '{root.Name}' is translatable and cannot be used as a facet.");
             RequireFacetable(root, field);
             return new ResolvedFacetPath(raw, FacetPathKind.OwnField, field.Name, null, null);
         }

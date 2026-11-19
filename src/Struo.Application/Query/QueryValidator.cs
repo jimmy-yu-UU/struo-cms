@@ -130,8 +130,10 @@ public static class QueryValidator
         {
             if (!Known(meta).Contains(field))
                 throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'.");
-            if (op == AggregateOp.Count) return;
             var fm = meta.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase));
+            if (fm is { Translatable: true })
+                throw new QueryException($"Field '{fm.Name}' on collection '{meta.Name}' is translatable and cannot be aggregated.");
+            if (op == AggregateOp.Count) return;
             // `field` can also be a many-to-one FK column (see Known/CheckField) which carries no
             // [CmsField] and so has no FieldMetadata entry — fm is null in that case. Falling back to
             // Uuid is deliberate: Uuid is absent from both Numeric and Temporal below, so every
