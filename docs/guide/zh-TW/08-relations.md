@@ -205,6 +205,12 @@ junction payload 從不檢查 `Required`：元素沒帶的欄位維持原值。j
 collection 本身的寫入授權，加上 `AdminOnly` 時額外要求的超級管理員——在任何 payload 值被綁定之前就
 先檢查，沒有授權的呼叫端會拿到 403，不會漏到 payload 自己的欄位規則產生 400。
 
+payload 欄位對應不可為 null 的資料庫欄位時（規則見[第 5 章](05-collections.md)），值不能是 null：
+物件元素把它設成 `null` 會被拒絕；連結一個還沒連結的目標時，沒有初始值的欄位也一定要帶值，
+純 id 與沒帶那個欄位的物件都被拒絕。訊息是
+`Relation '{relation}', target '{id}': Field '{name}' is required.` 已經連結的目標沒帶的欄位維持
+原值。
+
 ## `OnDelete` 的每個值
 
 `OnDelete` 決定刪除目標時要連動什麼。丟進垃圾桶與清除（帶 `?purge` 的永久刪除）是兩個不同的時機，

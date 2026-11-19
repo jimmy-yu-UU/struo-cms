@@ -267,7 +267,7 @@ public static class MetadataScanner
             fieldToProp[Camel(nav.ForeignKey)] = nav.ForeignKey;
         }
 
-        return new EntityDescriptor(type, fieldToProp, idProperty);
+        return new EntityDescriptor(type, fieldToProp, idProperty) { NotNullProperties = NotNullColumns.PropertyNames(type) };
     }
 
     // The [CmsCollection] lookup runs on every type of a scanned assembly, so an attribute that cannot be
@@ -404,12 +404,15 @@ public static class MetadataScanner
             .Select(p => BuildField(p, p.GetCustomAttribute<CmsFieldAttribute>()!, isColumn: true) with { Translatable = true })
             .ToList();
 
+        var notNull = NotNullColumns.WithStartsNull(tType, fieldProps);
         var meta = new TranslationMetadata
         {
             TranslationEntityType = tType,
             ForeignKeyProperty = fkName,
             LocaleProperty = "Locale",
-            Fields = fields.Select(f => f.Name).ToList()
+            Fields = fields.Select(f => f.Name).ToList(),
+            NotNullFields = fieldProps.Where(notNull.ContainsKey)
+                .ToDictionary(p => Camel(p.Name), p => notNull[p], StringComparer.OrdinalIgnoreCase)
         };
         return (meta, fields);
     }

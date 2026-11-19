@@ -623,6 +623,15 @@ transformed again on the first request.
   they do not count towards the cap. A variant written while its file is being permanently deleted
   is removed too. Only the local disk of the replica that handled the request is cleared; other
   replicas keep their variants until eviction.
+- In 0.30.1, a REST write answered `500` `INTERNAL_SERVER_ERROR` when a string field whose column is
+  NOT NULL got `null` on create, was left out on create with no initial value, or got `null` on
+  update; the database's NOT NULL error appeared only in the server log. It answers `400`
+  `BAD_USER_INPUT` with the message `Field '{name}' is required.`; the rule is in
+  [Chapter 5](05-collections.md).
+  GraphQL create and update, revert, structured-type fields, translation fields and many-to-many
+  payload fields do the same; the message for a translation field is
+  `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
+  `Relation '{relation}', target '{id}': Field '{name}' is required.`
 
 ### Security
 
