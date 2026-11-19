@@ -615,6 +615,13 @@ transformed again on the first request.
   as for any failed login, and only a successful login clears the count. The comparison is on the
   password hash, not on `version`, so an edit to any other field does not affect a login. External
   (OIDC) login has no password to compare and gets only the revocation fix.
+- A facet, or a `count` aggregate, over an own translatable field answered `500`; the facet and
+  every aggregate op now answer `400` with a message naming the field and the collection, see
+  [Chapter 11](11-query-advanced.md). A facet over a translatable leaf field reached through a
+  relation (`articles.title`) is unaffected.
+- On SQL Server, a facet over a `datetime` column followed, in the same process, by a facet over a
+  zone-aware `datetimeoffset` column of another collection (or the other way round) answered `500`
+  for the second one; both orders now answer with the column's values.
 - A permanent delete of a file left its cached image variants on disk until eviction removed them;
   the row's deletion now deletes all of that file's variants (a failure is logged as a warning and
   does not fail the delete). Writing a variant of one `version` also deletes that file's variants of

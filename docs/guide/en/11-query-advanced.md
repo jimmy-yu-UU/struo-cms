@@ -161,6 +161,9 @@ Long text (`RichText`/`Markdown`/`Code`), multi-value interfaces
 `Hidden`/`Divider`/`Password` can't be used as a facet. A hidden field gets exactly the same message
 as a field that doesn't exist, so a facet path can't be used to probe whether a hidden field exists.
 
+An own field that is translatable keeps its value on the translation row, one per locale, and
+can't be used as a facet.
+
 For the one-hop-relation-plus-leaf-field form, a translatable leaf field always needs a valid query
 locale — without `locale=`, the site default is used, so a value is always available.
 
@@ -293,6 +296,8 @@ field's type. A many-to-one foreign key only supports `count`: it has no `[CmsFi
 validator falls back to the `Uuid` interface, which lands on neither the numeric nor the date side —
 deliberately, since summing or averaging a foreign key means nothing.
 
+An own field that is translatable can't be aggregated, whatever the op — `count` included.
+
 The precision of `avg` follows the database. MySQL/MariaDB return an average with only
 `div_precision_increment` more decimals than the field (4 by default), so the average of 1, 2 and 2
 comes back as 1.6667; PostgreSQL, SQL Server and SQLite have no such four-decimal cut.
@@ -329,6 +334,10 @@ message and what triggers it.
   'category.parent.name'.`
 - An interface that can't be used as a facet: `Field 'regions' on collection 'article'
   (MultiSelect) cannot be used as a facet.`
+- A translatable own field used as a facet: `Field '<field>' on collection '<collection>' is
+  translatable and cannot be used as a facet.`
+- A translatable field aggregated (any op, `count` included): `Field '<field>' on collection
+  '<collection>' is translatable and cannot be aggregated.`
 - An aggregate op incompatible with the field's interface: `Aggregate 'sum' is not supported on
   field 'status' (Select).`
 - An empty segment in the path: `Facet path must not be empty.`

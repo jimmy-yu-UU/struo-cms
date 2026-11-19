@@ -34,8 +34,15 @@ internal sealed partial class FacetQueries(
     {
         var key = (Expression<Func<T, object>>)ColumnSelectorFactory.BoxedSelector(typeof(T), valueProp);
         var count = (Expression<Func<T, object>>)ColumnSelectorFactory.CountSelector(typeof(T), countProp, distinct);
+        var grouped = ((ISugarQueryable<T>)q).GroupBy(key).OrderBy(count, OrderByType.Desc).OrderBy(key);
+        if (ColumnSelectorFactory.IsZoneAwareInstant(typeof(T), valueProp))
+        {
+            var instantProj = (Expression<Func<T, InstantFacetRow<TValue>>>)ColumnSelectorFactory.FacetProjection(typeof(T), valueProp, countProp, distinct, typeof(InstantFacetRow<>));
+            var instantRows = await grouped.Select(instantProj).Take(take).ToListAsync(ct);
+            return instantRows.Select(r => new FacetBucket(r.Value, r.Count)).ToList();
+        }
         var proj = (Expression<Func<T, FacetRow<TValue>>>)ColumnSelectorFactory.FacetProjection(typeof(T), valueProp, countProp, distinct);
-        var rows = await ((ISugarQueryable<T>)q).GroupBy(key).OrderBy(count, OrderByType.Desc).OrderBy(key).Select(proj).Take(take).ToListAsync(ct);
+        var rows = await grouped.Select(proj).Take(take).ToListAsync(ct);
         return rows.Select(r => new FacetBucket(r.Value, r.Count)).ToList();
     }
 

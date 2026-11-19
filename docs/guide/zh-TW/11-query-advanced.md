@@ -135,6 +135,8 @@ this page's parents to their targets; a nested filter does not lower it, so requ
 都不能拿來當 facet。一個隱藏欄位拿到的訊息，跟一個不存在的欄位完全一樣，所以 facet 路徑不能被拿
 來探測一個隱藏欄位存不存在。
 
+可翻譯的自有欄位，值存在翻譯列上、每個 locale 一份，不能當 facet。
+
 一跳關聯＋葉欄位如果葉欄位可翻譯，一律需要一個有效的查詢 locale——沒帶 `locale=` 就用站台預設
 值，永遠有值可用。
 
@@ -242,6 +244,8 @@ to-many 的形態依目標 id 分組，用 `COUNT(DISTINCT ...)` 算：一個根
 `[CmsField]`，驗證器退回 `Uuid` 介面，不落在數字或時間任何一邊，這是刻意的，因為一個外鍵求和或
 求平均沒有意義。
 
+可翻譯的自有欄位不能彙總，每個 op 都一樣，連 `count` 也不例外。
+
 `avg` 的精度跟著資料庫走。MySQL／MariaDB 的平均值只比欄位多出 `div_precision_increment` 位小數
 （預設 4 位），1、2、2 的平均回傳 1.6667；PostgreSQL、SQL Server 與 SQLite 沒有這個四位小數的截斷。
 
@@ -272,6 +276,10 @@ facet 跟彙總的驗證錯誤走 `BAD_USER_INPUT`／400，只有讀取授權被
 - 超過一個關聯跳：`Facet paths support exactly one relation hop: 'category.parent.name'.`
 - 介面不能拿來當 facet：`Field 'regions' on collection 'article' (MultiSelect) cannot be used
   as a facet.`
+- 自有欄位可翻譯，不能當 facet：`Field '<field>' on collection '<collection>' is translatable and
+  cannot be used as a facet.`
+- 彙總的欄位可翻譯（任何 op，含 `count`）：`Field '<field>' on collection '<collection>' is
+  translatable and cannot be aggregated.`
 - 彙總 op 跟欄位介面不相容：`Aggregate 'sum' is not supported on field 'status' (Select).`
 - 路徑裡有一段是空的：`Facet path must not be empty.`
 - 一跳關聯＋葉欄位裡，關聯那一段解析不出來：`Unknown relation 'bogusRelation' on collection

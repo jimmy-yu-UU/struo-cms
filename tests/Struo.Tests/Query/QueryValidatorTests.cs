@@ -617,6 +617,51 @@ public class QueryValidatorTests
         act.Should().Throw<QueryException>().WithMessage("Unknown field 'secret' on collection 'article'.");
     }
 
+    private static CollectionMetadata TranslatableMeta() => Meta() with
+    {
+        Fields =
+        [
+            .. Meta().Fields,
+            new FieldMetadata { Name = "headline", Label = "Headline", Interface = FieldInterface.Text, Translatable = true },
+            new FieldMetadata { Name = "draftNote", Label = "Draft note", Interface = FieldInterface.Text, Translatable = true, Hidden = true },
+        ],
+    };
+
+    [Fact]
+    public void Facet_on_an_own_translatable_field_is_rejected_naming_the_field_and_collection()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("headline"), TranslatableMeta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Field 'headline' on collection 'article' is translatable and cannot be used as a facet.");
+    }
+
+    [Fact]
+    public void Facet_on_a_hidden_translatable_field_is_an_unknown_field()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("draftNote"), TranslatableMeta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'draftNote' on collection 'article'.");
+    }
+
+    [Theory]
+    [InlineData(AggregateOp.Count)]
+    [InlineData(AggregateOp.Sum)]
+    [InlineData(AggregateOp.Min)]
+    [InlineData(AggregateOp.Max)]
+    [InlineData(AggregateOp.Avg)]
+    public void Aggregate_of_any_op_on_an_own_translatable_field_is_rejected(AggregateOp op)
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(op, "headline"), TranslatableMeta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Field 'headline' on collection 'article' is translatable and cannot be aggregated.");
+    }
+
+    [Theory]
+    [InlineData(AggregateOp.Count)]
+    [InlineData(AggregateOp.Max)]
+    public void Aggregate_on_a_hidden_translatable_field_is_an_unknown_field(AggregateOp op)
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(op, "draftNote"), TranslatableMeta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'draftNote' on collection 'article'.");
+    }
+
     [Fact]
     public void Too_many_aggregate_fields_counts_across_ops()
     {

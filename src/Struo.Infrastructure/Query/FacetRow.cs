@@ -6,6 +6,15 @@ public sealed class FacetRow<TValue>
     public long Count { get; set; }
 }
 
+// The facet row of a zone-aware instant column. SqlSugar caches a row binder by result type plus each reader
+// column's name and the first two letters of its CLR type name; DateTime and DateTimeOffset both give "Da",
+// so a datetime and a datetimeoffset column would share one binder unless their row types differ.
+public sealed class InstantFacetRow<TValue>
+{
+    public TValue? Value { get; set; }
+    public long Count { get; set; }
+}
+
 public sealed class AggregateRow
 {
     public const int SlotCount = 10;

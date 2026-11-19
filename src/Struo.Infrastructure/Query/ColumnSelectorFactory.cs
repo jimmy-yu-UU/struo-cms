@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using SqlSugar;
 using Struo.Domain.Query;
+using Struo.Infrastructure.Persistence;
 
 namespace Struo.Infrastructure.Query;
 
@@ -40,13 +41,20 @@ internal static class ColumnSelectorFactory
     public static Type FacetRowType(Type entityType, string valueProperty) =>
         typeof(FacetRow<>).MakeGenericType(Property(entityType, valueProperty).PropertyType);
 
-    // x => new FacetRow<TValue> { Value = x.Value, Count = (long)SqlFunc.AggregateCount(x.Count) } —
-    // TValue is the value property's own CLR type (SqlSugar maps Value straight from the group key).
-    public static LambdaExpression FacetProjection(Type entityType, string valueProperty, string countProperty, bool distinct)
+    public static bool IsZoneAwareInstant(Type entityType, string valueProperty) =>
+        UtcInstantConverter.IsUtcInstantProperty(Property(entityType, valueProperty));
+
+    public static LambdaExpression FacetProjection(Type entityType, string valueProperty, string countProperty, bool distinct) =>
+        FacetProjection(entityType, valueProperty, countProperty, distinct, typeof(FacetRow<>));
+
+    // x => new TRow<TValue> { Value = x.Value, Count = (long)SqlFunc.AggregateCount(x.Count) } — rowDefinition is
+    // FacetRow<> or InstantFacetRow<>, TValue the value property's own CLR type (SqlSugar maps Value straight
+    // from the group key).
+    public static LambdaExpression FacetProjection(Type entityType, string valueProperty, string countProperty, bool distinct, Type rowDefinition)
     {
         var p = Expression.Parameter(entityType, "x");
         var value = Property(entityType, valueProperty);
-        var rowType = typeof(FacetRow<>).MakeGenericType(value.PropertyType);
+        var rowType = rowDefinition.MakeGenericType(value.PropertyType);
         var body = Expression.MemberInit(Expression.New(rowType),
             Expression.Bind(rowType.GetProperty(nameof(FacetRow<object>.Value))!, Expression.Property(p, value)),
             Expression.Bind(rowType.GetProperty(nameof(FacetRow<object>.Count))!,
