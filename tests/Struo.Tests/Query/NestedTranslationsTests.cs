@@ -209,6 +209,37 @@ public class NestedTranslationsTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task A_nested_level_loads_translations_in_the_same_number_of_queries_for_any_row_count()
+    {
+        var (c, s) = await SeedAsync();
+        using var capture = SqlCapture.Attach(factory.Services);
+        var deep = new { category = new { deep = new { articles = new { } } } };
+
+        async Task<int> ArticleTranslationQueries(object filter)
+        {
+            capture.Clear();
+            var rows = await Query(c, "fxArticle", new { filter, deep });
+            rows.GetArrayLength().Should().BeGreaterThan(0);
+            return capture.Matching("fx_article_translations").Count;
+        }
+
+        var oneParent = await ArticleTranslationQueries(IdEquals(s.Both));
+
+        var categories = new List<string> { s.Category };
+        for (var i = 0; i < 3; i++)
+        {
+            var category = await Post(c, "fxCategory", new { name = $"ManyCat{i}" });
+            categories.Add(category);
+            for (var j = 0; j < 3; j++)
+                await Post(c, "fxArticle", new { status = "draft", categoryId = category, translations = Titles($"Many{i}{j}") });
+        }
+        var manyParents = await ArticleTranslationQueries(
+            new { categoryId = new Dictionary<string, object> { ["_in"] = categories } });
+
+        manyParents.Should().Be(oneParent);
+    }
+
+    [Fact]
     public async Task Two_relations_to_one_target_share_one_translation_query()
     {
         var (c, s) = await SeedAsync();

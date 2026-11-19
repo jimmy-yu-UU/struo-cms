@@ -84,4 +84,21 @@ public class NestedTranslationsGraphQlTests(ApiFactory factory)
         many[g1].Keys.Order().Should().Equal("en", "zh-TW");
         many[g2].Keys.Should().Equal("en");
     }
+
+    [Fact]
+    public async Task The_root_locale_argument_filters_the_nested_translations()
+    {
+        var c = await factory.CreateAuthenticatedClientAsync();
+        var cat = await Post(c, "fxCategory", new { name = "GqlLocaleCat" });
+        var both = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = Titles("LocEn", "LocZh") });
+        var enOnly = await Post(c, "fxArticle", new { status = "draft", categoryId = cat, translations = Titles("LocOnlyEn") });
+
+        var articles = (await Gql(c, $$"""{ fxCategory(id: "{{cat}}", locale: "zh-TW") { articles { id {{Selection}} } } }"""))
+            .GetProperty("fxCategory").GetProperty("articles");
+
+        var byId = articles.EnumerateArray()
+            .ToDictionary(a => a.GetProperty("id").GetString()!, a => Flatten(a.GetProperty("translations")));
+        byId[both].Should().Equal(new Dictionary<string, string> { ["zh-TW"] = "LocZh" });
+        byId[enOnly].Should().BeEmpty();
+    }
 }
