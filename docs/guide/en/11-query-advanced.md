@@ -75,8 +75,9 @@ The junction's payload (the `_junction` key) is already covered in
 the end.
 
 An expanded row that belongs to a collection with a translation sidecar carries `translations`, and
-a nested `fields` list does not trim it. Relations on one level that point at the same target
-collection share one translation query, however many rows that level returns.
+a nested `fields` list does not trim it. Relations expanded on the same parent rows that
+reach the same target collection share one translation query; a relation with a nested `deep`
+expands its own set. The number of queries does not depend on the number of rows.
 
 **The depth cap.** The `deep` tree's depth cap shares the same configuration key as filtering and
 sorting: `Query:MaxRelationDepth` (default 6); see

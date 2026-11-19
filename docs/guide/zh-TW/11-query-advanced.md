@@ -60,8 +60,9 @@ to-many relations is not supported: '<path>'.` 是兩回事，一個管巢狀清
 junction 的 payload（`_junction` 鍵）[第 8 章：關聯](08-relations.md)已經介紹過，本章最後的完整
 範例會再看到一次。
 
-展開出來的列只要屬於有翻譯 sidecar 的集合，就帶 `translations`，巢狀 `fields` 篩不掉它。同一層裡
-指向同一個目標集合的關聯，共用一次翻譯查詢，不管那一層有幾列。
+展開出來的列只要屬於有翻譯 sidecar 的集合，就帶 `translations`，巢狀 `fields` 篩不掉它。同一組父列上
+展開、指向同一個目標集合的關聯，共用一次翻譯查詢；帶巢狀 `deep` 的關聯往下展開的那一組另算。
+查詢次數跟列數無關。
 
 **深度上限。** `deep` 樹的深度上限跟篩選、排序共用同一個設定鍵：`Query:MaxRelationDepth`（預設
 6），改法見[第 4 章：設定參考](04-configuration.md)。

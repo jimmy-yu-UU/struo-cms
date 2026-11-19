@@ -446,11 +446,12 @@ transformed again on the first request.
     string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
   - A test host of your own that derives `WebApplicationFactory<Program>` directly calls
     `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
-- The `DeepExpansionCoordinator` constructor takes an `IItemRepository` as its first parameter, and
-  `ExpandPreparedAsync` takes a `translationLocale` parameter after `locale` (the value of
-  `?locale=`, `null` when absent). `EntityAccessors` gains an optional fourth member,
-  `AttachTranslations`; a fork with its own `IRelationExpander` calls it once per target collection
-  when an expansion level is complete. A fork that builds or calls these types adds the arguments.
+- Expanded objects carry `translations`, which changes these public members of
+  `DeepExpansionCoordinator`.
+  - The constructor takes a `TranslationOverlay translations` parameter first. A fork that builds
+    the class adds it.
+  - `ExpandPreparedAsync` takes a `string? translationLocale` parameter after `locale` (the value of
+    `?locale=`, `null` when absent). A fork that calls it adds the argument.
 :::
 
 ### Added
@@ -474,6 +475,11 @@ transformed again on the first request.
   - `HostIsolation.RemoveUserSecrets`, `HostIsolation.IsUserSecretsSource`,
     `HostIsolation.UserSecretsSources` and `TestHostEnvironment.EmptyAppDataRoot`
     (`Struo.Tests.Support`); Breaking says how the first is used.
+  - `EntityAccessors.AttachTranslations` (`Struo.Application.Query`, an optional `init` property,
+    default `null`): a fork with its own `IRelationExpander` calls it once per target collection for
+    each set of rows it expands, so the expanded rows carry `translations`; relations expanded on
+    the same parent rows can share one call, and a relation with a nested `deep` expands its own
+    set. Construction with three arguments and three-variable deconstruction still compile.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
@@ -644,14 +650,17 @@ transformed again on the first request.
   payload fields do the same; the message for a translation field is
   `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
-- An object a `deep` expansion brought in had no `translations`: in 0.30.1 the expanded rows of a
-  REST single-item read, list and `POST .../query` lacked the key and a nested GraphQL
-  `translations` answered an empty array, while the same row queried as a root carried both. When the target
-  collection has a translation sidecar, every expanded row (at every level, one-to-many, many-to-one
-  and many-to-many) now carries `translations`, with the same shape, the same strict `?locale=`
-  filter and the same omission of hidden fields as a root row. Each expansion level runs one more
-  translation query per target collection with a sidecar, and responses grow accordingly; the root
-  query and response are unchanged.
+- An object a `deep` expansion brought in had no `translations`: in 0.30.1 the one-to-many rows
+  expanded in a REST single-item read (with or without `?locale=`) and in a list lacked the key, and
+  a one-to-many GraphQL `translations` answered an empty array, while the same row queried as a
+  root carried both. When the target collection has a translation sidecar, every expanded row in a
+  REST single-item read, list or `POST .../query` and in GraphQL (at every level, one-to-many,
+  many-to-one and many-to-many) now carries `translations`, with the same shape, the same strict
+  `?locale=` filter and the same omission of hidden fields as a root row. The root row's own
+  `translations` and its one translation query are unchanged; the root response grows by the
+  nested `translations`. Each target collection with a sidecar costs one more translation query
+  for each set of expanded rows (relations on the same parent rows that reach the same target share
+  it, and a relation with a nested `deep` expands its own set), whatever the number of rows.
 
 ### Security
 
