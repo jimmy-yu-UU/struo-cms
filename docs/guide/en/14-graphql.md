@@ -68,6 +68,10 @@ never appear in the schema at all.
 one entry per locale — not REST's locale-keyed object; the write shape is left to this chapter's
 "Translations" section.
 
+The `translations` of a nested object work as they do at the root: when the target collection has
+a sidecar, every expanded row carries them, listing each locale that row has a translation in, and
+the strict `locale` argument filters them the same way.
+
 ## Endpoint and discovery
 
 The single endpoint is `POST /graphql`, mounted in the same web application as everything REST

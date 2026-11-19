@@ -446,6 +446,11 @@ transformed again on the first request.
     string keys `Passfile`, `SSL Certificate`, `SSL Key` and `Root Certificate`.
   - A test host of your own that derives `WebApplicationFactory<Program>` directly calls
     `HostIsolation.RemoveUserSecrets` from `ConfigureAppConfiguration`.
+- The `DeepExpansionCoordinator` constructor takes an `IItemRepository` as its first parameter, and
+  `ExpandPreparedAsync` takes a `translationLocale` parameter after `locale` (the value of
+  `?locale=`, `null` when absent). `EntityAccessors` gains an optional fourth member,
+  `AttachTranslations`; a fork with its own `IRelationExpander` calls it once per target collection
+  when an expansion level is complete. A fork that builds or calls these types adds the arguments.
 :::
 
 ### Added
@@ -639,6 +644,14 @@ transformed again on the first request.
   payload fields do the same; the message for a translation field is
   `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- An object a `deep` expansion brought in had no `translations`: in 0.30.1 the expanded rows of a
+  REST single-item read, list and `POST .../query` lacked the key and a nested GraphQL
+  `translations` answered an empty array, while the same row queried as a root carried both. When the target
+  collection has a translation sidecar, every expanded row (at every level, one-to-many, many-to-one
+  and many-to-many) now carries `translations`, with the same shape, the same strict `?locale=`
+  filter and the same omission of hidden fields as a root row. Each expansion level runs one more
+  translation query per target collection with a sidecar, and responses grow accordingly; the root
+  query and response are unchanged.
 
 ### Security
 

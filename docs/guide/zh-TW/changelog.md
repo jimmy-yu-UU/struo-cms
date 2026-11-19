@@ -342,6 +342,10 @@
     指明檔案。
   - 自己另寫、直接繼承 `WebApplicationFactory<Program>` 的測試主機，要在
     `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
+- `DeepExpansionCoordinator` 的建構式第一個參數多了 `IItemRepository`，`ExpandPreparedAsync` 在
+  `locale` 之後多了 `translationLocale` 參數（`?locale=` 的值，沒給就是 `null`）；`EntityAccessors`
+  多了選用的第四個成員 `AttachTranslations`，自己實作 `IRelationExpander` 的 fork 要在每一層展開完
+  成後，依目標集合各呼叫它一次。自己建構或呼叫這些型別的 fork 要補上。
 :::
 
 ### 新增
@@ -495,6 +499,11 @@
   GraphQL 的建立與更新、還原、結構化型別欄位、翻譯欄位與多對多 payload 欄位也一樣；翻譯欄位的訊息
   是 `Required translation field '{name}' is missing for locale '{locale}'.`，payload 欄位的是
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- `deep` 展開出來的物件沒有 `translations`：0.30.1 的 REST 單筆、清單與 `POST .../query`，展開出來的
+  列都沒有這個鍵，GraphQL 的巢狀 `translations` 回空陣列，而同一筆當根查詢時兩者都有。目標集合有
+  翻譯 sidecar 時，展開出來的每一列（每一層，一對多、多對一、多對多）現在都帶 `translations`，形狀、
+  `?locale=` 的嚴格篩選與隱藏欄位的省略都跟根層相同。每一層展開、每個有 sidecar 的目標集合多跑一條
+  翻譯查詢，回應也因此變大；根層的查詢與回應不變。
 
 ### 安全性
 
