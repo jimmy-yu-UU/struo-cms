@@ -39,7 +39,7 @@
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.5",
     "vue": "^3.5.45",
-    "vue-i18n": "^11.4.20",
+    "vue-i18n": "^11.4.21",
     "vue-router": "^5.4.0",
     "vue-sonner": "^2.0.9"
   },
