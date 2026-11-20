@@ -639,6 +639,24 @@ transformed again on the first request.
   payload fields do the same; the message for a translation field is
   `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- In 0.30.1, the admin UI spliced the item id from the address bar into the request path as it was:
+  opening a link ending in `<id>?purge=true` made "Delete" a permanent delete instead of a move to
+  the trash, and an id containing `/../` sent the request to another collection. An id is now one
+  encoded path segment, and an id of `.`, `..` or nothing shows "not found" and sends no request.
+- In 0.30.1, a JSON field could be saved while its text did not parse, and what was sent was the
+  last value that did; a first edit that never parsed raised no warning on leaving the page or
+  closing the tab. Save now sends nothing and moves focus to the field, leaving asks first, and the
+  text and its error stay when the language tab is switched; Reload latest, a reload after a revert
+  and loading the item again discard that text.
+- In 0.30.1, a second trigger while the first was still running sent the request again, for saving
+  an item, deleting an item, saving site settings, saving media details, creating a media folder,
+  signing in and saving the permission matrix; on a collection with a single one-line text field,
+  pressing Enter twice on the new-item page created two items. The second trigger is now ignored.
+- In 0.30.1, on a role form, after another administrator removed the role's super-admin status,
+  "Reload latest" or a reload after a revert showed an empty permission table instead of the
+  server's grants, and saving from that screen replaced every stored grant with the empty set. The
+  matrix now follows the role and its super-admin state, and shows no table and cannot save while
+  the grants load.
 
 ### Security
 
