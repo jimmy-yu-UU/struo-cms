@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apiPath, withQuery } from './apiPath'
+import { apiPath, withQuery, withRawQuery } from './apiPath'
 import { ApiError } from './apiClient'
 
 describe('apiPath', () => {
@@ -13,7 +13,7 @@ describe('apiPath', () => {
     ['/', '%2F'],
     ['%', '%25'],
     [' ', '%20'],
-    ['中文', '%E4%B8%AD%E6%96%87'],
+    ['\u4e2d\u6587', '%E4%B8%AD%E6%96%87'],
   ])('encodes %j inside a segment as %s', (raw, encoded) => {
     expect(apiPath('items', 'article', `a${raw}b`)).toBe(`/items/article/a${encoded}b`)
   })
@@ -66,5 +66,12 @@ describe('withQuery', () => {
     const params = new URLSearchParams()
     params.set('email', 'a+b@c.d')
     expect(withQuery('/login-locks', params)).toBe('/login-locks?email=a%2Bb%40c.d')
+  })
+})
+
+describe('withRawQuery', () => {
+  it('appends the query as given, and nothing for an empty one', () => {
+    expect(withRawQuery('/auth/login', 'returnUrl=/a%3Fb')).toBe('/auth/login?returnUrl=/a%3Fb')
+    expect(withRawQuery('/auth/login', '')).toBe('/auth/login')
   })
 })

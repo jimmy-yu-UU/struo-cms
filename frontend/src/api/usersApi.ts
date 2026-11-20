@@ -25,6 +25,7 @@ export const usersApi = {
     return apiClient.post<CreatedUser>('/users', body)
   },
 
+  // async so that a path apiPath refuses is a rejected promise, as for any other failed request.
   // GET /api/users/{id}/access-token (read on user): issue and last-use times, never the token.
   async getAccessTokenInfo(userId: string): Promise<AccessTokenInfo> {
     return apiClient.get<AccessTokenInfo>(apiPath('users', userId, 'access-token'))

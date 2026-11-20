@@ -15,6 +15,7 @@ export type EffectivePermissions = {
 }
 
 export const rbacApi = {
+  // async so that a path apiPath refuses is a rejected promise, as for any other failed request.
   async getRolePermissions(roleId: string): Promise<RolePermissionEntry[]> {
     return apiClient.get<RolePermissionEntry[]>(apiPath('roles', roleId, 'permissions'))
   },

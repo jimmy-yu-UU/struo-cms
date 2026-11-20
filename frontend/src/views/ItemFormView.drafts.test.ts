@@ -43,7 +43,6 @@ const item = {
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: catalogs as never })
 type Wrapper = VueWrapper<InstanceType<typeof ItemFormView>>
-let wrappers: Wrapper[] = []
 
 async function mountEdit(): Promise<Wrapper> {
   routeParams = { name: 'article', id: '5' }
@@ -59,7 +58,6 @@ async function mountEdit(): Promise<Wrapper> {
     attachTo: document.body,
     global: { plugins: [i18n], stubs: { RevisionHistoryDrawer: true, teleport: true }, renderStubDefaultSlot: true },
   }) as Wrapper
-  wrappers.push(w)
   await flushPromises()
   return w
 }
@@ -88,7 +86,6 @@ describe('ItemFormView JSON drafts', () => {
     push.mockClear()
     confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     vi.spyOn(itemsApi, 'get').mockResolvedValue(structuredClone(item))
-    wrappers = []
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -172,7 +169,7 @@ describe('ItemFormView JSON drafts', () => {
     await openTab(w, 'English')
     await openTab(w, 'French')
     expect(textareas(w)[0].value).toBe('{"k":')
-    expect(w.findAll('.json-error')).toHaveLength(1)
+    expect(w.findAll('[role="alert"]').filter((a) => a.text() !== '')).toHaveLength(1)
     expect(w.findAll('textarea')[0].attributes('aria-invalid')).toBe('true')
   })
 
@@ -185,11 +182,12 @@ describe('ItemFormView JSON drafts', () => {
     await clickSave(w)
     expect(update).toHaveBeenCalledTimes(1)
     await typeInto(w, 1, '{')
-    expect(w.findAll('.json-error')).toHaveLength(1)
+    expect(w.text()).toContain('JSON')
     w.vm.reloadLatest()
     await flushPromises()
     expect(textareas(w)[1].value).toContain('"a": 9')
     expect(w.findAll('.json-error')).toHaveLength(0)
+    expect(w.text()).not.toContain('JSON')
     expect(await w.vm.guardLeave()).toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
   })
@@ -211,6 +209,100 @@ describe('ItemFormView JSON drafts', () => {
     await flushPromises()
     expect(await w.vm.guardLeave()).toBe(true)
     expect(w.findAll('.json-error')).toHaveLength(0)
+  })
+
+  describe('the error follows the text in the box', () => {
+    const parseMessage = (text: string): string => {
+      try { JSON.parse(text) } catch (e) { return (e as Error).message }
+      return ''
+    }
+    const alertTexts = (w: Wrapper): string[] =>
+      w.findAll('[role="alert"]').map((a) => a.text()).filter((x) => x !== '')
+
+    it('replaces, then removes, the message as the text changes after a blocked save', async () => {
+      const w = await mountEdit()
+      await typeInto(w, 1, '{"a":1,}')
+      await clickSave(w)
+      expect(alertTexts(w)).toEqual([parseMessage('{"a":1,}')])
+
+      await typeInto(w, 1, '{"a":2}')
+      expect(alertTexts(w)).toEqual([])
+      expect(w.findAll('textarea')[1].attributes('aria-invalid')).not.toBe('true')
+
+      await typeInto(w, 1, '[[[')
+      expect(parseMessage('[[[')).not.toBe(parseMessage('{"a":1,}'))
+      expect(alertTexts(w)).toEqual([parseMessage('[[[')])
+      expect(w.findAll('textarea')[1].attributes('aria-invalid')).toBe('true')
+    })
+
+    it('shows no error before the first save while the text parses, and one once it does not', async () => {
+      const w = await mountEdit()
+      expect(alertTexts(w)).toEqual([])
+      await typeInto(w, 1, '{')
+      expect(alertTexts(w)).toEqual([parseMessage('{')])
+    })
+
+    it('does not move the tab or the focus while typing after a blocked save', async () => {
+      const w = await mountEdit()
+      await openTab(w, 'French')
+      await typeInto(w, 0, '{')
+      await clickSave(w)
+      await openTab(w, 'English')
+      const area = textareas(w)[1]
+      area.focus()
+      await typeInto(w, 1, '[')
+      await flushPromises()
+      const active = w.findAll('[role="tab"]').find((x) => x.attributes('data-state') === 'active')!
+      expect(active.text()).toContain('English')
+      expect(document.activeElement).toBe(area)
+    })
+
+    it('shows the live parse error, once, on a field that also has a server error', async () => {
+      vi.spyOn(itemsApi, 'update').mockRejectedValue(
+        new ApiError(400, 'bad', 'BAD_USER_INPUT', [{ field: 'config', message: 'Server says no' }]))
+      const w = await mountEdit()
+      await clickSave(w)
+      expect(alertTexts(w)).toEqual(['Server says no'])
+      await typeInto(w, 1, '{')
+      expect(alertTexts(w)).toEqual([parseMessage('{')])
+      expect(w.findAll('textarea')[1].attributes('aria-invalid')).toBe('true')
+    })
+  })
+
+  it('a null JSON value stays null after Reload latest, with or without an unparsable text in the box', async () => {
+    const nullConfig = { ...structuredClone(item), config: null, version: 4 }
+    vi.mocked(itemsApi.get).mockResolvedValue({ ...structuredClone(item), config: null })
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+    const w = await mountEdit()
+    expect(textareas(w)[1].value).toBe('')
+    vi.mocked(itemsApi.get).mockResolvedValue(nullConfig)
+    await w.find('input').setValue('edited')
+    await typeInto(w, 1, '{"a":1}')
+    await clickSave(w)
+    await typeInto(w, 1, '{')
+    w.vm.reloadLatest()
+    await flushPromises()
+    expect(textareas(w)[1].value).toBe('')
+    expect((w.vm as unknown as { model: { shared: { config: unknown } } }).model.shared.config).toBeNull()
+    expect(w.text()).not.toContain('JSON')
+    expect(await w.vm.guardLeave()).toBe(true)
+  })
+
+  it('keeps an unparsable text through the 409 recovery, which keeps the edits', async () => {
+    let rejectUpdate!: (e: Error) => void
+    vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((_, reject) => { rejectUpdate = reject }))
+    const w = await mountEdit()
+    const saving = (w.vm as unknown as { onSubmit: () => Promise<void> }).onSubmit()
+    await flushPromises()
+    await typeInto(w, 1, '{"a":')
+    rejectUpdate(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+    await saving
+    await flushPromises()
+    expect((w.vm as unknown as { conflict: boolean }).conflict).toBe(true)
+    expect(textareas(w)[1].value).toBe('{"a":')
+    expect(w.text()).toContain('JSON')
+    confirmRequire.mockResolvedValue(false)
+    expect(await w.vm.guardLeave()).toBe(false)
   })
 
   it('puts no draft attribute on the DOM of fields that parse nothing', async () => {

@@ -69,6 +69,37 @@ describe('LoginView', () => {
     await new Promise((r) => setTimeout(r, 0))
   })
 
+  it('a second submit after the sign-in resolved but before the navigation settled sends no second login', async () => {
+    const store = useAuthStore()
+    const loginSpy = vi.spyOn(store, 'login').mockResolvedValue()
+    let settleNavigation!: () => void
+    push.mockImplementationOnce(() => new Promise<void>((resolve) => { settleNavigation = resolve }))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(push).toHaveBeenCalledTimes(1)
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+    settleNavigation()
+    await new Promise((r) => setTimeout(r, 0))
+  })
+
+  it('signs in again after the navigation failed', async () => {
+    const store = useAuthStore()
+    const loginSpy = vi.spyOn(store, 'login').mockResolvedValue()
+    push.mockRejectedValueOnce(new Error('navigation failed'))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(loginSpy).toHaveBeenCalledTimes(2)
+  })
+
   it('shows an error message when login fails', async () => {
     // A plain (non-ApiError) rejection is not one auth.login actually produces in practice — it
     // always throws ApiError, since it goes through apiClient — but it is still the fallback branch

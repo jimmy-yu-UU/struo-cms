@@ -29,7 +29,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
-import { draftErrors, hasDrafts, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
+import { hasDrafts, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
@@ -237,11 +237,13 @@ async function init(): Promise<void> {
 async function onSubmit(): Promise<void> {
   // A second trigger (Enter in a lone input, a double click) must not send a second request.
   if (submitting.value || !meta.value) return
-  errors.value = {
-    ...validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t),
-    ...draftErrors(drafts.value),
-  }
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
   if (Object.keys(errors.value).length > 0) return
+  if (hasDrafts(drafts.value)) {
+    // The form shows each draft's own error, which follows the text; this brings the field into view.
+    void itemForm.value?.revealErrors()
+    return
+  }
   submitting.value = true
   serverError.value = ''
   try {
@@ -292,7 +294,7 @@ async function onSubmit(): Promise<void> {
           // baseline stale would make the unified leave guard block the very navigation this
           // failure path performs.
           matrix.value?.markFlushed()
-          void router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          await router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
           return
         }
       }
@@ -306,7 +308,9 @@ async function onSubmit(): Promise<void> {
     }
     // Note: the form itself was already re-baselined above (right after the create/update calls),
     // before either matrix flush — no second captureBaseline() needed here.
-    void router.push({ name: 'collection-list', params: { name: name.value } })
+    // The guard stays closed until the (lazily loaded) target has settled, so a second trigger cannot
+    // send the save again; it opens again when the navigation fails.
+    await router.push({ name: 'collection-list', params: { name: name.value } })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
       // Optimistic-lock clash: only this specific code means "someone else changed the

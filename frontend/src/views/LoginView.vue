@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import PasswordInput from '@/components/form/PasswordInput.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useAppConfigStore } from '../stores/appConfigStore'
-import { apiBaseUrl, ApiError } from '../api/apiClient'
+import { apiClient, ApiError } from '../api/apiClient'
+import { apiPath, withRawQuery } from '../api/apiPath'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import { encodeRedirectParam, safeRedirect, ssoReturnUrl } from '@/lib/safeRedirect'
 import { resolveSsoIcon } from '@/lib/ssoIcons'
@@ -38,7 +39,8 @@ async function onSubmit() {
   submitting.value = true
   try {
     await auth.login(email.value, password.value)
-    void router.push(redirectTarget ?? { name: 'dashboard' })
+    // Held until the (lazily loaded) page has settled, so a second submit cannot sign in again.
+    await router.push(redirectTarget ?? { name: 'dashboard' })
   } catch (e) {
     error.value = loginErrorMessage(e)
   } finally {
@@ -103,7 +105,9 @@ onMounted(() => {
 })
 
 function onSso(providerId: string) {
-  window.location.href = `${apiBaseUrl}/auth/login/oidc/${encodeURIComponent(providerId)}?returnUrl=${encodeRedirectParam(ssoReturnUrl(apiBaseUrl, redirectTarget ?? '/', window.location.origin))}`
+  const returnUrl = encodeRedirectParam(ssoReturnUrl(apiClient.urlFor(''), redirectTarget ?? '/', window.location.origin))
+  window.location.href = withRawQuery(
+    apiClient.urlFor(apiPath('auth', 'login', 'oidc', providerId)), `returnUrl=${returnUrl}`)
 }
 </script>
 

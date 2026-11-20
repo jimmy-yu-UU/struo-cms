@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore'
 import en from '../../locales/en'
 import type { CollectionMeta, FieldMeta, RelationMeta } from '../../types/schema'
 import type { RelationLink } from '../../types/itemForm'
+import { linkDraftKey, type FieldDrafts } from '../../lib/fieldDrafts'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
@@ -321,5 +322,95 @@ describe('JunctionLinksEditor', () => {
     await flushPromises()
 
     expect(w.findAll('.junction-link__remove')[0].attributes('aria-label')).toBe('Remove One')
+  })
+})
+
+describe('JunctionLinksEditor payload drafts', () => {
+  const jsonJunction: CollectionMeta = { name: 'articleTag', label: 'Article tag', relations: [], fields: [
+    field('articleId', { interface: 'uuid' }), field('tagId', { interface: 'uuid' }),
+    field('note', { sort: 1 }), field('config', { interface: 'json', sort: 2 }), field('sort', { interface: 'number' }),
+  ] }
+  const relation = rel({ junctionPayloadFields: ['note', 'config'], sortField: 'sort' })
+  const jsonLinks: RelationLink[] = [
+    { id: 't1', junction: { note: 'a', config: { x: 1 } } },
+    { id: 't2', junction: { note: 'b', config: { y: 2 } } },
+  ]
+  const badDraft = { text: '{"x":', error: 'Unexpected end of JSON input' }
+
+  function mountJson(props: { drafts?: FieldDrafts; modelValue?: unknown } = {}) {
+    setup()
+    useSchemaStore().get = vi.fn((n: string) =>
+      (n === 'tag' ? tagMeta : n === 'articleTag' ? jsonJunction : undefined)) as never
+    return mount(JunctionLinksEditor, {
+      props: { relation, modelValue: jsonLinks, ...props },
+      global: { plugins: [i18n], stubs },
+    })
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.restoreAllMocks()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 't1', name: 'One' }, { id: 't2', name: 'Two' }, { id: 't3', name: 'Three' }], total: 3 })
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'x', name: 'X' })
+  })
+
+  it('reports unparsable payload text under a key naming the relation, the link and the field', async () => {
+    const w = mountJson()
+    await flushPromises()
+    await w.findAll('textarea')[0].setValue('{"x":')
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    const [key, draft] = w.emitted('draft')!.at(-1)! as [string, { text: string }]
+    expect(key).toBe(linkDraftKey('tags', 't1', 'config'))
+    expect(draft.text).toBe('{"x":')
+  })
+
+  it('mounts a link showing its draft text with one error text and real aria targets', async () => {
+    const w = mountJson({ drafts: { [linkDraftKey('tags', 't1', 'config')]: badDraft } })
+    await flushPromises()
+    const area = w.findAll('textarea')[0]
+    expect((area.element as HTMLTextAreaElement).value).toBe('{"x":')
+    expect(area.attributes('aria-invalid')).toBe('true')
+    const alerts = w.findAll('[role="alert"]')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].text()).toBe(badDraft.error)
+    expect(alerts[0].attributes('id')).toBe(area.attributes('aria-describedby'))
+    expect(w.findAll('textarea')[1].attributes('aria-invalid')).not.toBe('true')
+  })
+
+  it('drops the drafts of a link that is removed, and only that link\'s', async () => {
+    const w = mountJson({ drafts: {
+      [linkDraftKey('tags', 't1', 'config')]: badDraft,
+      [linkDraftKey('tags', 't2', 'config')]: badDraft,
+    } })
+    await flushPromises()
+    await w.findAll('.junction-link__remove')[0].trigger('click')
+    expect(w.emitted('draft')).toEqual([[linkDraftKey('tags', 't1', 'config'), null]])
+  })
+
+  it('drops the drafts of a link the picker removes', async () => {
+    const w = mountJson({ drafts: { [linkDraftKey('tags', 't2', 'config')]: badDraft } })
+    await flushPromises()
+    w.findComponent(RelationPicker).vm.$emit('update:modelValue', ['t1'])
+    expect(w.emitted('draft')).toEqual([[linkDraftKey('tags', 't2', 'config'), null]])
+  })
+
+  it('keeps each link\'s draft with its link when the links are reordered', async () => {
+    const drafts = { [linkDraftKey('tags', 't1', 'config')]: badDraft }
+    const w = mountJson({ drafts })
+    await flushPromises()
+    await w.setProps({ modelValue: [jsonLinks[1], jsonLinks[0]] })
+    const rows = w.findAll('.junction-link')
+    expect(rows[0].attributes('data-link-id')).toBe('t2')
+    expect(rows[1].attributes('data-link-id')).toBe('t1')
+    expect((rows[1].find('textarea').element as HTMLTextAreaElement).value).toBe('{"x":')
+    expect(rows[1].find('textarea').attributes('aria-invalid')).toBe('true')
+    expect(rows[0].find('textarea').attributes('aria-invalid')).not.toBe('true')
+  })
+
+  it('gives a payload field that parses nothing no draft prop or attribute', async () => {
+    const w = mountJson({ drafts: { [linkDraftKey('tags', 't1', 'config')]: badDraft } })
+    await flushPromises()
+    expect(w.findAll('*').filter((el) => 'draft' in el.attributes())).toHaveLength(0)
+    expect(w.findAll('input[type="text"], input:not([type])')[0].attributes('aria-invalid')).not.toBe('true')
   })
 })

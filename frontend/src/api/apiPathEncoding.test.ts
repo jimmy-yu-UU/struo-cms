@@ -25,34 +25,34 @@ function sentUrls(): string[] {
   return fetchMock.mock.calls.map((c) => String(c[0]))
 }
 
-describe('hostile ids reach the network as one encoded segment', () => {
-  const calls: Array<[string, (id: string) => Promise<unknown>, (enc: string) => string]> = [
-    ['itemsApi.get', (id) => itemsApi.get('article', id), (e) => `/api/items/article/${e}`],
-    ['itemsApi.update', (id) => itemsApi.update('article', id, {}), (e) => `/api/items/article/${e}`],
-    ['itemsApi.remove', (id) => itemsApi.remove('article', id), (e) => `/api/items/article/${e}`],
-    ['itemsApi.restore', (id) => itemsApi.restore('article', id), (e) => `/api/items/article/${e}/restore`],
-    ['itemsApi.listRevisions', (id) => itemsApi.listRevisions('article', id), (e) => `/api/items/article/${e}/revisions`],
-    ['itemsApi.getRevision', (id) => itemsApi.getRevision('article', id, 3), (e) => `/api/items/article/${e}/revisions/3`],
-    ['itemsApi.revert', (id) => itemsApi.revert('article', id, 3), (e) => `/api/items/article/${e}/revisions/3/revert`],
-    ['filesApi.remove', (id) => filesApi.remove(id), (e) => `/api/files/${e}`],
-    ['filesApi.restore', (id) => filesApi.restore(id), (e) => `/api/files/${e}/restore`],
-    ['rbacApi.getRolePermissions', (id) => rbacApi.getRolePermissions(id), (e) => `/api/roles/${e}/permissions`],
-    ['rbacApi.putRolePermissions', (id) => rbacApi.putRolePermissions(id, []), (e) => `/api/roles/${e}/permissions`],
-    ['rbacApi.getEffectivePermissions', (id) => rbacApi.getEffectivePermissions(id),
-      (e) => `/api/users/${e}/effective-permissions`],
-    ['usersApi.getAccessTokenInfo', (id) => usersApi.getAccessTokenInfo(id), (e) => `/api/users/${e}/access-token`],
-    ['usersApi.generateAccessToken', (id) => usersApi.generateAccessToken(id), (e) => `/api/users/${e}/access-token`],
-    ['usersApi.revokeAccessToken', (id) => usersApi.revokeAccessToken(id), (e) => `/api/users/${e}/access-token`],
-    ['usersApi.changePassword', (id) => usersApi.changePassword(id, { newPassword: 'n' }), (e) => `/api/users/${e}/password`],
-    ['schemaApi.get', (id) => schemaApi.get(id), (e) => `/api/schema/${e}`],
-  ]
+const idCalls: Array<[string, (id: string) => Promise<unknown>, (enc: string) => string]> = [
+  ['itemsApi.get', (id) => itemsApi.get('article', id), (e) => `/api/items/article/${e}`],
+  ['itemsApi.update', (id) => itemsApi.update('article', id, {}), (e) => `/api/items/article/${e}`],
+  ['itemsApi.remove', (id) => itemsApi.remove('article', id), (e) => `/api/items/article/${e}`],
+  ['itemsApi.restore', (id) => itemsApi.restore('article', id), (e) => `/api/items/article/${e}/restore`],
+  ['itemsApi.listRevisions', (id) => itemsApi.listRevisions('article', id), (e) => `/api/items/article/${e}/revisions`],
+  ['itemsApi.getRevision', (id) => itemsApi.getRevision('article', id, 3), (e) => `/api/items/article/${e}/revisions/3`],
+  ['itemsApi.revert', (id) => itemsApi.revert('article', id, 3), (e) => `/api/items/article/${e}/revisions/3/revert`],
+  ['filesApi.remove', (id) => filesApi.remove(id), (e) => `/api/files/${e}`],
+  ['filesApi.restore', (id) => filesApi.restore(id), (e) => `/api/files/${e}/restore`],
+  ['rbacApi.getRolePermissions', (id) => rbacApi.getRolePermissions(id), (e) => `/api/roles/${e}/permissions`],
+  ['rbacApi.putRolePermissions', (id) => rbacApi.putRolePermissions(id, []), (e) => `/api/roles/${e}/permissions`],
+  ['rbacApi.getEffectivePermissions', (id) => rbacApi.getEffectivePermissions(id),
+    (e) => `/api/users/${e}/effective-permissions`],
+  ['usersApi.getAccessTokenInfo', (id) => usersApi.getAccessTokenInfo(id), (e) => `/api/users/${e}/access-token`],
+  ['usersApi.generateAccessToken', (id) => usersApi.generateAccessToken(id), (e) => `/api/users/${e}/access-token`],
+  ['usersApi.revokeAccessToken', (id) => usersApi.revokeAccessToken(id), (e) => `/api/users/${e}/access-token`],
+  ['usersApi.changePassword', (id) => usersApi.changePassword(id, { newPassword: 'n' }), (e) => `/api/users/${e}/password`],
+  ['schemaApi.get', (id) => schemaApi.get(id), (e) => `/api/schema/${e}`],
+]
 
-  it.each(calls)('%s with a query-looking id', async (_name, call, expected) => {
+describe('hostile ids reach the network as one encoded segment', () => {
+  it.each(idCalls)('%s with a query-looking id', async (_name, call, expected) => {
     await call(PURGE_ID)
     expect(sentUrls()).toEqual([expected(ENC_PURGE)])
   })
 
-  it.each(calls)('%s with a traversal-looking id', async (_name, call, expected) => {
+  it.each(idCalls)('%s with a traversal-looking id', async (_name, call, expected) => {
     await call(TRAVERSAL_ID)
     expect(sentUrls()).toEqual([expected(ENC_TRAVERSAL)])
   })
@@ -69,15 +69,9 @@ describe('hostile ids reach the network as one encoded segment', () => {
 
 describe('segments that would collapse a path send no request', () => {
   const calls: Array<[string, () => Promise<unknown>]> = [
-    ['itemsApi.get ..', () => itemsApi.get('article', '..')],
-    ['itemsApi.get .', () => itemsApi.get('article', '.')],
-    ['itemsApi.get empty id', () => itemsApi.get('article', '')],
-    ['itemsApi.remove ..', () => itemsApi.remove('article', '..')],
+    ...idCalls.map(([name, call]): [string, () => Promise<unknown>] => [`${name} with ..`, () => call('..')]),
     ['itemsApi.list ..', () => itemsApi.list('..', { page: 0, rows: 10 })],
-    ['filesApi.remove ..', () => filesApi.remove('..')],
-    ['rbacApi.getRolePermissions ..', () => rbacApi.getRolePermissions('..')],
-    ['usersApi.getAccessTokenInfo ..', () => usersApi.getAccessTokenInfo('..')],
-    ['schemaApi.get ..', () => schemaApi.get('..')],
+    ['itemsApi.create ..', () => itemsApi.create('..', {})],
   ]
 
   it.each(calls)('%s rejects with 404 NOT_FOUND and never calls fetch', async (_name, call) => {
@@ -88,12 +82,18 @@ describe('segments that would collapse a path send no request', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each(['.', ''])('itemsApi.get rejects the id %j without calling fetch', async (id) => {
+    const err = await itemsApi.get('article', id).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('filesApi.contentUrl throws for ..', () => {
     expect(() => filesApi.contentUrl('..')).toThrow(ApiError)
   })
 })
 
-describe('ordinary ids produce the same URLs as string interpolation did', () => {
+describe('ordinary ids produce the plain, unencoded-looking URLs', () => {
   it('items, files, roles, users, schema and login locks', async () => {
     await itemsApi.get('article', GUID, { locale: 'en', deep: ['a', 'b'] })
     await itemsApi.get('article', GUID)

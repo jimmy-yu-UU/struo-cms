@@ -263,17 +263,17 @@ async function loadFolders(): Promise<void> {
 function enterFolder(id: string): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
 function goToBreadcrumb(id: string | null): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
 
-let creatingFolder = false
+const creatingFolder = ref(false)
 async function onCreateFolder(name: string): Promise<void> {
-  if (creatingFolder) return
-  creatingFolder = true
+  if (creatingFolder.value) return
+  creatingFolder.value = true
   try {
     await itemsApi.create('mediafolder', { name, parentId: currentFolderId.value })
     await loadFolders()
   } catch (e) {
     toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.folderSaveFailed'), life: 3500 })
   } finally {
-    creatingFolder = false
+    creatingFolder.value = false
   }
 }
 
@@ -419,7 +419,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
   <section class="media-library">
     <PageHeader :title="t('media.title')" :caption="totalKnown ? t('media.count', { n: total }) : undefined">
       <template #actions>
-        <Button v-if="canManageFolders" type="button" variant="outline" @click="createOpen = true">
+        <Button v-if="canManageFolders" type="button" variant="outline" :disabled="creatingFolder" @click="createOpen = true">
           <FolderPlus aria-hidden="true" />
           {{ t('media.folderNew') }}
         </Button>

@@ -11,7 +11,7 @@ import { hasLocaleContent } from '../lib/localeCompleteness'
 import { localeHasErrors, translationErrorKey } from '../lib/translationErrors'
 import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
-import type { FieldDraft, FieldDrafts } from '../lib/fieldDrafts'
+import { fieldDraftErrors, relationsWithDrafts, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 
 const props = defineProps<{
   meta: CollectionMeta
@@ -66,14 +66,20 @@ function relationFieldId(name: string): string { return `${uid}-relation-${name}
 // One error element per error key (`name`, or `locale:name` for a non-default locale), the target of
 // the control's aria-describedby.
 function errorId(key: string): string { return `${uid}-error-${key}` }
-function invalidAttr(key: string): 'true' | undefined { return props.errors[key] ? 'true' : undefined }
-function describedByAttr(key: string): string | undefined { return props.errors[key] ? errorId(key) : undefined }
+// The errors a field shows: those the form reports, with the live parse error of a field that parses its
+// own text in place of any other on that field, so the message always describes the text in the box.
+const shownErrors = computed<Record<string, string>>(() => ({
+  ...props.errors,
+  ...fieldDraftErrors(props.drafts ?? {}),
+}))
+function invalidAttr(key: string): 'true' | undefined { return shownErrors.value[key] ? 'true' : undefined }
+function describedByAttr(key: string): string | undefined { return shownErrors.value[key] ? errorId(key) : undefined }
 
 function tabHasErrors(code: string): boolean {
-  return localeHasErrors(props.errors, code, fields.value.translatable, defaultCode.value)
+  return localeHasErrors(shownErrors.value, code, fields.value.translatable, defaultCode.value)
 }
 function fieldError(code: string, name: string): string | undefined {
-  return props.errors[translationErrorKey(code, name, defaultCode.value)]
+  return shownErrors.value[translationErrorKey(code, name, defaultCode.value)]
 }
 
 const formEl = ref<HTMLFormElement | null>(null)
@@ -90,12 +96,16 @@ function invalidKeys(): string[] {
     ...fields.value.shared.map((f) => f.name),
     ...(props.meta.relations ?? []).map((r) => r.name),
   ]
-  return keys.filter((key) => Object.hasOwn(props.errors, key))
+  const draftRelations = relationsWithDrafts(props.drafts ?? {})
+  return keys.filter((key) => Object.hasOwn(shownErrors.value, key) || draftRelations.has(key))
 }
 
 // The control the field's label points at when that is focusable, else the first focusable element
 // inside the field (composite fields such as tags or key-value, whose labelled node is a wrapper).
 function focusTarget(wrapper: Element): HTMLElement | null {
+  // A relation whose payload field holds unparsable text: that field, not the relation's first control.
+  const flagged = wrapper.querySelector<HTMLElement>('[aria-invalid="true"]')
+  if (flagged?.matches(FOCUSABLE)) return flagged
   const labelFor = wrapper.querySelector('label[for]')?.getAttribute('for')
   const labelled = labelFor ? document.getElementById(labelFor) : null
   if (labelled && wrapper.contains(labelled) && labelled.matches(FOCUSABLE)) return labelled
@@ -126,8 +136,7 @@ async function focusBanner(): Promise<void> {
 // Surface validation errors even if the user is on another tab: jump to the first locale tab that
 // has an error, the default locale first, then focus the first invalid control. Errors that live
 // outside the tabs fall back to the default tab.
-watch(() => props.errors, async (e) => {
-  if (Object.keys(e).length === 0) return
+async function revealErrors(): Promise<void> {
   const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
   activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
   // A tab switch mounts the new panel a tick or two after the one that changed activeLocale.
@@ -137,9 +146,15 @@ watch(() => props.errors, async (e) => {
   // An invalid field that cannot take focus is skipped; the next one does, then the banner.
   if (invalidKeys().some(focusField)) return
   await focusBanner()
+}
+
+// The parent replaces `errors` on every save attempt; typing never does, so the view never jumps while
+// the user edits.
+watch(() => props.errors, (e) => {
+  if (Object.keys(e).length > 0) void revealErrors()
 })
 
-defineExpose({ activeLocale, focusBanner })
+defineExpose({ activeLocale, focusBanner, revealErrors })
 </script>
 
 <template>
@@ -208,7 +223,7 @@ defineExpose({ activeLocale, focusBanner })
         @update:draft="(d) => emit('draft', f.name, d)"
       />
       <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
-      <FieldError v-if="errors[f.name]" :id="errorId(f.name)" role="alert">{{ errors[f.name] }}</FieldError>
+      <FieldError v-if="shownErrors[f.name]" :id="errorId(f.name)" role="alert">{{ shownErrors[f.name] }}</FieldError>
     </Field>
 
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
@@ -220,13 +235,15 @@ defineExpose({ activeLocale, focusBanner })
           v-model="model.relations[rel.name]"
           :disabled="disabled"
           :parent-id="itemId"
+          :drafts="drafts"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
           :option-hint="optionHintFor(rel.name)"
           :aria-invalid="invalidAttr(rel.name)"
           :aria-describedby="describedByAttr(rel.name)"
+          @draft="(key, d) => emit('draft', key, d)"
         />
         <FieldDescription v-if="rel.helpText">{{ rel.helpText }}</FieldDescription>
-        <FieldError v-if="errors[rel.name]" :id="errorId(rel.name)" role="alert">{{ errors[rel.name] }}</FieldError>
+        <FieldError v-if="shownErrors[rel.name]" :id="errorId(rel.name)" role="alert">{{ shownErrors[rel.name] }}</FieldError>
       </Field>
     </section>
   </form>

@@ -28,6 +28,7 @@ export type RevisionInfo = {
 export type RevisionDetail = RevisionInfo & { snapshot: unknown }
 
 export const itemsApi = {
+  // async so that a path apiPath refuses is a rejected promise, as for any other failed request.
   async list(collection: string, opts: ListOptions): Promise<ListResult> {
     const { page, rows, ...query } = opts
     const params = buildListQuery(page, rows, query)

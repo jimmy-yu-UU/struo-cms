@@ -753,6 +753,27 @@ describe('MediaLibraryView', () => {
     await first
   })
 
+  it('disables the New folder action while a create is in flight, then enables it again', async () => {
+    useAuthStore().user = { id: 'u1', isSuperAdmin: false, permissions: {
+      file: { read: true, write: false, delete: false }, mediafolder: { read: true, write: true, delete: false },
+    } } as CurrentUser
+    makeListMock([{ data: rows, total: 1 }], [])
+    let release!: () => void
+    vi.spyOn(itemsApi, 'create').mockImplementation(() => new Promise((r) => { release = () => r({}) }))
+    const w = mountView()
+    await flushPromises()
+    const newFolder = () => w.findAll('button').find((b) => b.text() === 'New folder')!
+    expect(newFolder().attributes('disabled')).toBeUndefined()
+    const first = (w.vm as unknown as { onCreateFolder: (n: string) => Promise<void> }).onCreateFolder('N')
+    await flushPromises()
+    expect(newFolder().attributes('disabled')).toBeDefined()
+    expect(newFolder().classes().includes('cursor-not-allowed')).toBe(false)
+    release()
+    await first
+    await flushPromises()
+    expect(newFolder().attributes('disabled')).toBeUndefined()
+  })
+
   it('a second folder rename for the same target sends no second request', async () => {
     const target: FolderRow = { id: 'a', name: 'A', parentId: null }
     makeListMock([{ data: rows, total: 1 }], [target])

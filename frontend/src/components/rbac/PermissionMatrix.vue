@@ -49,6 +49,8 @@ function grantFor(name: string): Grant {
 }
 
 function toggle(name: string, key: keyof Grant, value: boolean): void {
+  // The save's response replaces the grants, so a change made while it runs would be lost.
+  if (saving.value) return
   // Immutable update: fresh record per change.
   grants.value = { ...grants.value, [name]: { ...grantFor(name), [key]: value } }
 }
@@ -172,17 +174,17 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox :model-value="grantFor(c.name).read" :disabled="readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colRead')}`"
                           @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
                           @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
                           @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>

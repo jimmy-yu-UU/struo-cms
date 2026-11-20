@@ -691,6 +691,51 @@ describe('ItemFormView', () => {
     expect(push).toHaveBeenCalledTimes(1)
   })
 
+  it('a second onSubmit after the save resolved but before the navigation settled sends no second request', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+    let settleNavigation!: () => void
+    push.mockImplementationOnce(() => new Promise<void>((resolve) => { settleNavigation = resolve }))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    const first = (w.vm as any).onSubmit()
+    await flushPromises()
+    expect(push).toHaveBeenCalledTimes(1)
+    await (w.vm as any).onSubmit()
+    expect(create).toHaveBeenCalledTimes(1)
+    settleNavigation()
+    await first
+  })
+
+  it('submits again after the navigation was refused or failed', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+    push.mockRejectedValueOnce(new Error('navigation failed'))
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    expect(create).toHaveBeenCalledTimes(1)
+    await (w.vm as any).onSubmit()
+    expect(create).toHaveBeenCalledTimes(2)
+  })
+
+  it('submits again after the navigation resolved with a failure result', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+    push.mockResolvedValueOnce({ type: 4 })
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    await (w.vm as any).onSubmit()
+    await (w.vm as any).onSubmit()
+    expect(create).toHaveBeenCalledTimes(2)
+  })
+
   it('a second onSubmit while one is in flight sends no second request (create)', async () => {
     routeParams = { name: 'article' }; routeName = 'collection-create'
     setupStores()

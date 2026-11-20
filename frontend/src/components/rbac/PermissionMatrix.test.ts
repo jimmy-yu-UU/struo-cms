@@ -143,6 +143,70 @@ describe('PermissionMatrix follows the role state', () => {
   })
 })
 
+describe('PermissionMatrix while a save is in flight', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.mocked(rbacApi.getRolePermissions).mockReset()
+    vi.mocked(rbacApi.putRolePermissions).mockReset()
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    seedSchema()
+  })
+
+  async function startSave() {
+    const w = mountMatrix()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: () => Promise<boolean>
+      currentEntries: () => unknown[]
+      dirty: boolean
+    }
+    vm.toggle('article', 'read', true)
+    let release!: (entries: unknown[]) => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((r) => { release = (entries) => r(entries as never) }))
+    const saving = vm.save()
+    await flushPromises()
+    return { w, vm, saving, release: (entries: unknown[]) => release(entries) }
+  }
+
+  it('disables every grant checkbox, and keeps the default cursor', async () => {
+    const { w, release, saving } = await startSave()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes.length).toBeGreaterThan(0)
+    expect(boxes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+    expect(boxes.some((b) => b.classes().includes('disabled:cursor-not-allowed'))).toBe(false)
+    expect(boxes.every((b) => b.classes().includes('disabled:cursor-default'))).toBe(true)
+    release([])
+    await saving
+    await flushPromises()
+    expect(w.findAll('[data-slot="checkbox"]')[0].attributes('disabled')).toBeUndefined()
+  })
+
+  it('ignores toggle() until the save has settled, so a grant cannot be lost to the response', async () => {
+    const { vm, release, saving } = await startSave()
+    vm.toggle('article', 'write', true)
+    expect(vm.currentEntries()).toEqual([{ collection: 'article', canRead: true, canWrite: false, canDelete: false }])
+    release([{ collection: 'article', canRead: true, canWrite: false, canDelete: false }])
+    expect(await saving).toBe(true)
+    expect(vm.currentEntries()).toEqual([{ collection: 'article', canRead: true, canWrite: false, canDelete: false }])
+    expect(vm.dirty).toBe(false)
+    vm.toggle('article', 'write', true)
+    expect(vm.dirty).toBe(true)
+  })
+
+  it('a form save that joins the in-flight save reports the grants that were sent', async () => {
+    const { vm, release, saving } = await startSave()
+    const joined = vm.save()
+    release([{ collection: 'article', canRead: true, canWrite: false, canDelete: false }])
+    expect(await saving).toBe(true)
+    expect(await joined).toBe(true)
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledTimes(1)
+    expect(vm.dirty).toBe(false)
+  })
+})
+
 describe('PermissionMatrix save re-entry', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

@@ -36,7 +36,7 @@ export class ApiClient {
     this.baseUrl = baseUrl
   }
 
-  // The absolute URL of an endpoint path; the only place the base and a path are joined.
+  // The URL of an endpoint path under this client's base: the only place the configured API base and a path are joined.
   urlFor(path: string): string {
     return `${this.baseUrl}${path}`
   }

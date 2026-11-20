@@ -1,4 +1,5 @@
-import { apiBaseUrl } from '../api/apiClient'
+import { apiClient } from '../api/apiClient'
+import { apiPath } from '../api/apiPath'
 
 const GUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 const GUID_PATTERN = new RegExp(`^${GUID}$`, 'i')
@@ -6,12 +7,12 @@ const STORED_PREFIX = '/api'
 
 /** Stored, base-independent content path for a file id. */
 export function fileContentPath(id: string): string {
-  return `${STORED_PREFIX}/files/${id}/content`
+  return `${STORED_PREFIX}${apiPath('files', id, 'content')}`
 }
 
 /** Absolute (or app-relative) URL for previewing a file in the editor. */
 export function fileContentDisplayUrl(id: string): string {
-  return `${apiBaseUrl}/files/${id}/content`
+  return apiClient.urlFor(apiPath('files', id, 'content'))
 }
 
 function escapeRegExp(text: string): string {
@@ -22,7 +23,7 @@ const QUERY = String.raw`(\?.*)?`
 
 // A managed image src is the stored path or the display URL, optionally followed by a query.
 const MANAGED_SRC = new RegExp(
-  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiBaseUrl)})/files/(${GUID})/content${QUERY}$`,
+  `^(?:${escapeRegExp(STORED_PREFIX)}|${escapeRegExp(apiClient.urlFor(''))})/files/(${GUID})/content${QUERY}$`,
   'i',
 )
 
