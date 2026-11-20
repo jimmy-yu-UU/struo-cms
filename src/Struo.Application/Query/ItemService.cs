@@ -100,7 +100,7 @@ public sealed class ItemService(
         var entities = result.Rows;
         var rows = entities.Select(r => projector.Project(r, meta, validated.Fields)).ToList();
         if (deepSpec is not null)
-            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, entities, rows, queryLocale, AttachTranslations(locale), ct);
         await overlay.ApplyAsync(meta, entities, rows, locale, ct);
         var facets = await FacetsAsync(collection, meta, validated, searchable, queryLocale, deleted, ct);
         var aggregate = validated.Aggregate is null ? null
@@ -148,7 +148,7 @@ public sealed class ItemService(
         var projected = (Dictionary<string, object?>)projector.Project(entity, meta, null);
         var queryLocale = locale ?? await languages.DefaultCodeAsync();
         if (deepSpec is not null)
-            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, ct);
+            await deepExpansion.ExpandPreparedAsync(collection, deepSpec, [entity], [projected], queryLocale, AttachTranslations(locale), ct);
         await overlay.ApplyAsync(meta, [entity], [projected], locale, ct);
         return projected;
     }
@@ -691,6 +691,10 @@ public sealed class ItemService(
         set.Add(collection, id.ToString()!, kind);
         return set;
     }
+
+    private Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>
+        AttachTranslations(string? locale) =>
+        (target, entities, rows, ct) => overlay.ApplyAsync(Meta(target), entities, rows, locale, ct);
 
     private CollectionMetadata Meta(string collection) =>
         metadata.GetCollection(collection) ?? throw new CollectionNotFoundException(collection);

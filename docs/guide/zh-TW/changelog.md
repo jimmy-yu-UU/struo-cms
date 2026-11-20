@@ -342,6 +342,10 @@
     指明檔案。
   - 自己另寫、直接繼承 `WebApplicationFactory<Program>` 的測試主機，要在
     `ConfigureAppConfiguration` 裡呼叫 `HostIsolation.RemoveUserSecrets`。
+- 展開出來的物件帶上 `translations`，改了 `DeepExpansionCoordinator` 的一個公開成員。
+  - `ExpandPreparedAsync` 在 `locale` 之後多了 `attachTranslations` 參數，型別與
+    `EntityAccessors.AttachTranslations` 相同。自己呼叫它的 fork 要補上：傳入替展開列加上
+    `translations` 的委派，傳 `null` 則不加。
 :::
 
 ### 新增
@@ -363,6 +367,10 @@
   - `HostIsolation.RemoveUserSecrets`、`HostIsolation.IsUserSecretsSource`、
     `HostIsolation.UserSecretsSources` 與 `TestHostEnvironment.EmptyAppDataRoot`
     （`Struo.Tests.Support`），第一個的用法見破壞性變更。
+  - `EntityAccessors.AttachTranslations`（`Struo.Application.Query`，選用的 `init` 屬性，預設
+    `null`）：自己實作 `IRelationExpander` 的 fork，對每個目標集合、每一組它展開的列呼叫它一次，
+    展開出來的列才會帶 `translations`；同一組父列上展開的關聯可以合成一次呼叫，帶巢狀 `deep` 的
+    關聯往下展開的那一組另算。既有的建構與三個值的解構照常編譯。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -503,6 +511,13 @@
   GraphQL 的建立與更新、還原、結構化型別欄位、翻譯欄位與多對多 payload 欄位也一樣；翻譯欄位的訊息
   是 `Required translation field '{name}' is missing for locale '{locale}'.`，payload 欄位的是
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- `deep` 展開出來的物件沒有 `translations`：0.30.1 的 REST 單筆（含 `?locale=`）與清單，一對多展開出
+  來的列都沒有這個鍵，GraphQL 一對多的 `translations` 回空陣列，而同一筆當根查詢時兩者都有。目標
+  集合有翻譯 sidecar 時，REST 單筆、清單、`POST .../query` 與 GraphQL 展開出來的每一列（每一層，
+  一對多、多對一、多對多）現在都帶 `translations`，形狀、`?locale=` 的嚴格篩選與隱藏欄位的省略都
+  跟根層相同。根層那一列自己的 `translations` 與它的那一條翻譯查詢不變，根層的回應則多了巢狀的
+  `translations`，因此變大。每個有 sidecar 的目標集合，對每一組被展開的列多跑一條翻譯查詢（同一組
+  父列上指向同一個目標集合的關聯共用，帶巢狀 `deep` 的關聯往下展開的那一組另算），次數跟列數無關。
 
 ### 安全性
 

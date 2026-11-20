@@ -53,6 +53,9 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 `Translation { locale: String!, fields: Any! }` 把翻譯的讀取形狀定成一份陣列，每筆一個 locale，不
 是 REST 那種以 locale 當鍵的物件；寫入形狀留給本章「翻譯」一節。
 
+巢狀物件的 `translations` 跟根層一樣：目標集合有 sidecar，展開出來的每一列都帶，列出那一列每個
+有翻譯的 locale；`locale` 引數的嚴格篩選同樣適用。
+
 ## 端點與探索
 
 單一端點是 `POST /graphql`，跟 REST 的一切一樣掛在同一個 web 應用裡。schema 揭露分兩條路，用同一個

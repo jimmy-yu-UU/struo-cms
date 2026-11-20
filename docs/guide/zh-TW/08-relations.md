@@ -241,7 +241,10 @@ junction entity 自己宣告的多對一（例如指向第三個集合）也算�
 
 展開關聯的參數只有一個：`deep`。展開是逐關聯、逐頁批次做的——每個關聯一次額外查詢，不是逐列各查一次，
 也刻意不用 ORM 自己的 eager-include：多對一一次查詢，一對多一次，多對多兩次（junction 列一次、
-目標一次）。
+目標一次）。目標集合有翻譯 sidecar 時，展開出來的每一列都帶 `translations`（見
+[第 7 章](07-i18n.md)）；每個這樣的目標集合，對每一組被展開的列多一次翻譯查詢。同一組父列上展開、
+指向同一個目標集合的關聯共用這一次，帶巢狀 `deep` 的關聯往下展開的那一組另算。次數跟列數無關，
+上限是 `deep` 樹的關聯節點數。
 
 查詢字串形式是單層、只列關聯名稱：`?deep=folder,tags`，用逗號分隔；每個關聯的欄位挑選、巢狀篩選、排
 序、`limit`／`offset`，以及更深一層的巢狀，只存在於查詢端點的 JSON 封裝形式裡。對多對一關聯帶篩選、
@@ -267,11 +270,12 @@ junction 順序——關聯沒有宣告 `SortField`、或該欄位不是數字�
 的巢狀篩選或排序根本不會拿去對集合的 metadata 驗證；如果修剪把每個要求的關聯都拿掉，請求照樣成功，只
 是沒有展開，也沒有錯誤。
 
-一對多展開長這樣，`articles` 是一個陣列，元素是完整的項目投影：
+一對多展開長這樣，`articles` 是一個陣列，元素是完整的項目投影；`article` 有翻譯 sidecar，所以
+每一列都帶 `translations`：
 
 ```text
-$ GET /api/items/category/01a08c68-5681-7e60-ade2-3f277347cc19?deep=articles
-{"success":true,"data":{"id":"01a08c68-5681-7e60-ade2-3f277347cc19","version":0,"name":"Tutorials","createdAt":"2026-09-10T17:40:43.266118Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.266208Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","articles":[{"id":"01a08c68-57d6-7f25-80e7-c42a2a1702a4","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.607052Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.607133Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}]}}
+$ GET /api/items/category/01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1?deep=articles
+{"success":true,"data":{"id":"01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1","version":0,"name":"Tutorials","createdAt":"2026-11-19T10:33:47.3768579Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.3773908Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","articles":[{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}]}}
 HTTP_STATUS:200
 ```
 
@@ -286,8 +290,8 @@ HTTP_STATUS:200
 帶 payload 的多對多展開長這樣，`tags` 的每一筆多一個 `_junction`：
 
 ```text
-$ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4?deep=tags
-{"success":true,"data":{"id":"01a08c68-57d6-7f25-80e7-c42a2a1702a4","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.607052Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.607133Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","tags":[{"id":"01a08c68-56ed-7736-9b4a-bdd351d6b95b","version":0,"name":"howto","createdAt":"2026-09-10T17:40:43.374315Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.374443Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}
+$ GET /api/items/article/01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b?deep=tags
+{"success":true,"data":{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","tags":[{"id":"01a1f35e-a088-7ce7-9813-aa98d6dca224","version":0,"name":"howto","createdAt":"2026-11-19T10:33:47.4015639Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4016547Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}
 HTTP_STATUS:200
 ```
 
