@@ -178,6 +178,8 @@ const submitting = ref(false)
 // The item was saved but no page could be opened: the form stays closed, so it cannot be sent again.
 const saveClosed = ref(false)
 const formBusy = computed(() => submitting.value || saveClosed.value)
+// The matrix's own save is running: the form's Save waits, since both would carry the same role version.
+const matrixSaving = computed(() => matrix.value?.saving ?? false)
 const deleting = ref(false)
 // ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
 // swap plus :disabled="submitting" on the button below.
@@ -269,6 +271,9 @@ async function onSubmit(): Promise<void> {
   }
   submitting.value = true
   try {
+    // A matrix save already running moves the role's version on; wait for it and send the version it hands back.
+    // When it failed, its own notice (or the conflict banner) is showing and nothing is sent.
+    if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value && !(await matrix.value.whenSaved())) return
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update',
       { resolveCollection, canWriteJunction: canWriteJunctionFor,
         baselineTranslations: baselineTranslations(baseline.value) })
@@ -277,6 +282,7 @@ async function onSubmit(): Promise<void> {
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
     const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
     conflict.value = false
+    latestFromServer = null
     // The update DID succeed even if the matrix flush below fails — refresh the
     // concurrency token from the response and re-baseline the FORM now, before the matrix flush.
     // Returning early (matrix failure) must never discard a successful update: doing so left the
@@ -295,7 +301,8 @@ async function onSubmit(): Promise<void> {
     // own PUT fails, its own error toast already fired, and we keep the user on the page (matrix
     // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
-      const ok = await matrix.value.save()
+      // The role's version is the form's: the matrix sends it and hands the new one back (onMatrixSaved).
+      const ok = await matrix.value.save(model.version)
       if (!ok) return
     }
     // Role create — the matrix has no role id to PUT against until now, so it only buffers
@@ -306,7 +313,8 @@ async function onSubmit(): Promise<void> {
       const entries = matrix.value?.currentEntries() ?? []
       if (entries.length > 0) {
         try {
-          await rbacApi.putRolePermissions(String(created.id), entries)
+          const createdVersion = typeof created.version === 'number' ? created.version : undefined
+          await rbacApi.putRolePermissions(String(created.id), entries, createdVersion)
         } catch {
           toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
           // The role WAS created, only the grants PUT failed. Re-baseline the matrix
@@ -387,6 +395,21 @@ async function recoverFromConflict(): Promise<void> {
   }
 }
 
+// The matrix saved the role's grants: that moved the role's version on, and the form carries it from here.
+// The version is not part of the form's dirty state, so nothing becomes unsaved.
+function onMatrixSaved(version: number): void {
+  model.version = version
+  // A grants save changes no role field, so an open conflict stays open: the form still holds the fields from
+  // before the other administrator's save, and only a form save (the warned overwrite) or Reload latest ends it.
+  // The cached server copy takes the new version, so applying it does not step the version back.
+  if (latestFromServer) latestFromServer = { ...latestFromServer, version }
+}
+
+// The matrix's save met a role that has moved on: the form's own conflict handling takes over.
+function onMatrixConflict(): void {
+  void recoverFromConflict()
+}
+
 function reloadLatest(): void {
   if (!latestFromServer) return
   setModel(latestFromServer) // full overwrite: discard the user's edits for the server copy
@@ -400,6 +423,8 @@ function reloadLatest(): void {
   // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
   if (name.value === ROLE_COLLECTION)
     captureSavedRole()
+  // The grants are the server's too: re-read them, which drops any unsaved ticks.
+  if (!isCreate.value && name.value === ROLE_COLLECTION) matrix.value?.reload()
 }
 
 async function onReverted(): Promise<void> {
@@ -524,7 +549,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
                   :disabled="deleteBlockedHint !== undefined || deleting" :title="deleteBlockedHint" @click="onDelete">
             {{ t('itemForm.delete') }}
           </Button>
-          <Button v-if="canWrite" type="button" :disabled="formBusy || lockedBySuperAdmin" :title="lockedHint"
+          <Button v-if="canWrite" type="button" :disabled="formBusy || matrixSaving || lockedBySuperAdmin" :title="lockedHint"
                   @click="onSubmit">{{ saveLabel }}</Button>
         </template>
       </PageHeader>
@@ -573,7 +598,11 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
           :role-id="idStr"
           :is-super-admin-role="savedRoleIsSuperAdmin"
           :create-mode="isCreate"
-          :readonly="!canWrite || lockedBySuperAdmin || formBusy"
+          :readonly="!canWrite || lockedBySuperAdmin"
+          :busy="formBusy"
+          :version="model.version"
+          @saved="onMatrixSaved"
+          @conflict="onMatrixConflict"
         />
         <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
         <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"

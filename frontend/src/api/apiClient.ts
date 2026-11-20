@@ -28,6 +28,11 @@ function serializeBody(body: unknown, isForm: boolean): FormData | string | unde
   return isForm ? (body as FormData) : JSON.stringify(body)
 }
 
+// What a 204 or an empty body yields: nothing, or an envelope of nothing when the caller asked for the envelope.
+function emptyResult<T>(envelope: boolean | undefined): T {
+  return (envelope ? { data: undefined, meta: undefined } : undefined) as T
+}
+
 export class ApiClient {
   private readonly baseUrl: string
   private onUnauthorized: (() => void) | null = null
@@ -65,6 +70,11 @@ export class ApiClient {
     return this.request<T>('PUT', path, body)
   }
 
+  // A PUT whose caller needs the envelope's `meta` as well as its `data`.
+  putEnveloped<T, M = Record<string, unknown>>(path: string, body?: unknown): Promise<{ data: T; meta: M | undefined }> {
+    return this.request<{ data: T; meta: M | undefined }>('PUT', path, body, { envelope: true })
+  }
+
   delete<T>(path: string): Promise<T> {
     return this.request<T>('DELETE', path)
   }
@@ -73,7 +83,7 @@ export class ApiClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { unwrap?: boolean },
+    opts?: { unwrap?: boolean; envelope?: boolean },
   ): Promise<T> {
     const isForm = body instanceof FormData
     const headers: Record<string, string> = {}
@@ -113,12 +123,19 @@ export class ApiClient {
       )
     }
 
-    if (res.status === 204) return undefined as T
+    if (res.status === 204) return emptyResult<T>(opts?.envelope)
     const text = await res.text()
-    if (!text) return undefined as T
+    if (!text) return emptyResult<T>(opts?.envelope)
     const payload = JSON.parse(text)
     if (opts?.unwrap === false) return payload as T
-    if (payload && typeof payload === 'object' && 'success' in payload) {
+    const enveloped = payload && typeof payload === 'object' && 'success' in payload
+    // A body without an envelope has no meta; its data is read as unwrapped requests read it.
+    if (opts?.envelope) {
+      return (enveloped
+        ? { data: payload.data, meta: payload.meta }
+        : { data: payload?.data ?? payload, meta: undefined }) as T
+    }
+    if (enveloped) {
       return (payload as { data?: unknown }).data as T
     }
     return (payload?.data ?? payload) as T

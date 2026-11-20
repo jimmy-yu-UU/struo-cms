@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
-import { traceIdDetail } from '../../api/apiClient'
+import { ApiError, traceIdDetail } from '../../api/apiClient'
 import { GOVERNED_JUNCTIONS } from '../../lib/frameworkCollections'
 import { createLatestWins } from '../../lib/latestWins'
 
@@ -15,11 +15,16 @@ import { createLatestWins } from '../../lib/latestWins'
 // createMode buffers grants locally (no GET, no own Save button) — ItemFormView's create
 // submit reads currentEntries() and PUTs them itself once the role exists.
 // `readonly` shows the grants without letting them change (a caller who can read roles but not write them).
+// `version` is the role's version as the form holds it: a save sends it and reports the new one through
+// `saved`; a 409 VERSION_CONFLICT is reported through `conflict`, for the form's own conflict handling.
+// `busy` greys the matrix and its Save while the form saves, so two saves never carry the same version.
 const props = withDefaults(defineProps<{
-  roleId: string; isSuperAdminRole: boolean; createMode?: boolean; readonly?: boolean
+  roleId: string; isSuperAdminRole: boolean; createMode?: boolean; readonly?: boolean; version?: number
+  busy?: boolean
 }>(), {
-  createMode: false, readonly: false,
+  createMode: false, readonly: false, version: undefined, busy: false,
 })
+const emit = defineEmits<{ saved: [version: number]; conflict: [] }>()
 
 const { t } = useI18n()
 const toast = useToast()
@@ -50,7 +55,7 @@ function grantFor(name: string): Grant {
 
 function toggle(name: string, key: keyof Grant, value: boolean): void {
   // The save's response replaces the grants, so a change made while it runs would be lost.
-  if (saving.value) return
+  if (saving.value || props.busy) return
   // Immutable update: fresh record per change.
   grants.value = { ...grants.value, [name]: { ...grantFor(name), [key]: value } }
 }
@@ -106,24 +111,35 @@ function foldEntries(): RolePermissionEntry[] {
 }
 
 // Returns whether the save succeeded so the parent form's Save can flush this matrix as
-// part of one submit and stay on the page when the PUT fails (its own error toast still fires).
+// part of one submit and stay on the page when the PUT fails (its own error toast still fires, except
+// for a version conflict, which the form reports itself). The form passes the version it holds as
+// `version`, since a prop it has just changed only arrives after the next render.
 // A save asked for while another is in flight joins that one instead of sending a second PUT.
 let inFlightSave: Promise<boolean> | null = null
-function save(): Promise<boolean> {
+
+// Resolves with the outcome of the save in flight, or true when none is.
+function whenSaved(): Promise<boolean> {
+  return inFlightSave ?? Promise.resolve(true)
+}
+
+function save(version?: number): Promise<boolean> {
   if (loading.value) return Promise.resolve(false)
-  inFlightSave ??= putGrants().finally(() => { inFlightSave = null })
+  inFlightSave ??= putGrants(version ?? props.version).finally(() => { inFlightSave = null })
   return inFlightSave
 }
 
-async function putGrants(): Promise<boolean> {
+async function putGrants(version: number | undefined): Promise<boolean> {
   saving.value = true
   try {
-    grants.value = fold(await rbacApi.putRolePermissions(props.roleId, foldEntries()))
+    const saved = await rbacApi.putRolePermissions(props.roleId, foldEntries(), version)
+    grants.value = fold(saved.entries)
     baseline.value = JSON.stringify(grants.value)
+    if (saved.version !== undefined) emit('saved', saved.version)
     toast.add({ severity: 'success', summary: t('rbac.saved'), life: 3000 })
     return true
   } catch (e) {
-    toast.add({ severity: 'error', summary: t('rbac.saveFailed'), detail: traceIdDetail(e), life: 5000 })
+    if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') emit('conflict')
+    else toast.add({ severity: 'error', summary: t('rbac.saveFailed'), detail: traceIdDetail(e), life: 5000 })
     return false
   } finally {
     saving.value = false
@@ -150,7 +166,7 @@ watch([() => props.roleId, () => props.isSuperAdminRole], sync)
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently would
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
-defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel })
+defineExpose({ toggle, save, whenSaved, saving, dirty, load, reload: sync, currentEntries, markFlushed, saveLabel })
 </script>
 
 <template>
@@ -174,17 +190,17 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colRead')}`"
                           @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
                           @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
                           @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>
@@ -193,7 +209,7 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
         </table>
       </div>
       <div v-if="!createMode && !readonly" class="matrix-actions">
-        <Button type="button" :disabled="!dirty || saving" @click="save">{{ saveLabel }}</Button>
+        <Button type="button" :disabled="!dirty || saving || busy" @click="save()">{{ saveLabel }}</Button>
       </div>
     </template>
   </section>

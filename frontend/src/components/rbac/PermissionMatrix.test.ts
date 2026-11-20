@@ -17,13 +17,18 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ add: toastAdd }) }
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function mountMatrix(props: { roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean; readonly?: boolean } = {}) {
+function mountMatrix(props: {
+  roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean; readonly?: boolean; version?: number
+  busy?: boolean
+} = {}) {
   return mount(PermissionMatrix, {
     props: {
       roleId: props.roleId ?? 'r1',
       isSuperAdminRole: props.isSuperAdminRole ?? false,
       createMode: props.createMode ?? false,
       readonly: props.readonly ?? false,
+      version: props.version,
+      busy: props.busy ?? false,
     },
     global: { plugins: [i18n] },
   })
@@ -165,7 +170,7 @@ describe('PermissionMatrix while a save is in flight', () => {
     vm.toggle('article', 'read', true)
     let release!: (entries: unknown[]) => void
     vi.mocked(rbacApi.putRolePermissions).mockImplementation(
-      () => new Promise((r) => { release = (entries) => r(entries as never) }))
+      () => new Promise((r) => { release = (entries) => r({ entries, version: 2 } as never) }))
     const saving = vm.save()
     await flushPromises()
     return { w, vm, saving, release: (entries: unknown[]) => release(entries) }
@@ -220,7 +225,7 @@ describe('PermissionMatrix save re-entry', () => {
     const w = mountMatrix()
     await flushPromises()
     let release!: () => void
-    vi.mocked(rbacApi.putRolePermissions).mockImplementation(() => new Promise((r) => { release = () => r([]) }))
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(() => new Promise((r) => { release = () => r({ entries: [], version: 2 }) }))
     const save = (w.vm as unknown as { save: () => Promise<boolean> }).save
     const first = save()
     const second = save()
@@ -234,7 +239,7 @@ describe('PermissionMatrix save re-entry', () => {
     seedSchema()
     const w = mountMatrix()
     await flushPromises()
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [], version: 2 })
     const save = (w.vm as unknown as { save: () => Promise<boolean> }).save
     await save()
     await save()
@@ -369,9 +374,9 @@ describe('PermissionMatrix', () => {
 
   it('save PUTs only rows with at least one grant and resets dirty', async () => {
     seedSchema()
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [
       { collection: 'article', canRead: true, canWrite: true, canDelete: false },
-    ])
+    ], version: 2 })
     const w = mountMatrix()
     await flushPromises()
     const vm: any = w.vm
@@ -380,7 +385,7 @@ describe('PermissionMatrix', () => {
     await vm.save()
     expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', [
       { collection: 'article', canRead: true, canWrite: true, canDelete: false },
-    ])
+    ], undefined)
     expect(vm.dirty).toBe(false)
   })
 
@@ -390,7 +395,7 @@ describe('PermissionMatrix', () => {
   // toast composable is the vendored/sonner one, mocked at module level.
   it('save resolves true on success and false on failure, and toasts success/failure accordingly', async () => {
     seedSchema()
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [], version: 2 })
     const w = mountMatrix()
     await flushPromises()
     const vm: any = w.vm
@@ -417,7 +422,7 @@ describe('PermissionMatrix', () => {
 
   it('the save button carries the vendored identity, a native type="button", :disabled tracking dirty/saving, and a saving label swap', async () => {
     seedSchema()
-    let resolvePut!: (v: RolePermissionEntry[]) => void
+    let resolvePut!: (v: { entries: RolePermissionEntry[]; version: number }) => void
     vi.mocked(rbacApi.putRolePermissions).mockImplementation(
       () => new Promise((resolve) => { resolvePut = resolve }),
     )
@@ -436,7 +441,7 @@ describe('PermissionMatrix', () => {
     expect(btn().text()).toBe('Saving permissions…')
     expect(btn().attributes('disabled')).toBeDefined() // saving -> disabled even though dirty
 
-    resolvePut([{ collection: 'article', canRead: true, canWrite: true, canDelete: false }])
+    resolvePut({ entries: [{ collection: 'article', canRead: true, canWrite: true, canDelete: false }], version: 2 })
     await flushPromises()
     expect(btn().text()).toBe('Save permissions')
   })
@@ -497,5 +502,180 @@ describe('PermissionMatrix', () => {
     expect(boxes).toHaveLength(6)
     expect(boxes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
     expect(w.text()).not.toContain('Save permissions')
+  })
+})
+
+describe('PermissionMatrix role version', () => {
+  const article = (canRead: boolean) => ({ collection: 'article', canRead, canWrite: false, canDelete: false })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    toastAdd.mockClear()
+    vi.mocked(rbacApi.getRolePermissions).mockReset()
+    vi.mocked(rbacApi.putRolePermissions).mockReset()
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    seedSchema()
+  })
+
+  async function mountDirty(version?: number) {
+    const w = mountMatrix({ version })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: (version?: number) => Promise<boolean>
+      dirty: boolean
+    }
+    vm.toggle('article', 'read', true)
+    return { w, vm }
+  }
+
+  it('sends the version it is given by the form', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [article(true)], version: 4 })
+    const { vm } = await mountDirty(3)
+    await vm.save()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', [article(true)], 3)
+  })
+
+  it('an explicit version of save() takes precedence over the prop, which updates a render later', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [article(true)], version: 8 })
+    const { vm } = await mountDirty(3)
+    await vm.save(7)
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', [article(true)], 7)
+  })
+
+  it('hands the new version to the form after a successful save', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [article(true)], version: 4 })
+    const { w, vm } = await mountDirty(3)
+    expect(await vm.save()).toBe(true)
+    expect(w.emitted('saved')).toEqual([[4]])
+    expect(vm.dirty).toBe(false)
+  })
+
+  it('hands over nothing when the response carries no version', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [article(true)], version: undefined })
+    const { w, vm } = await mountDirty(3)
+    expect(await vm.save()).toBe(true)
+    expect(w.emitted('saved')).toBeUndefined()
+  })
+
+  it('a VERSION_CONFLICT emits conflict, shows no failure toast and keeps the matrix dirty', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new ApiError(409, 'm', 'VERSION_CONFLICT'))
+    const { w, vm } = await mountDirty(3)
+    expect(await vm.save()).toBe(false)
+    expect(w.emitted('conflict')).toHaveLength(1)
+    expect(w.emitted('saved')).toBeUndefined()
+    expect(toastAdd).not.toHaveBeenCalled()
+    expect(vm.dirty).toBe(true)
+  })
+
+  it('another 409 and any other error keep the failure toast and emit no conflict', async () => {
+    const { w, vm } = await mountDirty(3)
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new ApiError(409, 'm', 'CONFLICT'))
+    expect(await vm.save()).toBe(false)
+    vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    expect(await vm.save()).toBe(false)
+    expect(toastAdd).toHaveBeenCalledTimes(2)
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
+    expect(w.emitted('conflict')).toBeUndefined()
+  })
+
+  it('the Save button saves with the version prop', async () => {
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [article(true)], version: 4 })
+    const { w } = await mountDirty(3)
+    await w.get('[data-slot="button"]').trigger('click')
+    await flushPromises()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', [article(true)], 3)
+  })
+
+  it('reload() re-reads the grants and drops unsaved ticks', async () => {
+    const { w, vm } = await mountDirty(3)
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([article(false)])
+    ;(w.vm as unknown as { reload: () => void }).reload()
+    await flushPromises()
+    expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(2)
+    expect(vm.dirty).toBe(false)
+    expect(w.find('[aria-label="Article — Read"]').attributes('data-state')).toBe('unchecked')
+  })
+})
+
+describe('PermissionMatrix while the form saves or while its own save runs', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.mocked(rbacApi.getRolePermissions).mockReset()
+    vi.mocked(rbacApi.putRolePermissions).mockReset()
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    seedSchema()
+  })
+
+  it('busy greys every checkbox and the Save button, keeps the default cursor, and ignores toggle()', async () => {
+    const w = mountMatrix({ busy: true })
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes.length).toBeGreaterThan(0)
+    expect(boxes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+    expect(boxes.every((b) => b.classes().includes('disabled:cursor-default'))).toBe(true)
+    const vm = w.vm as unknown as { toggle: (n: string, k: string, v: boolean) => void; dirty: boolean }
+    vm.toggle('article', 'read', true)
+    expect(vm.dirty).toBe(false)
+    const save = w.get('[data-slot="button"]')
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(save.classes().join(' ')).not.toContain('not-allowed')
+  })
+
+  it('the Save button of a dirty matrix is disabled only while busy', async () => {
+    const w = mountMatrix()
+    await flushPromises()
+    ;(w.vm as unknown as { toggle: (n: string, k: string, v: boolean) => void }).toggle('article', 'read', true)
+    await flushPromises()
+    expect(w.get('[data-slot="button"]').attributes('disabled')).toBeUndefined()
+    await w.setProps({ busy: true })
+    expect(w.get('[data-slot="button"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('exposes whether it is saving, and whenSaved() waits for the save in flight', async () => {
+    const w = mountMatrix({ version: 3 })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: () => Promise<boolean>
+      whenSaved: () => Promise<boolean>
+      saving: boolean
+    }
+    expect(vm.saving).toBe(false)
+    expect(await vm.whenSaved()).toBe(true)
+    vm.toggle('article', 'read', true)
+    let release!: () => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((r) => { release = () => r({ entries: [], version: 4 }) }))
+    const saving = vm.save()
+    await flushPromises()
+    expect(vm.saving).toBe(true)
+    const waited = vm.whenSaved()
+    release()
+    expect(await saving).toBe(true)
+    expect(await waited).toBe(true)
+    expect(vm.saving).toBe(false)
+  })
+
+  it('whenSaved() reports a failed save in flight as false', async () => {
+    const w = mountMatrix({ version: 3 })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: () => Promise<boolean>
+      whenSaved: () => Promise<boolean>
+    }
+    vm.toggle('article', 'read', true)
+    let fail!: () => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((_, reject) => { fail = () => reject(new Error('boom')) }))
+    const saving = vm.save()
+    await flushPromises()
+    const waited = vm.whenSaved()
+    fail()
+    expect(await saving).toBe(false)
+    expect(await waited).toBe(false)
   })
 })
