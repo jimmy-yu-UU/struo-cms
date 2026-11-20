@@ -155,7 +155,7 @@ const errors = ref<Record<string, string>>({})
 const drafts = ref<FieldDrafts>({})
 function onDraft(key: string, draft: FieldDraft | null): void {
   drafts.value = withDraft(drafts.value, key, draft)
-  // The text changed, so an error reported for the earlier text no longer applies to the field.
+  // An error on the field describes the text it was reported for, not the text in the box.
   const errorKey = relationOfDraftKey(key) ?? key
   if (Object.hasOwn(errors.value, errorKey)) {
     const rest = { ...errors.value }
