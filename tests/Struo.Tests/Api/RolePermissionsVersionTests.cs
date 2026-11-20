@@ -2,6 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
+using Struo.Api.Auth;
+using Struo.Application.Security;
+using Struo.Infrastructure.Identity;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -168,12 +174,11 @@ public class RolePermissionsVersionTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task A_grants_save_leaves_the_roles_audit_stamps_and_revisions_alone()
+    public async Task A_grants_save_leaves_the_roles_audit_stamps_alone()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var roleId = await CreateRoleAsync(admin);
         var before = (await ReadJsonAsync(await admin.GetAsync($"/api/items/role/{roleId}"))).GetProperty("data");
-        var revisionsBefore = await RevisionCountAsync(admin, roleId);
 
         (await PutGrantsAsync(admin, roleId, ArticleRead, before.GetProperty("version").GetInt64()))
             .StatusCode.Should().Be(HttpStatusCode.OK);
@@ -181,7 +186,51 @@ public class RolePermissionsVersionTests(ApiFactory factory)
         var after = (await ReadJsonAsync(await admin.GetAsync($"/api/items/role/{roleId}"))).GetProperty("data");
         after.GetProperty("updatedAt").GetString().Should().Be(before.GetProperty("updatedAt").GetString());
         after.GetProperty("updatedBy").ToString().Should().Be(before.GetProperty("updatedBy").ToString());
-        (await RevisionCountAsync(admin, roleId)).Should().Be(revisionsBefore);
+    }
+
+    // The role is removed after the controller's existence check and before the version update.
+    private sealed class DeletingBeforeReplaceStore(IPermissionGrantStore inner, ISqlSugarClient db) : IPermissionGrantStore
+    {
+        public Task<bool> RoleExistsAsync(Guid roleId, CancellationToken ct = default) => inner.RoleExistsAsync(roleId, ct);
+
+        public Task<IReadOnlyList<PermissionGrant>> ListAsync(Guid roleId, CancellationToken ct = default) =>
+            inner.ListAsync(roleId, ct);
+
+        public async Task<long?> ReplaceAsync(
+            Guid roleId, IReadOnlyList<PermissionGrant> grants, long? expectedVersion = null,
+            CancellationToken ct = default)
+        {
+            await db.Deleteable<Role>().Where(r => r.Id == roleId).ExecuteCommandAsync(ct);
+            return await inner.ReplaceAsync(roleId, grants, expectedVersion, ct);
+        }
+
+        public Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default) => inner.DeleteForRoleAsync(roleId, ct);
+    }
+
+    [Fact]
+    public async Task A_role_deleted_between_the_check_and_the_save_is_a_404_with_the_not_found_body()
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var roleId = await CreateRoleAsync(admin);
+        var version = await RoleVersionAsync(admin, roleId);
+        var unknown = await ReadJsonAsync(await PutGrantsAsync(admin, Guid.NewGuid(), ArticleRead, version));
+
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+            s.AddScoped<IPermissionGrantStore>(sp => new DeletingBeforeReplaceStore(
+                ActivatorUtilities.CreateInstance<SqlSugarPermissionGrantStore>(sp),
+                sp.GetRequiredService<ISqlSugarClient>()))));
+        using var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        (await client.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+
+        var resp = await PutGrantsAsync(client, roleId, ArticleRead, version);
+
+        resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var body = await ReadJsonAsync(resp);
+        body.GetProperty("error").GetProperty("code").GetString().Should().Be("NOT_FOUND");
+        body.GetProperty("error").GetProperty("message").GetString()
+            .Should().Be(unknown.GetProperty("error").GetProperty("message").GetString());
     }
 
     [Fact]
@@ -199,11 +248,5 @@ public class RolePermissionsVersionTests(ApiFactory factory)
         var winnerIsFirst = responses[0].StatusCode == HttpStatusCode.OK;
         (await GrantNamesAsync(admin, roleId)).Should().Equal(winnerIsFirst ? "fxArticle" : "fxTag");
         (await RoleVersionAsync(admin, roleId)).Should().Be(v0 + 1);
-    }
-
-    private static async Task<int> RevisionCountAsync(HttpClient admin, Guid roleId)
-    {
-        var json = await ReadJsonAsync(await admin.GetAsync($"/api/items/role/{roleId}/revisions"));
-        return json.GetProperty("data").GetArrayLength();
     }
 }

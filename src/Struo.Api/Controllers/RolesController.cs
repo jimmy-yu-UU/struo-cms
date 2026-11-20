@@ -89,9 +89,12 @@ public sealed class RolesController(
 
         var expectedVersion = VersionQuery.Parse(version);
         var newVersion = await grants.ReplaceAsync(id, rows, expectedVersion, ct);
+        // The role was deleted after the existence check above.
+        if (newVersion is null)
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
         return Ok(Envelope.Versioned(
-            rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList(), newVersion));
+            rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList(), newVersion.Value));
     }
 
     private static RolePermissionEntry ToEntry(PermissionGrant g) =>

@@ -45,7 +45,8 @@ public class PermissionGrantReplaceVersionTests(ApiFactory factory, ITestOutputH
         foreach (var s in statements) output.WriteLine(s);
         statements.Should().NotBeEmpty();
         statements[0].Should().StartWith("UPDATE", "the compare-and-advance is the first write");
-        statements[0].ToLowerInvariant().Should().Contain("version").And.Contain("where");
+        var where = statements[0][statements[0].IndexOf("WHERE", StringComparison.OrdinalIgnoreCase)..];
+        where.Should().Contain("Version", "the update is conditional on the expected version");
         statements.Skip(1).Should().NotContain(s => s.StartsWith("UPDATE", StringComparison.Ordinal),
             "the version is advanced by exactly one statement");
     }
@@ -79,15 +80,17 @@ public class PermissionGrantReplaceVersionTests(ApiFactory factory, ITestOutputH
     }
 
     [Fact]
-    public async Task A_missing_role_throws_a_concurrency_conflict_and_writes_no_grants()
+    public async Task A_missing_role_returns_null_with_or_without_an_expected_version_and_writes_no_grants()
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IPermissionGrantStore>();
         var roleId = Guid.CreateVersion7();
 
-        var act = () => store.ReplaceAsync(roleId, Article);
+        object? withoutVersion = await store.ReplaceAsync(roleId, Article);
+        object? withVersion = await store.ReplaceAsync(roleId, Article, 4);
 
-        await act.Should().ThrowAsync<ConcurrencyConflictException>();
+        withoutVersion.Should().BeNull();
+        withVersion.Should().BeNull();
         (await store.ListAsync(roleId)).Should().BeEmpty();
     }
 
