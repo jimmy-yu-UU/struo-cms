@@ -19,7 +19,7 @@ internal static class ColumnTypeFit
         "and the check is the same on every backend";
     private const string BooleanFix = "Write tinyint without its length, or remove ColumnDataType";
     private const string BooleanWhy =
-        "MySQL and MariaDB read a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
+        "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
         "and the check is the same on every backend";
 
     // One type name as written in a column type: the words it is made of, and for a one-word name the length
@@ -73,32 +73,64 @@ internal static class ColumnTypeFit
             if (tokens[i].Word != entry.Words[i]) return false;
         if (entry.FirstArgument is not null && tokens[0].Argument != entry.FirstArgument) return false;
 
-        // "unsigned" and "zerofill" turn the name into another type; any other trailing word is a column modifier.
-        return tokens.Count == count || tokens[count].Word is not ("unsigned" or "zerofill");
+        // "unsigned", "zerofill" and an array suffix turn the name into another type; any other trailing word is
+        // a column modifier.
+        return tokens.Count == count || !MakesAnotherType(tokens[count].Word);
     }
 
+    private static bool MakesAnotherType(string word) =>
+        word is "unsigned" or "zerofill" or "array" || word.StartsWith('[') || word.StartsWith("array[", StringComparison.Ordinal);
+
     // Lower-case words split at whitespace and at a parenthesised group; the group's text, without spaces,
-    // is the argument of the word before it. Brackets and quotes around a name are dropped:
-    // "[datetimeoffset](7)" is the word "datetimeoffset" with the argument "7".
+    // is the argument of the word before it. A word wrapped whole in brackets, double quotes or backticks keeps
+    // its inner text as one word: "[datetimeoffset](7)" is the word "datetimeoffset" with the argument "7",
+    // and "int custom" in quotes is the word "int custom". Brackets inside a word are part of it, so the
+    // array type "int[]" is the word "int[]".
     private static List<Token> Tokenize(string columnType)
     {
         var tokens = new List<Token>();
         var word = new StringBuilder();
-        for (var i = 0; i < columnType.Length; i++)
+        var i = 0;
+        while (i < columnType.Length)
         {
             var c = columnType[i];
             if (c == '(')
             {
                 var end = ClosingParenthesis(columnType, i);
                 Flush(tokens, word, Compact(columnType[(i + 1)..end]));
-                i = end;
+                i = end + 1;
             }
-            else if (char.IsWhiteSpace(c)) Flush(tokens, word, null);
-            else if (c is not ('[' or ']' or '"' or '`')) word.Append(char.ToLowerInvariant(c));
+            else if (char.IsWhiteSpace(c))
+            {
+                Flush(tokens, word, null);
+                i++;
+            }
+            else if (word.Length == 0 && WrappedWordEnd(columnType, i) is var close and > 0)
+            {
+                word.Append(columnType[(i + 1)..close].ToLowerInvariant());
+                i = close + 1;
+            }
+            else
+            {
+                word.Append(char.ToLowerInvariant(c));
+                i++;
+            }
         }
 
         Flush(tokens, word, null);
         return tokens;
+    }
+
+    // The index of the closing mark when the word starting at `open` is wrapped whole in brackets, double
+    // quotes or backticks with something inside and a word boundary after it; otherwise -1.
+    private static int WrappedWordEnd(string text, int open)
+    {
+        var closing = text[open] switch { '[' => ']', '"' => '"', '`' => '`', _ => '\0' };
+        if (closing == '\0') return -1;
+
+        var close = text.IndexOf(closing, open + 1);
+        var atBoundary = close >= 0 && (close + 1 == text.Length || char.IsWhiteSpace(text[close + 1]) || text[close + 1] == '(');
+        return atBoundary && close > open + 1 ? close : -1;
     }
 
     private static int ClosingParenthesis(string text, int open)

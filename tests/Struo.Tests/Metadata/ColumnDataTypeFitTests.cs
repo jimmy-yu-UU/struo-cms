@@ -66,7 +66,14 @@ public sealed class ColumnDataTypeFitTests
         { typeof(DateTime), "datetimeoffset(7) null" },
         { typeof(DateTime?), "timestamptz not null default now()" },
         { typeof(DateTime), "timestamp with time zone not null" },
-        // tinyint(1) is read as a boolean by MySQL and MariaDB
+        // the whole quoted or bracketed word is judged, case-insensitively
+        { typeof(long), "\"Int\"" },
+        { typeof(int), "[BigInt]" },
+        // an unclosed group runs to the end, and a second group does not replace the first
+        { typeof(int), "tinyint(1" },
+        { typeof(long), "tinyint(1)(2)" },
+        { typeof(int), "bigint(1(2))" },
+        // the MySQL driver reads tinyint(1) as a boolean
         { typeof(int), "tinyint(1)" },
         { typeof(int?), "TINYINT(1)" },
         { typeof(long), "tinyint (1)" },
@@ -80,8 +87,20 @@ public sealed class ColumnDataTypeFitTests
         var misfit = ColumnTypeFit.Find(propertyType, columnType);
 
         misfit.Should().NotBeNull();
-        misfit!.Value.Fix.Should().NotBeNullOrWhiteSpace();
+        misfit!.Value.Fix.Should().Contain(ExpectedFix(propertyType, columnType));
         misfit.Value.Why.Should().NotBeNullOrWhiteSpace();
+    }
+
+    // The fix text identifies the rule that fired.
+    private static string ExpectedFix(Type propertyType, string columnType)
+    {
+        var name = columnType.ToLowerInvariant();
+        if (name.Contains("tinyint", StringComparison.Ordinal)) return "Write tinyint without its length";
+        if (propertyType == typeof(DateTime) || propertyType == typeof(DateTime?)) return "TimestampWithTimeZone";
+        var isInt = propertyType == typeof(int) || propertyType == typeof(int?);
+        if (name.Contains("smallint", StringComparison.Ordinal))
+            return isInt ? "declare the column as int" : "declare the column as bigint";
+        return isInt ? "Declare the property as long" : "Declare the property as int";
     }
 
     public static TheoryData<Type, string?> Passing() => new()
@@ -98,7 +117,7 @@ public sealed class ColumnDataTypeFitTests
         { typeof(DateTime?), "date" },
         // a zone-aware name on a property that is not DateTime is another rule's concern
         { typeof(string), "timestamptz" },
-        // natural widths and widths the database itself polices
+        // natural widths, narrower names the database polices, and wider names that cannot lose a value
         { typeof(int), "int" },
         { typeof(int), "integer" },
         { typeof(int), "int4" },
@@ -144,6 +163,19 @@ public sealed class ColumnDataTypeFitTests
         { typeof(DateTime), "[datetime2](3)" },
         { typeof(int), "[int] not null" },
         { typeof(long), "[bigint] identity(1,1)" },
+        // PostgreSQL array types, and a quoted or bracketed word that is not a table entry
+        { typeof(long), "int[]" },
+        { typeof(long), "integer[]" },
+        { typeof(long), "int []" },
+        { typeof(long), "int array" },
+        { typeof(long), "integer ARRAY[3]" },
+        { typeof(DateTime), "timestamptz[]" },
+        { typeof(int), "smallint[]" },
+        { typeof(long), "_int4" },
+        { typeof(long), "\"int custom\"" },
+        { typeof(long), "[int value]" },
+        // a group with no word before it adds nothing, so tinyint has no length here
+        { typeof(int), "(1)tinyint" },
         // no declaration, or an empty one
         { typeof(int), null },
         { typeof(DateTime), "" },
@@ -239,6 +271,14 @@ public sealed class ColumnDataTypeFitTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [SugarColumn(ColumnDataType = "tinyint(1)")]
         [CmsField(Label = "Level", Interface = FieldInterface.Number)] public int Level { get; set; }
+    }
+
+    [CmsCollection("Long on tinyint(1)", Name = "cdtLongTinyint1")]
+    public sealed class LongTinyint1
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "tinyint(1)")]
+        [CmsField(Label = "Level", Interface = FieldInterface.Number)] public long Level { get; set; }
     }
 
     [CmsCollection("Long on int", Name = "cdtLongInt")]
@@ -340,7 +380,19 @@ public sealed class ColumnDataTypeFitTests
         act.Should().Throw<MetadataException>().Which.Message.Should().Be(
             "Field 'IntTinyint1.Level' has [SugarColumn(ColumnDataType = \"tinyint(1)\")] and is an int property. " +
             "Write tinyint without its length, or remove ColumnDataType: " +
-            "MySQL and MariaDB read a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
+            "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
+            "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_long_on_tinyint_with_a_length_of_one_is_the_same_rule()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(LongTinyint1)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'LongTinyint1.Level' has [SugarColumn(ColumnDataType = \"tinyint(1)\")] and is a long property. " +
+            "Write tinyint without its length, or remove ColumnDataType: " +
+            "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
             "and the check is the same on every backend.");
     }
 
