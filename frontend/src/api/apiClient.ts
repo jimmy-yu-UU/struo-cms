@@ -65,6 +65,11 @@ export class ApiClient {
     return this.request<T>('PUT', path, body)
   }
 
+  // A PUT whose caller needs the envelope's `meta` as well as its `data`.
+  putEnveloped<T, M = Record<string, unknown>>(path: string, body?: unknown): Promise<{ data: T; meta: M | undefined }> {
+    return this.request<{ data: T; meta: M | undefined }>('PUT', path, body, { envelope: true })
+  }
+
   delete<T>(path: string): Promise<T> {
     return this.request<T>('DELETE', path)
   }
@@ -73,7 +78,7 @@ export class ApiClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { unwrap?: boolean },
+    opts?: { unwrap?: boolean; envelope?: boolean },
   ): Promise<T> {
     const isForm = body instanceof FormData
     const headers: Record<string, string> = {}
@@ -118,6 +123,10 @@ export class ApiClient {
     if (!text) return undefined as T
     const payload = JSON.parse(text)
     if (opts?.unwrap === false) return payload as T
+    if (opts?.envelope) {
+      const envelope = payload as { data?: unknown; meta?: unknown }
+      return { data: envelope.data, meta: envelope.meta } as T
+    }
     if (payload && typeof payload === 'object' && 'success' in payload) {
       return (payload as { data?: unknown }).data as T
     }

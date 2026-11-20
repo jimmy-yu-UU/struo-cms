@@ -22,6 +22,25 @@ describe('ApiClient', () => {
     expect(result).toEqual({ id: 'u1' })
   })
 
+  it('putEnveloped returns the data and the meta of the envelope, with the CSRF header on the PUT', async () => {
+    const f = mockFetch(200, { success: true, data: [1], meta: { version: 7 } })
+    vi.stubGlobal('fetch', f)
+    const result = await new ApiClient('/api').putEnveloped<number[], { version: number }>('/x?version=6', [2])
+    expect(result).toEqual({ data: [1], meta: { version: 7 } })
+    expect(f).toHaveBeenCalledWith('/api/x?version=6', expect.objectContaining({
+      method: 'PUT', body: '[2]', headers: expect.objectContaining({ 'X-Struo-CSRF': '1' }),
+    }))
+  })
+
+  it('putEnveloped reports an absent meta as undefined and still throws the ApiError of a failure', async () => {
+    vi.stubGlobal('fetch', mockFetch(200, { success: true, data: [] }))
+    expect(await new ApiClient('/api').putEnveloped('/x', [])).toEqual({ data: [], meta: undefined })
+    vi.stubGlobal('fetch', mockFetch(409, { success: false, error: { code: 'VERSION_CONFLICT', message: 'm' } }))
+    const err = await new ApiClient('/api').putEnveloped('/x', []).catch((e) => e) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.code).toBe('VERSION_CONFLICT')
+  })
+
   it('returns a null data payload as null (not the whole envelope)', async () => {
     vi.stubGlobal('fetch', mockFetch(200, { success: true, data: null }))
     const result = await new ApiClient('/api').get('/auth/me')

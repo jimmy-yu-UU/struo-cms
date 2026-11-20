@@ -295,7 +295,8 @@ async function onSubmit(): Promise<void> {
     // own PUT fails, its own error toast already fired, and we keep the user on the page (matrix
     // stays dirty, form does not) instead of navigating away and losing the unsaved grants.
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value?.dirty) {
-      const ok = await matrix.value.save()
+      // The role's version is the form's: the matrix sends it and hands the new one back (onMatrixSaved).
+      const ok = await matrix.value.save(model.version)
       if (!ok) return
     }
     // Role create — the matrix has no role id to PUT against until now, so it only buffers
@@ -306,7 +307,8 @@ async function onSubmit(): Promise<void> {
       const entries = matrix.value?.currentEntries() ?? []
       if (entries.length > 0) {
         try {
-          await rbacApi.putRolePermissions(String(created.id), entries)
+          const createdVersion = typeof created.version === 'number' ? created.version : undefined
+          await rbacApi.putRolePermissions(String(created.id), entries, createdVersion)
         } catch {
           toast.add({ severity: 'warn', summary: t('rbac.grantsSaveFailedAfterCreate'), life: 6000 })
           // The role WAS created, only the grants PUT failed. Re-baseline the matrix
@@ -387,6 +389,17 @@ async function recoverFromConflict(): Promise<void> {
   }
 }
 
+// The matrix saved the role's grants: that moved the role's version on, and the form carries it from here.
+// The version is not part of the form's dirty state, so nothing becomes unsaved.
+function onMatrixSaved(version: number): void {
+  model.version = version
+}
+
+// The matrix's save met a role that has moved on: the form's own conflict handling takes over.
+function onMatrixConflict(): void {
+  void recoverFromConflict()
+}
+
 function reloadLatest(): void {
   if (!latestFromServer) return
   setModel(latestFromServer) // full overwrite: discard the user's edits for the server copy
@@ -400,6 +413,8 @@ function reloadLatest(): void {
   // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
   if (name.value === ROLE_COLLECTION)
     captureSavedRole()
+  // The grants are the server's too: re-read them, which drops any unsaved ticks.
+  if (!isCreate.value && name.value === ROLE_COLLECTION) matrix.value?.reload()
 }
 
 async function onReverted(): Promise<void> {
@@ -574,6 +589,9 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
           :is-super-admin-role="savedRoleIsSuperAdmin"
           :create-mode="isCreate"
           :readonly="!canWrite || lockedBySuperAdmin || formBusy"
+          :version="model.version"
+          @saved="onMatrixSaved"
+          @conflict="onMatrixConflict"
         />
         <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
         <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"

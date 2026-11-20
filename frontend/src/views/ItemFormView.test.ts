@@ -1804,9 +1804,9 @@ describe('ItemFormView', () => {
     expect(push).not.toHaveBeenCalled() // matrix save failed -> stay on the page
     expect(matrixVm.dirty).toBe(true) // matrix still dirty; its own toast already fired
 
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: [
       { collection: 'article', canRead: false, canWrite: true, canDelete: false },
-    ])
+    ], version: 9 })
     await (w.vm as any).onSubmit()
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
@@ -1851,9 +1851,9 @@ describe('ItemFormView', () => {
 
     // A retry (matrix flush now succeeding) must echo the REFRESHED version, not the stale
     // pre-save one — otherwise the user's own prior save would bounce off a bogus 409.
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce([
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: [
       { collection: 'article', canRead: false, canWrite: true, canDelete: false },
-    ])
+    ], version: 9 })
     await (w.vm as any).onSubmit()
     expect(upd).toHaveBeenLastCalledWith('role', 'r1', expect.objectContaining({ version: 8 }))
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
@@ -1879,7 +1879,7 @@ describe('ItemFormView', () => {
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue(roleMeta)
     vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-1' })
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [], version: 9 })
     const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.name = 'Editor'
@@ -1890,7 +1890,7 @@ describe('ItemFormView', () => {
     await (w.vm as any).onSubmit()
     expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-1', [
       { collection: 'article', canRead: true, canWrite: false, canDelete: false },
-    ])
+    ], undefined)
     expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'role' } })
   })
 
@@ -1924,7 +1924,7 @@ describe('ItemFormView', () => {
     await (w.vm as any).onSubmit() // must not throw / leave an unhandled rejection
     expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-3', [
       { collection: 'article', canRead: true, canWrite: false, canDelete: false },
-    ])
+    ], undefined)
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
       severity: 'warn',
       summary: "The role was created, but saving its permissions failed — retry from the role's edit page.",
@@ -1943,7 +1943,7 @@ describe('ItemFormView', () => {
     const { schema } = setupStores()
     ;(schema.get as any).mockReturnValue(roleMeta)
     vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-4' })
-    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: [], version: 9 })
     const w = mountView()
     await w.vm.init()
     ;(w.vm as any).model.shared.name = 'Editor'
@@ -1981,6 +1981,170 @@ describe('ItemFormView', () => {
     // path just performed.
     await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
     expect(confirmRequire).not.toHaveBeenCalled()
+  })
+
+  describe('role version shared by the form and the matrix', () => {
+    const readGrant = [{ collection: 'article', canRead: true, canWrite: false, canDelete: false }]
+
+    beforeEach(() => {
+      vi.mocked(rbacApi.getRolePermissions).mockReset()
+      vi.mocked(rbacApi.putRolePermissions).mockReset()
+      vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    })
+
+    function seedRoleEdit() {
+      routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+      const { schema } = setupStores()
+      ;(schema.get as any).mockReturnValue(roleMeta)
+      schema.collections = [{ name: 'article', label: 'Article', fields: [], relations: [] }] as never
+    }
+
+    async function mountRole(version = 3) {
+      seedRoleEdit()
+      const get = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version })
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      const matrixVm: any = w.findComponent(PermissionMatrix).vm
+      return { w, get, matrixVm }
+    }
+
+    const conflictError = () => new ApiError(409, 'changed', 'VERSION_CONFLICT')
+    const failureToasts = () => toastAdd.mock.calls.filter(([t]) => t.severity === 'error')
+
+    it('the matrix save sends the form version and hands the new version back without dirtying the form', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: readGrant, version: 4 })
+      matrixVm.toggle('article', 'read', true)
+      expect(await matrixVm.save()).toBe(true)
+      expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', readGrant, 3)
+      expect((w.vm as any).model.version).toBe(4)
+      await expect(Promise.resolve(leaveGuard!())).resolves.toBe(true)
+      expect(confirmRequire).not.toHaveBeenCalled()
+    })
+
+    it('a form save hands its new version to the matrix flush, and the flush hands its own back', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 8 })
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: readGrant, version: 9 })
+      matrixVm.toggle('article', 'read', true)
+      await (w.vm as any).onSubmit()
+      expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('r1', readGrant, 8)
+      expect((w.vm as any).model.version).toBe(9)
+    })
+
+    it('role create flushes the staged grants with the version of the created role', async () => {
+      routeParams = { name: 'role' }; routeName = 'collection-create'
+      const { schema } = setupStores()
+      ;(schema.get as any).mockReturnValue(roleMeta)
+      vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: 'new-role-9', version: 1 })
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: readGrant, version: 2 })
+      const w = mountView()
+      await w.vm.init()
+      ;(w.vm as any).model.shared.name = 'Editor'
+      ;(w.findComponent(PermissionMatrix).vm as any).toggle('article', 'read', true)
+      await (w.vm as any).onSubmit()
+      expect(rbacApi.putRolePermissions).toHaveBeenCalledWith('new-role-9', readGrant, 1)
+    })
+
+    it('a conflict on the matrix own Save shows the form conflict banner and no failure toast', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 5 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(conflictError())
+      matrixVm.toggle('article', 'read', true)
+      expect(await matrixVm.save()).toBe(false)
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+      expect(w.text()).toContain('This item was changed by someone else.')
+      expect((w.vm as any).model.version).toBe(5)
+      expect(failureToasts()).toHaveLength(0)
+      expect(matrixVm.dirty).toBe(true)
+    })
+
+    it('a conflict on the matrix flush of a form save shows the banner, no failure toast, and stays on the page', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 5 })
+      vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 4 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(conflictError())
+      matrixVm.toggle('article', 'read', true)
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+      expect(failureToasts()).toHaveLength(0)
+      expect(push).not.toHaveBeenCalled()
+      expect((w.vm as any).model.version).toBe(5)
+    })
+
+    it('Reload latest reloads the role fields and the grants, and leaves the matrix clean', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'renamed on server', isSuperAdmin: false, version: 5 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(conflictError())
+      matrixVm.toggle('article', 'write', true)
+      await matrixVm.save()
+      await flushPromises()
+      expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(1)
+      vi.mocked(rbacApi.getRolePermissions).mockResolvedValue(readGrant)
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
+      expect((w.vm as any).model.shared.name).toBe('renamed on server')
+      expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(2)
+      expect(w.find('[aria-label="Article — Read"]').attributes('data-state')).toBe('checked')
+      expect(w.find('[aria-label="Article — Write"]').attributes('data-state')).toBe('unchecked')
+      expect(matrixVm.dirty).toBe(false)
+      expect((w.vm as any).conflict).toBe(false)
+    })
+
+    it('saving again after the banner sends the latest version with the grants on screen', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 5 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(conflictError())
+      matrixVm.toggle('article', 'read', true)
+      await matrixVm.save()
+      await flushPromises()
+
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 6 })
+      expect(await matrixVm.save()).toBe(true)
+      expect(rbacApi.putRolePermissions).toHaveBeenLastCalledWith('r1', readGrant, 5)
+      expect((w.vm as any).model.version).toBe(6)
+    })
+
+    it('any other matrix failure keeps the failure toast and arms no conflict banner', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValue(new Error('boom'))
+      matrixVm.toggle('article', 'read', true)
+      await matrixVm.save()
+      await flushPromises()
+      expect(failureToasts()).toHaveLength(1)
+      expect((w.vm as any).conflict).toBe(false)
+    })
+
+    it('beforeunload still reacts to a dirty matrix only, also after a version hand-back', async () => {
+      seedRoleEdit()
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 3 })
+      const listener = vi.spyOn(window, 'addEventListener')
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      const onUnload = listener.mock.calls.find(([type]) => type === 'beforeunload')![1] as (e: BeforeUnloadEvent) => void
+      const matrixVm: any = w.findComponent(PermissionMatrix).vm
+      const event = () => ({ preventDefault: vi.fn() }) as unknown as BeforeUnloadEvent
+
+      const clean = event()
+      onUnload(clean)
+      expect(clean.preventDefault).not.toHaveBeenCalled()
+
+      matrixVm.toggle('article', 'read', true)
+      const dirty = event()
+      onUnload(dirty)
+      expect(dirty.preventDefault).toHaveBeenCalled()
+
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValue({ entries: readGrant, version: 4 })
+      await matrixVm.save()
+      const saved = event()
+      onUnload(saved)
+      expect(saved.preventDefault).not.toHaveBeenCalled()
+      w.unmount()
+    })
   })
 
   it('loads a payload-bearing relation into JunctionLinksEditor and submits {id, ...payload} objects', async () => {
