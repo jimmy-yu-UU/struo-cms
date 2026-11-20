@@ -570,9 +570,10 @@ The image forwards these paths to the API and answers every other path from its 
 | Any other path | SPA files | `index.html` for a path that is no file |
 
 The `/graphql` paths match in any letter case, as the API's routing does, and carry the query
-string; `/graphql/` and `/graphql/schema/` with a trailing slash are forwarded too. The schema routes
-and `GET /graphql?sdl` answer only while `GraphQl:ExposeSchema` is on, and introspection follows the
-same setting (see [Chapter 14](14-graphql.md)); with it off the image returns what the API returns,
+string; `/graphql/` and `/graphql/schema/` with a trailing slash are forwarded too. The schema
+routes and `GET /graphql?sdl` answer only while `GraphQl:ExposeSchema` is on, and introspection
+follows the same setting (see [Chapter 14](14-graphql.md)); with it off the image returns what the
+API returns,
 `404` for the schema routes and an error for introspection. Any other path that starts with
 `/graphql` gets the SPA page. The GraphQL IDE the API serves under `/graphql/` in Development does
 not work through the image, because its assets are not forwarded; open it on the API's own port.
