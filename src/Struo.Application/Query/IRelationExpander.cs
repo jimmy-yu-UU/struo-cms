@@ -39,4 +39,15 @@ public interface IRelationExpander
 public sealed record EntityAccessors(
     Func<string, object, IReadOnlyList<string>?, IReadOnlyDictionary<string, object?>> ProjectTarget,
     Func<object, object> ParentId,
-    Func<object, string, object?> ReadProp);
+    Func<object, string, object?> ReadProp)
+{
+    /// <summary>
+    /// <c>(targetCollection, entities, projectedRows, ct)</c>: adds <c>translations</c> to the projected
+    /// rows of one target collection. The expander calls it once per target collection for each set
+    /// of rows one <c>ExpandAsync</c> call expands, so relations expanded on the same parent rows
+    /// share one call and a nested <c>deep</c> makes its own. The call count never depends on the
+    /// number of rows. <c>null</c> attaches nothing.
+    /// </summary>
+    public Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>?
+        AttachTranslations { get; init; }
+}
