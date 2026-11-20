@@ -108,7 +108,7 @@ updates:
       - dependency-name: "mcr.microsoft.com/dotnet/*"
         update-types: ["version-update:semver-major"]
 
-  # frontend/Dockerfile pins the Node build stage and the nginx-unprivileged
+  # frontend/Dockerfile pins the Node build stage and the official nginx
   # runtime stage to exact versions; Dependabot rewrites the tag. Node majors
   # are ignored here: the Node major moves together with the CI frontend job's
   # Node version. Same cooldowns as the other ecosystems, minor and patch
