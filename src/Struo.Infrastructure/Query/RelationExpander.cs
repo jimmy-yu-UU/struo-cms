@@ -59,6 +59,7 @@ public sealed class RelationExpander(
 
         var (projectTarget, parentId, readProp) = accessors;
         var ctx = new ExpandContext(projectTarget, parentId, readProp, locale, canReadJunction);
+        var levelRows = new List<(string Collection, object Entity, Dictionary<string, object?> Dict)>();
         var result = new Dictionary<object, Dictionary<string, object?>>();
         foreach (var p in parents) result[parentId(p)] = new Dictionary<string, object?>();
 
@@ -139,9 +140,28 @@ public sealed class RelationExpander(
                     if (sub.TryGetValue(parentId(entity), out var subMap))
                         foreach (var (k, v) in subMap) dict[k] = v;
             }
+
+            levelRows.AddRange(expanded.Select(e => (rel.TargetCollection, e.Entity, e.Dict)));
         }
 
+        await AttachTranslationsAsync(accessors, levelRows, ct);
         return result;
+    }
+
+    // One call per target collection for the rows this ExpandAsync call expanded; relations expanded
+    // on the same parent rows share it, and a nested deep recurses into its own call.
+    private static async Task AttachTranslationsAsync(
+        EntityAccessors accessors,
+        List<(string Collection, object Entity, Dictionary<string, object?> Dict)> levelRows,
+        CancellationToken ct)
+    {
+        if (accessors.AttachTranslations is not { } attach) return;
+        foreach (var byCollection in levelRows.GroupBy(r => r.Collection))
+            await attach(
+                byCollection.Key,
+                byCollection.Select(r => r.Entity).ToList(),
+                byCollection.Select(r => (IReadOnlyDictionary<string, object?>)r.Dict).ToList(),
+                ct);
     }
 
     // Fetches the O2M children for the expanded parents. With exactly one parent and a nested limit
