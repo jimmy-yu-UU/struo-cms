@@ -372,7 +372,9 @@
 
 - 後台映像的 runtime 階段改用官方 `nginx` 映像 `nginx:1.30.7-alpine`，不再用
   `nginxinc/nginx-unprivileged`。容器的執行方式不變：以 `nginx` 使用者（uid 101）執行、監聽
-  `8080`、pid 檔與暫存目錄在 `/tmp`。主設定檔改為 repo 內的 `frontend/nginx/nginx.conf`。
+  `8080`、pid 檔與暫存目錄在 `/tmp`。主設定檔改為 repo 內的 `frontend/nginx/nginx.conf`。唯一的差異
+  在映像中繼資料：多列了從基底映像繼承的 `80` 埠，沒有任何東西監聽，從映像中繼資料取得埠號的代理或
+  編排工具必須明確指定 `8080`。
 
 ### 修正
 

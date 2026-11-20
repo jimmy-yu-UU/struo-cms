@@ -36,6 +36,11 @@ RUN pnpm build
 # group 0. The base image's own conf.d/default.conf (port 80) is removed;
 # the rendered template is the only site config.
 #
+# The base image declares EXPOSE 80, and a derived image cannot remove it, so
+# the image metadata lists ports 80 and 8080. Nothing listens on 80; a proxy
+# or orchestrator that reads the port from the image metadata needs 8080
+# given explicitly.
+#
 # The runtime stage runs `apk upgrade` as root, then switches to uid 101.
 # Alpine publishes package fixes before the upstream image is rebuilt, and
 # this keeps every build on the current fixes. It is permanent, not a
@@ -47,11 +52,12 @@ RUN pnpm build
 #   dependency to probe (no database, no cache) -- an orchestrator supervising
 #   this container should probe `/` directly instead.
 FROM nginx:1.30.7-alpine AS runtime
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 RUN apk upgrade --no-cache \
     && rm -f /etc/nginx/conf.d/default.conf \
-    && chown 101:0 /etc/nginx /etc/nginx/conf.d /var/cache/nginx \
-    && chmod 775 /etc/nginx /etc/nginx/conf.d /var/cache/nginx
-COPY --chown=101:0 --chmod=664 nginx/nginx.conf /etc/nginx/nginx.conf
+    && chown 101:0 /etc/nginx /etc/nginx/nginx.conf /etc/nginx/conf.d /var/cache/nginx \
+    && chmod 775 /etc/nginx /etc/nginx/conf.d /var/cache/nginx \
+    && chmod 664 /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 ENV API_UPSTREAM=http://api:8080

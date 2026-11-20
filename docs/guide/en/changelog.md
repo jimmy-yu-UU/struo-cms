@@ -480,7 +480,9 @@ transformed again on the first request.
 - The admin image's runtime stage is built on the official `nginx` image, `nginx:1.30.7-alpine`,
   instead of `nginxinc/nginx-unprivileged`. The container runs the same way: as the `nginx` user
   (uid 101), listening on `8080`, with the pid file and temp directories under `/tmp`. The main
-  config is now the repository file `frontend/nginx/nginx.conf`.
+  config is now the repository file `frontend/nginx/nginx.conf`. The one difference is in the image
+  metadata: it also lists port `80`, inherited from the base image. Nothing listens on it, and a
+  proxy or orchestrator that picks the port from the image metadata must be given `8080` explicitly.
 
 ### Fixed
 

@@ -437,6 +437,9 @@ Production 下，設了 `Redis:ConnectionString` 而 `DataProtection:Certificate
 監聽 `8080`，以非 root 使用者 `nginx` 執行 nginx，提供 Vite 的 production build。跟 API 映像不同，這裡沒有
 `HEALTHCHECK`：沒有下游依賴可以探測，要探測就直接打 `/`。
 
+映像的中繼資料列出 `80` 與 `8080` 兩個埠，`80` 來自基底映像，沒有任何東西監聽。從映像中繼資料
+取得埠號的代理或編排工具，要明確指定 `8080`。
+
 SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI_LOCALE`）是建置期就烤進映像
 裡的：`vite build` 在 production 模式下會讀 `frontend/.env.production`（有這份檔案的話），
 `frontend/.dockerignore` 也刻意不把它排除在建置範圍之外，只排除開發者自己的
