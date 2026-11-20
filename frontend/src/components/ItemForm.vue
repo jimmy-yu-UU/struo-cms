@@ -11,6 +11,7 @@ import { hasLocaleContent } from '../lib/localeCompleteness'
 import { localeHasErrors, translationErrorKey } from '../lib/translationErrors'
 import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
+import type { FieldDraft, FieldDrafts } from '../lib/fieldDrafts'
 
 const props = defineProps<{
   meta: CollectionMeta
@@ -19,13 +20,18 @@ const props = defineProps<{
   serverError?: string
   disabled?: boolean
   itemId?: string
+  // Unparsable text of the fields that parse their own input, by error key; the parent owns it.
+  drafts?: FieldDrafts
   // Returns a reason when an option of the named relation cannot be chosen.
   relationOptionHint?: (relation: string, raw: Record<string, unknown>) => string | null
 }>()
 // The form edits the parent's draft object in place; declaring it as a model makes that
 // two-way contract explicit to consumers.
 const model = defineModel<FormModel>('model', { required: true })
-const emit = defineEmits<{ (e: 'submit'): void }>()
+const emit = defineEmits<{
+  (e: 'submit'): void
+  (e: 'draft', key: string, draft: FieldDraft | null): void
+}>()
 const { t } = useI18n()
 
 const fields = computed(() => splitFields(props.meta))
@@ -173,9 +179,11 @@ defineExpose({ activeLocale, focusBanner })
               :id="translatableFieldId(f.name, loc.code)"
               :field="f"
               v-model="model.translations[loc.code][f.name]"
+              :draft="drafts?.[translationErrorKey(loc.code, f.name, defaultCode)]"
               :disabled="disabled"
               :aria-invalid="invalidAttr(translationErrorKey(loc.code, f.name, defaultCode))"
               :aria-describedby="describedByAttr(translationErrorKey(loc.code, f.name, defaultCode))"
+              @update:draft="(d) => emit('draft', translationErrorKey(loc.code, f.name, defaultCode), d)"
             />
             <FieldError
               v-if="fieldError(loc.code, f.name)"
@@ -193,9 +201,11 @@ defineExpose({ activeLocale, focusBanner })
         :id="sharedFieldId(f.name)"
         :field="f"
         v-model="model.shared[f.name]"
+        :draft="drafts?.[f.name]"
         :disabled="disabled"
         :aria-invalid="invalidAttr(f.name)"
         :aria-describedby="describedByAttr(f.name)"
+        @update:draft="(d) => emit('draft', f.name, d)"
       />
       <FieldDescription v-if="f.helpText">{{ f.helpText }}</FieldDescription>
       <FieldError v-if="errors[f.name]" :id="errorId(f.name)" role="alert">{{ errors[f.name] }}</FieldError>

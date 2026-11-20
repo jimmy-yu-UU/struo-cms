@@ -29,6 +29,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
+import { draftErrors, hasDrafts, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
@@ -148,6 +149,15 @@ const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
+// Text that a field parsing its own input (JSON) could not parse; the model still holds the last
+// parsable value, so a save is refused and leaving counts as discarding edits while any exists.
+const drafts = ref<FieldDrafts>({})
+function onDraft(key: string, draft: FieldDraft | null): void {
+  drafts.value = withDraft(drafts.value, key, draft)
+}
+function hasUnsavedEdits(): boolean {
+  return isDirty(baseline.value, model) || hasDrafts(drafts.value)
+}
 const serverError = ref('')
 const itemForm = ref<InstanceType<typeof ItemForm> | null>(null)
 // A save that failed with a server error and no field error has no control to focus, so the banner takes focus.
@@ -176,6 +186,7 @@ function captureBaseline(): void {
 }
 
 function setModel(next: FormModel): void {
+  drafts.value = {}
   model.shared = next.shared
   model.translations = next.translations
   model.relations = next.relations
@@ -224,7 +235,10 @@ async function init(): Promise<void> {
 
 async function onSubmit(): Promise<void> {
   if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
+  errors.value = {
+    ...validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t),
+    ...draftErrors(drafts.value),
+  }
   if (Object.keys(errors.value).length > 0) return
   submitting.value = true
   serverError.value = ''
@@ -416,7 +430,7 @@ function guardLeave(): Promise<boolean> {
   // Unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
   // grants, so a single confirm covers both instead of two independently-registered guards firing
   // sequentially on the same navigation.
-  if (!(isDirty(baseline.value, model) || rolePanelsDirty())) return Promise.resolve(true)
+  if (!(hasUnsavedEdits() || rolePanelsDirty())) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
   // Cancel and dismiss (Escape — an AlertDialog is not backdrop-dismissible, and ConfirmHost
   // renders no close button) are the same outcome here by design: confirmStore guarantees every
@@ -438,7 +452,7 @@ onBeforeRouteUpdate(async (to, from) => {
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {
-  if (isDirty(baseline.value, model) || rolePanelsDirty()) {
+  if (hasUnsavedEdits() || rolePanelsDirty()) {
     e.preventDefault()
   }
 }
@@ -504,10 +518,12 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :model="model"
         :locales="langStore.languages"
         :errors="errors"
+        :drafts="drafts"
         :server-error="serverError"
         :disabled="!canWrite || lockedBySuperAdmin"
         :relation-option-hint="relationOptionHint"
         @submit="onSubmit"
+        @draft="onDraft"
       />
 
       <div v-if="hasPanels" class="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 border-t pt-8">

@@ -33,6 +33,9 @@ export const ALL_FIELD_INTERFACES: readonly FieldInterface[] = [
 
 export interface FieldTypeDef {
   component: Component
+  // The component parses its own input text and reports what it cannot parse as a draft
+  // (props `draft`, event `update:draft`) instead of updating the model.
+  ownsInput?: boolean
   defaultValue(field: FieldMeta): unknown
   parse(raw: unknown, field: FieldMeta): unknown
   serialize(value: unknown, field: FieldMeta): unknown

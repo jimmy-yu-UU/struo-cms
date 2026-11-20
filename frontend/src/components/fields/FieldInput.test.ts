@@ -4,6 +4,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import FieldInput from './FieldInput.vue'
 import FilePicker from './FilePicker.vue'
+import JsonField from './JsonField.vue'
+import TextField from './TextField.vue'
+import NumberField from './NumberField.vue'
 import { itemsApi } from '../../api/itemsApi'
 import { useLanguageStore } from '../../stores/languageStore'
 import type { FieldMeta } from '../../types/schema'
@@ -140,6 +143,34 @@ describe('FieldInput', () => {
       const byId = w.find('#my-id')
       expect(byId.exists()).toBe(true)
       expect(byId.element.tagName).toBe('BUTTON')
+    })
+  })
+
+  describe('drafts', () => {
+    const draft = { text: '{', error: 'Unexpected end of JSON input' }
+
+    it('hands the draft to a field that owns its input and forwards its reports', async () => {
+      const w = mount(FieldInput, { props: { field: field({ interface: 'json' }), modelValue: null, draft }, global: { stubs } })
+      const json = w.getComponent(JsonField)
+      expect(json.props('draft')).toEqual(draft)
+      json.vm.$emit('update:draft', null)
+      expect(w.emitted('update:draft')).toEqual([[null]])
+    })
+
+    it.each(['text', 'number', 'boolean', 'select', 'tags', 'keyValue', 'repeater', 'dateTime'])(
+      'passes no draft attribute or prop to a %s field',
+      (iface) => {
+        const w = mount(FieldInput, { props: { field: field({ interface: iface }), modelValue: null, draft }, global: { stubs, plugins: [i18n] } })
+        const inner = w.findAll('*').filter((el) => 'draft' in el.attributes())
+        expect(inner).toHaveLength(0)
+      },
+    )
+
+    it('leaves the TextField and NumberField components without a draft prop', () => {
+      const text = mount(FieldInput, { props: { field: field({ interface: 'text' }), modelValue: '', draft }, global: { stubs } })
+      expect(text.getComponent(TextField).props()).not.toHaveProperty('draft')
+      const num = mount(FieldInput, { props: { field: field({ interface: 'number' }), modelValue: null, draft }, global: { stubs: {} } })
+      expect(num.getComponent(NumberField).props()).not.toHaveProperty('draft')
     })
   })
 })
