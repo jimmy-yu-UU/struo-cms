@@ -91,6 +91,8 @@ updates:
 
   # The root Dockerfile follows the floating mcr `10.0` tags, which stay on .NET
   # 10: a major bump to 11.0 would break net10.0, so mcr majors are ignored.
+  # Dependabot names these images without the registry host (dotnet/aspnet,
+  # dotnet/sdk), and the ignore rule matches that name.
   - package-ecosystem: docker
     directory: "/"
     schedule:
@@ -102,15 +104,18 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     ignore:
-      - dependency-name: "mcr.microsoft.com/dotnet/*"
+      - dependency-name: "dotnet/*"
         update-types: ["version-update:semver-major"]
 
   # frontend/Dockerfile pins the Node build stage and the official nginx
   # runtime stage to exact versions; Dependabot rewrites the tag. Node majors
   # are ignored here: the Node major moves together with the CI frontend job's
-  # Node version. Only default-days in the cooldown, as for the root
-  # Dockerfile: the semver-aware cooldown keys are not accepted for image
-  # tags. Minor and patch grouped.
+  # Node version. nginx stays on its stable line: nginx numbers the mainline
+  # line as the next minor (1.31 beside stable 1.30), so its minor updates are
+  # ignored and only patch releases of the pinned line arrive; moving to the
+  # next stable line is a manual edit of the tag. Only default-days in the
+  # cooldown, as for the root Dockerfile: the semver-aware cooldown keys are
+  # not accepted for image tags. Minor and patch grouped.
   - package-ecosystem: docker
     directory: "/frontend"
     schedule:
@@ -124,6 +129,8 @@ updates:
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "nginx"
+        update-types: ["version-update:semver-minor"]
 
   # Backend versions are centralised in Directory.Packages.props, which is the
   # file this reads, together with the tool manifest .config/dotnet-tools.json.
