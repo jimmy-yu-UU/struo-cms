@@ -27,12 +27,21 @@ RUN pnpm build
 # CSP_CONNECT_EXTRA are consumed by nginx's own envsubst-on-templates
 # entrypoint at container start.
 #
-# The runtime image is nginxinc/nginx-unprivileged: nginx runs as its
-# non-root `nginx` user (uid 101) and listens on 8080, an unprivileged port.
-# The image's entrypoint renders the template into /etc/nginx/conf.d as that
-# same user, and its pid file and temp directories are under /tmp.
+# The runtime image is the official nginx image. nginx runs as its `nginx`
+# user (uid 101), not root, and listens on 8080, an unprivileged port.
+# nginx/nginx.conf has no `user` directive and keeps the pid file and temp
+# directories under /tmp. /etc/nginx, /etc/nginx/conf.d and /var/cache/nginx
+# belong to uid 101 with group 0 and are group-writable, so the entrypoint
+# renders the template into /etc/nginx/conf.d as uid 101 or as any uid in
+# group 0. The base image's own conf.d/default.conf (port 80) is removed;
+# the rendered template is the only site config.
 #
-# The runtime stage runs `apk upgrade` as root, then switches back to uid 101.
+# The base image declares EXPOSE 80, and a derived image cannot remove it, so
+# the image metadata lists ports 80 and 8080. Nothing listens on 80; a proxy
+# or orchestrator that reads the port from the image metadata needs 8080
+# given explicitly.
+#
+# The runtime stage runs `apk upgrade` as root, then switches to uid 101.
 # Alpine publishes package fixes before the upstream image is rebuilt, and
 # this keeps every build on the current fixes. It is permanent, not a
 # workaround for a particular CVE: when the base image already carries the
@@ -42,10 +51,13 @@ RUN pnpm build
 # - No HEALTHCHECK: unlike the API image, static nginx here has no downstream
 #   dependency to probe (no database, no cache) -- an orchestrator supervising
 #   this container should probe `/` directly instead.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine AS runtime
-USER root
-RUN apk upgrade --no-cache
-USER 101
+FROM nginx:1.30.7-alpine AS runtime
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+RUN apk upgrade --no-cache \
+    && rm -f /etc/nginx/conf.d/default.conf \
+    && chown 101:0 /etc/nginx /etc/nginx/nginx.conf /etc/nginx/conf.d /var/cache/nginx \
+    && chmod 775 /etc/nginx /etc/nginx/conf.d /var/cache/nginx \
+    && chmod 664 /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 ENV API_UPSTREAM=http://api:8080
@@ -53,4 +65,5 @@ ENV HSTS_VALUE=
 ENV CSP_IMG_EXTRA=
 ENV CSP_CONNECT_EXTRA=
 ENV NGINX_RESOLVER=127.0.0.11
+USER 101
 EXPOSE 8080
