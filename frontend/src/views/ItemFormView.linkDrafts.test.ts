@@ -50,13 +50,13 @@ const item = {
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: catalogs as never })
 type Wrapper = VueWrapper<InstanceType<typeof ItemFormView>>
 
-async function mountEdit(): Promise<Wrapper> {
+async function mountEdit(junction: typeof junctionMeta = junctionMeta): Promise<Wrapper> {
   routeParams = { name: 'article', id: '5' }
   useAuthStore().user = { id: '1', isSuperAdmin: true, permissions: {} }
   const schema = useSchemaStore()
   schema.load = vi.fn().mockResolvedValue(undefined)
   schema.get = vi.fn((n: string) =>
-    (n === 'article' ? articleMeta : n === 'tag' ? tagMeta : n === 'articleTag' ? junctionMeta : undefined)) as never
+    (n === 'article' ? articleMeta : n === 'tag' ? tagMeta : n === 'articleTag' ? junction : undefined)) as never
   const lang = useLanguageStore()
   lang.load = vi.fn().mockResolvedValue(undefined)
   lang.languages = [{ code: 'en', name: 'English', isDefault: true }]
@@ -141,6 +141,40 @@ describe('ItemFormView JSON payload on a link', () => {
     confirmRequire.mockResolvedValue(true)
     await clickSave(w)
     expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not bring a relation error back when the payload text parses again', async () => {
+    const required = { ...junctionMeta, fields: [...junctionMeta.fields.slice(0, 3), f('config', 'json', { sort: 2, required: true })] }
+    vi.mocked(itemsApi.get).mockResolvedValue({
+      ...structuredClone(item),
+      tags: [{ id: 't1', name: 'One', _junction: { note: 'a', config: null } }],
+    })
+    const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 4 })
+    const w = await mountEdit(required)
+    await clickSave(w)
+    expect(update).not.toHaveBeenCalled()
+    expect(alertTexts(w)).toHaveLength(1)
+    await typeInto(w, 0, '{')
+    await typeInto(w, 0, '{"y":1}')
+    expect(alertTexts(w)).toEqual([])
+    await clickSave(w)
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('focuses the payload textarea, not the relation\'s first control, when the relation also has a validation error', async () => {
+    const required = { ...junctionMeta, fields: [...junctionMeta.fields.slice(0, 2), f('note', 'text', { sort: 1, required: true }), f('config', 'json', { sort: 2 })] }
+    vi.mocked(itemsApi.get).mockResolvedValue({
+      ...structuredClone(item),
+      tags: [
+        { id: 't1', name: 'One', _junction: { note: 'a', config: { x: 1 } } },
+        { id: 't2', name: 'Two', _junction: { note: '', config: { y: 2 } } },
+      ],
+    })
+    const w = await mountEdit(required)
+    await typeInto(w, 0, '{"x":')
+    await clickSave(w)
+    expect(alertTexts(w).length).toBeGreaterThan(0)
+    expect(document.activeElement).toBe(w.findAll('textarea')[0].element)
   })
 
   it('discards the draft when the item is loaded again', async () => {

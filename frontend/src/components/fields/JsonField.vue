@@ -19,13 +19,14 @@ const attrs = useAttrs()
 const parseErrorId = `${useId()}-json-error`
 
 // The textarea is invalid for a JSON parse failure or for an error ItemForm reports on the field.
-const formReportsError = computed(() => String(attrs['aria-invalid']) === 'true')
+const formReportsError = computed(() => attrs['aria-invalid'] === 'true' || attrs['aria-invalid'] === true)
 const invalid = computed(() => error.value !== null || formReportsError.value)
 // The form's error text on this field already says the text does not parse, so this field adds its own
 // only when the form has none.
 const showsOwnError = computed(() => error.value !== null && !formReportsError.value)
 const describedBy = computed(() => {
-  const ids = [String(attrs['aria-describedby'] ?? ''), showsOwnError.value ? parseErrorId : '']
+  const given = attrs['aria-describedby']
+  const ids = [typeof given === 'string' ? given : '', showsOwnError.value ? parseErrorId : '']
   const joined = ids.filter((id) => id !== '').join(' ')
   return joined === '' ? undefined : joined
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, useId, nextTick } from 'vue'
+import { ref, computed, useId, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
@@ -103,9 +103,10 @@ function invalidKeys(): string[] {
 // The control the field's label points at when that is focusable, else the first focusable element
 // inside the field (composite fields such as tags or key-value, whose labelled node is a wrapper).
 function focusTarget(wrapper: Element): HTMLElement | null {
-  // A relation whose payload field holds unparsable text: that field, not the relation's first control.
-  const flagged = wrapper.querySelector<HTMLElement>('[aria-invalid="true"]')
-  if (flagged?.matches(FOCUSABLE)) return flagged
+  // A control the field marks invalid (a payload field holding unparsable text) comes before the
+  // field's first control.
+  const flagged = [...wrapper.querySelectorAll<HTMLElement>('[aria-invalid="true"]')].find((el) => el.matches(FOCUSABLE))
+  if (flagged) return flagged
   const labelFor = wrapper.querySelector('label[for]')?.getAttribute('for')
   const labelled = labelFor ? document.getElementById(labelFor) : null
   if (labelled && wrapper.contains(labelled) && labelled.matches(FOCUSABLE)) return labelled
@@ -135,8 +136,11 @@ async function focusBanner(): Promise<void> {
 
 // Surface validation errors even if the user is on another tab: jump to the first locale tab that
 // has an error, the default locale first, then focus the first invalid control. Errors that live
-// outside the tabs fall back to the default tab.
+// outside the tabs fall back to the default tab. The parent calls this when a save attempt fails and
+// never while the user types, so the view does not jump during editing.
 async function revealErrors(): Promise<void> {
+  // The error props the parent just set reach this component on the next flush.
+  await nextTick()
   const codes = [defaultCode.value, ...props.locales.map((l) => l.code).filter((c) => c !== defaultCode.value)]
   activeLocale.value = codes.find(tabHasErrors) ?? defaultCode.value
   // A tab switch mounts the new panel a tick or two after the one that changed activeLocale.
@@ -147,12 +151,6 @@ async function revealErrors(): Promise<void> {
   if (invalidKeys().some(focusField)) return
   await focusBanner()
 }
-
-// The parent replaces `errors` on every save attempt; typing never does, so the view never jumps while
-// the user edits.
-watch(() => props.errors, (e) => {
-  if (Object.keys(e).length > 0) void revealErrors()
-})
 
 defineExpose({ activeLocale, focusBanner, revealErrors })
 </script>

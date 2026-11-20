@@ -13,6 +13,7 @@ import { apiPath, withRawQuery } from '../api/apiPath'
 import { tooManyRequestsMessage } from '@/lib/apiErrorMessage'
 import { encodeRedirectParam, safeRedirect, ssoReturnUrl } from '@/lib/safeRedirect'
 import { resolveSsoIcon } from '@/lib/ssoIcons'
+import { navigationCompleted } from '@/lib/navigation'
 import BrandMark from '../components/shell/BrandMark.vue'
 
 const email = ref('')
@@ -20,6 +21,8 @@ const password = ref('')
 const error = ref('')
 const notice = ref('')
 const submitting = ref(false)
+// Signed in, but no page could be opened: signing in again would only repeat the request.
+const signedIn = ref(false)
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -34,18 +37,31 @@ const redirectTarget = safeRedirect(route.query.redirect)
 const submitLabel = computed(() => (submitting.value ? t('login.submitting') : t('login.submit')))
 
 async function onSubmit() {
-  if (submitting.value) return
+  if (submitting.value || signedIn.value) return
   error.value = ''
   submitting.value = true
   try {
     await auth.login(email.value, password.value)
-    // Held until the (lazily loaded) page has settled, so a second submit cannot sign in again.
-    await router.push(redirectTarget ?? { name: 'dashboard' })
   } catch (e) {
     error.value = loginErrorMessage(e)
+    submitting.value = false
+    return
+  }
+  // Held until the (lazily loaded) page has settled, so a second submit cannot sign in again.
+  try {
+    await openApp()
   } finally {
     submitting.value = false
   }
+}
+
+// A navigation that does not complete is not a failed sign-in: the dashboard is tried next, and when
+// no page opens the form stays closed with a message.
+async function openApp(): Promise<void> {
+  if (await navigationCompleted(() => router.push(redirectTarget ?? { name: 'dashboard' }))) return
+  signedIn.value = true
+  if (await navigationCompleted(() => router.replace({ name: 'dashboard' }))) return
+  error.value = t('login.signedInNotOpened')
 }
 
 // The server's prose is English-only and deliberately vague, so it is never displayed: map the
@@ -105,9 +121,15 @@ onMounted(() => {
 })
 
 function onSso(providerId: string) {
+  let target: string
+  try {
+    target = apiClient.urlFor(apiPath('auth', 'login', 'oidc', providerId))
+  } catch {
+    // An id the path helper refuses names no provider endpoint: the click does nothing.
+    return
+  }
   const returnUrl = encodeRedirectParam(ssoReturnUrl(apiClient.urlFor(''), redirectTarget ?? '/', window.location.origin))
-  window.location.href = withRawQuery(
-    apiClient.urlFor(apiPath('auth', 'login', 'oidc', providerId)), `returnUrl=${returnUrl}`)
+  window.location.href = withRawQuery(target, `returnUrl=${returnUrl}`)
 }
 </script>
 
@@ -147,7 +169,7 @@ function onSso(providerId: string) {
           />
         </div>
 
-        <Button type="submit" class="w-full" :disabled="submitting">{{ submitLabel }}</Button>
+        <Button type="submit" class="w-full" :disabled="submitting || signedIn">{{ submitLabel }}</Button>
 
         <output v-if="notice" class="notice block text-muted-foreground">{{ notice }}</output>
         <p v-if="error" class="error" role="alert">{{ error }}</p>

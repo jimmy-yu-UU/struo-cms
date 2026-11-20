@@ -1,4 +1,5 @@
 import { apiClient } from '../api/apiClient'
+import { filesApi } from '../api/filesApi'
 import { apiPath } from '../api/apiPath'
 
 const GUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
@@ -12,7 +13,7 @@ export function fileContentPath(id: string): string {
 
 /** Absolute (or app-relative) URL for previewing a file in the editor. */
 export function fileContentDisplayUrl(id: string): string {
-  return apiClient.urlFor(apiPath('files', id, 'content'))
+  return filesApi.contentUrl(id)
 }
 
 function escapeRegExp(text: string): string {

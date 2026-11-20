@@ -44,13 +44,13 @@ const item = {
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: catalogs as never })
 type Wrapper = VueWrapper<InstanceType<typeof ItemFormView>>
 
-async function mountEdit(): Promise<Wrapper> {
+async function mountEdit(formMeta: typeof meta = meta): Promise<Wrapper> {
   routeParams = { name: 'article', id: '5' }
   const auth = useAuthStore()
   auth.user = { id: '1', isSuperAdmin: true, permissions: {} }
   const schema = useSchemaStore()
   schema.load = vi.fn().mockResolvedValue(undefined)
-  schema.get = vi.fn().mockReturnValue(meta) as never
+  schema.get = vi.fn().mockReturnValue(formMeta) as never
   const lang = useLanguageStore()
   lang.load = vi.fn().mockResolvedValue(undefined)
   lang.languages = [{ code: 'en', name: 'English', isDefault: true }, { code: 'fr', name: 'French', isDefault: false }]
@@ -235,6 +235,57 @@ describe('ItemFormView JSON drafts', () => {
       expect(w.findAll('textarea')[1].attributes('aria-invalid')).toBe('true')
     })
 
+    it('does not bring a server error back when the text parses again, and the save brought the field into view', async () => {
+      vi.spyOn(itemsApi, 'update').mockRejectedValue(
+        new ApiError(400, 'bad', 'BAD_USER_INPUT', [{ field: 'config', message: 'Server says no' }]))
+      const w = await mountEdit()
+      await clickSave(w)
+      expect(alertTexts(w)).toEqual(['Server says no'])
+      expect(document.activeElement).toBe(textareas(w)[1])
+      await typeInto(w, 1, '{')
+      await typeInto(w, 1, '{"a":3}')
+      expect(alertTexts(w)).toEqual([])
+      expect(w.findAll('textarea')[1].attributes('aria-invalid')).not.toBe('true')
+    })
+
+    it('does not bring a required error back when the text parses again', async () => {
+      const required = { ...meta, fields: [f('status', 'text'), f('config', 'json', { required: true }), f('extra', 'json', { translatable: true })] }
+      vi.mocked(itemsApi.get).mockResolvedValue({ ...structuredClone(item), config: null })
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 4 })
+      const w = await mountEdit(required)
+      await clickSave(w)
+      expect(update).not.toHaveBeenCalled()
+      expect(alertTexts(w)).toHaveLength(1)
+      await typeInto(w, 1, '{')
+      await typeInto(w, 1, '{"a":3}')
+      expect(alertTexts(w)).toEqual([])
+      expect(w.findAll('textarea')[1].attributes('aria-invalid')).not.toBe('true')
+      await clickSave(w)
+      expect(update).toHaveBeenCalledTimes(1)
+    })
+
+    it('brings a client validation error on another tab into view when saving', async () => {
+      const required = { ...meta, fields: [f('status', 'text'), f('config', 'json'), f('extra', 'json', { translatable: true, required: true })] }
+      vi.mocked(itemsApi.get).mockResolvedValue({ ...structuredClone(item), translations: { en: { extra: null }, fr: { extra: { k: 2 } } } })
+      const w = await mountEdit(required)
+      await openTab(w, 'French')
+      await clickSave(w)
+      const active = w.findAll('[role="tab"]').find((x) => x.attributes('data-state') === 'active')!
+      expect(active.text()).toContain('English')
+      expect(document.activeElement).toBe(textareas(w)[0])
+    })
+
+    it('clears a stale server banner when a draft or a validation error blocks the next save', async () => {
+      vi.spyOn(itemsApi, 'update').mockRejectedValue(new Error('boom'))
+      const w = await mountEdit()
+      await clickSave(w)
+      expect(w.find('p.error').exists()).toBe(true)
+      await typeInto(w, 1, '{')
+      await clickSave(w)
+      expect(w.find('p.error').exists()).toBe(false)
+      expect(alertTexts(w)).toHaveLength(1)
+    })
+
     it('shows no error before the first save while the text parses, and one once it does not', async () => {
       const w = await mountEdit()
       expect(alertTexts(w)).toEqual([])
@@ -288,21 +339,30 @@ describe('ItemFormView JSON drafts', () => {
     expect(await w.vm.guardLeave()).toBe(true)
   })
 
-  it('keeps an unparsable text through the 409 recovery, which keeps the edits', async () => {
-    let rejectUpdate!: (e: Error) => void
-    vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((_, reject) => { rejectUpdate = reject }))
+  it('keeps the edits through the 409 recovery, and holds a text typed after it as a draft', async () => {
+    const update = vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+    const w = await mountEdit()
+    await w.find('input').setValue('edited')
+    await clickSave(w)
+    expect(update).toHaveBeenCalledTimes(1)
+    expect((w.vm as unknown as { conflict: boolean }).conflict).toBe(true)
+    expect((w.find('input').element as HTMLInputElement).value).toBe('edited')
+    await typeInto(w, 1, '{"a":')
+    await clickSave(w)
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(w.text()).toContain('JSON')
+    expect(textareas(w)[1].value).toBe('{"a":')
+  })
+
+  it('disables the inputs while a save runs, so no text can appear between the request and the navigation', async () => {
+    let release!: () => void
+    vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((r) => { release = () => r({ id: '5', version: 4 }) }))
     const w = await mountEdit()
     const saving = (w.vm as unknown as { onSubmit: () => Promise<void> }).onSubmit()
     await flushPromises()
-    await typeInto(w, 1, '{"a":')
-    rejectUpdate(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+    expect(w.findAll('textarea').every((x) => x.attributes('disabled') !== undefined)).toBe(true)
+    release()
     await saving
-    await flushPromises()
-    expect((w.vm as unknown as { conflict: boolean }).conflict).toBe(true)
-    expect(textareas(w)[1].value).toBe('{"a":')
-    expect(w.text()).toContain('JSON')
-    confirmRequire.mockResolvedValue(false)
-    expect(await w.vm.guardLeave()).toBe(false)
   })
 
   it('puts no draft attribute on the DOM of fields that parse nothing', async () => {

@@ -35,6 +35,7 @@ vi.mock('../api/rbacApi', () => ({
 }))
 
 const push = vi.fn()
+const replace = vi.fn()
 let routeParams: Record<string, string> = {}
 let routeName = 'collection-item'
 // Capture the guards registered via onBeforeRouteLeave / onBeforeRouteUpdate so tests can invoke
@@ -44,7 +45,7 @@ let leaveGuard: (() => Promise<boolean> | boolean) | null = null
 let updateGuard: ((to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) | null = null
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, name: routeName }),
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
   onBeforeRouteLeave: (guard: () => Promise<boolean> | boolean) => { leaveGuard = guard },
   onBeforeRouteUpdate: (guard: (to: RouteLoc, from: RouteLoc) => Promise<boolean> | boolean) => { updateGuard = guard },
 }))
@@ -77,7 +78,7 @@ const ItemFormStub = {
   name: 'ItemForm',
   props: ['meta', 'itemId', 'model', 'locales', 'errors', 'serverError', 'disabled', 'relationOptionHint'],
   template: '<div />',
-  methods: { focusBanner: () => Promise.resolve() },
+  methods: { focusBanner: () => Promise.resolve(), revealErrors: () => Promise.resolve() },
 }
 const stubs = { ItemForm: ItemFormStub, Button: true, RevisionHistoryDrawer: true, teleport: true }
 
@@ -89,6 +90,7 @@ const i18n = createI18n({
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
     translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
+    savedNotOpened: 'Saved, but the page could not be opened.',
   },
     revisions: { open: 'History', title: 'Revision history', reverted: 'Reverted to {n}',
       revertConflict: 'Revert failed: this item was changed by someone else.' },
@@ -151,7 +153,8 @@ function setupStores(opts: { superAdmin?: boolean } = {}) {
 describe('ItemFormView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    push.mockClear()
+    push.mockReset()
+    replace.mockReset()
     confirmRequire.mockReset(); confirmRequire.mockResolvedValue(true)
     toastAdd.mockClear()
     vi.mocked(rbacApi.getRolePermissions).mockClear()
@@ -709,31 +712,110 @@ describe('ItemFormView', () => {
     await first
   })
 
-  it('submits again after the navigation was refused or failed', async () => {
-    routeParams = { name: 'article' }; routeName = 'collection-create'
-    setupStores()
-    const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
-    push.mockRejectedValueOnce(new Error('navigation failed'))
-    const w = mountView()
-    await w.vm.init()
-    ;(w.vm as any).model.shared.status = 'draft'
-    await (w.vm as any).onSubmit()
-    expect(create).toHaveBeenCalledTimes(1)
-    await (w.vm as any).onSubmit()
-    expect(create).toHaveBeenCalledTimes(2)
+  describe('after a save, when the navigation does not complete', () => {
+    const edit = { name: 'collection-item', params: { name: 'article', id: '9' } }
+
+    async function mountCreate() {
+      routeParams = { name: 'article' }; routeName = 'collection-create'
+      setupStores()
+      const w = mountView()
+      await w.vm.init()
+      ;(w.vm as any).model.shared.status = 'draft'
+      return w
+    }
+
+    it('never sends a created item again, and opens its edit page, when the navigation resolves with a failure', async () => {
+      const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+      push.mockResolvedValueOnce({ type: 4 })
+      const w = await mountCreate()
+      await (w.vm as any).onSubmit()
+      expect(replace).toHaveBeenCalledExactlyOnceWith(edit)
+      expect((w.vm as any).serverError).toBe('')
+      expect(create).toHaveBeenCalledTimes(1)
+    })
+
+    it('never sends a created item again, and opens its edit page, when the navigation rejects', async () => {
+      const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+      push.mockRejectedValueOnce(new Error('navigation failed'))
+      const w = await mountCreate()
+      await (w.vm as any).onSubmit()
+      expect(replace).toHaveBeenCalledExactlyOnceWith(edit)
+      expect((w.vm as any).serverError).toBe('')
+      expect(create).toHaveBeenCalledTimes(1)
+    })
+
+    it('says the item was saved, and keeps Save closed, when the edit page cannot be opened either', async () => {
+      const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
+      push.mockRejectedValueOnce(new Error('navigation failed'))
+      replace.mockRejectedValueOnce(new Error('navigation failed'))
+      const w = await mountCreate()
+      await (w.vm as any).onSubmit()
+      expect((w.vm as any).serverError).toBe('Saved, but the page could not be opened.')
+      await (w.vm as any).onSubmit()
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(w.findComponent({ name: 'ItemForm' }).props('disabled')).toBe(true)
+    })
+
+    it.each([
+      ['rejects', () => push.mockRejectedValueOnce(new Error('navigation failed'))],
+      ['resolves with a failure', () => push.mockResolvedValueOnce({ type: 4 })],
+    ])('shows no error after an update whose navigation %s, and saves again with one request', async (_label, arrange) => {
+      routeParams = { name: 'article', id: '5' }
+      setupStores()
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: '5', version: 2 })
+      arrange()
+      const w = mountView()
+      await w.vm.init()
+      await (w.vm as any).onSubmit()
+      expect((w.vm as any).serverError).toBe('')
+      expect(replace).not.toHaveBeenCalled()
+      await (w.vm as any).onSubmit()
+      expect(update).toHaveBeenCalledTimes(2)
+      expect(update.mock.calls[1][2]).toMatchObject({ version: 2 })
+      expect(await (w.vm as any).guardLeave()).toBe(true)
+    })
   })
 
-  it('submits again after the navigation resolved with a failure result', async () => {
-    routeParams = { name: 'article' }; routeName = 'collection-create'
-    setupStores()
-    const create = vi.spyOn(itemsApi, 'create').mockResolvedValue({ id: '9' })
-    push.mockResolvedValueOnce({ type: 4 })
-    const w = mountView()
-    await w.vm.init()
-    ;(w.vm as any).model.shared.status = 'draft'
-    await (w.vm as any).onSubmit()
-    await (w.vm as any).onSubmit()
-    expect(create).toHaveBeenCalledTimes(2)
+  describe('while a save is in flight', () => {
+    it('disables the form, and enables it again after a failed save', async () => {
+      routeParams = { name: 'article', id: '5' }
+      setupStores()
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+      let rejectUpdate!: (e: Error) => void
+      vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((_, reject) => { rejectUpdate = reject }))
+      const w = mountView()
+      await w.vm.init()
+      const formDisabled = () => w.findComponent({ name: 'ItemForm' }).props('disabled')
+      expect(formDisabled()).toBe(false)
+      const saving = (w.vm as any).onSubmit()
+      await nextTick()
+      expect(formDisabled()).toBe(true)
+      rejectUpdate(new Error('boom'))
+      await saving
+      await nextTick()
+      expect(formDisabled()).toBe(false)
+      expect((w.vm as any).serverError).not.toBe('')
+    })
+
+    it('makes the permission matrix read-only for the duration', async () => {
+      vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+      routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+      const { schema } = setupStores()
+      ;(schema.get as any).mockReturnValue(roleMeta)
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false })
+      let release!: () => void
+      vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((r) => { release = () => r({ id: 'r1' }) }))
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      expect(w.findComponent(PermissionMatrix).props('readonly')).toBe(false)
+      const saving = (w.vm as any).onSubmit()
+      await nextTick()
+      expect(w.findComponent(PermissionMatrix).props('readonly')).toBe(true)
+      release()
+      await saving
+    })
   })
 
   it('a second onSubmit while one is in flight sends no second request (create)', async () => {
