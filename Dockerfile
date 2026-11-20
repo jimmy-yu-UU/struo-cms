@@ -34,6 +34,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish ./
+# The notices for the licenses of the bundled third-party components travel with the image.
+COPY THIRD-PARTY-NOTICES.md ./
 # /app/logs is where Serilog's File sink (logs/struo-.log, relative to the content root) writes;
 # without a writable directory here it silently drops file logging under the non-root user below.
 # The DataProtection key ring (cookie encryption keys) lives under the app user's home; owning the
