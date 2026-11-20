@@ -138,12 +138,18 @@ body 是 `{ id, email, name }`。空白 email、不符密碼規則、重複 emai
 | 方法與路徑 | 權限 | 用途 |
 |---|---|---|
 | `GET api/roles/{id}/permissions` | `role` 的讀取 | 讀該角色目前的授權列 |
-| `PUT api/roles/{id}/permissions` | `role` 的寫入 | 整組覆寫該角色的授權 |
+| `PUT api/roles/{id}/permissions` | `role` 的寫入 | 整組覆寫該角色的授權，可帶 `?version=` |
 
-`GET` 依集合名稱排序回傳 `{ collection, canRead, canWrite, canDelete }` 陣列，角色不存在就是
-404。`PUT` 是整組覆寫，不是逐筆合併——三個旗標都是 false 的那一列根本不會被存，回應也只會看到真
-的還留著的列；body 如果不是 JSON 陣列、有重複集合、或點名不存在的集合，都會被擋下，集合名稱的大
-小寫會被統一。
+`GET` 依集合名稱排序回傳 `{ collection, canRead, canWrite, canDelete }` 陣列。角色不存在時，兩個方法
+都回 404；`PUT` 在儲存進行中角色被刪除，也是 404。`PUT` 是整組覆寫，不是逐筆合併——三個旗標都是
+false 的那一列根本不會被存，回應也只會看到真的還留著的列；body 如果不是 JSON 陣列、有重複集合、或點
+名不存在的集合，都會被擋下，集合名稱的大小寫會被統一。
+
+`PUT` 可帶選填的查詢參數 `version`：呼叫端最後從 `GET api/items/role/{id}` 讀到的角色 `version`。
+`version` 與角色目前的不同，回 `409` `VERSION_CONFLICT`，什麼都不會改；不是整數或重複給兩次，回
+`400` `INVALID_VERSION`。不帶就不檢查，直接覆寫。每次儲存成功，角色的 `version` 加 1，所以帶著較早
+`version` 的角色表單儲存會得到同一個 `409`。回應把新的值放在 `meta.version`，與 `data` 陣列並列。
+儲存授權不會改動角色的 `updatedAt` 與 `updatedBy`。
 
 沒有授權的呼叫端得到 `403` `Read permission on the role collection is required.` 或 `Write permission on the
 role collection is required.`。寫入超級管理員角色或 `public` 角色的授權，不是超級管理員的呼叫端會被擋下：

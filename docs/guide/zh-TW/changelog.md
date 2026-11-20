@@ -359,12 +359,27 @@
     `/graphql` 的 `location` 區塊。
   - 存取規則是 API 自己的：誰能讀、誰能寫由 API 決定，`GraphQl:ExposeSchema` 管 introspection 與
     schema 路由。沒有關掉這個端點的設定。
+- 授權儲存成功會讓角色的 `version` 加 1，所以在 `PUT /api/items/role/{id}` 回帶 `version` 的 API
+  用戶端，要改用新的值：
+  - 呼叫 `PUT /api/roles/{id}/permissions` 之後，從回應的 `meta.version` 取值，或重新讀取角色。
+  - 帶著授權儲存前讀到的 version 去更新，會回 `409` `VERSION_CONFLICT`。
+- `IPermissionGrantStore.ReplaceAsync` 多了預期版本，並回傳角色的新版本。
+  - 回傳 `Task<long?>`，原本是 `Task`；`long? expectedVersion = null` 放在 `grants` 與
+    `CancellationToken` 之間。
+  - fork 的實作要拿 `expectedVersion` 與角色的 `Version` 比對，並用單一條件式更新把它加 1，這是
+    這次儲存的第一個語句。兩者不同就丟 `ConcurrencyConflictException`，角色不存在回 `null`，
+    其餘回傳新版本。
+  - 原本以位置引數把 token 放在第三個位置的呼叫端，改用名稱 `ct:` 傳入，或放到第四個位置。
 :::
 
 ### 新增
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
+- `PUT api/roles/{id}/permissions` 可帶選填的查詢參數 `version`：角色已被改過就回 `409`
+  `VERSION_CONFLICT`，回應用 `meta.version` 帶上角色的新 `version`（見
+  [第 13 章](13-rest-endpoints.md)）。後台的角色表單與權限矩陣共用同一個 version，彼此不會衝突；
+  其間若有其他管理員儲存過這個角色，儲存時會看到表單的衝突提示。
 - 新增的公開成員：
   - `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
     `DomainErrorMap.DeadlockMessage`。
@@ -384,6 +399,9 @@
     `null`）：自己實作 `IRelationExpander` 的 fork，對每個目標集合、每一組它展開的列呼叫它一次，
     展開出來的列才會帶 `translations`；同一組父列上展開的關聯可以合成一次呼叫，帶巢狀 `deep` 的
     關聯往下展開的那一組另算。既有的建構與三個值的解構照常編譯。
+  - `VersionedSuccessEnvelope`、`VersionMeta` 與 `Envelope.Versioned`（`Struo.Api.Http`）：
+    `meta` 只帶 `version` 的成功信封；動作把它放在 `ObjectResult` 裡回傳時，會原樣送出，外面不會
+    再多包一層。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -580,6 +598,9 @@
   套件宣告的是 LGPL-3.0-or-later；它還寫了已經過期的釘住版本、漏了 `Isopoh.Cryptography.Argon2` 的
   CC BY 4.0 署名與 API 映像裡其他非 MIT 元件的授權，而且不在映像裡。現在它列出這些元件、原文收錄
   `NetVips.Native` 附的內含程式庫表與它所依據的授權全文，不寫版本號。
+- 0.30.1 裡，兩位管理員同時儲存同一個角色的權限矩陣不會衝突：後存的蓋掉先存的授權，沒有任何
+  警告。現在儲存會比對角色的 `version`：版本過時就回 `409` `VERSION_CONFLICT`、什麼都不寫，後台
+  顯示表單的衝突提示與「重新載入最新版本」。
 
 ### 安全性
 

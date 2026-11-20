@@ -332,6 +332,11 @@ show what the currently selected role set computes to. A caller without read on 
 Roles selection, so the panel shows the effective permissions computed from the roles stored on the user
 instead.
 
+The matrix and the role form share the role's `version`: saving either one moves it on. When someone
+else has saved the same role in between, the save is answered with the form's usual notice that the
+item was changed by someone else. Reload latest re-reads the role's fields and its grants and drops
+unsaved ticks; saving again overwrites with what is on screen.
+
 For a caller who is not a super-admin, the form of a super-admin account or role, or of the `public`
 role, is disabled, with a note saying why, and so are its Delete, reset-password and token actions; the
 Roles field offers no super-admin role. The Super Admin checkbox of the role form is read-only for
@@ -345,7 +350,9 @@ completed in one transaction; the endpoint's own semantics are in
 - the body isn't a JSON array: `400`;
 - the role id doesn't exist: `404`;
 - the same collection appears twice: `400`, `Duplicate collection entries: …`;
-- a collection name doesn't exist or is blank: `400`, `Unknown collections: …`.
+- a collection name doesn't exist or is blank: `400`, `Unknown collections: …`;
+- the `version` query parameter differs from the role's: `409`, `VERSION_CONFLICT`;
+- the `version` isn't an integer or is given twice: `400`, `INVALID_VERSION`.
 
 A row where all three flags are false isn't stored at all — it's equivalent to deleting that
 grant. These changes call the same endpoint directly, so nothing needs restarting afterward: the

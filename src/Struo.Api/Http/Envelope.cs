@@ -33,6 +33,12 @@ public sealed record SuccessEnvelope(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     MetaInfo? Meta = null);
 
+/// <summary>Meta of a save that reports the new optimistic-concurrency version of the record it guards.</summary>
+public sealed record VersionMeta(long Version);
+
+/// <summary>Success wire envelope whose <c>meta</c> carries only the new <c>version</c>.</summary>
+public sealed record VersionedSuccessEnvelope(bool Success, object? Data, VersionMeta Meta);
+
 public sealed record ErrorEnvelope(bool Success, ErrorBody Error);
 
 /// <summary>Marker a controller returns for a paginated list; the result filter unwraps it to data + meta.</summary>
@@ -44,6 +50,9 @@ public sealed record PagedResult(
 public static class Envelope
 {
     public static SuccessEnvelope Success(object? data, MetaInfo? meta = null) => new(true, data, meta);
+
+    public static VersionedSuccessEnvelope Versioned(object? data, long version) =>
+        new(true, data, new VersionMeta(version));
 
     public static ErrorEnvelope Error(
         string code, string message, IReadOnlyList<ValidationDetail>? details = null, string? traceId = null) =>

@@ -1,5 +1,4 @@
 // src/Struo.Api/Controllers/ItemsController.cs
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -143,21 +142,7 @@ public sealed class ItemsController(IItemUseCases items, IPermissionService perm
     public async Task<IActionResult> Revert(string collection, string id, long revisionNumber,
         [FromQuery(Name = "version")] string[]? version, CancellationToken ct)
     {
-        var reverted = await items.RevertAsync(collection, id, revisionNumber, ParseVersion(version), ct);
+        var reverted = await items.RevertAsync(collection, id, revisionNumber, VersionQuery.Parse(version), ct);
         return reverted is null ? NotFound() : Ok(reverted);
-    }
-
-    // The optimistic-concurrency token of a revert, bound as a string array so that absent (no element) is
-    // distinguishable from empty (one empty element) and from repeated: absent means last-write-wins, anything present that is
-    // not a single integer string (empty, "abc", "1.5", "1e2", out of range, repeated) is INVALID_VERSION,
-    // the same code and the same accepted forms as an update body's `version`.
-    private static long? ParseVersion(string[]? values)
-    {
-        if (values is null or { Length: 0 }) return null;
-        if (values.Length != 1)
-            throw new InvalidVersionException("version must be supplied at most once.");
-        return long.TryParse(values[0], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n)
-            ? n
-            : throw new InvalidVersionException("version must be an integer.");
     }
 }
