@@ -643,8 +643,8 @@ admin 容器預設的 `API_UPSTREAM=http://api:8080` 之所以解析得到，是
 `/health/live` 不跑任何檢查（`Predicate = _ => false`），只確認行程還在接受請求；liveness
 探針該在這裡沒回應時重啟容器或 pod。
 
-`/health/ready` 執行兩項標了 `ready` 的檢查：`DbReadinessCheck` 對資料庫做一次真正的連線往
-返（讀 `struo_languages` 資料表的一筆資料），`CacheReadinessCheck` 對設定好的
+`/health/ready` 執行兩項標了 `ready` 的檢查：資料庫檢查對資料庫做一次真正的連線往
+返（讀 `struo_languages` 資料表的一筆資料），快取檢查對設定好的
 `IDistributedCache`（Redis 或行程內快取）做一次寫入再讀回；readiness 探針該等兩項都連得上，
 才把流量導進來。
 
@@ -676,7 +676,7 @@ Healthy
 ## 重新部署與開著的分頁
 
 後台重新部署之後，一個還開著的分頁，它的 `index.html` 仍然在要求一個新版本不再提供的 chunk
-檔名；`frontend/src/router/chunkLoadRecovery.ts` 在這種 chunk 404 時重新整理頁面來復原，靠
+檔名；後台在這種 chunk 404 時重新整理頁面來復原，靠
 一個只用一次的 `sessionStorage` 標記擋住無窮迴圈。真的不存在的 chunk 會變成一個錯誤，而不
 是不斷重新整理。
 
@@ -779,7 +779,8 @@ Compose 替 `api` 另外設了每 5 秒一次的健康檢查，`docker compose u
 預設的 `docker compose up -d` 既不會拉這兩個映像，也不會等它們的健康檢查。
 
 Compose 起的 `api` 服務用的是 `local` 檔案後端，MinIO 是給自己跑、`Struo:Files:Backend` 設成
-`s3` 的 API 用的。要跟相依服務一起起：
+`s3` 的 API 用的。Compose 每個指令都會讀整份檔案，所以要先在 `.env` 或環境變數設好
+`STRUO_ADMIN_PASSWORD`。要把 MinIO 跟相依服務一起起：
 
 ```
 docker compose --profile s3 up -d postgres redis minio createbuckets

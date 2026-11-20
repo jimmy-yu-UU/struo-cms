@@ -474,8 +474,8 @@ builder.Services.AddScoped<ICollectionDeleteHandler, AttachmentDeleteHandler>();
 選擇。要把檔案存到別處，就把後端設成 `custom`，並在 `AddStruoCms()` 之後註冊你的實作。這個模式下核心不會
 自己建任何儲存，沒註冊時啟動會失敗，訊息會點出那個鍵。記住契約：找不到 key 要丟 `FileBlobNotFoundException`，
 不能丟後端自己的例外；`ListAsync` 要串流每一個 blob；`Describe()` 是 `files:sweep` 印出的那一行，不能含
-任何憑證。下面是 Azure Blob 儲存的最小示意（`Azure.Storage.Blobs` 套件屬於你的 fork，不屬於核心）。它沒有測試過：
-容器必須事先存在，也沒有做預簽章網址（SAS）：
+任何憑證。下面是 Azure Blob 儲存的最小示意（`Azure.Storage.Blobs` 套件屬於你的 fork，
+不屬於核心）。它預期容器已經存在，也沒有做預簽章網址（SAS）：
 
 ```csharp
 using System.Runtime.CompilerServices;

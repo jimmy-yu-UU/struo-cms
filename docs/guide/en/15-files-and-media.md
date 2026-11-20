@@ -10,7 +10,7 @@ present in every install with no extra setup: both the configuration and the cod
 framework.
 
 Writing a `File` goes through a dedicated pipeline — `FilesController` (routed at `api/files`),
-`FileService`, `IFileStorage` — rather than the `ItemService`/`ItemsController` path every other
+`FileService`, `IFileStorage` — rather than the generic item endpoints every other
 collection shares. An upload involves byte storage, content-type checking, and image dimensions and
 transforms, none of which the generic item CRUD path needs to know about.
 
@@ -20,9 +20,10 @@ ordinary query. The grants and status codes for each endpoint are in
 [Chapter 13: REST API Endpoint Reference](13-rest-endpoints.md).
 
 Creating a `file` through the generic item API is always refused, because `File` declares
-`Creatable = false`. The check lives in `ItemService.CreateAsync`, so GraphQL's `createFile` mutation
-is blocked by the same message: `Items cannot be created in collection 'file' through the generic items
-API.`, status `400`/`BAD_USER_INPUT`. A file is created by uploading it to `POST /api/files`.
+`Creatable = false`. The refusal happens in the item use cases that REST and GraphQL share, so
+GraphQL's `createFile` mutation is blocked by the same message: `Items cannot be created in
+collection 'file' through the generic items API.`, status `400`/`BAD_USER_INPUT`. A file is
+created by uploading it to `POST /api/files`.
 
 `File`'s collection name is `file`, grouped under `System`, and it declares `Hidden = true`. That
 governs how the collection itself appears in the admin UI, a different thing from the field-level

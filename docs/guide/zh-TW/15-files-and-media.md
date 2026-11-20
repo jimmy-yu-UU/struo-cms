@@ -8,16 +8,17 @@
 與程式碼都由框架提供。
 
 `File` 的寫入走一條專屬管線：`FilesController`（路由 `api/files`）、`FileService`、
-`IFileStorage`，不是走其他集合共用的 `ItemService`／`ItemsController` 路徑。一次上傳牽涉位
+`IFileStorage`，不是走其他集合共用的通用項目端點。一次上傳牽涉位
 元組儲存、內容類型檢查、圖片尺寸與轉換，是通用的項目 CRUD 路徑不需要知道的事。
 
 讀取、更新與刪除 `file` 的中繼資料，仍然走一般的 `api/items/file` 與 `api/items/mediaFolder`：
 瀏覽、篩選與排序媒體庫，是一次普通的查詢。每個端點的授權與狀態碼見
 [第 13 章：REST API 端點參考](13-rest-endpoints.md)。
 
-透過通用的項目 API 建立 `file` 一律被拒，因為 `File` 宣告了 `Creatable = false`。這道檢查寫在
-`ItemService.CreateAsync`，因此 GraphQL 的 `createFile` mutation 也被同一句訊息擋下：`Items cannot
-be created in collection 'file' through the generic items API.`，狀態碼 `400`／`BAD_USER_INPUT`。
+透過通用的項目 API 建立 `file` 一律被拒，因為 `File` 宣告了 `Creatable = false`。
+REST 與 GraphQL 共用的項目用例會做這項拒絕，因此 GraphQL 的 `createFile` mutation
+也被同一句訊息擋下，狀態碼 `400`／`BAD_USER_INPUT`：
+`Items cannot be created in collection 'file' through the generic items API.`
 檔案要靠上傳到 `POST /api/files` 來建立。
 
 `File` 的集合名稱是 `file`，分組在 `System`，並且宣告了 `Hidden = true`。它管的是這個集合在
