@@ -513,6 +513,10 @@ transformed again on the first request.
 
 ### Changed
 
+- The API image carries only the native files of its own platform (`linux-x64` or `linux-arm64`),
+  SQLite and libvips next to the assemblies in `/app`, instead of the files for every platform under
+  `/app/runtimes/`. The Windows `Microsoft.Data.SqlClient.SNI` library is not in the image. Image
+  size (amd64) drops from 840 MB to 545 MB.
 - The admin image's runtime stage is built on the official `nginx` image, `nginx:1.30.7-alpine`,
   instead of `nginxinc/nginx-unprivileged`. The container runs the same way: as the `nginx` user
   (uid 101), listening on `8080`, with the pid file and temp directories under `/tmp`. The main

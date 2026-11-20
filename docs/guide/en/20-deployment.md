@@ -418,6 +418,12 @@ project is pulled in through a `ProjectReference`, so the build needs every proj
 can reach, plus the root `Directory.Build.props`/`Directory.Packages.props`. The root
 `.dockerignore` keeps `frontend/`, `docs/`, and ordinary build artifacts out.
 
+The build stage publishes for the architecture it runs on, `linux-x64` or `linux-arm64`, and stops
+with an error on any other. The output is framework-dependent and carries only that platform's
+native files, SQLite and libvips, next to the assemblies in `/app`: the image holds no Windows or
+macOS binaries and none for another CPU. An image runs on the platform it was built on. The build
+works with BuildKit and with the classic builder (`DOCKER_BUILDKIT=0`).
+
 ### The API image
 
 The image listens on `8080` and runs as the non-root user `app`. It applies no migrations when it

@@ -400,6 +400,9 @@
 
 ### 變更
 
+- API 映像只帶自己所在平台（`linux-x64` 或 `linux-arm64`）的原生檔，SQLite 與 libvips 放在 `/app`
+  的組件旁邊，不再帶 `/app/runtimes/` 底下所有平台的檔案。Windows 的
+  `Microsoft.Data.SqlClient.SNI` 不在映像裡。映像大小（amd64）由 840 MB 降到 545 MB。
 - 後台映像的 runtime 階段改用官方 `nginx` 映像 `nginx:1.30.7-alpine`，不再用
   `nginxinc/nginx-unprivileged`。容器的執行方式不變：以 `nginx` 使用者（uid 101）執行、監聽
   `8080`、pid 檔與暫存目錄在 `/tmp`。主設定檔改為 repo 內的 `frontend/nginx/nginx.conf`。唯一的差異

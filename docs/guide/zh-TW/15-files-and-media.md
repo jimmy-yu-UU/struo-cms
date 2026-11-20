@@ -395,8 +395,8 @@ HTTP_STATUS:200
 入 libvips，不靜態連結，也不直接連結。
 
 libvips 本身以二進位檔的形式隨 `NetVips.Native` 系列套件而來，套件宣告的授權是
-LGPL-3.0-or-later。這些二進位檔是 API 映像裡 `runtimes/<rid>/native/` 底下的獨立檔案，StruoCMS 沒有
-內嵌 libvips 的原始碼。同一系列套件還一併打包了 libvips 的幾個選用相依項目，
+LGPL-3.0-or-later。這個二進位檔是 API 映像裡 `/app` 底下的獨立檔案 `libvips.so.42`，屬於映像本身
+的平台，StruoCMS 沒有內嵌 libvips 的原始碼。同一系列套件還一併打包了 libvips 的幾個選用相依項目，
 各有各的授權，`THIRD-PARTY-NOTICES.md` 裡的表列出了它們。
 
 `THIRD-PARTY-NOTICES.md` 列出映像中宣告的授權不是 MIT、ISC、BSD 或 0BSD 的第三方元件與它們的授權

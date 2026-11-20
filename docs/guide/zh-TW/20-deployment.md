@@ -340,6 +340,11 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 `Directory.Build.props`／`Directory.Packages.props`。根目錄的 `.dockerignore` 把
 `frontend/`、`docs/` 跟一般的建置產物擋在外面。
 
+建置階段針對自己所在的架構發布，也就是 `linux-x64` 或 `linux-arm64`，遇到其他架構就報錯停止。
+輸出是 framework-dependent，只帶那個平台的原生檔，SQLite 與 libvips，放在 `/app` 的組件旁邊：
+映像裡沒有 Windows 或 macOS 的二進位檔，也沒有其他 CPU 的。映像只能在建置它的那個平台上執行。
+BuildKit 與傳統 builder（`DOCKER_BUILDKIT=0`）都能建置。
+
 ### API 映像
 
 監聽 `8080`，以非 root 使用者 `app` 執行。映像啟動時不套用 migration：進入點是
