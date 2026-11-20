@@ -235,30 +235,43 @@
     declare the matching type.
   - `MultiSelect` or `CheckboxGroup` without `[CmsOptions]`, or with a `[CmsOptions]` that lists no
     value. With no options every value is rejected; add `[CmsOptions]` listing the allowed values.
-- The scanner rejects an explicit `ColumnDataType` that contradicts the property's CLR type, in the
-  combinations below, with a `MetadataException` that names "Class.Property", the property type and
-  the declared type, so a fork that has one can no longer start the host. The type name is compared
-  without letter case, surrounding spaces or a length or precision, and `Nullable<T>` counts as `T`;
-  a property with `[SugarColumn(IsIgnore = true)]` is not checked, and `[ColumnShape]` beside
-  `ColumnDataType` is rejected by its own rule. Each combination used to start the host and then
-  misbehave, and [Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the
-  table:
+- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", the
+  property type and the declared type, when an explicit `ColumnDataType` contradicts the property's
+  CLR type in one of the combinations below, so a fork that has one can no longer start the host;
+  each combination used to start and then misbehave, and
+  [Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the table:
   - A `DateTime` or `DateTime?` with `timestamptz`, `timestamp with time zone` or `datetimeoffset`
-    and no `[ColumnShape]`. The value was written and read in the host's local time. On a host at
-    UTC+8, a value written at 13:06 local time (05:06 UTC) read back from PostgreSQL as 21:06, and
-    SQL Server stored 13:06, eight hours off the instant. On SQL Server, a facet on such a column and
-    a facet on a plain `DateTime` column in the same process made each other fail with a bind error,
-    in either order. Declare `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` and remove
-    `ColumnDataType`. A table built with `timestamptz` on PostgreSQL or `datetimeoffset` on SQL
-    Server already has the column type the shape gives, so it needs no migration.
+    and no `[ColumnShape]`. Only the shape makes the framework read and write the column as a UTC
+    instant, on PostgreSQL and SQL Server. Without it, a `Kind = Local` value written by
+    server-side code (a hook, an interceptor, a seed) was stored off by the host's UTC offset: on
+    a host at UTC+8, 13:06 local time (05:06 UTC) read back from PostgreSQL as 21:06, and SQL
+    Server stored 13:06. PostgreSQL returned the column as `Kind = Local` values where the shaped
+    column returns `Kind = Utc`. On SQL Server, a facet over the column and a facet over a
+    zone-less `DateTime` column in the same process made each other fail with a bind error, in
+    either order, the one failure a request reaches through the API alone. A value sent through
+    the API arrives as `Kind = Utc` and was stored correctly. Declare
+    `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` and remove `ColumnDataType`. A table built
+    with `timestamptz` on PostgreSQL or `datetimeoffset` on SQL Server already has the column
+    type the shape gives, so the column needs no migration; rows already written from a
+    `Kind = Local` value keep their offset error, and the fork has to correct them.
   - An `int` or `int?` on `bigint` or `smallint`, and a `long` or `long?` on `int`, `integer` or
-    `smallint`. On SQL Server, a facet of such a column failed with a bind error when a facet of a
-    column of the property's own width had already run in the same process; the reverse order, reads
-    and filters worked, and no other backend failed. Declare the property with the column's width
-    (`long` for `bigint`, `int` for `int` and `integer`) or remove `ColumnDataType`. A table that
-    exists needs a migration when the column type changes.
-  - Every other pair passes, `tinyint`, `mediumint`, `int2` and `int8` on an integer property
-    included: a database refuses a value that does not fit a narrower column.
+    `smallint`. These are the integer type names SQL Server has and reads as integer types that
+    share one entry of the ORM's reader cache. On SQL Server, a facet of such a column failed with
+    a bind error when a facet of a column of the property's own width had already run in the same
+    process; the reverse order, reads and filters worked, and no other backend failed. The check
+    is the same on every backend. Declare the property with the column's width (`long` for
+    `bigint`, `int` for `int` and `integer`) or remove `ColumnDataType`. A table that exists needs
+    a migration when the column type changes.
+  - An `int`, `int?`, `long` or `long?` on `tinyint(1)`. MySQL and MariaDB read a `tinyint(1)`
+    column as a boolean, so a stored 7 came back as 1 from a read and a facet, while a filter for
+    7 still matched the row. Write `tinyint` with no length.
+  - Every other pair passes, including `tinyint`, `mediumint`, `int2`, `int8`, `int unsigned`,
+    `bigint unsigned` and `timestamp with local time zone`. The type name is compared by its
+    words, without letter case, brackets or double quotes, a length or precision in parentheses
+    is ignored except for `tinyint(1)`, and words after the type such as `not null` are column
+    modifiers. The check covers the `[CmsField]` properties of collections, translation entities
+    and junction payloads; a property with `[SugarColumn(IsIgnore = true)]` is not checked, and
+    `[ColumnShape]` beside `ColumnDataType` is rejected by its own rule.
 - The `[Navigate]` foreign-key name on a `[CmsRelation]` property must be a property, or the host
   fails at startup with a message that names the relation, the foreign key and the type to look in.
   For many-to-one and one-to-one it is a property of the declaring entity, for one-to-many a

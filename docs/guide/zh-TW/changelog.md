@@ -177,26 +177,36 @@
     用在不是 `DateTime`、`DateTime?` 的屬性。拿掉 `[ColumnShape]`，或把屬性改成對應的型別。
   - `MultiSelect` 或 `CheckboxGroup` 沒有 `[CmsOptions]`，或 `[CmsOptions]` 一個項目都沒有。沒有
     選項時每個值都被拒絕；加上 `[CmsOptions]` 並列出可選的值。
-- 掃描器擋下與屬性 CLR 型別衝突的明寫 `ColumnDataType`，範圍是下面幾種組合，丟出
-  `MetadataException`，訊息點名「類別.屬性」、屬性型別與寫的型別，所以有這類宣告的 fork 不能再
-  啟動主機。比對型別名稱時不分大小寫，不看前後空白與長度、精度，`Nullable<T>` 當作 `T`；掛
-  `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，`[ColumnShape]` 與 `ColumnDataType` 並存由它自己
-  的規則擋。這些組合原本都能啟動主機，之後才出錯，表格在
+- 當明寫的 `ColumnDataType` 以下面任一種組合與屬性的 CLR 型別衝突，掃描器就讓主機在啟動時失敗，
+  丟出 `MetadataException`，訊息點名「類別.屬性」、屬性型別與寫的型別，所以有這類宣告的 fork
+  不能再啟動主機；這些組合原本都能啟動，之後才出錯，表格在
   [第 6 章](06-field-types.md#與屬性型別衝突的欄位型別)：
   - `DateTime` 或 `DateTime?` 配 `timestamptz`、`timestamp with time zone` 或 `datetimeoffset`，
-    又沒有 `[ColumnShape]`。值依主機的本地時間寫入與讀出。主機在 UTC+8 時，本地 13:06（UTC 05:06）
-    寫入的值，PostgreSQL 讀回 21:06，SQL Server 存成 13:06，與實際時刻差八小時。在 SQL Server 上，
-    同一個程序裡對這種欄位與對一般 `DateTime` 欄位做 facet，兩個順序都會讓對方以綁定錯誤失敗。
-    改宣告 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` 並拿掉 `ColumnDataType`。在
-    PostgreSQL 用 `timestamptz`、在 SQL Server 用 `datetimeoffset` 建好的表，欄位型別就是形狀給的
-    型別，不必 migration。
+    又沒有 `[ColumnShape]`。只有形狀讓框架在 PostgreSQL 與 SQL Server 上以 UTC 時刻讀寫這個
+    欄位。沒有形狀時，由 hook、interceptor、seed 這類伺服器端程式碼寫入的 `Kind = Local` 值，
+    存進去會差主機的 UTC 位移：主機在 UTC+8 時，本地 13:06（UTC 05:06）的值，PostgreSQL 讀回
+    21:06，SQL Server 存成 13:06。PostgreSQL 把欄位讀成 `Kind = Local` 的值，有形狀的欄位讀成
+    `Kind = Utc`。在 SQL Server 上，同一個程序裡對這個欄位與對不帶時區的 `DateTime` 欄位做
+    facet，兩個順序都會讓對方以綁定錯誤失敗，這是只用 API 就會碰到的唯一一個。經 API 送進來
+    的值是 `Kind = Utc`，存得正確。改宣告 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+    並拿掉 `ColumnDataType`。在 PostgreSQL 用 `timestamptz`、在 SQL Server 用
+    `datetimeoffset` 建好的表，欄位型別就是形狀給的型別，欄位不必 migration；已經由
+    `Kind = Local` 的值寫進去的資料列，位移錯誤仍在，fork 要自己修正。
   - `int` 或 `int?` 配 `bigint` 或 `smallint`，以及 `long` 或 `long?` 配 `int`、`integer` 或
-    `smallint`。在 SQL Server 上，同一個程序裡若已對屬性自己寬度的欄位做過 facet，這種欄位的
-    facet 會以綁定錯誤失敗；反過來的順序、讀取與篩選都正常，其他後端也都沒失敗。屬性改成欄位的
-    寬度（`bigint` 用 `long`，`int` 與 `integer` 用 `int`），或拿掉 `ColumnDataType`。欄位型別有
-    變時，已存在的表需要 migration。
-  - 其他組合照常通過，整數屬性配 `tinyint`、`mediumint`、`int2`、`int8` 也一樣：值放不進較窄的
-    欄位時，由資料庫拒絕。
+    `smallint`。這些是 SQL Server 有的整數型別名稱，ORM 的讀取快取把它們當成同一個項目。在
+    SQL Server 上，同一個程序裡若已對屬性自己寬度的欄位做過 facet，這種欄位的 facet 會以綁定
+    錯誤失敗；反過來的順序、讀取與篩選都正常，其他後端也都沒失敗。檢查在每個後端都一樣。屬性
+    改成欄位的寬度（`bigint` 用 `long`，`int` 與 `integer` 用 `int`），或拿掉
+    `ColumnDataType`。欄位型別有變時，已存在的表需要 migration。
+  - `int`、`int?`、`long` 或 `long?` 配 `tinyint(1)`。MySQL 與 MariaDB 把 `tinyint(1)` 欄位讀成
+    布林值，所以存了 7，讀取與 facet 得到 1，不過篩選 7 仍然比得到那一列。寫 `tinyint`，不帶
+    長度。
+  - 其他組合照常通過，包含 `tinyint`、`mediumint`、`int2`、`int8`、`int unsigned`、
+    `bigint unsigned` 與 `timestamp with local time zone`。比對型別名稱時看的是各個單字，不分
+    大小寫，不看中括號與雙引號，括號裡的長度或精度也不看，`tinyint(1)` 除外，型別後面的
+    `not null` 這類字是欄位修飾。檢查對象是集合、翻譯實體與 junction payload 的 `[CmsField]`
+    屬性；掛 `[SugarColumn(IsIgnore = true)]` 的屬性不檢查，`[ColumnShape]` 與 `ColumnDataType`
+    並存由它自己的規則擋。
 - `[CmsRelation]` 屬性的 `[Navigate]` 外鍵名稱必須是一個屬性，不然主機在啟動時失敗，訊息點名關聯、
   外鍵名稱與該找的型別：多對一與一對一要是宣告它的實體上的屬性，一對多要是清單元素型別上的屬性，
   不分大小寫；多對多的鍵不在這項檢查裡。原本啟動時不檢查，之後的查詢與寫入才失敗。改成實際存在的

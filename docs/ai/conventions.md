@@ -391,11 +391,18 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   `[ColumnShape(TimestampWithTimeZone)]` on one that is not `DateTime` or `DateTime?`;
 - `[ColumnShape]` beside `ColumnDataType`;
 - a `ColumnDataType` that `ColumnTypeFit` (`src/Struo.Infrastructure/Metadata/ColumnTypeFit.cs`: a
-  closed table of property type × column type name, matched without case, surrounding space or a
-  parenthesised length) lists as contradicting the property type: `DateTime` or `DateTime?` with
-  `timestamptz`, `timestamp with time zone` or `datetimeoffset`; `int` with `bigint` or `smallint`;
-  `long` with `int`, `integer` or `smallint`, each with its `Nullable<T>`. Any other name passes.
-  `ColumnDataTypeFitTests` pins the table;
+  closed table of property type and column type name) lists as contradicting the property type, each
+  with its `Nullable<T>`: `DateTime` with `timestamptz`, `timestamp with time zone` or
+  `datetimeoffset` (only `[ColumnShape(TimestampWithTimeZone)]` makes the framework read and write
+  the column as a UTC instant, on PostgreSQL and SQL Server, and the unshaped SQL Server column
+  breaks the facet of a zone-less `DateTime` column); `int` with `bigint` or `smallint`; `long`
+  with `int`, `integer` or `smallint` (the integer names SQL Server has whose reader types share
+  one entry of the ORM's row-binder cache; only SQL Server fails, in one facet order, but the
+  rule is the same on every backend); `int` or `long` with `tinyint(1)` (MySQL and MariaDB read it
+  as a boolean). The name is matched by its words: case, brackets, double quotes and a
+  parenthesised length are ignored (the length only for `tinyint(1)`), trailing column modifiers
+  such as `not null` are skipped, and `unsigned` or `zerofill` makes another type. Any other name
+  passes, `timestamp with local time zone` included. `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 

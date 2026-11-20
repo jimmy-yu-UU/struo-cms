@@ -276,9 +276,11 @@ JSON 欄位，同樣如此。
 
 ### 與屬性型別衝突的欄位型別
 
-下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。比對型別名稱時不分大小寫，
-也不看前後空白與長度、精度，所以 `timestamp(3) with time zone`、` TimestampTZ ` 都算表裡寫的
-那個名稱。不在表裡的名稱是你自己的，照常通過。
+下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。比對型別名稱時看的是
+各個單字，不分大小寫，不看中括號與雙引號，括號裡的長度或精度也不看，`tinyint(1)` 除外。
+型別後面的字，例如 `not null`、`identity(1,1)`，是欄位修飾：`bigint not null` 當作 `bigint`。
+`unsigned` 與 `zerofill` 讓名稱變成另一種型別，所以 `int unsigned` 不是 `int`。不在表裡的名稱，
+包含 `timestamp with local time zone`，是你自己的，照常通過。
 
 | 屬性型別 | `ColumnDataType` | 改成 |
 |---|---|---|
@@ -287,15 +289,31 @@ JSON 欄位，同樣如此。
 | `int` | `smallint` | 拿掉 `ColumnDataType`，或改用 `int` |
 | `long` | `int`、`integer` | 屬性改 `int`，或拿掉 `ColumnDataType` |
 | `long` | `smallint` | 拿掉 `ColumnDataType`，或改用 `bigint` |
+| `int`、`long` | `tinyint(1)` | 寫 `tinyint`，不帶長度 |
 
 `DateTime` 要用的形狀是 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`（見
-[日期時間](#日期時間)）。把帶時區的欄位型別寫成 `ColumnDataType`，值會依主機的本地時間寫入與
-讀出，不是 UTC 時刻。主機在 UTC+8 時，本地 13:06（UTC 05:06）寫入的值，PostgreSQL 讀回 21:06，
-SQL Server 存成 13:06，與實際時刻差八小時。
+[日期時間](#日期時間)）。在 PostgreSQL 與 SQL Server 上，形狀讓欄位以 UTC 時刻讀寫，單寫
+`ColumnDataType` 不會。沒有形狀時：
 
-整數屬性放在寬度不同的欄位上，在 SQL Server 上，同一個程序裡若先對屬性自己寬度的欄位做過 facet，
-這個欄位的 facet 就會失敗；讀取與篩選不受影響，其他後端也不受影響。其他寬度（`tinyint`、
-`mediumint`、`int2`、`int8`）不被擋：值放不進較窄的欄位時，由資料庫拒絕。
+- `Kind = Local` 的 `DateTime`，由 hook、interceptor、seed 這類伺服器端程式碼寫入，存進去的
+  值會差主機的 UTC 位移。主機在 UTC+8 時，本地 13:06（UTC 05:06）的值，PostgreSQL 讀回
+  21:06，SQL Server 存成 13:06。
+- PostgreSQL 把這個欄位讀成 `Kind = Local` 的值，有形狀的欄位讀成 `Kind = Utc`，所以在程式裡
+  拿它跟 UTC 值比較會得到錯的答案。
+- 在 SQL Server 上，同一個程序裡對這個欄位與對不帶時區的 `DateTime` 欄位做 facet，兩個順序
+  都會讓對方以綁定錯誤失敗。只用 API 就會碰到這一條。
+
+經 API 送進來的值是 `Kind = Utc`，來回都是正確的時刻，所以只有 API 寫入這個欄位時，前兩條
+不會發生。
+
+整數那幾列，列的是 SQL Server 有的整數型別名稱，而且 ORM 的讀取快取把它們當成同一個項目：
+`bigint`、`int`（同義詞 `integer`）與 `smallint`。整數屬性放在這幾種寬度中另一種的欄位上，
+在 SQL Server 上，同一個程序裡若先對屬性自己寬度的欄位做過 facet，這個欄位的 facet 就會失敗；
+讀取與篩選正常。檢查在每個後端都一樣，雖然只有 SQL Server 會失敗。`tinyint` 讀成另一種型別，
+`mediumint`、`int2`、`int4`、`int8` 在 SQL Server 上不存在，所以都通過。
+
+在 MySQL 與 MariaDB 上，`tinyint(1)` 欄位被讀成布林值：存了 7 的 `int` 或 `long` 屬性，讀取
+與 facet 都得到 1，不過篩選 7 仍然比得到那一列。寫 `tinyint`，不帶長度。
 
 ### 沒有介面收的型別
 

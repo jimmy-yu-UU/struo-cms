@@ -315,9 +315,11 @@ gives the property's type, what the interface accepts and which interfaces accep
 ### Column types that contradict the property
 
 A `ColumnDataType` from the table below stops the host as well. `Nullable<T>` counts as `T`. The
-type name is compared without letter case, surrounding spaces and any length or precision, so
-`timestamp(3) with time zone` and ` TimestampTZ ` are the names written in the table. A name that is
-not in the table is yours, and passes.
+type name is compared by its words, without letter case, brackets or double quotes, and a length
+or precision in parentheses is ignored, except for `tinyint(1)`. Words after the type, such as
+`not null` or `identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`.
+`unsigned` and `zerofill` make another type, so `int unsigned` is not `int`. A name that is not in
+the table, `timestamp with local time zone` included, is yours, and passes.
 
 | Property type | `ColumnDataType` | Declare instead |
 |---|---|---|
@@ -326,17 +328,35 @@ not in the table is yours, and passes.
 | `int` | `smallint` | Remove `ColumnDataType`, or use `int` |
 | `long` | `int`, `integer` | `int`, or remove `ColumnDataType` |
 | `long` | `smallint` | Remove `ColumnDataType`, or use `bigint` |
+| `int`, `long` | `tinyint(1)` | `tinyint` with no length |
 
 For a `DateTime` the shape is `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (see
-[Date and time](#date-and-time)). A zone-aware column type written as `ColumnDataType` leaves the
-value to be written and read in the host's local time, not as a UTC instant. On a host at UTC+8, a
-value written at 13:06 local time (05:06 UTC) reads back as 21:06 from PostgreSQL, and SQL Server
-stores 13:06, eight hours off the instant.
+[Date and time](#date-and-time)). On PostgreSQL and SQL Server the shape reads and writes the
+column as a UTC instant, and a `ColumnDataType` alone does not. Without the shape:
 
-An integer property on a column of another width has a facet that fails on SQL Server when a facet
-of a column of the property's own width ran first in the same process; reads and filters are
-unaffected, and so is every other backend. Other widths (`tinyint`, `mediumint`, `int2`, `int8`)
-are not rejected: a database refuses a value that does not fit a narrower column.
+- A `DateTime` with `Kind = Local`, written by server-side code such as a hook, an interceptor or a
+  seed, is stored off by the host's UTC offset. On a host at UTC+8, 13:06 local time (05:06 UTC)
+  reads back as 21:06 from PostgreSQL, and SQL Server stores 13:06.
+- PostgreSQL returns the column as `Kind = Local` values, where the shaped column returns
+  `Kind = Utc`, so comparing them in code with UTC values gives the wrong answer.
+- On SQL Server, a facet over the column and a facet over a zone-less `DateTime` column in the
+  same process make each other fail with a bind error, in either order. A request reaches this
+  through the API alone.
+
+A value sent through the API arrives as `Kind = Utc` and round-trips to the right instant, so the
+first two do not occur when only the API writes the column.
+
+The integer rows list the integer type names SQL Server has and reads as integer types that share
+one entry of the ORM's reader cache: `bigint`, `int` with its synonym `integer`, and `smallint`.
+An integer property on a column of another of these widths has a facet that fails on SQL Server
+when a facet of a column of the property's own width ran first in the same process. Reads and
+filters work. The check is the same on every backend, although only SQL Server fails. `tinyint` is
+read as another type, and `mediumint`, `int2`, `int4` and `int8` do not exist on SQL Server, so
+they pass.
+
+On MySQL and MariaDB a `tinyint(1)` column is read as a boolean: an `int` or `long` property
+stored as 7 reads back as 1, in a read and in a facet, although a filter for 7 still matches the
+row. Write `tinyint` with no length.
 
 ### Types no interface accepts
 
