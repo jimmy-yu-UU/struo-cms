@@ -35,6 +35,7 @@ public sealed class EnvelopeResultFilter : IAlwaysRunResultFilter
                 { StatusCode = stamped.StatusCode };
             case ObjectResult { Value: ErrorEnvelope }:
             case ObjectResult { Value: SuccessEnvelope }:
+            case ObjectResult { Value: VersionedSuccessEnvelope }:
                 return null;
 
             // Paginated list marker → success envelope carrying meta.

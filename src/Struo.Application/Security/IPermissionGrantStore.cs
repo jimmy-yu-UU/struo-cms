@@ -29,8 +29,16 @@ public interface IPermissionGrantStore
     /// holding neither its old grant set nor its new one, which for an authorization table means a
     /// silently wrong security posture rather than merely stale data.
     /// </para>
+    /// <para>
+    /// The role's own <c>Version</c> guards the save: a non-null <paramref name="expectedVersion"/> must
+    /// equal it, otherwise nothing is changed and <see cref="Struo.Domain.Query.ConcurrencyConflictException"/>
+    /// is thrown. Success advances the version by one, with or without an expected value, and returns it.
+    /// The compare-and-advance is a single conditional update, the first write of the transaction.
+    /// </para>
     /// </summary>
-    Task ReplaceAsync(Guid roleId, IReadOnlyList<PermissionGrant> grants, CancellationToken ct = default);
+    Task<long> ReplaceAsync(
+        Guid roleId, IReadOnlyList<PermissionGrant> grants, long? expectedVersion = null,
+        CancellationToken ct = default);
 
     /// <summary>Removes every grant of the role, joining the caller's transaction when one is open.</summary>
     Task DeleteForRoleAsync(Guid roleId, CancellationToken ct = default);
