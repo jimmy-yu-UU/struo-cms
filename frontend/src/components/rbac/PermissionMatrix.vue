@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 import { traceIdDetail } from '../../api/apiClient'
 import { GOVERNED_JUNCTIONS } from '../../lib/frameworkCollections'
+import { createLatestWins } from '../../lib/latestWins'
 
 // The Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
@@ -58,17 +59,38 @@ function fold(entries: RolePermissionEntry[]): Record<string, Grant> {
   return next
 }
 
+const loadGuard = createLatestWins()
+
 async function load(): Promise<void> {
+  const token = loadGuard.next()
   loading.value = true
   loadFailed.value = false
   try {
-    grants.value = fold(await rbacApi.getRolePermissions(props.roleId))
-    baseline.value = JSON.stringify(grants.value)
+    const next = fold(await rbacApi.getRolePermissions(props.roleId))
+    if (!loadGuard.isCurrent(token)) return
+    grants.value = next
+    baseline.value = JSON.stringify(next)
   } catch {
-    loadFailed.value = true
+    if (loadGuard.isCurrent(token)) loadFailed.value = true
   } finally {
-    loading.value = false
+    if (loadGuard.isCurrent(token)) loading.value = false
   }
+}
+
+// A super-admin role holds no grants of its own: drop the buffer, and any load still in flight.
+function clearGrants(): void {
+  loadGuard.next()
+  grants.value = {}
+  baseline.value = '{}'
+  loading.value = false
+  loadFailed.value = false
+}
+
+// Brings the matrix in line with the role it is given. Create mode has no role yet to read.
+function sync(): void {
+  if (props.createMode) { loading.value = false; return }
+  if (props.isSuperAdminRole) clearGrants()
+  else void load()
 }
 
 // Shared fold from the live `grants` buffer down to the non-all-false wire entries — used
@@ -86,6 +108,7 @@ function foldEntries(): RolePermissionEntry[] {
 // A save asked for while another is in flight joins that one instead of sending a second PUT.
 let inFlightSave: Promise<boolean> | null = null
 function save(): Promise<boolean> {
+  if (loading.value) return Promise.resolve(false)
   inFlightSave ??= putGrants().finally(() => { inFlightSave = null })
   return inFlightSave
 }
@@ -119,12 +142,8 @@ function markFlushed(): void {
   baseline.value = JSON.stringify(grants.value)
 }
 
-onMounted(() => {
-  // Create mode has no role yet to GET permissions for — stay with the empty buffer.
-  if (props.createMode) { loading.value = false; return }
-  if (!props.isSuperAdminRole) void load()
-  else loading.value = false
-})
+onMounted(sync)
+watch([() => props.roleId, () => props.isSuperAdminRole], sync)
 
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently would

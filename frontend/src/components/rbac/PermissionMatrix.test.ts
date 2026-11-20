@@ -36,6 +36,113 @@ function seedSchema() {
   ] as any
 }
 
+describe('PermissionMatrix follows the role state', () => {
+  const READ = 'Article \u2014 Read'
+  const entry = (collection: string, canRead: boolean) => ({ collection, canRead, canWrite: false, canDelete: false })
+  const checkbox = (w: ReturnType<typeof mountMatrix>) => w.find(`[aria-label="${READ}"]`)
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.mocked(rbacApi.getRolePermissions).mockReset()
+    vi.mocked(rbacApi.putRolePermissions).mockReset()
+    seedSchema()
+  })
+
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+
+  it('loads the server grants when the role stops being a super-admin role', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([entry('article', true)])
+    const w = mountMatrix({ isSuperAdminRole: true })
+    await flushPromises()
+    expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
+    await w.setProps({ isSuperAdminRole: false })
+    await flushPromises()
+    expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(1)
+    expect(rbacApi.getRolePermissions).toHaveBeenCalledWith('r1')
+    expect(checkbox(w).attributes('data-state')).toBe('checked')
+    expect((w.vm as unknown as { dirty: boolean }).dirty).toBe(false)
+  })
+
+  it('reloads when the role id changes', async () => {
+    vi.mocked(rbacApi.getRolePermissions)
+      .mockResolvedValueOnce([entry('article', true)])
+      .mockResolvedValueOnce([entry('article', false)])
+    const w = mountMatrix({ roleId: 'r1' })
+    await flushPromises()
+    expect(checkbox(w).attributes('data-state')).toBe('checked')
+    await w.setProps({ roleId: 'r2' })
+    await flushPromises()
+    expect(rbacApi.getRolePermissions).toHaveBeenLastCalledWith('r2')
+    expect(checkbox(w).attributes('data-state')).toBe('unchecked')
+  })
+
+  it('drops its grants and stays clean when the role becomes a super-admin role', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([entry('article', true)])
+    const w = mountMatrix()
+    await flushPromises()
+    ;(w.vm as unknown as { toggle: (n: string, k: string, v: boolean) => void }).toggle('article', 'write', true)
+    expect((w.vm as unknown as { dirty: boolean }).dirty).toBe(true)
+    await w.setProps({ isSuperAdminRole: true })
+    expect((w.vm as unknown as { dirty: boolean }).dirty).toBe(false)
+    expect(w.text()).toContain(en.rbac.superAdminAll)
+    expect((w.vm as unknown as { currentEntries: () => unknown[] }).currentEntries()).toEqual([])
+  })
+
+  it('shows no table and refuses to save while the grants are loading', async () => {
+    const w = mountMatrix({ isSuperAdminRole: true })
+    await flushPromises()
+    const pending = deferred<ReturnType<typeof entry>[]>()
+    vi.mocked(rbacApi.getRolePermissions).mockReturnValueOnce(pending.promise)
+    await w.setProps({ isSuperAdminRole: false })
+    expect(w.find('table').exists()).toBe(false)
+    expect(await (w.vm as unknown as { save: () => Promise<boolean> }).save()).toBe(false)
+    expect(rbacApi.putRolePermissions).not.toHaveBeenCalled()
+    pending.resolve([entry('article', true)])
+    await flushPromises()
+    expect(w.find('table').exists()).toBe(true)
+  })
+
+  it('keeps the newer role\'s grants when an older load answers last', async () => {
+    const first = deferred<ReturnType<typeof entry>[]>()
+    const second = deferred<ReturnType<typeof entry>[]>()
+    vi.mocked(rbacApi.getRolePermissions)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const w = mountMatrix({ roleId: 'r1' })
+    await w.setProps({ roleId: 'r2' })
+    expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(2)
+    second.resolve([entry('article', true)])
+    await flushPromises()
+    first.resolve([entry('article', false)])
+    await flushPromises()
+    expect(checkbox(w).attributes('data-state')).toBe('checked')
+  })
+
+  it('ignores a load that answers after the role became a super-admin role', async () => {
+    const pending = deferred<ReturnType<typeof entry>[]>()
+    vi.mocked(rbacApi.getRolePermissions).mockReturnValueOnce(pending.promise)
+    const w = mountMatrix({ roleId: 'r1' })
+    await w.setProps({ isSuperAdminRole: true })
+    pending.resolve([entry('article', true)])
+    await flushPromises()
+    expect(w.text()).toContain(en.rbac.superAdminAll)
+    expect((w.vm as unknown as { currentEntries: () => unknown[] }).currentEntries()).toEqual([])
+  })
+
+  it('shows the load failure of the latest load only', async () => {
+    vi.mocked(rbacApi.getRolePermissions).mockRejectedValueOnce(new Error('boom'))
+    const w = mountMatrix({ isSuperAdminRole: true })
+    await w.setProps({ isSuperAdminRole: false })
+    await flushPromises()
+    expect(w.text()).toContain(en.rbac.loadFailed)
+  })
+})
+
 describe('PermissionMatrix save re-entry', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

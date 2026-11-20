@@ -1291,6 +1291,71 @@ describe('ItemFormView', () => {
     expect(noGrant.findComponent(PermissionMatrix).exists()).toBe(false)
   })
 
+  describe('permission matrix after the saved role state changes', () => {
+    const grant = [{ collection: 'article', canRead: true, canWrite: false, canDelete: false }]
+
+    function seedRole() {
+      routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
+      const { schema } = setupStores()
+      ;(schema.get as any).mockReturnValue({
+        ...roleMeta,
+        fields: [...roleMeta.fields, { ...roleMeta.fields[0], name: 'isSuperAdmin', interface: 'boolean', required: false, sort: 2 }],
+      })
+      schema.collections = [{ name: 'article', label: 'Article', fields: [], relations: [] }] as never
+      vi.mocked(rbacApi.getRolePermissions).mockResolvedValue(grant)
+    }
+    const readBox = (w: ReturnType<typeof mountView>) => w.find('[aria-label="Article \u2014 Read"]')
+
+    it('Reload latest after a conflict shows the server grants once the role is no longer a super-admin role', async () => {
+      seedRole()
+      const get = vi.spyOn(itemsApi, 'get')
+        .mockResolvedValueOnce({ id: 'r1', name: 'ops', isSuperAdmin: true, version: 1 })
+        .mockResolvedValue({ id: 'r1', name: 'ops', isSuperAdmin: false, version: 2 })
+      vi.spyOn(itemsApi, 'update').mockRejectedValue(new ApiError(409, 'conflict', 'VERSION_CONFLICT'))
+      const w = mountView()
+      await flushPromises()
+      expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
+      expect(w.text()).toContain('full access')
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect(get).toHaveBeenCalledTimes(2)
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
+      expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(1)
+      expect(rbacApi.getRolePermissions).toHaveBeenCalledWith('r1')
+      expect(readBox(w).attributes('data-state')).toBe('checked')
+      expect(w.findComponent(PermissionMatrix).vm.dirty).toBe(false)
+    })
+
+    it('reloading after a revert shows the server grants once the role is no longer a super-admin role', async () => {
+      seedRole()
+      vi.spyOn(itemsApi, 'get')
+        .mockResolvedValueOnce({ id: 'r1', name: 'ops', isSuperAdmin: true, version: 1 })
+        .mockResolvedValue({ id: 'r1', name: 'ops', isSuperAdmin: false, version: 2 })
+      const w = mountView()
+      await flushPromises()
+      expect(rbacApi.getRolePermissions).not.toHaveBeenCalled()
+      await (w.vm as any).onReverted()
+      await flushPromises()
+      expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(1)
+      expect(readBox(w).attributes('data-state')).toBe('checked')
+    })
+
+    it('a revert that makes the role a super-admin role drops the grants it held', async () => {
+      seedRole()
+      vi.spyOn(itemsApi, 'get')
+        .mockResolvedValueOnce({ id: 'r1', name: 'ops', isSuperAdmin: false, version: 1 })
+        .mockResolvedValue({ id: 'r1', name: 'ops', isSuperAdmin: true, version: 2 })
+      const w = mountView()
+      await flushPromises()
+      expect(readBox(w).attributes('data-state')).toBe('checked')
+      await (w.vm as any).onReverted()
+      await flushPromises()
+      expect(w.text()).toContain('full access')
+      expect(w.findComponent(PermissionMatrix).vm.dirty).toBe(false)
+    })
+  })
+
   it('mounts EffectivePermissionsPanel when editing a user as super-admin, passing the current role selection', async () => {
     vi.mocked(rbacApi.getEffectivePermissions).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
 

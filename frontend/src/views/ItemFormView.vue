@@ -393,6 +393,8 @@ async function onReverted(): Promise<void> {
     latestFromServer = null
     errors.value = {}
     serverError.value = ''
+    // A revert can restore the role's super-admin flag.
+    if (name.value === ROLE_COLLECTION) captureSavedRole()
   } catch (e) {
     serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
   }
