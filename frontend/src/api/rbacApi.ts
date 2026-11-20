@@ -9,6 +9,9 @@ export type RolePermissionEntry = {
   canDelete: boolean
 }
 
+// What a grants save reports: the grants as stored and the role's new version (absent when the response has none).
+export type RoleGrantsSaved = { entries: RolePermissionEntry[]; version: number | undefined }
+
 export type EffectivePermissions = {
   isSuperAdmin: boolean
   permissions: Record<string, { read: boolean; write: boolean; delete: boolean }>
@@ -19,9 +22,16 @@ export const rbacApi = {
   async getRolePermissions(roleId: string): Promise<RolePermissionEntry[]> {
     return apiClient.get<RolePermissionEntry[]>(apiPath('roles', roleId, 'permissions'))
   },
-  // Full-replace: send every grant the matrix holds; unsent collections lose their grants.
-  async putRolePermissions(roleId: string, entries: RolePermissionEntry[]): Promise<RolePermissionEntry[]> {
-    return apiClient.put<RolePermissionEntry[]>(apiPath('roles', roleId, 'permissions'), entries)
+  // Full-replace: send every grant the matrix holds; unsent collections lose their grants. `version` is the
+  // role version the caller last saw; a role that has moved on answers 409 VERSION_CONFLICT.
+  async putRolePermissions(roleId: string, entries: RolePermissionEntry[], version?: number): Promise<RoleGrantsSaved> {
+    const params = new URLSearchParams()
+    if (version !== undefined) params.set('version', String(version))
+    const { data, meta } = await apiClient.putEnveloped<RolePermissionEntry[], { version?: unknown }>(
+      withQuery(apiPath('roles', roleId, 'permissions'), params), entries)
+    // A response without data (204, empty body) is a committed save whose stored grants are not reported: the
+    // entries that were sent stand for them, and no version is handed back.
+    return { entries: data ?? entries, version: typeof meta?.version === 'number' ? meta.version : undefined }
   },
   // roleIds, when provided (including []), asks the backend to compute permissions for that
   // hypothetical role set instead of the user's saved roles — this is what lets the preview

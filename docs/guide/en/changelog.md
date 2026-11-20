@@ -466,6 +466,21 @@ transformed again on the first request.
   - The access rules are the API's own: the API decides who may read and write, and
     `GraphQl:ExposeSchema` governs introspection and the schema routes. No setting switches the
     endpoint off.
+- A successful grants save advances the role's `version` by one, so an API client that echoes
+  `version` on `PUT /api/items/role/{id}` has to take the new value:
+  - After `PUT /api/roles/{id}/permissions`, it reads `meta.version` from the response, or re-reads
+    the role.
+  - An update that carries the version read before the grants save answers `409`
+    `VERSION_CONFLICT`.
+- `IPermissionGrantStore.ReplaceAsync` takes an expected version and returns the role's new one.
+  - It returns `Task<long?>` where it returned `Task`, and takes `long? expectedVersion = null`
+    between `grants` and the `CancellationToken`.
+  - A fork's implementation compares `expectedVersion` with the role's `Version` and advances it by
+    one in a single conditional update, the first statement of the save. It throws
+    `ConcurrencyConflictException` when they differ, returns `null` for a role that does not exist,
+    and otherwise returns the new version.
+  - A caller that passed the token as the third argument passes it by name (`ct:`) or as the
+    fourth argument.
 - The API image is a runtime-specific publish, so a fork that uses the shipped `Dockerfile`
   unchanged has nothing to do, a fork that changed it checks the three points below, and the build
   stops with a message when the native files in `/app` do not match the runtime image.
@@ -481,6 +496,11 @@ transformed again on the first request.
 
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
+- `PUT api/roles/{id}/permissions` takes an optional `version` query parameter: a role that has
+  moved on answers `409` `VERSION_CONFLICT`, and the response carries the role's new `version` as
+  `meta.version` ([Chapter 13](13-rest-endpoints.md)). In the admin UI the role form and the
+  permission matrix share one version and do not conflict with each other; when another
+  administrator has saved the role in between, the save shows the form's conflict notice.
 - New public members:
   - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
     `DomainErrorMap.DeadlockMessage`.
@@ -503,6 +523,9 @@ transformed again on the first request.
     each set of rows it expands, so the expanded rows carry `translations`; relations expanded on
     the same parent rows can share one call, and a relation with a nested `deep` expands its own
     set. Construction with three arguments and three-variable deconstruction still compile.
+  - `VersionedSuccessEnvelope`, `VersionMeta` and `Envelope.Versioned` (`Struo.Api.Http`): a success
+    envelope whose `meta` carries only `version`; an action that returns it as the value of an
+    `ObjectResult` has it sent as it is, with no second envelope around it.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
@@ -763,6 +786,10 @@ transformed again on the first request.
   non-MIT components in the API image, and was not part of the image. It lists those components,
   quotes the bundled-library table of `NetVips.Native` verbatim and the license texts it relies on,
   and states no version numbers.
+- In 0.30.1, two administrators saving the permission matrix of the same role at the same time did
+  not conflict: the later save replaced the earlier one's grants without a warning. The save is
+  checked against the role's `version`: a stale one answers `409` `VERSION_CONFLICT`, writes
+  nothing, and the admin UI shows the form's conflict notice with "Reload latest".
 
 ### Security
 

@@ -49,11 +49,14 @@ public sealed class RolesController(
     /// three flags are all false carry no grant and are treated as absent (never stored) — filtered
     /// here, since "which submitted rows count as grants" is a wire-contract decision rather than a
     /// storage one. How the replacement is applied atomically is
-    /// <see cref="IPermissionGrantStore.ReplaceAsync"/>'s concern.
+    /// <see cref="IPermissionGrantStore.ReplaceAsync"/>'s concern. The optional <c>version</c> query
+    /// parameter must equal the role's current version (409 VERSION_CONFLICT otherwise); the success
+    /// envelope's <c>meta.version</c> is the role's new version.
     /// </summary>
     [HttpPut("{id:guid}/permissions")]
     public async Task<IActionResult> PutPermissions(
-        Guid id, [FromBody] List<RolePermissionEntry>? body, CancellationToken ct)
+        Guid id, [FromBody] List<RolePermissionEntry>? body,
+        [FromQuery(Name = "version")] string[]? version, CancellationToken ct)
     {
         if (RequireWrite() is { } denied) return denied;
         if (body is null)
@@ -84,9 +87,14 @@ public sealed class RolesController(
                 metadata.GetCollection(e.Collection)!.Name, e.CanRead, e.CanWrite, e.CanDelete))
             .ToList();
 
-        await grants.ReplaceAsync(id, rows, ct);
+        var expectedVersion = VersionQuery.Parse(version);
+        var newVersion = await grants.ReplaceAsync(id, rows, expectedVersion, ct);
+        // The role was deleted after the existence check above.
+        if (newVersion is null)
+            return ApiResults.Fail(StatusCodes.Status404NotFound, ErrorCodes.NotFound, RoleNotFound);
 
-        return Ok(rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList());
+        return Ok(Envelope.Versioned(
+            rows.Select(ToEntry).OrderBy(e => e.Collection, StringComparer.Ordinal).ToList(), newVersion.Value));
     }
 
     private static RolePermissionEntry ToEntry(PermissionGrant g) =>
