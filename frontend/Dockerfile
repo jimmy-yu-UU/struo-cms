@@ -8,7 +8,7 @@
 # --ignore-scripts on install matches the CI frontend job's reasoning:
 # untrusted package postinstall scripts don't get to run during image build.
 # Node 24 is used to match the CI "frontend" job's runtime.
-FROM node:24.22.0-alpine AS build
+FROM node:24.22.3-alpine AS build
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -51,7 +51,7 @@ RUN pnpm build
 # - No HEALTHCHECK: unlike the API image, static nginx here has no downstream
 #   dependency to probe (no database, no cache) -- an orchestrator supervising
 #   this container should probe `/` directly instead.
-FROM nginx:1.30.7-alpine AS runtime
+FROM nginx:1.31.7-alpine AS runtime
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 # The licenses of the bundled packages sit outside the web root, so nginx does not serve them.
 COPY THIRD-PARTY-NOTICES.md /usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md
