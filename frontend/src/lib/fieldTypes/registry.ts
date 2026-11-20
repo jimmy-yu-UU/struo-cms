@@ -130,6 +130,7 @@ const uuidDef = def({ component: ReadonlyField, serialize: emptyToNull })
 
 const jsonDef: FieldTypeDef = {
   component: JsonField,
+  ownsInput: true,
   defaultValue: () => null,
   parse: (raw) => raw ?? null,
   serialize: (v) => v ?? null,

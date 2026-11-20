@@ -53,6 +53,7 @@ function onUploaded(meta: FileMeta): void {
 }
 
 async function save(): Promise<void> {
+  if (saving.value) return
   const name = brandName.value.trim()
   if (name.length === 0) { toast.add({ severity: 'warn', summary: t('settings.nameRequired'), life: 3000 }); return }
   if (name.length > 100) { toast.add({ severity: 'warn', summary: t('settings.nameTooLong'), life: 3000 }); return }

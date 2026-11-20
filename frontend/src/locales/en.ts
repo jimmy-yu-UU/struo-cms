@@ -160,6 +160,7 @@ export default {
     password: 'Password',
     submit: 'Sign in',
     submitting: 'Signing in…',
+    signedInNotOpened: 'You are signed in, but the page could not be opened. Reload the page.',
     or: 'or',
     ssoProvider: 'Sign in with {name}',
     failed: 'Login failed. Please try again.',
@@ -216,6 +217,7 @@ export default {
     localeIncomplete: 'No content yet',
     tabHasErrors: 'has errors',
     conflictText: 'This item was changed by someone else. Review your edits and save again to overwrite, or reload the latest version.',
+    savedNotOpened: 'The item was saved, but its page could not be opened. Reload the page.',
     reloadLatest: 'Reload latest',
   },
   media: {

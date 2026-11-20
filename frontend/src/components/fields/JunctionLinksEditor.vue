@@ -14,6 +14,7 @@ import {
 } from '../../lib/junctionLinks'
 import type { RelationMeta, FieldMeta } from '../../types/schema'
 import type { RelationLink } from '../../types/itemForm'
+import { linkDraftKey, linkDraftPrefix, type FieldDraft, type FieldDrafts } from '../../lib/fieldDrafts'
 
 defineOptions({ name: 'JunctionLinksEditor' })
 
@@ -25,8 +26,13 @@ defineOptions({ name: 'JunctionLinksEditor' })
 // button, which is RelationPicker itself with its chips turned off and its trigger drawn as that button. Its id[] model is treated purely as the membership set, order always comes from
 // `links`. Rows and header share one grid template on a wide screen; on a narrow one a row stacks:
 // target, payload inputs, then the buttons in a compact row.
-const props = defineProps<{ relation: RelationMeta; modelValue: unknown; disabled?: boolean }>()
-const emit = defineEmits<{ (e: 'update:modelValue', v: RelationLink[]): void }>()
+// `drafts` holds the unparsable text of payload fields that parse their own input (JSON), keyed by
+// relation, link and field; the editor reports them with `draft` and drops those of a removed link.
+const props = defineProps<{ relation: RelationMeta; modelValue: unknown; disabled?: boolean; drafts?: FieldDrafts }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: RelationLink[]): void
+  (e: 'draft', key: string, draft: FieldDraft | null): void
+}>()
 const { t } = useI18n()
 const schema = useSchemaStore()
 const auth = useAuthStore()
@@ -58,15 +64,35 @@ function labelFor(id: string): string {
   return picker.value?.displayOptions.find((o) => o.id === id)?.label ?? id
 }
 
+function draftKey(linkId: string, field: string): string {
+  return linkDraftKey(props.relation.name, linkId, field)
+}
+function draftFor(linkId: string, field: string): FieldDraft | undefined {
+  return props.drafts?.[draftKey(linkId, field)]
+}
+function draftErrorId(linkId: string, field: string): string {
+  return `${fieldId(linkId, field)}-error`
+}
+function dropDraftsOf(linkIds: string[]): void {
+  for (const linkId of linkIds) {
+    const prefix = linkDraftPrefix(props.relation.name, linkId)
+    for (const key of Object.keys(props.drafts ?? {})) {
+      if (key.startsWith(prefix)) emit('draft', key, null)
+    }
+  }
+}
+
 function onPickerChange(v: unknown): void {
   const next = ((v as unknown[] | null) ?? []).map(String)
   const nextSet = new Set(next)
   const kept = links.value.filter((l) => nextSet.has(l.id))
+  dropDraftsOf(links.value.filter((l) => !nextSet.has(l.id)).map((l) => l.id))
   const have = new Set(kept.map((l) => l.id))
   const added = next.filter((id) => !have.has(id)).map((id) => emptyLink(id, payloadFields.value))
   emit('update:modelValue', [...kept, ...added])
 }
 function removeLink(id: string): void {
+  dropDraftsOf([id])
   emit('update:modelValue', links.value.filter((l) => l.id !== id))
 }
 function setPayload(id: string, name: string, v: unknown): void {
@@ -124,8 +150,18 @@ function fieldId(id: string, name: string): string { return `${uid}-${id}-${name
                 :field="f"
                 :model-value="item.junction[f.name]"
                 :disabled="!payloadEditable"
+                :draft="draftFor(item.id, f.name)"
+                :aria-invalid="draftFor(item.id, f.name) ? 'true' : undefined"
+                :aria-describedby="draftFor(item.id, f.name) ? draftErrorId(item.id, f.name) : undefined"
                 @update:model-value="(v: unknown) => setPayload(item.id, f.name, v)"
+                @update:draft="(d: FieldDraft | null) => emit('draft', draftKey(item.id, f.name), d)"
               />
+              <p
+                v-if="draftFor(item.id, f.name)"
+                :id="draftErrorId(item.id, f.name)"
+                class="text-destructive m-0 text-xs"
+                role="alert"
+              >{{ draftFor(item.id, f.name)?.error }}</p>
             </div>
             <!-- A compact row of buttons while stacked; on a wide screen the wrapper disappears and each
                  button is a cell of the row grid. type="button": this editor lives inside ItemForm.vue's

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate, type RouteLocationRaw } from 'vue-router'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
@@ -22,6 +22,7 @@ import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
 import { writeFailureMessage } from '@/lib/apiErrorMessage'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
+import { navigationCompleted } from '../lib/navigation'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { nullsAfterSave } from '../lib/loadedNulls'
 import { validateItem } from '../lib/validateItem'
@@ -29,6 +30,7 @@ import { splitServerErrors } from '../lib/applyServerErrors'
 import { relationInputKind } from '../lib/relationInputKind'
 import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
+import { hasDrafts, relationOfDraftKey, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
@@ -148,6 +150,22 @@ const tokenPanel = ref<InstanceType<typeof AccessTokenPanel> | null>(null)
 
 const model = reactive<FormModel>({ shared: {}, translations: {}, relations: {} })
 const errors = ref<Record<string, string>>({})
+// Text that a field parsing its own input (JSON) could not parse; the model still holds the last
+// parsable value, so a save is refused and leaving counts as discarding edits while any exists.
+const drafts = ref<FieldDrafts>({})
+function onDraft(key: string, draft: FieldDraft | null): void {
+  drafts.value = withDraft(drafts.value, key, draft)
+  // An error on the field describes the text it was reported for, not the text in the box.
+  const errorKey = relationOfDraftKey(key) ?? key
+  if (Object.hasOwn(errors.value, errorKey)) {
+    const rest = { ...errors.value }
+    delete rest[errorKey]
+    errors.value = rest
+  }
+}
+function hasUnsavedEdits(): boolean {
+  return isDirty(baseline.value, model) || hasDrafts(drafts.value)
+}
 const serverError = ref('')
 const itemForm = ref<InstanceType<typeof ItemForm> | null>(null)
 // A save that failed with a server error and no field error has no control to focus, so the banner takes focus.
@@ -157,6 +175,10 @@ async function focusSaveBanner(): Promise<void> {
 }
 const loading = ref(true)
 const submitting = ref(false)
+// The item was saved but no page could be opened: the form stays closed, so it cannot be sent again.
+const saveClosed = ref(false)
+const formBusy = computed(() => submitting.value || saveClosed.value)
+const deleting = ref(false)
 // ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
 // swap plus :disabled="submitting" on the button below.
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
@@ -176,6 +198,7 @@ function captureBaseline(): void {
 }
 
 function setModel(next: FormModel): void {
+  drafts.value = {}
   model.shared = next.shared
   model.translations = next.translations
   model.relations = next.relations
@@ -222,12 +245,29 @@ async function init(): Promise<void> {
   loading.value = false
 }
 
+// Opens `target` after a successful save. A navigation that does not complete is not a failed save: an
+// update stays on the saved form, and a create opens the created item's edit page, so the create form is
+// never offered again. When that page cannot be opened either, the form says so and stays closed.
+async function openAfterSave(target: RouteLocationRaw, created: Record<string, unknown> | undefined): Promise<void> {
+  if (await navigationCompleted(() => router.push(target))) return
+  if (!created) return
+  const edit = { name: 'collection-item', params: { name: name.value, id: String(created.id) } }
+  if (await navigationCompleted(() => router.replace(edit))) return
+  saveClosed.value = true
+  serverError.value = t('itemForm.savedNotOpened')
+}
+
 async function onSubmit(): Promise<void> {
-  if (!meta.value) return
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
-  if (Object.keys(errors.value).length > 0) return
-  submitting.value = true
+  // A second trigger (Enter in a lone input, a double click) must not send a second request.
+  if (formBusy.value || !meta.value) return
   serverError.value = ''
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
+  if (Object.keys(errors.value).length > 0 || hasDrafts(drafts.value)) {
+    // The form shows each draft's own error, which follows the text; this brings the field into view.
+    void itemForm.value?.revealErrors()
+    return
+  }
+  submitting.value = true
   try {
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update',
       { resolveCollection, canWriteJunction: canWriteJunctionFor,
@@ -276,7 +316,7 @@ async function onSubmit(): Promise<void> {
           // baseline stale would make the unified leave guard block the very navigation this
           // failure path performs.
           matrix.value?.markFlushed()
-          void router.push({ name: 'collection-item', params: { name: name.value, id: String(created.id) } })
+          await openAfterSave({ name: 'collection-item', params: { name: name.value, id: String(created.id) } }, created)
           return
         }
       }
@@ -290,7 +330,9 @@ async function onSubmit(): Promise<void> {
     }
     // Note: the form itself was already re-baselined above (right after the create/update calls),
     // before either matrix flush — no second captureBaseline() needed here.
-    void router.push({ name: 'collection-list', params: { name: name.value } })
+    // `submitting` stays set until the (lazily loaded) target has settled, so a second trigger cannot
+    // send the save again.
+    await openAfterSave({ name: 'collection-list', params: { name: name.value } }, created)
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
       // Optimistic-lock clash: only this specific code means "someone else changed the
@@ -309,11 +351,11 @@ async function onSubmit(): Promise<void> {
         defaultLocale: langStore.defaultCode,
         locales: new Set(langStore.languages.map((l) => l.code)),
       })
-      // Replace (not mutate) so ItemForm's watch(props.errors) jumps to the first tab with an error.
       errors.value = { ...fieldErrors }
       const banner = leftover.join('; ')
       serverError.value = banner || (Object.keys(fieldErrors).length === 0 ? e.message : '')
       if (Object.keys(fieldErrors).length === 0) void focusSaveBanner()
+      else void itemForm.value?.revealErrors()
     } else {
       serverError.value = writeFailureMessage(e, t, 'common.saveFailed')
       void focusSaveBanner()
@@ -377,6 +419,8 @@ async function onReverted(): Promise<void> {
     latestFromServer = null
     errors.value = {}
     serverError.value = ''
+    // A revert can restore the role's super-admin flag.
+    if (name.value === ROLE_COLLECTION) captureSavedRole()
   } catch (e) {
     serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
   }
@@ -387,6 +431,16 @@ function onRevertConflict(): void {
 }
 
 async function onDelete(): Promise<void> {
+  if (deleting.value) return
+  deleting.value = true
+  try {
+    await deleteAfterConfirm()
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function deleteAfterConfirm(): Promise<void> {
   const { header, message } = deleteConfirm(t, deleteKindFor(meta.value))
   // severity 'danger' is the confirmStore vocabulary (not the toast one) and drives the
   // destructive variant on ConfirmHost's accept button.
@@ -416,7 +470,7 @@ function guardLeave(): Promise<boolean> {
   // Unified guard — also dirty if the mounted permission matrix (Role edit) has unsaved
   // grants, so a single confirm covers both instead of two independently-registered guards firing
   // sequentially on the same navigation.
-  if (!(isDirty(baseline.value, model) || rolePanelsDirty())) return Promise.resolve(true)
+  if (!(hasUnsavedEdits() || rolePanelsDirty())) return Promise.resolve(true)
   const { header, message } = unsavedConfirm(t)
   // Cancel and dismiss (Escape — an AlertDialog is not backdrop-dismissible, and ConfirmHost
   // renders no close button) are the same outcome here by design: confirmStore guarantees every
@@ -438,7 +492,7 @@ onBeforeRouteUpdate(async (to, from) => {
 // edits. The browser shows its own native dialog — preventDefault is all that is needed; custom
 // text is not honoured by modern browsers.
 function onBeforeUnload(e: BeforeUnloadEvent): void {
-  if (isDirty(baseline.value, model) || rolePanelsDirty()) {
+  if (hasUnsavedEdits() || rolePanelsDirty()) {
     e.preventDefault()
   }
 }
@@ -467,10 +521,10 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
             <History class="size-4" />{{ t('revisions.open') }}
           </Button>
           <Button v-if="!isCreate && canDelete" type="button" variant="destructive"
-                  :disabled="deleteBlockedHint !== undefined" :title="deleteBlockedHint" @click="onDelete">
+                  :disabled="deleteBlockedHint !== undefined || deleting" :title="deleteBlockedHint" @click="onDelete">
             {{ t('itemForm.delete') }}
           </Button>
-          <Button v-if="canWrite" type="button" :disabled="submitting || lockedBySuperAdmin" :title="lockedHint"
+          <Button v-if="canWrite" type="button" :disabled="formBusy || lockedBySuperAdmin" :title="lockedHint"
                   @click="onSubmit">{{ saveLabel }}</Button>
         </template>
       </PageHeader>
@@ -504,10 +558,12 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :model="model"
         :locales="langStore.languages"
         :errors="errors"
+        :drafts="drafts"
         :server-error="serverError"
-        :disabled="!canWrite || lockedBySuperAdmin"
+        :disabled="!canWrite || lockedBySuperAdmin || formBusy"
         :relation-option-hint="relationOptionHint"
         @submit="onSubmit"
+        @draft="onDraft"
       />
 
       <div v-if="hasPanels" class="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 border-t pt-8">
@@ -517,7 +573,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
           :role-id="idStr"
           :is-super-admin-role="savedRoleIsSuperAdmin"
           :create-mode="isCreate"
-          :readonly="!canWrite || lockedBySuperAdmin"
+          :readonly="!canWrite || lockedBySuperAdmin || formBusy"
         />
         <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
         <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"

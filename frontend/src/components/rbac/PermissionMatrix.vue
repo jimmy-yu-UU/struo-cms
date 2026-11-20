@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { rbacApi, type RolePermissionEntry } from '../../api/rbacApi'
 import { traceIdDetail } from '../../api/apiClient'
 import { GOVERNED_JUNCTIONS } from '../../lib/frameworkCollections'
+import { createLatestWins } from '../../lib/latestWins'
 
 // The Role form's permission matrix — one row per collection, read/write/delete grants,
 // saved as a full-replace PUT independent from the generic form's save.
@@ -48,6 +49,8 @@ function grantFor(name: string): Grant {
 }
 
 function toggle(name: string, key: keyof Grant, value: boolean): void {
+  // The save's response replaces the grants, so a change made while it runs would be lost.
+  if (saving.value) return
   // Immutable update: fresh record per change.
   grants.value = { ...grants.value, [name]: { ...grantFor(name), [key]: value } }
 }
@@ -58,17 +61,38 @@ function fold(entries: RolePermissionEntry[]): Record<string, Grant> {
   return next
 }
 
+const loadGuard = createLatestWins()
+
 async function load(): Promise<void> {
+  const token = loadGuard.next()
   loading.value = true
   loadFailed.value = false
   try {
-    grants.value = fold(await rbacApi.getRolePermissions(props.roleId))
-    baseline.value = JSON.stringify(grants.value)
+    const next = fold(await rbacApi.getRolePermissions(props.roleId))
+    if (!loadGuard.isCurrent(token)) return
+    grants.value = next
+    baseline.value = JSON.stringify(next)
   } catch {
-    loadFailed.value = true
+    if (loadGuard.isCurrent(token)) loadFailed.value = true
   } finally {
-    loading.value = false
+    if (loadGuard.isCurrent(token)) loading.value = false
   }
+}
+
+// A super-admin role holds no grants of its own: drop the buffer, and any load still in flight.
+function clearGrants(): void {
+  loadGuard.next()
+  grants.value = {}
+  baseline.value = '{}'
+  loading.value = false
+  loadFailed.value = false
+}
+
+// Brings the matrix in line with the role it is given. Create mode has no role yet to read.
+function sync(): void {
+  if (props.createMode) { loading.value = false; return }
+  if (props.isSuperAdminRole) clearGrants()
+  else void load()
 }
 
 // Shared fold from the live `grants` buffer down to the non-all-false wire entries — used
@@ -83,7 +107,15 @@ function foldEntries(): RolePermissionEntry[] {
 
 // Returns whether the save succeeded so the parent form's Save can flush this matrix as
 // part of one submit and stay on the page when the PUT fails (its own error toast still fires).
-async function save(): Promise<boolean> {
+// A save asked for while another is in flight joins that one instead of sending a second PUT.
+let inFlightSave: Promise<boolean> | null = null
+function save(): Promise<boolean> {
+  if (loading.value) return Promise.resolve(false)
+  inFlightSave ??= putGrants().finally(() => { inFlightSave = null })
+  return inFlightSave
+}
+
+async function putGrants(): Promise<boolean> {
   saving.value = true
   try {
     grants.value = fold(await rbacApi.putRolePermissions(props.roleId, foldEntries()))
@@ -112,12 +144,8 @@ function markFlushed(): void {
   baseline.value = JSON.stringify(grants.value)
 }
 
-onMounted(() => {
-  // Create mode has no role yet to GET permissions for — stay with the empty buffer.
-  if (props.createMode) { loading.value = false; return }
-  if (!props.isSuperAdminRole) void load()
-  else loading.value = false
-})
+onMounted(sync)
+watch([() => props.roleId, () => props.isSuperAdminRole], sync)
 
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently would
@@ -146,17 +174,17 @@ defineExpose({ toggle, save, dirty, load, currentEntries, markFlushed, saveLabel
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox :model-value="grantFor(c.name).read" :disabled="readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colRead')}`"
                           @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
                           @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving"
                           :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
                           @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>

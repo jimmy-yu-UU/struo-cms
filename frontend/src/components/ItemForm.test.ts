@@ -6,6 +6,11 @@ import RelationInput from './fields/RelationInput.vue'
 import type { CollectionMeta, FieldMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
+// A failed save asks the form to bring its errors into view; setting the error props alone does not.
+async function reveal(w: { vm: unknown }): Promise<void> {
+  await (w.vm as { revealErrors: () => Promise<void> }).revealErrors()
+}
+
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
@@ -47,11 +52,13 @@ describe('ItemForm', () => {
     // 1 shared (status) + translatable title for the ACTIVE locale only (1) = 2 FieldInputs
     expect(w.findAll('.field-input')).toHaveLength(2)
   })
-  it('jumps the active tab to the default locale when validation errors appear', async () => {
+  it('jumps the active tab to the default locale when the parent asks to reveal the errors', async () => {
     const w = mountForm({ meta, model, locales, errors: {} })
     // move off the default locale, then surface an error
     ;(w.vm as unknown as { activeLocale: string }).activeLocale = 'zh-TW'
     await w.setProps({ errors: { title: 'Title is required.' } })
+    expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('zh-TW')
+    await reveal(w)
     expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('en')
   })
   it('activates the clicked locale tab and mounts that locale\'s field body', async () => {
@@ -250,15 +257,19 @@ describe('ItemForm per-locale errors', () => {
   it('jumps to the first tab with an error, default first', async () => {
     const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
     await w.setProps({ errors: { 'fr:title': 'Title is required.' } })
+    await reveal(w)
     expect(vmLocale(w)).toBe('fr')
     await w.setProps({ errors: { 'fr:title': 'x', 'zh-TW:title': 'y' } })
+    await reveal(w)
     expect(vmLocale(w)).toBe('zh-TW')
     await w.setProps({ errors: { 'fr:title': 'x', title: 'z' } })
+    await reveal(w)
     expect(vmLocale(w)).toBe('en')
   })
   it('shows a non-default locale error on its own tab only', async () => {
     const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
     await w.setProps({ errors: { 'fr:title': 'Title is required.' } })
+    await reveal(w)
     await flushPromises()
     expect(w.text()).toContain('Title is required.')
     await w.findAll('[role="tab"]')[0].trigger('mousedown')
@@ -313,6 +324,7 @@ describe('ItemForm per-locale errors', () => {
       new Set(['status', 'title']), { defaultLocale: 'en', locales: new Set(['en', 'zh-TW', 'fr']) })
     const w = mountForm({ meta: reqMeta, model: m3, locales: three, errors: {} })
     await w.setProps({ errors: fieldErrors })
+    await reveal(w)
     await flushPromises()
     expect(vmLocale(w)).toBe('fr')
     expect(w.text()).toContain('exceeds maximum length 255 for locale')
