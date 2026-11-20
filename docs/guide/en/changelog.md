@@ -639,25 +639,28 @@ transformed again on the first request.
   payload fields do the same; the message for a translation field is
   `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
-- In 0.30.1, the admin UI spliced the item id from the address bar into the request path as it was:
-  opening a link ending in `<id>?purge=true` made "Delete" a permanent delete instead of a move to
-  the trash, and an id containing `/../` sent the request to another collection. An id is now one
-  encoded path segment; a `?` or `/` in it is part of the id.
+- In 0.30.1, the admin UI decoded the item id from the address bar and spliced it into the request
+  path as it was: opening a link ending in `<id>%3Fpurge=true` made "Delete" a permanent delete
+  instead of a move to the trash, and an id containing `%2F..%2F` sent the request to another
+  collection. An id is now one encoded path segment; a `?` or `/` in it is part of the id.
 - In 0.30.1, a JSON field, including a JSON payload field on a row of a many-to-many relation, could
   be saved while its text did not parse, and what was sent was the last value that did; a first edit
   that never parsed raised no warning on leaving the page or closing the tab. Save now sends nothing
-  and moves focus to the field, the field's error message follows the text in the box, and leaving
-  asks first; the text and its error stay when the language tab is switched. Reload latest, a reload
-  after a revert and loading the item again discard that text, and so does removing the relation
-  row.
-- In 0.30.1, a second trigger while the first was still running sent the request again, for saving
-  an item, deleting an item, saving site settings, saving media details, creating a media folder,
-  signing in and saving the permission matrix; saving an item and signing in did the same after the
-  request had succeeded but before the next page had opened. On a collection with a single one-line
-  text field, pressing Enter twice on the new-item page created two items. The second trigger is
-  now ignored; the permission matrix cannot be ticked while its save runs (a box ticked then was
-  overwritten by the response), and "New folder" is disabled while a folder is being created (a
-  second folder with another name, asked for then, was dropped without a word).
+  and moves focus to the field, the field's error message follows the text in the box and goes away
+  once it parses, and leaving asks first; the text and its error stay when the language tab is
+  switched. Reload latest, a reload after a revert and loading the item again discard that text, and
+  so does removing the relation row.
+- In 0.30.1, some operations of the admin UI could be triggered again while the first was running,
+  and each sent its request again: saving an item (on a collection with a single one-line text
+  field, pressing Enter twice on the new-item page created two items; the button was also enabled
+  again after the request succeeded but before the next page opened), deleting an item, creating a
+  media folder (opening the dialog again, or holding Enter), signing in (after the request
+  succeeded, before the next page opened) and saving the permission matrix (pressing the form's
+  Save while the matrix save ran, or ticking a box, which the response then overwrote). The second
+  trigger is now ignored, the form's inputs are disabled while a save runs, the permission matrix
+  cannot be ticked while its save runs, and the "New folder" button is disabled while a folder is
+  being created; if the list page cannot be opened after an item is created, its edit page opens
+  instead and nothing is sent again.
 - In 0.30.1, on a role form, after another administrator removed the role's super-admin status,
   "Reload latest" or a reload after a revert showed a permission table with no grants instead of the
   server's grants, and ticking one box and saving replaced every stored grant with just that one.
