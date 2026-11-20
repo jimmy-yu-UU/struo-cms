@@ -451,12 +451,30 @@ transformed again on the first request.
   - `ExpandPreparedAsync` takes an `attachTranslations` parameter after `locale`, of the same type
     as `EntityAccessors.AttachTranslations`. A fork that calls it adds the argument: a delegate
     that adds `translations` to the expanded rows, or `null` to add none.
+- A grants save advances the role's `version` by one, so an update of the role item that carries
+  the version read before the save answers `409` `VERSION_CONFLICT`; read the role again after
+  saving its grants. The save itself takes an optional `version`, which changes these public
+  members:
+  - `IPermissionGrantStore.ReplaceAsync` takes `long? expectedVersion = null` before the
+    `CancellationToken` and returns `Task<long>`, the role's new version, instead of `Task`. A fork
+    that implements the interface compares `expectedVersion` with the role's `Version` and advances
+    it by one in a single conditional update that runs first in the transaction, throwing
+    `ConcurrencyConflictException` when they differ; a caller that passes the token positionally as
+    the third argument passes it as `ct`.
+  - `rbacApi.putRolePermissions` takes an optional `version` and returns `{ entries, version }`
+    instead of the entries array, and `PermissionMatrix` takes a `version` prop and emits `saved`
+    and `conflict`; a fork that customizes the admin SPA adjusts its calls.
 :::
 
 ### Added
 
 - A provider on a multi-tenant `Authority` that sets `AllowedEmailDomains` but no `AllowedTenantId`
   logs one start-up warning naming the provider id, never the domains; the host still starts.
+- `PUT api/roles/{id}/permissions` takes an optional `version` query parameter: a role that has
+  moved on answers `409` `VERSION_CONFLICT`, and the response carries the role's new `version` as
+  `meta.version` ([Chapter 13](13-rest-endpoints.md)). The role form and the permission matrix of
+  the admin UI share that version, so saving one after the other has saved the role shows the form's
+  conflict notice.
 - New public members:
   - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
     `DomainErrorMap.DeadlockMessage`.
@@ -479,6 +497,9 @@ transformed again on the first request.
     each set of rows it expands, so the expanded rows carry `translations`; relations expanded on
     the same parent rows can share one call, and a relation with a nested `deep` expands its own
     set. Construction with three arguments and three-variable deconstruction still compile.
+  - `VersionedSuccessEnvelope`, `VersionMeta` and `Envelope.Versioned` (`Struo.Api.Http`): a success
+    envelope whose `meta` carries only `version`; `EnvelopeResultFilter` leaves it as it is.
+  - `ApiClient.putEnveloped` and the type `RoleGrantsSaved` (admin SPA).
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
@@ -700,6 +721,10 @@ transformed again on the first request.
   server's grants, and ticking one box and saving replaced every stored grant with just that one.
   The matrix now follows the role and its super-admin state, and shows no table and cannot save
   while the grants load.
+- In 0.30.1, two administrators saving the permission matrix of the same role at the same time did
+  not conflict: the later save replaced the earlier one's grants without a warning. The save is
+  checked against the role's `version`: a stale one answers `409` `VERSION_CONFLICT`, writes
+  nothing, and the admin UI shows the form's conflict notice with "Reload latest".
 
 ### Security
 

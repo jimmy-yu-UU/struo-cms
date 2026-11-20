@@ -346,12 +346,26 @@
   - `ExpandPreparedAsync` 在 `locale` 之後多了 `attachTranslations` 參數，型別與
     `EntityAccessors.AttachTranslations` 相同。自己呼叫它的 fork 要補上：傳入替展開列加上
     `translations` 的委派，傳 `null` 則不加。
+- 儲存授權會讓角色的 `version` 加 1，所以帶著儲存前讀到的 version 去更新角色項目，會回 `409`
+  `VERSION_CONFLICT`；儲存授權後要重新讀取角色。儲存本身可帶選填的 `version`，改了下列公開成員：
+  - `IPermissionGrantStore.ReplaceAsync` 在 `CancellationToken` 之前多了
+    `long? expectedVersion = null`，回傳型別由 `Task` 改為 `Task<long>`，值是角色的新 version。
+    實作這個介面的 fork 要拿 `expectedVersion` 與角色的 `Version` 比對，並用單一條件式更新把它
+    加 1，這個更新在交易裡最先執行；兩者不同就丟 `ConcurrencyConflictException`。以位置引數把
+    token 放在第三個位置的呼叫端，改用名稱 `ct` 傳入。
+  - `rbacApi.putRolePermissions` 多了選填的 `version`，回傳 `{ entries, version }` 而不是授權陣列；
+    `PermissionMatrix` 多了 `version` prop，並發出 `saved` 與 `conflict`。客製後台 SPA 的 fork 要
+    調整呼叫。
 :::
 
 ### 新增
 
 - 多租用戶的 `Authority` 只設 `AllowedEmailDomains`、沒設 `AllowedTenantId` 時，啟動記一則警告，點名
   提供者的 id，不含網域；主機照常啟動。
+- `PUT api/roles/{id}/permissions` 可帶選填的查詢參數 `version`：角色已被改過就回 `409`
+  `VERSION_CONFLICT`，回應用 `meta.version` 帶上角色的新 `version`（見
+  [第 13 章](13-rest-endpoints.md)）。後台的角色表單與權限矩陣共用這個 version，所以一邊儲存後
+  再儲存另一邊，會看到表單的衝突提示。
 - 新增的公開成員：
   - `DeadlockVictim`（`Struo.Infrastructure.Persistence`）、`DomainErrorMap.IsDeadlockVictim` 與
     `DomainErrorMap.DeadlockMessage`。
@@ -371,6 +385,9 @@
     `null`）：自己實作 `IRelationExpander` 的 fork，對每個目標集合、每一組它展開的列呼叫它一次，
     展開出來的列才會帶 `translations`；同一組父列上展開的關聯可以合成一次呼叫，帶巢狀 `deep` 的
     關聯往下展開的那一組另算。既有的建構與三個值的解構照常編譯。
+  - `VersionedSuccessEnvelope`、`VersionMeta` 與 `Envelope.Versioned`（`Struo.Api.Http`）：
+    `meta` 只帶 `version` 的成功信封；`EnvelopeResultFilter` 不會再包它。
+  - `ApiClient.putEnveloped` 與型別 `RoleGrantsSaved`（後台 SPA）。
   - `IItemRepository` 的四個成員：`GetByIdLockedAsync`、`CountTrashedWhereInAsync`、
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
@@ -540,6 +557,9 @@
   重新載入，權限矩陣顯示的表格沒有任何授權，而不是伺服器上的授權；在這個畫面勾選一格並儲存，會
   把所有已存的授權換成只有那一格。現在矩陣跟著角色與它的超級管理員狀態重新載入，載入期間不顯示
   表格、不能儲存。
+- 0.30.1 裡，兩位管理員同時儲存同一個角色的權限矩陣不會衝突：後存的蓋掉先存的授權，沒有任何
+  警告。現在儲存會比對角色的 `version`：版本過時就回 `409` `VERSION_CONFLICT`、什麼都不寫，後台
+  顯示表單的衝突提示與「重新載入最新版本」。
 
 ### 安全性
 

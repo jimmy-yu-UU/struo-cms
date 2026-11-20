@@ -163,13 +163,21 @@ the error message is `Items cannot be created in collection 'user' through the g
 | Method and path | Permission | Purpose |
 |---|---|---|
 | `GET api/roles/{id}/permissions` | Read on `role` | Read the role's current grant rows |
-| `PUT api/roles/{id}/permissions` | Write on `role` | Overwrite the whole set of grants |
+| `PUT api/roles/{id}/permissions` | Write on `role` | Overwrite the whole set of grants, optional `?version=` |
 
 `GET` returns a `{ collection, canRead, canWrite, canDelete }` array ordered by collection name, and
 a nonexistent role is a `404`. `PUT` overwrites the whole set rather than merging row by row — a row
 where all three flags are false is never stored at all, and the response only shows the rows that
 genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
 or names a collection that doesn't exist, and collection-name casing is normalized.
+
+`PUT` takes an optional `version` query parameter: the role's `version` as the caller last read it
+from `GET api/items/role/{id}`. A `version` that differs from the role's current one answers `409`
+`VERSION_CONFLICT` and changes nothing; one that is not an integer, or is given twice, answers `400`
+`INVALID_VERSION`. Without it the grants are overwritten unchecked. Every successful save adds one
+to the role's `version`, so a role-form save that carries an earlier `version` gets the same `409`.
+The response reports the new value as `meta.version`, next to the `data` array. A grants save leaves
+the role's `updatedAt` and `updatedBy` as they are.
 
 A caller without the grant gets `403` `Read permission on the role collection is required.` or `Write
 permission on the role collection is required.`. Writing the grants of a super-admin role or of the
