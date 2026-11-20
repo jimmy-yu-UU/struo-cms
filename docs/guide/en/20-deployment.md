@@ -418,11 +418,16 @@ project is pulled in through a `ProjectReference`, so the build needs every proj
 can reach, plus the root `Directory.Build.props`/`Directory.Packages.props`. The root
 `.dockerignore` keeps `frontend/`, `docs/`, and ordinary build artifacts out.
 
-The build stage publishes for the architecture it runs on, `linux-x64` or `linux-arm64`, and stops
-with an error on any other. The output is framework-dependent and carries only that platform's
-native files, SQLite and libvips, next to the assemblies in `/app`: the image holds no Windows or
-macOS binaries and none for another CPU. An image runs on the platform it was built on. The build
-works with BuildKit and with the classic builder (`DOCKER_BUILDKIT=0`).
+The build stage publishes for the platform the build targets, `linux-x64` or `linux-arm64`, and
+stops with an error on any other. The architecture comes from the builder's `TARGETARCH`, or from
+`uname -m` when the builder sets none. The output is framework-dependent: it needs the .NET runtime,
+which the base image provides, and carries only that platform's native files, SQLite and libvips,
+next to the assemblies in `/app`. The image holds no Windows or macOS binaries, none for another
+CPU, and no `/app/runtimes/` directory. It runs on the platform the build targets, the host's
+unless `--platform` says otherwise. The runtime stage checks that every native library in `/app`
+resolves on the base image and stops the build with a message when one does not, as with a musl
+base image or a mismatched architecture. The build works with BuildKit and with the classic
+builder (`DOCKER_BUILDKIT=0`).
 
 ### The API image
 

@@ -359,6 +359,13 @@
     `/graphql` 的 `location` 區塊。
   - 存取規則是 API 自己的：誰能讀、誰能寫由 API 決定，`GraphQl:ExposeSchema` 管 introspection 與
     schema 路由。沒有關掉這個端點的設定。
+- API 映像改為針對特定 runtime 發布，所以直接使用隨附 `Dockerfile` 的 fork 不需要做任何事，改過它的
+  fork 要檢查下面三點，原生檔與 runtime 映像不符時，建置會停下並顯示訊息。
+  - musl（alpine）的 runtime 階段，建置階段要用 musl 的 runtime identifier，`linux-musl-x64` 或
+    `linux-musl-arm64`；隨附的對應只產生 `linux-x64` 與 `linux-arm64`。
+  - 把建置階段釘在建置主機平台（`FROM --platform=$BUILDPLATFORM`）的，必須針對目標平台發布；
+    `Dockerfile` 讀 `TARGETARCH` 來取得目標。
+  - `/app/runtimes/` 底下的路徑不存在；原生檔放在 `/app`。
 :::
 
 ### 新增
@@ -402,7 +409,8 @@
 
 - API 映像只帶自己所在平台（`linux-x64` 或 `linux-arm64`）的原生檔，SQLite 與 libvips 放在 `/app`
   的組件旁邊，不再帶 `/app/runtimes/` 底下所有平台的檔案。Windows 的
-  `Microsoft.Data.SqlClient.SNI` 不在映像裡。映像大小（amd64）由 840 MB 降到 545 MB。
+  `Microsoft.Data.SqlClient.SNI` 不在映像裡。`/app` 目錄由約 279 MB
+  縮小到約 78 MB（amd64）。
 - 後台映像的 runtime 階段改用官方 `nginx` 映像 `nginx:1.30.7-alpine`，不再用
   `nginxinc/nginx-unprivileged`。容器的執行方式不變：以 `nginx` 使用者（uid 101）執行、監聽
   `8080`、pid 檔與暫存目錄在 `/tmp`。主設定檔改為 repo 內的 `frontend/nginx/nginx.conf`。唯一的差異
