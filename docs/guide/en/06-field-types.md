@@ -289,6 +289,7 @@ table to be used.
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 | A property type the interface does not accept | Declare a type it accepts, or change the interface |
 | A property type no interface accepts | See "Types no interface accepts" |
+| A `ColumnDataType` that contradicts the property type | See "Column types that contradict the property" |
 | `IsJson = true` on a single-value property | Remove `IsJson` |
 | `[ColumnShape(LongText)]` on a non-`string` property | Remove it, or declare `string` |
 | `Timestamp` or `TimestampWithTimeZone` on a non-`DateTime` | Remove it, or declare `DateTime` |
@@ -310,6 +311,61 @@ The tables under "Interface overview" list the property types each interface acc
 be the exact one, so `List<string>` on `Tags` is rejected and `Tags` is declared as
 `List<TagItem>`; `string[]` or `IList<string>` does not stand in for `List<string>`. The message
 gives the property's type, what the interface accepts and which interfaces accept the type.
+
+### Column types that contradict the property
+
+A `ColumnDataType` from the table below stops the host as well. `Nullable<T>` counts as `T`. The
+type name is compared by its words, without letter case, and a length or precision in parentheses
+is ignored, except for `tinyint(1)`. A word wrapped whole in brackets, double quotes or backticks
+counts as one word, so `[bigint]` is `bigint` and `"int custom"` is not `int`; brackets inside a
+word, as in `int[]`, make another type. Words after the type, such as `not null` or
+`identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`. `unsigned`,
+`zerofill` and `array` after the type make another type, so `int unsigned` is not `int`. A name
+that is not in the table, `timestamp with local time zone` included, is yours, and passes.
+
+| Property type | `ColumnDataType` | Declare instead |
+|---|---|---|
+| `DateTime` | `timestamptz`, `timestamp with time zone`, `datetimeoffset` | The shape; remove `ColumnDataType` |
+| `int` | `bigint` | `long`, or remove `ColumnDataType` |
+| `int` | `smallint` | Remove `ColumnDataType`, or use `int` |
+| `long` | `int`, `integer` | `int`, or remove `ColumnDataType` |
+| `long` | `smallint` | Remove `ColumnDataType`, or use `bigint` |
+| `int`, `long` | `tinyint(1)` | `tinyint` with no length, or remove `ColumnDataType` |
+
+For a `DateTime` the shape is `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (see
+[Date and time](#date-and-time)). On PostgreSQL and SQL Server the shape reads and writes the
+column as a UTC instant. Without it the database takes the clock digits of the value: in the
+PostgreSQL server's time zone, and as UTC on SQL Server. Measured on PostgreSQL 17 and SQL Server
+2022, with hosts at UTC+8 and at UTC:
+
+- On PostgreSQL with a server time zone that is not UTC (measured with `Asia/Taipei`), a value with
+  `Kind = Utc` is stored at the wrong instant: 05:06 UTC is stored as 21:06 UTC of the day before.
+  A date-time in a JSON request body is read as `Kind = Utc`, so this happens with the API alone.
+  A value with `Kind = Unspecified` is stored the same way. With a UTC server time zone, and on SQL
+  Server, both are stored correctly.
+- A value with `Kind = Local`, written by server-side code such as a hook, an interceptor or a
+  seed, is stored off by the host's UTC offset on SQL Server and on PostgreSQL with a UTC server
+  time zone. On a host at UTC+8, 13:06 local time (05:06 UTC) is stored as 13:06 UTC.
+- PostgreSQL returns the column as `Kind = Local` values on every read, whoever wrote the row; the
+  shaped column returns `Kind = Utc`. Code that compares a value it read with `DateTime.UtcNow`
+  gets the wrong answer.
+- On SQL Server, a facet over the column and a facet over a zone-less `DateTime` column in the
+  same process make each other fail with a bind error, in either order.
+
+Only the second item needs server-side code to write the value; the others happen with values
+written through the API.
+
+The integer rows list the integer type names SQL Server has and reads as integer types that share
+one entry of the ORM's reader cache: `bigint`, `int` with its synonym `integer`, and `smallint`.
+An integer property on a column of another of these widths has a facet that fails on SQL Server
+when a facet of a column of the property's own width ran first in the same process. Reads and
+filters work. The check is the same on every backend, although only SQL Server fails. `tinyint` is
+read as another type, and `mediumint`, `int2`, `int4` and `int8` do not exist on SQL Server, so
+they pass.
+
+The MySQL driver reads a `tinyint(1)` column as a boolean, on MySQL and on MariaDB: an `int` or
+`long` property stored as 7 reads back as 1, in a read and in a facet, although a filter for 7
+still matches the row. Write `tinyint` with no length.
 
 ### Types no interface accepts
 

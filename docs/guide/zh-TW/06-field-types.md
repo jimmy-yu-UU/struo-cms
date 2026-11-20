@@ -254,6 +254,7 @@ UTC。
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 | 屬性型別不是該介面收的型別 | 改宣告成該介面收的型別，或換介面 |
 | 沒有任何介面收的屬性型別 | 見〈沒有介面收的型別〉 |
+| `ColumnDataType` 與屬性型別衝突 | 見〈與屬性型別衝突的欄位型別〉 |
 | 單一值型別屬性加 `IsJson = true` | 拿掉 `IsJson` |
 | `[ColumnShape(LongText)]` 在不是 `string` 的屬性上 | 拿掉，或屬性改成 `string` |
 | `Timestamp`、`TimestampWithTimeZone` 在不是 `DateTime` 的屬性上 | 拿掉，或屬性改成 `DateTime` |
@@ -272,6 +273,53 @@ JSON 欄位，同樣如此。
 每個介面收哪些屬性型別，列在〈介面總覽〉各組的表。型別要完全相同，所以 `List<string>` 放在
 `Tags` 上被擋，`Tags` 要宣告成 `List<TagItem>`；`string[]` 或 `IList<string>` 也不能代替
 `List<string>`。訊息指出屬性的型別、介面收什麼，以及哪些介面收這個型別。
+
+### 與屬性型別衝突的欄位型別
+
+下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。比對型別名稱時看的是
+各個單字，不分大小寫，括號裡的長度或精度也不看，`tinyint(1)` 除外。整個單字被中括號、雙引號
+或反引號包起來時算一個單字，所以 `[bigint]` 就是 `bigint`，`"int custom"` 不是 `int`；單字
+中間出現中括號，例如 `int[]`，是另一種型別。型別後面的字，例如 `not null`、`identity(1,1)`，
+是欄位修飾：`bigint not null` 當作 `bigint`。型別後面接 `unsigned`、`zerofill` 或 `array`，
+名稱就變成另一種型別，所以 `int unsigned` 不是 `int`。不在表裡的名稱，包含
+`timestamp with local time zone`，是你自己的，照常通過。
+
+| 屬性型別 | `ColumnDataType` | 改成 |
+|---|---|---|
+| `DateTime` | `timestamptz`、`timestamp with time zone`、`datetimeoffset` | 用欄位形狀，拿掉 `ColumnDataType` |
+| `int` | `bigint` | 屬性改 `long`，或拿掉 `ColumnDataType` |
+| `int` | `smallint` | 拿掉 `ColumnDataType`，或改用 `int` |
+| `long` | `int`、`integer` | 屬性改 `int`，或拿掉 `ColumnDataType` |
+| `long` | `smallint` | 拿掉 `ColumnDataType`，或改用 `bigint` |
+| `int`、`long` | `tinyint(1)` | 寫不帶長度的 `tinyint`，或拿掉 `ColumnDataType` |
+
+`DateTime` 要用的形狀是 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`（見
+[日期時間](#日期時間)）。在 PostgreSQL 與 SQL Server 上，形狀讓欄位以 UTC 時刻讀寫。沒有形狀時，
+資料庫拿的是值的時鐘數字：PostgreSQL 依伺服器的時區解讀，SQL Server 當作 UTC。以下是在
+PostgreSQL 17 與 SQL Server 2022 上量到的，主機分別在 UTC+8 與 UTC：
+
+- PostgreSQL 的伺服器時區不是 UTC 時（用 `Asia/Taipei` 量），`Kind = Utc` 的值存在錯的時刻：
+  UTC 05:06 存成前一天的 UTC 21:06。JSON 請求本文裡的日期時間讀成 `Kind = Utc`，所以只用 API
+  就會發生。`Kind = Unspecified` 的值存法相同。伺服器時區是 UTC 時，以及在 SQL Server 上，
+  兩者都存得正確。
+- `Kind = Local` 的值，由 hook、interceptor、seed 這類伺服器端程式碼寫入，在 SQL Server 上與
+  伺服器時區為 UTC 的 PostgreSQL 上，存進去會差主機的 UTC 位移。主機在 UTC+8 時，本地 13:06
+  （UTC 05:06）存成 UTC 13:06。
+- PostgreSQL 每次讀取都把這個欄位回傳成 `Kind = Local` 的值，不論資料列是誰寫的；有形狀的
+  欄位回傳 `Kind = Utc`。程式碼拿讀到的值跟 `DateTime.UtcNow` 比較，會得到錯的答案。
+- 在 SQL Server 上，同一個程序裡對這個欄位與對不帶時區的 `DateTime` 欄位做 facet，兩個順序
+  都會讓對方以綁定錯誤失敗。
+
+只有第二條需要伺服器端程式碼來寫入值；其他幾條，值經 API 寫入也會發生。
+
+整數那幾列，列的是 SQL Server 有的整數型別名稱，而且 ORM 的讀取快取把它們當成同一個項目：
+`bigint`、`int`（同義詞 `integer`）與 `smallint`。整數屬性放在這幾種寬度中另一種的欄位上，
+在 SQL Server 上，同一個程序裡若先對屬性自己寬度的欄位做過 facet，這個欄位的 facet 就會失敗；
+讀取與篩選正常。檢查在每個後端都一樣，雖然只有 SQL Server 會失敗。`tinyint` 讀成另一種型別，
+`mediumint`、`int2`、`int4`、`int8` 在 SQL Server 上不存在，所以都通過。
+
+MySQL 驅動程式把 `tinyint(1)` 欄位讀成布林值，MySQL 與 MariaDB 都一樣：存了 7 的 `int` 或
+`long` 屬性，讀取與 facet 都得到 1，不過篩選 7 仍然比得到那一列。寫不帶長度的 `tinyint`。
 
 ### 沒有介面收的型別
 

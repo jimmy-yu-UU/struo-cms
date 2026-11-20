@@ -177,6 +177,44 @@
     用在不是 `DateTime`、`DateTime?` 的屬性。拿掉 `[ColumnShape]`，或把屬性改成對應的型別。
   - `MultiSelect` 或 `CheckboxGroup` 沒有 `[CmsOptions]`，或 `[CmsOptions]` 一個項目都沒有。沒有
     選項時每個值都被拒絕；加上 `[CmsOptions]` 並列出可選的值。
+- 當明寫的 `ColumnDataType` 以下面任一種組合與屬性的 CLR 型別衝突，掃描器就讓主機在啟動時失敗，
+  丟出 `MetadataException`，訊息點名「類別.屬性」、屬性型別與寫的型別；這些組合原本都能啟動
+  主機，之後才出錯（表格在
+  [第 6 章](06-field-types.md#與屬性型別衝突的欄位型別)）：
+  - `DateTime` 或 `DateTime?` 配 `timestamptz`、`timestamp with time zone` 或 `datetimeoffset`，
+    又沒有 `[ColumnShape]`。只有形狀讓框架在 PostgreSQL 與 SQL Server 上以 UTC 時刻讀寫這個
+    欄位。沒有形狀時，資料庫拿的是值的時鐘數字：PostgreSQL 依伺服器時區解讀，SQL Server 當作
+    UTC。在 PostgreSQL 17 與 SQL Server 2022 上量到：
+    - PostgreSQL 的伺服器時區不是 UTC 時（`Asia/Taipei`），`Kind = Utc` 的值存在錯的時刻：UTC
+      05:06 存成前一天的 UTC 21:06。JSON 請求本文讀成 `Kind = Utc`，所以只用 API 就會發生。
+      `Kind = Unspecified` 的值存法相同。伺服器時區是 UTC 時，以及在 SQL Server 上，兩者都存得
+      正確。
+    - 由 hook、interceptor、seed 這類伺服器端程式碼寫入的 `Kind = Local` 值，在 SQL Server 上與
+      伺服器時區為 UTC 的 PostgreSQL 上，存進去會差主機的 UTC 位移。主機在 UTC+8 時，本地
+      13:06（UTC 05:06）存成 UTC 13:06。
+    - PostgreSQL 每次讀取都把欄位回傳成 `Kind = Local` 的值，不論資料列是誰寫的；有形狀的
+      欄位回傳 `Kind = Utc`。
+    - 在 SQL Server 上，同一個程序裡對這個欄位與對不帶時區的 `DateTime` 欄位做 facet，兩個
+      順序都會讓對方以綁定錯誤失敗。
+  - `DateTime` 的改法是宣告 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` 並拿掉
+    `ColumnDataType`。在 PostgreSQL 用 `timestamptz`、在 SQL Server 用 `datetimeoffset` 建好的
+    表，欄位型別就是形狀給的型別，欄位不必 migration。已經寫進去的資料列留在當時存的時刻，
+    其中有偏差的，fork 要自己修正。
+  - `int` 或 `int?` 配 `bigint` 或 `smallint`，以及 `long` 或 `long?` 配 `int`、`integer` 或
+    `smallint`。這些是 SQL Server 有的整數型別名稱，ORM 的讀取快取把它們當成同一個項目。在
+    SQL Server 上，同一個程序裡若已對屬性自己寬度的欄位做過 facet，這種欄位的 facet 會以綁定
+    錯誤失敗；反過來的順序、讀取與篩選都正常，其他後端也都沒失敗。檢查在每個後端都一樣。屬性
+    改成欄位的寬度（`bigint` 用 `long`，`int` 與 `integer` 用 `int`），或拿掉
+    `ColumnDataType`。欄位型別有變時，已存在的表需要 migration。
+  - `int`、`int?`、`long` 或 `long?` 配 `tinyint(1)`。MySQL 驅動程式把 `tinyint(1)` 欄位讀成布林
+    值，MySQL 與 MariaDB 都一樣，所以存了 7，讀取與 facet 得到 1，不過篩選 7 仍然比得到那一列。
+    寫不帶長度的 `tinyint`。
+  - 其他組合照常通過，包含 `tinyint`、`mediumint`、`int2`、`int8`、`int unsigned`、
+    `bigint unsigned`、`int[]` 這類陣列型別與 `timestamp with local time zone`。比對型別名稱時
+    看的是各個單字，不分大小寫；括號裡的長度或精度不看，`tinyint(1)` 除外；整個單字被中括號、
+    雙引號或反引號包起來時算一個單字；型別後面的 `not null` 這類字是欄位修飾。檢查對象是集合、
+    翻譯實體與 junction payload 的 `[CmsField]` 屬性；掛 `[SugarColumn(IsIgnore = true)]` 的
+    屬性不檢查，`[ColumnShape]` 與 `ColumnDataType` 並存由它自己的規則擋。
 - `[CmsRelation]` 屬性的 `[Navigate]` 外鍵名稱必須是一個屬性，不然主機在啟動時失敗，訊息點名關聯、
   外鍵名稱與該找的型別：多對一與一對一要是宣告它的實體上的屬性，一對多要是清單元素型別上的屬性，
   不分大小寫；多對多的鍵不在這項檢查裡。原本啟動時不檢查，之後的查詢與寫入才失敗。改成實際存在的
