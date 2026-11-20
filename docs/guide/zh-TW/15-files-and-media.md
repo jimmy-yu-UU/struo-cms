@@ -106,6 +106,11 @@ HTTP_STATUS:201
 同樣的 `413`／`PAYLOAD_TOO_LARGE`、同一句訊息與同樣的 details，不會有一個被靜悄悄截斷的檔案。這道緩衝有 64 KB
 的記憶體門檻，超過就溢出到暫存檔，所以多個大檔案同時上傳，不會每一個都在記憶體裡各占滿一份上限。
 
+整個請求本文另有一道上限，只在這個端點：`Struo:Files:MaxUploadBytes` 再加 64 KiB 的 multipart 外框。
+超過的本文在讀檔案部分之前就被拒絕，回同樣的 `413`／`PAYLOAD_TOO_LARGE`、同一句訊息與同樣的
+details。
+後台映像的 nginx 有自己的上限，會先以 HTML 頁面回應，見[第 20 章](20-deployment.md)。
+
 內容類型先過白名單 `Struo:Files:AllowedContentTypes`：留空代表不限制，也是編譯進去的預設
 值；隨附的 `appsettings.json` 另外列了一份清單（完整內容見[第 4 章](04-configuration.md)），
 fork 把這個鍵整段刪掉，就會回到不限制。不在清單裡的類型是 `400`，`Content type '{x}' is not
@@ -384,15 +389,15 @@ HTTP_STATUS:200
 ## NetVips 與 LGPL
 
 轉換管線建立在 NetVips 上，一個 MIT 授權的管理層封裝。StruoCMS 透過 NetVips 在執行期動態載
-入 libvips，不靜態連結，也不直接連結。libvips 本身是 LGPL-2.1-or-later；因為連結是動態的，
-LGPL-2.1 只要求重新標明授權聲明、不限制使用者改用另一個修改過的 libvips、並讓 libvips 自己
-的原始碼可以取得，這件事上游本來就做到了——StruoCMS 沒有額外加上任何限制，也沒有內嵌 libvips
-的原始碼，自己的 MIT 授權不受影響。
+入 libvips，不靜態連結，也不直接連結。
 
-實際釘住的版本號記在 `Directory.Packages.props` 與 `THIRD-PARTY-NOTICES.md`，這裡不重複。
-`NetVips.Native` 系列套件還一併打包了 libvips 幾個選用相依項目（mozjpeg、libpng、libwebp、
-cairo、pango、librsvg 等），授權是 MIT、BSD 與 LGPLv3 的混合，各自記在 `NetVips.Native.*`
-套件自己的聲明檔裡。
+libvips 本身以二進位檔的形式隨 `NetVips.Native` 系列套件而來，套件宣告的授權是
+LGPL-3.0-or-later。這些二進位檔是 API 映像裡 `runtimes/<rid>/native/` 底下的獨立檔案，StruoCMS 沒有
+內嵌 libvips 的原始碼。同一系列套件還一併打包了 libvips 幾個選用相依項目（mozjpeg、libpng、
+libwebp、cairo、pango、librsvg 等），授權是 MIT、BSD、MPL 與 LGPL 的混合。
+
+`THIRD-PARTY-NOTICES.md` 列出映像中需要聲明的第三方元件與它們的授權條款；API 映像把它放在
+`/app/THIRD-PARTY-NOTICES.md`。釘住的版本號記在 `Directory.Packages.props`，那份檔案與這裡都不重複。
 
 主機在註冊檔案服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生
 libvips。沒有可用 libvips 的主機會在啟動時失敗，而不是等到第一次轉換才失敗。

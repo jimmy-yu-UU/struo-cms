@@ -367,6 +367,11 @@
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
   自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
+- 後台映像新增環境變數 `CLIENT_MAX_BODY_SIZE`，設定 nginx 的 `client_max_body_size`。
+  `frontend/Dockerfile` 裡的預設值是 `32m`，也就是範本原本寫死的值；`docker-compose.yml` 在 `admin`
+  服務上設了它。調高 `Struo:Files:MaxUploadBytes` 時要一起調（見[第 20 章](20-deployment.md)）。
+- API 映像在 `/app/THIRD-PARTY-NOTICES.md` 帶著 `THIRD-PARTY-NOTICES.md`。檔案列出映像裡授權不是
+  MIT、ISC、BSD 或 0BSD 的第三方元件與它們的授權條款，不寫版本號。
 
 ### 變更
 
@@ -503,6 +508,22 @@
   GraphQL 的建立與更新、還原、結構化型別欄位、翻譯欄位與多對多 payload 欄位也一樣；翻譯欄位的訊息
   是 `Required translation field '{name}' is missing for locale '{locale}'.`，payload 欄位的是
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- 在 0.30.1，後台映像的 nginx 只轉發 `/api/*` 與 OIDC 回呼路徑，所以經映像打 `POST /graphql` 回
+  `405`，`GET /graphql` 回 SPA 頁面：照[第 20 章](20-deployment.md)的建議不公開 API 埠的部署，連不到
+  API 的GraphQL 端點。映像現在轉送 `/graphql`，只有這個路徑、連同查詢字串，做法與 `/api/*` 相同：轉
+  送標頭一樣，每個安全標頭只送一次。只是以 `/graphql` 開頭的路徑仍然拿到 SPA 頁面。CI 的 compose 煙
+  霧測試會經 nginx送一次 GraphQL 查詢。
+- 在 0.30.1，`Struo:Files:MaxUploadBytes` 調不過伺服器預設的請求本文上限 30,000,000 bytes：請求本文
+  超過它的上傳，不管這個鍵設多少，都回 `400` `VALIDATION`，訊息含
+  `Request body too large. The max request body size is 30000000 bytes.`；
+  後台映像的 nginx 也以寫死的 `32m` 擋掉更大的本文。上傳端點的請求本文上限現在是 `MaxUploadBytes` 再
+  加 64 KiB 的 multipart 外框（其他端點維持伺服器預設），超過的本文回 `413` `PAYLOAD_TOO_LARGE`，
+  `error.details[0].maxBytes` 帶著上限，和超過鍵的檔案一樣；預設的鍵下超過 30,000,000 bytes 的本文也
+  是如此。nginx 的上限取自 `CLIENT_MAX_BODY_SIZE`。
+- 在 0.30.1，`THIRD-PARTY-NOTICES.md` 把 libvips 的授權寫成 LGPL-2.1-or-later，而 `NetVips.Native`
+  套件宣告的是LGPL-3.0-or-later；它還寫了已經過期的釘住版本、漏了 `Isopoh.Cryptography.Argon2` 的 CC
+  BY 4.0 署名與 API 映像裡其他非 MIT 元件的授權，而且不在映像裡。現在它列出這些元件、原文收錄
+  `NetVips.Native` 附的內含程式庫表，不寫版本號。
 
 ### 安全性
 

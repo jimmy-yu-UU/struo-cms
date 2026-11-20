@@ -165,7 +165,11 @@ listed under [ImageTransform](#imagetransform) as validated have no validation r
 correctly typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
-  about the length is still limited.
+  about the length is limited too. The upload endpoint takes its request body limit from this key
+  plus 64 KiB for the multipart framing, so raising the key takes effect there; every other endpoint
+  keeps the server's default request body limit of 30,000,000 bytes. The admin image's nginx has a
+  limit of its own, `CLIENT_MAX_BODY_SIZE` (default `32m`): raise it together with this key. See
+  [Chapter 20](20-deployment.md).
 - `AllowedContentTypes`: leaving it empty means no format is restricted; the default
   `appsettings.json` already lists 18 MIME types.
 - `DefaultStatus`: the status a new upload gets, `"published"` or `"draft"`; any other value fails

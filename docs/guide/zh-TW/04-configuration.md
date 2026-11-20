@@ -139,7 +139,11 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。`MaxUploadBytes`、`AllowedContentTypes`、
 `PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
-- `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
+- `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。上傳端點的請求本文上限
+  取這個鍵的值再加 64 KiB 的 multipart 外框，所以調高這個鍵在上傳端點會生效；其他端點維持伺服器預設
+  的請求本文上限 30,000,000 bytes。後台映像的 nginx 另有自己的上限
+  `CLIENT_MAX_BODY_SIZE`（預設 `32m`），
+  調高這個鍵時要一起調。見[第 20 章](20-deployment.md)。
 - `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
 - `DefaultStatus`：新上傳檔案的狀態，`"published"` 或 `"draft"`；其他值會讓啟動失敗，錯誤訊息指出
   `Struo:Files:DefaultStatus`。已發布的檔案任何持有 id 的人都能讀取；草稿只有已登入且有 `file` 寫入

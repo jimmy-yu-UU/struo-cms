@@ -474,6 +474,13 @@ transformed again on the first request.
 
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
+- `CLIENT_MAX_BODY_SIZE`, an environment variable of the admin image, sets nginx's
+  `client_max_body_size`. Its default in `frontend/Dockerfile` is `32m`, the value the template had
+  hard-coded; `docker-compose.yml` sets it on the `admin` service. Raise it together with
+  `Struo:Files:MaxUploadBytes` (see [Chapter 20](20-deployment.md)).
+- The API image carries `THIRD-PARTY-NOTICES.md` at `/app/THIRD-PARTY-NOTICES.md`. The file lists
+  the third-party components in the images whose license is not MIT, ISC, BSD or 0BSD, with their
+  license terms and no version numbers.
 
 ### Changed
 
@@ -648,6 +655,26 @@ transformed again on the first request.
   payload fields do the same; the message for a translation field is
   `Required translation field '{name}' is missing for locale '{locale}'.` and for a payload field
   `Relation '{relation}', target '{id}': Field '{name}' is required.`
+- In 0.30.1, the admin image's nginx forwarded only `/api/*` and the OIDC callback paths, so
+  `POST /graphql` through the image answered `405` and `GET /graphql` answered the SPA page: the
+  API's GraphQL endpoint was out of reach for a deployment that, as [Chapter 20](20-deployment.md)
+  advises, does not publish the API port. The image forwards `/graphql`, that path only and with its
+  query string, exactly as it forwards `/api/*`: the same forwarded headers, each security header
+  sent once. A path that only starts with `/graphql` still gets the SPA page. The CI compose smoke
+  test sends a GraphQL query through nginx.
+- In 0.30.1, `Struo:Files:MaxUploadBytes` could not be raised above the server's default request
+  body limit of 30,000,000 bytes: an upload whose request body passed it answered `400` `VALIDATION`
+  whose message says `Request body too large. The max request body size is 30000000 bytes.`,
+  whatever the key said, and the admin image's nginx stopped bodies over a fixed `32m`. The upload
+  endpoint's request body limit is now `MaxUploadBytes` plus 64 KiB for the multipart framing (every
+  other endpoint keeps the server default), and a body over it answers `413` `PAYLOAD_TOO_LARGE`
+  with `error.details[0].maxBytes`, like a file over the key; this includes a body over 30,000,000
+  bytes at the default key. nginx's limit comes from `CLIENT_MAX_BODY_SIZE`.
+- In 0.30.1, `THIRD-PARTY-NOTICES.md` gave libvips's license as LGPL-2.1-or-later, where the
+  `NetVips.Native` packages declare LGPL-3.0-or-later, named a pinned version that had moved on,
+  left out the CC BY 4.0 attribution of `Isopoh.Cryptography.Argon2` and the licenses of the other
+  non-MIT components in the API image, and was not part of the image. It lists those components,
+  quotes the bundled-library table of `NetVips.Native` verbatim, and states no version numbers.
 
 ### Security
 

@@ -120,8 +120,8 @@ without `SONAR_ORGANIZATION` both jobs are skipped.
 
 ## License
 
-StruoCMS is licensed under the [MIT License](LICENSE). Third-party components bundled with the
-image-transform feature are listed with their own license terms in
+StruoCMS is licensed under the [MIT License](LICENSE). Third-party components that travel inside the
+container images are listed with their own license terms in
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 ---
