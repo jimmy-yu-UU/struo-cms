@@ -254,6 +254,7 @@ UTC。
 | `Nullable<T>` 或 `string?` 加 `IsNullable = false` | 屬性改成不可為 null，或拿掉 `IsNullable = false` |
 | 屬性型別不是該介面收的型別 | 改宣告成該介面收的型別，或換介面 |
 | 沒有任何介面收的屬性型別 | 見〈沒有介面收的型別〉 |
+| `ColumnDataType` 與屬性型別衝突 | 見〈與屬性型別衝突的欄位型別〉 |
 | 單一值型別屬性加 `IsJson = true` | 拿掉 `IsJson` |
 | `[ColumnShape(LongText)]` 在不是 `string` 的屬性上 | 拿掉，或屬性改成 `string` |
 | `Timestamp`、`TimestampWithTimeZone` 在不是 `DateTime` 的屬性上 | 拿掉，或屬性改成 `DateTime` |
@@ -272,6 +273,29 @@ JSON 欄位，同樣如此。
 每個介面收哪些屬性型別，列在〈介面總覽〉各組的表。型別要完全相同，所以 `List<string>` 放在
 `Tags` 上被擋，`Tags` 要宣告成 `List<TagItem>`；`string[]` 或 `IList<string>` 也不能代替
 `List<string>`。訊息指出屬性的型別、介面收什麼，以及哪些介面收這個型別。
+
+### 與屬性型別衝突的欄位型別
+
+下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。比對型別名稱時不分大小寫，
+也不看前後空白與長度、精度，所以 `timestamp(3) with time zone`、` TimestampTZ ` 都算表裡寫的
+那個名稱。不在表裡的名稱是你自己的，照常通過。
+
+| 屬性型別 | `ColumnDataType` | 改成 |
+|---|---|---|
+| `DateTime` | `timestamptz`、`timestamp with time zone`、`datetimeoffset` | 用欄位形狀，拿掉 `ColumnDataType` |
+| `int` | `bigint` | 屬性改 `long`，或拿掉 `ColumnDataType` |
+| `int` | `smallint` | 拿掉 `ColumnDataType`，或改用 `int` |
+| `long` | `int`、`integer` | 屬性改 `int`，或拿掉 `ColumnDataType` |
+| `long` | `smallint` | 拿掉 `ColumnDataType`，或改用 `bigint` |
+
+`DateTime` 要用的形狀是 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`（見
+[日期時間](#日期時間)）。把帶時區的欄位型別寫成 `ColumnDataType`，值會依主機的本地時間寫入與
+讀出，不是 UTC 時刻。主機在 UTC+8 時，本地 13:06（UTC 05:06）寫入的值，PostgreSQL 讀回 21:06，
+SQL Server 存成 13:06，與實際時刻差八小時。
+
+整數屬性放在寬度不同的欄位上，在 SQL Server 上，同一個程序裡若先對屬性自己寬度的欄位做過 facet，
+這個欄位的 facet 就會失敗；讀取與篩選不受影響，其他後端也不受影響。其他寬度（`tinyint`、
+`mediumint`、`int2`、`int8`）不被擋：值放不進較窄的欄位時，由資料庫拒絕。
 
 ### 沒有介面收的型別
 

@@ -390,6 +390,12 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
 - `[ColumnShape(LongText)]` on a property that is not `string`, `[ColumnShape(Timestamp)]` or
   `[ColumnShape(TimestampWithTimeZone)]` on one that is not `DateTime` or `DateTime?`;
 - `[ColumnShape]` beside `ColumnDataType`;
+- a `ColumnDataType` that `ColumnTypeFit` (`src/Struo.Infrastructure/Metadata/ColumnTypeFit.cs`: a
+  closed table of property type × column type name, matched without case, surrounding space or a
+  parenthesised length) lists as contradicting the property type: `DateTime` or `DateTime?` with
+  `timestamptz`, `timestamp with time zone` or `datetimeoffset`; `int` with `bigint` or `smallint`;
+  `long` with `int`, `integer` or `smallint`, each with its `Nullable<T>`. Any other name passes.
+  `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 

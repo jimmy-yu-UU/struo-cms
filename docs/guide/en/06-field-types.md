@@ -289,6 +289,7 @@ table to be used.
 | `Nullable<T>` or `string?` with `IsNullable = false` | Make it non-nullable, or remove `IsNullable = false` |
 | A property type the interface does not accept | Declare a type it accepts, or change the interface |
 | A property type no interface accepts | See "Types no interface accepts" |
+| A `ColumnDataType` that contradicts the property type | See "Column types that contradict the property" |
 | `IsJson = true` on a single-value property | Remove `IsJson` |
 | `[ColumnShape(LongText)]` on a non-`string` property | Remove it, or declare `string` |
 | `Timestamp` or `TimestampWithTimeZone` on a non-`DateTime` | Remove it, or declare `DateTime` |
@@ -310,6 +311,32 @@ The tables under "Interface overview" list the property types each interface acc
 be the exact one, so `List<string>` on `Tags` is rejected and `Tags` is declared as
 `List<TagItem>`; `string[]` or `IList<string>` does not stand in for `List<string>`. The message
 gives the property's type, what the interface accepts and which interfaces accept the type.
+
+### Column types that contradict the property
+
+A `ColumnDataType` from the table below stops the host as well. `Nullable<T>` counts as `T`. The
+type name is compared without letter case, surrounding spaces and any length or precision, so
+`timestamp(3) with time zone` and ` TimestampTZ ` are the names written in the table. A name that is
+not in the table is yours, and passes.
+
+| Property type | `ColumnDataType` | Declare instead |
+|---|---|---|
+| `DateTime` | `timestamptz`, `timestamp with time zone`, `datetimeoffset` | The shape; remove `ColumnDataType` |
+| `int` | `bigint` | `long`, or remove `ColumnDataType` |
+| `int` | `smallint` | Remove `ColumnDataType`, or use `int` |
+| `long` | `int`, `integer` | `int`, or remove `ColumnDataType` |
+| `long` | `smallint` | Remove `ColumnDataType`, or use `bigint` |
+
+For a `DateTime` the shape is `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (see
+[Date and time](#date-and-time)). A zone-aware column type written as `ColumnDataType` leaves the
+value to be written and read in the host's local time, not as a UTC instant. On a host at UTC+8, a
+value written at 13:06 local time (05:06 UTC) reads back as 21:06 from PostgreSQL, and SQL Server
+stores 13:06, eight hours off the instant.
+
+An integer property on a column of another width has a facet that fails on SQL Server when a facet
+of a column of the property's own width ran first in the same process; reads and filters are
+unaffected, and so is every other backend. Other widths (`tinyint`, `mediumint`, `int2`, `int8`)
+are not rejected: a database refuses a value that does not fit a narrower column.
 
 ### Types no interface accepts
 
