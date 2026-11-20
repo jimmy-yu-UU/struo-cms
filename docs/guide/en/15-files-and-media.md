@@ -10,7 +10,7 @@ present in every install with no extra setup: both the configuration and the cod
 framework.
 
 Writing a `File` goes through a dedicated pipeline — `FilesController` (routed at `api/files`),
-`FileService`, `IFileStorage` — rather than the `ItemService`/`ItemsController` path every other
+`FileService`, `IFileStorage` — rather than the generic item endpoints every other
 collection shares. An upload involves byte storage, content-type checking, and image dimensions and
 transforms, none of which the generic item CRUD path needs to know about.
 

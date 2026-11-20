@@ -36,12 +36,12 @@ A snapshot is one flat JSON object, with a fixed shape:
   just the locale used for the current query. A translatable `Json` field's stored text is parsed
   back into a real JSON value there too, like a root `Json` field.
 
-A snapshot carries an internal format marker that no API response ever shows. Reverting a
-snapshot with the marker stores a translatable `Json` value that was not valid JSON as a JSON
-string, and the value read back is the same. Reverting a snapshot without the marker stores each
-translatable `Json` string value verbatim, as the text the snapshot holds.
+Every snapshot the server takes carries an internal format marker that no API response ever
+shows. Reverting a snapshot with the marker stores a translatable `Json` value that was not valid
+JSON as a JSON string, and the value read back is the same. Reverting a snapshot without the marker
+stores each translatable `Json` string value verbatim, as the text the snapshot holds.
 
-Date-time values in a snapshot are UTC instants ending in `Z`. A snapshot that
+Date-time values the server writes into a snapshot are UTC instants ending in `Z`. A snapshot that
 holds zone-less date-times returns them as stored, without a zone.
 
 Within many-to-many relations, one whose junction carries no payload is stored as an ordered id

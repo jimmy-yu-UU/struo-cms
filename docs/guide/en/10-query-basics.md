@@ -433,10 +433,10 @@ paging is plain `offset`, up to `Query:MaxOffset`.
 `deleted=` is always read from the URL, on the list, `POST .../query`, and single-item reads
 alike. The three accepted values, the default, and the permission rule are in
 [Chapter 9: Revisions and Soft Delete](09-revisions-and-trash.md), in "The `deleted=` filter and
-permissions." The check runs at every entry point: the REST endpoints and GraphQL apply it before
-the query starts, and the use-case interface `IItemUseCases` applies it again in `QueryAsync` and
-`GetAsync`. Code in a fork that calls those two methods directly gets the same refusal. A fork that
-replaces `IItemUseCases` has to enforce the rule itself.
+permissions." The check runs at every entry point: the REST endpoints and the GraphQL list fields
+apply it before the query starts, and the shipped implementation of `IItemUseCases` applies it
+again in `QueryAsync` and `GetAsync`. Code in a fork that calls those two methods directly gets the
+same refusal. A fork that replaces `IItemUseCases` has to enforce the rule itself.
 
 ## Which fields can be filtered and sorted, and what happens when it goes wrong
 

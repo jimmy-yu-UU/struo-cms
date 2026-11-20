@@ -8,7 +8,7 @@
 與程式碼都由框架提供。
 
 `File` 的寫入走一條專屬管線：`FilesController`（路由 `api/files`）、`FileService`、
-`IFileStorage`，不是走其他集合共用的 `ItemService`／`ItemsController` 路徑。一次上傳牽涉位
+`IFileStorage`，不是走其他集合共用的通用項目端點。一次上傳牽涉位
 元組儲存、內容類型檢查、圖片尺寸與轉換，是通用的項目 CRUD 路徑不需要知道的事。
 
 讀取、更新與刪除 `file` 的中繼資料，仍然走一般的 `api/items/file` 與 `api/items/mediaFolder`：

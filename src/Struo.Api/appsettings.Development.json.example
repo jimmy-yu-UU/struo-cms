@@ -32,8 +32,9 @@
 
       // To use the MinIO container from docker-compose.yml instead of local disk: change Backend
       // above to "s3", start it with
-      // `docker compose --profile s3 up -d postgres redis minio createbuckets`, and uncomment
-      // the S3 block below. Values match that file's dev credentials.
+      // `docker compose --profile s3 up -d postgres redis minio createbuckets` (set
+      // STRUO_ADMIN_PASSWORD first: Compose reads the whole file), and uncomment the S3 block
+      // below. Values match that file's dev credentials.
       // If you remapped the MinIO host port (STRUO_MINIO_PORT in .env), change Endpoint to match.
       // "S3": {
       //   "Endpoint": "http://localhost:9000",
@@ -59,9 +60,10 @@
     // contains "test"; it must already exist, and the login needs create/drop-database rights (the
     // migration tests write into it directly; the other live suites create their own databases next
     // to it). An empty value reports that backend's live tests as skipped, and the skip reason names
-    // the env var and the key that enable them; with STRUO_TEST_BACKEND set to that backend the run
-    // fails instead. The env vars
-    // STRUO_TEST_PG_CONNECTION, STRUO_TEST_SQLSERVER_CONNECTION, STRUO_TEST_MYSQL_CONNECTION and
+    // the env var and the key that enable them. With STRUO_TEST_BACKEND set to that backend, the
+    // live tests stay skipped, and the API test hosts and unit harnesses moved to it fail, naming
+    // the same env var and key. The env vars STRUO_TEST_PG_CONNECTION,
+    // STRUO_TEST_SQLSERVER_CONNECTION, STRUO_TEST_MYSQL_CONNECTION and
     // STRUO_TEST_MARIADB_CONNECTION override these keys — NOT Testing__PostgresConnection and the
     // like, which the double-underscore convention would otherwise suggest. MariaDB runs on the
     // MySql dialect and is reported as its own cases.

@@ -356,9 +356,9 @@ of 100000; narrow the result set with filters instead of paging deeper.`。`deep
 
 `deleted=` 一律從網址讀，在清單、`POST .../query` 與單筆讀取上都一樣。三個可接受值、預設值與權限
 規則見[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)「`deleted=` 過濾器與權限」一節。每個
-入口都會檢查：REST 端點與 GraphQL 在查詢開始前先擋，用例介面 `IItemUseCases` 的 `QueryAsync` 與
-`GetAsync` 也會再檢查一次。fork 的程式碼直接呼叫這兩個方法，一樣會被拒絕。fork 若換掉
-`IItemUseCases` 的實作，要自己執行這條規則。
+入口都會檢查：REST 端點與 GraphQL 清單欄位在查詢開始前先擋，`IItemUseCases` 的出貨實作在
+`QueryAsync` 與 `GetAsync` 也會再檢查一次。fork 的程式碼直接呼叫這兩個方法，一樣會被拒絕。
+fork 若換掉 `IItemUseCases` 的實作，要自己執行這條規則。
 
 ## 哪些欄位能篩、能排，走錯會怎樣
 
