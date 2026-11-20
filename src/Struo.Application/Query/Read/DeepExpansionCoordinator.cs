@@ -47,12 +47,18 @@ public sealed class DeepExpansionCoordinator(
 
     /// <summary>
     /// Nests the expanded relation rows of an already <see cref="Prepare">prepared</see> spec into
-    /// each projected parent dictionary. No-op when there are no parent rows.
+    /// each projected parent dictionary. <paramref name="attachTranslations"/> adds
+    /// <c>translations</c> to the rows expanded from each target collection (see
+    /// <see cref="EntityAccessors.AttachTranslations"/>); <c>null</c> attaches nothing. No-op when
+    /// there are no parent rows.
     /// </summary>
     public async Task ExpandPreparedAsync(
         string collection, DeepSpec visible,
         IReadOnlyList<object> entities, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
-        string? locale, CancellationToken ct)
+        string? locale,
+        Func<string, IReadOnlyList<object>, IReadOnlyList<IReadOnlyDictionary<string, object?>>, CancellationToken, Task>?
+            attachTranslations,
+        CancellationToken ct)
     {
         if (entities.Count == 0) return;
 
@@ -69,7 +75,10 @@ public sealed class DeepExpansionCoordinator(
         // never comes back through this coordinator.
         var nested = await expander.ExpandAsync(
             collection, entities, visible,
-            new EntityAccessors(projector.ProjectFor, ParentId, PropertyAccessorCache.Read),
+            new EntityAccessors(projector.ProjectFor, ParentId, PropertyAccessorCache.Read)
+            {
+                AttachTranslations = attachTranslations,
+            },
             locale, permissions.CanRead, ct);
 
         for (var i = 0; i < entities.Count; i++)
