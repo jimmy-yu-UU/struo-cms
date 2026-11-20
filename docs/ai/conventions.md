@@ -394,15 +394,18 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   closed table of property type and column type name) lists as contradicting the property type, each
   with its `Nullable<T>`: `DateTime` with `timestamptz`, `timestamp with time zone` or
   `datetimeoffset` (only `[ColumnShape(TimestampWithTimeZone)]` makes the framework read and write
-  the column as a UTC instant, on PostgreSQL and SQL Server, and the unshaped SQL Server column
-  breaks the facet of a zone-less `DateTime` column); `int` with `bigint` or `smallint`; `long`
-  with `int`, `integer` or `smallint` (the integer names SQL Server has whose reader types share
-  one entry of the ORM's row-binder cache; only SQL Server fails, in one facet order, but the
-  rule is the same on every backend); `int` or `long` with `tinyint(1)` (MySQL and MariaDB read it
-  as a boolean). The name is matched by its words: case, brackets, double quotes and a
-  parenthesised length are ignored (the length only for `tinyint(1)`), trailing column modifiers
-  such as `not null` are skipped, and `unsigned` or `zerofill` makes another type. Any other name
-  passes, `timestamp with local time zone` included. `ColumnDataTypeFitTests` pins the table;
+  the column as a UTC instant, on PostgreSQL and SQL Server; without it the database takes the clock
+  digits, in the PostgreSQL server's time zone and as UTC on SQL Server, PostgreSQL returns
+  `Kind = Local` on every read, and the unshaped SQL Server column breaks the facet of a zone-less
+  `DateTime` column); `int` with `bigint` or `smallint`; `long` with `int`, `integer` or `smallint`
+  (the integer names SQL Server has whose reader types share one entry of the ORM's row-binder
+  cache; only SQL Server fails, in one facet order, but the rule is the same on every backend);
+  `int` or `long` with `tinyint(1)` (the MySQL driver reads it as a boolean). The name is matched by
+  its words: case and a parenthesised length are ignored (the length only for `tinyint(1)`), a word
+  wrapped whole in brackets, double quotes or backticks is one word, brackets inside a word make
+  another type (`int[]`), trailing column modifiers such as `not null` are skipped, and `unsigned`,
+  `zerofill` or `array` after the name makes another type. Any other name passes,
+  `timestamp with local time zone` included. `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 

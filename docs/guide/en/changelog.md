@@ -237,23 +237,30 @@
     value. With no options every value is rejected; add `[CmsOptions]` listing the allowed values.
 - The scanner stops the host at start, with a `MetadataException` that names "Class.Property", the
   property type and the declared type, when an explicit `ColumnDataType` contradicts the property's
-  CLR type in one of the combinations below, so a fork that has one can no longer start the host;
-  each combination used to start and then misbehave, and
-  [Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the table:
+  CLR type in one of the combinations below; each combination used to start the host and then
+  misbehave ([Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the
+  table):
   - A `DateTime` or `DateTime?` with `timestamptz`, `timestamp with time zone` or `datetimeoffset`
     and no `[ColumnShape]`. Only the shape makes the framework read and write the column as a UTC
-    instant, on PostgreSQL and SQL Server. Without it, a `Kind = Local` value written by
-    server-side code (a hook, an interceptor, a seed) was stored off by the host's UTC offset: on
-    a host at UTC+8, 13:06 local time (05:06 UTC) read back from PostgreSQL as 21:06, and SQL
-    Server stored 13:06. PostgreSQL returned the column as `Kind = Local` values where the shaped
-    column returns `Kind = Utc`. On SQL Server, a facet over the column and a facet over a
-    zone-less `DateTime` column in the same process made each other fail with a bind error, in
-    either order, the one failure a request reaches through the API alone. A value sent through
-    the API arrives as `Kind = Utc` and was stored correctly. Declare
-    `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` and remove `ColumnDataType`. A table built
-    with `timestamptz` on PostgreSQL or `datetimeoffset` on SQL Server already has the column
-    type the shape gives, so the column needs no migration; rows already written from a
-    `Kind = Local` value keep their offset error, and the fork has to correct them.
+    instant, on PostgreSQL and SQL Server. Without it the database took the clock digits of the
+    value, in the PostgreSQL server's time zone and as UTC on SQL Server. Measured on PostgreSQL 17
+    and SQL Server 2022:
+    - On PostgreSQL with a server time zone that is not UTC (`Asia/Taipei`), a `Kind = Utc` value
+      was stored at the wrong instant: 05:06 UTC as 21:06 UTC of the day before. A JSON request
+      body is read as `Kind = Utc`, so the API alone caused it. `Kind = Unspecified` was stored
+      the same way. With a UTC server time zone, and on SQL Server, both were stored correctly.
+    - A `Kind = Local` value written by server-side code (a hook, an interceptor, a seed) was
+      stored off by the host's UTC offset on SQL Server and on PostgreSQL with a UTC server time
+      zone. On a host at UTC+8, 13:06 local time (05:06 UTC) was stored as 13:06 UTC.
+    - PostgreSQL returned the column as `Kind = Local` values on every read, whoever wrote the
+      row, where the shaped column returns `Kind = Utc`.
+    - On SQL Server, a facet over the column and a facet over a zone-less `DateTime` column in
+      the same process made each other fail with a bind error, in either order.
+  - The fix for the `DateTime` case is to declare `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`
+    and remove `ColumnDataType`. A table built with `timestamptz` on PostgreSQL or
+    `datetimeoffset` on SQL Server already has the column type the shape gives, so the column
+    needs no migration. Rows already written keep the instant they were stored at, and the fork
+    has to correct those that are off.
   - An `int` or `int?` on `bigint` or `smallint`, and a `long` or `long?` on `int`, `integer` or
     `smallint`. These are the integer type names SQL Server has and reads as integer types that
     share one entry of the ORM's reader cache. On SQL Server, a facet of such a column failed with
@@ -262,13 +269,14 @@
     is the same on every backend. Declare the property with the column's width (`long` for
     `bigint`, `int` for `int` and `integer`) or remove `ColumnDataType`. A table that exists needs
     a migration when the column type changes.
-  - An `int`, `int?`, `long` or `long?` on `tinyint(1)`. MySQL and MariaDB read a `tinyint(1)`
-    column as a boolean, so a stored 7 came back as 1 from a read and a facet, while a filter for
-    7 still matched the row. Write `tinyint` with no length.
+  - An `int`, `int?`, `long` or `long?` on `tinyint(1)`. The MySQL driver reads a `tinyint(1)`
+    column as a boolean, on MySQL and on MariaDB, so a stored 7 came back as 1 from a read and a
+    facet, while a filter for 7 still matched the row. Write `tinyint` with no length.
   - Every other pair passes, including `tinyint`, `mediumint`, `int2`, `int8`, `int unsigned`,
-    `bigint unsigned` and `timestamp with local time zone`. The type name is compared by its
-    words, without letter case, brackets or double quotes, a length or precision in parentheses
-    is ignored except for `tinyint(1)`, and words after the type such as `not null` are column
+    `bigint unsigned`, the array types such as `int[]`, and `timestamp with local time zone`. The
+    type name is compared by its words, without letter case; a length or precision in parentheses
+    is ignored except for `tinyint(1)`; a word wrapped whole in brackets, double quotes or
+    backticks counts as one word; and words after the type such as `not null` are column
     modifiers. The check covers the `[CmsField]` properties of collections, translation entities
     and junction payloads; a property with `[SugarColumn(IsIgnore = true)]` is not checked, and
     `[ColumnShape]` beside `ColumnDataType` is rejected by its own rule.
