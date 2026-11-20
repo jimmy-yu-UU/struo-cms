@@ -1,4 +1,4 @@
-# Three deliberate decisions:
+# Four deliberate decisions:
 # 1. The build context is the whole repo, not src/Struo.Api/ alone: a fork adds its content
 #    project as a ProjectReference from Struo.Api.csproj, so the build needs every project
 #    that reference can point at, plus the root Directory.Build.props/Directory.Packages.props.
@@ -7,6 +7,9 @@
 #    database, or set Database__MigrateOnStartup=true.
 # 3. The runtime stage is Ubuntu-based (aspnet:10.0), not alpine: globalization needs full ICU,
 #    which the alpine variant does not ship.
+# 4. The publish is framework-dependent and targets the build platform (linux-x64 or linux-arm64),
+#    so runtimes/ carries only that platform's native files. The architecture comes from `uname -m`:
+#    the build stage runs on the image's own platform, and the legacy builder sets no TARGETARCH.
 #
 # COPY . . before dotnet restore (rather than copying each .csproj first to prime a
 # restore-only layer) trades away NuGet layer caching -- any source edit invalidates the
@@ -19,8 +22,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet restore src/Struo.Api/Struo.Api.csproj
-RUN dotnet publish src/Struo.Api/Struo.Api.csproj --configuration Release --no-restore --output /app/publish
+# restore and publish take the same runtime identifier, so publish needs no second restore.
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64) rid=linux-x64 ;; \
+      aarch64) rid=linux-arm64 ;; \
+      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    dotnet restore src/Struo.Api/Struo.Api.csproj --runtime "$rid"; \
+    dotnet publish src/Struo.Api/Struo.Api.csproj --configuration Release --runtime "$rid" \
+      --self-contained false --no-restore --output /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # The runtime stage upgrades the OS packages first: Ubuntu publishes package fixes before the
