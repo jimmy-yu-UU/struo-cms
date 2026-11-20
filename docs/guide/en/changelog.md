@@ -475,6 +475,15 @@ transformed again on the first request.
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
 
+### Changed
+
+- The admin image's runtime stage is built on the official `nginx` image, `nginx:1.30.7-alpine`,
+  instead of `nginxinc/nginx-unprivileged`. The container runs the same way: as the `nginx` user
+  (uid 101), listening on `8080`, with the pid file and temp directories under `/tmp`. The main
+  config is now the repository file `frontend/nginx/nginx.conf`. The one difference is in the image
+  metadata: it also lists port `80`, inherited from the base image. Nothing listens on it, and a
+  proxy or orchestrator that picks the port from the image metadata must be given `8080` explicitly.
+
 ### Fixed
 
 - A `Time` field read through GraphQL printed its value with the host's time-zone offset
@@ -645,6 +654,11 @@ transformed again on the first request.
 - A GET to `/signout-oidc-{id}` with no parameters cleared the current session cookie and ended the
   server-side session, so any page could sign a logged-in user out with one cross-site request. The
   endpoint is removed; see Breaking.
+- nginx 1.30.7, the version the admin image now carries, fixes six CVEs: CVE-2026-113425 (mail
+  proxy), CVE-2026-121810 (HTTP/3), CVE-2026-123007 and CVE-2026-123633 (HTTP/2), CVE-2026-118899
+  (TLS) and CVE-2026-123634 (resolver). The image's template configures only the `resolver`
+  directive among those; it sets up no mail proxy, TLS, HTTP/2 or HTTP/3, so only CVE-2026-123634
+  could be reached.
 
 ## 0.30.1 — 2026-11-11
 

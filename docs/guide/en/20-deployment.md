@@ -538,6 +538,10 @@ The image listens on `8080` and runs nginx as the non-root user `nginx`, serving
 build. Unlike the API image, there's no `HEALTHCHECK` here: there's no downstream dependency to probe,
 so probing means hitting `/` directly.
 
+The image metadata lists ports `80` and `8080`; the `80` comes from the base image and nothing
+listens on it. A proxy or orchestrator that takes the port from the image metadata needs `8080`
+given explicitly.
+
 The SPA's API address and default admin-UI language (`VITE_API_BASE_URL`, `VITE_DEFAULT_UI_LOCALE`)
 are baked into the image at build time: `vite build` in production mode reads
 `frontend/.env.production` if one is present, and `frontend/.dockerignore` deliberately doesn't
