@@ -490,7 +490,8 @@ several of libvips's optional dependencies (mozjpeg, libpng, libwebp, cairo, pan
 others) under a mix of MIT, BSD, MPL and LGPL licenses.
 
 `THIRD-PARTY-NOTICES.md` lists the third-party components in the images that need a notice, with
-their license terms; the API image carries it at `/app/THIRD-PARTY-NOTICES.md`. The pinned version
+their license terms; the API image carries it at `/app/THIRD-PARTY-NOTICES.md`, and the admin image
+carries its own file for the admin bundle (see [Chapter 20](20-deployment.md)). The pinned version
 numbers are recorded in `Directory.Packages.props`, not repeated there or here.
 
 The host sets `NetVips.BlockUntrusted` while it registers the file services, which loads native libvips

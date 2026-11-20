@@ -564,15 +564,18 @@ The image forwards these paths to the API and answers every other path from its 
 | Path | Goes to | Note |
 |---|---|---|
 | `/api/*` | API | Every method |
-| `/graphql` | API | This path only, query string included |
+| `/graphql`, `/graphql/schema`, `/graphql/schema.graphql` | API | Endpoint and schema routes |
 | `/signin-oidc`, `/signin-oidc-{id}` | API | OIDC sign-in callback |
 | `/signout-callback-oidc`, `/signout-callback-oidc-{id}` | API | OIDC sign-out callback |
 | Any other path | SPA files | `index.html` for a path that is no file |
 
-A path that only starts with `/graphql`, such as `/graphql/schema`, is not forwarded and gets the
-SPA page. `GET /graphql?sdl` and introspection reach the API and are answered as the API answers
-them directly, which is "off" outside Development unless `GraphQl:ExposeSchema` says otherwise (see
-[Chapter 14](14-graphql.md)).
+The `/graphql` paths match in any letter case, as the API's routing does, and carry the query
+string; `/graphql/` and `/graphql/schema/` with a trailing slash are forwarded too. The schema routes
+and `GET /graphql?sdl` answer only while `GraphQl:ExposeSchema` is on, and introspection follows the
+same setting (see [Chapter 14](14-graphql.md)); with it off the image returns what the API returns,
+`404` for the schema routes and an error for introspection. Any other path that starts with
+`/graphql` gets the SPA page. The GraphQL IDE the API serves under `/graphql/` in Development does
+not work through the image, because its assets are not forwarded; open it on the API's own port.
 
 Forwarded requests carry the client's `Host` header (with its port) as `Host` and
 `X-Forwarded-Host`, so the API sees the origin the browser used. The callback paths are the OIDC
@@ -611,6 +614,11 @@ the image with `VITE_API_BASE_URL` pointing at a different host. A blocked reque
 Caching rules: `/assets/` sends
 `public, max-age=31536000, immutable` (Vite's filenames carry a content hash); `index.html` and every
 other file, such as `theme-init.js` and `favicon.svg`, send `Cache-Control: no-cache`.
+
+The image carries the licenses of the third-party packages in its bundle at
+`/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`, outside the web root, so nginx does not
+serve it. The build copies `frontend/THIRD-PARTY-NOTICES.md` there and fails when the file is
+missing, so a fork keeps the file or removes the line from `frontend/Dockerfile`.
 
 A request body is capped in more than one place:
 

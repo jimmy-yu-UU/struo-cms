@@ -56,7 +56,10 @@ function blocks(): Block[] {
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
 // Locations that forward to the API: /api/, the GraphQL endpoint and the per-provider OIDC callback paths.
 const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$'
-const GRAPHQL_LOCATION = '= /graphql'
+// What the API serves under /graphql: the endpoint, and the SDL at /graphql/schema and
+// /graphql/schema.graphql when GraphQl:ExposeSchema is on, each of the first two with or without a
+// trailing slash. ASP.NET routing ignores case.
+const GRAPHQL_LOCATION = '~* ^/graphql(/|/schema/?|/schema\\.graphql)?$'
 const PROXIED = ['/api/', GRAPHQL_LOCATION, OIDC_LOCATION]
 
 // Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
@@ -65,7 +68,9 @@ function matchLocation(path: string): string {
   const names = blocks().map((b) => b.name).filter((n) => n !== 'server')
   const exact = names.find((n) => n.startsWith('= ') && n.slice(2) === path)
   if (exact) return exact
-  const regex = names.find((n) => n.startsWith('~ ') && new RegExp(n.slice(2)).test(path))
+  const regex = names.find((n) =>
+    n.startsWith('~* ') ? new RegExp(n.slice(3), 'i').test(path) : n.startsWith('~ ') && new RegExp(n.slice(2)).test(path),
+  )
   if (regex) return regex
   const prefixes = names.filter((n) => !/^[=~]/.test(n) && path.startsWith(n))
   return [...prefixes].sort((a, b) => b.length - a.length)[0]
@@ -200,15 +205,35 @@ describe('nginx template cache headers', () => {
 })
 
 describe('nginx template API proxying', () => {
-  it('proxies the GraphQL endpoint through one exact-match location', () => {
+  it('proxies the GraphQL endpoint and its schema paths through one location', () => {
     expect(blocks().map((b) => b.name)).toContain(GRAPHQL_LOCATION)
   })
 
-  it('routes /graphql to the API', () => {
-    expect(matchLocation('/graphql')).toBe(GRAPHQL_LOCATION)
-  })
+  it.each([
+    '/graphql',
+    '/graphql/',
+    '/graphql/schema',
+    '/graphql/schema/',
+    '/graphql/schema.graphql',
+    '/GraphQL',
+    '/GRAPHQL/Schema',
+  ])(
+    'routes %s to the API',
+    (path) => {
+      expect(matchLocation(path)).toBe(GRAPHQL_LOCATION)
+    },
+  )
 
-  it.each(['/graphqlx', '/graphql/', '/graphql/foo', '/GraphQL', '/graphql-docs'])(
+  it.each([
+    '/graphqlx',
+    '/graphql//',
+    '/graphql/foo',
+    '/graphql/schema.graphql/',
+    '/graphql/schemax',
+    '/graphql/schema.gql',
+    '/graphql/schema/x',
+    '/graphql-docs',
+  ])(
     'leaves %s to the SPA',
     (path) => {
       expect(matchLocation(path)).toBe('/')

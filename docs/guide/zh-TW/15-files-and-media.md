@@ -397,7 +397,9 @@ LGPL-3.0-or-later。這些二進位檔是 API 映像裡 `runtimes/<rid>/native/`
 libwebp、cairo、pango、librsvg 等），授權是 MIT、BSD、MPL 與 LGPL 的混合。
 
 `THIRD-PARTY-NOTICES.md` 列出映像中需要聲明的第三方元件與它們的授權條款；API 映像把它放在
-`/app/THIRD-PARTY-NOTICES.md`。釘住的版本號記在 `Directory.Packages.props`，那份檔案與這裡都不重複。
+`/app/THIRD-PARTY-NOTICES.md`，後台映像為自己的 bundle 帶另一份檔案
+（見[第 20 章](20-deployment.md)）。釘住的版本號記在 `Directory.Packages.props`，那份檔案與這裡都不
+重複。
 
 主機在註冊檔案服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生
 libvips。沒有可用 libvips 的主機會在啟動時失敗，而不是等到第一次轉換才失敗。

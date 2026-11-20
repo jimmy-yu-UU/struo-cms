@@ -59,6 +59,8 @@ RUN apk upgrade --no-cache \
     && chmod 775 /etc/nginx /etc/nginx/conf.d /var/cache/nginx \
     && chmod 664 /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+# The licenses of the bundled third-party packages sit outside the web root, so nginx does not serve them.
+COPY THIRD-PARTY-NOTICES.md /usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 ENV API_UPSTREAM=http://api:8080
 ENV HSTS_VALUE=

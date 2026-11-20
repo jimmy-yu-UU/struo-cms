@@ -26,8 +26,8 @@
 #     original request path is forwarded unchanged: a request to /api/foo/bar
 #     reaches the backend as /api/foo/bar. The backend's controllers are
 #     routed at `api/...`, so no rewrite is needed -- the proxy's contract is
-#     a plain pass-through of /api/*, the GraphQL endpoint /graphql (that path
-#     only, query string included) and the OIDC callback paths, nothing more.
+#     a plain pass-through of /api/*, the paths the API serves under /graphql
+#     (the endpoint and its SDL routes) and the OIDC callback paths, nothing more.
 # (d) proxy_pass takes $upstream (an nginx variable) rather than the
 #     envsubst'd literal directly. With a literal target nginx resolves the
 #     hostname once at config load and refuses to start at all if it isn't
@@ -134,10 +134,12 @@ server {
         proxy_hide_header Permissions-Policy;
     }
 
-    # The GraphQL endpoint is proxied exactly like /api/. The exact match covers
-    # /graphql itself, whatever its query string (`?sdl` included); no other
-    # path starting with /graphql reaches the API, so those stay with the SPA.
-    location = /graphql {
+    # What the API serves under /graphql is proxied exactly like /api/: the endpoint
+    # (its `?sdl` form too) and the SDL routes /graphql/schema and /graphql/schema.graphql,
+    # which exist when GraphQl:ExposeSchema is on, the first two also with a trailing
+    # slash. The match ignores case, as the API's routing does. Any other path starting
+    # with /graphql stays with the SPA, and so do the assets of the Development-only IDE.
+    location ~* ^/graphql(/|/schema/?|/schema\.graphql)?$ {
         set $upstream "${API_UPSTREAM}";
         proxy_pass $upstream;
         proxy_http_version 1.1;

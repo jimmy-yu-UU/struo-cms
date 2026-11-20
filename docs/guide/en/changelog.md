@@ -488,9 +488,12 @@ transformed again on the first request.
   `client_max_body_size`. Its default in `frontend/Dockerfile` is `32m`, the value the template had
   hard-coded; `docker-compose.yml` sets it on the `admin` service. Raise it together with
   `Struo:Files:MaxUploadBytes` (see [Chapter 20](20-deployment.md)).
-- The API image carries `THIRD-PARTY-NOTICES.md` at `/app/THIRD-PARTY-NOTICES.md`. The file lists
-  the third-party components in the images whose license is not MIT, ISC, BSD or 0BSD, with their
-  license terms and no version numbers.
+- Both images carry the licenses of their third-party components whose license is not MIT, ISC, BSD
+  or 0BSD, with the license terms and no version numbers: the API image at
+  `/app/THIRD-PARTY-NOTICES.md` (the repository's `THIRD-PARTY-NOTICES.md`), the admin image at
+  `/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`, outside the web root (new
+  `frontend/THIRD-PARTY-NOTICES.md`). Each `Dockerfile` copies its file, so a build fails when a
+  fork deleted it; a fork that adds or removes a component updates the file.
 
 ### Changed
 
@@ -679,10 +682,12 @@ transformed again on the first request.
 - In 0.30.1, the admin image's nginx forwarded only `/api/*` and the OIDC callback paths, so
   `POST /graphql` through the image answered `405` and `GET /graphql` answered the SPA page: the
   API's GraphQL endpoint was out of reach for a deployment that, as [Chapter 20](20-deployment.md)
-  advises, does not publish the API port. The image forwards `/graphql`, that path only and with its
-  query string, exactly as it forwards `/api/*`: the same forwarded headers, each security header
-  sent once. A path that only starts with `/graphql` still gets the SPA page. The CI compose smoke
-  test sends a GraphQL query through nginx.
+  advises, does not publish the API port. The image forwards what the API
+  serves under `/graphql`: `/graphql` with its query string, and `/graphql/schema` and
+  `/graphql/schema.graphql` when `GraphQl:ExposeSchema` is on, in any letter case, exactly as it
+  forwards `/api/*`: the same forwarded headers, each security header sent once. Any other path that
+  starts with `/graphql` still gets the SPA page. The CI compose smoke test sends a GraphQL query
+  through nginx.
 - In 0.30.1, `Struo:Files:MaxUploadBytes` could not be raised above the server's default request
   body limit of 30,000,000 bytes: an upload whose request body passed it answered `400` `VALIDATION`
   whose message says `Request body too large. The max request body size is 30000000 bytes.`,

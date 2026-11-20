@@ -378,8 +378,12 @@
 - 後台映像新增環境變數 `CLIENT_MAX_BODY_SIZE`，設定 nginx 的 `client_max_body_size`。
   `frontend/Dockerfile` 裡的預設值是 `32m`，也就是範本原本寫死的值；`docker-compose.yml` 在 `admin`
   服務上設了它。調高 `Struo:Files:MaxUploadBytes` 時要一起調（見[第 20 章](20-deployment.md)）。
-- API 映像在 `/app/THIRD-PARTY-NOTICES.md` 帶著 `THIRD-PARTY-NOTICES.md`。檔案列出映像裡授權不是
-  MIT、ISC、BSD 或 0BSD 的第三方元件與它們的授權條款，不寫版本號。
+- 兩個映像都帶著各自第三方元件的授權（授權不是 MIT、ISC、BSD 或 0BSD 的元件，附授權條款，
+  不寫版本號）：API 映像放在 `/app/THIRD-PARTY-NOTICES.md`（儲存庫根目錄的
+  `THIRD-PARTY-NOTICES.md`），後台映像放在網頁根目錄之外的
+  `/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`（新增
+  `frontend/THIRD-PARTY-NOTICES.md`）。各個 `Dockerfile` 會複製自己的檔案，所以 fork 刪掉檔案後
+  建置會失敗；fork 增減元件時要更新檔案。
 
 ### 變更
 
@@ -525,9 +529,10 @@
   父列上指向同一個目標集合的關聯共用，帶巢狀 `deep` 的關聯往下展開的那一組另算），次數跟列數無關。
 - 在 0.30.1，後台映像的 nginx 只轉發 `/api/*` 與 OIDC 回呼路徑，所以經映像打 `POST /graphql` 回
   `405`，`GET /graphql` 回 SPA 頁面：照[第 20 章](20-deployment.md)的建議不公開 API 埠的部署，連不到
-  API 的GraphQL 端點。映像現在轉送 `/graphql`，只有這個路徑、連同查詢字串，做法與 `/api/*` 相同：轉
-  送標頭一樣，每個安全標頭只送一次。只是以 `/graphql` 開頭的路徑仍然拿到 SPA 頁面。CI 的 compose 煙
-  霧測試會經 nginx送一次 GraphQL 查詢。
+  API 的 GraphQL 端點。映像現在轉送 API 在 `/graphql` 底下提供的路徑：`/graphql`（連同查詢字串），
+  以及 `GraphQl:ExposeSchema` 開啟時的 `/graphql/schema` 與 `/graphql/schema.graphql`，不分大小寫，
+  做法與 `/api/*` 相同：轉送標頭一樣，每個安全標頭只送一次。其他以 `/graphql` 開頭的路徑仍然拿到
+  SPA 頁面。CI 的 compose 煙霧測試會經 nginx 送一次 GraphQL 查詢。
 - 在 0.30.1，`Struo:Files:MaxUploadBytes` 調不過伺服器預設的請求本文上限 30,000,000 bytes：請求本文
   超過它的上傳，不管這個鍵設多少，都回 `400` `VALIDATION`，訊息含
   `Request body too large. The max request body size is 30000000 bytes.`；

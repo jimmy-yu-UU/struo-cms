@@ -20,7 +20,8 @@ internal static class UploadRequestBody
     /// </summary>
     internal const long MultipartHeadroomBytes = 64 * 1024;
 
-    // Kestrel's multipart section limit (FormOptions.MultipartBodyLengthLimit) is 128 MiB.
+    // ASP.NET reads a multipart section only up to FormOptions.MultipartBodyLengthLimit, 128 MiB by
+    // default; a larger section fails the read with "Multipart body length limit exceeded" (a 500).
     private const long DefaultMultipartLimitBytes = 134_217_728;
 
     /// <summary>Reads the multipart form of an upload request under the upload's own body cap.</summary>

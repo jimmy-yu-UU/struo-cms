@@ -106,6 +106,79 @@ public class UploadRequestBodyTests
         form["folderId"].ToString().Should().Be("abc");
     }
 
+    // The multipart section limit of ASP.NET (FormOptions.MultipartBodyLengthLimit) is 128 MiB; an upload
+    // limit above it needs the limit raised or the read fails with "Multipart body length limit exceeded".
+    private const long DefaultMultipartLimit = 134_217_728;
+
+    private sealed class GeneratedMultipart(long fileBytes) : Stream
+    {
+        private readonly byte[] _head = Encoding.ASCII.GetBytes(
+            "--xyz\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.bin\"\r\n" +
+            "Content-Type: application/octet-stream\r\n\r\n");
+        private readonly byte[] _tail = Encoding.ASCII.GetBytes("\r\n--xyz--\r\n");
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _head.Length + fileBytes + _tail.Length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            var written = 0;
+            while (written < buffer.Length && _position < Length)
+            {
+                if (_position < _head.Length)
+                {
+                    var n = (int)Math.Min(buffer.Length - written, _head.Length - _position);
+                    _head.AsSpan((int)_position, n).CopyTo(buffer[written..]);
+                    written += n;
+                    _position += n;
+                }
+                else if (_position < _head.Length + fileBytes)
+                {
+                    var n = (int)Math.Min(buffer.Length - written, _head.Length + fileBytes - _position);
+                    buffer.Slice(written, n).Fill((byte)'a');
+                    written += n;
+                    _position += n;
+                }
+                else
+                {
+                    var at = (int)(_position - _head.Length - fileBytes);
+                    var n = Math.Min(buffer.Length - written, _tail.Length - at);
+                    _tail.AsSpan(at, n).CopyTo(buffer[written..]);
+                    written += n;
+                    _position += n;
+                }
+            }
+
+            return written;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
+            new(Read(buffer.Span));
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task A_file_part_past_the_default_multipart_limit_is_read_when_the_upload_limit_allows_it()
+    {
+        const long fileBytes = DefaultMultipartLimit + 4096;
+        var context = Multipart(new GeneratedMultipart(fileBytes));
+
+        var form = await UploadRequestBody.ReadFormAsync(
+            context.Request, DefaultMultipartLimit + 8192, CancellationToken.None);
+
+        form.Files.GetFile("file")!.Length.Should().Be(fileBytes);
+    }
+
     [Fact]
     public async Task A_body_over_the_cap_is_PayloadTooLarge_naming_the_upload_limit()
     {

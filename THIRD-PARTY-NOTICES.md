@@ -10,17 +10,16 @@ Scope:
 - API image (`Dockerfile`): the NuGet packages `dotnet publish` copies into the image, including
   indirect dependencies and the native binaries under `runtimes/`. The image carries this file at
   `/app/THIRD-PARTY-NOTICES.md`.
-- Admin image (`frontend/Dockerfile`): the npm packages compiled into the admin bundle.
+- Admin image (`frontend/Dockerfile`): not covered here. It carries its own file,
+  `frontend/THIRD-PARTY-NOTICES.md`, at `/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`.
 
 Out of scope: the operating-system packages and the .NET runtime of the base images, which come
 with their own notices, and development tools that do not travel in an image. Versions are not
-repeated here; they are recorded in `Directory.Packages.props` and `frontend/pnpm-lock.yaml`.
+repeated here; they are recorded in `Directory.Packages.props`.
 The license of each component is the one its package declares, read from the package's own
 metadata and license files.
 
 ## Apache License 2.0
-
-API image:
 
 - `AWSSDK.Core`, `AWSSDK.Extensions.Numerics`, `AWSSDK.S3` (Amazon Web Services)
 - `FluentMigrator`, `FluentMigrator.Abstractions`, `FluentMigrator.Extensions.MySql`,
@@ -37,11 +36,6 @@ API image:
   `SQLitePCLRaw.provider.e_sqlite3` (Copyright 2014-2024 SourceGear, LLC)
 - `SqlSugarCore`, `SqlSugarCore.Dm`, `SqlSugarCore.Kdbndp` (sunkaixuan; the packages declare
   the license by URL, <http://www.apache.org/licenses/LICENSE-2.0.html>)
-
-Admin bundle:
-
-- `@internationalized/date` (Copyright 2019 Adobe), `@internationalized/number` (Adobe)
-- `class-variance-authority` (Copyright 2022 Joe Bell)
 
 None of these packages ships a `NOTICE` file. The license text:
 

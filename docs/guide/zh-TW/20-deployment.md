@@ -455,14 +455,17 @@ SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI
 | 路徑 | 送往 | 說明 |
 |---|---|---|
 | `/api/*` | API | 所有方法 |
-| `/graphql` | API | 只有這個路徑，含查詢字串 |
+| `/graphql`、`/graphql/schema`、`/graphql/schema.graphql` | API | 端點與 schema 路由 |
 | `/signin-oidc`、`/signin-oidc-{id}` | API | OIDC 登入回呼 |
 | `/signout-callback-oidc`、`/signout-callback-oidc-{id}` | API | OIDC 登出回呼 |
 | 其他路徑 | SPA 檔案 | 不是檔案的路徑回 `index.html` |
 
-只是以 `/graphql` 開頭的路徑，例如 `/graphql/schema`，不會被轉送，拿到的是 SPA 頁面。
-`GET /graphql?sdl` 與 introspection 會到達 API，回應和直接打 API 時相同，也就是在 Development 之外
-預設關閉，除非 `GraphQl:ExposeSchema` 另有設定（見[第 14 章](14-graphql.md)）。
+`/graphql` 這幾個路徑不分大小寫，和 API 的路由一樣，查詢字串也一併帶上；結尾多一個斜線的
+`/graphql/` 與 `/graphql/schema/` 也會轉送。schema 路由與
+`GET /graphql?sdl` 只有在 `GraphQl:ExposeSchema` 開啟時才有回應，introspection 跟著同一個設定
+（見[第 14 章](14-graphql.md)）；關閉時，映像回的就是 API 回的：schema 路由是 `404`，introspection
+是錯誤。其他以 `/graphql` 開頭的路徑拿到 SPA 頁面。API 在 Development 下於 `/graphql/` 底下提供的
+GraphQL IDE 的資源檔不轉送，所以經映像用不了，請在 API 自己的埠開啟。
 
 轉送的請求會把用戶端的 `Host` 標頭（含埠號）當作 `Host` 與 `X-Forwarded-Host` 帶上，讓 API 看到瀏覽
 器實際使用的來源。回呼路徑是 OIDC 的重新導向目標；`/api/` 之外的自訂 `CallbackPath` 要在範本另加一個
@@ -498,6 +501,11 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 快取規則：`/assets/` 送
 `public, max-age=31536000, immutable`（Vite 的檔名帶內容雜湊）；`index.html` 與其他所有檔案
 （例如 `theme-init.js`、`favicon.svg`）送 `Cache-Control: no-cache`。
+
+映像把 bundle 內第三方套件的授權放在
+`/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`，在網頁根目錄之外，nginx 不會提供這個檔案。
+建置時把 `frontend/THIRD-PARTY-NOTICES.md` 複製到那裡，檔案不存在就會建置失敗，所以 fork 要保留這個
+檔案，或從 `frontend/Dockerfile` 拿掉那一行。
 
 請求本文的上限不只一處：
 
