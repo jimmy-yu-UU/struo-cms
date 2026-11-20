@@ -219,29 +219,74 @@ describe('API paths are built in one place', () => {
   })
 })
 
-// The public methods of ApiClient whose first parameter is the endpoint path, read from the class itself.
-function pathMethodsOfApiClient(): string[] {
-  const text = readFileSync(join(SRC, 'api/apiClient.ts'), 'utf8')
-  const file = ts.createSourceFile('apiClient.ts', text, ts.ScriptTarget.Latest, true)
-  const names: string[] = []
+// The public methods of a class that hand a path to this.request(method, path, ...): methods and arrow-function
+// properties whose body calls it, with the position of the parameter that is passed as the path. A path that is not
+// one of the method's own parameters has position -1.
+type PathMethod = { name: string; pathParameter: number }
+
+function pathMethodsOf(text: string, className: string): PathMethod[] {
+  const file = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true)
+  const found: PathMethod[] = []
+  const requestCalls = (node: ts.Node): ts.CallExpression[] => {
+    const calls: ts.CallExpression[] = []
+    const visit = (n: ts.Node): void => {
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)
+        && n.expression.expression.kind === ts.SyntaxKind.ThisKeyword && n.expression.name.text === 'request') calls.push(n)
+      ts.forEachChild(n, visit)
+    }
+    visit(node)
+    return calls
+  }
   file.forEachChild((node) => {
-    if (!ts.isClassDeclaration(node) || node.name?.text !== 'ApiClient') return
+    if (!ts.isClassDeclaration(node) || node.name?.text !== className) return
     for (const member of node.members) {
-      if (!ts.isMethodDeclaration(member) || !ts.isIdentifier(member.name)) continue
-      const modifiers = ts.getModifiers(member) ?? []
+      const modifiers = ts.canHaveModifiers(member) ? (ts.getModifiers(member) ?? []) : []
       if (modifiers.some((m) => m.kind === ts.SyntaxKind.PrivateKeyword || m.kind === ts.SyntaxKind.ProtectedKeyword)) continue
-      const first = member.parameters[0]
-      if (first && ts.isIdentifier(first.name) && first.name.text === 'path') names.push(member.name.text)
+      let fn: ts.SignatureDeclaration | undefined
+      let name: string | undefined
+      if (ts.isMethodDeclaration(member) && ts.isIdentifier(member.name)) { fn = member; name = member.name.text }
+      else if (ts.isPropertyDeclaration(member) && ts.isIdentifier(member.name) && member.initializer
+        && (ts.isArrowFunction(member.initializer) || ts.isFunctionExpression(member.initializer))) {
+        fn = member.initializer; name = member.name.text
+      }
+      if (!fn || !name) continue
+      for (const call of requestCalls(fn)) {
+        const passed = call.arguments[1]
+        const index = passed && ts.isIdentifier(passed)
+          ? fn.parameters.findIndex((param) => ts.isIdentifier(param.name) && param.name.text === passed.text)
+          : -1
+        found.push({ name, pathParameter: index })
+      }
     }
   })
-  return names
+  return found
 }
 
+const apiClientSource = (): string => readFileSync(join(SRC, 'api/apiClient.ts'), 'utf8')
+
 describe('every request path goes through apiPath', () => {
-  it('every public ApiClient method that takes a path is one the path check reads', () => {
-    const methods = pathMethodsOfApiClient()
-    expect(methods).toContain('putEnveloped')
-    expect(methods.filter((m) => !REQUEST_METHODS.has(m))).toEqual([])
+  it('every public ApiClient method that passes a path to request() is one the path check reads, by its first parameter', () => {
+    const methods = pathMethodsOf(apiClientSource(), 'ApiClient')
+    expect(methods.map((m) => m.name)).toContain('putEnveloped')
+    expect(methods.filter((m) => !REQUEST_METHODS.has(m.name)).map((m) => m.name)).toEqual([])
+    expect(methods.filter((m) => m.pathParameter !== 0).map((m) => m.name)).toEqual([])
+  })
+
+  it('pathMethodsOf finds methods and arrow properties whatever their path parameter is called, and skips private ones', () => {
+    const sample = `class C {
+      private hidden(p: string) { return this.request('GET', p) }
+      patch(endpoint: string, body?: unknown) { return this.request('PATCH', endpoint, body) }
+      swapped(body: unknown, endpoint: string) { return this.request('PUT', endpoint, body) }
+      arrow = (where: string) => this.request('GET', where)
+      literal() { return this.request('GET', '/x') }
+      other(path: string) { return path }
+    }`
+    expect(pathMethodsOf(sample, 'C')).toEqual([
+      { name: 'patch', pathParameter: 0 },
+      { name: 'swapped', pathParameter: 1 },
+      { name: 'arrow', pathParameter: 0 },
+      { name: 'literal', pathParameter: -1 },
+    ])
   })
 
   it('reads a putEnveloped call like any other request call', () => {

@@ -2179,9 +2179,9 @@ describe('ItemFormView', () => {
       await formSave
     })
 
-    it('a successful matrix save after a matrix conflict clears the banner and the cached server copy', async () => {
+    it('a matrix save while a matrix conflict is open keeps the banner, and Reload latest then shows the other administrator fields and grants', async () => {
       const { w, get, matrixVm } = await mountRole(3)
-      get.mockResolvedValue({ id: 'r1', name: 'cached copy', isSuperAdmin: false, version: 5 })
+      get.mockResolvedValue({ id: 'r1', name: 'renamed by B', isSuperAdmin: false, version: 5 })
       vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(conflictError())
       matrixVm.toggle('article', 'read', true)
       await matrixVm.save()
@@ -2191,13 +2191,102 @@ describe('ItemFormView', () => {
       vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 6 })
       expect(await matrixVm.save()).toBe(true)
       await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+      expect(w.text()).toContain('This item was changed by someone else.')
+      expect((w.vm as any).model.version).toBe(6)
+
+      vi.mocked(rbacApi.getRolePermissions).mockResolvedValue(readGrant)
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
       expect((w.vm as any).conflict).toBe(false)
-      expect(w.text()).not.toContain('This item was changed by someone else.')
+      expect((w.vm as any).model.shared.name).toBe('renamed by B')
+      expect((w.vm as any).model.version).toBe(6)
+      expect(w.find('[aria-label="Article — Read"]').attributes('data-state')).toBe('checked')
+      expect(matrixVm.dirty).toBe(false)
+
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 7 })
+      await (w.vm as any).onSubmit()
+      expect(update).toHaveBeenCalledWith('role', 'r1', expect.objectContaining({ version: 6 }))
+      expect((w.vm as any).conflict).toBe(false)
+    })
+
+    it('a matrix-only save while a form conflict is open keeps the banner, and a form save after Reload latest sends the matrix save version', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'renamed by B', isSuperAdmin: false, version: 5 })
+      const update = vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(conflictError())
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 6 })
+      matrixVm.toggle('article', 'read', true)
+      expect(await matrixVm.save()).toBe(true)
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+      expect(rbacApi.putRolePermissions).toHaveBeenLastCalledWith('r1', readGrant, 5)
 
       ;(w.vm as any).reloadLatest()
       await flushPromises()
+      expect((w.vm as any).model.shared.name).toBe('renamed by B')
       expect((w.vm as any).model.version).toBe(6)
-      expect((w.vm as any).model.shared.name).toBe('editor')
+
+      update.mockResolvedValueOnce({ id: 'r1', version: 7 })
+      await (w.vm as any).onSubmit()
+      expect(update).toHaveBeenLastCalledWith('role', 'r1', expect.objectContaining({ version: 6 }))
+      expect((w.vm as any).conflict).toBe(false)
+    })
+
+    it('a form save while a conflict is open is the warned overwrite and clears it', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'renamed by B', isSuperAdmin: false, version: 5 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(conflictError())
+      matrixVm.toggle('article', 'read', true)
+      await matrixVm.save()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+
+      vi.spyOn(itemsApi, 'update').mockResolvedValueOnce({ id: 'r1', version: 6 })
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 7 })
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(false)
+      ;(w.vm as any).reloadLatest()
+      expect((w.vm as any).model.version).toBe(7)
+    })
+
+    it('with no conflict open a matrix save hands the version to the form and shows no banner', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 4 })
+      matrixVm.toggle('article', 'read', true)
+      await matrixVm.save()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(false)
+      expect(w.text()).not.toContain('This item was changed by someone else.')
+      expect((w.vm as any).model.version).toBe(4)
+    })
+
+    it('a form Save that waited on a matrix save which got a 409 sends no item update and shows the matrix conflict', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'editor', isSuperAdmin: false, version: 5 })
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 6 })
+      let reject!: () => void
+      vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+        () => new Promise((_, rej) => { reject = () => rej(conflictError()) }))
+      matrixVm.toggle('article', 'read', true)
+      const matrixSave = matrixVm.save()
+      await flushPromises()
+      const formSave = (w.vm as any).onSubmit()
+      await flushPromises()
+      reject()
+      await matrixSave
+      await formSave
+      await flushPromises()
+      expect(update).not.toHaveBeenCalled()
+      expect((w.vm as any).conflict).toBe(true)
+      expect(w.text()).toContain('This item was changed by someone else.')
+      expect((w.vm as any).model.version).toBe(5)
+      expect(failureToasts()).toHaveLength(0)
+      expect(push).not.toHaveBeenCalled()
     })
 
     it('a successful form save after a conflict clears the banner and the cached server copy', async () => {

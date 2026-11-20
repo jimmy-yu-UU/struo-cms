@@ -29,7 +29,9 @@ export const rbacApi = {
     if (version !== undefined) params.set('version', String(version))
     const { data, meta } = await apiClient.putEnveloped<RolePermissionEntry[], { version?: unknown }>(
       withQuery(apiPath('roles', roleId, 'permissions'), params), entries)
-    return { entries: data, version: typeof meta?.version === 'number' ? meta.version : undefined }
+    // A response without data (204, empty body) is a committed save whose stored grants are not reported: the
+    // entries that were sent stand for them, and no version is handed back.
+    return { entries: data ?? entries, version: typeof meta?.version === 'number' ? meta.version : undefined }
   },
   // roleIds, when provided (including []), asks the backend to compute permissions for that
   // hypothetical role set instead of the user's saved roles — this is what lets the preview

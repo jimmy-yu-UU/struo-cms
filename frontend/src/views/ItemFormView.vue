@@ -399,9 +399,10 @@ async function recoverFromConflict(): Promise<void> {
 // The version is not part of the form's dirty state, so nothing becomes unsaved.
 function onMatrixSaved(version: number): void {
   model.version = version
-  // A save that went through settles any conflict shown so far; the copy cached for it is older than this save.
-  conflict.value = false
-  latestFromServer = null
+  // A grants save changes no role field, so an open conflict stays open: the form still holds the fields from
+  // before the other administrator's save, and only a form save (the warned overwrite) or Reload latest ends it.
+  // The cached server copy takes the new version, so applying it does not step the version back.
+  if (latestFromServer) latestFromServer = { ...latestFromServer, version }
 }
 
 // The matrix's save met a role that has moved on: the form's own conflict handling takes over.

@@ -34,6 +34,12 @@ describe('rbacApi', () => {
     expect((await rbacApi.putRolePermissions('r1', [])).version).toBeUndefined()
   })
 
+  it('putRolePermissions answers the entries it sent, and no version, when the response has no data', async () => {
+    vi.mocked(apiClient.putEnveloped).mockResolvedValue({ data: undefined, meta: undefined })
+    const entries = [{ collection: 'article', canRead: true, canWrite: false, canDelete: false }]
+    expect(await rbacApi.putRolePermissions('r1', entries, 3)).toEqual({ entries, version: undefined })
+  })
+
   it('getEffectivePermissions hits /users/{id}/effective-permissions when roleIds is omitted', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
     await rbacApi.getEffectivePermissions('u1')
