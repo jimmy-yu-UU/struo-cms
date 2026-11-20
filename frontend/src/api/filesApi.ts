@@ -1,4 +1,5 @@
-import { apiClient, apiBaseUrl } from './apiClient'
+import { apiClient } from './apiClient'
+import { apiPath, withQuery } from './apiPath'
 
 export type FileMeta = {
   id: string
@@ -19,13 +20,14 @@ export const filesApi = {
     return apiClient.postForm<FileMeta>('/files', form)
   },
   async remove(id: string, opts?: { purge?: boolean }): Promise<void> {
-    const qs = opts?.purge ? '?purge=true' : ''
-    await apiClient.delete<void>(`/files/${id}${qs}`)
+    const params = new URLSearchParams()
+    if (opts?.purge) params.set('purge', 'true')
+    await apiClient.delete<void>(withQuery(apiPath('files', id), params))
   },
   async restore(id: string): Promise<void> {
-    await apiClient.post<void>(`/files/${id}/restore`)
+    await apiClient.post<void>(apiPath('files', id, 'restore'))
   },
   contentUrl(id: string): string {
-    return `${apiBaseUrl}/files/${id}/content`
+    return apiClient.urlFor(apiPath('files', id, 'content'))
   },
 }

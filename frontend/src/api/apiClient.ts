@@ -1,46 +1,8 @@
 import { i18n } from '../i18n'
+import { ApiError, type ApiErrorBody } from './apiError'
 
-// `maxBytes` is set on the detail of a PAYLOAD_TOO_LARGE error that names the size cap.
-export type ValidationDetail = { field: string; message: string; locale?: string; maxBytes?: number }
-
-// The shape of the server's error envelope body.
-export type ApiErrorBody = {
-  code?: string
-  message: string
-  details?: ValidationDetail[]
-  traceId?: string
-}
-
-// The Error thrown by apiClient on any non-2xx response.
-export class ApiError extends Error {
-  readonly status: number
-  readonly code?: string
-  readonly details?: ValidationDetail[]
-  // Seconds to wait, lifted from the standard Retry-After response header when the rejecting rate
-  // limiter supplies one (the window limiters this API ships with do; OnRejected also has a bare
-  // fallback branch for limiters that do not, so this can be absent on a 429 too). Kept off the
-  // error envelope on purpose: ErrorBody.details is a {field,message} list, so a scalar delay has
-  // no honest place in it.
-  readonly retryAfterSeconds?: number
-  // The id the server logged for this request; quote it to find the entry in the server log.
-  readonly traceId?: string
-  constructor(
-    status: number,
-    message: string,
-    code?: string,
-    details?: ValidationDetail[],
-    retryAfterSeconds?: number,
-    traceId?: string,
-  ) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.code = code
-    this.details = details
-    this.retryAfterSeconds = retryAfterSeconds
-    this.traceId = traceId
-  }
-}
+export { ApiError } from './apiError'
+export type { ValidationDetail, ApiErrorBody } from './apiError'
 
 // A server fault (5xx) is the only error a user cannot act on, so it is the only one that shows the
 // trace id.
@@ -72,6 +34,11 @@ export class ApiClient {
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
+  }
+
+  // The absolute URL of an endpoint path; the only place the base and a path are joined.
+  urlFor(path: string): string {
+    return `${this.baseUrl}${path}`
   }
 
   setUnauthorizedHandler(fn: () => void): void {
@@ -112,7 +79,7 @@ export class ApiClient {
     const headers: Record<string, string> = {}
     if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
     if (!SAFE_METHODS.has(method)) headers[CSRF_HEADER] = '1'
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await fetch(this.urlFor(path), {
       method,
       credentials: 'include',
       headers: Object.keys(headers).length > 0 ? headers : undefined,

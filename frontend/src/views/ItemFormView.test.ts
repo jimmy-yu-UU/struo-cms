@@ -320,6 +320,23 @@ describe('ItemFormView', () => {
     expect((w.vm as any).notFound).toBe(true)
   })
 
+  it.each(['..', '.'])('shows not-found and sends no request when the route id is %j', async (badId) => {
+    routeParams = { name: 'article', id: badId }
+    setupStores()
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    try {
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      expect((w.vm as any).notFound).toBe(true)
+      expect(w.text()).toContain('Item not found')
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('shows serverError (not notFound) on a non-404 load error', async () => {
     routeParams = { name: 'article', id: '5' }
     setupStores()
