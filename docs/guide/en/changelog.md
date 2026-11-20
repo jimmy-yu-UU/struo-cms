@@ -505,6 +505,15 @@ transformed again on the first request.
     and otherwise returns the new version.
   - A caller that passed the token as the third argument passes it by name (`ct:`) or as the
     fourth argument.
+- The API image is a runtime-specific publish, so a fork that uses the shipped `Dockerfile`
+  unchanged has nothing to do, a fork that changed it checks the three points below, and the build
+  stops with a message when the native files in `/app` do not match the runtime image.
+  - A musl (alpine) runtime stage needs the musl runtime identifiers, `linux-musl-x64` or
+    `linux-musl-arm64`, in the build stage; the shipped mapping produces `linux-x64` and
+    `linux-arm64`.
+  - A build stage pinned to the build platform (`FROM --platform=$BUILDPLATFORM`) must publish for
+    the target platform; the `Dockerfile` reads `TARGETARCH` for that.
+  - Paths under `/app/runtimes/` do not exist; the native files are in `/app`.
 :::
 
 ### Added
@@ -560,6 +569,10 @@ transformed again on the first request.
 
 ### Changed
 
+- The API image carries only the native files of its own platform (`linux-x64` or `linux-arm64`),
+  SQLite and libvips next to the assemblies in `/app`, instead of the files for every platform under
+  `/app/runtimes/`. The Windows `Microsoft.Data.SqlClient.SNI` library is not in the image. The
+  `/app` directory shrinks from about 279 MB to about 78 MB (amd64).
 - The admin image's runtime stage is built on the official `nginx` image, `nginx:1.30.7-alpine`,
   instead of `nginxinc/nginx-unprivileged`. The container runs the same way: as the `nginx` user
   (uid 101), listening on `8080`, with the pid file and temp directories under `/tmp`. The main
