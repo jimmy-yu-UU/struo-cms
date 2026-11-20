@@ -672,6 +672,74 @@ describe('ItemFormView', () => {
     expect(saveButton().attributes('disabled')).toBe('false')
   })
 
+  it('a second onSubmit while one is in flight sends no second request (edit)', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+    let resolveUpdate!: (v: Record<string, unknown>) => void
+    const update = vi.spyOn(itemsApi, 'update').mockImplementation(
+      () => new Promise((resolve) => { resolveUpdate = resolve }),
+    )
+    const w = mountView()
+    await w.vm.init()
+    const first = (w.vm as any).onSubmit()
+    await nextTick()
+    await (w.vm as any).onSubmit()
+    expect(update).toHaveBeenCalledTimes(1)
+    resolveUpdate({ id: '5' })
+    await first
+    expect(push).toHaveBeenCalledTimes(1)
+  })
+
+  it('a second onSubmit while one is in flight sends no second request (create)', async () => {
+    routeParams = { name: 'article' }; routeName = 'collection-create'
+    setupStores()
+    let resolveCreate!: (v: Record<string, unknown>) => void
+    const create = vi.spyOn(itemsApi, 'create').mockImplementation(
+      () => new Promise((resolve) => { resolveCreate = resolve }),
+    )
+    const w = mountView()
+    await w.vm.init()
+    ;(w.vm as any).model.shared.status = 'draft'
+    const first = (w.vm as any).onSubmit()
+    await nextTick()
+    await (w.vm as any).onSubmit()
+    expect(create).toHaveBeenCalledTimes(1)
+    resolveCreate({ id: '9' })
+    await first
+  })
+
+  it('a second onDelete while one is in flight asks once and removes once', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+    let resolveRemove!: () => void
+    const remove = vi.spyOn(itemsApi, 'remove').mockImplementation(
+      () => new Promise<void>((resolve) => { resolveRemove = resolve }),
+    )
+    const w = mountView()
+    await w.vm.init()
+    const first = (w.vm as any).onDelete()
+    await flushPromises()
+    await (w.vm as any).onDelete()
+    expect(confirmRequire).toHaveBeenCalledTimes(1)
+    expect(remove).toHaveBeenCalledTimes(1)
+    resolveRemove()
+    await first
+  })
+
+  it('allows another delete after a failed one', async () => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: '5', status: 'x', translations: {}, version: 1 })
+    const remove = vi.spyOn(itemsApi, 'remove').mockRejectedValueOnce(new Error('boom')).mockResolvedValue(undefined)
+    const w = mountView()
+    await w.vm.init()
+    await (w.vm as any).onDelete()
+    await (w.vm as any).onDelete()
+    expect(remove).toHaveBeenCalledTimes(2)
+  })
+
   // ---- dirty-state leave guard --------------------------------------
 
   it('registers a route-leave guard synchronously on setup', async () => {

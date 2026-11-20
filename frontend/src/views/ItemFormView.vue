@@ -167,6 +167,7 @@ async function focusSaveBanner(): Promise<void> {
 }
 const loading = ref(true)
 const submitting = ref(false)
+const deleting = ref(false)
 // ui/button has no `loading` prop, so the in-flight save state is surfaced through this label
 // swap plus :disabled="submitting" on the button below.
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
@@ -234,7 +235,8 @@ async function init(): Promise<void> {
 }
 
 async function onSubmit(): Promise<void> {
-  if (!meta.value) return
+  // A second trigger (Enter in a lone input, a double click) must not send a second request.
+  if (submitting.value || !meta.value) return
   errors.value = {
     ...validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t),
     ...draftErrors(drafts.value),
@@ -401,6 +403,16 @@ function onRevertConflict(): void {
 }
 
 async function onDelete(): Promise<void> {
+  if (deleting.value) return
+  deleting.value = true
+  try {
+    await deleteAfterConfirm()
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function deleteAfterConfirm(): Promise<void> {
   const { header, message } = deleteConfirm(t, deleteKindFor(meta.value))
   // severity 'danger' is the confirmStore vocabulary (not the toast one) and drives the
   // destructive variant on ConfirmHost's accept button.
@@ -481,7 +493,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
             <History class="size-4" />{{ t('revisions.open') }}
           </Button>
           <Button v-if="!isCreate && canDelete" type="button" variant="destructive"
-                  :disabled="deleteBlockedHint !== undefined" :title="deleteBlockedHint" @click="onDelete">
+                  :disabled="deleteBlockedHint !== undefined || deleting" :title="deleteBlockedHint" @click="onDelete">
             {{ t('itemForm.delete') }}
           </Button>
           <Button v-if="canWrite" type="button" :disabled="submitting || lockedBySuperAdmin" :title="lockedHint"

@@ -173,7 +173,7 @@ async function reloadAfterConflict(): Promise<void> {
 }
 
 async function onSave(): Promise<void> {
-  if (!canSave.value || !fileMeta.value || !raw.value) return
+  if (saving.value || !canSave.value || !fileMeta.value || !raw.value) return
   // The id of the LOADED item, so the update can only ever target the file whose data is in the form.
   const savedId = String(raw.value.id)
   saving.value = true

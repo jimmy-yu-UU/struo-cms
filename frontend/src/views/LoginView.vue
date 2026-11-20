@@ -33,6 +33,7 @@ const redirectTarget = safeRedirect(route.query.redirect)
 const submitLabel = computed(() => (submitting.value ? t('login.submitting') : t('login.submit')))
 
 async function onSubmit() {
+  if (submitting.value) return
   error.value = ''
   submitting.value = true
   try {

@@ -36,6 +36,41 @@ function seedSchema() {
   ] as any
 }
 
+describe('PermissionMatrix save re-entry', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    toastAdd.mockClear()
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+  })
+
+  it('a second save while one is in flight sends no second PUT and shares the outcome', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    let release!: () => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(() => new Promise((r) => { release = () => r([]) }))
+    const save = (w.vm as unknown as { save: () => Promise<boolean> }).save
+    const first = save()
+    const second = save()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledTimes(1)
+    release()
+    expect(await first).toBe(true)
+    expect(await second).toBe(true)
+  })
+
+  it('saves again once the previous save has settled', async () => {
+    seedSchema()
+    const w = mountMatrix()
+    await flushPromises()
+    vi.mocked(rbacApi.putRolePermissions).mockResolvedValue([])
+    const save = (w.vm as unknown as { save: () => Promise<boolean> }).save
+    await save()
+    await save()
+    expect(rbacApi.putRolePermissions).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('PermissionMatrix', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

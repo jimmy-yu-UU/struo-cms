@@ -55,6 +55,20 @@ describe('LoginView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
+  it('a second submit while a sign-in is in flight sends no second login', async () => {
+    const store = useAuthStore()
+    let release!: () => void
+    const loginSpy = vi.spyOn(store, 'login').mockImplementation(() => new Promise<void>((r) => { release = r }))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+    release()
+    await new Promise((r) => setTimeout(r, 0))
+  })
+
   it('shows an error message when login fails', async () => {
     // A plain (non-ApiError) rejection is not one auth.login actually produces in practice — it
     // always throws ApiError, since it goes through apiClient — but it is still the fallback branch

@@ -263,12 +263,17 @@ async function loadFolders(): Promise<void> {
 function enterFolder(id: string): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
 function goToBreadcrumb(id: string | null): void { clearSelection(); currentFolderId.value = id; page.value = 0; void load() }
 
+let creatingFolder = false
 async function onCreateFolder(name: string): Promise<void> {
+  if (creatingFolder) return
+  creatingFolder = true
   try {
     await itemsApi.create('mediafolder', { name, parentId: currentFolderId.value })
     await loadFolders()
   } catch (e) {
     toast.add({ severity: 'error', summary: e instanceof Error ? e.message : t('media.folderSaveFailed'), life: 3500 })
+  } finally {
+    creatingFolder = false
   }
 }
 

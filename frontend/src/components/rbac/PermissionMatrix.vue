@@ -83,7 +83,14 @@ function foldEntries(): RolePermissionEntry[] {
 
 // Returns whether the save succeeded so the parent form's Save can flush this matrix as
 // part of one submit and stay on the page when the PUT fails (its own error toast still fires).
-async function save(): Promise<boolean> {
+// A save asked for while another is in flight joins that one instead of sending a second PUT.
+let inFlightSave: Promise<boolean> | null = null
+function save(): Promise<boolean> {
+  inFlightSave ??= putGrants().finally(() => { inFlightSave = null })
+  return inFlightSave
+}
+
+async function putGrants(): Promise<boolean> {
   saving.value = true
   try {
     grants.value = fold(await rbacApi.putRolePermissions(props.roleId, foldEntries()))

@@ -739,6 +739,36 @@ describe('MediaLibraryView', () => {
     expect(create).toHaveBeenCalledWith('mediafolder', { name: 'N', parentId: null })
   })
 
+  it('a second folder create while one is in flight sends no second request', async () => {
+    makeListMock([{ data: rows, total: 1 }], [])
+    let release!: () => void
+    const create = vi.spyOn(itemsApi, 'create').mockImplementation(() => new Promise((r) => { release = () => r({}) }))
+    const w = mountView()
+    await flushPromises()
+    const onCreate = (w.vm as unknown as { onCreateFolder: (n: string) => Promise<void> }).onCreateFolder
+    const first = onCreate('N')
+    await onCreate('N')
+    expect(create).toHaveBeenCalledTimes(1)
+    release()
+    await first
+  })
+
+  it('a second folder rename for the same target sends no second request', async () => {
+    const target: FolderRow = { id: 'a', name: 'A', parentId: null }
+    makeListMock([{ data: rows, total: 1 }], [target])
+    let release!: () => void
+    const update = vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((r) => { release = () => r({}) }))
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as { renameTarget: FolderRow | null; onRenameFolder: (n: string) => Promise<void> }
+    vm.renameTarget = target
+    const first = vm.onRenameFolder('B')
+    await vm.onRenameFolder('B')
+    expect(update).toHaveBeenCalledTimes(1)
+    release()
+    await first
+  })
+
   it('shows a folderNotEmpty toast when deleting a non-empty folder (409 CONFLICT)', async () => {
     const target: FolderRow = { id: 'a', name: 'A', parentId: null }
     makeListMock([{ data: rows, total: 1 }], [target])
