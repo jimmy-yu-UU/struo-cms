@@ -97,9 +97,6 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
-      semver-major-days: 30
-      semver-minor-days: 7
-      semver-patch-days: 3
     groups:
       docker-root-minor-patch:
         patterns: ["*"]
@@ -111,17 +108,15 @@ updates:
   # frontend/Dockerfile pins the Node build stage and the official nginx
   # runtime stage to exact versions; Dependabot rewrites the tag. Node majors
   # are ignored here: the Node major moves together with the CI frontend job's
-  # Node version. Same cooldowns as the other ecosystems, minor and patch
-  # grouped.
+  # Node version. Only default-days in the cooldown, as for the root
+  # Dockerfile: the semver-aware cooldown keys are not accepted for image
+  # tags. Minor and patch grouped.
   - package-ecosystem: docker
     directory: "/frontend"
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
-      semver-major-days: 30
-      semver-minor-days: 7
-      semver-patch-days: 3
     groups:
       docker-frontend-minor-patch:
         patterns: ["*"]
