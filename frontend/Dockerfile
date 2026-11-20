@@ -21,10 +21,10 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-# Runtime: nginx serves the built dist/ and reverse-proxies /api/ to the
+# Runtime: nginx serves the built dist/ and reverse-proxies /api/ and /graphql to the
 # backend. See nginx/default.conf.template for the proxy and header
-# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA and
-# CSP_CONNECT_EXTRA are consumed by nginx's own envsubst-on-templates
+# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA,
+# CSP_CONNECT_EXTRA and CLIENT_MAX_BODY_SIZE are consumed by nginx's own envsubst-on-templates
 # entrypoint at container start.
 #
 # The runtime image is the official nginx image. nginx runs as its `nginx`
@@ -65,5 +65,6 @@ ENV HSTS_VALUE=
 ENV CSP_IMG_EXTRA=
 ENV CSP_CONNECT_EXTRA=
 ENV NGINX_RESOLVER=127.0.0.11
+ENV CLIENT_MAX_BODY_SIZE=32m
 USER 101
 EXPOSE 8080

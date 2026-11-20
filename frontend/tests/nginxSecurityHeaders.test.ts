@@ -54,9 +54,10 @@ function blocks(): Block[] {
 }
 
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
-// Locations that forward to the API: /api/ and the per-provider OIDC callback paths.
+// Locations that forward to the API: /api/, the GraphQL endpoint and the per-provider OIDC callback paths.
 const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$'
-const PROXIED = ['/api/', OIDC_LOCATION]
+const GRAPHQL_LOCATION = '= /graphql'
+const PROXIED = ['/api/', GRAPHQL_LOCATION, OIDC_LOCATION]
 
 // Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
 // longest plain prefix; the first matching regex wins over a plain prefix, as in nginx.
@@ -162,6 +163,26 @@ describe('nginx template security headers', () => {
   )
 })
 
+describe('nginx template request body limit', () => {
+  const repo = resolve(root, '..')
+  const read = (rel: string) => readFileSync(resolve(repo, rel), 'utf8')
+
+  it('takes client_max_body_size from CLIENT_MAX_BODY_SIZE, once, at server level', () => {
+    const server = blocks().find((b) => b.name === 'server')!.body
+    expect(server).toMatch(/^\s*client_max_body_size \$\{CLIENT_MAX_BODY_SIZE\};/m)
+    for (const b of blocks().filter((x) => x.name !== 'server')) expect(b.body).not.toContain('client_max_body_size')
+  })
+
+  it('defaults CLIENT_MAX_BODY_SIZE to 32m in the Dockerfile', () => {
+    expect(read('frontend/Dockerfile')).toMatch(/^ENV CLIENT_MAX_BODY_SIZE=32ms*$/m)
+  })
+
+  it('documents the variable in the template header and in Compose', () => {
+    expect(rawTemplate).toMatch(/^# .*CLIENT_MAX_BODY_SIZE/m)
+    expect(read('docker-compose.yml')).toMatch(/CLIENT_MAX_BODY_SIZE/)
+  })
+})
+
 describe('nginx template cache headers', () => {
   const body = (name: string) => blocks().find((b) => b.name === name)!.body
 
@@ -179,6 +200,26 @@ describe('nginx template cache headers', () => {
 })
 
 describe('nginx template API proxying', () => {
+  it('proxies the GraphQL endpoint through one exact-match location', () => {
+    expect(blocks().map((b) => b.name)).toContain(GRAPHQL_LOCATION)
+  })
+
+  it('routes /graphql to the API', () => {
+    expect(matchLocation('/graphql')).toBe(GRAPHQL_LOCATION)
+  })
+
+  it.each(['/graphqlx', '/graphql/', '/graphql/foo', '/GraphQL', '/graphql-docs'])(
+    'leaves %s to the SPA',
+    (path) => {
+      expect(matchLocation(path)).toBe('/')
+    },
+  )
+
+  it('keeps the GraphQL location after /api/, so the server-level headers precede both', () => {
+    const names = blocks().map((b) => b.name)
+    expect(names.indexOf('/api/')).toBeLessThan(names.indexOf(GRAPHQL_LOCATION))
+  })
+
   it('proxies the OIDC callback paths through one regex location', () => {
     expect(blocks().map((b) => b.name)).toContain(OIDC_LOCATION)
   })

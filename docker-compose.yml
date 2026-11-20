@@ -98,6 +98,8 @@ services:
         condition: service_healthy
     environment:
       API_UPSTREAM: http://api:8080
+      # nginx's request body limit; raise it together with Struo__Files__MaxUploadBytes on the api service.
+      CLIENT_MAX_BODY_SIZE: 32m
     ports:
       - "${STRUO_BIND_ADDRESS:-127.0.0.1}:${STRUO_ADMIN_PORT:-8080}:8080"
 
