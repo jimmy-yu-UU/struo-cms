@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient'
+import { withQuery } from './apiPath'
 
 // One entry per queried address, in request order. `clearable` is false for a super-admin account when
 // the caller is not a super-admin. An address with no account answers in the same shape.
@@ -12,6 +13,6 @@ export const loginLocksApi = {
   },
   // Returns 204: no body.
   clear(email: string): Promise<void> {
-    return apiClient.delete<void>(`/login-locks?email=${encodeURIComponent(email)}`)
+    return apiClient.delete<void>(withQuery('/login-locks', new URLSearchParams({ email })))
   },
 }

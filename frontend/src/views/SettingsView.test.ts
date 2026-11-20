@@ -88,6 +88,21 @@ describe('SettingsView', () => {
     expect(input().value).toBe('Acme Docs')
   })
 
+  it('a second save while one is in flight sends no second request', async () => {
+    seedAdmin()
+    const cfg = useAppConfigStore(); cfg.brandName = 'Old'
+    let release!: () => void
+    const save = vi.spyOn(cfg, 'saveBranding').mockImplementation(() => new Promise<void>((r) => { release = r }))
+    const wrapper = mountView()
+    await wrapper.find('input').setValue('New Brand')
+    const vm = wrapper.vm as unknown as { save: () => Promise<void> }
+    const first = vm.save()
+    await vm.save()
+    expect(save).toHaveBeenCalledTimes(1)
+    release()
+    await first
+  })
+
   it('saves branding for a super-admin', async () => {
     seedAdmin()
     const cfg = useAppConfigStore(); cfg.brandName = 'Old'

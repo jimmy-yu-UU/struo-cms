@@ -3,6 +3,22 @@ import {
   fileContentPath, fileContentDisplayUrl, absolutizeImageSrc, normalizeForStorage,
 } from './richTextImages'
 
+const GUID_ID = '0b6f6a2e-7c1d-4f7e-9a53-0c5d2b1e9f10'
+
+describe('image URL text for a GUID id', () => {
+  it('is the same text the stored HTML is parsed back from', () => {
+    expect(fileContentPath(GUID_ID)).toBe(`/api/files/${GUID_ID}/content`)
+    expect(fileContentDisplayUrl(GUID_ID)).toBe(`/api/files/${GUID_ID}/content`)
+  })
+
+  it('is recognised as a managed image in both forms', () => {
+    for (const src of [fileContentPath(GUID_ID), fileContentDisplayUrl(GUID_ID)]) {
+      const out = normalizeForStorage(`<img src="${src}?width=300" alt="a">`)
+      expect(out).toContain(`src="${fileContentPath(GUID_ID)}?width=300"`)
+    }
+  })
+})
+
 describe('richTextImages', () => {
   it('builds the stored relative path', () => {
     expect(fileContentPath('abc')).toBe('/api/files/abc/content')

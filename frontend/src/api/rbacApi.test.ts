@@ -31,7 +31,7 @@ describe('rbacApi', () => {
   it('getEffectivePermissions appends ?roles=<csv> when roleIds is provided', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ isSuperAdmin: false, permissions: {} })
     await rbacApi.getEffectivePermissions('u1', ['a', 'b'])
-    expect(apiClient.get).toHaveBeenCalledWith('/users/u1/effective-permissions?roles=a,b')
+    expect(apiClient.get).toHaveBeenCalledWith('/users/u1/effective-permissions?roles=a%2Cb')
   })
 
   it('getEffectivePermissions appends ?roles= (empty) for an empty roleIds array', async () => {

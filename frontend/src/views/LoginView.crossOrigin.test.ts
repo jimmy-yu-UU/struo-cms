@@ -11,10 +11,10 @@ const { push, replace, route } = vi.hoisted(() => ({
   route: { query: {} as Record<string, unknown> },
 }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: () => route }))
-vi.mock('../api/apiClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../api/apiClient')>()),
-  apiBaseUrl: 'https://api.example.com/api',
-}))
+vi.mock('../api/apiClient', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../api/apiClient')>()
+  return { ...original, apiClient: new original.ApiClient('https://api.example.com/api') }
+})
 
 const MS = { id: 'microsoft', displayName: 'Microsoft 365', icon: 'microsoft' }
 const ORIGIN = 'https://admin.example.com'
@@ -31,7 +31,7 @@ async function clickSso(): Promise<string> {
   }
 }
 
-describe('LoginView SSO with a cross-origin apiBaseUrl', () => {
+describe('LoginView SSO with a cross-origin API base', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()

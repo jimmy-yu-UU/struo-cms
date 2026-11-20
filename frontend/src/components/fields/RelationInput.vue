@@ -7,6 +7,7 @@ import { relationInputKind } from '../../lib/relationInputKind'
 import { usesLinksEditor } from '../../lib/junctionLinks'
 import { useSchemaStore } from '../../stores/schemaStore'
 import type { RelationMeta } from '../../types/schema'
+import type { FieldDraft, FieldDrafts } from '../../lib/fieldDrafts'
 
 const props = defineProps<{
   relation: RelationMeta
@@ -15,8 +16,13 @@ const props = defineProps<{
   parentId?: string
   excludeId?: string
   optionHint?: (raw: Record<string, unknown>) => string | null
+  // Unparsable payload text of the links editor; no other input of a relation parses its own text.
+  drafts?: FieldDrafts
 }>()
-const emit = defineEmits<{ (e: 'update:modelValue', v: unknown): void }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: unknown): void
+  (e: 'draft', key: string, draft: FieldDraft | null): void
+}>()
 // ItemForm's id, aria-invalid and aria-describedby are re-bound onto whichever control renders.
 defineOptions({ inheritAttrs: false })
 
@@ -38,8 +44,9 @@ function update(v: unknown): void { emit('update:modelValue', v) }
   <JunctionLinksEditor
     v-else-if="linksEditor"
     v-bind="$attrs"
-    :relation="relation" :model-value="modelValue" :disabled="isDisabled"
+    :relation="relation" :model-value="modelValue" :disabled="isDisabled" :drafts="drafts"
     @update:model-value="update"
+    @draft="(key: string, d: FieldDraft | null) => emit('draft', key, d)"
   />
   <RelationPicker
     v-else-if="kind === 'tagSelect'"

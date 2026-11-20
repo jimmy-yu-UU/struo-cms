@@ -695,6 +695,37 @@ transformed again on the first request.
   nested `translations`. Each target collection with a sidecar costs one more translation query
   for each set of expanded rows (relations on the same parent rows that reach the same target share
   it, and a relation with a nested `deep` expands its own set), whatever the number of rows.
+- In 0.30.1, the admin UI decoded the item id from the address bar and spliced it into the request
+  path as it was: opening a link ending in `<id>%3Fpurge=true` made "Delete" a permanent delete
+  instead of a move to the trash, and an id containing `%2F..%2F` sent the request to another
+  collection. An id is now one encoded path segment; a `?` or `/` in it is part of the id.
+- In 0.30.1, a JSON field, including a JSON payload field on a row of a many-to-many relation, could
+  be saved while its text did not parse, and what was sent was the last value that did; a first edit
+  that never parsed raised no warning on leaving the page or closing the tab. Save now sends nothing
+  and moves focus to the field, the field's error message follows the text in the box and goes away
+  once it parses, and leaving asks first; the text and its error stay when the language tab is
+  switched. Reload latest, a reload after a revert and loading the item again discard that text, and
+  so does removing the relation row.
+- In 0.30.1, some operations of the admin UI could be triggered again while the first was running,
+  and each sent its request again. A second trigger while one is running is now ignored:
+  - Saving an item: on a collection with a single one-line text field, pressing Enter twice on the
+    new-item page created two items, and the Save button was enabled again after the request
+    succeeded but before the next page opened. The form's inputs are now disabled while a save
+    runs; if the list page cannot be opened after an item is created, its edit page opens instead
+    and nothing is sent again.
+  - Deleting an item: after confirming, the item could be deleted a second time while the request
+    ran.
+  - Creating a media folder: by opening the dialog again, or by holding Enter. The "New folder"
+    button is now disabled while a folder is being created.
+  - Signing in: the form could be submitted again after the request succeeded, before the next
+    page opened.
+  - Saving the permission matrix: the form's Save could be pressed while the matrix save ran, and
+    a box ticked then was overwritten by the response. Boxes cannot be ticked while the save runs.
+- In 0.30.1, on a role form, after another administrator removed the role's super-admin status,
+  "Reload latest" or a reload after a revert showed a permission table with no grants instead of the
+  server's grants, and ticking one box and saving replaced every stored grant with just that one.
+  The matrix now follows the role and its super-admin state, and shows no table and cannot save
+  while the grants load.
 - In 0.30.1, the admin image's nginx forwarded only `/api/*` and the OIDC callback paths, so
   `POST /graphql` through the image answered `405` and `GET /graphql` answered the SPA page: the
   API's GraphQL endpoint was out of reach for a deployment that, as [Chapter 20](20-deployment.md)

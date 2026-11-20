@@ -80,4 +80,81 @@ describe('JsonField', () => {
     await w.setProps({ modelValue: { b: 2 } })
     expect((w.get('textarea').element as HTMLTextAreaElement).value).toContain('"b": 2')
   })
+
+  describe('draft reporting', () => {
+    const jsonField = field({ interface: 'json' })
+
+    it('reports the unparsable text as a draft and leaves the model untouched', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 } } })
+      await w.get('textarea').setValue('{"a":1,}')
+      expect(w.emitted('update:modelValue')).toBeUndefined()
+      const draft = w.emitted('update:draft')?.at(-1)?.[0] as { text: string; error: string }
+      expect(draft.text).toBe('{"a":1,}')
+      expect(draft.error).not.toBe('')
+    })
+
+    it('withdraws the draft once the text parses again', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 } } })
+      await w.get('textarea').setValue('{"a":1,}')
+      await w.get('textarea').setValue('{"a":2}')
+      expect(w.emitted('update:draft')?.at(-1)).toEqual([null])
+      expect(w.emitted('update:modelValue')?.at(-1)).toEqual([{ a: 2 }])
+    })
+
+    it('withdraws the draft when the text is cleared', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 } } })
+      await w.get('textarea').setValue('{')
+      await w.get('textarea').setValue('')
+      expect(w.emitted('update:draft')?.at(-1)).toEqual([null])
+      expect(w.emitted('update:modelValue')?.at(-1)).toEqual([null])
+    })
+
+    it('mounts showing the draft text and its error instead of the model', () => {
+      const draft = { text: '{"a":1,}', error: 'Unexpected token } in JSON' }
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 }, draft } })
+      expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe('{"a":1,}')
+      expect(w.get('.json-error').text()).toBe('Unexpected token } in JSON')
+      expect(w.get('textarea').attributes('aria-invalid')).toBe('true')
+    })
+
+    it('shows its own error once, not beside an error the form reports on the field', () => {
+      const draft = { text: '{', error: 'Unexpected end of JSON input' }
+      const w = mount(JsonField, {
+        props: { field: jsonField, modelValue: null, draft },
+        attrs: { 'aria-invalid': 'true', 'aria-describedby': 'form-error-id' },
+      })
+      expect(w.find('.json-error').exists()).toBe(false)
+      expect(w.get('textarea').attributes('aria-describedby')).toBe('form-error-id')
+    })
+
+    it('points aria-describedby at its own error when the form reports none', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: null } })
+      await w.get('textarea').setValue('{')
+      const id = w.get('.json-error').attributes('id')
+      expect(w.get('textarea').attributes('aria-describedby')).toBe(id)
+    })
+
+    it('drops an unparsable buffer when the form withdraws its draft', async () => {
+      const draft = { text: '{', error: 'Unexpected end of JSON input' }
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 }, draft } })
+      await w.setProps({ draft: null })
+      expect((w.get('textarea').element as HTMLTextAreaElement).value).toContain('"a": 1')
+      expect(w.find('.json-error').exists()).toBe(false)
+    })
+
+    it('keeps a valid buffer when the draft prop stays empty', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 } } })
+      await w.get('textarea').setValue('{"a": 2}')
+      await w.setProps({ draft: null })
+      expect((w.get('textarea').element as HTMLTextAreaElement).value).toBe('{"a": 2}')
+    })
+
+    it('replaces an unparsable buffer when the model is swapped from outside', async () => {
+      const w = mount(JsonField, { props: { field: jsonField, modelValue: { a: 1 } } })
+      await w.get('textarea').setValue('{')
+      await w.setProps({ modelValue: { b: 2 } })
+      expect((w.get('textarea').element as HTMLTextAreaElement).value).toContain('"b": 2')
+      expect(w.emitted('update:draft')?.at(-1)).toEqual([null])
+    })
+  })
 })
