@@ -66,10 +66,14 @@ edits done, that migration is not applied yet; with `Database:MigrateOnStartup` 
 restarted API refuses to start and exits with code `1`:
 
 ```text
-[18:00:42 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[07:40:18 WRN]  Migration(s) 202610080100 are out of order: older than the highest applied migration 202611170000. They run after it here, while a new database runs them in version order, so check that they do not depend on later migrations. <s:Struo.Migrations>
+[07:40:18 FTL]  StruoCMS host terminated unexpectedly <s:>
+System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true. Some of them are out of order: older than the highest applied migration.
 …
 ```
+
+The warning above the fatal entry appears because the sample's migration is older than the newest
+migration the core has applied; [Chapter 21](21-schema-and-upgrades.md) covers out-of-order migrations.
 
 Run `migrate` once to create the five tables `articles`, `article_translations`, `tags`,
 `article_tags` and `categories`:

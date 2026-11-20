@@ -58,10 +58,14 @@ migration 還沒套用；`Database:MigrateOnStartup` 是 `false` 時，重啟的
 結束：
 
 ```text
-[18:00:42 FTL] StruoCMS host terminated unexpectedly
-System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
+[07:40:18 WRN]  Migration(s) 202610080100 are out of order: older than the highest applied migration 202611170000. They run after it here, while a new database runs them in version order, so check that they do not depend on later migrations. <s:Struo.Migrations>
+[07:40:18 FTL]  StruoCMS host terminated unexpectedly <s:>
+System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true. Some of them are out of order: older than the highest applied migration.
 …
 ```
+
+Fatal 上方的警告，是因為範例的 migration 版本早於核心已套用的最新一支；out-of-order 的 migration
+見[第 21 章](21-schema-and-upgrades.md)。
 
 跑一次 `migrate`，建出 `articles`、`article_translations`、`tags`、`article_tags`、`categories`
 五張表：
