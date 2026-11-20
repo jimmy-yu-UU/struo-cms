@@ -340,6 +340,15 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 `Directory.Build.props`／`Directory.Packages.props`。根目錄的 `.dockerignore` 把
 `frontend/`、`docs/` 跟一般的建置產物擋在外面。
 
+建置階段針對建置目標的平台發布，也就是 `linux-x64` 或 `linux-arm64`，遇到其他架構就報錯停止。
+架構取自 builder 提供的 `TARGETARCH`，builder 沒提供時用 `uname -m`。輸出是不含 .NET 執行環境的
+發布方式（framework-dependent）：.NET 執行環境由基底映像提供，映像不重複帶；原生檔只有那個
+平台的（SQLite 與 libvips），放在 `/app` 的組件旁邊。映像裡沒有 Windows、macOS 或其他 CPU 的
+二進位檔，也沒有 `/app/runtimes/` 目錄。映像在建置目標的平台上執行，沒有用 `--platform`
+指定時就是主機的平台。runtime 階段會檢查 `/app` 裡每個原生函式庫都能在基底映像上解析，不能的話
+建置就停下並顯示訊息，例如換成 musl 基底映像、或架構不符。BuildKit 與傳統 builder
+（`DOCKER_BUILDKIT=0`）都能建置。
+
 ### API 映像
 
 監聽 `8080`，以非 root 使用者 `app` 執行。映像啟動時不套用 migration：進入點是

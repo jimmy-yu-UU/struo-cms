@@ -490,10 +490,10 @@ The transform pipeline is built on NetVips, an MIT-licensed managed wrapper. Str
 through NetVips dynamically at runtime — never statically linked, and never linked directly.
 
 libvips itself arrives as binaries in the `NetVips.Native` package family, which declares the
-license LGPL-3.0-or-later. The binaries are separate files in the API image, under
-`runtimes/<rid>/native/`, and StruoCMS embeds none of libvips's source. The same family bundles
-several of libvips's optional dependencies, each under its own license; the table in
-`THIRD-PARTY-NOTICES.md` lists them.
+license LGPL-3.0-or-later. The binary is a separate file in the API image, `libvips.so.42` in
+`/app`, for the image's own platform, and StruoCMS embeds none of libvips's source. The same
+family bundles several of libvips's optional dependencies, each under its own license; the table
+in `THIRD-PARTY-NOTICES.md` lists them.
 
 `THIRD-PARTY-NOTICES.md` lists the third-party components in the images whose declared license is
 not MIT, ISC, BSD or 0BSD, with their license terms. It is not a complete inventory of what the
