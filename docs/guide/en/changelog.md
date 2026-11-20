@@ -451,19 +451,21 @@ transformed again on the first request.
   - `ExpandPreparedAsync` takes an `attachTranslations` parameter after `locale`, of the same type
     as `EntityAccessors.AttachTranslations`. A fork that calls it adds the argument: a delegate
     that adds `translations` to the expanded rows, or `null` to add none.
-- A grants save advances the role's `version` by one, so an update of the role item that carries
-  the version read before the save answers `409` `VERSION_CONFLICT`; read the role again after
-  saving its grants. The save itself takes an optional `version`, which changes these public
-  members:
-  - `IPermissionGrantStore.ReplaceAsync` takes `long? expectedVersion = null` before the
-    `CancellationToken` and returns `Task<long>`, the role's new version, instead of `Task`. A fork
-    that implements the interface compares `expectedVersion` with the role's `Version` and advances
-    it by one in a single conditional update that runs first in the transaction, throwing
-    `ConcurrencyConflictException` when they differ; a caller that passes the token positionally as
-    the third argument passes it as `ct`.
-  - `rbacApi.putRolePermissions` takes an optional `version` and returns `{ entries, version }`
-    instead of the entries array, and `PermissionMatrix` takes a `version` prop and emits `saved`
-    and `conflict`; a fork that customizes the admin SPA adjusts its calls.
+- A successful grants save advances the role's `version` by one, so an API client that echoes
+  `version` on `PUT /api/items/role/{id}` has to take the new value:
+  - After `PUT /api/roles/{id}/permissions`, it reads `meta.version` from the response, or re-reads
+    the role.
+  - An update that carries the version read before the grants save answers `409`
+    `VERSION_CONFLICT`.
+- `IPermissionGrantStore.ReplaceAsync` takes an expected version and returns the role's new one.
+  - It returns `Task<long?>` where it returned `Task`, and takes `long? expectedVersion = null`
+    between `grants` and the `CancellationToken`.
+  - A fork's implementation compares `expectedVersion` with the role's `Version` and advances it by
+    one in a single conditional update, the first statement of the save. It throws
+    `ConcurrencyConflictException` when they differ, returns `null` for a role that does not exist,
+    and otherwise returns the new version.
+  - A caller that passed the token as the third argument passes it by name (`ct:`) or as the
+    fourth argument.
 :::
 
 ### Added
@@ -472,9 +474,9 @@ transformed again on the first request.
   logs one start-up warning naming the provider id, never the domains; the host still starts.
 - `PUT api/roles/{id}/permissions` takes an optional `version` query parameter: a role that has
   moved on answers `409` `VERSION_CONFLICT`, and the response carries the role's new `version` as
-  `meta.version` ([Chapter 13](13-rest-endpoints.md)). The role form and the permission matrix of
-  the admin UI share that version, so saving one after the other has saved the role shows the form's
-  conflict notice.
+  `meta.version` ([Chapter 13](13-rest-endpoints.md)). In the admin UI the role form and the
+  permission matrix share one version and do not conflict with each other; when another
+  administrator has saved the role in between, the save shows the form's conflict notice.
 - New public members:
   - `DeadlockVictim` (`Struo.Infrastructure.Persistence`), `DomainErrorMap.IsDeadlockVictim` and
     `DomainErrorMap.DeadlockMessage`.
@@ -498,8 +500,8 @@ transformed again on the first request.
     the same parent rows can share one call, and a relation with a nested `deep` expands its own
     set. Construction with three arguments and three-variable deconstruction still compile.
   - `VersionedSuccessEnvelope`, `VersionMeta` and `Envelope.Versioned` (`Struo.Api.Http`): a success
-    envelope whose `meta` carries only `version`; `EnvelopeResultFilter` leaves it as it is.
-  - `ApiClient.putEnveloped` and the type `RoleGrantsSaved` (admin SPA).
+    envelope whose `meta` carries only `version`; an action that returns it as the value of an
+    `ObjectResult` has it sent as it is, with no second envelope around it.
   - Four `IItemRepository` members: `GetByIdLockedAsync`, `CountTrashedWhereInAsync`,
     `SetForeignKeyNullForTrashedAsync`, `IsForeignKeyNullable`.
 
