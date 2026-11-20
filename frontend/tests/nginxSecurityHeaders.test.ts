@@ -161,10 +161,11 @@ describe('nginx template security headers', () => {
   })
 
   it.each(withHeaders.map((b) => [b.name, b] as const))(
-    'block %s sends every security header on every response',
+    'block %s sends every security header on every response, once',
     (_name, b) => {
       for (const h of SECURITY_HEADERS) {
         expect(b.body).toMatch(new RegExp(`add_header ${h} "[^\n]*" always;`))
+        expect(b.body.match(new RegExp(`add_header ${h} `, 'g'))).toHaveLength(1)
       }
     },
   )
@@ -184,6 +185,14 @@ describe('nginx template request body limit', () => {
     const withLimit = blocks().filter((b) => /client_max_body_size/.test(b.body) && b.name !== 'server')
     expect(withLimit.map((b) => b.name)).toEqual([UPLOAD_LOCATION])
     expect(withLimit[0].body).toMatch(/^\s*client_max_body_size \$\{CLIENT_MAX_BODY_SIZE\};/m)
+  })
+
+  // With buffering off, nginx answered some refusals with a 502 instead of the API's JSON when the
+  // client sent the body faster than the API refused it, so the upload location keeps the default.
+  it('leaves request buffering on in every proxied location', () => {
+    for (const name of PROXIED) {
+      expect(blocks().find((b) => b.name === name)!.body).not.toMatch(/proxy_request_buffering/)
+    }
   })
 
   it.each(['/api/files', '/api/files/', '/API/Files'])('routes %s to the upload location', (path) => {

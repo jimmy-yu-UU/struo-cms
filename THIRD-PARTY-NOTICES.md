@@ -16,10 +16,9 @@ Scope:
 Components under MIT, ISC, BSD or 0BSD terms are not listed, so this file is not a complete
 inventory of what the images contain. Out of scope: the operating-system packages and the .NET
 runtime of the base images, which come with their own notices, and development tools that do not
-travel in an image. Versions are not
-repeated here; they are recorded in `Directory.Packages.props`.
-The license of each component is the one its package declares, read from the package's own
-metadata and license files.
+travel in an image. Versions are not repeated here; they are recorded in
+`Directory.Packages.props`. The license of each component is the one its package declares, read
+from the package's own metadata and license files.
 
 ## Apache License 2.0
 
@@ -1152,25 +1151,29 @@ The license is at <http://creativecommons.org/licenses/by/4.0/>.
 
 ## PostgreSQL License
 
-`Npgsql` (Copyright 2025 The Npgsql Development Team; <https://github.com/npgsql/npgsql>)
-declares the license expression `PostgreSQL`, <https://licenses.nuget.org/PostgreSQL>. The
-copyright line is the one its package metadata declares: Copyright 2025 © The Npgsql Development Team.
-The text of the PostgreSQL License is the one of the SPDX license list,
-<https://spdx.org/licenses/PostgreSQL.html>:
+`Npgsql` (<https://github.com/npgsql/npgsql>) declares the license expression `PostgreSQL`,
+<https://licenses.nuget.org/PostgreSQL>, and the copyright line Copyright 2025 © The Npgsql
+Development Team. Its own license file, `LICENSE` in the repository, taken from the tag of the
+pinned version, reads:
 
 ```text
-PostgreSQL Database Management System
-(formerly known as Postgres, then as Postgres95)
+Copyright (c) 2002-2025, Npgsql
 
-Portions Copyright (c) 1996-2010, The PostgreSQL Global Development Group
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose, without fee, and without a written agreement
+is hereby granted, provided that the above copyright notice and this
+paragraph and the following two paragraphs appear in all copies.
 
-Portions Copyright (c) 1994, The Regents of the University of California
+IN NO EVENT SHALL NPGSQL BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,
+SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS,
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF
+Npgsql HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Permission to use, copy, modify, and distribute this software and its documentation for any purpose, without fee, and without a written agreement is hereby granted, provided that the above copyright notice and this paragraph and the following two paragraphs appear in all copies.
-
-IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+NPGSQL SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND Npgsql
+HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS,
+OR MODIFICATIONS.
 ```
 
 ## Microsoft.Data.SqlClient.SNI.runtime

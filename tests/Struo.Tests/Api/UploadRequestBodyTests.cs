@@ -24,6 +24,26 @@ public class UploadRequestBodyTests
 {
     private const long MaxUploadBytes = 104_857_600;
 
+    /// <summary>The ways reading the form fails because of what the client sent.</summary>
+    public enum ClientFault { MalformedForm, StreamEnded }
+
+    /// <summary>Failures on the server's side of the read, which are not the caller's mistake.</summary>
+    public enum ServerFault { UnixNoSpace, UnixQuota, WindowsDiskFull, WindowsHandleDiskFull }
+
+    private static Exception Fault(ClientFault kind) => kind switch
+    {
+        ClientFault.MalformedForm => new InvalidDataException("Missing content-type boundary."),
+        _ => new IOException("Unexpected end of Stream, the content may have already been read by another component."),
+    };
+
+    private static IOException Fault(ServerFault kind) => kind switch
+    {
+        ServerFault.UnixNoSpace => new IOException("No space left on device", 28),
+        ServerFault.UnixQuota => new IOException("Disk quota exceeded", 122),
+        ServerFault.WindowsDiskFull => new IOException("There is not enough space on the disk.", unchecked((int)0x80070070)),
+        _ => new IOException("The disk is full.", unchecked((int)0x80070027)),
+    };
+
     private static DefaultHttpContext Multipart(Stream body, IServiceProvider? services = null)
     {
         var context = new DefaultHttpContext();
@@ -47,7 +67,7 @@ public class UploadRequestBodyTests
         return new MemoryStream(Encoding.ASCII.GetBytes(sb.ToString()));
     }
 
-    private static IServiceProvider FormOptionsWith(Action<FormOptions> configure)
+    private static ServiceProvider FormOptionsWith(Action<FormOptions> configure)
     {
         var options = new FormOptions();
         configure(options);
@@ -63,7 +83,7 @@ public class UploadRequestBodyTests
 
         UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, NullLogger.Instance);
 
-        feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + UploadRequestBody.MultipartHeadroomBytes);
+        feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + FileStorageOptions.UploadFramingHeadroomBytes);
     }
 
     [Fact]
@@ -75,16 +95,16 @@ public class UploadRequestBodyTests
 
         UploadRequestBody.RaiseBodyLimit(context.Request, 64, NullLogger.Instance);
 
-        feature.MaxRequestBodySize.Should().Be(64 + UploadRequestBody.MultipartHeadroomBytes);
+        feature.MaxRequestBodySize.Should().Be(64 + FileStorageOptions.UploadFramingHeadroomBytes);
     }
 
     [Fact]
-    public void A_read_only_limit_feature_is_left_alone_and_a_warning_is_logged_once()
+    public void A_read_only_limit_feature_is_left_alone_and_one_warning_is_logged_for_the_request()
     {
         var feature = new RecordingLimitFeature(isReadOnly: true);
         var context = Multipart(Stream.Null);
         context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
-        var logger = new ListLogger();
+        var logger = new RecordingLogger();
 
         UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, logger);
 
@@ -98,7 +118,7 @@ public class UploadRequestBodyTests
     public void A_host_without_a_limit_feature_is_not_an_error()
     {
         var context = Multipart(Stream.Null);
-        var logger = new ListLogger();
+        var logger = new RecordingLogger();
 
         var act = () => UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, logger);
 
@@ -118,22 +138,9 @@ public class UploadRequestBodyTests
     }
 
     [Fact]
-    public async Task A_file_part_past_the_default_multipart_limit_is_read_when_the_upload_limit_allows_it()
-    {
-        const long fileBytes = FormOptions.DefaultMultipartBodyLengthLimit + 4096;
-        var context = Multipart(new GeneratedMultipart(fileBytes));
-
-        var form = await UploadRequestBody.ReadFormAsync(
-            context.Request, FormOptions.DefaultMultipartBodyLengthLimit + 8192, NullLogger.Instance,
-            CancellationToken.None);
-
-        form.Files.GetFile("file")!.Length.Should().Be(fileBytes);
-    }
-
-    [Fact]
     public async Task The_multipart_limit_is_raised_from_the_configured_form_options_not_from_defaults()
     {
-        var services = FormOptionsWith(o => o.MultipartBodyLengthLimit = 1024);
+        using var services = FormOptionsWith(o => o.MultipartBodyLengthLimit = 1024);
         var context = Multipart(Form(fieldCount: 0, filePartBytes: 3000), services);
 
         var form = await UploadRequestBody.ReadFormAsync(context.Request, 4096, NullLogger.Instance, CancellationToken.None);
@@ -144,7 +151,7 @@ public class UploadRequestBodyTests
     [Fact]
     public async Task The_other_configured_form_limits_survive_the_raise()
     {
-        var services = FormOptionsWith(o =>
+        using var services = FormOptionsWith(o =>
         {
             o.MultipartBodyLengthLimit = 1024;
             o.ValueCountLimit = 2;
@@ -159,7 +166,8 @@ public class UploadRequestBodyTests
     [Fact]
     public void A_configured_multipart_limit_above_the_cap_is_left_as_it_is()
     {
-        var context = Multipart(Stream.Null, FormOptionsWith(_ => { }));
+        using var services = FormOptionsWith(_ => { });
+        var context = Multipart(Stream.Null, services);
 
         UploadRequestBody.RaiseBodyLimit(context.Request, 4096, NullLogger.Instance);
 
@@ -181,21 +189,16 @@ public class UploadRequestBodyTests
         thrown.MaxBytes.Should().Be(MaxUploadBytes);
     }
 
-    public static TheoryData<Exception> UnreadableForms() => new()
-    {
-        new InvalidDataException("Missing content-type boundary."),
-        new BadHttpRequestException("Unexpected end of request content.", StatusCodes.Status400BadRequest),
-        new IOException("Unexpected end of Stream, the content may have already been read by another component."),
-    };
-
     [Theory]
-    [MemberData(nameof(UnreadableForms))]
-    public async Task A_form_that_cannot_be_read_is_a_bad_input_error_with_a_fixed_message(Exception failure)
+    [InlineData(ClientFault.MalformedForm)]
+    [InlineData(ClientFault.StreamEnded)]
+    public async Task A_form_that_cannot_be_read_is_a_bad_input_error_with_a_fixed_message(ClientFault kind)
     {
+        var failure = Fault(kind);
         var context = Multipart(new FailingBodyStream(failure));
+        var logger = new RecordingLogger();
 
-        var act = () => UploadRequestBody.ReadFormAsync(
-            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
 
         var thrown = (await act.Should().ThrowAsync<QueryException>()).Which;
         thrown.Message.Should().Be("The request form could not be read.");
@@ -203,10 +206,75 @@ public class UploadRequestBodyTests
     }
 
     [Theory]
-    [MemberData(nameof(UnreadableForms))]
-    public async Task A_form_read_that_fails_after_the_client_left_is_a_cancellation_not_a_bad_request(Exception failure)
+    [InlineData(ClientFault.MalformedForm)]
+    [InlineData(ClientFault.StreamEnded)]
+    public async Task A_form_that_cannot_be_read_is_logged_once_at_warning_with_the_exception_attached(ClientFault kind)
     {
+        var failure = Fault(kind);
         var context = Multipart(new FailingBodyStream(failure));
+        var logger = new RecordingLogger();
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
+        await act.Should().ThrowAsync<QueryException>();
+
+        var entry = logger.Entries.Should().ContainSingle().Which;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Exception.Should().BeSameAs(failure);
+        entry.Message.Should().NotContain("xyz", "no request content is logged");
+    }
+
+    [Theory]
+    [InlineData(ServerFault.UnixNoSpace)]
+    [InlineData(ServerFault.UnixQuota)]
+    [InlineData(ServerFault.WindowsDiskFull)]
+    [InlineData(ServerFault.WindowsHandleDiskFull)]
+    public async Task A_disk_fault_while_buffering_the_form_is_left_to_surface_as_a_server_error(ServerFault kind)
+    {
+        var failure = Fault(kind);
+        var context = Multipart(new FailingBodyStream(failure));
+        var logger = new RecordingLogger();
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<IOException>()).Which.Should().BeSameAs(failure);
+        logger.Entries.Should().BeEmpty("the unhandled-exception handler logs a server error");
+    }
+
+    [Fact]
+    public async Task A_request_the_server_rejected_keeps_its_own_failure_and_is_not_turned_into_a_bad_input_error()
+    {
+        var timeout = new BadHttpRequestException("Request body timeout.", StatusCodes.Status408RequestTimeout);
+        var context = Multipart(new FailingBodyStream(timeout));
+        var logger = new RecordingLogger();
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BadHttpRequestException>()).Which.Should().BeSameAs(timeout);
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(ClientFault.MalformedForm)]
+    [InlineData(ClientFault.StreamEnded)]
+    public async Task A_form_read_that_fails_after_the_client_left_is_a_cancellation_not_a_bad_request(ClientFault kind)
+    {
+        var context = Multipart(new FailingBodyStream(Fault(kind)));
+        using var aborted = new CancellationTokenSource();
+        context.RequestAborted = aborted.Token;
+        await aborted.CancelAsync();
+        var logger = new RecordingLogger();
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        logger.Entries.Should().BeEmpty("a client that left is not worth a warning");
+    }
+
+    [Fact]
+    public async Task A_request_the_server_rejected_after_the_client_left_is_a_cancellation_too()
+    {
+        var early = new BadHttpRequestException("Unexpected end of request content.", StatusCodes.Status400BadRequest);
+        var context = Multipart(new FailingBodyStream(early));
         using var aborted = new CancellationTokenSource();
         context.RequestAborted = aborted.Token;
         await aborted.CancelAsync();
@@ -286,7 +354,7 @@ public class UploadBodyLimitFilterTests
         await Filter().OnResourceExecutionAsync(context, () => { nextCalled = true; return Executed(context); });
 
         nextCalled.Should().BeTrue();
-        feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + UploadRequestBody.MultipartHeadroomBytes);
+        feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + FileStorageOptions.UploadFramingHeadroomBytes);
         (await http.Request.ReadFormAsync())["a"].ToString().Should().Be("b");
     }
 

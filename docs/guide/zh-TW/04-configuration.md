@@ -136,13 +136,13 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:DefaultStatus` | 字串 | `"published"` |
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
-`Backend`、`DefaultStatus` 與 `MaxUploadBytes` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值
-直接讓啟動失敗；所選後端的必
-要欄位（見下面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要 fork
-註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。`MaxUploadBytes`
-必須介於 1 與 9223372036854710271 之間（留得下下面 64 KiB multipart 外框的最大值），超出範圍時啟動失
-敗，訊息指出這個鍵與範圍。`AllowedContentTypes`、
-`PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
+`Backend`、`DefaultStatus` 與 `MaxUploadBytes` 是這個區段裡在啟動時真的被驗證的頂層鍵。`Backend` 或
+`DefaultStatus` 的值無法辨識、或 `MaxUploadBytes` 超出範圍，啟動會立刻失敗；所選後端的必要欄位（見下
+面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要
+fork 註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。
+`MaxUploadBytes` 必須介於 1 與 9223372036854710271 之間，這是留得下下面 64 KiB multipart 外框的最大
+值；訊息指出這個鍵與範圍。`AllowedContentTypes`、`PresignedRedirect` 跟 `ImageTransform` 裡沒在
+[ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
 - `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。請求本文的上限不只一
   個，見下面的表。

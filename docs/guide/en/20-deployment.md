@@ -633,9 +633,12 @@ A request body is capped in more than one place:
 
 `CLIENT_MAX_BODY_SIZE` is an nginx size (`32m`, `128m`). It applies to the upload path
 `POST /api/files` only; every other path, `/graphql` and the rest of `/api/` included, keeps the
-fixed `32m`, so raising it does not raise the limit for anonymous requests. The Compose file passes
-it through from `STRUO_CLIENT_MAX_BODY_SIZE` (default `32m`). nginx refuses to start when the value
-is empty or is not an nginx size: `32MB` stops it with `[emerg] "client_max_body_size" directive
+fixed `32m`. nginx stores a request body in a temporary file under `/tmp/client_temp` in the
+container before it forwards the request, so on the upload path it stores a body of up to
+`CLIENT_MAX_BODY_SIZE` for any caller, signed in or not, before the API can answer with a `401`,
+`403` or `413`. Size the container's `/tmp` for the limit you set. The Compose file passes it
+through from `STRUO_CLIENT_MAX_BODY_SIZE` (default `32m`). nginx refuses to start when the value is
+empty or is not an nginx size: `32MB` stops it with `[emerg] "client_max_body_size" directive
 invalid value`.
 
 On the upload endpoint the API accepts a request body of `Struo:Files:MaxUploadBytes` plus 64 KiB

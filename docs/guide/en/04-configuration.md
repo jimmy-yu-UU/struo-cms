@@ -158,16 +158,15 @@ reported.
 | `Struo:Files:PresignedRedirect` | bool | `false` |
 
 `Backend`, `DefaultStatus` and `MaxUploadBytes` are the only top-level keys in this section that are
-validated at startup: an unrecognized value fails startup immediately, and the required fields of
-whichever
+validated at startup. A `Backend` or `DefaultStatus` value that is not recognized, or a
+`MaxUploadBytes` outside its range, fails startup immediately, and the required fields of whichever
 backend you picked (see Local/S3 below) are validated along with it. `Backend` is `local`, `s3` or
 `custom`; `custom` builds no storage in the core and needs a fork-registered `IFileStorage` (see
 [Chapter 15](15-files-and-media.md)), and startup fails when there is none. `MaxUploadBytes` must be
-between 1 and 9223372036854710271 (the largest value that leaves room for the 64 KiB of multipart
-framing below), and startup fails with a message naming the key and that range otherwise.
-`AllowedContentTypes`, `PresignedRedirect`, and the `ImageTransform` keys other than the ones
-listed under [ImageTransform](#imagetransform) as validated have no validation rule — a
-correctly typed value is never checked further.
+between 1 and 9223372036854710271, the largest value that leaves room for the 64 KiB of multipart
+framing below; the message names the key and that range. `AllowedContentTypes`, `PresignedRedirect`,
+and the `ImageTransform` keys other than the ones listed under [ImageTransform](#imagetransform) as
+validated have no validation rule — a correctly typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
   about the length is limited too. A request body has more than one limit; see the table below.

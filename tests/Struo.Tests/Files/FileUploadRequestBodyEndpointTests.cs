@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Struo.Api.Auth;
-using Struo.Api.Http;
+using Struo.Application.Files;
 using Struo.Tests.Api;
 using Struo.Tests.Support;
 using Xunit;
@@ -74,7 +74,7 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         return client;
     }
 
-    private async Task<HttpClient> LoginAsync(WebApplicationFactory<Program> host, string email, string password)
+    private static async Task<HttpClient> LoginAsync(WebApplicationFactory<Program> host, string email, string password)
     {
         var client = Client(host);
         (await client.PostAsJsonAsync("/api/auth/login", new { email, password })).EnsureSuccessStatusCode();
@@ -158,7 +158,7 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         var other = new StringContent("a=b", Encoding.ASCII, "application/x-www-form-urlencoded");
         await client.PostAsync("/api/auth/login", other);
 
-        probe.Features["/api/files"].MaxRequestBodySize.Should().Be(Limit + UploadRequestBody.MultipartHeadroomBytes);
+        probe.Features["/api/files"].MaxRequestBodySize.Should().Be(Limit + FileStorageOptions.UploadFramingHeadroomBytes);
         probe.Features["/api/auth/login"].MaxRequestBodySize.Should().Be(30_000_000);
     }
 

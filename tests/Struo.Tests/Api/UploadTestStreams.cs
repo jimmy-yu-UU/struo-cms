@@ -1,4 +1,3 @@
-using System.Text;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
 
@@ -54,72 +53,14 @@ internal sealed class RecordingLimitFeature(bool isReadOnly = false) : IHttpMaxR
     public long? MaxRequestBodySize { get; set; } = 30_000_000;
 }
 
-/// <summary>A logger that keeps what it is asked to write.</summary>
-internal sealed class ListLogger : ILogger
+/// <summary>A logger that keeps what it is asked to write, exceptions included.</summary>
+internal sealed class RecordingLogger : ILogger
 {
-    public List<(LogLevel Level, string Message)> Entries { get; } = [];
+    public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-        Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception)));
-}
-
-/// <summary>A multipart body with one file part of the given size, generated as it is read.</summary>
-internal sealed class GeneratedMultipart(long fileBytes) : Stream
-{
-    private readonly byte[] _head = Encoding.ASCII.GetBytes(
-        "--xyz\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.bin\"\r\n" +
-        "Content-Type: application/octet-stream\r\n\r\n");
-    private readonly byte[] _tail = Encoding.ASCII.GetBytes("\r\n--xyz--\r\n");
-    private long _position;
-
-    public override bool CanRead => true;
-    public override bool CanSeek => false;
-    public override bool CanWrite => false;
-    public override long Length => _head.Length + fileBytes + _tail.Length;
-    public override long Position { get => _position; set => throw new NotSupportedException(); }
-
-    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
-
-    public override int Read(Span<byte> buffer)
-    {
-        var written = 0;
-        while (written < buffer.Length && _position < Length)
-        {
-            if (_position < _head.Length)
-            {
-                var n = (int)Math.Min(buffer.Length - written, _head.Length - _position);
-                _head.AsSpan((int)_position, n).CopyTo(buffer[written..]);
-                written += n;
-                _position += n;
-            }
-            else if (_position < _head.Length + fileBytes)
-            {
-                var n = (int)Math.Min(buffer.Length - written, _head.Length + fileBytes - _position);
-                buffer.Slice(written, n).Fill((byte)'a');
-                written += n;
-                _position += n;
-            }
-            else
-            {
-                var at = (int)(_position - _head.Length - fileBytes);
-                var n = Math.Min(buffer.Length - written, _tail.Length - at);
-                _tail.AsSpan(at, n).CopyTo(buffer[written..]);
-                written += n;
-                _position += n;
-            }
-        }
-
-        return written;
-    }
-
-    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
-        new(Read(buffer.Span));
-
-    public override void Flush() { }
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    public override void SetLength(long value) => throw new NotSupportedException();
-    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception), exception));
 }

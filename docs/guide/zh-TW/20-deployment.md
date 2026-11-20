@@ -518,9 +518,12 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 | 經映像的其他請求（nginx） | `32m` | 範本裡固定 |
 
 `CLIENT_MAX_BODY_SIZE` 是 nginx 的大小寫法（`32m`、`128m`），只套用在上傳路徑 `POST /api/files`；其
-他路徑，包括 `/graphql` 與 `/api/` 的其餘部分，維持固定的 `32m`，所以調高它不會放寬匿名請求的上限。
-Compose 檔從 `STRUO_CLIENT_MAX_BODY_SIZE`（預設 `32m`）傳進來。值是空的、或不是 nginx 的大小寫法時，
-nginx 拒絕啟動：`32MB` 會讓它以 `[emerg] "client_max_body_size" directive invalid value` 停下來。
+他路徑，包括 `/graphql` 與 `/api/` 的其餘部分，維持固定的 `32m`。nginx 在轉送請求之前，會先把請求本
+文存進容器裡 `/tmp/client_temp` 底下的暫存檔，所以在上傳路徑上，不論呼叫端有沒有登入，nginx 都會先存
+下最多 `CLIENT_MAX_BODY_SIZE` 大的本文，API 才有機會回 `401`、`403` 或 `413`。容器的 `/tmp` 要照你設
+的上限準備空間。Compose 檔從 `STRUO_CLIENT_MAX_BODY_SIZE`（預設 `32m`）傳進來。值是空的、或不是
+nginx 的大小寫法時，nginx 拒絕啟動：`32MB` 會讓它以
+`[emerg] "client_max_body_size" directive invalid value` 停下來。
 
 上傳端點接受的請求本文是 `Struo:Files:MaxUploadBytes` 再加檔案外圍 multipart 外框的 64 KiB。上傳超過
 這個鍵，拿到的是 API 的 JSON 錯誤信封：`413`、`PAYLOAD_TOO_LARGE`，上限在
