@@ -22,7 +22,7 @@ COPY . .
 RUN dotnet restore src/Struo.Api/Struo.Api.csproj
 RUN dotnet publish src/Struo.Api/Struo.Api.csproj --configuration Release --no-restore --output /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 # The runtime stage upgrades the OS packages first: Ubuntu publishes package fixes before the
 # upstream image is rebuilt, and this keeps every build on the current fixes. It is permanent, not a
 # workaround for a particular CVE: when the base image already carries the fixes it upgrades nothing.
