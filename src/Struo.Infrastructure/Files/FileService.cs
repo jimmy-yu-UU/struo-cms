@@ -127,8 +127,7 @@ public sealed class FileService(
         }
     }
 
-    private PayloadTooLargeException TooLarge() => new(
-        $"File exceeds the maximum size of {fileOptions.MaxUploadBytes} bytes.", "file", fileOptions.MaxUploadBytes);
+    private PayloadTooLargeException TooLarge() => PayloadTooLargeException.FileTooLarge(fileOptions.MaxUploadBytes);
 
     // Shortens the stem so the name fits the column and keeps its extension; an extension that
     // alone fills the column is cut with the rest of the name.

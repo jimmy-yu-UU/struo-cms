@@ -559,16 +559,34 @@ whose value is empty; it should only be set once every reachable request has TLS
 by an upstream proxy. Set it in production, for example `max-age=31536000`: the API sends no HSTS
 header itself, and TLS may end at a proxy in front of this image.
 
-The image proxies `/api/*` and the OIDC paths `/signin-oidc`, `/signin-oidc-{id}` and `/signout-callback-oidc-{id}` to the API, forwarding the
-client's `Host` header (with its port) as `Host` and `X-Forwarded-Host`, so the API sees the origin
-the browser used. The callback paths are the OIDC redirect targets; a custom `CallbackPath`
-outside `/api/` needs its own `location` block in the template. Chapter 16 covers registering the
-redirect URI.
+The image forwards these paths to the API and answers every other path from its own files:
+
+| Path | Goes to | Note |
+|---|---|---|
+| `/api/*` | API | Every method |
+| `/graphql`, `/graphql/schema`, `/graphql/schema.graphql` | API | Endpoint and schema routes |
+| `/signin-oidc`, `/signin-oidc-{id}` | API | OIDC sign-in callback |
+| `/signout-callback-oidc`, `/signout-callback-oidc-{id}` | API | OIDC sign-out callback |
+| Any other path | SPA files | `index.html` for a path that is no file |
+
+The `/graphql` paths match in any letter case, as the API's routing does, and carry the query
+string; `/graphql/` and `/graphql/schema/` with a trailing slash are forwarded too. The schema
+routes and `GET /graphql?sdl` answer only while `GraphQl:ExposeSchema` is on, and introspection
+follows the same setting (see [Chapter 14](14-graphql.md)); with it off the image returns what the
+API returns,
+`404` for the schema routes and an error for introspection. Any other path that starts with
+`/graphql` gets the SPA page. The GraphQL IDE the API serves under `/graphql/` in Development does
+not work through the image, because its assets are not forwarded; open it on the API's own port.
+
+Forwarded requests carry the client's `Host` header (with its port) as `Host` and
+`X-Forwarded-Host`, so the API sees the origin the browser used. The callback paths are the OIDC
+redirect targets; a custom `CallbackPath` outside `/api/` needs its own `location` block in the
+template. Chapter 16 covers registering the redirect URI.
 
 Regardless of how `HSTS_VALUE` is set, the three headers `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin` are always sent;
-the API's own `nosniff` is stripped from responses proxied to `/api/*`, so this header appears only
-once.
+the API's own `nosniff` is stripped from the responses the image forwards to the API, so this header
+appears only once.
 
 The image also sends a `Content-Security-Policy` and a `Permissions-Policy` on every response:
 
@@ -581,8 +599,9 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 Scripts load only from the image itself (the theme bootstrap is the file `theme-init.js`, not an inline
 script), the page cannot be framed, and `<form>` posts, `<base>` and plugins are locked to the same
-origin or off. Responses proxied from `/api/*` and the OIDC callback and sign-out paths carry `Content-Security-Policy: default-src 'none';
-frame-ancestors 'none'; sandbox` instead, and any policy the API itself sends there is dropped.
+origin or off. Responses forwarded to the API (the paths in the table above) carry
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox` instead, and any
+policy the API itself sends there is dropped.
 
 `CSP_IMG_EXTRA` and `CSP_CONNECT_EXTRA` default to empty. Each takes space-separated origins
 (`https://cdn.example.com`) that are appended to `img-src` and `connect-src`. Set `CSP_IMG_EXTRA` when
@@ -596,9 +615,43 @@ the image with `VITE_API_BASE_URL` pointing at a different host. A blocked reque
 Caching rules: `/assets/` sends
 `public, max-age=31536000, immutable` (Vite's filenames carry a content hash); `index.html` and every
 other file, such as `theme-init.js` and `favicon.svg`, send `Cache-Control: no-cache`.
-`client_max_body_size` is `32m`, higher than the backend's `Struo:Files:MaxUploadBytes` of 25 MiB,
-so an oversized upload gets the backend's own JSON error envelope instead of nginx's HTML error
-page.
+
+The image carries the licenses of the third-party packages in its bundle at
+`/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`, outside the web root, so nginx does not
+serve it. The build copies `frontend/THIRD-PARTY-NOTICES.md` there and fails when the file is
+missing, so a fork keeps the file or removes the line from `frontend/Dockerfile`.
+
+A request body is capped in more than one place:
+
+| Request | Limit | Set by |
+|---|---|---|
+| Upload, `POST /api/files` (API) | `MaxUploadBytes` plus 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON bodies and `/graphql` (API) | 4 MiB | `Api:MaxJsonBodyBytes` |
+| Any other request body (API) | 30,000,000 bytes | The server's default |
+| Upload through the admin image (nginx) | `32m` | `CLIENT_MAX_BODY_SIZE` |
+| Any other request through the image (nginx) | `32m` | Fixed in the template |
+
+`CLIENT_MAX_BODY_SIZE` is an nginx size (`32m`, `128m`). It applies to the upload path
+`POST /api/files` only; every other path, `/graphql` and the rest of `/api/` included, keeps the
+fixed `32m`. nginx stores a request body in a temporary file under `/tmp/client_temp` in the
+container before it forwards the request, so on the upload path it stores a body of up to
+`CLIENT_MAX_BODY_SIZE` for any caller, signed in or not, before the API can answer with a `401`,
+`403` or `413`. Size the container's `/tmp` for the limit you set. The Compose file passes it
+through from `STRUO_CLIENT_MAX_BODY_SIZE` (default `32m`). nginx refuses to start when the value is
+empty or is not an nginx size: `32MB` stops it with `[emerg] "client_max_body_size" directive
+invalid value`.
+
+On the upload endpoint the API accepts a request body of `Struo:Files:MaxUploadBytes` plus 64 KiB
+for the multipart framing around the file. An upload over the key gets the API's JSON error
+envelope, `413` with `PAYLOAD_TOO_LARGE` and the limit in `error.details[0].maxBytes` (see
+[Chapter 15](15-files-and-media.md)). A body over the nginx limit never reaches the API: nginx
+answers `413` with its own HTML page.
+
+Raise the two together. With `Struo__Files__MaxUploadBytes=104857600` (100 MiB), set
+`CLIENT_MAX_BODY_SIZE=128m`, which leaves room for the multipart framing. Raising only the API key
+leaves the image at `32m`: an upload of 31,000,000 bytes goes through, one of 40,000,000 bytes gets
+the nginx page. Raising only `CLIENT_MAX_BODY_SIZE` lets a larger upload reach the API, which
+refuses a file over its own key.
 
 `NGINX_RESOLVER` (defaulting to `127.0.0.11`, Docker's built-in DNS, with a 5-second timeout) only
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
@@ -859,10 +912,11 @@ publishing it.
 
 The health endpoints are on the API port: `/health/live` and `/health/ready`, by default
 `http://localhost:8081/health/live` (`STRUO_API_PORT` changes it). The admin's nginx forwards only
-`/api/*`, so `/health/...` on the admin port returns the SPA page. Compose gives `api` its own
-health check every 5 seconds, so `docker compose up --wait` doesn't wait out the image's default
-30-second interval. Both the image's health check and Compose's probe read the port from
-`ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry when it is a `;`-separated list).
+the paths listed in "The admin SPA image", so `/health/...` on the admin port returns the SPA page.
+Compose gives `api` its own health check every 5 seconds, so `docker compose up --wait` doesn't
+wait out the image's default 30-second interval. Both the image's health check and Compose's probe
+read the port from `ASPNETCORE_HTTP_PORTS` (8080 when unset; the first entry when it is a
+`;`-separated list).
 
 This stack sets `Redis__ConnectionString`, so the DataProtection key ring is stored in its `redis`
 service, unencrypted, and the `struo-dpkeys` volume mounted for the file location goes unused. The

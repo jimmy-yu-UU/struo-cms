@@ -18,6 +18,10 @@ public sealed class PayloadTooLargeException : Exception
         MaxBytes = maxBytes;
     }
 
+    /// <summary>The refusal of a file over <c>Struo:Files:MaxUploadBytes</c>, naming that limit.</summary>
+    public static PayloadTooLargeException FileTooLarge(long maxBytes) =>
+        new($"File exceeds the maximum size of {maxBytes} bytes.", "file", maxBytes);
+
     /// <summary>The request part that exceeded the cap, or null when the refusal names no limit.</summary>
     public string? Field { get; }
 

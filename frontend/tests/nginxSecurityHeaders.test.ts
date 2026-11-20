@@ -54,9 +54,15 @@ function blocks(): Block[] {
 }
 
 const withHeaders = blocks().filter((b) => /add_header/.test(b.body))
-// Locations that forward to the API: /api/ and the per-provider OIDC callback paths.
+// Locations that forward to the API: /api/, the GraphQL endpoint and the per-provider OIDC callback paths.
 const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$'
-const PROXIED = ['/api/', OIDC_LOCATION]
+// What the API serves under /graphql: the endpoint, and the SDL at /graphql/schema and
+// /graphql/schema.graphql when GraphQl:ExposeSchema is on, each of the first two with or without a
+// trailing slash. ASP.NET routing ignores case.
+const GRAPHQL_LOCATION = '~* ^/graphql(/|/schema/?|/schema\\.graphql)?$'
+// POST /api/files is the only endpoint that takes a multipart upload; it alone gets CLIENT_MAX_BODY_SIZE.
+const UPLOAD_LOCATION = '~* ^/api/files/?$'
+const PROXIED = ['/api/', UPLOAD_LOCATION, GRAPHQL_LOCATION, OIDC_LOCATION]
 
 // Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
 // longest plain prefix; the first matching regex wins over a plain prefix, as in nginx.
@@ -64,7 +70,9 @@ function matchLocation(path: string): string {
   const names = blocks().map((b) => b.name).filter((n) => n !== 'server')
   const exact = names.find((n) => n.startsWith('= ') && n.slice(2) === path)
   if (exact) return exact
-  const regex = names.find((n) => n.startsWith('~ ') && new RegExp(n.slice(2)).test(path))
+  const regex = names.find((n) =>
+    n.startsWith('~* ') ? new RegExp(n.slice(3), 'i').test(path) : n.startsWith('~ ') && new RegExp(n.slice(2)).test(path),
+  )
   if (regex) return regex
   const prefixes = names.filter((n) => !/^[=~]/.test(n) && path.startsWith(n))
   return [...prefixes].sort((a, b) => b.length - a.length)[0]
@@ -153,13 +161,59 @@ describe('nginx template security headers', () => {
   })
 
   it.each(withHeaders.map((b) => [b.name, b] as const))(
-    'block %s sends every security header on every response',
+    'block %s sends every security header on every response, once',
     (_name, b) => {
       for (const h of SECURITY_HEADERS) {
         expect(b.body).toMatch(new RegExp(`add_header ${h} "[^\n]*" always;`))
+        expect(b.body.match(new RegExp(`add_header ${h} `, 'g'))).toHaveLength(1)
       }
     },
   )
+})
+
+describe('nginx template request body limit', () => {
+  const repo = resolve(root, '..')
+  const read = (rel: string) => readFileSync(resolve(repo, rel), 'utf8')
+
+  it('keeps the server-wide client_max_body_size at the fixed 32m', () => {
+    const server = blocks().find((b) => b.name === 'server')!.body
+    expect(server).toMatch(/^\s*client_max_body_size 32m;/m)
+    expect(server).not.toContain('CLIENT_MAX_BODY_SIZE')
+  })
+
+  it('takes CLIENT_MAX_BODY_SIZE for the upload location only', () => {
+    const withLimit = blocks().filter((b) => /client_max_body_size/.test(b.body) && b.name !== 'server')
+    expect(withLimit.map((b) => b.name)).toEqual([UPLOAD_LOCATION])
+    expect(withLimit[0].body).toMatch(/^\s*client_max_body_size \$\{CLIENT_MAX_BODY_SIZE\};/m)
+  })
+
+  // With buffering off, nginx answered some refusals with a 502 instead of the API's JSON when the
+  // client sent the body faster than the API refused it, so the upload location keeps the default.
+  it('leaves request buffering on in every proxied location', () => {
+    for (const name of PROXIED) {
+      expect(blocks().find((b) => b.name === name)!.body).not.toMatch(/proxy_request_buffering/)
+    }
+  })
+
+  it.each(['/api/files', '/api/files/', '/API/Files'])('routes %s to the upload location', (path) => {
+    expect(matchLocation(path)).toBe(UPLOAD_LOCATION)
+  })
+
+  it.each(['/api/files/abc', '/api/filesx', '/api/files/abc/content', '/api/items/file', '/graphql'])(
+    'leaves %s to a location with the server-wide limit',
+    (path) => {
+      expect(matchLocation(path)).not.toBe(UPLOAD_LOCATION)
+    },
+  )
+
+  it('defaults CLIENT_MAX_BODY_SIZE to 32m in the Dockerfile', () => {
+    expect(read('frontend/Dockerfile')).toMatch(/^ENV CLIENT_MAX_BODY_SIZE=32m\s*$/m)
+  })
+
+  it('documents the variable in the template header and passes it through in Compose', () => {
+    expect(rawTemplate).toMatch(/^# .*CLIENT_MAX_BODY_SIZE/m)
+    expect(read('docker-compose.yml')).toMatch(/CLIENT_MAX_BODY_SIZE: \$\{STRUO_CLIENT_MAX_BODY_SIZE:-32m\}/)
+  })
 })
 
 describe('nginx template cache headers', () => {
@@ -179,6 +233,46 @@ describe('nginx template cache headers', () => {
 })
 
 describe('nginx template API proxying', () => {
+  it('proxies the GraphQL endpoint and its schema paths through one location', () => {
+    expect(blocks().map((b) => b.name)).toContain(GRAPHQL_LOCATION)
+  })
+
+  it.each([
+    '/graphql',
+    '/graphql/',
+    '/graphql/schema',
+    '/graphql/schema/',
+    '/graphql/schema.graphql',
+    '/GraphQL',
+    '/GRAPHQL/Schema',
+  ])(
+    'routes %s to the API',
+    (path) => {
+      expect(matchLocation(path)).toBe(GRAPHQL_LOCATION)
+    },
+  )
+
+  it.each([
+    '/graphqlx',
+    '/graphql//',
+    '/graphql/foo',
+    '/graphql/schema.graphql/',
+    '/graphql/schemax',
+    '/graphql/schema.gql',
+    '/graphql/schema/x',
+    '/graphql-docs',
+  ])(
+    'leaves %s to the SPA',
+    (path) => {
+      expect(matchLocation(path)).toBe('/')
+    },
+  )
+
+  it('keeps the GraphQL location after /api/, so the server-level headers precede both', () => {
+    const names = blocks().map((b) => b.name)
+    expect(names.indexOf('/api/')).toBeLessThan(names.indexOf(GRAPHQL_LOCATION))
+  })
+
   it('proxies the OIDC callback paths through one regex location', () => {
     expect(blocks().map((b) => b.name)).toContain(OIDC_LOCATION)
   })

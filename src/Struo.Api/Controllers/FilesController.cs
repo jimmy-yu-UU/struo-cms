@@ -26,6 +26,7 @@ public sealed class FilesController(
     // IFileAccessPolicy so it isn't duplicated with PermissionResolutionMiddleware.
     [HttpPost]
     [Authorize(AuthenticationSchemes = AuthSchemes.CookieOrBearer)]
+    [TypeFilter<UploadBodyLimitFilter>]
     public async Task<IActionResult> Upload(CancellationToken ct)
     {
         if (!access.CanWrite())

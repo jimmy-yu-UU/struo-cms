@@ -34,12 +34,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish ./
+# The licenses of the bundled third-party components travel with the image.
+COPY THIRD-PARTY-NOTICES.md ./
 # /app/logs is where Serilog's File sink (logs/struo-.log, relative to the content root) writes;
 # without a writable directory here it silently drops file logging under the non-root user below.
 # The DataProtection key ring (cookie encryption keys) lives under the app user's home; owning the
 # directory here lets a named volume mounted on it start writable, so sessions survive a restart.
 RUN mkdir -p /app/App_Data /app/logs /home/app/.aspnet/DataProtection-Keys \
-    && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet
+    && chown -R app:app /app/App_Data /app/logs /home/app/.aspnet \
+    && chmod 644 /app/THIRD-PARTY-NOTICES.md
 USER app
 EXPOSE 8080
 # A derived image cannot undo this VOLUME: docs/ai/decisions/dockerfile-base-image-choices.md.

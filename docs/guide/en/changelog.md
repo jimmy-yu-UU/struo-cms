@@ -451,6 +451,21 @@ transformed again on the first request.
   - `ExpandPreparedAsync` takes an `attachTranslations` parameter after `locale`, of the same type
     as `EntityAccessors.AttachTranslations`. A fork that calls it adds the argument: a delegate
     that adds `translations` to the expanded rows, or `null` to add none.
+- `Struo:Files:MaxUploadBytes` is validated at start: a value outside the accepted range stops the
+  host.
+  - The range is `1` to `9223372036854710271`; the message names the key and the range. Such
+    values used to start: `0` or a negative number refused every upload as too large.
+  - A fork that sets one changes it to a value in range.
+- Each image build copies its notices file, so `docker build` fails in a fork that deleted
+  `THIRD-PARTY-NOTICES.md` (API image) or `frontend/THIRD-PARTY-NOTICES.md` (admin image).
+  - The fork restores the file, or removes the matching `COPY` line from its `Dockerfile`
+    (`frontend/Dockerfile` for the admin image).
+- The admin image forwards `/graphql`, so the GraphQL endpoint is reachable on the admin origin.
+  - A deployment that relied on GraphQL not being reachable through the admin origin removes the
+    `/graphql` `location` block from `frontend/nginx/default.conf.template`.
+  - The access rules are the API's own: the API decides who may read and write, and
+    `GraphQl:ExposeSchema` governs introspection and the schema routes. No setting switches the
+    endpoint off.
 :::
 
 ### Added
@@ -484,6 +499,17 @@ transformed again on the first request.
 
   A class that implements or wraps `IItemRepository` must implement or forward all four; see
   Breaking.
+- `CLIENT_MAX_BODY_SIZE`, an environment variable of the admin image, sets nginx's
+  `client_max_body_size` for the upload path `POST /api/files` only; every other path keeps the
+  fixed `32m` it had. Its default in `frontend/Dockerfile` is `32m`. `docker-compose.yml` passes it
+  from the new `STRUO_CLIENT_MAX_BODY_SIZE` (also in `.env.example`, default `32m`). Raise it
+  together with `Struo:Files:MaxUploadBytes` (see [Chapter 20](20-deployment.md)).
+- Both images carry the licenses of their third-party components whose declared license is not MIT,
+  ISC, BSD or 0BSD, with the license terms and no version numbers: the API image at
+  `/app/THIRD-PARTY-NOTICES.md` (the repository's `THIRD-PARTY-NOTICES.md`), the admin image at
+  `/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`, outside the web root (new
+  `frontend/THIRD-PARTY-NOTICES.md`). A fork that adds or removes a component updates the file. The
+  files do not list components under MIT, ISC, BSD or 0BSD terms.
 
 ### Changed
 
@@ -700,6 +726,30 @@ transformed again on the first request.
   server's grants, and ticking one box and saving replaced every stored grant with just that one.
   The matrix now follows the role and its super-admin state, and shows no table and cannot save
   while the grants load.
+- In 0.30.1, the admin image's nginx forwarded only `/api/*` and the OIDC callback paths, so
+  `POST /graphql` through the image answered `405` and `GET /graphql` answered the SPA page: the
+  API's GraphQL endpoint was out of reach for a deployment that, as [Chapter 20](20-deployment.md)
+  advises, does not publish the API port. The image forwards what the API serves under `/graphql`:
+  `/graphql` with its query string, and `/graphql/schema` and `/graphql/schema.graphql` when
+  `GraphQl:ExposeSchema` is on, in any letter case, exactly as it forwards `/api/*`. Any other path
+  that starts with `/graphql` still gets the SPA page.
+- In 0.30.1, `Struo:Files:MaxUploadBytes` could not be raised above the server's default request
+  body limit of 30,000,000 bytes: an upload whose request body passed it answered `400` `VALIDATION`
+  whose message says `Request body too large. The max request body size is 30000000 bytes.`,
+  whatever the key said, and the admin image's nginx stopped bodies over a fixed `32m`. The upload
+  endpoint's request body limit is now `MaxUploadBytes` plus 64 KiB for the multipart framing (every
+  other endpoint keeps its limit), and a body over it answers `413` `PAYLOAD_TOO_LARGE` with
+  `error.details[0].maxBytes`, like a file over the key. A caller without the file write grant is
+  refused with `403` before the body is read. A request form that cannot be read (no boundary, a
+  truncated body, too many form values) answers `400` `BAD_USER_INPUT` with
+  `The request form could not be read.`, where it answered `400` `VALIDATION` with the form reader's
+  text; the cause is logged once at Warning. nginx's upload limit comes from `CLIENT_MAX_BODY_SIZE`.
+- In 0.30.1, `THIRD-PARTY-NOTICES.md` gave libvips's license as LGPL-2.1-or-later, where the
+  `NetVips.Native` packages declare LGPL-3.0-or-later, named a pinned version that had moved on,
+  left out the CC BY 4.0 attribution of `Isopoh.Cryptography.Argon2` and the licenses of the other
+  non-MIT components in the API image, and was not part of the image. It lists those components,
+  quotes the bundled-library table of `NetVips.Native` verbatim and the license texts it relies on,
+  and states no version numbers.
 
 ### Security
 

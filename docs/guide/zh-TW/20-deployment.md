@@ -450,17 +450,33 @@ SPA 的 API 位址與預設後台語言（`VITE_API_BASE_URL`、`VITE_DEFAULT_UI
 線：`proxy_pass` 吃的是一個 nginx 變數，不是字面值，所以容器就算 API 還沒起來也能先啟動，代
 價是變數裡任何路徑片段都會取代請求的 URI，而不是被當成前綴接上去。
 
-映像會把 `/api/*` 與 OIDC 路徑 `/signin-oidc`、`/signin-oidc-{id}`、`/signout-callback-oidc-{id}` 代理給 API，並把用戶端的 `Host` 標頭（含埠號）
-當作 `Host` 與 `X-Forwarded-Host` 轉送，讓 API 看到瀏覽器實際使用的來源。回呼路徑是 OIDC 的重新導向
-目標；`/api/` 之外的自訂 `CallbackPath` 要在範本另加一個 `location` 區塊。登記重新導向網址的做法見
-第 16 章。
+映像把下列路徑轉送給 API，其餘路徑一律由自己的檔案回應：
+
+| 路徑 | 送往 | 說明 |
+|---|---|---|
+| `/api/*` | API | 所有方法 |
+| `/graphql`、`/graphql/schema`、`/graphql/schema.graphql` | API | 端點與 schema 路由 |
+| `/signin-oidc`、`/signin-oidc-{id}` | API | OIDC 登入回呼 |
+| `/signout-callback-oidc`、`/signout-callback-oidc-{id}` | API | OIDC 登出回呼 |
+| 其他路徑 | SPA 檔案 | 不是檔案的路徑回 `index.html` |
+
+`/graphql` 這幾個路徑不分大小寫，和 API 的路由一樣，查詢字串也一併帶上；結尾多一個斜線的
+`/graphql/` 與 `/graphql/schema/` 也會轉送。schema 路由與
+`GET /graphql?sdl` 只有在 `GraphQl:ExposeSchema` 開啟時才有回應，introspection 跟著同一個設定
+（見[第 14 章](14-graphql.md)）；關閉時，映像回的就是 API 回的：schema 路由是 `404`，introspection
+是錯誤。其他以 `/graphql` 開頭的路徑拿到 SPA 頁面。API 在 Development 下於 `/graphql/` 底下提供的
+GraphQL IDE 的資源檔不轉送，所以經映像用不了，請在 API 自己的埠開啟。
+
+轉送的請求會把用戶端的 `Host` 標頭（含埠號）當作 `Host` 與 `X-Forwarded-Host` 帶上，讓 API 看到瀏覽
+器實際使用的來源。回呼路徑是 OIDC 的重新導向目標；`/api/` 之外的自訂 `CallbackPath` 要在範本另加一個
+`location` 區塊。登記重新導向網址的做法見第 16 章。
 
 `HSTS_VALUE` 預設空字串，nginx 遇到值是空字串的 `add_header` 就完全不送這個標頭；只有在這裡
 或前面的代理已經終結 TLS 的每一個可觸達請求上，才該把它設起來。正式環境建議設，例如
 `max-age=31536000`：API 自己不送 HSTS 標頭，而 TLS 可能終結在這個映像前面的代理。不管 `HSTS_VALUE` 怎麼設，
 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
 `Referrer-Policy: strict-origin-when-cross-origin` 這三個標頭一律都送；API 自己的
-`nosniff` 在代理到 `/api/*` 的回應上被隱藏掉，讓這個標頭只出現一次。
+`nosniff` 在映像轉送給 API 的回應上被隱藏掉，讓這個標頭只出現一次。
 
 映像另外在每個回應上送 `Content-Security-Policy` 與 `Permissions-Policy`：
 
@@ -472,7 +488,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 ```
 
 指令稿只能從映像本身載入（主題初始化是檔案 `theme-init.js`，不是內嵌指令稿），頁面不能被嵌入框架，
-表單送出、`<base>` 與外掛都被限制在同一來源或關閉。從 `/api/*` 與這些 OIDC 回呼、登出路徑代理出去的回應改帶
+表單送出、`<base>` 與外掛都被限制在同一來源或關閉。轉送給 API 的回應（上表的路徑）改帶
 `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`，API 自己在那裡送的
 政策會被丟掉。
 
@@ -484,9 +500,40 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 快取規則：`/assets/` 送
 `public, max-age=31536000, immutable`（Vite 的檔名帶內容雜湊）；`index.html` 與其他所有檔案
-（例如 `theme-init.js`、`favicon.svg`）送 `Cache-Control: no-cache`。`client_max_body_size` 是
-`32m`，高於後端 `Struo:Files:MaxUploadBytes` 的 25 MiB，讓過大的上傳收到後端自己的 JSON 錯
-誤信封，而不是 nginx 的 HTML 錯誤頁。
+（例如 `theme-init.js`、`favicon.svg`）送 `Cache-Control: no-cache`。
+
+映像把 bundle 內第三方套件的授權放在
+`/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`，在網頁根目錄之外，nginx 不會提供這個檔案。
+建置時把 `frontend/THIRD-PARTY-NOTICES.md` 複製到那裡，檔案不存在就會建置失敗，所以 fork 要保留這個
+檔案，或從 `frontend/Dockerfile` 拿掉那一行。
+
+請求本文的上限不只一處：
+
+| 請求 | 上限 | 由誰設定 |
+|---|---|---|
+| 上傳 `POST /api/files`（API） | `MaxUploadBytes` 加 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON 本文與 `/graphql`（API） | 4 MiB | `Api:MaxJsonBodyBytes` |
+| 其他請求本文（API） | 30,000,000 bytes | 伺服器預設 |
+| 經後台映像的上傳（nginx） | `32m` | `CLIENT_MAX_BODY_SIZE` |
+| 經映像的其他請求（nginx） | `32m` | 範本裡固定 |
+
+`CLIENT_MAX_BODY_SIZE` 是 nginx 的大小寫法（`32m`、`128m`），只套用在上傳路徑 `POST /api/files`；其
+他路徑，包括 `/graphql` 與 `/api/` 的其餘部分，維持固定的 `32m`。nginx 在轉送請求之前，會先把請求本
+文存進容器裡 `/tmp/client_temp` 底下的暫存檔，所以在上傳路徑上，不論呼叫端有沒有登入，nginx 都會先存
+下最多 `CLIENT_MAX_BODY_SIZE` 大的本文，API 才有機會回 `401`、`403` 或 `413`。容器的 `/tmp` 要照你設
+的上限準備空間。Compose 檔從 `STRUO_CLIENT_MAX_BODY_SIZE`（預設 `32m`）傳進來。值是空的、或不是
+nginx 的大小寫法時，nginx 拒絕啟動：`32MB` 會讓它以
+`[emerg] "client_max_body_size" directive invalid value` 停下來。
+
+上傳端點接受的請求本文是 `Struo:Files:MaxUploadBytes` 再加檔案外圍 multipart 外框的 64 KiB。上傳超過
+這個鍵，拿到的是 API 的 JSON 錯誤信封：`413`、`PAYLOAD_TOO_LARGE`，上限在
+`error.details[0].maxBytes`（見[第 15 章](15-files-and-media.md)）。超過 nginx 上限的本文到不了
+API，由 nginx 以自己的 HTML 頁面回 `413`。
+
+兩處要一起調。`Struo__Files__MaxUploadBytes=104857600`（100 MiB）時，把 `CLIENT_MAX_BODY_SIZE` 設成
+`128m`，留出 multipart 外框的空間。只調高 API 的鍵，映像維持 `32m`：31,000,000 bytes 的上傳過得去，
+40,000,000 bytes 的上傳拿到 nginx 的頁面。只調高 `CLIENT_MAX_BODY_SIZE`，較大的上傳會到達 API，
+由 API 依自己的鍵拒絕超過的檔案。
 
 `NGINX_RESOLVER`（預設 `127.0.0.11`，Docker 內建 DNS，5 秒逾時）只有在使用者自訂的 Docker
 network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*` 請求都會在解析逾時之後收
@@ -704,9 +751,10 @@ PostgreSQL 的密碼是固定的開發值，Redis 沒有密碼。每個埠預設
 從後台 nginx 的 `/api/` 連 API，不要直接開出去。
 
 健康檢查端點在 API 的埠上：`/health/live` 與 `/health/ready`，預設是
-`http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發 `/api/*`，
-從後台的埠打 `/health/...` 拿到的是 SPA 頁面。Compose 替 `api` 另外設了每 5 秒一次的健康檢查，
-`docker compose up --wait` 不必等映像預設的 30 秒間隔。映像的健康檢查與 Compose 的探測都從
+`http://localhost:8081/health/live`（`STRUO_API_PORT` 可改）。後台的 nginx 只轉發
+「後台 SPA 映像」一節列的路徑，從後台的埠打 `/health/...` 拿到的是 SPA 頁面。
+Compose 替 `api` 另外設了每 5 秒一次的健康檢查，`docker compose up --wait` 不必等映像預設的 30 秒
+間隔。映像的健康檢查與 Compose 的探測都從
 `ASPNETCORE_HTTP_PORTS` 讀埠號（沒設就是 8080；值是以 `;` 分隔的清單時取第一個）。
 
 這個環境設了 `Redis__ConnectionString`，所以 DataProtection 金鑰圈存在它的 `redis` 服務裡，沒有加密，
