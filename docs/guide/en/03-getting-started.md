@@ -75,6 +75,10 @@ your machine.
 
 ### 1. Start PostgreSQL and Redis
 
+Compose reads the whole `docker-compose.yml` for every command, so `STRUO_ADMIN_PASSWORD` must be
+set in `.env` or the environment first, even though `api` is not started here. With the password
+empty, this command fails.
+
 ```bash
 docker compose up -d postgres redis
 ```
@@ -168,8 +172,8 @@ A successful start shows:
 ```
 
 With `MigrateOnStartup` set to `false`, nothing about the database is logged before these lines;
-with `true`, they come after FluentMigrator's log and one `Applied migration …` line per migration
-applied.
+with `true`, they come after FluentMigrator's log and one `Applied <version>  <name>` line per
+migration applied.
 
 If startup fails, the log prints a single Fatal entry and the process exits with code 1. Skipping
 the previous step looks like this (stack trace omitted):

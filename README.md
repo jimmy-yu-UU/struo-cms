@@ -62,6 +62,8 @@ first: compose refuses to start without it. Change `STRUO_ADMIN_EMAIL` from the 
 - `docker compose down` keeps the data; `docker compose down -v` wipes it.
 
 For development work or special needs, start only the services you need and run the rest yourself.
+Compose reads the whole file for every command, so `STRUO_ADMIN_PASSWORD` must be set in `.env` or
+the environment first, even when `api` is not among the services you start.
 Prerequisites: .NET SDK 10.0.x, Node.js 24, pnpm 10.x, Docker (with Compose).
 
 ```bash

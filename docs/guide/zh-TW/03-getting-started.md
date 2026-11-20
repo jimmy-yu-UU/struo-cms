@@ -64,6 +64,9 @@ docker compose ps
 
 ### 1. 啟動 PostgreSQL 與 Redis
 
+Compose 每個指令都會讀整份 `docker-compose.yml`，所以即使這裡不起 `api`，也要先在 `.env` 或環境變數
+設好 `STRUO_ADMIN_PASSWORD`。密碼是空的，這個指令會失敗。
+
 ```bash
 docker compose up -d postgres redis
 ```
@@ -151,7 +154,7 @@ dotnet run --project src/Struo.Api
 ```
 
 `MigrateOnStartup` 是 `false` 時，這幾行前面沒有任何資料庫的紀錄；設成 `true` 時，前面是
-FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied migration …`。
+FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied <version>  <name>`。
 
 啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。漏了上一步，訊息是這樣（堆疊追蹤省略）：
 

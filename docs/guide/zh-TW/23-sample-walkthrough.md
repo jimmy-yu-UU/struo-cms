@@ -57,7 +57,7 @@ entity 時的最低限度就是前者。範例自己的 migration 繼承 `Struo.
 migration 還沒套用；`Database:MigrateOnStartup` 是 `false` 時，重啟的 API 會拒絕啟動，以代碼 `1`
 結束：
 
-```
+```text
 [18:00:42 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …

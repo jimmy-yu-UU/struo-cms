@@ -65,7 +65,7 @@ The sample carries its own migration, `Migrations/202610080100_CreateBlogSchema.
 edits done, that migration is not applied yet; with `Database:MigrateOnStartup` set to `false`, the
 restarted API refuses to start and exits with code `1`:
 
-```
+```text
 [18:00:42 FTL] StruoCMS host terminated unexpectedly
 System.InvalidOperationException: 1 migration(s) pending, the lowest is 202610080100; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
