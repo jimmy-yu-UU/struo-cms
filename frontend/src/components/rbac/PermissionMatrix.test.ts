@@ -19,6 +19,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 function mountMatrix(props: {
   roleId?: string; isSuperAdminRole?: boolean; createMode?: boolean; readonly?: boolean; version?: number
+  busy?: boolean
 } = {}) {
   return mount(PermissionMatrix, {
     props: {
@@ -27,6 +28,7 @@ function mountMatrix(props: {
       createMode: props.createMode ?? false,
       readonly: props.readonly ?? false,
       version: props.version,
+      busy: props.busy ?? false,
     },
     global: { plugins: [i18n] },
   })
@@ -594,5 +596,86 @@ describe('PermissionMatrix role version', () => {
     expect(rbacApi.getRolePermissions).toHaveBeenCalledTimes(2)
     expect(vm.dirty).toBe(false)
     expect(w.find('[aria-label="Article — Read"]').attributes('data-state')).toBe('unchecked')
+  })
+})
+
+describe('PermissionMatrix while the form saves or while its own save runs', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.mocked(rbacApi.getRolePermissions).mockReset()
+    vi.mocked(rbacApi.putRolePermissions).mockReset()
+    vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
+    seedSchema()
+  })
+
+  it('busy greys every checkbox and the Save button, keeps the default cursor, and ignores toggle()', async () => {
+    const w = mountMatrix({ busy: true })
+    await flushPromises()
+    const boxes = w.findAll('[data-slot="checkbox"]')
+    expect(boxes.length).toBeGreaterThan(0)
+    expect(boxes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+    expect(boxes.every((b) => b.classes().includes('disabled:cursor-default'))).toBe(true)
+    const vm = w.vm as unknown as { toggle: (n: string, k: string, v: boolean) => void; dirty: boolean }
+    vm.toggle('article', 'read', true)
+    expect(vm.dirty).toBe(false)
+    const save = w.get('[data-slot="button"]')
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(save.classes().join(' ')).not.toContain('not-allowed')
+  })
+
+  it('the Save button of a dirty matrix is disabled only while busy', async () => {
+    const w = mountMatrix()
+    await flushPromises()
+    ;(w.vm as unknown as { toggle: (n: string, k: string, v: boolean) => void }).toggle('article', 'read', true)
+    await flushPromises()
+    expect(w.get('[data-slot="button"]').attributes('disabled')).toBeUndefined()
+    await w.setProps({ busy: true })
+    expect(w.get('[data-slot="button"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('exposes whether it is saving, and whenSaved() waits for the save in flight', async () => {
+    const w = mountMatrix({ version: 3 })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: () => Promise<boolean>
+      whenSaved: () => Promise<boolean>
+      saving: boolean
+    }
+    expect(vm.saving).toBe(false)
+    expect(await vm.whenSaved()).toBe(true)
+    vm.toggle('article', 'read', true)
+    let release!: () => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((r) => { release = () => r({ entries: [], version: 4 }) }))
+    const saving = vm.save()
+    await flushPromises()
+    expect(vm.saving).toBe(true)
+    const waited = vm.whenSaved()
+    release()
+    expect(await saving).toBe(true)
+    expect(await waited).toBe(true)
+    expect(vm.saving).toBe(false)
+  })
+
+  it('whenSaved() reports a failed save in flight as false', async () => {
+    const w = mountMatrix({ version: 3 })
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      toggle: (n: string, k: string, v: boolean) => void
+      save: () => Promise<boolean>
+      whenSaved: () => Promise<boolean>
+    }
+    vm.toggle('article', 'read', true)
+    let fail!: () => void
+    vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+      () => new Promise((_, reject) => { fail = () => reject(new Error('boom')) }))
+    const saving = vm.save()
+    await flushPromises()
+    const waited = vm.whenSaved()
+    fail()
+    expect(await saving).toBe(false)
+    expect(await waited).toBe(false)
   })
 })

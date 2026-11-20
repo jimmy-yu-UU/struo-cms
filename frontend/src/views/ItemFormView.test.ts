@@ -798,7 +798,7 @@ describe('ItemFormView', () => {
       expect((w.vm as any).serverError).not.toBe('')
     })
 
-    it('makes the permission matrix read-only for the duration', async () => {
+    it('makes the permission matrix busy for the duration', async () => {
       vi.mocked(rbacApi.getRolePermissions).mockResolvedValue([])
       routeParams = { name: 'role', id: 'r1' }; routeName = 'collection-item'
       const { schema } = setupStores()
@@ -809,10 +809,10 @@ describe('ItemFormView', () => {
       const w = mountView()
       await w.vm.init()
       await flushPromises()
-      expect(w.findComponent(PermissionMatrix).props('readonly')).toBe(false)
+      expect(w.findComponent(PermissionMatrix).props('busy')).toBe(false)
       const saving = (w.vm as any).onSubmit()
       await nextTick()
-      expect(w.findComponent(PermissionMatrix).props('readonly')).toBe(true)
+      expect(w.findComponent(PermissionMatrix).props('busy')).toBe(true)
       release()
       await saving
     })
@@ -2106,6 +2106,119 @@ describe('ItemFormView', () => {
       expect(await matrixVm.save()).toBe(true)
       expect(rbacApi.putRolePermissions).toHaveBeenLastCalledWith('r1', readGrant, 5)
       expect((w.vm as any).model.version).toBe(6)
+    })
+
+    it('a form Save while the matrix save is in flight waits for it and sends the version it handed back', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 5 })
+      let release!: () => void
+      vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+        () => new Promise((r) => { release = () => r({ entries: readGrant, version: 4 }) }))
+      matrixVm.toggle('article', 'read', true)
+      const matrixSave = matrixVm.save()
+      await flushPromises()
+      const formSave = (w.vm as any).onSubmit()
+      await flushPromises()
+      expect(update).not.toHaveBeenCalled()
+      release()
+      await matrixSave
+      await formSave
+      await flushPromises()
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(update).toHaveBeenCalledWith('role', 'r1', expect.objectContaining({ version: 4 }))
+      expect(rbacApi.putRolePermissions).toHaveBeenCalledTimes(1)
+      expect((w.vm as any).conflict).toBe(false)
+      expect(failureToasts()).toHaveLength(0)
+      expect((w.vm as any).model.version).toBe(5)
+    })
+
+    it('a form Save does not send the item update when the matrix save it waited for failed', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      const update = vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 5 })
+      let fail!: () => void
+      vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+        () => new Promise((_, reject) => { fail = () => reject(new Error('boom')) }))
+      matrixVm.toggle('article', 'read', true)
+      const matrixSave = matrixVm.save()
+      await flushPromises()
+      const formSave = (w.vm as any).onSubmit()
+      await flushPromises()
+      fail()
+      await matrixSave
+      await formSave
+      expect(update).not.toHaveBeenCalled()
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    const formSaveButton = (w: ReturnType<typeof mountView>) =>
+      w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Save' || b.text() === 'Saving…')!
+
+    it('the form Save is disabled while the matrix saves, and the matrix is busy while the form saves', async () => {
+      const { w, matrixVm } = await mountRole(3)
+      vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 5 })
+      let release!: () => void
+      vi.mocked(rbacApi.putRolePermissions).mockImplementation(
+        () => new Promise((r) => { release = () => r({ entries: readGrant, version: 4 }) }))
+      expect(formSaveButton(w).attributes('disabled')).toBe('false')
+      matrixVm.toggle('article', 'read', true)
+      const matrixSave = matrixVm.save()
+      await flushPromises()
+      expect(formSaveButton(w).attributes('disabled')).toBe('true')
+      expect(w.findComponent(PermissionMatrix).props('busy')).toBe(false)
+      release()
+      await matrixSave
+      await flushPromises()
+      expect(formSaveButton(w).attributes('disabled')).toBe('false')
+
+      let releaseForm!: () => void
+      vi.spyOn(itemsApi, 'update').mockImplementation(() => new Promise((r) => { releaseForm = () => r({ id: 'r1', version: 6 }) }))
+      const formSave = (w.vm as any).onSubmit()
+      await flushPromises()
+      expect(w.findComponent(PermissionMatrix).props('busy')).toBe(true)
+      releaseForm()
+      await formSave
+    })
+
+    it('a successful matrix save after a matrix conflict clears the banner and the cached server copy', async () => {
+      const { w, get, matrixVm } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'cached copy', isSuperAdmin: false, version: 5 })
+      vi.mocked(rbacApi.putRolePermissions).mockRejectedValueOnce(conflictError())
+      matrixVm.toggle('article', 'read', true)
+      await matrixVm.save()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+
+      vi.mocked(rbacApi.putRolePermissions).mockResolvedValueOnce({ entries: readGrant, version: 6 })
+      expect(await matrixVm.save()).toBe(true)
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(false)
+      expect(w.text()).not.toContain('This item was changed by someone else.')
+
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
+      expect((w.vm as any).model.version).toBe(6)
+      expect((w.vm as any).model.shared.name).toBe('editor')
+    })
+
+    it('a successful form save after a conflict clears the banner and the cached server copy', async () => {
+      const { w, get } = await mountRole(3)
+      get.mockResolvedValue({ id: 'r1', name: 'cached copy', isSuperAdmin: false, version: 5 })
+      const update = vi.spyOn(itemsApi, 'update')
+        .mockRejectedValueOnce(conflictError())
+        .mockResolvedValueOnce({ id: 'r1', version: 6 })
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect((w.vm as any).conflict).toBe(true)
+
+      await (w.vm as any).onSubmit()
+      await flushPromises()
+      expect(update).toHaveBeenLastCalledWith('role', 'r1', expect.objectContaining({ version: 5 }))
+      expect((w.vm as any).conflict).toBe(false)
+
+      ;(w.vm as any).reloadLatest()
+      await flushPromises()
+      expect((w.vm as any).model.version).toBe(6)
+      expect((w.vm as any).model.shared.name).toBe('editor')
     })
 
     it('any other matrix failure keeps the failure toast and arms no conflict banner', async () => {

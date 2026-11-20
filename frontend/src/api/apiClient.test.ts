@@ -41,6 +41,23 @@ describe('ApiClient', () => {
     expect(err.code).toBe('VERSION_CONFLICT')
   })
 
+  it('putEnveloped answers an undefined data and meta for a 204 and for an empty body', async () => {
+    const noContent = vi.fn().mockResolvedValue({ status: 204, ok: true, headers: { get: () => null } } as unknown as Response)
+    vi.stubGlobal('fetch', noContent)
+    expect(await new ApiClient('/api').putEnveloped('/x', [])).toEqual({ data: undefined, meta: undefined })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200, ok: true, headers: { get: () => null }, text: async () => '',
+    } as unknown as Response))
+    expect(await new ApiClient('/api').putEnveloped('/x', [])).toEqual({ data: undefined, meta: undefined })
+  })
+
+  it('putEnveloped reads a body without an envelope as the data, with an undefined meta', async () => {
+    vi.stubGlobal('fetch', mockFetch(200, [1, 2]))
+    expect(await new ApiClient('/api').putEnveloped('/x', [])).toEqual({ data: [1, 2], meta: undefined })
+    vi.stubGlobal('fetch', mockFetch(200, { data: [3] }))
+    expect(await new ApiClient('/api').putEnveloped('/x', [])).toEqual({ data: [3], meta: undefined })
+  })
+
   it('returns a null data payload as null (not the whole envelope)', async () => {
     vi.stubGlobal('fetch', mockFetch(200, { success: true, data: null }))
     const result = await new ApiClient('/api').get('/auth/me')

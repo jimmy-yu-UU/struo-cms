@@ -28,6 +28,11 @@ function serializeBody(body: unknown, isForm: boolean): FormData | string | unde
   return isForm ? (body as FormData) : JSON.stringify(body)
 }
 
+// What a 204 or an empty body yields: nothing, or an envelope of nothing when the caller asked for the envelope.
+function emptyResult<T>(envelope: boolean | undefined): T {
+  return (envelope ? { data: undefined, meta: undefined } : undefined) as T
+}
+
 export class ApiClient {
   private readonly baseUrl: string
   private onUnauthorized: (() => void) | null = null
@@ -118,16 +123,19 @@ export class ApiClient {
       )
     }
 
-    if (res.status === 204) return undefined as T
+    if (res.status === 204) return emptyResult<T>(opts?.envelope)
     const text = await res.text()
-    if (!text) return undefined as T
+    if (!text) return emptyResult<T>(opts?.envelope)
     const payload = JSON.parse(text)
     if (opts?.unwrap === false) return payload as T
+    const enveloped = payload && typeof payload === 'object' && 'success' in payload
+    // A body without an envelope has no meta; its data is read as unwrapped requests read it.
     if (opts?.envelope) {
-      const envelope = payload as { data?: unknown; meta?: unknown }
-      return { data: envelope.data, meta: envelope.meta } as T
+      return (enveloped
+        ? { data: payload.data, meta: payload.meta }
+        : { data: payload?.data ?? payload, meta: undefined }) as T
     }
-    if (payload && typeof payload === 'object' && 'success' in payload) {
+    if (enveloped) {
       return (payload as { data?: unknown }).data as T
     }
     return (payload?.data ?? payload) as T

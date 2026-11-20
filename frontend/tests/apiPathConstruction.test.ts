@@ -91,7 +91,7 @@ const isLiteral = (t: Token | undefined): boolean =>
 
 // ---- rules --------------------------------------------------------------------------------------
 
-const REQUEST_METHODS = new Set(['get', 'getRaw', 'post', 'postForm', 'put', 'delete', 'urlFor'])
+const REQUEST_METHODS = new Set(['get', 'getRaw', 'post', 'postForm', 'put', 'putEnveloped', 'delete', 'urlFor'])
 const OPENERS = new Set([ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.OpenBracketToken, ts.SyntaxKind.OpenBraceToken])
 const CLOSERS = new Set([ts.SyntaxKind.CloseParenToken, ts.SyntaxKind.CloseBracketToken, ts.SyntaxKind.CloseBraceToken])
 
@@ -219,7 +219,36 @@ describe('API paths are built in one place', () => {
   })
 })
 
+// The public methods of ApiClient whose first parameter is the endpoint path, read from the class itself.
+function pathMethodsOfApiClient(): string[] {
+  const text = readFileSync(join(SRC, 'api/apiClient.ts'), 'utf8')
+  const file = ts.createSourceFile('apiClient.ts', text, ts.ScriptTarget.Latest, true)
+  const names: string[] = []
+  file.forEachChild((node) => {
+    if (!ts.isClassDeclaration(node) || node.name?.text !== 'ApiClient') return
+    for (const member of node.members) {
+      if (!ts.isMethodDeclaration(member) || !ts.isIdentifier(member.name)) continue
+      const modifiers = ts.getModifiers(member) ?? []
+      if (modifiers.some((m) => m.kind === ts.SyntaxKind.PrivateKeyword || m.kind === ts.SyntaxKind.ProtectedKeyword)) continue
+      const first = member.parameters[0]
+      if (first && ts.isIdentifier(first.name) && first.name.text === 'path') names.push(member.name.text)
+    }
+  })
+  return names
+}
+
 describe('every request path goes through apiPath', () => {
+  it('every public ApiClient method that takes a path is one the path check reads', () => {
+    const methods = pathMethodsOfApiClient()
+    expect(methods).toContain('putEnveloped')
+    expect(methods.filter((m) => !REQUEST_METHODS.has(m))).toEqual([])
+  })
+
+  it('reads a putEnveloped call like any other request call', () => {
+    expect(pathProblems("apiClient.putEnveloped<A[], { v?: unknown }>(withQuery(apiPath('a'), p), x)")).toEqual([])
+    expect(pathProblems('apiClient.putEnveloped(`/a/${id}`, x)')).toHaveLength(1)
+  })
+
   it('every apiClient request call in src has a plain string literal, apiPath(...) or withQuery(...) as its path', () => {
     expect(sources.flatMap((s) => pathProblems(s.code).map((p) => `${s.file}: ${p}`))).toEqual([])
   })

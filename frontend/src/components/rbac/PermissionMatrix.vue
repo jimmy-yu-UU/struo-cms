@@ -17,10 +17,12 @@ import { createLatestWins } from '../../lib/latestWins'
 // `readonly` shows the grants without letting them change (a caller who can read roles but not write them).
 // `version` is the role's version as the form holds it: a save sends it and reports the new one through
 // `saved`; a 409 VERSION_CONFLICT is reported through `conflict`, for the form's own conflict handling.
+// `busy` greys the matrix and its Save while the form saves, so two saves never carry the same version.
 const props = withDefaults(defineProps<{
   roleId: string; isSuperAdminRole: boolean; createMode?: boolean; readonly?: boolean; version?: number
+  busy?: boolean
 }>(), {
-  createMode: false, readonly: false, version: undefined,
+  createMode: false, readonly: false, version: undefined, busy: false,
 })
 const emit = defineEmits<{ saved: [version: number]; conflict: [] }>()
 
@@ -53,7 +55,7 @@ function grantFor(name: string): Grant {
 
 function toggle(name: string, key: keyof Grant, value: boolean): void {
   // The save's response replaces the grants, so a change made while it runs would be lost.
-  if (saving.value) return
+  if (saving.value || props.busy) return
   // Immutable update: fresh record per change.
   grants.value = { ...grants.value, [name]: { ...grantFor(name), [key]: value } }
 }
@@ -114,6 +116,12 @@ function foldEntries(): RolePermissionEntry[] {
 // `version`, since a prop it has just changed only arrives after the next render.
 // A save asked for while another is in flight joins that one instead of sending a second PUT.
 let inFlightSave: Promise<boolean> | null = null
+
+// Resolves with the outcome of the save in flight, or true when none is.
+function whenSaved(): Promise<boolean> {
+  return inFlightSave ?? Promise.resolve(true)
+}
+
 function save(version?: number): Promise<boolean> {
   if (loading.value) return Promise.resolve(false)
   inFlightSave ??= putGrants(version ?? props.version).finally(() => { inFlightSave = null })
@@ -158,7 +166,7 @@ watch([() => props.roleId, () => props.isSuperAdminRole], sync)
 // No route-leave guard here — ItemFormView owns ONE unified guard that also checks this
 // matrix's `dirty` (via the exposed computed below). Two guards registered independently would
 // fire sequentially on the same navigation, producing two identical "Unsaved changes" dialogs.
-defineExpose({ toggle, save, dirty, load, reload: sync, currentEntries, markFlushed, saveLabel })
+defineExpose({ toggle, save, whenSaved, saving, dirty, load, reload: sync, currentEntries, markFlushed, saveLabel })
 </script>
 
 <template>
@@ -182,17 +190,17 @@ defineExpose({ toggle, save, dirty, load, reload: sync, currentEntries, markFlus
             <tr v-for="c in rows" :key="c.name">
               <td class="col-name">{{ c.label }}</td>
               <td>
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).read" :disabled="readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colRead')}`"
                           @update:model-value="(v) => toggle(c.name, 'read', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).write" :disabled="!!c.adminOnly || readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colWrite')}`"
                           @update:model-value="(v) => toggle(c.name, 'write', !!v)" />
               </td>
               <td :title="c.adminOnly ? t('rbac.adminOnlyWriteHint') : undefined">
-                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving"
+                <Checkbox class="disabled:cursor-default" :model-value="grantFor(c.name).delete" :disabled="!!c.adminOnly || readonly || saving || busy"
                           :aria-label="`${c.label} — ${t('rbac.colDelete')}`"
                           @update:model-value="(v) => toggle(c.name, 'delete', !!v)" />
               </td>
@@ -201,7 +209,7 @@ defineExpose({ toggle, save, dirty, load, reload: sync, currentEntries, markFlus
         </table>
       </div>
       <div v-if="!createMode && !readonly" class="matrix-actions">
-        <Button type="button" :disabled="!dirty || saving" @click="save()">{{ saveLabel }}</Button>
+        <Button type="button" :disabled="!dirty || saving || busy" @click="save()">{{ saveLabel }}</Button>
       </div>
     </template>
   </section>
