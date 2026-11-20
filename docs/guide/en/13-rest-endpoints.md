@@ -165,11 +165,12 @@ the error message is `Items cannot be created in collection 'user' through the g
 | `GET api/roles/{id}/permissions` | Read on `role` | Read the role's current grant rows |
 | `PUT api/roles/{id}/permissions` | Write on `role` | Overwrite the whole set of grants, optional `?version=` |
 
-`GET` returns a `{ collection, canRead, canWrite, canDelete }` array ordered by collection name, and
-a nonexistent role is a `404`. `PUT` overwrites the whole set rather than merging row by row — a row
-where all three flags are false is never stored at all, and the response only shows the rows that
-genuinely remain; the request is rejected if the body isn't a JSON array, names a collection twice,
-or names a collection that doesn't exist, and collection-name casing is normalized.
+`GET` returns a `{ collection, canRead, canWrite, canDelete }` array ordered by collection name. A
+role that does not exist is a `404` for both methods, for `PUT` also a role removed while the save
+runs. `PUT` overwrites the whole set rather than merging row by row — a row where all three flags
+are false is never stored at all, and the response only shows the rows that genuinely remain; the
+request is rejected if the body isn't a JSON array, names a collection twice, or names a collection
+that doesn't exist, and collection-name casing is normalized.
 
 `PUT` takes an optional `version` query parameter: the role's `version` as the caller last read it
 from `GET api/items/role/{id}`. A `version` that differs from the role's current one answers `409`
