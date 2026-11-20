@@ -8,7 +8,7 @@
 # --ignore-scripts on install matches the CI frontend job's reasoning:
 # untrusted package postinstall scripts don't get to run during image build.
 # Node 24 is used to match the CI "frontend" job's runtime.
-FROM node:24.22.0-alpine AS build
+FROM node:24.22.3-alpine AS build
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
