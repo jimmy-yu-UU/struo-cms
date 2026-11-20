@@ -58,8 +58,9 @@
     // when STRUO_TEST_BACKEND selects that backend. Point each at a DISPOSABLE database whose name
     // contains "test"; it must already exist, and the login needs create/drop-database rights (the
     // migration tests write into it directly; the other live suites create their own databases next
-    // to it). An empty value makes the live tests return early as a pass, so judge them by per-test
-    // duration; with STRUO_TEST_BACKEND set to that backend the run fails instead. The env vars
+    // to it). An empty value reports that backend's live tests as skipped, and the skip reason names
+    // the env var and the key that enable them; with STRUO_TEST_BACKEND set to that backend the run
+    // fails instead. The env vars
     // STRUO_TEST_PG_CONNECTION, STRUO_TEST_SQLSERVER_CONNECTION, STRUO_TEST_MYSQL_CONNECTION and
     // STRUO_TEST_MARIADB_CONNECTION override these keys — NOT Testing__PostgresConnection and the
     // like, which the double-underscore convention would otherwise suggest. MariaDB runs on the
