@@ -160,6 +160,7 @@ export default {
     password: '密碼',
     submit: '登入',
     submitting: '登入中…',
+    signedInNotOpened: '已登入,但無法開啟頁面。請重新整理頁面。',
     or: '或',
     ssoProvider: '使用 {name} 登入',
     failed: '登入失敗,請稍後再試。',
@@ -216,6 +217,7 @@ export default {
     localeIncomplete: '尚無內容',
     tabHasErrors: '有錯誤',
     conflictText: '此項目已被他人變更。檢視您的編輯後再次儲存以覆寫,或重新載入最新版本。',
+    savedNotOpened: '項目已儲存,但無法開啟頁面。請重新整理頁面。',
     reloadLatest: '重新載入最新版本',
   },
   media: {

@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient'
+import { apiPath } from './apiPath'
 
 export type ChangePasswordBody = {
   newPassword: string
@@ -24,25 +25,26 @@ export const usersApi = {
     return apiClient.post<CreatedUser>('/users', body)
   },
 
-  // GET /api/users/{id}/access-token (read on user): issue and last-use times, never the token.
-  getAccessTokenInfo(userId: string): Promise<AccessTokenInfo> {
-    return apiClient.get<AccessTokenInfo>(`/users/${userId}/access-token`)
+  // GET /api/users/{id}/access-token (read on user): issue and last-use times, never the token. The
+  // methods taking an id are async so that a path apiPath refuses is a rejected promise.
+  async getAccessTokenInfo(userId: string): Promise<AccessTokenInfo> {
+    return apiClient.get<AccessTokenInfo>(apiPath('users', userId, 'access-token'))
   },
 
   // POST /api/users/{id}/access-token (write on user): issues a token, replacing any previous one.
   // The raw value is in this response only; the server keeps just its hash.
-  generateAccessToken(userId: string): Promise<{ token: string }> {
-    return apiClient.post<{ token: string }>(`/users/${userId}/access-token`)
+  async generateAccessToken(userId: string): Promise<{ token: string }> {
+    return apiClient.post<{ token: string }>(apiPath('users', userId, 'access-token'))
   },
 
   // DELETE /api/users/{id}/access-token (write on user): returns 204, no body.
-  revokeAccessToken(userId: string): Promise<void> {
-    return apiClient.delete<void>(`/users/${userId}/access-token`)
+  async revokeAccessToken(userId: string): Promise<void> {
+    return apiClient.delete<void>(apiPath('users', userId, 'access-token'))
   },
 
   // Returns 204: no body. The API decides self-service vs admin-reset from whether {userId} is the
   // caller, so this client does not need (or get) a mode flag.
-  changePassword(userId: string, body: ChangePasswordBody): Promise<void> {
-    return apiClient.put<void>(`/users/${userId}/password`, body)
+  async changePassword(userId: string, body: ChangePasswordBody): Promise<void> {
+    return apiClient.put<void>(apiPath('users', userId, 'password'), body)
   },
 }

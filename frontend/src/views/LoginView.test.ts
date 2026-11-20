@@ -55,6 +55,72 @@ describe('LoginView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
+  it('a second submit while a sign-in is in flight sends no second login', async () => {
+    const store = useAuthStore()
+    let release!: () => void
+    const loginSpy = vi.spyOn(store, 'login').mockImplementation(() => new Promise<void>((r) => { release = r }))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+    release()
+    await new Promise((r) => setTimeout(r, 0))
+  })
+
+  it('a second submit after the sign-in resolved but before the navigation settled sends no second login', async () => {
+    const store = useAuthStore()
+    const loginSpy = vi.spyOn(store, 'login').mockResolvedValue()
+    let settleNavigation!: () => void
+    push.mockImplementationOnce(() => new Promise<void>((resolve) => { settleNavigation = resolve }))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(push).toHaveBeenCalledTimes(1)
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+    settleNavigation()
+    await new Promise((r) => setTimeout(r, 0))
+  })
+
+  it.each([
+    ['rejects', () => push.mockRejectedValueOnce(new Error('navigation failed'))],
+    ['resolves with a failure', () => push.mockResolvedValueOnce({ type: 4 })],
+  ])('does not report a failed sign-in, nor sign in again, when the navigation %s', async (_label, arrange) => {
+    const store = useAuthStore()
+    const loginSpy = vi.spyOn(store, 'login').mockResolvedValue()
+    arrange()
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(replace).toHaveBeenCalledExactlyOnceWith({ name: 'dashboard' })
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('says the user is signed in, and stays closed, when no page can be opened', async () => {
+    const store = useAuthStore()
+    const loginSpy = vi.spyOn(store, 'login').mockResolvedValue()
+    push.mockRejectedValueOnce(new Error('navigation failed'))
+    replace.mockRejectedValueOnce(new Error('navigation failed'))
+    const wrapper = mountLogin()
+    await wrapper.find('input[type="email"]').setValue('a@b.com')
+    await wrapper.find('input[type="password"]').setValue('pw')
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.find('[role="alert"]').text()).toBe(i18n.global.t('login.signedInNotOpened'))
+    await wrapper.find('form').trigger('submit.prevent')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(loginSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('shows an error message when login fails', async () => {
     // A plain (non-ApiError) rejection is not one auth.login actually produces in practice — it
     // always throws ApiError, since it goes through apiClient — but it is still the fallback branch
@@ -184,6 +250,21 @@ describe('LoginView', () => {
       expect(sso.exists()).toBe(true)
       await sso.trigger('click')
       expect(window.location.href).toBe('/api/auth/login/oidc/microsoft?returnUrl=/')
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
+  it('ignores the click of a provider whose id the path helper refuses', async () => {
+    setProviders({ id: '..', displayName: 'Broken', icon: null })
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
+    try {
+      const handled: unknown[] = []
+      const wrapper = mount(LoginView, { global: { plugins: [i18n], config: { errorHandler: (e: unknown) => { handled.push(e) } } } })
+      await wrapper.find('[data-test="sso"]').trigger('click')
+      expect(handled).toEqual([])
+      expect(window.location.href).toBe('')
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: original })
     }

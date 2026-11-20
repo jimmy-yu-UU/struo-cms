@@ -347,6 +347,21 @@ describe('MediaDetailDialog', () => {
     await pending
   })
 
+  it('a second onSave while one is in flight sends no second update', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    let release!: () => void
+    const update = vi.spyOn(itemsApi, 'update').mockReturnValue(new Promise((r) => { release = () => r(item as never) }) as never)
+    const onSave = (w.vm as unknown as { onSave: () => Promise<void> }).onSave
+    const first = onSave()
+    await flushPromises()
+    await onSave()
+    expect(update).toHaveBeenCalledTimes(1)
+    release()
+    await first
+  })
+
   it('gives every dialog button an explicit type="button"', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()

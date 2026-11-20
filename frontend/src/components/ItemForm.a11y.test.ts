@@ -11,6 +11,11 @@ import { useLanguageStore } from '../stores/languageStore'
 import type { CollectionMeta, FieldMeta, LanguageInfo, RelationMeta } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
 
+// A failed save asks the form to bring its errors into view; setting the error props alone does not.
+async function reveal(w: { vm: unknown }): Promise<void> {
+  await (w.vm as { revealErrors: () => Promise<void> }).revealErrors()
+}
+
 vi.mock('../api/itemsApi', () => ({
   itemsApi: { list: vi.fn().mockResolvedValue({ data: [], total: 0 }), get: vi.fn() },
 }))
@@ -144,6 +149,7 @@ describe('ItemForm focus on validation errors', () => {
   it('focuses a shared field with an error', async () => {
     const w = mountForm(meta, emptyModel())
     await w.setProps({ errors: { status: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(labelTarget(w, 'status'))
   })
@@ -151,6 +157,7 @@ describe('ItemForm focus on validation errors', () => {
   it('focuses the default-locale translatable field before a shared one', async () => {
     const w = mountForm(meta, emptyModel())
     await w.setProps({ errors: { status: MESSAGE, title: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(labelTarget(w, 'title'))
   })
@@ -158,6 +165,7 @@ describe('ItemForm focus on validation errors', () => {
   it('switches to an inactive locale tab and focuses its field', async () => {
     const w = mountForm(meta, emptyModel())
     await w.setProps({ errors: { 'fr:title': MESSAGE } })
+    await reveal(w)
     await settle()
     expect((w.vm as unknown as { activeLocale: string }).activeLocale).toBe('fr')
     expect(document.activeElement).toBe(labelTarget(w, 'fr:title'))
@@ -166,6 +174,7 @@ describe('ItemForm focus on validation errors', () => {
   it('focuses the first focusable control inside a composite field', async () => {
     const w = mountForm(meta, { ...emptyModel(), shared: { tags: [] } })
     await w.setProps({ errors: { tags: MESSAGE } })
+    await reveal(w)
     await settle()
     const wrapperEl = w.get('[data-field-key="tags"]').element
     expect(wrapperEl.contains(document.activeElement)).toBe(true)
@@ -176,6 +185,7 @@ describe('ItemForm focus on validation errors', () => {
     const w = mountForm(meta, emptyModel())
     await editorReady(w)
     await w.setProps({ errors: { body: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(labelTarget(w, 'body'))
     expect(document.activeElement?.getAttribute('contenteditable')).toBe('true')
@@ -187,6 +197,7 @@ describe('ItemForm focus on validation errors', () => {
       foreignKey: 'OtherId', displayTemplate: null, editable: true, selfReferencing: false }] }
     const w = mountForm(relMeta, { ...emptyModel(), relations: { rel: null } })
     await w.setProps({ errors: { rel: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(w.get('[data-field-key="rel"]').element.contains(document.activeElement)).toBe(true)
     expect(document.activeElement?.tagName).toBe('BUTTON')
@@ -213,6 +224,7 @@ describe('ItemForm focus on validation errors', () => {
     ] }
     const w = mountForm(roMeta, emptyModel())
     await w.setProps({ errors: { locked: MESSAGE, status: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(labelTarget(w, 'status'))
   })
@@ -223,6 +235,7 @@ describe('ItemForm focus on validation errors', () => {
     ] }
     const w = mountForm(roMeta, emptyModel(), { serverError: SERVER_MESSAGE })
     await w.setProps({ errors: { locked: MESSAGE } })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(w.get('[role="alert"]').element)
   })
@@ -230,6 +243,7 @@ describe('ItemForm focus on validation errors', () => {
   it('prefers the failing field over the banner when both are present', async () => {
     const w = mountForm(meta, emptyModel())
     await w.setProps({ errors: { status: MESSAGE }, serverError: SERVER_MESSAGE })
+    await reveal(w)
     await settle()
     expect(document.activeElement).toBe(labelTarget(w, 'status'))
   })
