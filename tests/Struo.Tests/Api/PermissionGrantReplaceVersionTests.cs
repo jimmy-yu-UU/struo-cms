@@ -86,8 +86,8 @@ public class PermissionGrantReplaceVersionTests(ApiFactory factory, ITestOutputH
         var store = scope.ServiceProvider.GetRequiredService<IPermissionGrantStore>();
         var roleId = Guid.CreateVersion7();
 
-        object? withoutVersion = await store.ReplaceAsync(roleId, Article);
-        object? withVersion = await store.ReplaceAsync(roleId, Article, 4);
+        long? withoutVersion = await store.ReplaceAsync(roleId, Article);
+        long? withVersion = await store.ReplaceAsync(roleId, Article, 4);
 
         withoutVersion.Should().BeNull();
         withVersion.Should().BeNull();
