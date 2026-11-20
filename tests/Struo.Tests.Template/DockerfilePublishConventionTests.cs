@@ -33,12 +33,14 @@ public sealed partial class DockerfilePublishConventionTests
         return dockerfile[start..];
     }
 
+    private static readonly string[] InstructionEnds = [";", "&&", "dotnet "];
+
     private static string Instruction(string stage, string verb)
     {
         var start = stage.IndexOf($"dotnet {verb} ", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, $"the build stage runs dotnet {verb}");
         var from = start + 1;
-        var ends = new[] { ";", "&&", "dotnet " }
+        var ends = InstructionEnds
             .Select(marker => stage.IndexOf(marker, from, StringComparison.Ordinal))
             .Where(index => index >= 0)
             .ToList();
