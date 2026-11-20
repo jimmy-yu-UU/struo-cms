@@ -234,7 +234,8 @@ jobs:
           docker logs admin
           exit 1
       # The compose stack builds its own images from the same Dockerfiles. It must
-      # come up healthy, serve the built SPA, and proxy an anonymous API call through nginx.
+      # come up healthy, serve the built SPA, and proxy an anonymous API call and a GraphQL query
+      # through nginx.
       - name: Smoke-test the compose stack
         run: |
           STRUO_ADMIN_PASSWORD="$(openssl rand -hex 16)"
@@ -244,6 +245,8 @@ jobs:
           curl --fail --silent --show-error http://localhost:8081/health/ready
           curl --fail --silent --show-error http://localhost:8080/ | grep --quiet 'assets/index-'
           curl --fail --silent --show-error http://localhost:8080/api/config > /dev/null
+          curl --fail --silent --show-error --header 'Content-Type: application/json' \
+            --data '{"query":"{ __typename }"}' http://localhost:8080/graphql | grep --quiet '"__typename":"Query"'
 
   # Runs the Playwright `core` project against the Compose stack, the same stack the
   # `docker` job smoke-tests: the admin SPA on port 8080 serves the built assets and

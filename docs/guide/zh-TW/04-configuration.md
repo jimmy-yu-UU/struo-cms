@@ -39,7 +39,7 @@
 - 預設除了 Development 之外的環境都生效：cookie `SecurePolicy` 為 `Always`
   （`Auth:Cookie:RequireSecure` 可覆寫）。
 
-以下七個是 `docker-compose.yml` 的 host 對外設定，不會傳進 API 的設定：
+以下八個是 `docker-compose.yml` 的 host 對外設定，不會傳進 API 的設定：
 
 - `STRUO_PG_PORT`
 - `STRUO_REDIS_PORT`
@@ -48,6 +48,8 @@
 - `STRUO_MINIO_PORT`
 - `STRUO_MINIO_CONSOLE_PORT`
 - `STRUO_BIND_ADDRESS`（每個埠綁定的 host 位址，預設 `127.0.0.1`）
+- `STRUO_CLIENT_MAX_BODY_SIZE`（後台映像的 nginx 對上傳的請求本文上限，預設 `32m`；見
+  [第 20 章](20-deployment.md)）
 
 改了 `STRUO_MINIO_PORT`，`Struo:Files:S3:Endpoint` 要自己跟著改。
 
@@ -134,12 +136,16 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 | `Struo:Files:DefaultStatus` | 字串 | `"published"` |
 | `Struo:Files:PresignedRedirect` | 布林 | `false` |
 
-`Backend` 與 `DefaultStatus` 是這個區段裡在啟動時真的被驗證的頂層鍵：無法辨識的值直接讓啟動失敗；所選後端的必
-要欄位（見下面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要 fork
-註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。`MaxUploadBytes`、`AllowedContentTypes`、
-`PresignedRedirect` 跟 `ImageTransform` 裡沒在 [ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
+`Backend`、`DefaultStatus` 與 `MaxUploadBytes` 是這個區段裡在啟動時真的被驗證的頂層鍵。`Backend` 或
+`DefaultStatus` 的值無法辨識、或 `MaxUploadBytes` 超出範圍，啟動會立刻失敗；所選後端的必要欄位（見下
+面 Local／S3）也一併驗證。`Backend` 是 `local`、`s3` 或 `custom`；`custom` 在核心不建任何儲存，需要
+fork 註冊的 `IFileStorage`（見[第 15 章](15-files-and-media.md)），沒有的話啟動會失敗。
+`MaxUploadBytes` 必須介於 1 與 9223372036854710271 之間，這是留得下下面 64 KiB multipart 外框的最大
+值；訊息指出這個鍵與範圍。`AllowedContentTypes`、`PresignedRedirect` 跟 `ImageTransform` 裡沒在
+[ImageTransform](#imagetransform) 標成會驗證的鍵都沒有驗證規則：型別正確的值不會被檢查。
 
-- `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。
+- `MaxUploadBytes`：同時卡住宣告長度與實際位元組數，謊報長度的用戶端一樣受限。請求本文的上限不只一
+  個，見下面的表。
 - `AllowedContentTypes`：留空代表不限制格式，預設設定檔已經列了 18 種 MIME 類型。
 - `DefaultStatus`：新上傳檔案的狀態，`"published"` 或 `"draft"`；其他值會讓啟動失敗，錯誤訊息指出
   `Struo:Files:DefaultStatus`。已發布的檔案任何持有 id 的人都能讀取；草稿只有已登入且有 `file` 寫入
@@ -147,6 +153,17 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
   Logo 必須先發布才能儲存，否則儲存回 `400`；匿名頁面與唯讀的媒體庫使用者讀這個檔案會得到 `404`。
 - `PresignedRedirect`：設成 `true` 時，下載改成 302 轉址到儲存端的預簽章網址；預設 `false`
   由 API 直接串流位元組，適合瀏覽器連不到儲存端的架構。
+
+請求本文能有多大，看它是什麼請求：
+
+| 請求 | 上限 | 由誰設定 |
+|---|---|---|
+| 上傳 `POST /api/files` | `MaxUploadBytes` 加 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON 本文與 `POST /graphql` | 4 MiB | `Api:MaxJsonBodyBytes` |
+| 其他請求本文 | 30,000,000 bytes | 伺服器預設 |
+
+後台映像的 nginx 有自己的上限，上傳用 `CLIENT_MAX_BODY_SIZE`，調高 `MaxUploadBytes` 時要一起調。見
+[第 20 章](20-deployment.md)。
 
 ### Local
 

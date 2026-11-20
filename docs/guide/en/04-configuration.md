@@ -48,7 +48,7 @@ following environment-specific behavior:
 - Every environment except Development by default: the cookie `SecurePolicy` is `Always`
   (`Auth:Cookie:RequireSecure` overrides it).
 
-These seven are host-facing settings in `docker-compose.yml`; they never reach the API's own
+These eight are host-facing settings in `docker-compose.yml`; they never reach the API's own
 configuration:
 
 - `STRUO_PG_PORT`
@@ -58,6 +58,8 @@ configuration:
 - `STRUO_MINIO_PORT`
 - `STRUO_MINIO_CONSOLE_PORT`
 - `STRUO_BIND_ADDRESS` (the host address every port binds to, default `127.0.0.1`)
+- `STRUO_CLIENT_MAX_BODY_SIZE` (the admin image's nginx request body limit for uploads, default
+  `32m`; see [Chapter 20](20-deployment.md))
 
 If you change `STRUO_MINIO_PORT`, update `Struo:Files:S3:Endpoint` yourself to match.
 
@@ -155,17 +157,19 @@ reported.
 | `Struo:Files:DefaultStatus` | string | `"published"` |
 | `Struo:Files:PresignedRedirect` | bool | `false` |
 
-`Backend` and `DefaultStatus` are the only top-level keys in this section that are validated at
-startup: an unrecognized value fails startup immediately, and the required fields of whichever
+`Backend`, `DefaultStatus` and `MaxUploadBytes` are the only top-level keys in this section that are
+validated at startup. A `Backend` or `DefaultStatus` value that is not recognized, or a
+`MaxUploadBytes` outside its range, fails startup immediately, and the required fields of whichever
 backend you picked (see Local/S3 below) are validated along with it. `Backend` is `local`, `s3` or
 `custom`; `custom` builds no storage in the core and needs a fork-registered `IFileStorage` (see
-[Chapter 15](15-files-and-media.md)), and startup fails when there is none. `MaxUploadBytes`,
-`AllowedContentTypes`, `PresignedRedirect`, and the `ImageTransform` keys other than the ones
-listed under [ImageTransform](#imagetransform) as validated have no validation rule — a
-correctly typed value is never checked further.
+[Chapter 15](15-files-and-media.md)), and startup fails when there is none. `MaxUploadBytes` must be
+between 1 and 9223372036854710271, the largest value that leaves room for the 64 KiB of multipart
+framing below; the message names the key and that range. `AllowedContentTypes`, `PresignedRedirect`,
+and the `ImageTransform` keys other than the ones listed under [ImageTransform](#imagetransform) as
+validated have no validation rule — a correctly typed value is never checked further.
 
 - `MaxUploadBytes`: caps both the declared length and the actual byte count, so a client that lies
-  about the length is still limited.
+  about the length is limited too. A request body has more than one limit; see the table below.
 - `AllowedContentTypes`: leaving it empty means no format is restricted; the default
   `appsettings.json` already lists 18 MIME types.
 - `DefaultStatus`: the status a new upload gets, `"published"` or `"draft"`; any other value fails
@@ -177,6 +181,17 @@ correctly typed value is never checked further.
 - `PresignedRedirect`: when `true`, a download becomes a 302 redirect to a storage-presigned URL;
   the default `false` has the API stream the bytes itself, which suits setups where the browser
   can't reach storage directly.
+
+How large a request body may be depends on what it is:
+
+| Request | Limit | Set by |
+|---|---|---|
+| Upload, `POST /api/files` | `MaxUploadBytes` plus 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON bodies and `POST /graphql` | 4 MiB | `Api:MaxJsonBodyBytes` |
+| Any other request body | 30,000,000 bytes | The server's default |
+
+The admin image's nginx has limits of its own, `CLIENT_MAX_BODY_SIZE` for uploads; raise it together
+with `MaxUploadBytes`. See [Chapter 20](20-deployment.md).
 
 ### Local
 

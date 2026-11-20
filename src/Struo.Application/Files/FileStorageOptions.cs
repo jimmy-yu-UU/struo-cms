@@ -4,6 +4,16 @@ public sealed class FileStorageOptions
 {
     public const string SectionName = "Struo:Files";
 
+    /// <summary>What the multipart framing adds around the file bytes of an upload request body, in
+    /// bytes. A request with one file part, a 255-character file name and a <c>folderId</c> part
+    /// measured 588 bytes of framing; 64 KiB leaves room for further parts and headers a client adds.
+    /// The upload endpoint's request-body cap is <see cref="MaxUploadBytes"/> plus this.</summary>
+    public const long UploadFramingHeadroomBytes = 64 * 1024;
+
+    /// <summary>The largest accepted <see cref="MaxUploadBytes"/>: adding the framing headroom to it
+    /// cannot overflow.</summary>
+    public const long MaxUploadBytesCeiling = long.MaxValue - UploadFramingHeadroomBytes;
+
     public string Backend { get; set; } = "local";          // "local" | "s3" | "custom"
     public long MaxUploadBytes { get; set; } = 26_214_400;   // 25 MB
     public string[] AllowedContentTypes { get; set; } = [];  // empty = allow all
@@ -146,6 +156,9 @@ public sealed class FileStorageOptions
     public void Validate()
     {
         ImageTransform.Validate();
+        if (MaxUploadBytes is < 1 or > MaxUploadBytesCeiling)
+            throw new InvalidOperationException(
+                $"Struo:Files:MaxUploadBytes must be between 1 and {MaxUploadBytesCeiling} (got {MaxUploadBytes}).");
         if (DefaultStatus is not (PublishedStatus or DraftStatus))
             throw new InvalidOperationException(
                 $"Unknown Struo:Files:DefaultStatus '{DefaultStatus}' (expected '{PublishedStatus}' or '{DraftStatus}').");

@@ -21,10 +21,10 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-# Runtime: nginx serves the built dist/ and reverse-proxies /api/ to the
+# Runtime: nginx serves the built dist/ and reverse-proxies /api/ and /graphql to the
 # backend. See nginx/default.conf.template for the proxy and header
-# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA and
-# CSP_CONNECT_EXTRA are consumed by nginx's own envsubst-on-templates
+# behavior; API_UPSTREAM, HSTS_VALUE, NGINX_RESOLVER, CSP_IMG_EXTRA,
+# CSP_CONNECT_EXTRA and CLIENT_MAX_BODY_SIZE are consumed by nginx's own envsubst-on-templates
 # entrypoint at container start.
 #
 # The runtime image is the official nginx image. nginx runs as its `nginx`
@@ -53,11 +53,14 @@ RUN pnpm build
 #   this container should probe `/` directly instead.
 FROM nginx:1.30.7-alpine AS runtime
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
+# The licenses of the bundled packages sit outside the web root, so nginx does not serve them.
+COPY THIRD-PARTY-NOTICES.md /usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md
 RUN apk upgrade --no-cache \
     && rm -f /etc/nginx/conf.d/default.conf \
     && chown 101:0 /etc/nginx /etc/nginx/nginx.conf /etc/nginx/conf.d /var/cache/nginx \
     && chmod 775 /etc/nginx /etc/nginx/conf.d /var/cache/nginx \
-    && chmod 664 /etc/nginx/nginx.conf
+    && chmod 664 /etc/nginx/nginx.conf \
+    && chmod 644 /usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 ENV API_UPSTREAM=http://api:8080
@@ -65,5 +68,6 @@ ENV HSTS_VALUE=
 ENV CSP_IMG_EXTRA=
 ENV CSP_CONNECT_EXTRA=
 ENV NGINX_RESOLVER=127.0.0.11
+ENV CLIENT_MAX_BODY_SIZE=32m
 USER 101
 EXPOSE 8080
