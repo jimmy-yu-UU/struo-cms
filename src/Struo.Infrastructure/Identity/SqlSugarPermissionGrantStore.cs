@@ -50,7 +50,7 @@ public sealed class SqlSugarPermissionGrantStore(ISqlSugarClient db) : IPermissi
         }, ct);
     }
 
-    // One conditional UPDATE. Zero affected rows is either a role that no longer exists (null) or a version
+    // One conditional UPDATE. Zero affected rows is either a role that does not exist (null) or a version
     // that moved on (conflict), told apart by a read in the same transaction.
     // UpdatedAt/UpdatedBy stay as they are, since the role's own fields did not change.
     private async Task<long?> AdvanceRoleVersionAsync(Guid roleId, long? expectedVersion, CancellationToken ct)
