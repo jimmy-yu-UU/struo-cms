@@ -642,21 +642,27 @@ transformed again on the first request.
 - In 0.30.1, the admin UI spliced the item id from the address bar into the request path as it was:
   opening a link ending in `<id>?purge=true` made "Delete" a permanent delete instead of a move to
   the trash, and an id containing `/../` sent the request to another collection. An id is now one
-  encoded path segment, and an id of `.`, `..` or nothing shows "not found" and sends no request.
-- In 0.30.1, a JSON field could be saved while its text did not parse, and what was sent was the
-  last value that did; a first edit that never parsed raised no warning on leaving the page or
-  closing the tab. Save now sends nothing and moves focus to the field, leaving asks first, and the
-  text and its error stay when the language tab is switched; Reload latest, a reload after a revert
-  and loading the item again discard that text.
+  encoded path segment; a `?` or `/` in it is part of the id.
+- In 0.30.1, a JSON field, including a JSON payload field on a row of a many-to-many relation, could
+  be saved while its text did not parse, and what was sent was the last value that did; a first edit
+  that never parsed raised no warning on leaving the page or closing the tab. Save now sends nothing
+  and moves focus to the field, the field's error message follows the text in the box, and leaving
+  asks first; the text and its error stay when the language tab is switched. Reload latest, a reload
+  after a revert and loading the item again discard that text, and so does removing the relation
+  row.
 - In 0.30.1, a second trigger while the first was still running sent the request again, for saving
   an item, deleting an item, saving site settings, saving media details, creating a media folder,
-  signing in and saving the permission matrix; on a collection with a single one-line text field,
-  pressing Enter twice on the new-item page created two items. The second trigger is now ignored.
+  signing in and saving the permission matrix; saving an item and signing in did the same after the
+  request had succeeded but before the next page had opened. On a collection with a single one-line
+  text field, pressing Enter twice on the new-item page created two items. The second trigger is
+  now ignored; the permission matrix cannot be ticked while its save runs (a box ticked then was
+  overwritten by the response), and "New folder" is disabled while a folder is being created (a
+  second folder with another name, asked for then, was dropped without a word).
 - In 0.30.1, on a role form, after another administrator removed the role's super-admin status,
-  "Reload latest" or a reload after a revert showed an empty permission table instead of the
-  server's grants, and saving from that screen replaced every stored grant with the empty set. The
-  matrix now follows the role and its super-admin state, and shows no table and cannot save while
-  the grants load.
+  "Reload latest" or a reload after a revert showed a permission table with no grants instead of the
+  server's grants, and ticking one box and saving replaced every stored grant with just that one.
+  The matrix now follows the role and its super-admin state, and shows no table and cannot save
+  while the grants load.
 
 ### Security
 
