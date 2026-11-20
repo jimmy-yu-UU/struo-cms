@@ -64,6 +64,10 @@ docker compose ps
 
 ### 1. 啟動 PostgreSQL 與 Redis
 
+Compose 每個指令都會讀整份 `docker-compose.yml`，所以即使這裡不起 `api`，也要先在 `.env` 或環境變數
+設好 `STRUO_ADMIN_PASSWORD`。密碼是空的，這個指令會失敗。這一步任何非空的值都可以，因為不會起
+`api`；管理員密碼在第 2 步設定。
+
 ```bash
 docker compose up -d postgres redis
 ```
@@ -109,14 +113,14 @@ dotnet run --project src/Struo.Api -- migrate
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
-[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
+[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
 …
-[10:14:57 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
-[10:14:57 INF]  => 0.0019954s <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  => 0.0031182s <s:FluentMigrator.Runner.MigrationRunner>
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
@@ -144,19 +148,19 @@ dotnet run --project src/Struo.Api
 啟動成功會看到：
 
 ```text
-[18:30:38 INF] Now listening on: http://localhost:5221
-[18:30:38 INF] Application started. Press Ctrl+C to shut down.
-[18:30:38 INF] Hosting environment: Development
+[07:39:11 INF]  Now listening on: http://localhost:5221 <s:Microsoft.Hosting.Lifetime>
+[07:39:11 INF]  Application started. Press Ctrl+C to shut down. <s:Microsoft.Hosting.Lifetime>
+[07:39:11 INF]  Hosting environment: Development <s:Microsoft.Hosting.Lifetime>
 …
 ```
 
 `MigrateOnStartup` 是 `false` 時，這幾行前面沒有任何資料庫的紀錄；設成 `true` 時，前面是
-FluentMigrator 的紀錄，加上每套用一支 migration 一行 `Applied migration …`。
+FluentMigrator 自己的紀錄，加上每套用一支 migration 一行 `Applied migration <version> <name>.`。
 
 啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。漏了上一步，訊息是這樣（堆疊追蹤省略）：
 
 ```text
-[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
+[07:38:36 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -168,7 +172,7 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 ```
 
 ```text
-{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-10-12T10:30:38.9562717Z"}}
+{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-11-20T07:39:12.1993283Z"}}
 HTTP_STATUS:200
 ```
 

@@ -50,8 +50,9 @@ docker compose ps   # 等 postgres、redis、api 都顯示 (healthy)
   連進來，前面要先架 HTTPS。
 - `docker compose down` 保留資料；`docker compose down -v` 連資料一起刪。
 
-做開發或有特殊需求時，只起你需要的服務，其餘自己跑。先決條件：.NET SDK 10.0.x、Node.js 24、pnpm 10.x、
-Docker 加上 Compose。
+做開發或有特殊需求時，只起你需要的服務，其餘自己跑。Compose 每個指令都會讀整份檔案，
+所以即使不起 `api`，也要先在 `.env` 或環境變數設好 `STRUO_ADMIN_PASSWORD`。
+先決條件：.NET SDK 10.0.x、Node.js 24、pnpm 10.x、Docker 加上 Compose。
 
 ```bash
 # 1. 啟動 PostgreSQL 與 Redis

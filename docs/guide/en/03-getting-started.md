@@ -75,6 +75,11 @@ your machine.
 
 ### 1. Start PostgreSQL and Redis
 
+Compose reads the whole `docker-compose.yml` for every command, so `STRUO_ADMIN_PASSWORD` must be
+set in `.env` or the environment first, even though `api` is not started here. With the password
+empty, this command fails. Any non-empty value works for this step, because the `api` service is
+not started; step 2 sets the admin password.
+
 ```bash
 docker compose up -d postgres redis
 ```
@@ -125,14 +130,14 @@ FluentMigrator's log of each step and ends with one `Applied` line per migration
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
-[10:14:57 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
+[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
 …
-[10:14:57 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.SQLite.SQLiteProcessor>
-[10:14:57 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
-[10:14:57 INF]  => 0.0019954s <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[07:38:51 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
+[07:38:51 INF]  => 0.0031182s <s:FluentMigrator.Runner.MigrationRunner>
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
@@ -161,21 +166,21 @@ By default this uses the `http` profile: it listens on `http://localhost:5221`, 
 A successful start shows:
 
 ```text
-[18:30:38 INF] Now listening on: http://localhost:5221
-[18:30:38 INF] Application started. Press Ctrl+C to shut down.
-[18:30:38 INF] Hosting environment: Development
+[07:39:11 INF]  Now listening on: http://localhost:5221 <s:Microsoft.Hosting.Lifetime>
+[07:39:11 INF]  Application started. Press Ctrl+C to shut down. <s:Microsoft.Hosting.Lifetime>
+[07:39:11 INF]  Hosting environment: Development <s:Microsoft.Hosting.Lifetime>
 …
 ```
 
 With `MigrateOnStartup` set to `false`, nothing about the database is logged before these lines;
-with `true`, they come after FluentMigrator's log and one `Applied migration …` line per migration
-applied.
+with `true`, they come after FluentMigrator's own log and one `Applied migration <version> <name>.`
+line per migration applied.
 
 If startup fails, the log prints a single Fatal entry and the process exits with code 1. Skipping
 the previous step looks like this (stack trace omitted):
 
 ```text
-[10:15:06 FTL]  StruoCMS host terminated unexpectedly <s:>
+[07:38:36 FTL]  StruoCMS host terminated unexpectedly <s:>
 System.InvalidOperationException: 6 migration(s) pending, the lowest is 202610080000; run the 'migrate' command, or set Database:MigrateOnStartup to true.
 …
 ```
@@ -187,7 +192,7 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:5221/api/ping
 ```
 
 ```text
-{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-10-12T10:30:38.9562717Z"}}
+{"success":true,"data":{"status":"ok","service":"StruoCMS","utc":"2026-11-20T07:39:12.1993283Z"}}
 HTTP_STATUS:200
 ```
 

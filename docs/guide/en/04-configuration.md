@@ -115,7 +115,7 @@ The API does not use the keys `Database:MigrationsPath` and `Database:AutoSyncSc
 configuration they have no effect, and startup logs a warning for each, for example:
 
 ```text
-[17:42:58 WRN] The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command.
+[07:39:45 WRN]  The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command. <s:Struo.Startup>
 ```
 
 The database part of startup runs in this order:

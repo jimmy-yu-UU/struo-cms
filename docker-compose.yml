@@ -9,13 +9,15 @@
 # `up -d --build` is the simplest way to start the services for development and testing. For
 # development work or special needs, start only the services you need and run the rest yourself,
 # e.g. `docker compose up -d postgres redis` followed by `dotnet run` and the frontend dev server.
+# Compose reads this whole file for every command, so STRUO_ADMIN_PASSWORD (no default) must be set
+# in .env or the environment, even when `api` is not among the services you start; compose refuses
+# to start without it.
 #
 # By default the admin SPA is at http://localhost:8080 and the API at http://localhost:8081
 # (STRUO_ADMIN_PORT / STRUO_API_PORT). Container and volume names carry the Compose project name
 # (the checkout's folder name), so stacks from different checkouts can run side by side as long
 # as their host ports differ. The first start migrates the database and seeds an admin account:
-# admin@admin.com by default (STRUO_ADMIN_EMAIL, change it). STRUO_ADMIN_PASSWORD has no default and
-# must be set in .env or the environment; compose refuses to start without it.
+# admin@admin.com by default (STRUO_ADMIN_EMAIL, change it), with the password set above.
 # The api service runs as Production, so the session cookie is Secure: login works on
 # http://localhost (browsers treat it as a secure context) but any other host name needs HTTPS
 # in front of the admin.

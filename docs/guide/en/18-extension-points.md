@@ -548,8 +548,8 @@ implementation after `AddStruoCms()`. The core builds no storage in that mode, a
 naming the key when none is registered. Keep the contract in mind: a missing key throws
 `FileBlobNotFoundException`, never the backend's own exception; `ListAsync` streams every blob;
 `Describe()` is the line `files:sweep` prints, and must not contain a credential. A minimal sketch of an
-Azure Blob storage (the `Azure.Storage.Blobs` package belongs to your fork, not to the core). It is untested: the
-container must already exist, and presigned URLs (SAS) are left out:
+Azure Blob storage follows (the `Azure.Storage.Blobs` package belongs to your fork, not to the
+core). It expects the container to exist already, and it leaves out presigned URLs (SAS):
 
 ```csharp
 using System.Runtime.CompilerServices;

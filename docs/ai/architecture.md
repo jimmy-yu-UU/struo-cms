@@ -396,10 +396,10 @@ instance, so a list repeats a name only when it names a column and a column made
 `Query:MaxInValues` (`QueryValidator`) bounds the list values of a request. `FilterTranslator` is
 `internal`, not registered in DI at all —
 `SqlSugarItemRepository` constructs it directly with
-`new FilterTranslator(db, graph, metadata, registry, options)` (four times: its own `filters` field,
-plus one separate instance each for `WhereInQueries`, `FacetQueries`, and `AggregateQueries` — see
-the field-initializer note above) exactly the way it constructs its other Query-folder
-collaborators. It also needs the graph parameter to actually be the **concrete**
+`new FilterTranslator(db, graph, metadata, registry, options)` (its own `filters` field, plus one
+separate instance each for `WhereInQueries`, `WhereInWindowQueries`, `FacetQueries`, and
+`AggregateQueries` — see the field-initializer note above) exactly the way it constructs its other
+Query-folder collaborators. It also needs the graph parameter to actually be the **concrete**
 `RelationshipGraph`, not just an `IRelationshipGraph` — relation-subquery construction reads
 junction/reverse-FK descriptor information off the concrete type that an interface-level caller does
 not expose, so it casts and throws `InvalidOperationException` if handed anything else (never

@@ -99,7 +99,7 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 用，啟動時各記一筆警告，例如：
 
 ```text
-[17:42:58 WRN] The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command.
+[07:39:45 WRN]  The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command. <s:Struo.Startup>
 ```
 
 啟動時資料庫這一段的順序是：

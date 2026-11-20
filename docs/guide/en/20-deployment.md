@@ -783,8 +783,8 @@ the box only on Docker Desktop; on Linux, add `--add-host=host.docker.internal:h
 still accepting requests. A liveness probe should restart the container or pod when this route stops
 responding.
 
-`/health/ready` runs two checks tagged `ready`: `DbReadinessCheck` makes an actual round trip to
-the database by reading one row of the `struo_languages` table, and `CacheReadinessCheck` writes to
+`/health/ready` runs two checks tagged `ready`: the database check makes an actual round trip to
+the database by reading one row of the `struo_languages` table, and the cache check writes to
 and reads back from the configured `IDistributedCache` (Redis or the in-process cache); a readiness
 probe should wait until both are reachable before routing traffic in.
 
@@ -818,7 +818,7 @@ of headers; the difference is that it only responds this way once both checks su
 
 After the admin SPA redeploys, a tab still open from before is running an `index.html` that still
 requests chunk filenames missing from the new version;
-`frontend/src/router/chunkLoadRecovery.ts` recovers from this chunk-404 by reloading the page,
+the admin SPA recovers from this chunk-404 by reloading the page,
 guarding against an infinite loop with a `sessionStorage` flag that's used only once. A chunk
 that's genuinely missing turns into an error, rather than an endless reload.
 
@@ -941,7 +941,9 @@ The `minio` and `createbuckets` services in `docker-compose.yml` both sit under 
 a plain `docker compose up -d` neither pulls these two images nor waits on their health checks.
 
 The `api` service Compose starts keeps the `local` files backend, so MinIO is for an API you run
-yourself with `Struo:Files:Backend` set to `s3`. Start it next to the dependencies with:
+yourself with `Struo:Files:Backend` set to `s3`. Compose reads the whole file for every command,
+so `STRUO_ADMIN_PASSWORD` must be set in `.env` or the environment first. Start MinIO next to the
+dependencies with:
 
 ```
 docker compose --profile s3 up -d postgres redis minio createbuckets
