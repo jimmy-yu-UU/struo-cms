@@ -651,16 +651,20 @@ transformed again on the first request.
   switched. Reload latest, a reload after a revert and loading the item again discard that text, and
   so does removing the relation row.
 - In 0.30.1, some operations of the admin UI could be triggered again while the first was running,
-  and each sent its request again: saving an item (on a collection with a single one-line text
-  field, pressing Enter twice on the new-item page created two items; the button was also enabled
-  again after the request succeeded but before the next page opened), deleting an item, creating a
-  media folder (opening the dialog again, or holding Enter), signing in (after the request
-  succeeded, before the next page opened) and saving the permission matrix (pressing the form's
-  Save while the matrix save ran, or ticking a box, which the response then overwrote). The second
-  trigger is now ignored, the form's inputs are disabled while a save runs, the permission matrix
-  cannot be ticked while its save runs, and the "New folder" button is disabled while a folder is
-  being created; if the list page cannot be opened after an item is created, its edit page opens
-  instead and nothing is sent again.
+  and each sent its request again. A second trigger while one is running is now ignored:
+  - Saving an item: on a collection with a single one-line text field, pressing Enter twice on the
+    new-item page created two items, and the Save button was enabled again after the request
+    succeeded but before the next page opened. The form's inputs are now disabled while a save
+    runs; if the list page cannot be opened after an item is created, its edit page opens instead
+    and nothing is sent again.
+  - Deleting an item: after confirming, the item could be deleted a second time while the request
+    ran.
+  - Creating a media folder: by opening the dialog again, or by holding Enter. The "New folder"
+    button is now disabled while a folder is being created.
+  - Signing in: the form could be submitted again after the request succeeded, before the next
+    page opened.
+  - Saving the permission matrix: the form's Save could be pressed while the matrix save ran, and
+    a box ticked then was overwritten by the response. Boxes cannot be ticked while the save runs.
 - In 0.30.1, on a role form, after another administrator removed the role's super-admin status,
   "Reload latest" or a reload after a revert showed a permission table with no grants instead of the
   server's grants, and ticking one box and saving replaced every stored grant with just that one.
