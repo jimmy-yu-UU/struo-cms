@@ -4,11 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Struo.Api.Auth;
 using Struo.Tests.Support;
@@ -73,78 +69,5 @@ public class FileUploadLimitEndpointTests(ApiFactory factory)
         var resp = await client.PostAsync("/api/files", Multipart(Limit));
 
         resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
-    }
-
-    // Counts the bytes the pipeline reads from the body of a POST to /api/files.
-    private sealed class BodyReads
-    {
-        public long Bytes;
-    }
-
-    private sealed class CountBodyReads(BodyReads reads) : IStartupFilter
-    {
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-        {
-            app.Use(async (context, nextMiddleware) =>
-            {
-                if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path.StartsWithSegments("/api/files"))
-                    context.Request.Body = new CountingStream(context.Request.Body, reads);
-                await nextMiddleware();
-            });
-            next(app);
-        };
-    }
-
-    private sealed class CountingStream(Stream inner, BodyReads reads) : Stream
-    {
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
-            Count(await inner.ReadAsync(buffer, ct));
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        private int Count(int read)
-        {
-            Interlocked.Add(ref reads.Bytes, read);
-            return read;
-        }
-    }
-
-    private WebApplicationFactory<Program> CountingHost(BodyReads reads) =>
-        factory.WithWebHostBuilder(b => b.ConfigureServices(services =>
-            services.AddSingleton<IStartupFilter>(new CountBodyReads(reads))));
-
-    [Fact]
-    public async Task An_unauthenticated_upload_is_refused_without_reading_its_body()
-    {
-        var reads = new BodyReads();
-        using var host = CountingHost(reads);
-        var client = host.CreateClient();
-        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-
-        var resp = await client.PostAsync("/api/files", Multipart(8192));
-
-        resp.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        Interlocked.Read(ref reads.Bytes).Should().Be(0, "the form is read only after authorization");
-    }
-
-    [Fact]
-    public async Task An_authenticated_upload_reads_its_body()
-    {
-        var reads = new BodyReads();
-        using var host = CountingHost(reads);
-        var client = await AdminClientAsync(host);
-
-        var resp = await client.PostAsync("/api/files", Multipart(8192));
-
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
-        Interlocked.Read(ref reads.Bytes).Should().BeGreaterThan(8192);
     }
 }

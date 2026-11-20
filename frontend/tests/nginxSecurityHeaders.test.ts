@@ -60,7 +60,9 @@ const OIDC_LOCATION = '~ ^/(signin-oidc|signout-callback-oidc)(-[a-z0-9-]+)?$'
 // /graphql/schema.graphql when GraphQl:ExposeSchema is on, each of the first two with or without a
 // trailing slash. ASP.NET routing ignores case.
 const GRAPHQL_LOCATION = '~* ^/graphql(/|/schema/?|/schema\\.graphql)?$'
-const PROXIED = ['/api/', GRAPHQL_LOCATION, OIDC_LOCATION]
+// POST /api/files is the only endpoint that takes a multipart upload; it alone gets CLIENT_MAX_BODY_SIZE.
+const UPLOAD_LOCATION = '~* ^/api/files/?$'
+const PROXIED = ['/api/', UPLOAD_LOCATION, GRAPHQL_LOCATION, OIDC_LOCATION]
 
 // Minimal nginx matcher for the locations in this template: exact (=), regex (~), then the
 // longest plain prefix; the first matching regex wins over a plain prefix, as in nginx.
@@ -172,19 +174,36 @@ describe('nginx template request body limit', () => {
   const repo = resolve(root, '..')
   const read = (rel: string) => readFileSync(resolve(repo, rel), 'utf8')
 
-  it('takes client_max_body_size from CLIENT_MAX_BODY_SIZE, once, at server level', () => {
+  it('keeps the server-wide client_max_body_size at the fixed 32m', () => {
     const server = blocks().find((b) => b.name === 'server')!.body
-    expect(server).toMatch(/^\s*client_max_body_size \$\{CLIENT_MAX_BODY_SIZE\};/m)
-    for (const b of blocks().filter((x) => x.name !== 'server')) expect(b.body).not.toContain('client_max_body_size')
+    expect(server).toMatch(/^\s*client_max_body_size 32m;/m)
+    expect(server).not.toContain('CLIENT_MAX_BODY_SIZE')
   })
+
+  it('takes CLIENT_MAX_BODY_SIZE for the upload location only', () => {
+    const withLimit = blocks().filter((b) => /client_max_body_size/.test(b.body) && b.name !== 'server')
+    expect(withLimit.map((b) => b.name)).toEqual([UPLOAD_LOCATION])
+    expect(withLimit[0].body).toMatch(/^\s*client_max_body_size \$\{CLIENT_MAX_BODY_SIZE\};/m)
+  })
+
+  it.each(['/api/files', '/api/files/', '/API/Files'])('routes %s to the upload location', (path) => {
+    expect(matchLocation(path)).toBe(UPLOAD_LOCATION)
+  })
+
+  it.each(['/api/files/abc', '/api/filesx', '/api/files/abc/content', '/api/items/file', '/graphql'])(
+    'leaves %s to a location with the server-wide limit',
+    (path) => {
+      expect(matchLocation(path)).not.toBe(UPLOAD_LOCATION)
+    },
+  )
 
   it('defaults CLIENT_MAX_BODY_SIZE to 32m in the Dockerfile', () => {
-    expect(read('frontend/Dockerfile')).toMatch(/^ENV CLIENT_MAX_BODY_SIZE=32ms*$/m)
+    expect(read('frontend/Dockerfile')).toMatch(/^ENV CLIENT_MAX_BODY_SIZE=32m\s*$/m)
   })
 
-  it('documents the variable in the template header and in Compose', () => {
+  it('documents the variable in the template header and passes it through in Compose', () => {
     expect(rawTemplate).toMatch(/^# .*CLIENT_MAX_BODY_SIZE/m)
-    expect(read('docker-compose.yml')).toMatch(/CLIENT_MAX_BODY_SIZE/)
+    expect(read('docker-compose.yml')).toMatch(/CLIENT_MAX_BODY_SIZE: \$\{STRUO_CLIENT_MAX_BODY_SIZE:-32m\}/)
   })
 })
 

@@ -107,9 +107,12 @@ HTTP_STATUS:201
 的記憶體門檻，超過就溢出到暫存檔，所以多個大檔案同時上傳，不會每一個都在記憶體裡各占滿一份上限。
 
 整個請求本文另有一道上限，只在這個端點：`Struo:Files:MaxUploadBytes` 再加 64 KiB 的 multipart 外框。
-超過的本文在讀檔案部分之前就被拒絕，回同樣的 `413`／`PAYLOAD_TOO_LARGE`、同一句訊息與同樣的
-details。
-後台映像的 nginx 有自己的上限，會先以 HTML 頁面回應，見[第 20 章](20-deployment.md)。
+請求宣告了長度而且超過上限時，在讀本文之前就被拒絕；沒有宣告長度的本文（chunked）會一直讀到超過上限
+才被拒絕，所以最多有上限那麼多的位元組先被緩衝。兩種情況的回應一樣：`413`／`PAYLOAD_TOO_LARGE`、
+同一句訊息與同樣的 details。讀不出來的請求表單（沒有 boundary、本文被截斷、表單值超過表單的個數
+上限）是 `400`／`BAD_USER_INPUT`，訊息是 `The request form could not be read.`。沒有檔案寫入權限
+的呼叫端在讀表單之前就收到 `403`。後台映像的 nginx 有自己的上限，會先以 HTML 頁面回應，見
+[第 20 章](20-deployment.md)。
 
 內容類型先過白名單 `Struo:Files:AllowedContentTypes`：留空代表不限制，也是編譯進去的預設
 值；隨附的 `appsettings.json` 另外列了一份清單（完整內容見[第 4 章](04-configuration.md)），
@@ -393,12 +396,13 @@ HTTP_STATUS:200
 
 libvips 本身以二進位檔的形式隨 `NetVips.Native` 系列套件而來，套件宣告的授權是
 LGPL-3.0-or-later。這些二進位檔是 API 映像裡 `runtimes/<rid>/native/` 底下的獨立檔案，StruoCMS 沒有
-內嵌 libvips 的原始碼。同一系列套件還一併打包了 libvips 幾個選用相依項目（mozjpeg、libpng、
-libwebp、cairo、pango、librsvg 等），授權是 MIT、BSD、MPL 與 LGPL 的混合。
+內嵌 libvips 的原始碼。同一系列套件還一併打包了 libvips 的幾個選用相依項目，
+各有各的授權，`THIRD-PARTY-NOTICES.md` 裡的表列出了它們。
 
-`THIRD-PARTY-NOTICES.md` 列出映像中需要聲明的第三方元件與它們的授權條款；API 映像把它放在
-`/app/THIRD-PARTY-NOTICES.md`，後台映像為自己的 bundle 帶另一份檔案
-（見[第 20 章](20-deployment.md)）。釘住的版本號記在 `Directory.Packages.props`，那份檔案與這裡都不
+`THIRD-PARTY-NOTICES.md` 列出映像中宣告的授權不是 MIT、ISC、BSD 或 0BSD 的第三方元件與它們的授權
+條款。它不是映像內容的完整清單，也不是散布者需要的全部文件。API 映像把它放在
+`/app/THIRD-PARTY-NOTICES.md`，後台映像為自己的 bundle 帶另一份檔案（見
+[第 20 章](20-deployment.md)）。釘住的版本號記在 `Directory.Packages.props`，那份檔案與這裡都不
 重複。
 
 主機在註冊檔案服務時就會設定 `NetVips.BlockUntrusted`，所以即使停用圖片轉換，啟動時也會載入原生

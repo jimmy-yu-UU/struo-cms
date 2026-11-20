@@ -346,6 +346,10 @@
   - `ExpandPreparedAsync` 在 `locale` 之後多了 `attachTranslations` 參數，型別與
     `EntityAccessors.AttachTranslations` 相同。自己呼叫它的 fork 要補上：傳入替展開列加上
     `translations` 的委派，傳 `null` 則不加。
+- `Struo:Files:MaxUploadBytes` 在啟動時驗證：超出可接受範圍的值會讓主機啟動失敗。
+  - 範圍是 `1` 到 `9223372036854710271`；訊息指出這個鍵與範圍。這類值原本可以啟動：`0` 或負數會把每
+    一次上傳都當成過大而拒絕。
+  - 設了這類值的 fork 改成範圍內的值。
 :::
 
 ### 新增
@@ -375,15 +379,18 @@
     `SetForeignKeyNullForTrashedAsync`、`IsForeignKeyNullable`。
 
   自己實作或包裝 `IItemRepository` 的類別必須實作或轉送這四個成員，見破壞性變更。
-- 後台映像新增環境變數 `CLIENT_MAX_BODY_SIZE`，設定 nginx 的 `client_max_body_size`。
-  `frontend/Dockerfile` 裡的預設值是 `32m`，也就是範本原本寫死的值；`docker-compose.yml` 在 `admin`
-  服務上設了它。調高 `Struo:Files:MaxUploadBytes` 時要一起調（見[第 20 章](20-deployment.md)）。
-- 兩個映像都帶著各自第三方元件的授權（授權不是 MIT、ISC、BSD 或 0BSD 的元件，附授權條款，
+- 後台映像新增環境變數 `CLIENT_MAX_BODY_SIZE`，設定 nginx 的 `client_max_body_size`，只套用在上傳路
+  徑 `POST /api/files`；其他路徑維持原本固定的 `32m`。`frontend/Dockerfile` 裡的預設值是 `32m`。
+  `docker-compose.yml` 從新增的 `STRUO_CLIENT_MAX_BODY_SIZE`（也列在 `.env.example`，預設 `32m`）傳
+  進來。值是空的、或不是 nginx 的大小寫法時，nginx 拒絕啟動。調高 `Struo:Files:MaxUploadBytes` 時要
+  一起調（見[第 20 章](20-deployment.md)）。
+- 兩個映像都帶著各自第三方元件的授權（宣告的授權不是 MIT、ISC、BSD 或 0BSD 的元件，附授權條款，
   不寫版本號）：API 映像放在 `/app/THIRD-PARTY-NOTICES.md`（儲存庫根目錄的
   `THIRD-PARTY-NOTICES.md`），後台映像放在網頁根目錄之外的
   `/usr/share/licenses/struo-admin/THIRD-PARTY-NOTICES.md`（新增
-  `frontend/THIRD-PARTY-NOTICES.md`）。各個 `Dockerfile` 會複製自己的檔案，所以 fork 刪掉檔案後
-  建置會失敗；fork 增減元件時要更新檔案。
+  `frontend/THIRD-PARTY-NOTICES.md`）。
+  映像建置會複製這兩個檔案，所以刪掉任一個檔案的 fork 必須把它補回來，或從自己的 `Dockerfile` 拿掉那
+  行 `COPY`；fork 增減元件時要更新檔案。這些檔案不列授權為 MIT、ISC、BSD 或 0BSD 的元件。
 
 ### 變更
 
@@ -531,19 +538,24 @@
   `405`，`GET /graphql` 回 SPA 頁面：照[第 20 章](20-deployment.md)的建議不公開 API 埠的部署，連不到
   API 的 GraphQL 端點。映像現在轉送 API 在 `/graphql` 底下提供的路徑：`/graphql`（連同查詢字串），
   以及 `GraphQl:ExposeSchema` 開啟時的 `/graphql/schema` 與 `/graphql/schema.graphql`，不分大小寫，
-  做法與 `/api/*` 相同：轉送標頭一樣，每個安全標頭只送一次。其他以 `/graphql` 開頭的路徑仍然拿到
-  SPA 頁面。CI 的 compose 煙霧測試會經 nginx 送一次 GraphQL 查詢。
+  做法與 `/api/*` 相同。這個端點在後台來源上的存取規則和直接打 API 時相同：誰能讀、誰能寫由 API
+  決定，`GraphQl:ExposeSchema` 管 introspection 與 schema 路由。沒有關掉這個端點的設定；不想讓它
+  出現在後台來源的營運者，要從 `frontend/nginx/default.conf.template` 拿掉 `/graphql` 的 `location`
+  區塊。其他以 `/graphql` 開頭的路徑仍然拿到 SPA 頁面。CI 的 compose 煙霧測試會經 nginx 送一次
+  GraphQL 查詢。
 - 在 0.30.1，`Struo:Files:MaxUploadBytes` 調不過伺服器預設的請求本文上限 30,000,000 bytes：請求本文
   超過它的上傳，不管這個鍵設多少，都回 `400` `VALIDATION`，訊息含
-  `Request body too large. The max request body size is 30000000 bytes.`；
-  後台映像的 nginx 也以寫死的 `32m` 擋掉更大的本文。上傳端點的請求本文上限現在是 `MaxUploadBytes` 再
-  加 64 KiB 的 multipart 外框（其他端點維持伺服器預設），超過的本文回 `413` `PAYLOAD_TOO_LARGE`，
-  `error.details[0].maxBytes` 帶著上限，和超過鍵的檔案一樣；預設的鍵下超過 30,000,000 bytes 的本文也
-  是如此。nginx 的上限取自 `CLIENT_MAX_BODY_SIZE`。
+  `Request body too large. The max request body size is 30000000 bytes.`；後台映像的 nginx 也以寫死
+  的 `32m` 擋掉更大的本文。上傳端點的請求本文上限現在是 `MaxUploadBytes` 再加 64 KiB 的 multipart 外
+  框（其他端點維持各自的上限），超過的本文回 `413` `PAYLOAD_TOO_LARGE`，`error.details[0].maxBytes`
+  帶著上限，和超過鍵的檔案一樣；預設的鍵下超過 30,000,000 bytes 的本文也是如此。沒有檔案寫入權限的呼
+  叫端在讀本文之前就收到 `403`。讀不出來的請求表單（沒有 boundary、本文被截斷、表單值太多）回 `400`
+  `BAD_USER_INPUT`，訊息是 `The request form could not be read.`，原本回的是 `400` `VALIDATION`，訊
+  息是表單讀取器的文字。nginx 的上傳上限取自 `CLIENT_MAX_BODY_SIZE`。
 - 在 0.30.1，`THIRD-PARTY-NOTICES.md` 把 libvips 的授權寫成 LGPL-2.1-or-later，而 `NetVips.Native`
-  套件宣告的是LGPL-3.0-or-later；它還寫了已經過期的釘住版本、漏了 `Isopoh.Cryptography.Argon2` 的 CC
-  BY 4.0 署名與 API 映像裡其他非 MIT 元件的授權，而且不在映像裡。現在它列出這些元件、原文收錄
-  `NetVips.Native` 附的內含程式庫表，不寫版本號。
+  套件宣告的是 LGPL-3.0-or-later；它還寫了已經過期的釘住版本、漏了 `Isopoh.Cryptography.Argon2` 的
+  CC BY 4.0 署名與 API 映像裡其他非 MIT 元件的授權，而且不在映像裡。現在它列出這些元件、原文收錄
+  `NetVips.Native` 附的內含程式庫表與它所依據的授權全文，不寫版本號。
 
 ### 安全性
 

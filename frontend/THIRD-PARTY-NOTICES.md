@@ -9,6 +9,9 @@ The admin image carries this file at `/usr/share/licenses/struo-admin/THIRD-PART
 It is not served over HTTP. The API image has its own file, `THIRD-PARTY-NOTICES.md` in the
 repository root.
 
+Components under MIT, ISC, BSD or 0BSD terms are not listed, so this file is not a complete
+inventory of what the admin image contains.
+
 Scope: the npm packages compiled into the admin bundle (`frontend/dist`), as resolved by
 `frontend/pnpm-lock.yaml`. Out of scope: the packages of the base images (the nginx image and its
 operating system), which come with their own notices, and development tools that do not end up in

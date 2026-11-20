@@ -79,4 +79,31 @@ public class FileStorageOptionsTests
         new FileStorageOptions { DefaultStatus = status }
             .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>()
             .WithMessage("*Struo:Files:DefaultStatus*");
+
+    [Fact]
+    public void MaxUploadBytes_defaults_to_25_MiB() =>
+        new FileStorageOptions().MaxUploadBytes.Should().Be(26_214_400);
+
+    [Theory]
+    [InlineData(1L)]
+    [InlineData(26_214_400L)]
+    [InlineData(FileStorageOptions.MaxUploadBytesCeiling)]
+    public void MaxUploadBytes_inside_the_range_passes(long bytes) =>
+        new FileStorageOptions { MaxUploadBytes = bytes }.Invoking(x => x.Validate()).Should().NotThrow();
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData(long.MinValue)]
+    [InlineData(FileStorageOptions.MaxUploadBytesCeiling + 1)]
+    [InlineData(long.MaxValue)]
+    public void MaxUploadBytes_outside_the_range_throws_naming_the_key_and_the_range(long bytes) =>
+        new FileStorageOptions { MaxUploadBytes = bytes }
+            .Invoking(x => x.Validate()).Should().Throw<InvalidOperationException>()
+            .WithMessage($"*Struo:Files:MaxUploadBytes*between 1 and {FileStorageOptions.MaxUploadBytesCeiling}*");
+
+    [Fact]
+    public void The_ceiling_leaves_room_for_the_multipart_headroom_without_overflow() =>
+        (long.MaxValue - FileStorageOptions.MaxUploadBytesCeiling)
+            .Should().BeGreaterThanOrEqualTo(FileStorageOptions.UploadFramingHeadroomBytes);
 }

@@ -3,7 +3,13 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Struo.Api.Auth;
 using Struo.Api.Http;
+using Struo.Application.Files;
 using Struo.Domain.Query;
 using Xunit;
 
@@ -11,51 +17,51 @@ namespace Struo.Tests.Api;
 
 /// <summary>
 /// The request-body handling of the upload endpoint, driven without a server: the body-size cap follows
-/// <c>Struo:Files:MaxUploadBytes</c> plus the multipart headroom, and a body over that cap is refused as
-/// <see cref="PayloadTooLargeException"/> naming the limit.
+/// <c>Struo:Files:MaxUploadBytes</c> plus the multipart headroom, a body over that cap is refused as
+/// <see cref="PayloadTooLargeException"/> naming the limit, and a form that cannot be read is a 400.
 /// </summary>
 public class UploadRequestBodyTests
 {
     private const long MaxUploadBytes = 104_857_600;
 
-    private sealed class FakeLimitFeature(bool isReadOnly = false) : IHttpMaxRequestBodySizeFeature
-    {
-        public bool IsReadOnly { get; } = isReadOnly;
-        public long? MaxRequestBodySize { get; set; } = 30_000_000;
-    }
-
-    private sealed class FailingStream(Exception failure) : Stream
-    {
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override int Read(byte[] buffer, int offset, int count) => throw failure;
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw failure;
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    }
-
-    private static DefaultHttpContext Multipart(Stream body)
+    private static DefaultHttpContext Multipart(Stream body, IServiceProvider? services = null)
     {
         var context = new DefaultHttpContext();
         context.Request.Method = "POST";
         context.Request.ContentType = "multipart/form-data; boundary=xyz";
         context.Request.Body = body;
+        if (services is not null) context.RequestServices = services;
         return context;
+    }
+
+    private static MemoryStream Form(int fieldCount, int filePartBytes = 0)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < fieldCount; i++)
+            sb.Append($"--xyz\r\nContent-Disposition: form-data; name=\"f{i}\"\r\n\r\nv\r\n");
+        if (filePartBytes > 0)
+            sb.Append("--xyz\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.bin\"\r\n" +
+                      "Content-Type: application/octet-stream\r\n\r\n")
+                .Append('a', filePartBytes).Append("\r\n");
+        sb.Append("--xyz--\r\n");
+        return new MemoryStream(Encoding.ASCII.GetBytes(sb.ToString()));
+    }
+
+    private static IServiceProvider FormOptionsWith(Action<FormOptions> configure)
+    {
+        var options = new FormOptions();
+        configure(options);
+        return new ServiceCollection().AddSingleton(Options.Create(options)).BuildServiceProvider();
     }
 
     [Fact]
     public void The_body_cap_is_the_upload_limit_plus_the_multipart_headroom()
     {
-        var feature = new FakeLimitFeature();
+        var feature = new RecordingLimitFeature();
         var context = Multipart(Stream.Null);
         context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
 
-        UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes);
+        UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, NullLogger.Instance);
 
         feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + UploadRequestBody.MultipartHeadroomBytes);
     }
@@ -63,129 +69,111 @@ public class UploadRequestBodyTests
     [Fact]
     public void The_cap_follows_a_limit_below_the_server_default_too()
     {
-        var feature = new FakeLimitFeature();
+        var feature = new RecordingLimitFeature();
         var context = Multipart(Stream.Null);
         context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
 
-        UploadRequestBody.RaiseBodyLimit(context.Request, 64);
+        UploadRequestBody.RaiseBodyLimit(context.Request, 64, NullLogger.Instance);
 
         feature.MaxRequestBodySize.Should().Be(64 + UploadRequestBody.MultipartHeadroomBytes);
     }
 
     [Fact]
-    public void A_read_only_limit_feature_is_left_alone()
+    public void A_read_only_limit_feature_is_left_alone_and_a_warning_is_logged_once()
     {
-        var feature = new FakeLimitFeature(isReadOnly: true);
+        var feature = new RecordingLimitFeature(isReadOnly: true);
         var context = Multipart(Stream.Null);
         context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var logger = new ListLogger();
 
-        UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes);
+        UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, logger);
 
         feature.MaxRequestBodySize.Should().Be(30_000_000);
+        var warning = logger.Entries.Should().ContainSingle().Which;
+        warning.Level.Should().Be(LogLevel.Warning);
+        warning.Message.Should().Contain("Struo:Files:MaxUploadBytes");
     }
 
     [Fact]
     public void A_host_without_a_limit_feature_is_not_an_error()
     {
         var context = Multipart(Stream.Null);
+        var logger = new ListLogger();
 
-        var act = () => UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes);
+        var act = () => UploadRequestBody.RaiseBodyLimit(context.Request, MaxUploadBytes, logger);
 
         act.Should().NotThrow();
+        logger.Entries.Should().BeEmpty();
     }
 
     [Fact]
     public async Task A_well_formed_body_is_read_as_a_form()
     {
-        const string body =
-            "--xyz\r\nContent-Disposition: form-data; name=\"folderId\"\r\n\r\nabc\r\n--xyz--\r\n";
-        var context = Multipart(new MemoryStream(Encoding.ASCII.GetBytes(body)));
+        var context = Multipart(Form(fieldCount: 1));
 
-        var form = await UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, CancellationToken.None);
+        var form = await UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
 
-        form["folderId"].ToString().Should().Be("abc");
-    }
-
-    // The multipart section limit of ASP.NET (FormOptions.MultipartBodyLengthLimit) is 128 MiB; an upload
-    // limit above it needs the limit raised or the read fails with "Multipart body length limit exceeded".
-    private const long DefaultMultipartLimit = 134_217_728;
-
-    private sealed class GeneratedMultipart(long fileBytes) : Stream
-    {
-        private readonly byte[] _head = Encoding.ASCII.GetBytes(
-            "--xyz\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.bin\"\r\n" +
-            "Content-Type: application/octet-stream\r\n\r\n");
-        private readonly byte[] _tail = Encoding.ASCII.GetBytes("\r\n--xyz--\r\n");
-        private long _position;
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => _head.Length + fileBytes + _tail.Length;
-        public override long Position { get => _position; set => throw new NotSupportedException(); }
-
-        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
-
-        public override int Read(Span<byte> buffer)
-        {
-            var written = 0;
-            while (written < buffer.Length && _position < Length)
-            {
-                if (_position < _head.Length)
-                {
-                    var n = (int)Math.Min(buffer.Length - written, _head.Length - _position);
-                    _head.AsSpan((int)_position, n).CopyTo(buffer[written..]);
-                    written += n;
-                    _position += n;
-                }
-                else if (_position < _head.Length + fileBytes)
-                {
-                    var n = (int)Math.Min(buffer.Length - written, _head.Length + fileBytes - _position);
-                    buffer.Slice(written, n).Fill((byte)'a');
-                    written += n;
-                    _position += n;
-                }
-                else
-                {
-                    var at = (int)(_position - _head.Length - fileBytes);
-                    var n = Math.Min(buffer.Length - written, _tail.Length - at);
-                    _tail.AsSpan(at, n).CopyTo(buffer[written..]);
-                    written += n;
-                    _position += n;
-                }
-            }
-
-            return written;
-        }
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
-            new(Read(buffer.Span));
-
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        form["f0"].ToString().Should().Be("v");
     }
 
     [Fact]
     public async Task A_file_part_past_the_default_multipart_limit_is_read_when_the_upload_limit_allows_it()
     {
-        const long fileBytes = DefaultMultipartLimit + 4096;
+        const long fileBytes = FormOptions.DefaultMultipartBodyLengthLimit + 4096;
         var context = Multipart(new GeneratedMultipart(fileBytes));
 
         var form = await UploadRequestBody.ReadFormAsync(
-            context.Request, DefaultMultipartLimit + 8192, CancellationToken.None);
+            context.Request, FormOptions.DefaultMultipartBodyLengthLimit + 8192, NullLogger.Instance,
+            CancellationToken.None);
 
         form.Files.GetFile("file")!.Length.Should().Be(fileBytes);
+    }
+
+    [Fact]
+    public async Task The_multipart_limit_is_raised_from_the_configured_form_options_not_from_defaults()
+    {
+        var services = FormOptionsWith(o => o.MultipartBodyLengthLimit = 1024);
+        var context = Multipart(Form(fieldCount: 0, filePartBytes: 3000), services);
+
+        var form = await UploadRequestBody.ReadFormAsync(context.Request, 4096, NullLogger.Instance, CancellationToken.None);
+
+        form.Files.GetFile("file")!.Length.Should().Be(3000);
+    }
+
+    [Fact]
+    public async Task The_other_configured_form_limits_survive_the_raise()
+    {
+        var services = FormOptionsWith(o =>
+        {
+            o.MultipartBodyLengthLimit = 1024;
+            o.ValueCountLimit = 2;
+        });
+        var context = Multipart(Form(fieldCount: 3), services);
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, 4096, NullLogger.Instance, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<QueryException>()).Which.Message.Should().Be(UploadRequestBody.UnreadableFormMessage);
+    }
+
+    [Fact]
+    public void A_configured_multipart_limit_above_the_cap_is_left_as_it_is()
+    {
+        var context = Multipart(Stream.Null, FormOptionsWith(_ => { }));
+
+        UploadRequestBody.RaiseBodyLimit(context.Request, 4096, NullLogger.Instance);
+
+        context.Features.Get<IFormFeature>().Should().BeNull("the configured limit already allows the upload");
     }
 
     [Fact]
     public async Task A_body_over_the_cap_is_PayloadTooLarge_naming_the_upload_limit()
     {
         var kestrel413 = new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge);
-        var context = Multipart(new FailingStream(kestrel413));
+        var context = Multipart(new FailingBodyStream(kestrel413));
 
-        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, CancellationToken.None);
+        var act = () => UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
 
         var thrown = (await act.Should().ThrowAsync<PayloadTooLargeException>()).Which;
         thrown.Message.Should().Be($"File exceeds the maximum size of {MaxUploadBytes} bytes.");
@@ -193,16 +181,52 @@ public class UploadRequestBodyTests
         thrown.MaxBytes.Should().Be(MaxUploadBytes);
     }
 
-    [Fact]
-    public async Task Another_unreadable_body_is_not_reported_as_too_large()
+    public static TheoryData<Exception> UnreadableForms() => new()
     {
-        var other = new BadHttpRequestException("Unexpected end of request content.", StatusCodes.Status400BadRequest);
-        var context = Multipart(new FailingStream(other));
+        new InvalidDataException("Missing content-type boundary."),
+        new BadHttpRequestException("Unexpected end of request content.", StatusCodes.Status400BadRequest),
+        new IOException("Unexpected end of Stream, the content may have already been read by another component."),
+    };
 
-        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, CancellationToken.None);
+    [Theory]
+    [MemberData(nameof(UnreadableForms))]
+    public async Task A_form_that_cannot_be_read_is_a_bad_input_error_with_a_fixed_message(Exception failure)
+    {
+        var context = Multipart(new FailingBodyStream(failure));
 
-        await act.Should().NotThrowAsync<PayloadTooLargeException>();
-        await act.Should().ThrowAsync<Exception>();
+        var act = () => UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<QueryException>()).Which;
+        thrown.Message.Should().Be("The request form could not be read.");
+        thrown.Message.Should().NotContain(failure.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(UnreadableForms))]
+    public async Task A_form_read_that_fails_after_the_client_left_is_a_cancellation_not_a_bad_request(Exception failure)
+    {
+        var context = Multipart(new FailingBodyStream(failure));
+        using var aborted = new CancellationTokenSource();
+        context.RequestAborted = aborted.Token;
+        await aborted.CancelAsync();
+
+        var act = () => UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task An_unrelated_failure_is_left_alone()
+    {
+        var failure = new InvalidOperationException("boom");
+        var context = Multipart(new FailingBodyStream(failure));
+
+        var act = () => UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>()).Which.Should().BeSameAs(failure);
     }
 
     [Fact]
@@ -218,11 +242,19 @@ public class UploadRequestBodyTests
 
 /// <summary>
 /// <see cref="UploadBodyLimitFilter"/> runs before MVC binds the action, which is when MVC reads the
-/// multipart form: the cap must be set and an over-cap body refused there.
+/// multipart form: the caller's write grant is checked first, then the cap is set and an over-cap body
+/// refused there.
 /// </summary>
 public class UploadBodyLimitFilterTests
 {
     private const long MaxUploadBytes = 1024;
+
+    private sealed class Policy(bool canWrite) : IFileAccessPolicy
+    {
+        public bool CanWrite() => canWrite;
+        public bool CanDelete() => canWrite;
+        public bool CanReadUnpublished() => canWrite;
+    }
 
     private static (ResourceExecutingContext Context, DefaultHttpContext Http) Context(string? contentType, Stream body)
     {
@@ -235,24 +267,19 @@ public class UploadBodyLimitFilterTests
         return (new ResourceExecutingContext(actionContext, [], []), http);
     }
 
-    private static UploadBodyLimitFilter Filter() =>
-        new(new Struo.Application.Files.FileStorageOptions { MaxUploadBytes = MaxUploadBytes });
+    private static UploadBodyLimitFilter Filter(bool canWrite = true) =>
+        new(new FileStorageOptions { MaxUploadBytes = MaxUploadBytes }, new Policy(canWrite),
+            NullLogger<UploadBodyLimitFilter>.Instance);
 
     private static Task<ResourceExecutedContext> Executed(ResourceExecutingContext context) =>
         Task.FromResult(new ResourceExecutedContext(context, []));
-
-    private sealed class LimitFeature : IHttpMaxRequestBodySizeFeature
-    {
-        public bool IsReadOnly => false;
-        public long? MaxRequestBodySize { get; set; } = 30_000_000;
-    }
 
     [Fact]
     public async Task A_multipart_request_gets_the_upload_cap_and_its_form_is_read_before_the_action()
     {
         const string body = "--xyz\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nb\r\n--xyz--\r\n";
         var (context, http) = Context("multipart/form-data; boundary=xyz", new MemoryStream(Encoding.ASCII.GetBytes(body)));
-        var feature = new LimitFeature();
+        var feature = new RecordingLimitFeature();
         http.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
         var nextCalled = false;
 
@@ -260,7 +287,6 @@ public class UploadBodyLimitFilterTests
 
         nextCalled.Should().BeTrue();
         feature.MaxRequestBodySize.Should().Be(MaxUploadBytes + UploadRequestBody.MultipartHeadroomBytes);
-        http.Request.HasFormContentType.Should().BeTrue();
         (await http.Request.ReadFormAsync())["a"].ToString().Should().Be("b");
     }
 
@@ -268,7 +294,7 @@ public class UploadBodyLimitFilterTests
     public async Task A_request_that_is_not_a_form_is_passed_on_untouched()
     {
         var (context, http) = Context("application/json", Stream.Null);
-        var feature = new LimitFeature();
+        var feature = new RecordingLimitFeature();
         http.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
         var nextCalled = false;
 
@@ -282,28 +308,30 @@ public class UploadBodyLimitFilterTests
     public async Task A_form_over_the_cap_is_refused_before_the_action_runs()
     {
         var kestrel413 = new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge);
-        var (context, _) = Context("multipart/form-data; boundary=xyz", new ThrowingBody(kestrel413));
+        var (context, _) = Context("multipart/form-data; boundary=xyz", new FailingBodyStream(kestrel413));
         var nextCalled = false;
 
         var act = () => Filter().OnResourceExecutionAsync(context, () => { nextCalled = true; return Executed(context); });
 
-        var thrown = (await act.Should().ThrowAsync<PayloadTooLargeException>()).Which;
-        thrown.MaxBytes.Should().Be(MaxUploadBytes);
+        (await act.Should().ThrowAsync<PayloadTooLargeException>()).Which.MaxBytes.Should().Be(MaxUploadBytes);
         nextCalled.Should().BeFalse();
     }
 
-    private sealed class ThrowingBody(Exception failure) : Stream
+    [Fact]
+    public async Task A_caller_without_the_write_grant_is_refused_before_the_body_is_touched()
     {
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override int Read(byte[] buffer, int offset, int count) => throw failure;
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw failure;
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        var body = new CountingBodyStream(new MemoryStream(new byte[4096]));
+        var (context, http) = Context("multipart/form-data; boundary=xyz", body);
+        var feature = new RecordingLimitFeature();
+        http.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var nextCalled = false;
+
+        var act = () => Filter(canWrite: false)
+            .OnResourceExecutionAsync(context, () => { nextCalled = true; return Executed(context); });
+
+        (await act.Should().ThrowAsync<PermissionDeniedException>()).Which.Message.Should().Be("Write not permitted.");
+        body.Bytes.Should().Be(0);
+        feature.MaxRequestBodySize.Should().Be(30_000_000);
+        nextCalled.Should().BeFalse();
     }
 }

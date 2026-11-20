@@ -234,7 +234,8 @@ jobs:
           docker logs admin
           exit 1
       # The compose stack builds its own images from the same Dockerfiles. It must
-      # come up healthy, serve the built SPA, and proxy an anonymous API call and a GraphQL query through nginx.
+      # come up healthy, serve the built SPA, and proxy an anonymous API call and a GraphQL query
+      # through nginx.
       - name: Smoke-test the compose stack
         run: |
           STRUO_ADMIN_PASSWORD="$(openssl rand -hex 16)"

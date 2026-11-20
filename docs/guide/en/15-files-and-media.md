@@ -126,9 +126,14 @@ in-memory threshold; past that it spills to a temp file, so several large upload
 don't each hold a full cap's worth in memory.
 
 The request body as a whole is capped at `Struo:Files:MaxUploadBytes` plus 64 KiB for the multipart
-framing, on this endpoint only. A body over that is refused before the file part is read, with the
-same `413`/`PAYLOAD_TOO_LARGE`, message and details. The admin image's nginx has a limit of its own
-that answers first with an HTML page; see [Chapter 20](20-deployment.md).
+framing, on this endpoint only. When the request declares its length and that is over the cap, it is
+refused before any of the body is read. A body without a declared length (chunked) is read until it
+passes the cap, so up to the cap is buffered before it is refused. Either way the answer is the same
+`413`/`PAYLOAD_TOO_LARGE`, message and details. A request form that cannot be read (no boundary, a
+truncated body, more form values than the form limit) is `400`/`BAD_USER_INPUT` with the message
+`The request form could not be read.`. A caller who may not write files is refused with `403` before
+the form is read. The admin image's nginx has a limit of its own that answers first with an HTML
+page; see [Chapter 20](20-deployment.md).
 
 Content type first passes through the `Struo:Files:AllowedContentTypes` allowlist: left blank means
 unrestricted, which is also the compiled-in default; the accompanying `appsettings.json` lists a
@@ -486,13 +491,15 @@ through NetVips dynamically at runtime — never statically linked, and never li
 libvips itself arrives as binaries in the `NetVips.Native` package family, which declares the
 license LGPL-3.0-or-later. The binaries are separate files in the API image, under
 `runtimes/<rid>/native/`, and StruoCMS embeds none of libvips's source. The same family bundles
-several of libvips's optional dependencies (mozjpeg, libpng, libwebp, cairo, pango, librsvg, and
-others) under a mix of MIT, BSD, MPL and LGPL licenses.
+several of libvips's optional dependencies, each under its own license; the table in
+`THIRD-PARTY-NOTICES.md` lists them.
 
-`THIRD-PARTY-NOTICES.md` lists the third-party components in the images that need a notice, with
-their license terms; the API image carries it at `/app/THIRD-PARTY-NOTICES.md`, and the admin image
-carries its own file for the admin bundle (see [Chapter 20](20-deployment.md)). The pinned version
-numbers are recorded in `Directory.Packages.props`, not repeated there or here.
+`THIRD-PARTY-NOTICES.md` lists the third-party components in the images whose declared license is
+not MIT, ISC, BSD or 0BSD, with their license terms. It is not a complete inventory of what the
+images contain, and not everything a distributor needs. The API image carries it at
+`/app/THIRD-PARTY-NOTICES.md`, and the admin image carries its own file for the admin bundle (see
+[Chapter 20](20-deployment.md)). The pinned version numbers are recorded in
+`Directory.Packages.props`, not repeated there or here.
 
 The host sets `NetVips.BlockUntrusted` while it registers the file services, which loads native libvips
 at startup even when transforms are disabled. A host without a usable libvips fails to start instead of

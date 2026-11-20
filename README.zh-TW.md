@@ -106,8 +106,10 @@ Cloud 分析。fork 要設定儲存庫變數 `SONAR_ORGANIZATION`、`SONAR_BACKE
 
 ## 授權
 
-StruoCMS 採用 [MIT 授權](LICENSE)。隨容器映像散布的第三方元件，其各自的授權條款列於
-[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。
+StruoCMS 採用 [MIT 授權](LICENSE)。容器映像中宣告的授權不是 MIT、ISC、BSD 或 0BSD 的第三方元件，
+其授權條款列於 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)（API 映像）與
+[`frontend/THIRD-PARTY-NOTICES.md`](frontend/THIRD-PARTY-NOTICES.md)（後台映像）。這些檔案不是映像
+內容的完整清單。
 
 ---
 

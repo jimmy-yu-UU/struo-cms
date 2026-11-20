@@ -120,9 +120,11 @@ without `SONAR_ORGANIZATION` both jobs are skipped.
 
 ## License
 
-StruoCMS is licensed under the [MIT License](LICENSE). Third-party components that travel inside the
-container images are listed with their own license terms in
-[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+StruoCMS is licensed under the [MIT License](LICENSE). Third-party components in the container
+images whose declared license is not MIT, ISC, BSD or 0BSD are listed with their license terms in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) (API image) and
+[`frontend/THIRD-PARTY-NOTICES.md`](frontend/THIRD-PARTY-NOTICES.md) (admin image). The files are
+not a complete inventory of what the images contain.
 
 ---
 

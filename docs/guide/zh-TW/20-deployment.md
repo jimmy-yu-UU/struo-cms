@@ -509,18 +509,23 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
 請求本文的上限不只一處：
 
-| 位置 | 設定 | 預設值 |
+| 請求 | 上限 | 由誰設定 |
 |---|---|---|
-| 後台映像裡的 nginx | `CLIENT_MAX_BODY_SIZE` | `32m` |
-| API 的上傳端點 | `Struo:Files:MaxUploadBytes` | `26214400` |
-| API 的 JSON 本文與 `/graphql` | `Api:MaxJsonBodyBytes` | `4194304` |
+| 上傳 `POST /api/files`（API） | `MaxUploadBytes` 加 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON 本文與 `/graphql`（API） | 4 MiB | `Api:MaxJsonBodyBytes` |
+| 其他請求本文（API） | 30,000,000 bytes | 伺服器預設 |
+| 經後台映像的上傳（nginx） | `32m` | `CLIENT_MAX_BODY_SIZE` |
+| 經映像的其他請求（nginx） | `32m` | 範本裡固定 |
 
-`CLIENT_MAX_BODY_SIZE` 是 nginx 的大小寫法（`32m`、`128m`），也就是 `client_max_body_size` 的值，
-Compose 檔在 `admin` 服務上設了它。上傳端點接受的請求本文是 `Struo:Files:MaxUploadBytes` 再加檔案外
-圍 multipart 外框的 64 KiB；其他端點維持伺服器預設的請求本文上限 30,000,000 bytes。上傳超過這個鍵，
-拿到的是 API 的 JSON 錯誤信封：`413`、`PAYLOAD_TOO_LARGE`，上限在 `error.details[0].maxBytes`（見
-[第 15 章](15-files-and-media.md)）。超過 `CLIENT_MAX_BODY_SIZE` 的本文到不了 API，由 nginx 以自己的
-HTML 頁面回 `413`。
+`CLIENT_MAX_BODY_SIZE` 是 nginx 的大小寫法（`32m`、`128m`），只套用在上傳路徑 `POST /api/files`；其
+他路徑，包括 `/graphql` 與 `/api/` 的其餘部分，維持固定的 `32m`，所以調高它不會放寬匿名請求的上限。
+Compose 檔從 `STRUO_CLIENT_MAX_BODY_SIZE`（預設 `32m`）傳進來。值是空的、或不是 nginx 的大小寫法時，
+nginx 拒絕啟動：`32MB` 會讓它以 `[emerg] "client_max_body_size" directive invalid value` 停下來。
+
+上傳端點接受的請求本文是 `Struo:Files:MaxUploadBytes` 再加檔案外圍 multipart 外框的 64 KiB。上傳超過
+這個鍵，拿到的是 API 的 JSON 錯誤信封：`413`、`PAYLOAD_TOO_LARGE`，上限在
+`error.details[0].maxBytes`（見[第 15 章](15-files-and-media.md)）。超過 nginx 上限的本文到不了
+API，由 nginx 以自己的 HTML 頁面回 `413`。
 
 兩處要一起調。`Struo__Files__MaxUploadBytes=104857600`（100 MiB）時，把 `CLIENT_MAX_BODY_SIZE` 設成
 `128m`，留出 multipart 外框的空間。只調高 API 的鍵，映像維持 `32m`：31,000,000 bytes 的上傳過得去，

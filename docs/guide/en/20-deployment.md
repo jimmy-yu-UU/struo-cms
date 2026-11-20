@@ -622,19 +622,26 @@ missing, so a fork keeps the file or removes the line from `frontend/Dockerfile`
 
 A request body is capped in more than one place:
 
-| Where | Setting | Default |
+| Request | Limit | Set by |
 |---|---|---|
-| nginx in the admin image | `CLIENT_MAX_BODY_SIZE` | `32m` |
-| API, upload endpoint | `Struo:Files:MaxUploadBytes` | `26214400` |
-| API, JSON bodies and `/graphql` | `Api:MaxJsonBodyBytes` | `4194304` |
+| Upload, `POST /api/files` (API) | `MaxUploadBytes` plus 64 KiB | `Struo:Files:MaxUploadBytes` |
+| JSON bodies and `/graphql` (API) | 4 MiB | `Api:MaxJsonBodyBytes` |
+| Any other request body (API) | 30,000,000 bytes | The server's default |
+| Upload through the admin image (nginx) | `32m` | `CLIENT_MAX_BODY_SIZE` |
+| Any other request through the image (nginx) | `32m` | Fixed in the template |
 
-`CLIENT_MAX_BODY_SIZE` is an nginx size (`32m`, `128m`) and the value of `client_max_body_size`. The
-Compose file sets it on the `admin` service. On the upload endpoint the API accepts a request body
-of `Struo:Files:MaxUploadBytes` plus 64 KiB for the multipart framing around the file; every other
-endpoint keeps the server's default request body limit of 30,000,000 bytes. An upload over the key
-gets the API's JSON error envelope, `413` with `PAYLOAD_TOO_LARGE` and the limit in
-`error.details[0].maxBytes` (see [Chapter 15](15-files-and-media.md)). A body over
-`CLIENT_MAX_BODY_SIZE` never reaches the API: nginx answers `413` with its own HTML page.
+`CLIENT_MAX_BODY_SIZE` is an nginx size (`32m`, `128m`). It applies to the upload path
+`POST /api/files` only; every other path, `/graphql` and the rest of `/api/` included, keeps the
+fixed `32m`, so raising it does not raise the limit for anonymous requests. The Compose file passes
+it through from `STRUO_CLIENT_MAX_BODY_SIZE` (default `32m`). nginx refuses to start when the value
+is empty or is not an nginx size: `32MB` stops it with `[emerg] "client_max_body_size" directive
+invalid value`.
+
+On the upload endpoint the API accepts a request body of `Struo:Files:MaxUploadBytes` plus 64 KiB
+for the multipart framing around the file. An upload over the key gets the API's JSON error
+envelope, `413` with `PAYLOAD_TOO_LARGE` and the limit in `error.details[0].maxBytes` (see
+[Chapter 15](15-files-and-media.md)). A body over the nginx limit never reaches the API: nginx
+answers `413` with its own HTML page.
 
 Raise the two together. With `Struo__Files__MaxUploadBytes=104857600` (100 MiB), set
 `CLIENT_MAX_BODY_SIZE=128m`, which leaves room for the multipart framing. Raising only the API key
