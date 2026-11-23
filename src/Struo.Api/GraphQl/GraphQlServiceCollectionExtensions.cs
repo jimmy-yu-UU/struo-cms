@@ -26,7 +26,7 @@ public static class GraphQlServiceCollectionExtensions
         ?? env.IsDevelopment();
 
     /// <summary>
-    /// Reads the depth and cost limits from configuration at registration time, like
+    /// Reads the depth, cost and field-repetition limits from configuration at registration time, like
     /// <see cref="ResolveExposeSchema"/>: the HotChocolate rules take plain values. A value that
     /// <see cref="GraphQlOptionsValidator"/> rejects throws here, before the host touches the database or builds
     /// the schema.
@@ -71,6 +71,10 @@ public static class GraphQlServiceCollectionExtensions
             .AddGraphQLServer()
             .AddStruoSchemaTypes()
             .AddMaxExecutionDepthRule(limits.MaxExecutionDepth, skipIntrospectionFields: true)
+            // The default rule (3) stays registered next to a second one, and the stricter of the two wins,
+            // so it is replaced rather than added to.
+            .RemoveMaxAllowedFieldCycleDepthRule()
+            .AddMaxAllowedFieldCycleDepthRule((ushort)limits.MaxFieldCycleDepth)
             // Stamps extensions.traceId on every error, including the validation errors the error filter never sees.
             .UseRequest(TraceIdResultMiddleware.Create)
             .UseDefaultPipeline()
