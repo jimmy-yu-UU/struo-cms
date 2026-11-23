@@ -137,6 +137,7 @@ public static class MigrationCli
         var applied = await host.ApplyAsync(ct);
         if (applied.Count == 0) await stdout.WriteLineAsync("Nothing to migrate.");
         foreach (var m in applied) await stdout.WriteLineAsync($"Applied {m.Version}  {m.Description}");
+        if (BootstrapAdminReport.For(host.Seed, applied) is { } report) await stdout.WriteLineAsync(report.Message);
     }
 
     private static async Task WriteStatusAsync(MigrationHost host, TextWriter stdout)
