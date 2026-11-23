@@ -192,10 +192,12 @@ public static class MetadataScanner
     /// <summary>
     /// Fail-fast: the key a <c>[CmsRelation]</c> names must have the type of the primary key it points at
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
-    /// junction keys. Every path that reads or writes the key hands it over as the type of that primary key,
-    /// so a key of another type reads back empty or fails at the first request. A key property or a target
-    /// the scan cannot resolve is left to the checks that already cover it. Runs for both
-    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
+    /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
+    /// relation is expanded, a link is written or a target is deleted. Nothing is compared when the key
+    /// property or the primary key property does not exist, or when the entity holding the primary key is
+    /// not a collection. Runs for both <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/>
+    /// (which delegates to it).
     /// </summary>
     private static void ValidateRelationKeyTypes(List<CollectionMetadata> collections, IEnumerable<Type> types)
     {
@@ -204,11 +206,18 @@ public static class MetadataScanner
         {
             if (!names.Contains(CollectionNameOf(type))) continue;
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) continue;
-                foreach (var pair in RelationKeyPairs(type, prop, nav))
-                    if (names.Contains(CollectionNameOf(pair.Target))) RequireKeyType(type, prop, pair);
-            }
+                ValidateOneRelationKeyTypes(type, prop, names);
+        }
+    }
+
+    // Per-property body of ValidateRelationKeyTypes.
+    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, HashSet<string> names)
+    {
+        if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) return;
+        foreach (var pair in RelationKeyPairs(type, prop, nav))
+        {
+            if (!names.Contains(CollectionNameOf(pair.Target))) continue;
+            RequireKeyType(type, prop, pair);
         }
     }
 
@@ -219,8 +228,7 @@ public static class MetadataScanner
     {
         if (!NavigateShape.IsListProperty(prop))
         {
-            var target = prop.PropertyType;
-            yield return new RelationKeyPair(owner, nav.ForeignKey, Nullable.GetUnderlyingType(target) ?? target);
+            yield return new RelationKeyPair(owner, nav.ForeignKey, SingleRelationTarget(prop));
             yield break;
         }
 
@@ -236,6 +244,14 @@ public static class MetadataScanner
         }
     }
 
+    // The entity a single-entity relation property points at: the property type, or the first generic
+    // argument of a generic wrapper, without Nullable<>.
+    private static Type SingleRelationTarget(PropertyInfo prop)
+    {
+        var target = prop.PropertyType.IsGenericType ? prop.PropertyType.GetGenericArguments()[0] : prop.PropertyType;
+        return Nullable.GetUnderlyingType(target) ?? target;
+    }
+
     private static void RequireKeyType(Type owner, PropertyInfo relation, RelationKeyPair pair)
     {
         var key = PropertyNamed(pair.KeyOwner, pair.Key);
@@ -246,15 +262,23 @@ public static class MetadataScanner
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
         if (keyType == primaryKeyType) return;
 
-        var keyName = $"{key.DeclaringType?.Name}.{key.Name}";
+        // Named by the type that declares the property: that is the declaration to change.
+        var keyName = $"{key.DeclaringType!.Name}.{key.Name}";
         throw new MetadataException(
             $"Relation '{owner.Name}.{relation.Name}' uses the key '{keyName}', " +
             $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(key.PropertyType))} property, " +
-            $"but it points at the primary key '{primaryKey.DeclaringType?.Name}.{primaryKey.Name}', " +
+            $"but it points at the primary key '{primaryKey.DeclaringType!.Name}.{primaryKey.Name}', " +
             $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(primaryKey.PropertyType))} property. " +
-            $"Declare '{keyName}' as {ColumnDeclarationCheck.TypeName(primaryKeyType)}: a relation key is read and " +
-            "written as the type of the primary key it points at. A column that already exists in another type needs a migration.");
+            $"Declare '{keyName}' as {ColumnDeclarationCheck.TypeName(SuggestedKeyType(key.PropertyType, primaryKeyType))}: " +
+            "a relation key is read and written as the type of the primary key it points at. " +
+            "A column that already exists with another type needs a migration.");
     }
+
+    // The primary key type, kept nullable when the key is, so an optional key stays optional.
+    private static Type SuggestedKeyType(Type keyPropertyType, Type primaryKeyType) =>
+        Nullable.GetUnderlyingType(keyPropertyType) is not null && primaryKeyType.IsValueType
+            ? typeof(Nullable<>).MakeGenericType(primaryKeyType)
+            : primaryKeyType;
 
     private static PropertyInfo? PropertyNamed(Type type, string name) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -744,11 +768,7 @@ public static class MetadataScanner
             }
             else
             {
-                target = prop.PropertyType.IsGenericType
-                    ? prop.PropertyType.GetGenericArguments()[0]
-                    : prop.PropertyType;
-                // Unwrap Nullable<T>
-                target = Nullable.GetUnderlyingType(target) ?? target;
+                target = SingleRelationTarget(prop);
                 kind = RelationKind.ManyToOne;
                 fk = Camel(nav.ForeignKey);
             }

@@ -154,8 +154,8 @@ public class RelationKeyTypeCheckTests
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain("M2oIntToLong.Target").And.Contain("M2oIntToLong.TargetId").And.Contain("an int? property")
-            .And.Contain("LongTarget.Id").And.Contain("a long property").And.Contain("Declare 'M2oIntToLong.TargetId' as long")
-            .And.Contain("migration");
+            .And.Contain("LongTarget.Id").And.Contain("a long property").And.Contain("Declare 'M2oIntToLong.TargetId' as long?")
+            .And.Contain("exists with another type needs a migration");
     }
 
     [Fact]
@@ -175,7 +175,8 @@ public class RelationKeyTypeCheckTests
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain("M2oGuidToLong.Target").And.Contain("M2oGuidToLong.TargetId").And.Contain("a Guid property")
-            .And.Contain("LongTarget.Id").And.Contain("a long property");
+            .And.Contain("LongTarget.Id").And.Contain("a long property")
+            .And.Contain("Declare 'M2oGuidToLong.TargetId' as long:");
     }
 
     [Fact]
@@ -242,7 +243,7 @@ public class RelationKeyTypeCheckTests
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain("OneToManyBadParent.Children").And.Contain("ChildIntKey.ParentId").And.Contain("an int? property")
-            .And.Contain("OneToManyBadParent.Id").And.Contain("a long property").And.Contain("Declare 'ChildIntKey.ParentId' as long");
+            .And.Contain("OneToManyBadParent.Id").And.Contain("a long property").And.Contain("Declare 'ChildIntKey.ParentId' as long?");
     }
 
     [Fact]
@@ -335,7 +336,7 @@ public class RelationKeyTypeCheckTests
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain("ManyToManyBadParentKey.Tags").And.Contain("JunctionIntParent.ParentId").And.Contain("an int property")
             .And.Contain("ManyToManyBadParentKey.Id").And.Contain("a long property")
-            .And.Contain("Declare 'JunctionIntParent.ParentId' as long");
+            .And.Contain("Declare 'JunctionIntParent.ParentId' as long:");
     }
 
     [Fact]
@@ -354,6 +355,57 @@ public class RelationKeyTypeCheckTests
         MetadataScanner.ScanTypes([typeof(ManyToManyOk), typeof(LongTarget)]).Should().HaveCount(2);
         MetadataScanner.ScanTypes([typeof(ManyToManyNullableKeys), typeof(LongTarget)]).Should().HaveCount(2);
     }
+
+    // ── what is not compared ─────────────────────────────────────────────────
+
+    [SugarTable("rkc_jct_unnamed")]
+    private sealed class JunctionWithoutParentKeyProperty
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public long TargetId { get; set; }
+    }
+
+    [SugarTable("rkc_mm_unnamed")]
+    [CmsCollection("MM unnamed", Name = "rkcMmUnnamed")]
+    private sealed class ManyToManyKeyWithoutProperty
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+
+        [Navigate(typeof(JunctionWithoutParentKeyProperty), "NoSuchKey", nameof(JunctionWithoutParentKeyProperty.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<LongTarget> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rkc_no_key_target")]
+    [CmsCollection("No key target", Name = "rkcNoKeyTarget")]
+    private sealed class TargetWithoutPrimaryKey
+    {
+        public string Name { get; set; } = "";
+    }
+
+    [SugarTable("rkc_m2o_no_key")]
+    [CmsCollection("M2O no key", Name = "rkcM2oNoKey")]
+    private sealed class M2oToTargetWithoutPrimaryKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public int TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public TargetWithoutPrimaryKey? Target { get; set; }
+    }
+
+    [Fact]
+    public void A_target_that_is_not_in_the_scan_is_not_compared() =>
+        MetadataScanner.ScanTypes([typeof(M2oIntToLong)]).Should().ContainSingle();
+
+    [Fact]
+    public void A_key_name_that_matches_no_property_is_not_compared() =>
+        MetadataScanner.ScanTypes([typeof(ManyToManyKeyWithoutProperty), typeof(LongTarget)]).Should().HaveCount(2);
+
+    [Fact]
+    public void A_target_without_a_primary_key_property_is_not_compared() =>
+        MetadataScanner.ScanTypes([typeof(M2oToTargetWithoutPrimaryKey), typeof(TargetWithoutPrimaryKey)]).Should().HaveCount(2);
 
     // ── the scan of whole assemblies ─────────────────────────────────────────
 
