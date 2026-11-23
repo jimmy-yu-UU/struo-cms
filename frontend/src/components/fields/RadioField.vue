@@ -2,6 +2,7 @@
 import { computed, useId } from 'vue'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
+import { primitiveText } from '../../lib/primitiveText'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
@@ -11,7 +12,7 @@ const options = computed(() => props.field.options ?? [])
 // registry.ts's def() default `empty` is '', and the `radio` interface entry does not override it,
 // so this total coercion keeps reka's RadioGroupRoot in controlled mode on every mount, matching
 // SelectField's settled convention rather than admitting `undefined` (reka's `passive` mode).
-const current = computed(() => String(props.modelValue ?? ''))
+const current = computed(() => primitiveText(props.modelValue))
 // Instance-scoped so a repeater rendering this field once per row never collides: field.name alone
 // repeats identically across rows, which would make every row's <label for> and reka's own
 // [for=…] name lookup resolve to the first row's element. Indexed rather than option-value-based so

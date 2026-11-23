@@ -22,6 +22,7 @@ import { rbacApi } from '../api/rbacApi'
 import { ApiError } from '../api/apiClient'
 import { writeFailureMessage } from '@/lib/apiErrorMessage'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
+import { primitiveText } from '../lib/primitiveText'
 import { navigationCompleted } from '../lib/navigation'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { nullsAfterSave } from '../lib/loadedNulls'
@@ -76,7 +77,7 @@ const savedRoleName = ref('')
 const savedRoleIsPublic = computed(() => savedRoleName.value === PUBLIC_ROLE_NAME)
 function captureSavedRole(): void {
   savedRoleIsSuperAdmin.value = model.shared.isSuperAdmin === true
-  savedRoleName.value = String(model.shared.name ?? '')
+  savedRoleName.value = primitiveText(model.shared.name)
 }
 // Whether the user being edited belongs to a super-admin role, read from its saved roles.
 const savedUserIsSuperAdmin = ref(false)

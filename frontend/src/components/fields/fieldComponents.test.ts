@@ -566,3 +566,43 @@ describe('field components (rich-text + file wrappers)', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['f1'])
   })
 })
+
+describe('field components (non-primitive model values)', () => {
+  const lookalike = { value: '[object Object]', label: 'Lookalike' }
+  const options = [{ value: '5', label: 'Five' }, { value: '0', label: 'Zero' }, lookalike]
+
+  it('RadioField checks no radio for an object model value', () => {
+    const w = mount(RadioField, {
+      props: { field: field({ interface: 'radio', options }), modelValue: { id: 1 } },
+    })
+    const states = w.findAll('[role="radio"]').map((r) => r.attributes('data-state'))
+    expect(states).toEqual(['unchecked', 'unchecked', 'unchecked'])
+  })
+
+  it('RadioField checks the radio whose value is the text of a numeric model, including 0', () => {
+    const five = mount(RadioField, { props: { field: field({ interface: 'radio', options }), modelValue: 5 } })
+    expect(five.findAll('[role="radio"]').map((r) => r.attributes('data-state'))).toEqual(['checked', 'unchecked', 'unchecked'])
+    const zero = mount(RadioField, { props: { field: field({ interface: 'radio', options }), modelValue: 0 } })
+    expect(zero.findAll('[role="radio"]').map((r) => r.attributes('data-state'))).toEqual(['unchecked', 'checked', 'unchecked'])
+  })
+
+  it('SelectField shows the placeholder, not an option, for an object model value', async () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', label: 'Pick one', options }), modelValue: { id: 1 } },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await w.vm.$nextTick()
+    const text = w.get('[role="combobox"]').text()
+    expect(text).not.toContain('Lookalike')
+    expect(text).toContain('Pick one')
+  })
+
+  it('SelectField shows the option whose value is the text of a numeric model', async () => {
+    const w = mount(SelectField, {
+      props: { field: field({ interface: 'select', label: 'Pick one', options }), modelValue: 5 },
+      global: { stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    await w.vm.$nextTick()
+    expect(w.get('[role="combobox"]').text()).toContain('Five')
+  })
+})
