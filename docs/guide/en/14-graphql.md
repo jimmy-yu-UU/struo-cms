@@ -513,7 +513,7 @@ Seven independent caps each guard their own concern:
 |---|---|---|
 | Execution depth (`GraphQl:MaxExecutionDepth`) | 12 by default | Selection sets nested too deep; introspection fields exempt |
 | Cost (`GraphQl:MaxFieldCost`/`GraphQl:MaxTypeCost`) | 150 by default | Alias amplification: one costly field under many aliases |
-| Self-reference depth (built into the server; the project has no setting for it) | One self-referencing field nests 3 levels at most | Writing a query far down a self-referencing relation such as `parent` |
+| Self-reference depth (no setting key) | One self-referencing field: 3 levels | A query far down a relation such as `parent` |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
