@@ -14,9 +14,10 @@ always returns `version`, used for optimistic concurrency — a collection that 
 `translations`, and any relation expanded by `deep`, are attached after projection — they show up
 whether or not `fields=` names them:
 
+<!-- capture: ch11-fields-id-status -->
 ```text
 $ GET /api/items/article?fields=id,status
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":4,"status":"draft","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":7,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206a9-dc34-71ad-8490-2fa51c2f4a3d","version":0,"status":"draft","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a206a9-dc23-71a4-807b-c6027907b653","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a206a9-dbc8-73d4-9e9f-a9cac93e20ea","version":0,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -29,6 +30,7 @@ The JSON envelope does the same thing; the key is `fields`, a string array — n
 
 `fields=` only projects the collection's own scalar fields; a relation path is rejected outright:
 
+<!-- capture: ch11-fields-relation-path-400 -->
 ```text
 $ GET /api/items/article?fields=category.name
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation paths are not supported in field selection: 'category.name'."}}
@@ -88,6 +90,7 @@ is six relation hops, which validates and runs normally; only a seventh hop is r
 `Relation nesting too deep (depth {n}); the maximum is {max}.`. Here is a request that hits the
 seventh hop:
 
+<!-- capture: ch11-deep-too-deep-400 -->
 ```text
 $ POST /api/items/article/query
 body:
@@ -196,8 +199,9 @@ equivalent to having no `filter` at all.
 `search=` is never pruned either — a facet only prunes its own copy of `filter`; pruning and
 `search` are separate, independent steps.
 
+<!-- capture: ch11-facets-status -->
 ```text
-$ GET /api/items/article?filter[categoryId][_eq]=01a08f92-3833-750e-bad3-6ee620f985c3&filter[status][_eq]=published&facets=status
+$ GET /api/items/article?filter[categoryId][_eq]=01a206a9-db95-7950-8059-d4df3e1f0b00&filter[status][_eq]=published&facets=status
 {"success":true,"data":[...],"meta":{"total":2,"limit":25,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]}}}
 HTTP_STATUS:200
 ```
@@ -315,6 +319,7 @@ precision.
 An aggregate is never pruned, no matter what facets the same request also asks for — it always runs
 against the request's complete, unpruned `filter`:
 
+<!-- capture: ch11-aggregate-count-max -->
 ```text
 $ GET /api/items/article?aggregate[count]=publishedAt&aggregate[max]=publishedAt
 {"success":true,"data":[...],"meta":{"total":3,"limit":25,"offset":0,"aggregate":{"count":{"publishedAt":2},"max":{"publishedAt":"2026-06-01T00:00:00Z"}}}}
@@ -366,9 +371,10 @@ message and what triggers it.
 Put `filter`, `sort`, `limit`/`offset`, `fields`, `deep`, `facets`, and `aggregate` all in the same
 request, and each one's rules still hold — none of them interfere with each other:
 
+<!-- capture: ch11-full-example -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0&fields=id,status&deep=category,tags&facets=status&aggregate[count]=publishedAt
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","category":{"id":"01a08f92-3833-750e-bad3-6ee620f985c3","version":0,"name":"Guides","createdAt":"2026-09-11T08:25:19.670132Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.670271Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"},"tags":[{"id":"01a08f92-38f5-7f1b-a478-f8a1140f0b0b","version":0,"name":"howto","createdAt":"2026-09-11T08:25:19.861593Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.86169Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":null}},{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","version":0,"name":"release","createdAt":"2026-09-11T08:25:19.98309Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:19.98318Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
+{"success":true,"data":[{"id":"01a206a9-dc23-71a4-807b-c6027907b653","version":0,"status":"published","category":{"id":"01a206a9-db95-7950-8059-d4df3e1f0b00","version":0,"name":"Guides","createdAt":"2026-11-23T04:28:44.823697Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.824053Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c"},"tags":[{"id":"01a206a9-dbb1-77c7-873b-027772859f8b","version":0,"name":"howto","createdAt":"2026-11-23T04:28:44.850379Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.850508Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","_junction":{"note":null}},{"id":"01a206a9-dbbc-759b-b7a4-f24797cd9a74","version":0,"name":"release","createdAt":"2026-11-23T04:28:44.860958Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.861012Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
 HTTP_STATUS:200
 ```
 

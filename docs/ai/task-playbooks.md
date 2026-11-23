@@ -1,6 +1,7 @@
 # Task Playbooks (for AI agents)
 
-Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`. Each names the exact
+Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`, and a sixth playbook
+for the manual's transcripts. Each names the exact
 files to touch, the shape of the code, the tests to add, and the gate to run. Background reading for
 each is the linked manual chapter — read it before making the change if anything here is unclear.
 
@@ -335,6 +336,57 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    sample opted in first. Locally, E2E needs a live API and database reachable at the dev proxy
    target; it is not one of the standing gates. CI's `e2e` job runs the `core` project against the
    Compose stack, and the `sample` project is not run by CI.
+
+## Playbook 6: Re-capture the manual's transcripts
+
+Background: `docs/ai/conventions.md`, "Transcripts". The tool is `docs/scripts/capture/` (Node, standard
+library only). It replays one scenario against a running host and writes the responses into the
+marked blocks of both languages from the same run. Chapters 10 and 11 are covered.
+
+**What the tool needs**
+
+- A host with the Blog sample opted in (`docs/guide/en/23-sample-walkthrough.md`, "Opting the sample in")
+  on a freshly migrated database that holds only the bootstrap admin. Keep every other shipped
+  default: no public read grants, login rate limit off. Over plain HTTP the session cookie needs
+  `Auth__Cookie__RequireSecure=false`.
+- The admin password in `STRUO_CAPTURE_ADMIN_PASSWORD`; the email defaults to `admin@admin.com`.
+- A new database for every run. The seed stops with a message when the database holds articles,
+  categories or tags, and the tool never sends a DELETE.
+
+**Run it** from `docs/`:
+
+```text
+node scripts/capture/capture.mjs --base-url http://localhost:5221 --chapters 10,11 --write
+node scripts/capture/capture.mjs --check
+```
+
+Without `--write` the captured blocks are printed and no file changes. `--check` needs no network: it
+verifies that every marker sits above a closed fence, that both languages hold the same markers and
+byte-identical blocks, that each scenario capture has a marker and each marker a capture, and that a
+block ends with the status its scenario declares. The docs build runs it.
+
+**Rules**
+
+- A marked block is never edited by hand. The tool replaces the lines between the fences.
+- Every difference between a printed body and the server's body is a transform named on the step
+  that uses it (`stripTraceId`, `elideData`). An undeclared difference does not exist.
+- Ids and timestamps change on every capture, so a re-capture rewrites every block of the chapters
+  it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
+  the same run.
+- After a capture, read the prose around each block. A sentence that states a number, a row or an
+  order is true for the new output or is fixed in both languages.
+
+**Add a capture**
+
+1. Put `<!-- capture: <id> -->` on the line directly above the opening fence of the block, in both
+   languages. The id is unique and stable.
+2. Add a step with `capture: '<id>'` to the chapter's scenario in
+   `docs/scripts/capture/scenarios/`. A step names its identity, method, path, body, the status the
+   manual shows (`expect`), the variables it saves (`save`) and its transforms. `lib/runner.mjs`
+   documents every field. Steps that share an id make one block with several exchanges.
+3. Register a new chapter in `scenarios/index.mjs`, after every chapter that must read the data
+   set unchanged.
+4. Run the tool tests (`node --test "scripts/**/*.test.mjs"`), then `--check`, then a capture.
 
 ## Next steps
 

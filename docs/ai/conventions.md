@@ -56,7 +56,8 @@ rejects what fails.
   sample, not a rendered table — and every markdown file under `docs/guide/`, not only the chapters,
   is checked.
 - **Transcripts.** Keep a command or HTTP transcript only when it shows something prose cannot, and
-  capture it from a real run. Never hand-edit one.
+  capture it from a real run. Never hand-edit one. Marked blocks are written by the capture tool
+  (`docs/ai/task-playbooks.md`, Playbook 6).
 - **Locales.** Traditional Chinese is the master text. The English chapter follows the Chinese
   chapter's section structure and content, written in natural English, not translated sentence by
   sentence. Both locales use the same filename.
