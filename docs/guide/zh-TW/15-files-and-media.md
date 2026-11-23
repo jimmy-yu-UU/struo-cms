@@ -112,7 +112,8 @@ HTTP_STATUS:201
 請求宣告了長度而且超過上限時，在讀本文之前就被拒絕；沒有宣告長度的本文（chunked）會一直讀到超過上限
 才被拒絕，所以最多有上限那麼多的位元組先被緩衝。兩種情況的回應一樣：`413`／`PAYLOAD_TOO_LARGE`、
 同一句訊息與同樣的 details。讀不出來的請求表單（沒有 boundary、本文被截斷、表單值超過表單的個數
-上限）是 `400`／`BAD_USER_INPUT`，訊息是 `The request form could not be read.`。沒有檔案寫入權限
+上限）是 `400`／`BAD_USER_INPUT`，訊息是 `The request form could not be read.`。讀表單時請求本文逾時是 `408`／`BAD_USER_INPUT`，訊息是
+`The request body could not be read.`。沒有檔案寫入權限
 的呼叫端在讀表單之前就收到 `403`。後台映像的 nginx 有自己的上限，會先以 HTML 頁面回應，見
 [第 20 章](20-deployment.md)。
 

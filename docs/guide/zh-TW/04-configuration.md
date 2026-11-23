@@ -412,13 +412,15 @@ Development 之外打開之前，前面要自己加一層驗證。
 | `GraphQl:MaxExecutionDepth` | 整數，至少 1 | `12` |
 | `GraphQl:MaxFieldCost` | 數字，大於 0 | `150` |
 | `GraphQl:MaxTypeCost` | 數字，大於 0 | `150` |
+| `GraphQl:MaxFieldCycleDepth` | 整數，1 到 65535 | `3` |
 
 留空時只有 Development 預設開放，其他環境（含 Production）一律預設關閉；管的只是 schema 能不能被
 查詢（introspection 與 `GET /graphql?sdl`），`POST /graphql` 本身不受影響。內建的 Nitro 瀏覽器
 IDE 另外只認開發環境，不受這個鍵控制。
 
-另外三個鍵是單一操作的上限：選擇集最多能巢狀幾層，以及最多能累積多少欄位成本與型別成本。設成 0
-或更小，啟動會失敗，訊息會點出是哪一個鍵。預設值是只針對核心 schema 量出來的。fork 加了比較重的
+另外四個鍵是單一操作的上限：選擇集最多能巢狀幾層、最多能累積多少欄位成本與型別成本，以及同一個欄位
+在一條路徑上最多出現幾次。設成 0 或更小，啟動會失敗，訊息會點出是哪一個鍵；`GraphQl:MaxFieldCycleDepth`
+大於 65535 也一樣。預設值是只針對核心 schema 量出來的。fork 加了比較重的
 查詢，就把成本上限調高到合適的值，見[第 14 章：GraphQL API](14-graphql.md)的〈深度上限〉。這幾個鍵只從設定讀取：在程式碼裡設定
 `GraphQlOptions` 對它們沒有作用。
 

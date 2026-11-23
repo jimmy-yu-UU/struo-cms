@@ -490,7 +490,8 @@ tells the two kinds of GraphQL error apart is the `data` key, not the status: an
 raises, or the shared validator raises, comes with `data` (`null`, or an object with a null member),
 carries one of the stable codes listed in [Chapter 12](12-rest-conventions.md#error-codes), and has
 status `200`; a document that fails before any resolver runs has no `data` key, carries no code or
-only a code of the GraphQL server itself, and its status changes with `Accept`.
+only a code of the GraphQL server itself, and its status changes with `Accept`. A malformed request
+is the exception, described below: it carries `BAD_USER_INPUT` and its status stays `400`.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
@@ -498,6 +499,14 @@ holds whether the request declared its length or streamed the body, and the mess
 `Request body is too large.`, which names no limit. A streamed body (no declared length) that cannot
 be read for another reason answers with the status of that failure, `400` or `408`, and one error
 with `BAD_USER_INPUT` and the message `The request body could not be read.`.
+
+A request the server cannot read as a GraphQL request is answered with HTTP `400` whatever the
+`Accept` header says, with no `data` key and one error whose `extensions.code` is `BAD_USER_INPUT`
+and whose message is the GraphQL server's own. That is a body that is not JSON (`Invalid JSON
+document.`), a body with no `query` or an empty one (`Request must contain either a query or a
+document id.`), and a `query`, `operationName`, `variables` or `extensions` of the wrong type, such
+as `Invalid 'query' value. Expected string or null, but got Number.` The server writes no
+error-level log entry for these requests.
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
 field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a
@@ -517,7 +526,7 @@ Seven independent caps each guard their own concern:
 |---|---|---|
 | Execution depth (`GraphQl:MaxExecutionDepth`) | 12 by default | Selection sets nested too deep; introspection fields exempt |
 | Cost (`GraphQl:MaxFieldCost`/`GraphQl:MaxTypeCost`) | 150 by default | Alias amplification: one costly field under many aliases |
-| Field repetition (built into the GraphQL server) | One field at most 3 times along a path | A query far down relations such as `parent` |
+| Field repetition (`GraphQl:MaxFieldCycleDepth`) | 3 by default | A query far down relations such as `parent` |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
@@ -534,9 +543,10 @@ A document over the cost limit is rejected the same way: `extensions.code` is Ho
 `fieldCost` and `maxFieldCost`. Fifty aliases of `articles { items { id } }` cost 550 against the
 default limit of 150.
 
-Field repetition is a separate rule, not part of the execution depth limit: the GraphQL server
-builds it in, and the project provides no setting for it. The same field (the same field name on the
-same type) may appear at most 3 times along one path, and the fourth is rejected. The simplest case
+Field repetition is a separate rule, not part of the execution depth limit.
+`GraphQl:MaxFieldCycleDepth` sets how many times the same field (the same field name on the same
+type) may appear along one path, and the next one is rejected. The default is 3, and the examples
+below use it. The simplest case
 is the self-referencing `parent`: on a path such as `{ categories { items { parent { parent { parent
 { name } } } } } }`, `parent` nests 3 levels at most. A path that goes back and forth through two
 types is bound the same way: `Category.articles` appears 3 times in `{ categories { items { articles
@@ -544,7 +554,7 @@ types is bound the same way: `Category.articles` appears 3 times in `{ categorie
 more is rejected. The rejected response holds one error with `extensions.code` `HC0087` and the
 message `Maximum allowed coordinate cycle depth was exceeded.` A document that exceeds both the
 execution depth limit and this rule has both errors in the response, and a document deeper than the
-limit that repeats no field more than 3 times has only the depth error.
+limit that repeats no field more often than the limit allows has only the depth error.
 
 None of these three errors has a `data` key; without `Accept` or with `*/*` the status is `400`,
 with `Accept: application/json` it is `200`.
@@ -552,7 +562,7 @@ with `Accept: application/json` it is `200`.
 Each relation field you select counts as one node of the deep tree, so a query that selects many
 relations can hit `MaxDeepRelations` without sending any `deep` argument.
 
-The first two limits are set under `GraphQl:` (see [Chapter 4](04-configuration.md)), in configuration only:
+The execution depth, cost and field repetition limits are set under `GraphQl:` (see [Chapter 4](04-configuration.md)), in configuration only:
 configuring `GraphQlOptions` in code has no effect. The defaults
 are measured against the core schema alone: the heaviest ordinary query costs 33 and a 50-alias
 amplification costs 550, so 150 sits between them. A fork that adds heavier queries measures its own

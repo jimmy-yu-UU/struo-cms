@@ -477,6 +477,7 @@ retroactively grant public read access on an existing database. Either set it be
 | `GraphQl:MaxExecutionDepth` | integer, at least 1 | `12` |
 | `GraphQl:MaxFieldCost` | number, greater than 0 | `150` |
 | `GraphQl:MaxTypeCost` | number, greater than 0 | `150` |
+| `GraphQl:MaxFieldCycleDepth` | integer, 1 to 65535 | `3` |
 
 When unset, it defaults to open only in Development; every other environment, Production included,
 defaults to closed. It governs only whether the
@@ -484,9 +485,10 @@ schema can be queried (introspection and `GET /graphql?sdl`); `POST /graphql` it
 The built-in Nitro browser IDE separately only recognizes Development, and isn't controlled by this
 key.
 
-The other three keys are the limits on one operation: how deep its selections may nest, and the most
-field cost and type cost it may accrue. A value of 0 or below fails startup with a message naming
-the key. The defaults are measured against the core schema alone. A fork that adds heavier queries
+The other four keys are the limits on one operation: how deep its selections may nest, the most
+field cost and type cost it may accrue, and how many times one field may appear along a path. A
+value of 0 or below fails startup with a message naming the key, and so does a
+`GraphQl:MaxFieldCycleDepth` above 65535. The defaults are measured against the core schema alone. A fork that adds heavier queries
 raises the cost limits to fit; see "Depth caps" in [Chapter 14: GraphQL API](14-graphql.md). These keys
 are read from configuration only: configuring `GraphQlOptions` in code has no effect on them.
 
