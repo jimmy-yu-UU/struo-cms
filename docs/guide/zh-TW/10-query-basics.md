@@ -11,9 +11,10 @@
 `filter[<欄位或關聯路徑>][<運算子>]=<值>`，其餘參數的完整清單見下一節「一個查詢的組成」。一次過濾、
 一個遞減排序、外加分頁：
 
+<!-- capture: ch10-filter-published-sort-limit -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a3c-7a89-99df-dc013fac5c37","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.493027Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.493077Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -161,9 +162,10 @@ body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不
 所以 `filter[publishedAt][_null]=false` 跟 `=true` 是同一個請求，不會反過來變成「不是 null」。它們
 唯一拒絕的值是 JSON 物件，和其他每個運算子一樣回 400；`null` 與清單則被忽略：
 
+<!-- capture: ch10-filter-publishedat-null -->
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a52-7700-bb7c-d7e497c6cd2c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.515175Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.515328Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -197,7 +199,7 @@ REST 回應裡每個 `DateTime` 都是以 `Z` 結尾的 UTC 時刻。寫入時�
 `_and`／`_or`，這樣寫：
 
 ```json
-{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a08f92-3833-750e-bad3-6ee620f985c3"}}]}}
+{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a206da-09b5-764b-a394-59a8cc848468"}}]}}
 ```
 
 POST 到 `/api/items/article/query`；三篇文章都符合——草稿那一篇滿足第一個分支，三篇的分類都是
@@ -238,9 +240,10 @@ array.`），查詢字串上沒分成欄位與運算子兩段的鍵是 `Malforme
 被同一個關聯列滿足；`_none` 是那個子查詢取反，一篇完全沒有相關列的文章也滿足 `_none`。把上面的路
 徑換成量詞：
 
+<!-- capture: ch10-some-quantifier-junction -->
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-09e5-791f-a9c2-cbbaf5d25f51","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.406149Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.406202Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -308,6 +311,7 @@ OR 接起來。
 
 排序鍵可以是一條點號路徑，但每一段都必須是多對一，只要碰到一段是多對多或一對多就被拒絕：
 
+<!-- capture: ch10-sort-to-many-400 -->
 ```text
 $ GET /api/items/article?sort=tags.name
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Sort across to-many relations is not supported: 'tags.name'."}}
@@ -371,6 +375,7 @@ fork 若換掉 `IItemUseCases` 的實作，要自己執行這條規則。
 果還能拿來篩，`meta.total` 就會變成一個逐字元試出內容的側錄工具。一個不存在的自己欄位不管像不像打
 錯字都用同一種方式拒絕：
 
+<!-- capture: ch10-unknown-field-400 -->
 ```text
 $ GET /api/items/article?filter[bogus][_eq]=x
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown field 'bogus' on collection 'article'."}}
@@ -382,6 +387,7 @@ HTTP_STATUS:400
 `Unknown field '<leaf>' on collection '<collection>' in path '<path>'.`、
 `Relation path '<path>' exceeds the maximum depth of <max>.`。第一種確實會發生：
 
+<!-- capture: ch10-unknown-relation-400 -->
 ```text
 $ GET /api/items/article?filter[bogus.name][_eq]=x
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}

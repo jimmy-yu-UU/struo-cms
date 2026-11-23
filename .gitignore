@@ -37,6 +37,9 @@ TestResults/
 .sonarqube/
 .scannerwork/
 
+# Temporary files the manual's capture tool writes next to a chapter file while it replaces it.
+*.capture-tmp
+
 # SQLite databases (used as the test backend)
 *.db
 *.db-shm

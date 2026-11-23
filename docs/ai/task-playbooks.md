@@ -1,6 +1,7 @@
 # Task Playbooks (for AI agents)
 
-Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`. Each names the exact
+Long-form, step-by-step versions of the five recipes summarized in `AGENTS.md`, and a sixth playbook
+for the manual's transcripts. Each names the exact
 files to touch, the shape of the code, the tests to add, and the gate to run. Background reading for
 each is the linked manual chapter — read it before making the change if anything here is unclear.
 
@@ -335,6 +336,93 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
    sample opted in first. Locally, E2E needs a live API and database reachable at the dev proxy
    target; it is not one of the standing gates. CI's `e2e` job runs the `core` project against the
    Compose stack, and the `sample` project is not run by CI.
+
+## Playbook 6: Re-capture the manual's transcripts
+
+Background: `docs/ai/conventions.md`, "Transcripts". The tool is `docs/scripts/capture/` (Node,
+standard library only; `docs/ai/decisions/capture-client-reuses-one-connection.md` records why
+its client reuses one connection). It replays one ordered run against a host and writes the
+responses into the marked blocks of both languages from that run. Chapters 10 and 11 are covered.
+
+**What the tool needs**
+
+- A host with the Blog sample opted in (`docs/guide/en/23-sample-walkthrough.md`, "Opting the
+  sample in") on a freshly migrated database that holds only the bootstrap admin. Keep every
+  other shipped default: no public read grants, login rate limit off. Over plain HTTP the session
+  cookie needs `Auth__Cookie__RequireSecure=false`.
+- **Isolation is the operator's job.** Start the host with explicit `Database__*` settings that
+  point at a throwaway database, in an environment that loads no developer-local configuration. A
+  Development run from a working checkout reads the developer's local settings and can reach a real
+  database. A container built from a clean source copy and started with
+  `ASPNETCORE_ENVIRONMENT=Production` has none. Read the host's first log lines and confirm the
+  database it connected to before the run.
+- **The guard is the last line of defence, not the isolation.** Before the first step the tool logs
+  in as the admin and requires exactly one user, no files, and no article, category or tag rows,
+  trashed rows included. It stops and says what it found. The real safety is the throwaway database
+  plus this guard. On top of that a DELETE step is refused unless one whole path segment equals an
+  id a 201 response of the same run returned (a row the run created), or the step declares a
+  `deletes` reason, for example revoking a token under the admin's id. Values the run read, fields
+  other than an id, and empty values never qualify.
+- A new database for every run.
+- Settings: `STRUO_CAPTURE_ADMIN_PASSWORD` (required), `STRUO_CAPTURE_BASE_URL` and
+  `STRUO_CAPTURE_ADMIN_EMAIL` (default `admin@admin.com`). The password has no command-line flag, so
+  it stays out of the process list.
+
+**Run it** from `docs/`:
+
+```text
+node scripts/capture/capture.mjs --base-url http://localhost:5221 --chapters 10,11 --write
+node scripts/capture/capture.mjs --check
+```
+
+The run always executes every group in its fixed order, so a partial run builds the same data as a
+full one. `--chapters` (comma-separated, duplicates ignored) chooses only which chapter files are
+written; the other files are not read and their blocks are discarded. Without `--write` the
+captured blocks are printed and no file changes. `--base-url` and `--email` override the settings
+above, and `--guide-dir` points at another manual root inside the working directory.
+
+The run produces and checks every block of every selected file before it replaces any file. Each
+file is written to a temporary `*.capture-tmp` file next to it and the temporaries are renamed one
+after the other, a file's two languages adjacent. A failure before the renames changes no chapter
+file. A failure during the renames removes the remaining temporaries and the error lists the files
+already replaced; `git checkout` restores them.
+
+`--check` needs no network. It verifies that every marker sits above a closed fence, that near-miss
+spellings of a marker are rejected, that both languages hold the same markers and byte-identical
+blocks, that every marker belongs to a scenario capture and every capture has a marker, that each
+chapter file exists in both languages, and that a block ends with the status its step declares.
+The docs build runs it.
+
+**Rules**
+
+- A marked block is never edited by hand. The tool replaces the lines between the fences.
+- Every difference between a printed body and the server's body is a transform named on the step
+  that uses it (`stripTraceId`, `elideData`). An undeclared difference does not exist.
+- A printed request body differs from the sent one only through `print.requestBody` on the step
+  (for example a placeholder where the sent body holds the admin password). The tool refuses to
+  write a block that holds the admin password, the session cookie of an identity, or any value a
+  step registered with `secret`. A step that prints one declares `print.mask: { name: '<text>' }`,
+  naming the secret (`adminPassword`, `session_<identity>`, or the `secret` variable); every
+  occurrence in that exchange is replaced by the text before the check runs.
+- Ids and timestamps change on every capture, so a re-capture rewrites every block of the files
+  it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
+  the same run.
+- After a capture, read the prose around each block. A sentence that states a number, a row or an
+  order is true for the new output or is fixed in both languages.
+
+**Add a capture**
+
+1. Put `<!-- capture: <id> -->` on the line directly above the opening fence of the block, in both
+   languages. The id is unique and stable.
+2. Add a step with `capture: '<id>'` to a group in `docs/scripts/capture/scenarios/`. A group is
+   `{ name, file, steps }`; a capture step takes the file of its group or names its own. A step
+   names its identity, method, path, body, the status the manual shows (`expect`), the variables it
+   saves (`save`, referenced as `{{name}}`) and its transforms. `lib/runner.mjs` documents every
+   field. Steps that share an id make one block with several exchanges.
+3. Place the group in `GROUPS` (`scenarios/index.mjs`) where the run needs it: after every group
+   whose data it depends on, and before every group that changes data it reads. One file may be fed
+   by several groups.
+4. Run the tool tests (`node --test "scripts/**/*.test.mjs"`), then `--check`, then a capture.
 
 ## Next steps
 

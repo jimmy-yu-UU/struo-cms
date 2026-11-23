@@ -12,9 +12,10 @@ pass through the same field allowlist before any SQL is built.
 `filter[<field or relation path>][<operator>]=<value>`. The next section, "What a query is made
 of," lists every other parameter. Here is one filter, one descending sort, and pagination:
 
+<!-- capture: ch10-filter-published-sort-limit -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.712477Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.712614Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a3c-7a89-99df-dc013fac5c37","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.493027Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.493077Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -189,9 +190,10 @@ their names apart work.
 not null". A JSON object is the one value they refuse: it is a 400 here as for every operator.
 `null` and a list are ignored:
 
+<!-- capture: ch10-filter-publishedat-null -->
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a52-7700-bb7c-d7e497c6cd2c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.515175Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.515328Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -232,7 +234,7 @@ field with the same operator can only appear as one key — both cases need the 
 `_and`/`_or` instead, written like this:
 
 ```json
-{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a08f92-3833-750e-bad3-6ee620f985c3"}}]}}
+{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a206da-09b5-764b-a394-59a8cc848468"}}]}}
 ```
 
 POST it to `/api/items/article/query`; all three articles match — the draft one satisfies the
@@ -286,9 +288,10 @@ subquery as a whole, so every condition under the quantifier must be satisfied b
 relation row. `_none` is that subquery negated — an article with no related row at all also
 satisfies `_none`. Turning the path above into a quantifier:
 
+<!-- capture: ch10-some-quantifier-junction -->
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:20.153539Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:20.153611Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-09e5-791f-a9c2-cbbaf5d25f51","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.406149Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.406202Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -374,6 +377,7 @@ list is rejected with `Too many sort fields (max 5).`.
 A sort key can be a dotted path, but every segment must be many-to-one; hitting a to-many segment
 anywhere in the path is rejected:
 
+<!-- capture: ch10-sort-to-many-400 -->
 ```text
 $ GET /api/items/article?sort=tags.name
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Sort across to-many relations is not supported: 'tags.name'."}}
@@ -454,6 +458,7 @@ still be filtered on, `meta.total` would turn into a character-by-character orac
 A nonexistent field on the collection itself is rejected the same way, whether or not it looks like
 a typo:
 
+<!-- capture: ch10-unknown-field-400 -->
 ```text
 $ GET /api/items/article?filter[bogus][_eq]=x
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown field 'bogus' on collection 'article'."}}
@@ -466,6 +471,7 @@ unknown leaf field, and exceeding the depth cap each get their own message — `
 '<collection>' in path '<path>'.`, `Relation path '<path>' exceeds the maximum depth of <max>.`.
 The first one actually happens here:
 
+<!-- capture: ch10-unknown-relation-400 -->
 ```text
 $ GET /api/items/article?filter[bogus.name][_eq]=x
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Unknown relation 'bogus' on 'article' in path 'bogus.name'."}}
