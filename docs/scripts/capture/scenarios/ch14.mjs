@@ -30,18 +30,54 @@ function sampleMatches(json, vars) {
 const ACCEPT_ANY = '*/*'
 const ACCEPT_JSON = 'application/json'
 
-// The two request-level errors the prose names as measured: a document that does not parse and a field
-// the schema does not have. They fail before any resolver runs.
+const DEPTH_LIMIT = 12
+const ALIAS_BOMB = 50
+
+// categories -> items -> parent x n -> name: every field level counts, so the depth is n + 3.
+function nestedParents(parents) {
+  return '{ categories { items { ' + 'parent { '.repeat(parents) + 'name' + ' }'.repeat(parents) + ' } } }'
+}
+
+// The same costly list field under many aliases (the amplification the cost rule exists for).
+function aliasBomb(count) {
+  return '{ ' + Array.from({ length: count }, (_, index) => 'a' + index + ': articles { items { id } }').join(' ') + ' }'
+}
+
+// The request-level errors the prose describes. They fail before any resolver runs, so an anonymous
+// caller sees them: the validation does not look at who asks.
 const REQUEST_LEVEL_QUERIES = [
   { label: 'a document that does not parse', query: 'query {', assertion: parserCode },
   { label: 'an unknown field', query: 'query { bogusThing { id } }', assertion: noCodeErrors },
+  { label: 'a document over the depth limit', query: nestedParents(DEPTH_LIMIT - 2), assertion: depthExceeded },
+  { label: 'a document over the cost limit', query: aliasBomb(ALIAS_BOMB), assertion: costExceeded },
 ]
 
 // The same anonymous request under a chosen Accept header: only the status depends on it.
 const acceptCheck = (name, accept, query, expect, assertion) =>
   anonymous(undefined, 'POST', GRAPHQL, expect, { name, headers: { Accept: accept }, body: spaced(query), verify: assertion })
 
+function noData(json) {
+  must(!('data' in json), 'a request-level failure has no data key')
+}
+
+function depthExceeded(json) {
+  noCodeErrors(json)
+  const [first] = json.errors
+  must(first.extensions.allowedExecutionDepth === DEPTH_LIMIT, 'the error reports the allowed depth')
+  must(first.extensions.detectedExecutionDepth === DEPTH_LIMIT + 1, 'every field level counts: 10 parents is depth 13')
+  must(/execution depth of 13 which exceeds the max allowed execution depth of 12/.test(first.message), 'the depth message')
+}
+
+function costExceeded(json) {
+  noData(json)
+  const [first] = json.errors
+  must(json.errors.length === 1 && first.extensions.code === 'HC0047', 'the cost error carries HC0047')
+  must(first.message === 'The maximum allowed field cost was exceeded.', 'the cost message')
+  must(first.extensions.fieldCost > first.extensions.maxFieldCost, 'the measured cost is above the limit')
+}
+
 function noCodeErrors(json) {
+  noData(json)
   must(Array.isArray(json.errors) && json.errors.length > 0, 'a request-level failure answers with an errors array')
   must(json.errors.every((error) => error.extensions?.code === undefined), 'a request-level failure has no extensions.code')
 }
@@ -49,6 +85,7 @@ function noCodeErrors(json) {
 // A document that does not parse carries the parser's own code (HC0011 and its kin), not one of the
 // stable codes of the chapter.
 function parserCode(json) {
+  noData(json)
   must(Array.isArray(json.errors) && json.errors.length > 0, 'a parse failure answers with an errors array')
   must(json.errors.every((error) => /^HC\d+$/.test(error.extensions?.code ?? '')), 'a parse failure carries an HC code')
 }
@@ -128,6 +165,9 @@ export const ch14Rest = {
       acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, assertion),
       acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, assertion),
     ]),
+    ...[ACCEPT_ANY, ACCEPT_JSON].map((accept) =>
+      acceptCheck('a document at the depth limit under Accept ' + accept, accept, nestedParents(DEPTH_LIMIT - 3), 200, codedError),
+    ),
     acceptCheck('a resolver error with Accept application/json', ACCEPT_JSON, '{ users { total } }', 200, codedError),
   ],
 }

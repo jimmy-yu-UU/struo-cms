@@ -460,10 +460,12 @@ An exception with no entry in the lookup table is masked to a fixed, generic mes
 logged server-side; a search-provider failure is masked the same way.
 
 There's a second kind of failure on a different path entirely. A document fails before any resolver
-ever runs and carries no exception: a field that does not exist gives an error with no
-`extensions.code`, and a document that does not parse carries a HotChocolate code of its own, such
-as `HC0011`. Without an `Accept` header or with `*/*`, both are answered with HTTP `400`; with
-`Accept: application/json` the same error comes back with `200`. This request sends no `Accept`:
+ever runs and carries no exception: a field that does not exist, or a document over the depth
+limit, gives an error with no `extensions.code`, while a document that does not parse and a document
+over the cost limit carry a HotChocolate code of their own, `HC0011` and `HC0047`. None of them has
+a `data` key. Without an `Accept` header or with `*/*` they are answered with HTTP `400`; with
+`Accept: application/json` the same error comes back with `200`. The depth and cost limits are
+described under "Depth caps" below. This request sends no `Accept`:
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -511,6 +513,16 @@ Six independent caps each guard their own concern:
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
 | Rows per relation (`Query:MaxExpandRows`) | 1000 by default | One relation fetch reading too many rows; shared with REST |
+
+A document over the execution depth limit is rejected before any resolver runs: the message is
+`The GraphQL document has an execution depth of N which exceeds the max allowed execution depth of
+12.` with N the depth of the document, `extensions` carries `detectedExecutionDepth` and
+`allowedExecutionDepth`, and there is no `extensions.code`. Every field level you select counts as
+one, so `{ categories { items { name } } }` is 3 levels deep. A document over the cost limit is
+rejected the same way: `extensions.code` is HotChocolate's `HC0047`, the message is `The maximum
+allowed field cost was exceeded.`, and `extensions` carries `fieldCost` and `maxFieldCost`. Neither
+error has a `data` key; without `Accept` or with `*/*` the status is `400`, with
+`Accept: application/json` it is `200`.
 
 Each relation field you select counts as one node of the deep tree, so a query that selects many
 relations can hit `MaxDeepRelations` without sending any `deep` argument.

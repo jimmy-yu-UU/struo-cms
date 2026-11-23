@@ -373,9 +373,10 @@ GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver
 尋提供者失敗的訊息也是同一種遮罩。
 
 還有一種失敗走另一條路。一個文件在任何 resolver 開始跑之前就出錯，不帶任何例外：指名了不存在的
-欄位，這則錯誤沒有 `extensions.code`；剖析不了的文件，帶的是 HotChocolate 自己的代碼，例如
-`HC0011`。兩種錯誤在請求沒帶 `Accept` 或帶 `*/*` 時，HotChocolate 回 HTTP `400`；帶
-`Accept: application/json` 時，同一份錯誤以 `200` 回應。下面的請求沒帶 `Accept`：
+欄位、超過深度上限的文件，錯誤沒有 `extensions.code`；剖析不了的文件與超過 cost 上限的文件，帶的
+是 HotChocolate 自己的代碼，例如 `HC0011` 與 `HC0047`。這些錯誤都沒有 `data` 鍵，在請求沒帶
+`Accept` 或帶 `*/*` 時回 HTTP `400`；帶 `Accept: application/json` 時，同一份錯誤以 `200` 回應。
+兩個上限的細節在後面的「深度上限」一節。下面的請求沒帶 `Accept`：
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -420,6 +421,14 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 | 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
 | 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
 | 每個關聯的列數（`Query:MaxExpandRows`） | 預設 1000 | 單次關聯抓取讀太多列，跟 REST 共用設定 |
+
+超過執行深度上限的文件，在 resolver 開始跑之前就被拒絕：訊息是 `The GraphQL document has an
+execution depth of N which exceeds the max allowed execution depth of 12.`，N 是文件實際的深度，
+`extensions` 帶 `detectedExecutionDepth` 與 `allowedExecutionDepth`，沒有 `extensions.code`。選取
+的每一層欄位都算一層，所以 `{ categories { items { name } } }` 是 3 層。超過 cost 上限的文件同樣
+被拒絕：`extensions.code` 是 HotChocolate 的 `HC0047`，訊息是 `The maximum allowed field cost was
+exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。兩種錯誤都沒有 `data` 鍵；沒帶 `Accept`
+或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json` 時回 `200`。
 
 你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
 `MaxDeepRelations`。
