@@ -48,13 +48,13 @@ body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:14:53 GMT
+Date: Mon, 23 Nov 2026 08:35:25 GMT
 Server: Kestrel
-Location: /api/items/tag/01a20778-e598-7270-8942-761028c4922d
+Location: /api/items/tag/01a2078b-b7c0-74df-8cac-2028f799ee9b
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a20778-e598-7270-8942-761028c4922d","version":0,"name":"launch","createdAt":"2026-11-23T08:14:53.3371181Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:53.3372196Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880"}}
+{"success":true,"data":{"id":"01a2078b-b7c0-74df-8cac-2028f799ee9b","version":0,"name":"launch","createdAt":"2026-11-23T08:35:26.7844195Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:26.7845838Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768"}}
 HTTP_STATUS:201
 ```
 
@@ -242,15 +242,15 @@ GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這
 
 <!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a20778-bd1f-7c8c-90b1-2b53fb859880/access-token
+$ POST /api/users/01a2078b-8c4b-70ae-904e-64f00fa6e768/access-token
 {"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1 (Authorization: Bearer <token>)
-{"success":true,"data":[{"id":"01a20778-e27f-7a8b-a7c1-2e73bf85b360","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.543485Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:52.543616Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a2078b-b482-7da1-8c58-e003e3f6fd75","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:25.955027Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:25.955135Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a20778-bd1f-7c8c-90b1-2b53fb859880/access-token
+$ DELETE /api/users/01a2078b-8c4b-70ae-904e-64f00fa6e768/access-token
 
 HTTP_STATUS:204
 
@@ -300,7 +300,7 @@ body 也可以把讀到的值原樣送回；伺服器拿這個值去比對目前
 
 <!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a20778-e219-7930-bc16-f8160dfa6016
+$ PUT /api/items/article/01a2078b-b428-7457-9c38-ebf84832acd6
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -374,10 +374,10 @@ HTTP_STATUS:400
 
 <!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a20778-e219-7930-bc16-f8160dfa6016
+$ PUT /api/items/article/01a2078b-b428-7457-9c38-ebf84832acd6
 body:
-{"tags":["01a20778-e204-7f53-9517-137414a0bf55",{"id":"01a20778-e20e-7522-98af-266f5206125a","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a20778-e219-7930-bc16-f8160dfa6016","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.442681Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:53.457179Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880"}}
+{"tags":["01a2078b-b40e-7f97-9187-fbf834d5c3b2",{"id":"01a2078b-b41b-755c-8909-cc6b2ad13d6b","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2078b-b428-7457-9c38-ebf84832acd6","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:25.864585Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:26.90467Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768"}}
 HTTP_STATUS:200
 ```
 
@@ -388,7 +388,7 @@ payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，
 
 <!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a20778-e20e-7522-98af-266f5206125a': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2078b-b41b-755c-8909-cc6b2ad13d6b': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 

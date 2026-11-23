@@ -15,7 +15,7 @@ of," lists every other parameter. Here is one filter, one descending sort, and p
 <!-- capture: ch10-filter-published-sort-limit -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a20778-e26c-7bd4-9ce6-e187001993f2","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.524972Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:52.525014Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a2078b-b473-7755-be5c-9669e88194c6","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:25.939552Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:25.939593Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -193,7 +193,7 @@ not null". A JSON object is the one value they refuse: it is a 400 here as for e
 <!-- capture: ch10-filter-publishedat-null -->
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a20778-e27f-7a8b-a7c1-2e73bf85b360","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.543485Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:52.543616Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a2078b-b482-7da1-8c58-e003e3f6fd75","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:25.955027Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:25.955135Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -234,7 +234,7 @@ field with the same operator can only appear as one key — both cases need the 
 `_and`/`_or` instead, written like this:
 
 ```json
-{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a20778-e1eb-7b52-9b67-f0cc81739666"}}]}}
+{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a2078b-b3f9-7080-a04c-923366e3cb3b"}}]}}
 ```
 
 POST it to `/api/items/article/query`; all three articles match — the draft one satisfies the
@@ -291,7 +291,7 @@ satisfies `_none`. Turning the path above into a quantifier:
 <!-- capture: ch10-some-quantifier-junction -->
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a20778-e219-7930-bc16-f8160dfa6016","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.442681Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:52.442822Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a2078b-b428-7457-9c38-ebf84832acd6","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:25.864585Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:25.864638Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 

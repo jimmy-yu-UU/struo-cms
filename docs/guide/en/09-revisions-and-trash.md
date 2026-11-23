@@ -151,8 +151,8 @@ no snapshot content, newest first:
 
 <!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a20778-f5eb-7bca-8557-8f0b8190af1c/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T08:14:57.632188Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T08:14:57.569316Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2078b-c7a9-71ee-a6b4-564a752af116/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T08:35:30.974012Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T08:35:30.90746Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -308,16 +308,16 @@ with it):
 
 <!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a20778-f631-7387-a121-5744ef1ce4e0
+$ DELETE /api/items/article/01a2078b-c7ec-73f2-8fd6-fc1152524ac9
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a20778-f631-7387-a121-5744ef1ce4e0
-{"success":true,"data":[{"id":"01a20778-f631-7387-a121-5744ef1ce4e0","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:57.585891Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:57.585914Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2078b-c7ec-73f2-8fd6-fc1152524ac9
+{"success":true,"data":[{"id":"01a2078b-c7ec-73f2-8fd6-fc1152524ac9","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:30.924135Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:30.924145Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a20778-f631-7387-a121-5744ef1ce4e0/restore
-{"success":true,"data":{"id":"01a20778-f631-7387-a121-5744ef1ce4e0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:57.585891Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:57.585914Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880"}}
+$ POST /api/items/article/01a2078b-c7ec-73f2-8fd6-fc1152524ac9/restore
+{"success":true,"data":{"id":"01a2078b-c7ec-73f2-8fd6-fc1152524ac9","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:30.924135Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:30.924145Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768"}}
 HTTP_STATUS:200
 ```
 

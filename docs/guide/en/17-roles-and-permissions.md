@@ -224,7 +224,7 @@ article. The request body comes first, the response after:
 
 <!-- capture: ch17-put-article-editor-403 -->
 ```text
-$ PUT /api/items/article/01a20778-e219-7930-bc16-f8160dfa6016
+$ PUT /api/items/article/01a2078b-b428-7457-9c38-ebf84832acd6
 body:
 {"status":"draft"}
 {"success":false,"error":{"code":"FORBIDDEN","message":"Write not permitted."}}
@@ -287,7 +287,7 @@ Take `editor@example.com` again, whose role only grants `article` read. First th
 
 <!-- capture: ch17-effective-permissions -->
 ```text
-$ GET /api/users/01a20778-e3fd-76e9-9ca4-06aec6849056/effective-permissions
+$ GET /api/users/01a2078b-b616-770d-a9ae-42c7fdaf2240/effective-permissions
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{"article":{"read":true,"write":false,"delete":false}}}}
 HTTP_STATUS:200
 pretty:
@@ -305,7 +305,7 @@ pretty:
   }
 }
 
-$ GET /api/users/01a20778-e3fd-76e9-9ca4-06aec6849056/effective-permissions?roles=01a20778-bd1c-7791-a2fd-1829ec9d4b22
+$ GET /api/users/01a2078b-b616-770d-a9ae-42c7fdaf2240/effective-permissions?roles=01a2078b-8c48-71ba-a802-17108ab88515
 {"success":true,"data":{"isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 pretty:
