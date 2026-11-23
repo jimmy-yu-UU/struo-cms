@@ -359,10 +359,10 @@ responses into the marked blocks of both languages from that run. Chapters 10 an
 - **The guard is the last line of defence, not the isolation.** Before the first step the tool logs
   in as the admin and requires exactly one user, no files, and no article, category or tag rows,
   trashed rows included. It stops and says what it found. The real safety is the throwaway database
-  plus this guard. On top of that a DELETE step is refused unless one whole path segment equals a
-  value a 201 response of the same run returned (a row the run created), or the step declares a
-  `deletes` reason, for example revoking a token under the admin's id. Values the run read, and
-  empty values, never qualify.
+  plus this guard. On top of that a DELETE step is refused unless one whole path segment equals an
+  id a 201 response of the same run returned (a row the run created), or the step declares a
+  `deletes` reason, for example revoking a token under the admin's id. Values the run read, fields
+  other than an id, and empty values never qualify.
 - A new database for every run.
 - Settings: `STRUO_CAPTURE_ADMIN_PASSWORD` (required), `STRUO_CAPTURE_BASE_URL` and
   `STRUO_CAPTURE_ADMIN_EMAIL` (default `admin@admin.com`). The password has no command-line flag, so

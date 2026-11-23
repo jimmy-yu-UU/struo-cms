@@ -12,15 +12,14 @@
 // A marker-looking line inside a fenced block is content (the manual shows markdown samples), so
 // the scan tracks fences with the shared rule in ../../lib/fences.mjs. Outside a fence, a line that
 // holds a capture comment in any other form (indented, spaced differently, mid-line) is an error:
-// a marker the tool would silently ignore is a block nobody updates. Two shapes are exempt because
-// they are text about the marker, not a marker: an inline code span, and indented code (four spaces
-// or a tab after a blank line, the CommonMark shape; an indented line inside a list item is not).
+// a marker the tool would silently ignore is a block nobody updates. One shape is exempt because it
+// is text about the marker, not a marker: an inline code span. The manual writes code in fences, so
+// an indented comment is a near miss like any other.
 import { closesFence, fenceOpener } from '../../lib/fences.mjs'
 
 const MARKER = /^<!-- capture: ([\w.-]+) -->$/
 const NEAR_MISS = /<!--\s*capture/i
 const INLINE_CODE = /``[^`]+``|`[^`]+`/g
-const INDENTED = /^( {4}|\t)/
 
 export class MarkerError extends Error {}
 
@@ -50,10 +49,6 @@ function findCloser(lines, from, opener) {
   return close
 }
 
-function continuesIndentedCode(lines, index, inCode) {
-  if (!INDENTED.test(lines[index])) return false
-  return inCode || index === 0 || lines[index - 1].trim() === ''
-}
 
 function rejectNearMiss(line, file, index) {
   if (NEAR_MISS.test(line.replace(INLINE_CODE, ''))) {
@@ -77,7 +72,6 @@ function readBlock(lines, index, id, file) {
 function scan(lines, file) {
   const blocks = []
   let index = 0
-  let inIndentedCode = false
   while (index < lines.length) {
     const line = lines[index]
     const opener = fenceOpener(line)
@@ -86,10 +80,9 @@ function scan(lines, file) {
       index = findCloser(lines, index + 1, opener) + 1
       continue
     }
-    inIndentedCode = continuesIndentedCode(lines, index, inIndentedCode)
-    const marker = inIndentedCode ? null : MARKER.exec(line)
+    const marker = MARKER.exec(line)
     if (!marker) {
-      if (!inIndentedCode) rejectNearMiss(line, file, index)
+      rejectNearMiss(line, file, index)
       index += 1
       continue
     }

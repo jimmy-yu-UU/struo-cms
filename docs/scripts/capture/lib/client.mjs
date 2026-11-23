@@ -138,5 +138,8 @@ export function createClient({ baseUrl, csrfValue = 'capture', timeoutMs = DEFAU
 
   const close = () => Object.values(agents).forEach((agent) => agent.destroy())
 
-  return { request, close }
+  // The cookie values each identity holds, for the runner to treat as secrets.
+  const sessions = () => new Map([...jars].map(([identity, jar]) => [identity, [...jar.values()]]))
+
+  return { request, sessions, close }
 }

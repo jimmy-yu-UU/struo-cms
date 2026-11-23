@@ -3,7 +3,8 @@
 // against a real socket without a running CMS.
 import { createServer } from 'node:http'
 
-// handler(request) receives { method, path, headers, body } and returns
+// handler(request) receives { method, path, headers, body, connection } (connection tells one
+// client socket from another) and returns
 // { status, headers?, body? }; a missing body is an empty response. { hang: true } never answers and
 // { destroy: true } closes the connection without an answer, and { cut: "text" } sends the headers
 // of a longer body, then half of it, then drops the connection.
@@ -18,6 +19,7 @@ export async function startStub(handler) {
         path: req.url,
         headers: req.headers,
         body: Buffer.concat(chunks).toString('utf8'),
+        connection: req.socket.remotePort,
       }
       requests.push(received)
       const answer = handler(received) ?? { status: 404 }

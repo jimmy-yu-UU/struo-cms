@@ -73,3 +73,12 @@ test('no user at all is not fresh either', async () => {
 test('a refused login stops the guard with the status', async () => {
   await assert.rejects(check({ user: 1 }, { login: 401 }), /login as the bootstrap admin.*HTTP 401/)
 })
+
+test('the check reads its lists one after another over the connection it logged in on', async () => {
+  const stub = await check({ user: 1 })
+  assert.equal(new Set(stub.requests.map((r) => r.connection)).size, 1)
+  assert.deepEqual(
+    stub.requests.slice(1).map((r) => /items\/([A-Za-z]+)/.exec(r.path)[1]),
+    ['user', 'file', 'article', 'category', 'tag'],
+  )
+})

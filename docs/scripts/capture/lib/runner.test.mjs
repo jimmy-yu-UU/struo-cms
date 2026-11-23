@@ -633,3 +633,69 @@ test('a verify hook that throws stops the run with its message', async () => {
     cleanup(root)
   }
 })
+
+test('only a saved id counts as a created row: a version or a name saved from a 201 does not open a DELETE', async () => {
+  const root = makeGuide({ [DEMO]: same(BLOCK('demo-del')) })
+  try {
+    const handler = (request) => (request.path === '/made' ? json(201, { id: 'abc-1', version: '0', kind: 'item' }) : api(request))
+    const made = { method: 'POST', path: '/made', expect: 201, save: { itemId: 'data.id', version: 'data.version', kind: 'data.kind' } }
+    const del = { capture: 'demo-del', method: 'DELETE', expect: 200 }
+    await assert.rejects(run(root, demo([made, { ...del, path: '/item/{{version}}' }]), {}, handler), /demo-del.*DELETE refused/)
+    await assert.rejects(run(root, demo([made, { ...del, path: '/{{kind}}/zzz' }]), {}, handler), /demo-del.*DELETE refused/)
+    const ok = await run(root, demo([made, { ...del, path: '/item/{{itemId}}' }]), {}, handler)
+    assert.equal(ok.stub.requests[1].method, 'DELETE')
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('a declared delete reason of only whitespace is no reason', async () => {
+  const root = makeGuide({ [DEMO]: same(BLOCK('demo-del')) })
+  try {
+    const del = { capture: 'demo-del', method: 'DELETE', path: '/item/literal-id', expect: 200, deletes: '   ' }
+    await assert.rejects(run(root, demo([del])), /DELETE refused/)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('masking a secret that sits inside a longer secret does not print the rest of the longer one', async () => {
+  const root = makeGuide({ [DEMO]: same(BLOCK('demo-nested')) })
+  try {
+    const outer = `xx${FIXTURE_TOKEN}yy`
+    const handler = (request) => (request.path === '/nested' ? json(201, { token: FIXTURE_TOKEN, outer }) : api(request))
+    const step = {
+      capture: 'demo-nested',
+      method: 'POST',
+      path: '/nested',
+      expect: 201,
+      secret: { token: 'data.token', outer: 'data.outer' },
+    }
+    await assert.rejects(
+      run(root, demo([{ ...step, print: { mask: { token: '<token>' } } }]), {}, handler),
+      (error) => /demo-nested.*secret.*mask/.test(error.message) && !error.message.includes(FIXTURE_TOKEN),
+    )
+    const both = await run(root, demo([{ ...step, print: { mask: { token: '<token>', outer: '<outer>' } } }]), {}, handler)
+    const text = both.blocks.get('demo-nested')
+    assert.ok(text.includes('"token":"<token>"') && text.includes('"outer":"<outer>"'), text)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('the cookie the guard receives is a secret too, and can be masked by its identity name', async () => {
+  const root = makeGuide({ [DEMO]: same(BLOCK('demo-echo')) })
+  try {
+    const handler = (request) =>
+      request.path === '/echo-cookie' ? { status: 200, body: JSON.stringify({ seen: FIXTURE_COOKIE }) } : api(request)
+    const guard = async ({ client }) => {
+      await client.request({ identity: 'admin', method: 'POST', path: '/login' })
+    }
+    const echo = { capture: 'demo-echo', as: 'admin', method: 'GET', path: '/echo-cookie', expect: 200 }
+    await assert.rejects(run(root, demo([echo]), { guard }, handler), /demo-echo.*secret.*mask/)
+    const masked = await run(root, demo([{ ...echo, print: { mask: { session_admin: '<cookie>' } } }]), { guard }, handler)
+    assert.ok(masked.blocks.get('demo-echo').includes('"seen":"<cookie>"'))
+  } finally {
+    cleanup(root)
+  }
+})

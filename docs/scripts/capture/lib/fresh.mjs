@@ -1,12 +1,14 @@
 // The fresh-database guard: a capture runs only against a freshly migrated database that holds the
 // bootstrap admin and nothing else, so the printed ids, versions and totals come from the run's own
 // data set and nothing the run changes belongs to someone else. It logs in as the admin first (the
-// same session the steps use), then reads every list with trashed rows included (`deleted=with`).
+// same session the steps use), then reads every list with trashed rows included (`deleted=with`),
+// one after another over that connection.
 //
 // This is the last line of defence, not the isolation: a host that can reach a real database is
 // refused only if that database happens to be empty. Pointing the host at a throwaway database is
 // the operator's job (docs/ai/task-playbooks.md, Playbook 6).
 import { CaptureError } from './errors.mjs'
+import { inOrder } from './sequence.mjs'
 
 async function total(client, collection) {
   const response = await client.request({
@@ -35,9 +37,12 @@ export async function checkFresh({ client, vars, collections }) {
   })
   if (login.status !== 200) throw new CaptureError(`login as the bootstrap admin: HTTP ${login.status}`)
 
-  // The lists are independent reads, and Promise.all keeps their results in the order declared.
   const names = ['file', ...collections]
-  const [users, ...rows] = await Promise.all(['user', ...names].map((collection) => total(client, collection)))
+  const totals = []
+  await inOrder(['user', ...names], async (collection) => {
+    totals.push(await total(client, collection))
+  })
+  const [users, ...rows] = totals
   const found = findings([users, ...names.map((name, index) => [name, rows[index]])])
   if (found.length > 0) {
     throw new CaptureError(

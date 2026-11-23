@@ -35,12 +35,12 @@
 //   }
 //
 // Secrets: the admin password (name adminPassword), every value a step saves with `secret`, and the
-// cookie a response sets for an identity (name session_<identity>) are registered. A block that
-// holds any of them is refused unless the step masks it.
+// cookie an identity holds (name session_<identity>; the guard's login included) are registered. An
+// exchange that holds any of them is refused unless the step masks every one it holds.
 //
 // Rules the runner keeps: the fresh-database guard runs before the first step; a block that holds a
-// secret value or a carriage return is refused; a DELETE must carry a whole path segment equal to a
-// value a 201 response of this run returned, or a declared `deletes` reason; and the run produces and
+// secret value or a carriage return is refused; a DELETE must carry a whole path segment equal to an
+// id a 201 response of this run returned, or a declared `deletes` reason; and the run produces and
 // checks every block of every selected file before it replaces any file.
 import { renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -85,26 +85,51 @@ function pick(json, dotted) {
   return String(value)
 }
 
+const UNMASKED_SECRET =
+  'the block contains a value registered as secret during the run; declare print.mask for it'
+
+function holdsSecret(text, secrets) {
+  return [...secrets].some((secret) => secret !== '' && text.includes(secret))
+}
+
 const labelOf = (step) => step.capture ?? step.name ?? `${step.method} ${step.path}`
+
+// Longest first, so a secret that contains another is replaced whole.
+const longestFirst = (values) => [...values].sort((a, b) => b.length - a.length || a.localeCompare(b))
 
 // An empty secret would match everywhere, so it is ignored.
 function redact(text, secrets) {
-  return [...secrets].filter((secret) => secret !== '').reduce((current, secret) => current.replaceAll(secret, '<secret>'), text)
+  return longestFirst(secrets)
+    .filter((secret) => secret !== '')
+    .reduce((current, secret) => current.replaceAll(secret, '<secret>'), text)
 }
 
 function excerpt(text, state) {
   return redact(text, state.secrets).slice(0, EXCERPT)
 }
 
+function registerSecret(state, name, value) {
+  state.secrets.add(value)
+  state.secretByName.set(name, value)
+}
+
+// A row the run created is known by its id: the value saved from a path whose last key is `id` or
+// ends in `Id`. A version, a name or any other field of a 201 response opens no DELETE.
+const ID_PATH = /(?:^|\.)(?:id|\w+Id)$/
+
 function save(state, entries, json, { secret, created }) {
   for (const [name, dotted] of Object.entries(entries ?? {})) {
     const value = pick(json, dotted)
     state.vars = { ...state.vars, [name]: value }
-    if (created) state.created.add(value)
-    if (secret) {
-      state.secrets.add(value)
-      state.secretByName.set(name, value)
-    }
+    if (created && ID_PATH.test(dotted)) state.created.add(value)
+    if (secret) registerSecret(state, name, value)
+  }
+}
+
+// The cookies the guard's own requests leave in a jar are live credentials like any other.
+function registerSessions(state, client) {
+  for (const [identity, cookies] of client.sessions()) {
+    for (const cookie of cookies) registerSecret(state, `session_${identity}`, cookie)
   }
 }
 
@@ -116,18 +141,26 @@ function registerCookies(state, identity, headers) {
     if (name.toLowerCase() !== 'set-cookie') continue
     const pair = value.split(';')[0]
     const cookie = pair.slice(pair.indexOf('=') + 1).trim()
-    if (cookie === '') continue
-    state.secrets.add(cookie)
-    state.secretByName.set(`session_${identity}`, cookie)
+    if (cookie !== '') registerSecret(state, `session_${identity}`, cookie)
   }
 }
 
+// Replaces every secret the step names, longest value first. A secret the mask does not name is
+// refused before anything is replaced: masking a value that sits inside a longer secret would
+// otherwise leave the rest of the longer one in the text, unrecognisable as a secret.
 function applyMask(text, mask, state) {
-  return Object.entries(mask ?? {}).reduce((current, [name, placeholder]) => {
+  const placeholders = new Map()
+  for (const [name, placeholder] of Object.entries(mask ?? {})) {
     const value = state.secretByName.get(name)
     if (value === undefined) throw new Error(`print.mask names '${name}', which no step registered as secret`)
-    return current.replaceAll(value, placeholder)
-  }, text)
+    placeholders.set(value, placeholder)
+  }
+  const unnamed = [...state.secrets].filter((secret) => !placeholders.has(secret))
+  if (holdsSecret(text, unnamed)) throw new Error(UNMASKED_SECRET)
+  return longestFirst(placeholders.keys()).reduce(
+    (current, value) => current.replaceAll(value, placeholders.get(value)),
+    text,
+  )
 }
 
 function segmentsOf(path) {
@@ -136,10 +169,10 @@ function segmentsOf(path) {
 
 function requireDeletable(step, path, state) {
   if (step.method !== 'DELETE') return
-  if (typeof step.deletes === 'string' && step.deletes !== '') return
+  if (typeof step.deletes === 'string' && step.deletes.trim() !== '') return
   if (segmentsOf(path).some((segment) => state.created.has(segment))) return
   throw new Error(
-    'DELETE refused: no path segment equals a value a 201 response of this run returned; declare `deletes` with the reason on the step',
+    'DELETE refused: no path segment equals an id a 201 response of this run returned; declare `deletes` with the reason on the step',
   )
 }
 
@@ -227,9 +260,6 @@ function rewrite(file, texts, declared, blocks) {
   )
 }
 
-function holdsSecret(text, secrets) {
-  return [...secrets].some((secret) => secret !== '' && text.includes(secret))
-}
 
 function refuseUnsafeBlocks(blocks, secrets, files) {
   for (const [id, text] of blocks) {
@@ -237,7 +267,7 @@ function refuseUnsafeBlocks(blocks, secrets, files) {
     if (text.includes('\r')) throw new CaptureError(`${id} (${file}): the captured text contains a carriage return`, { capture: id, file })
     if (holdsSecret(text, secrets)) {
       throw new CaptureError(
-        `${id} (${file}): the block contains a value registered as secret during the run; declare print.mask for it`,
+        `${id} (${file}): ${UNMASKED_SECRET}`,
         { capture: id, file },
       )
     }
@@ -340,6 +370,7 @@ async function play({ baseUrl, vars, steps, guard, freshCollections }) {
   const state = newState(vars)
   try {
     await guarded(guard, { client, vars, collections: freshCollections })
+    registerSessions(state, client)
     await inOrder(steps, ({ step, group, file }, index) => runStep(client, step, state, { group, file, index: index + 1 }))
   } finally {
     client.close()

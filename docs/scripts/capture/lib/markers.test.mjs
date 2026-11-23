@@ -145,8 +145,9 @@ test('a near-miss beside an inline-code span is still an error', () => {
   assert.throws(() => findBlocks('`ok` and <!--capture: a-->\n', { file: 'f.md' }), /f\.md:1: .*near-miss/)
 })
 
-test('indented code after a blank line is exempt, but a marker indented inside a list is not', () => {
-  assert.deepEqual(findBlocks('para\n\n    <!-- capture: a -->\n'), [])
-  assert.deepEqual(findBlocks('para\n\n\t<!--capture: a-->\n'), [])
+test('an indented capture comment is a near miss wherever it sits: under a paragraph or in a list item', () => {
+  assert.throws(() => findBlocks('para\n\n    <!-- capture: a -->\n', { file: 'f.md' }), /f\.md:3: .*near-miss/)
+  assert.throws(() => findBlocks('para\n\n\t<!--capture: a-->\n'), /near-miss/)
+  assert.throws(() => findBlocks('- item\n\n    <!-- capture: a -->\n'), /near-miss/)
   assert.throws(() => findBlocks('- item\n\n  <!-- capture: a -->\n  ```text\n  x\n  ```\n'), /near-miss/)
 })
