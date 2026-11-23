@@ -425,7 +425,9 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 超過執行深度上限的文件，在 resolver 開始跑之前就被拒絕：訊息是 `The GraphQL document has an
 execution depth of N which exceeds the max allowed execution depth of 12.`，N 是文件實際的深度，
 `extensions` 帶 `detectedExecutionDepth` 與 `allowedExecutionDepth`，沒有 `extensions.code`。選取
-的每一層欄位都算一層，所以 `{ categories { items { name } } }` 是 3 層。超過 cost 上限的文件同樣
+的每一層欄位都算一層，所以 `{ categories { items { name } } }` 是 3 層。沿著自我參照的關聯，例如
+`parent`，往下寫時，回應另外帶一則 `extensions.code` 為 `HC0087` 的錯誤，訊息是
+`Maximum allowed coordinate cycle depth was exceeded.`。超過 cost 上限的文件同樣
 被拒絕：`extensions.code` 是 HotChocolate 的 `HC0047`，訊息是 `The maximum allowed field cost was
 exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。兩種錯誤都沒有 `data` 鍵；沒帶 `Accept`
 或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json` 時回 `200`。

@@ -518,7 +518,9 @@ A document over the execution depth limit is rejected before any resolver runs: 
 `The GraphQL document has an execution depth of N which exceeds the max allowed execution depth of
 12.` with N the depth of the document, `extensions` carries `detectedExecutionDepth` and
 `allowedExecutionDepth`, and there is no `extensions.code`. Every field level you select counts as
-one, so `{ categories { items { name } } }` is 3 levels deep. A document over the cost limit is
+one, so `{ categories { items { name } } }` is 3 levels deep. Nesting along a self-referencing
+relation such as `parent` adds a second error with `extensions.code` `HC0087` and the message
+`Maximum allowed coordinate cycle depth was exceeded.` A document over the cost limit is
 rejected the same way: `extensions.code` is HotChocolate's `HC0047`, the message is `The maximum
 allowed field cost was exceeded.`, and `extensions` carries `fieldCost` and `maxFieldCost`. Neither
 error has a `data` key; without `Accept` or with `*/*` the status is `400`, with

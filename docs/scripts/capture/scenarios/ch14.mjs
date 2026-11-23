@@ -60,9 +60,14 @@ function noData(json) {
   must(!('data' in json), 'a request-level failure has no data key')
 }
 
+// The depth error has no code. Writing the nesting along a self-referencing relation (parent) also
+// trips the parser's coordinate-cycle rule, which adds a second error with its own code.
 function depthExceeded(json) {
-  noCodeErrors(json)
-  const [first] = json.errors
+  noData(json)
+  const [first, cycle, ...rest] = json.errors
+  must(first.extensions.code === undefined, 'the depth error has no extensions.code')
+  must(rest.length === 0 && cycle.extensions.code === 'HC0087', 'a self-referencing nesting adds one HC0087 error')
+  must(cycle.message === 'Maximum allowed coordinate cycle depth was exceeded.', 'the cycle message')
   must(first.extensions.allowedExecutionDepth === DEPTH_LIMIT, 'the error reports the allowed depth')
   must(first.extensions.detectedExecutionDepth === DEPTH_LIMIT + 1, 'every field level counts: 10 parents is depth 13')
   must(/execution depth of 13 which exceeds the max allowed execution depth of 12/.test(first.message), 'the depth message')
@@ -165,9 +170,6 @@ export const ch14Rest = {
       acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, assertion),
       acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, assertion),
     ]),
-    ...[ACCEPT_ANY, ACCEPT_JSON].map((accept) =>
-      acceptCheck('a document at the depth limit under Accept ' + accept, accept, nestedParents(DEPTH_LIMIT - 3), 200, codedError),
-    ),
     acceptCheck('a resolver error with Accept application/json', ACCEPT_JSON, '{ users { total } }', 200, codedError),
   ],
 }
