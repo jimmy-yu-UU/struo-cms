@@ -15,7 +15,7 @@
 <!-- capture: ch11-fields-id-status -->
 ```text
 $ GET /api/items/article?fields=id,status
-{"success":true,"data":[{"id":"01a2075a-ae08-7b40-8780-bc00ac868ab6","version":0,"status":"draft","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a2075a-adce-7f78-83e5-b8f2e37a0ace","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","version":0,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a2075c-2f1a-7b66-8c14-01d44f1cdcb0","version":0,"status":"draft","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a2075c-2f08-7514-89e5-e89c659a022c","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}},{"id":"01a2075c-2eb8-771e-b609-665813c88c3c","version":0,"status":"published","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -168,7 +168,7 @@ this page's parents to their targets; a nested filter does not lower it, so requ
 
 <!-- capture: ch11-facets-status -->
 ```text
-$ GET /api/items/article?filter[categoryId][_eq]=01a2075a-ac96-74df-94c8-1fb73f48340c&filter[status][_eq]=published&facets=status
+$ GET /api/items/article?filter[categoryId][_eq]=01a2075c-2e89-7d8c-b9f5-e974546c190b&filter[status][_eq]=published&facets=status
 {"success":true,"data":[...],"meta":{"total":2,"limit":25,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]}}}
 HTTP_STATUS:200
 ```
@@ -312,7 +312,7 @@ facet 跟彙總的驗證錯誤走 `BAD_USER_INPUT`／400，只有讀取授權被
 <!-- capture: ch11-full-example -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0&fields=id,status&deep=category,tags&facets=status&aggregate[count]=publishedAt
-{"success":true,"data":[{"id":"01a2075a-adce-7f78-83e5-b8f2e37a0ace","version":0,"status":"published","category":{"id":"01a2075a-ac96-74df-94c8-1fb73f48340c","version":0,"name":"Guides","createdAt":"2026-11-23T07:41:52.664732Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:52.665051Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d"},"tags":[{"id":"01a2075a-acd4-74df-8790-989a965e0ff0","version":0,"name":"howto","createdAt":"2026-11-23T07:41:52.725673Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:52.725968Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d","_junction":{"note":null}},{"id":"01a2075a-ace9-7a9b-a197-e5f4b96c88da","version":0,"name":"release","createdAt":"2026-11-23T07:41:52.746368Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:52.746536Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
+{"success":true,"data":[{"id":"01a2075c-2f08-7514-89e5-e89c659a022c","version":0,"status":"published","category":{"id":"01a2075c-2e89-7d8c-b9f5-e974546c190b","version":0,"name":"Guides","createdAt":"2026-11-23T07:43:31.467275Z","createdBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","updatedAt":"2026-11-23T07:43:31.467481Z","updatedBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426"},"tags":[{"id":"01a2075c-2ea1-7420-acca-f6a9abfb1c87","version":0,"name":"howto","createdAt":"2026-11-23T07:43:31.490399Z","createdBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","updatedAt":"2026-11-23T07:43:31.490536Z","updatedBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","_junction":{"note":null}},{"id":"01a2075c-2eac-7761-9265-1b1c56c9d83b","version":0,"name":"release","createdAt":"2026-11-23T07:43:31.500465Z","createdBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","updatedAt":"2026-11-23T07:43:31.500521Z","updatedBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","_junction":{"note":"hero"}}],"translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0,"facets":{"status":[{"value":"published","count":2},{"value":"draft","count":1}]},"aggregate":{"count":{"publishedAt":2}}}}
 HTTP_STATUS:200
 ```
 

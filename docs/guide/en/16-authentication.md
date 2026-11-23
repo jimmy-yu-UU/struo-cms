@@ -248,15 +248,15 @@ Issue a token for `editor@example.com`, read once with it, revoke it, then read 
 
 <!-- capture: ch16-token-flow -->
 ```text
-$ POST /api/users/01a2075a-b120-7ba3-8a95-5b79473d4391/access-token
+$ POST /api/users/01a2075c-3094-7286-9db5-31e62bda9767/access-token
 {"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
-{"success":true,"data":[{"id":"01a2075a-ae08-7b40-8780-bc00ac868ab6","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:41:53.033534Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:53.033773Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a2075c-2f1a-7b66-8c14-01d44f1cdcb0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:43:31.610851Z","createdBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","updatedAt":"2026-11-23T07:43:31.610975Z","updatedBy":"01a2075b-fc15-721d-b70d-e2ed1b62a426","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a2075a-b120-7ba3-8a95-5b79473d4391/access-token
+$ DELETE /api/users/01a2075c-3094-7286-9db5-31e62bda9767/access-token
 
 HTTP_STATUS:204
 
@@ -339,7 +339,7 @@ body:
 {"email":"$TW","password":"nope"}
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:41:57 GMT
+Date: Mon, 23 Nov 2026 07:43:35 GMT
 Server: Kestrel
 Retry-After: 898
 Transfer-Encoding: chunked
