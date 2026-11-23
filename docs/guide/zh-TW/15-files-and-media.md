@@ -78,13 +78,13 @@ not permitted.`。
 $ POST /api/files (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:35:26 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
-Location: /api/files/fb85ae1b-d009-4e27-a224-21bf0a2c396f
+Location: /api/files/760cd82c-5181-4a01-87f0-13a6756e19fc
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"fb85ae1b-d009-4e27-a224-21bf0a2c396f","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
+{"success":true,"data":{"id":"760cd82c-5181-4a01-87f0-13a6756e19fc","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
 HTTP_STATUS:201
 ```
 
@@ -198,7 +198,7 @@ allowed.`。
 
 <!-- capture: ch15-get-draft-anon-404 -->
 ```text
-$ GET /api/files/63c31486-0fba-490f-8e8a-30c5f5107d51
+$ GET /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 HTTP_STATUS:404
 ```
@@ -208,8 +208,8 @@ HTTP_STATUS:404
 
 <!-- capture: ch15-get-draft-admin -->
 ```text
-$ GET /api/files/63c31486-0fba-490f-8e8a-30c5f5107d51
-{"success":true,"data":{"id":"63c31486-0fba-490f-8e8a-30c5f5107d51","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
+$ GET /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5
+{"success":true,"data":{"id":"6ee78e4c-c929-495a-976c-2e2738cf54a5","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
 HTTP_STATUS:200
 ```
 
@@ -317,7 +317,7 @@ cover 高度。
 
 <!-- capture: ch15-content-width5000-png -->
 ```text
-$ GET /api/files/fb85ae1b-d009-4e27-a224-21bf0a2c396f/content?width=5000&format=png
+$ GET /api/files/760cd82c-5181-4a01-87f0-13a6756e19fc/content?width=5000&format=png
 HTTP/1.1 200 OK
 Content-Length: 6538
 Content-Type: image/png
@@ -441,7 +441,7 @@ null，指向這個檔案的多對多連接資料列會被移除。blob 的清�
 
 <!-- capture: ch15-delete-purge-1-400 -->
 ```text
-$ DELETE /api/files/63c31486-0fba-490f-8e8a-30c5f5107d51?purge=1
+$ DELETE /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}
 HTTP_STATUS:400
 ```

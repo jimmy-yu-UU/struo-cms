@@ -126,8 +126,8 @@ GraphQL 從同一個開關加出對應的三個介面，不需要逐集合寫任
 
 <!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a2078b-c7a9-71ee-a6b4-564a752af116/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T08:35:30.974012Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T08:35:30.90746Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2079c-92ba-755f-8900-59ac7908e3cc/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T08:53:51.527738Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T08:53:51.469786Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -259,16 +259,16 @@ payload 完全一樣，因此除了項目本身，也要有 junction collection 
 
 <!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a2078b-c7ec-73f2-8fd6-fc1152524ac9
+$ DELETE /api/items/article/01a2079c-92fc-7d5b-b6b7-57e89f4b83db
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2078b-c7ec-73f2-8fd6-fc1152524ac9
-{"success":true,"data":[{"id":"01a2078b-c7ec-73f2-8fd6-fc1152524ac9","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:30.924135Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:30.924145Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2079c-92fc-7d5b-b6b7-57e89f4b83db
+{"success":true,"data":[{"id":"01a2079c-92fc-7d5b-b6b7-57e89f4b83db","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.484809Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.484816Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a2078b-c7ec-73f2-8fd6-fc1152524ac9/restore
-{"success":true,"data":{"id":"01a2078b-c7ec-73f2-8fd6-fc1152524ac9","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:35:30.924135Z","createdBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768","updatedAt":"2026-11-23T08:35:30.924145Z","updatedBy":"01a2078b-8c4b-70ae-904e-64f00fa6e768"}}
+$ POST /api/items/article/01a2079c-92fc-7d5b-b6b7-57e89f4b83db/restore
+{"success":true,"data":{"id":"01a2079c-92fc-7d5b-b6b7-57e89f4b83db","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.484809Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.484816Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
