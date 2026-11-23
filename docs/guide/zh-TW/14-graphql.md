@@ -111,13 +111,13 @@ GraphQL 的 `null` 對應 REST 的 404，意圖一樣，形狀不同。清單欄
 面例子延用同一批測試資料，id 是資料本身的，讀者環境會不同：
 
 ```graphql
-query { article(id: "01a20772-e35c-72ed-bf37-5df75695a409") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
+query { article(id: "01a20778-e219-7930-bc16-f8160dfa6016") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
 實際回應：
 
 ```json
-{"data":{"article":{"id":"01a20772-e35c-72ed-bf37-5df75695a409","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
+{"data":{"article":{"id":"01a20778-e219-7930-bc16-f8160dfa6016","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
 ```
 
 `article` 只帶 `id` 就找回同一筆項目；`category` 是多對一，直接是一個物件、沒有任何引數；`tags` 是多
@@ -187,7 +187,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 $ POST /graphql
 body:
 {"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}
-{"data":{"articles":{"total":1,"items":[{"id":"01a20772-e35c-72ed-bf37-5df75695a409","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
+{"data":{"articles":{"total":1,"items":[{"id":"01a20778-e219-7930-bc16-f8160dfa6016","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
 HTTP_STATUS:200
 ```
 
@@ -295,8 +295,8 @@ tagsLinks: [ArticleTagsLink!]
 ```text
 $ POST /graphql
 body:
-{"query": "mutation { updateArticle(id: \"01a20772-e35c-72ed-bf37-5df75695a409\", input: { tagsLinks: [{ id: \"01a20772-e34d-787a-94d5-3fae7ec55e9b\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
-{"data":{"updateArticle":{"id":"01a20772-e35c-72ed-bf37-5df75695a409","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
+{"query": "mutation { updateArticle(id: \"01a20778-e219-7930-bc16-f8160dfa6016\", input: { tagsLinks: [{ id: \"01a20778-e20e-7522-98af-266f5206125a\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
+{"data":{"updateArticle":{"id":"01a20778-e219-7930-bc16-f8160dfa6016","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
 HTTP_STATUS:200
 ```
 
@@ -352,7 +352,7 @@ body:
 {"query":"{ users { total } }"}
 HTTP/1.1 200 OK
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:08:20 GMT
+Date: Mon, 23 Nov 2026 08:14:53 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff
@@ -385,7 +385,7 @@ body:
 {"query": "query { bogusThing { id } }"}
 HTTP/1.1 400 Bad Request
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:08:20 GMT
+Date: Mon, 23 Nov 2026 08:14:53 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff

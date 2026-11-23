@@ -67,12 +67,12 @@ JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `40
 
 <!-- capture: ch13-trash-and-restore -->
 ```text
-$ DELETE /api/items/article/01a20772-e3ce-7146-a80e-85cebae6b4fa
+$ DELETE /api/items/article/01a20778-e27f-7a8b-a7c1-2e73bf85b360
 
 HTTP_STATUS:204
 
-$ POST /api/items/article/01a20772-e3ce-7146-a80e-85cebae6b4fa/restore
-{"success":true,"data":{"id":"01a20772-e3ce-7146-a80e-85cebae6b4fa","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:08:19.662724Z","createdBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","updatedAt":"2026-11-23T08:08:19.66281Z","updatedBy":"01a20772-b9fd-71cd-99a6-01890a1057f0"}}
+$ POST /api/items/article/01a20778-e27f-7a8b-a7c1-2e73bf85b360/restore
+{"success":true,"data":{"id":"01a20778-e27f-7a8b-a7c1-2e73bf85b360","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:14:52.543485Z","createdBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880","updatedAt":"2026-11-23T08:14:52.543616Z","updatedBy":"01a20778-bd1f-7c8c-90b1-2b53fb859880"}}
 HTTP_STATUS:200
 ```
 
@@ -246,7 +246,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:08:20 GMT
+Date: Mon, 23 Nov 2026 08:14:53 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -255,11 +255,11 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a20772-b9fd-71cd-99a6-01890a1057f0"}}
+{"success":true,"data":{"id":"01a20778-bd1f-7c8c-90b1-2b53fb859880"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a20772-b9fd-71cd-99a6-01890a1057f0","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a20778-bd1f-7c8c-90b1-2b53fb859880","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 

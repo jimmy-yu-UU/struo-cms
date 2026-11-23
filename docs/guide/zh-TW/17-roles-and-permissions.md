@@ -183,7 +183,7 @@ GraphQL 在 `extensions.code` 帶同一個代碼。
 
 <!-- capture: ch17-put-article-editor-403 -->
 ```text
-$ PUT /api/items/article/01a20772-e35c-72ed-bf37-5df75695a409
+$ PUT /api/items/article/01a20778-e219-7930-bc16-f8160dfa6016
 body:
 {"status":"draft"}
 {"success":false,"error":{"code":"FORBIDDEN","message":"Write not permitted."}}
@@ -240,7 +240,7 @@ pretty:
 
 <!-- capture: ch17-effective-permissions -->
 ```text
-$ GET /api/users/01a20772-e55a-77ef-a374-f9128c1e9cbe/effective-permissions
+$ GET /api/users/01a20778-e3fd-76e9-9ca4-06aec6849056/effective-permissions
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{"article":{"read":true,"write":false,"delete":false}}}}
 HTTP_STATUS:200
 pretty:
@@ -258,7 +258,7 @@ pretty:
   }
 }
 
-$ GET /api/users/01a20772-e55a-77ef-a374-f9128c1e9cbe/effective-permissions?roles=01a20772-b9fa-72bb-b3f2-6797614ecb0b
+$ GET /api/users/01a20778-e3fd-76e9-9ca4-06aec6849056/effective-permissions?roles=01a20778-bd1c-7791-a2fd-1829ec9d4b22
 {"success":true,"data":{"isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 pretty:

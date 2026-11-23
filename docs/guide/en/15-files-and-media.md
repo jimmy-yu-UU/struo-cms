@@ -93,13 +93,13 @@ projected row:
 $ POST /api/files (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:08:21 GMT
+Date: Mon, 23 Nov 2026 08:14:53 GMT
 Server: Kestrel
-Location: /api/files/5a7381bf-3bd9-4cc6-8672-d3e8d9021018
+Location: /api/files/a997689f-45f3-4edd-87ae-bbde0cbe1146
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"5a7381bf-3bd9-4cc6-8672-d3e8d9021018","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
+{"success":true,"data":{"id":"a997689f-45f3-4edd-87ae-bbde0cbe1146","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
 HTTP_STATUS:201
 ```
 
@@ -241,7 +241,7 @@ ordinary `file` read grant.
 
 <!-- capture: ch15-get-draft-anon-404 -->
 ```text
-$ GET /api/files/4955b768-4d13-4114-bf26-76ee1e5fe96e
+$ GET /api/files/61f275b1-3ce6-42f7-b1aa-56136eaa33dc
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 HTTP_STATUS:404
 ```
@@ -251,8 +251,8 @@ The error examples in this manual leave out `traceId`, which every error respons
 
 <!-- capture: ch15-get-draft-admin -->
 ```text
-$ GET /api/files/4955b768-4d13-4114-bf26-76ee1e5fe96e
-{"success":true,"data":{"id":"4955b768-4d13-4114-bf26-76ee1e5fe96e","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
+$ GET /api/files/61f275b1-3ce6-42f7-b1aa-56136eaa33dc
+{"success":true,"data":{"id":"61f275b1-3ce6-42f7-b1aa-56136eaa33dc","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
 HTTP_STATUS:200
 ```
 
@@ -393,7 +393,7 @@ may use gets `503` with the `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` head
 
 <!-- capture: ch15-content-width5000-png -->
 ```text
-$ GET /api/files/5a7381bf-3bd9-4cc6-8672-d3e8d9021018/content?width=5000&format=png
+$ GET /api/files/a997689f-45f3-4edd-87ae-bbde0cbe1146/content?width=5000&format=png
 HTTP/1.1 200 OK
 Content-Length: 6538
 Content-Type: image/png
@@ -549,7 +549,7 @@ work:
 
 <!-- capture: ch15-delete-purge-1-400 -->
 ```text
-$ DELETE /api/files/4955b768-4d13-4114-bf26-76ee1e5fe96e?purge=1
+$ DELETE /api/files/61f275b1-3ce6-42f7-b1aa-56136eaa33dc?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}
 HTTP_STATUS:400
 ```
