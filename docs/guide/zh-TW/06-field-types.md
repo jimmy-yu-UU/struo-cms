@@ -346,6 +346,10 @@ MySQL 驅動程式把 `tinyint(1)` 欄位讀成布林值，MySQL 與 MariaDB 都
 `decimal` 屬性的欄位在 SQL Server、MySQL 與 MariaDB 是 `decimal(18,4)`，在 PostgreSQL 是不限
 精度的 `numeric`。
 
+在 SQLite 上，`decimal` 欄位不論怎麼宣告，包含不寫 `ColumnDataType` 與 `decimal(18,4)`，有效數字
+超過 15 位的值讀回時都捨入成 15 位：12345678901234.5678 讀回 12345678901234.6，這類值的篩選與
+加總也跟著錯。
+
 `decimal`、`numeric`、`dec`、`fixed` 沒寫精度與小數位數時，在 MySQL 與 MariaDB 上建出
 `decimal(10,0)`；在 SQL Server 上，`numeric` 與 `dec` 建出小數位數為 0 的型別。12345.6789 讀回
 12346，小數部分整個丟掉。PostgreSQL 的 `decimal`、`numeric`、`dec` 與 SQL Server 的 `decimal`

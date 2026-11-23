@@ -392,6 +392,10 @@ buckets and sums are wrong with them. With no `ColumnDataType`, the column of a 
 is `decimal(18,4)` on SQL Server, MySQL and MariaDB, and `numeric` with no limit on precision on
 PostgreSQL.
 
+On SQLite a `decimal` column, however it is declared, the default and `decimal(18,4)` included,
+returns a value of more than 15 significant digits rounded to 15: 12345678901234.5678 reads back
+as 12345678901234.6, and filters and sums over such values are wrong with it.
+
 `decimal`, `numeric`, `dec` and `fixed` written with no precision and scale create `decimal(10,0)`
 on MySQL and MariaDB, and on SQL Server `numeric` and `dec` create a type of scale 0. 12345.6789
 reads back as 12346 and the fraction is dropped. PostgreSQL keeps the fraction for `decimal`,
