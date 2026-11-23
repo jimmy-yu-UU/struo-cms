@@ -108,25 +108,26 @@ dotnet run --project src/Struo.Api -- migrate
 ```
 
 `migrate` 依序套用 migration：先建框架資料表，再植入語言、`admin` 與 `public` 兩個角色，以及管理員
-帳號。輸出前段是 FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied`，結束代碼
-`0`：
+帳號。輸出前段是 FluentMigrator 每一步的紀錄，接著每套用一支印一行 `Applied`，最後一行說明有沒有
+建立管理員帳號，結束代碼 `0`：
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
-[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
 …
-[07:38:51 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
-[07:38:51 INF]  => 0.0031182s <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  => 0.0014508s <s:FluentMigrator.Runner.MigrationRunner>
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
 Applied 202611040000  CreateRoleCapabilities
 Applied 202611060000  DropRoleCapabilities
 Applied 202611170000  ConvertStringColumnsToUtf8Mb4
+Bootstrap admin created: admin@example.com.
 ```
 
 這一步不能省：複製過來的設定檔把 `Database:MigrateOnStartup` 設成 `false`，資料庫還有待套用的
