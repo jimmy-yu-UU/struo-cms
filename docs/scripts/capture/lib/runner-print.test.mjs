@@ -3,6 +3,8 @@ import { test } from 'node:test'
 import { FIXTURE_COOKIE, FIXTURE_TOKEN } from '../test-support/fixtures.mjs'
 import { inRoot, run } from '../test-support/run-helpers.mjs'
 
+const LENGTH = 'Content-Length'
+const TYPE = 'Content-Type'
 const UP_ID = 'demo-up'
 const HEADERS_ID = 'demo-headers'
 const TRACE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
@@ -27,17 +29,17 @@ test('an upload prints a note made from its declaration, then any note the step 
 test('a step that strips the body and prints Content-Length is refused, naming the capture', () =>
   inRoot([HEADERS_ID], async (root) => {
     const base = { capture: HEADERS_ID, method: 'GET', path: '/e', expect: 400, transforms: ['stripTraceId'] }
-    const lengthHeaders = { 'Content-Length': String(ERROR_BODY.length), 'Content-Type': 'application/json' }
+    const lengthHeaders = { [LENGTH]: String(ERROR_BODY.length), [TYPE]: 'application/json' }
     const answer = () => ({ status: 400, headers: lengthHeaders, body: ERROR_BODY })
-    for (const headers of [true, ['Content-Length', 'Content-Type']]) {
+    for (const headers of [true, [LENGTH, TYPE]]) {
       await assert.rejects(run(root, [{ ...base, print: { headers } }], {}, answer), (error) => {
         assert.match(error.message, new RegExp(`${HEADERS_ID}.*Content-Length`))
         return true
       })
     }
-    const result = await run(root, [{ ...base, print: { headers: ['Content-Type'] } }], {}, () => ({
+    const result = await run(root, [{ ...base, print: { headers: [TYPE] } }], {}, () => ({
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { [TYPE]: 'application/json' },
       body: ERROR_BODY,
     }))
     assert.ok(result.blocks.get(HEADERS_ID).includes('Content-Type: application/json'))
@@ -48,7 +50,7 @@ test('a step that prints Content-Length without changing the body is not refused
   inRoot([HEADERS_ID], async (root) => {
     const step = { capture: HEADERS_ID, method: 'GET', path: '/e', expect: 200, print: { headers: true } }
     const body = '{"ok":true}'
-    const result = await run(root, [step], {}, () => ({ status: 200, headers: { 'Content-Length': String(body.length) }, body }))
+    const result = await run(root, [step], {}, () => ({ status: 200, headers: { [LENGTH]: String(body.length) }, body }))
     assert.ok(result.blocks.get(HEADERS_ID).includes('Content-Length: 11'))
   }))
 

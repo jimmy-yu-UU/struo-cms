@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { formatBlock, formatExchange } from './format.mjs'
+const LOWER_TYPE = 'content-type'
 const STATUS_200 = 'HTTP_STATUS:200'
 
 const response = (over = {}) => ({
@@ -55,7 +56,7 @@ test('headers true prints the status line and every header in server order, then
 })
 
 test('a header list keeps only the named headers, compared without regard to case', () => {
-  const text = formatExchange({ method: 'GET', path: '/x', headers: ['content-type'], response: response() })
+  const text = formatExchange({ method: 'GET', path: '/x', headers: [LOWER_TYPE], response: response() })
   assert.equal(text.split('\n').slice(1, 4).join('|'), 'HTTP/1.1 200 OK|Content-Type: application/json; charset=utf-8|')
 })
 
@@ -102,7 +103,7 @@ test('a binary response prints its summary lines in place of the body, after the
   const text = formatExchange({
     method: 'GET',
     path: '/img',
-    headers: ['content-type'],
+    headers: [LOWER_TYPE],
     binary: ['# body: 3 bytes (binary, not shown)'],
     response: response({ body: '���' }),
   })
@@ -114,7 +115,7 @@ test('a binary response prints its summary lines in place of the body, after the
 
 test('a header list naming a header the response lacks is an error that names it', () => {
   assert.throws(
-    () => formatExchange({ method: 'GET', path: '/x', headers: ['content-type', 'X-Missing'], response: response() }),
+    () => formatExchange({ method: 'GET', path: '/x', headers: [LOWER_TYPE, 'X-Missing'], response: response() }),
     /X-Missing/,
   )
 })
