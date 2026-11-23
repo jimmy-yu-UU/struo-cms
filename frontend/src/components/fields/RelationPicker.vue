@@ -92,16 +92,16 @@ async function loadOptions(): Promise<void> {
   }
 }
 
-// The single-select id as text: a string or number model reads as its text (0 and '' included), and
-// null, undefined or any non-primitive value reads as nothing selected.
-const singleId = computed(() => {
+// The single-select id as text: a primitive model reads as its text (0 and '' included); null,
+// undefined, an object or an array reads as nothing selected.
+const singleSelected = computed(() => {
   const text = primitiveText(props.modelValue)
   return text === '' && props.modelValue !== '' ? null : text
 })
 
 function selectedIds(): string[] {
   if (props.multiple) return ((props.modelValue as string[] | null) ?? []).map(String)
-  return singleId.value != null ? [singleId.value] : []
+  return singleSelected.value != null ? [singleSelected.value] : []
 }
 
 async function ensureSelectedLabels(): Promise<void> {
@@ -175,8 +175,6 @@ function onTreeChange(key: string | null): void {
   onChange(key)
 }
 
-// The single-select id, or null when nothing is chosen.
-const singleSelected = singleId
 // The multi-select ids, coerced to string[] regardless of what shape the model actually carries.
 const multipleSelected = computed(() => ((props.modelValue as string[] | null) ?? []).map(String))
 
@@ -246,7 +244,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
     <div v-if="tree" class="w-full max-w-[480px]">
       <TreeSelect
         v-bind="controlAttrs()"
-        :model-value="singleId"
+        :model-value="singleSelected"
         :nodes="treeNodes"
         :label="relation.label"
         :disabled="disabled"
@@ -359,7 +357,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
         </ComboboxList>
       </Combobox>
       <Button
-        v-if="modelValue != null"
+        v-if="singleSelected != null"
         type="button"
         variant="ghost"
         size="icon-sm"
