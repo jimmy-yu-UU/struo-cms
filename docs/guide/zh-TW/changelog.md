@@ -44,8 +44,8 @@
   次；預設 `3`，與先前 GraphQL 伺服器套用的值相同；小於 `1` 或大於 `65535` 的值讓主機啟動失敗，
   訊息帶上這個鍵（見 [第 4 章](04-configuration.md)、[第 14 章](14-graphql.md)）。
 - `migrate` 與 `Database:MigrateOnStartup` 的啟動會說明套用核心植入的那一次有沒有建立 bootstrap
-  管理員。`migrate` 在 `Applied` 各行之後多印一行：管理員的 email，或 `Auth:BootstrapAdmin:Email` 沒設、
-  設定檔是從哪個目錄讀的。啟動則把同樣的文字寫進記錄，建了用 `Information`，沒建用 `Warning`。結束
+  管理員。`migrate` 在 `Applied` 各行之後多印一行：管理員的 email，或
+  `Auth:BootstrapAdmin:Email` 沒設、設定檔是從哪個目錄讀的。啟動則把同樣的文字寫進記錄，建了用 `Information`，沒建用 `Warning`。結束
   代碼不變，`--contentRoot <目錄>` 改讀另一個目錄的設定檔（見 [第 20 章](20-deployment.md)）。
 - `[CmsField]` 所在屬性帶 `[SugarColumn(IsIgnore = true)]` 時，`FieldMetadata.Ignored` 為 `true`，
   `GET /api/schema` 在每個欄位上列出 `ignored`（見 [第 5 章](05-collections.md)）。
@@ -66,7 +66,8 @@
 
 - 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、分組或彙總，或讓
   關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
-  `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息 `Unknown field '<名稱>' on collection '<集合>'.`；
+  `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息
+  `Unknown field '<名稱>' on collection '<集合>'.`；
   GraphQL 的篩選輸入型別沒有這個欄位，請求是沒有 `data` 鍵的 `400` 錯誤；`fields=` 仍選得到它
   （見 [第 10 章](10-query-basics.md)）。
 
