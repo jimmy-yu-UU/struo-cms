@@ -15,7 +15,8 @@ namespace Struo.Api.GraphQl;
 /// single source the REST <see cref="StruoExceptionHandler"/> uses — so the two protocols can never
 /// drift (notably: an unauthenticated <c>PermissionDeniedException</c> is <c>UNAUTHORIZED</c> on
 /// both). GraphQL stamps the code and message, plus <c>extensions.details</c> when the exception
-/// carries them (HTTP 200 semantics are unchanged); it does not carry an HTTP status. Unmapped
+/// carries them (HTTP 200 semantics are unchanged); it does not carry an HTTP status. A request the
+/// parser rejects as malformed is <c>BAD_USER_INPUT</c> with the parser's message. Unmapped
 /// exceptions are masked and logged server-side.
 /// </summary>
 public sealed class StruoErrorFilter(
@@ -41,6 +42,11 @@ public sealed class StruoErrorFilter(
                 ? error.WithMessage(mismatch.Message).WithCode(mismatch.Code)
                 : error;
         }
+
+        // The request parser rejects a malformed request before any resolver runs, so its error has no path;
+        // the same exception type raised inside a resolver keeps the masked internal error.
+        if (exception is InvalidGraphQLRequestException && error.Path is null)
+            return error.WithMessage(exception.Message).WithCode(Http.ErrorCodes.BadUserInput).WithException(null!);
 
         // No HttpContext (non-HTTP execution, e.g. the in-process request executor) or an absent
         // ClaimsPrincipal ⇒ unauthenticated, mirroring the REST handler's authenticated bit.
