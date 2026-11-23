@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Struo.Tests.Hosting;
 
-/// <summary>The GraphQL depth and cost limits are config-bound (<c>GraphQl:*</c>), validated at startup, and applied to the schema.</summary>
+/// <summary>The GraphQL depth, cost and field-repetition limits are config-bound (<c>GraphQl:*</c>), validated at startup, and applied to the schema.</summary>
 [Collection("ApiIntegration")]
 public class GraphQlLimitOptionsTests
 {
@@ -24,7 +24,7 @@ public class GraphQlLimitOptionsTests
     [InlineData("MaxFieldCycleDepth", "65536")]
     [InlineData("MaxFieldCost", "NaN")]
     [InlineData("MaxTypeCost", "NaN")]
-    public async Task A_limit_that_is_not_positive_fails_startup_naming_the_key(string key, string value)
+    public async Task A_limit_outside_its_range_fails_startup_naming_the_key(string key, string value)
     {
         var error = await ForkHost.StartupErrorAsync(mutate: s => s[$"GraphQl:{key}"] = value);
 

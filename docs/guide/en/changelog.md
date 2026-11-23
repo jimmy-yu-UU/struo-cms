@@ -48,7 +48,7 @@
 
 ### Fixed
 
-- In 0.31.0, a GraphQL request the server cannot read as a request (an empty `query`, no `query` at
+- In 0.31.0, a `POST` whose JSON body the server cannot read as a GraphQL request (for example an empty `query`, no `query` at
   all, a body that is not JSON, a `query`, `operationName` or `extensions` of the wrong type, or
   `variables` that is a number or a string) was answered with `400` and the error
   `An internal error occurred.`, code `INTERNAL_SERVER_ERROR`, and the API wrote an error-level log

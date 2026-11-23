@@ -20,7 +20,7 @@ using Xunit;
 
 namespace Struo.Tests.GraphQl;
 
-/// <summary>A GraphQL request whose body the server cannot accept is a client error, answered the same way under every <c>Accept</c>.</summary>
+/// <summary>A GraphQL request whose body the server cannot accept is a client error, answered the same way with no <c>Accept</c>, with <c>*/*</c> and with <c>application/json</c>.</summary>
 [Collection("ApiIntegration")]
 public class GraphQlMalformedRequestTests(ApiFactory factory)
 {
@@ -80,6 +80,7 @@ public class GraphQlMalformedRequestTests(ApiFactory factory)
         var error = root.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
         error.GetProperty("message").GetString().Should().Be(message);
         error.GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        error.GetProperty("extensions").GetProperty("traceId").GetString().Should().HaveLength(32);
         error.TryGetProperty("exception", out _).Should().BeFalse();
         _sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
     }
@@ -107,7 +108,7 @@ public class StruoErrorFilterRequestErrorTests
     }
 
     [Fact]
-    public void The_same_exception_raised_by_a_resolver_stays_an_internal_error()
+    public void The_same_exception_on_an_error_with_a_path_stays_an_internal_error()
     {
         var error = ErrorBuilder.New()
             .SetMessage("original")

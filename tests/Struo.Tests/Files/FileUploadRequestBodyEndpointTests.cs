@@ -218,7 +218,8 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
     {
         var sink = new CapturingLogSink();
         var timeout = new BadHttpRequestException("Request body timeout.", StatusCodes.Status408RequestTimeout);
-        using var host = Host().WithWebHostBuilder(b => b.ConfigureServices(services =>
+        using var parent = Host();
+        using var host = parent.WithWebHostBuilder(b => b.ConfigureServices(services =>
         {
             services.AddSingleton<IStartupFilter>(new FailingBodyFilter(timeout));
             services.AddSingleton<ILogEventSink>(sink);

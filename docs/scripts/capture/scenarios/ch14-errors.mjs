@@ -1,8 +1,9 @@
 // Chapter 14 checks that print nothing: how the GraphQL endpoint answers the failures the prose
 // describes. Request-level failures (a document that does not parse, an unknown field, a depth or
 // cost violation, a self-reference nested too far) fail validation before any resolver runs, so an
-// anonymous caller sees them; their status depends on the Accept header, except a request the server cannot
-// read at all, which is 400 under every Accept. The shared-validator checks
+// anonymous caller sees them; their status depends on the Accept header, except a POST whose JSON body
+// the server cannot read as a request, which is 400 under the three Accept values checked. The
+// shared-validator checks
 // run as the admin. Each statement the chapter makes about a status, a code or a message is asserted
 // here, so the run fails when the behaviour changes.
 import { anonymous, check, must, setup } from './steps.mjs'
@@ -181,7 +182,7 @@ const requestLevel = REQUEST_LEVEL.flatMap(({ label, query, assertion }) =>
   ACCEPTS.map(({ accept, label: how, status }) => anonymousQuery(`${label} with ${how}`, accept, query, status, assertion)),
 )
 
-// A malformed request is 400 whatever the Accept header says.
+// A malformed request is 400 with no Accept header, with */* and with application/json.
 const malformedRequests = MALFORMED_REQUESTS.flatMap(({ label, body, message }) =>
   ACCEPTS.map(({ accept, label: how }) =>
     anonymous(undefined, 'POST', GRAPHQL, 400, {

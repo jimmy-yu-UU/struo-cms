@@ -491,7 +491,17 @@ raises, or the shared validator raises, comes with `data` (`null`, or an object 
 carries one of the stable codes listed in [Chapter 12](12-rest-conventions.md#error-codes), and has
 status `200`; a document that fails before any resolver runs has no `data` key, carries no code or
 only a code of the GraphQL server itself, and its status changes with `Accept`. A malformed request
-is the exception, described below: it carries `BAD_USER_INPUT` and its status stays `400`.
+is the exception, described in the next paragraph: it carries `BAD_USER_INPUT` and its status is
+`400`.
+
+A `POST` whose JSON body the server cannot read as a GraphQL request is answered with HTTP `400`
+with no `Accept` header, with `*/*` and with `application/json`, with no `data` key and one error
+whose `extensions.code` is `BAD_USER_INPUT` and whose message is the GraphQL server's own. Examples:
+a body that is not JSON (`Invalid JSON document.`), a body with no `query` or an empty one
+(`Request must contain either a query or a document id.`), and a `query`, `operationName`,
+`variables` or `extensions` of the wrong type
+(`Invalid 'query' value. Expected string or null, but got Number.`). The server writes no
+error-level log entry for these requests.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
@@ -499,14 +509,6 @@ holds whether the request declared its length or streamed the body, and the mess
 `Request body is too large.`, which names no limit. A streamed body (no declared length) that cannot
 be read for another reason answers with the status of that failure, `400` or `408`, and one error
 with `BAD_USER_INPUT` and the message `The request body could not be read.`.
-
-A request the server cannot read as a GraphQL request is answered with HTTP `400` whatever the
-`Accept` header says, with no `data` key and one error whose `extensions.code` is `BAD_USER_INPUT`
-and whose message is the GraphQL server's own. That is a body that is not JSON (`Invalid JSON
-document.`), a body with no `query` or an empty one (`Request must contain either a query or a
-document id.`), and a `query`, `operationName`, `variables` or `extensions` of the wrong type, such
-as `Invalid 'query' value. Expected string or null, but got Number.` The server writes no
-error-level log entry for these requests.
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
 field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a
@@ -564,7 +566,7 @@ relations can hit `MaxDeepRelations` without sending any `deep` argument.
 
 The execution depth, cost and field repetition limits are set under `GraphQl:` (see
 [Chapter 4](04-configuration.md)), in configuration only: configuring `GraphQlOptions` in code has
-no effect. The defaults are measured against the core schema alone: the heaviest ordinary query
+no effect. The cost defaults are measured against the core schema alone: the heaviest ordinary query
 costs 33 and a 50-alias amplification costs 550, so 150 sits between them. A fork that adds heavier
 queries measures its own heaviest legitimate query, the way `GraphQlCostAnalysisTests` does for the
 core, and sets the cost limits just above it.

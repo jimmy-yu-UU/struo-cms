@@ -2,9 +2,9 @@
 namespace Struo.Application.Configuration;
 
 /// <summary>
-/// GraphQL settings under <c>GraphQl:*</c>. The depth, cost and field-repetition limits are read from configuration once, while
-/// services are registered (the HotChocolate rules take plain values), and a value that is not greater than 0
-/// fails startup. Code that configures this options type, for example
+/// GraphQL settings under <c>GraphQl:*</c>. The depth, cost and field-repetition limits are read from
+/// configuration once, while services are registered (the HotChocolate rules take plain values), and a value
+/// outside its range fails startup. Code that configures this options type, for example
 /// <c>services.Configure&lt;GraphQlOptions&gt;(...)</c>, has no effect on them: set them in configuration.
 /// </summary>
 public sealed class GraphQlOptions
