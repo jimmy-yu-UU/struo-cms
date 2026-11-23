@@ -77,7 +77,7 @@ public class IgnoredFieldApiTests(ApiFactory factory)
         fields.Single(f => f.GetProperty("name").GetString() == "name").GetProperty("ignored").GetBoolean().Should().BeFalse();
     }
 
-    private async Task<(HttpStatusCode Status, JsonElement Root)> GraphQl(HttpClient client, string query)
+    private static async Task<(HttpStatusCode Status, JsonElement Root)> GraphQl(HttpClient client, string query)
     {
         var response = await client.PostAsJsonAsync("/graphql", new { query });
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
