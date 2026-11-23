@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { HostUnreachableError, createClient } from './client.mjs'
-import { startStub } from './stub-server.mjs'
+import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
+import { startStub } from '../test-support/stub-server.mjs'
 
 const login = (request) =>
   request.path === '/login'
@@ -96,4 +96,94 @@ test('an unreachable host raises HostUnreachableError naming the base URL', asyn
     assert.ok(error.message.includes(baseUrl))
     return true
   })
+})
+
+const cookies = (values) => (request) =>
+  request.path === '/set'
+    ? { status: 200, headers: { 'Set-Cookie': values } }
+    : { status: 200, body: request.headers.cookie ?? '' }
+
+test('several Set-Cookie headers in one response all enter the jar', async () => {
+  await withStub(cookies(['a=1; path=/', 'b=2; path=/; httponly']), async (_stub, client) => {
+    await client.request({ identity: 'u', method: 'GET', path: '/set' })
+    const res = await client.request({ identity: 'u', method: 'GET', path: '/echo' })
+    assert.equal(res.body, 'a=1; b=2')
+  })
+})
+
+test('Max-Age=0 and an expiry in the past delete a cookie; a later value replaces it', async () => {
+  let phase = 0
+  const handler = (request) => {
+    if (request.path === '/echo') return { status: 200, body: request.headers.cookie ?? '' }
+    const sets = [
+      ['a=1; path=/', 'b=2; path=/', 'c=3; path=/'],
+      ['a=; path=/; Max-Age=0', 'b=gone; path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT', 'c=4; path=/'],
+    ]
+    return { status: 200, headers: { 'Set-Cookie': sets[phase++] } }
+  }
+  await withStub(handler, async (_stub, client) => {
+    await client.request({ identity: 'u', method: 'GET', path: '/set' })
+    await client.request({ identity: 'u', method: 'GET', path: '/set' })
+    assert.equal((await client.request({ identity: 'u', method: 'GET', path: '/echo' })).body, 'c=4')
+  })
+})
+
+test('a request that gets no answer fails with a timeout error after the step\'s own limit', async () => {
+  await withStub(() => ({ hang: true }), async (_stub, client) => {
+    const started = Date.now()
+    await assert.rejects(client.request({ method: 'GET', path: '/x', timeoutMs: 150 }), (error) => {
+      assert.ok(error instanceof RequestTimeoutError)
+      assert.match(error.message, /no answer within 150 ms/)
+      return true
+    })
+    assert.ok(Date.now() - started < 3000)
+  })
+})
+
+test('the client default limit applies when a step names none', async () => {
+  const stub = await startStub(() => ({ hang: true }))
+  const client = createClient({ baseUrl: stub.baseUrl, timeoutMs: 120 })
+  try {
+    await assert.rejects(client.request({ method: 'GET', path: '/x' }), /no answer within 120 ms/)
+  } finally {
+    client.close()
+    await stub.close()
+  }
+})
+
+test('an ECONNRESET on a reused socket is retried once; on a new socket it is not', async () => {
+  let flaky = 0
+  const handler = (request) => {
+    if (request.path === '/flaky') {
+      flaky += 1
+      return flaky === 1 ? { destroy: true } : { status: 200, body: 'second try' }
+    }
+    return { status: 200, body: 'ok' }
+  }
+  await withStub(handler, async (stub, client) => {
+    await client.request({ method: 'GET', path: '/warm' })
+    const res = await client.request({ method: 'GET', path: '/flaky' })
+    assert.equal(res.body, 'second try')
+    assert.equal(stub.requests.filter((r) => r.path === '/flaky').length, 2)
+  })
+  await withStub(() => ({ destroy: true }), async (stub, client) => {
+    await assert.rejects(client.request({ method: 'GET', path: '/first' }), ConnectionError)
+    assert.equal(stub.requests.length, 1)
+  })
+})
+
+test('a refused connection reads as an unreachable host and any other socket error as a failed connection', async () => {
+  const stub = await startStub(() => ({ destroy: true }))
+  const client = createClient({ baseUrl: stub.baseUrl })
+  try {
+    await assert.rejects(client.request({ method: 'GET', path: '/' }), (error) => {
+      assert.ok(error instanceof ConnectionError)
+      assert.ok(!(error instanceof HostUnreachableError))
+      assert.match(error.message, /connection to http:\/\/127\.0\.0\.1:\d+ failed \(ECONNRESET\)/)
+      return true
+    })
+  } finally {
+    client.close()
+    await stub.close()
+  }
 })

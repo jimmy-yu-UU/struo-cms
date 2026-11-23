@@ -6,18 +6,22 @@
 //
 //   --check        no network: markers, cross-language identity, scenario/marker match
 //   --write        write the chapter files (without it the captured blocks are only printed)
-//   --chapters     comma-separated chapter numbers (default: every chapter with a scenario)
+//   --chapters     comma-separated chapter numbers whose files are written; the run itself always
+//                  executes every group in order (default: every file with a capture)
 //   --base-url     or STRUO_CAPTURE_BASE_URL
 //   --email        or STRUO_CAPTURE_ADMIN_EMAIL (default admin@admin.com)
-//   --password     or STRUO_CAPTURE_ADMIN_PASSWORD (the variable keeps it out of the process list)
 //   --guide-dir    the manual's root (default: ../../guide); must lie inside the working directory
+//
+// The admin password comes from STRUO_CAPTURE_ADMIN_PASSWORD only.
 import { realpathSync, statSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { checkGuide } from './lib/check.mjs'
-import { CaptureError, runCapture } from './lib/runner.mjs'
-import { CHAPTERS, SEED } from './scenarios/index.mjs'
+import { CaptureError } from './lib/errors.mjs'
+import { runCapture } from './lib/runner.mjs'
+import { selectFiles } from './lib/select.mjs'
+import { CONTENT_COLLECTIONS, GROUPS } from './scenarios/index.mjs'
 
 const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'guide')
 
@@ -38,15 +42,6 @@ function confinedDirectory(candidate) {
   return resolved
 }
 
-function selectChapters(option) {
-  if (!option) return CHAPTERS
-  return option.split(',').map((number) => {
-    const chapter = CHAPTERS.find((candidate) => candidate.number === number.trim())
-    if (!chapter) throw new CaptureError(`no scenario for chapter ${number.trim()}`)
-    return chapter
-  })
-}
-
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -55,7 +50,6 @@ async function main() {
       chapters: { type: 'string' },
       'base-url': { type: 'string' },
       email: { type: 'string' },
-      password: { type: 'string' },
       'guide-dir': { type: 'string' },
     },
   })
@@ -63,7 +57,7 @@ async function main() {
 
   if (values.check) {
     const guideDir = confinedDirectory(guideOption)
-    const { problems, blocks, files } = checkGuide({ guideDir, chapters: CHAPTERS })
+    const { problems, blocks, files } = checkGuide({ guideDir, groups: GROUPS })
     if (problems.length > 0) throw new CaptureError(`${problems.join('\n')}\n${problems.length} problem(s) in the capture markers`)
     process.stdout.write(`checked ${blocks} marked blocks in ${files} files\n`)
     return
@@ -71,17 +65,18 @@ async function main() {
 
   const baseUrl = values['base-url'] ?? process.env.STRUO_CAPTURE_BASE_URL
   if (!baseUrl) throw new CaptureError('no base URL: pass --base-url or set STRUO_CAPTURE_BASE_URL')
-  const adminPassword = values.password ?? process.env.STRUO_CAPTURE_ADMIN_PASSWORD
+  const adminPassword = process.env.STRUO_CAPTURE_ADMIN_PASSWORD
   if (!adminPassword) throw new CaptureError('no admin password: set STRUO_CAPTURE_ADMIN_PASSWORD')
   const adminEmail = values.email ?? process.env.STRUO_CAPTURE_ADMIN_EMAIL ?? 'admin@admin.com'
 
   const guideDir = confinedDirectory(guideOption)
-  const chapters = selectChapters(values.chapters)
+  const only = selectFiles(values.chapters, GROUPS)
   const { blocks, files } = await runCapture({
     baseUrl,
     vars: { adminEmail, adminPassword },
-    seed: SEED,
-    chapters,
+    groups: GROUPS,
+    only,
+    freshCollections: CONTENT_COLLECTIONS,
     guideDir,
     write: values.write,
   })
@@ -91,10 +86,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  if (!(error instanceof CaptureError)) {
-    process.stderr.write(`${error.stack ?? error}\n`)
-  } else {
+  if (error instanceof CaptureError) {
     process.stderr.write(`capture: ${error.message}\n`)
+  } else {
+    process.stderr.write(`${error.stack ?? error}\n`)
   }
-  process.exit(1)
+  process.exitCode = 1
 })

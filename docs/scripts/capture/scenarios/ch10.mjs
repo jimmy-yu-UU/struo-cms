@@ -3,7 +3,7 @@
 const read = (capture, path, extra = {}) => ({ capture, as: 'admin', method: 'GET', path, expect: 200, ...extra })
 
 export const ch10 = {
-  number: '10',
+  name: 'chapter 10: query basics',
   file: '10-query-basics.md',
   steps: [
     read('ch10-filter-published-sort-limit', '/api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0'),

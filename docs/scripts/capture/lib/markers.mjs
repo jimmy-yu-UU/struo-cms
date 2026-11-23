@@ -10,52 +10,65 @@
 // rendered page, so the marker costs the reader nothing.
 //
 // A marker-looking line inside a fenced block is content (the manual shows markdown samples), so
-// the scan tracks fences with the same CommonMark rule as ../../lib/fences.mjs: an opener is three
-// or more backticks or tildes indented up to three spaces; the closer reuses the character and is
-// at least as long. markers.test.mjs checks the two against each other.
+// the scan tracks fences with the shared rule in ../../lib/fences.mjs. Outside a fence, a line that
+// holds a capture comment in any other form (indented, spaced differently, mid-line) is an error:
+// a marker the tool would silently ignore is a block nobody updates.
+import { closesFence, fenceOpener } from '../../lib/fences.mjs'
+
 const MARKER = /^<!-- capture: ([A-Za-z0-9._-]+) -->$/
-const FENCE = /^ {0,3}(`{3,}|~{3,})/
+const NEAR_MISS = /<!--\s*capture/i
 
 export class MarkerError extends Error {}
 
-function splitLines(text) {
-  const eol = text.includes('\r\n') ? '\r\n' : '\n'
-  return { lines: text.split(/\r?\n/), eol }
-}
-
-function closes(opener, line) {
-  const match = FENCE.exec(line)
-  return match !== null && match[1][0] === opener[0] && match[1].length >= opener.length
+// Lines without their terminators, and each line's own terminator ('' for a last line without one).
+function split(text) {
+  const parts = text.split(/(\r\n|\n)/)
+  const lines = []
+  const eols = []
+  for (let i = 0; i < parts.length; i += 2) {
+    lines.push(parts[i])
+    eols.push(parts[i + 1] ?? '')
+  }
+  return { lines, eols }
 }
 
 function where(file, line) {
   return file ? `${file}:${line + 1}: ` : `line ${line + 1}: `
 }
 
+function findCloser(lines, from, opener) {
+  let close = from
+  while (close < lines.length && !closesFence(opener, lines[close])) close += 1
+  return close
+}
+
 function scan(lines, file) {
   const blocks = []
   let index = 0
   while (index < lines.length) {
-    const marker = MARKER.exec(lines[index])
-    const opener = FENCE.exec(lines[index])
+    const line = lines[index]
+    const opener = fenceOpener(line)
     if (opener) {
       // A fence outside any marker: skip to its closer so its content is never read as markers.
-      let end = index + 1
-      while (end < lines.length && !closes(opener[1], lines[end])) end += 1
-      index = end + 1
+      index = findCloser(lines, index + 1, opener) + 1
       continue
     }
+    const marker = MARKER.exec(line)
     if (!marker) {
+      if (NEAR_MISS.test(line)) {
+        throw new MarkerError(
+          `${where(file, index)}near-miss capture marker; the form is '<!-- capture: <id> -->' at column 0, directly above a fence`,
+        )
+      }
       index += 1
       continue
     }
     const id = marker[1]
-    const fence = index + 1 < lines.length ? FENCE.exec(lines[index + 1]) : null
+    const fence = index + 1 < lines.length ? fenceOpener(lines[index + 1]) : null
     if (!fence) {
       throw new MarkerError(`${where(file, index)}marker '${id}' is not directly above a fence`)
     }
-    let close = index + 2
-    while (close < lines.length && !closes(fence[1], lines[close])) close += 1
+    const close = findCloser(lines, index + 2, fence)
     if (close >= lines.length) {
       throw new MarkerError(`${where(file, index)}marker '${id}': the fence is never closed`)
     }
@@ -70,27 +83,33 @@ function scan(lines, file) {
 
 // Zero-based line numbers of each block's marker, opening fence and closing fence.
 export function findBlocks(text, { file } = {}) {
-  return scan(splitLines(text).lines, file)
+  return scan(split(text).lines, file)
 }
 
 // The opening fence, the content and the closing fence of one block, or null when the id has no
 // marker. This is the span two languages must hold byte for byte.
 export function blockRegion(text, id, { file } = {}) {
-  const { lines } = splitLines(text)
+  const { lines } = split(text)
   const block = scan(lines, file).find((candidate) => candidate.id === id)
   return block ? lines.slice(block.openLine, block.closeLine + 1) : null
 }
 
-// Returns the text with the lines between the fences of block `id` replaced by `content`.
-// The file's own line ending is kept.
+// Returns the text with the lines between the fences of block `id` replaced by `content`. The new
+// lines end with the file's first line ending; every other line keeps its own.
 export function replaceBlock(text, id, content, { file } = {}) {
-  const { lines, eol } = splitLines(text)
+  if (content.includes('\r')) throw new MarkerError(`${id}: the captured text contains a carriage return`)
+  const { lines, eols } = split(text)
   const block = scan(lines, file).find((candidate) => candidate.id === id)
   if (!block) throw new MarkerError(`${file ? `${file}: ` : ''}no marker '${id}'`)
-  const opener = FENCE.exec(lines[block.openLine])[1]
+  const opener = fenceOpener(lines[block.openLine])
   const replacement = content.split('\n')
-  if (replacement.some((line) => closes(opener, line))) {
+  if (replacement.some((line) => closesFence(opener, line))) {
     throw new MarkerError(`${id}: a line of the captured text would close the fence`)
   }
-  return [...lines.slice(0, block.openLine + 1), ...replacement, ...lines.slice(block.closeLine)].join(eol)
+  const eol = eols.find((candidate) => candidate !== '') ?? '\n'
+  const out = []
+  for (let i = 0; i <= block.openLine; i += 1) out.push(lines[i] + eols[i])
+  for (const line of replacement) out.push(line + eol)
+  for (let i = block.closeLine; i < lines.length; i += 1) out.push(lines[i] + eols[i])
+  return out.join('')
 }

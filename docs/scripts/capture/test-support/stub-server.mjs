@@ -4,7 +4,8 @@
 import { createServer } from 'node:http'
 
 // handler(request) receives { method, path, headers, body } and returns
-// { status, headers?, body? }; a missing body is an empty response.
+// { status, headers?, body? }; a missing body is an empty response. { hang: true } never answers and
+// { destroy: true } closes the connection without an answer.
 export async function startStub(handler) {
   const requests = []
   const server = createServer((req, res) => {
@@ -19,6 +20,11 @@ export async function startStub(handler) {
       }
       requests.push(received)
       const answer = handler(received) ?? { status: 404 }
+      if (answer.hang) return
+      if (answer.destroy) {
+        req.socket.destroy()
+        return
+      }
       res.writeHead(answer.status, answer.headers ?? {})
       res.end(answer.body ?? '')
     })

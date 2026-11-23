@@ -10,7 +10,7 @@ function tooDeep() {
 }
 
 export const ch11 = {
-  number: '11',
+  name: 'chapter 11: advanced queries',
   file: '11-query-advanced.md',
   steps: [
     read('ch11-fields-id-status', '/api/items/article?fields=id,status'),
@@ -29,7 +29,7 @@ export const ch11 = {
     },
     read(
       'ch11-facets-status',
-      '/api/items/article?filter[categoryId][_eq]={guidesId}&filter[status][_eq]=published&facets=status',
+      '/api/items/article?filter[categoryId][_eq]={{guidesId}}&filter[status][_eq]=published&facets=status',
       { transforms: ['elideData'] },
     ),
     read('ch11-aggregate-count-max', '/api/items/article?aggregate[count]=publishedAt&aggregate[max]=publishedAt', {

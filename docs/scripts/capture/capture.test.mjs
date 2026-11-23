@@ -25,12 +25,12 @@ function makeGuide(zh, en) {
   return root
 }
 
-test('--check exits 0 on a guide without markers and says what it checked', () => {
+test('--check on a guide that lacks the scenario files exits 1 and names them', () => {
   const root = makeGuide('# a\n', '# a\n')
   try {
     const result = run(['--check', '--guide-dir', root], root)
-    assert.equal(result.status, 0, result.stderr)
-    assert.match(result.stdout, /0 marked blocks in 2 files/)
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /10-query-basics.md: has captures in the scenario but no file/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -42,7 +42,7 @@ test('--check exits 1 and prints the id and file of a block that differs between
   try {
     const result = run(['--check', '--guide-dir', root], root)
     assert.equal(result.status, 1)
-    assert.match(result.stderr, /q: .*differs.*zh-TW/)
+    assert.match(result.stderr, /q: block differs between zh-TW/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

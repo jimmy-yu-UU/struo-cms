@@ -96,3 +96,42 @@ test('blockRegion returns the fences and the content, which is what the language
   assert.deepEqual(blockRegion(DOC, 'one'), ['```text', 'old line', '```'])
   assert.equal(blockRegion(DOC, 'nope'), null)
 })
+
+test('the new lines take the file\'s first line ending; every other line keeps its own', () => {
+  const mixed = '# t\r\n\n<!-- capture: a -->\n```text\nold\n```\n'
+  assert.equal(replaceBlock(mixed, 'a', 'x\ny'), '# t\r\n\n<!-- capture: a -->\n```text\nx\r\ny\r\n```\n')
+  const lf = 'a\n<!-- capture: a -->\r\n```text\r\nold\r\n```\r\n'
+  assert.equal(replaceBlock(lf, 'a', 'x'), 'a\n<!-- capture: a -->\r\n```text\r\nx\n```\r\n')
+})
+
+test('a file with no line ending at all uses LF', () => {
+  assert.equal(replaceBlock('<!-- capture: z -->\n```text\n```', 'z', 'new'), '<!-- capture: z -->\n```text\nnew\n```')
+})
+
+test('replaceBlock refuses captured text that holds a carriage return', () => {
+  assert.throws(() => replaceBlock(DOC, 'one', 'a\r\nb'), /carriage return/)
+  assert.throws(() => replaceBlock(DOC, 'one', 'a\rb'), /carriage return/)
+})
+
+test('a line that contains a capture comment but is not the exact marker form is an error', () => {
+  const near = [
+    ['trailing space', '<!-- capture: a --> \n```text\nx\n```\n'],
+    ['no space after the opener', '<!--capture: a-->\n```text\nx\n```\n'],
+    ['indented', '  <!-- capture: a -->\n  ```text\n  x\n  ```\n'],
+    ['mid-line in prose', 'see <!-- capture: a --> here\n\n```text\nx\n```\n'],
+    ['uppercase', '<!-- CAPTURE: a -->\n```text\nx\n```\n'],
+    ['missing colon', '<!-- capture a -->\n```text\nx\n```\n'],
+  ]
+  for (const [name, text] of near) {
+    assert.throws(() => findBlocks(text, { file: 'a.md' }), /a\.md:\d+: .*near-miss capture marker/, name)
+  }
+})
+
+test('the near-miss rule reports the line of the offending comment', () => {
+  assert.throws(() => findBlocks('one\ntwo\n<!--capture: a-->\n', { file: 'f.md' }), /f\.md:3: /)
+})
+
+test('capture comments inside a fenced block are content and never near-misses', () => {
+  const text = '```md\n<!--capture: a-->\n  <!-- capture: b -->\n```\n'
+  assert.deepEqual(findBlocks(text), [])
+})
