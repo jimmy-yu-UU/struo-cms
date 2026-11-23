@@ -68,7 +68,8 @@
 - 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、分組或彙總，或讓
   關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
   `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息
-  `Unknown field '<名稱>' on collection '<集合>'.`；GraphQL 的篩選輸入型別沒有這個欄位，請求是沒有 `data` 鍵的 `400` 錯誤；`fields=` 仍選得到它
+  `Unknown field '<名稱>' on collection '<集合>'.`；
+  GraphQL 的篩選輸入型別沒有這個欄位，請求是沒有 `data` 鍵的 `400` 錯誤；`fields=` 仍選得到它
   （見 [第 10 章](10-query-basics.md)）。
 
 ## 0.31.0 — 2026-11-23
