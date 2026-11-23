@@ -414,10 +414,10 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   `fixed`, which are listed only when written without one), a word wrapped whole in brackets,
   double quotes or backticks is one word, brackets inside a word make another type (`int[]`),
   trailing column modifiers such as `not null` are skipped, `double precision` counts as `double`
-  and `character varying` as `character`, and `array` after any name makes another type, and so do
-  `unsigned` and `zerofill` after an integer or string name; after `real`, `float` and `double`
-  they are column modifiers (`float unsigned` is `float`, measured on MySQL and MariaDB; the same
-  holds after `decimal`, `numeric`, `dec` and `fixed`). Any other name passes,
+  and `character varying` as `character`, and `array` after any name makes another type;
+  `unsigned` and `zerofill` are column modifiers after `real`, `float`, `double`, `decimal`,
+  `numeric`, `dec` and `fixed` (`float unsigned` is `float`, measured on MySQL and MariaDB) and
+  make another type after any other name. Any other name passes,
   `timestamp with local time zone`, `decimal(18,4)`, `bit`, `boolean` and `string` included.
   `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`

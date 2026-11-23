@@ -30,7 +30,7 @@ internal static class ColumnTypeFit
         "and the check is the same on every backend";
     private const string BareDecimalFix = "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType";
     private const string BareDecimalWhy =
-        "a column with no scale keeps no fraction on MySQL and MariaDB (decimal(10,0)) and, " +
+        "a decimal type written with no precision gets scale 0 on MySQL and MariaDB (decimal(10,0)) and, " +
         "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
         "and the check is the same on every backend";
     private const string BoolStringFix =

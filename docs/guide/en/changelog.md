@@ -5,8 +5,9 @@
 ::: danger Breaking
 - The scanner stops the host at start, with a `MetadataException` that names "Class.Property", the
   property type and the declared type, when an explicit `ColumnDataType` puts a `decimal` on a
-  binary floating-point type or a `bool` on a string type; each combination used to start the host
-  and then return rounded values or fail on read
+  binary floating-point type, a `decimal` on `decimal`, `numeric`, `dec` or `fixed` with no
+  precision, or a `bool` on a string type; each combination used to start the host and then return
+  rounded values or fail on read
   ([Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the table):
   - A `decimal` or `decimal?` with `real`, `float`, `float4`, `float8`, `double` or
     `double precision`, with or without a length or precision such as `float(53)`. The column
@@ -14,8 +15,9 @@
     single-precision type (`real` on PostgreSQL and SQL Server, `float` on MySQL and MariaDB)
     returned 12345.6789 as 12345.68 or 12345.7, a double-precision type returned
     12345678901234.5678 as 12345678901234.6, and filter counts, facet buckets and sums on the
-    column were wrong. `float unsigned`, `double unsigned`, `real unsigned` and `float zerofill`
-    on MySQL and MariaDB behave the same and are rejected too. Use `decimal(18,4)` or another
+    column were wrong. `real`, `float` and `double` followed by `unsigned` or `zerofill` are
+    rejected too: on MySQL and MariaDB `float unsigned`, `float zerofill`, `double unsigned` and
+    `real unsigned` returned the same rounded values. Use `decimal(18,4)` or another
     decimal type with an explicit scale, or remove `ColumnDataType`; a table that exists needs a
     migration when the column type changes.
   - A `decimal` or `decimal?` with `decimal`, `numeric`, `dec` or `fixed` and no precision or scale,

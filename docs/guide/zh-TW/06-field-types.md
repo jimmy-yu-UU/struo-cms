@@ -276,16 +276,8 @@ JSON 欄位，同樣如此。
 
 ### 與屬性型別衝突的欄位型別
 
-下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。比對型別名稱時看的是各個單字，
-不分大小寫，括號裡的長度或精度也不看，`tinyint(1)` 除外，`decimal`、`numeric`、`dec`、`fixed` 也除
-外，這四個只有沒寫括號時才在表裡。整個單字被中括號、雙引號或反引號包起來時算一個單字，所以
-`[bigint]` 就是 `bigint`，`"int custom"` 不是 `int`；單字中間出現中括號，例如 `int[]`，是另一種型
-別。型別後面的字，例如 `not null`、`identity(1,1)`，是欄位修飾：`bigint not null` 當作 `bigint`。
-`array` 接在名稱後面，名稱就變成另一種型別；`unsigned` 與 `zerofill` 接在整數或字串型別名稱後面也
-一樣，所以 `int unsigned` 不是 `int`。接在 `real`、`float`、`double`、`decimal`、`numeric`、
-`dec`、`fixed` 後面時，它們是欄位修飾：`float unsigned` 當作 `float`。`double precision` 算
-`double`，`character varying` 算 `character`，後面的 `precision`、`varying` 屬於名稱。不在表裡的
-名稱，包含 `timestamp with local time zone`，是你自己的，照常通過。
+下表的 `ColumnDataType` 同樣讓主機啟動失敗。`Nullable<T>` 當作 `T`。不在表裡的名稱，包含
+`timestamp with local time zone`，是你自己的，照常通過。
 
 | 屬性型別 | `ColumnDataType` | 改成 |
 |---|---|---|
@@ -297,10 +289,27 @@ JSON 欄位，同樣如此。
 | `int`、`long` | `tinyint(1)` | 寫不帶長度的 `tinyint`，或拿掉 `ColumnDataType` |
 | `decimal` | `real`、`float`、`float4`、`float8` | 改用 `decimal(18,4)`，或拿掉 `ColumnDataType` |
 | `decimal` | `double`、`double precision` | 改用 `decimal(18,4)`，或拿掉 `ColumnDataType` |
-| `decimal` | `decimal`、`numeric`、`dec`、`fixed`，後面沒有括號 | 寫明精度與位數，或拿掉 `ColumnDataType` |
+| `decimal` | `decimal`、`numeric`、`dec`、`fixed`，後面沒有括號 | 寫明精度與小數位數，或拿掉 `ColumnDataType` |
 | `bool` | `varchar`、`nvarchar`、`char`、`nchar` | 拿掉 `ColumnDataType`，或改用 `boolean` 或 `bit` |
 | `bool` | `character`、`character varying`、`bpchar` | 拿掉 `ColumnDataType`，或改用 `boolean` 或 `bit` |
 | `bool` | `text`、`ntext`、`tinytext`、`mediumtext`、`longtext` | 拿掉 `ColumnDataType`，或改用 `boolean` 或 `bit` |
+
+比對型別名稱時看的是各個單字，不分大小寫：
+
+- 括號裡的長度或精度不看，有兩個例外：`tinyint` 要帶 `(1)` 才在表裡；`decimal`、`numeric`、
+  `dec`、`fixed` 要沒有括號才在表裡。
+- 整個單字被中括號、雙引號或反引號包起來時算一個單字，所以 `[bigint]` 就是 `bigint`，
+  `"int custom"` 不是 `int`。
+- `double precision` 算 `double`，`character varying` 算 `character`。
+- 名稱後面的字依下表判斷。
+
+| 名稱後面的字 | 接在哪些名稱後面 | 怎麼算 |
+|---|---|---|
+| `unsigned`、`zerofill` | `real`、`float`、`double` | 欄位修飾：`float unsigned` 當作 `float` |
+| `unsigned`、`zerofill` | `decimal`、`numeric`、`dec`、`fixed` | 欄位修飾 |
+| `unsigned`、`zerofill` | 其他名稱 | 另一種型別：`int unsigned` 不是 `int` |
+| `array`，或 `int[]` 這樣的中括號 | 任何名稱 | 另一種型別 |
+| 其他字，例如 `not null` | 任何名稱 | 欄位修飾：`bigint not null` 當作 `bigint` |
 
 `DateTime` 要用的形狀是 `[ColumnShape(ColumnShape.TimestampWithTimeZone)]`（見
 [日期時間](#日期時間)）。在 PostgreSQL 與 SQL Server 上，形狀讓欄位以 UTC 時刻讀寫。沒有形狀時，
@@ -337,11 +346,11 @@ MySQL 驅動程式把 `tinyint(1)` 欄位讀成布林值，MySQL 與 MariaDB 都
 `decimal` 屬性的欄位在 SQL Server、MySQL 與 MariaDB 是 `decimal(18,4)`，在 PostgreSQL 是不限
 精度的 `numeric`。
 
-`decimal` 屬性的欄位型別沒寫精度與小數位數時，小數位數是 0。MySQL 與 MariaDB 的 `decimal`、
-`numeric`、`dec`、`fixed` 建出 `decimal(10,0)`，SQL Server 的 `numeric` 與 `dec` 建出小數位數為 0
-的型別，12345.6789 讀回 12346，小數部分整個丟掉。PostgreSQL 的 `numeric` 與 SQL Server 的
-`decimal` 不受影響，不過檢查在每個後端都一樣。要明寫型別時，寫明精度與小數位數，例如
-`decimal(18,4)`；`unsigned`、`zerofill` 接在後面也一樣。
+`decimal`、`numeric`、`dec`、`fixed` 沒寫精度與小數位數時，在 MySQL 與 MariaDB 上建出
+`decimal(10,0)`；在 SQL Server 上，`numeric` 與 `dec` 建出小數位數為 0 的型別。12345.6789 讀回
+12346，小數部分整個丟掉。PostgreSQL 的 `decimal`、`numeric`、`dec` 與 SQL Server 的 `decimal`
+保留小數，不過檢查在每個後端都一樣。要明寫型別時，寫明精度與小數位數，例如 `decimal(18,4)`：
+帶括號的名稱照寫的內容建欄位，照常通過。`unsigned`、`zerofill` 接在後面也一樣。
 
 `bool` 放在字串欄位上，值存成 `0` 與 `1`（PostgreSQL 存成 `false` 與 `true`）。資料庫肯收這個
 寫入時，讀取該列與對欄位做 facet 都會失敗，在 SQLite、PostgreSQL、SQL Server、MySQL 與

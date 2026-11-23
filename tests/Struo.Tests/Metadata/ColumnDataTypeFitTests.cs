@@ -546,7 +546,7 @@ public sealed class ColumnDataTypeFitTests
     public sealed class NumericBareNullable
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        [SugarColumn(ColumnDataType = "NUMERIC not null", IsNullable = true)]
+        [SugarColumn(ColumnDataType = "NUMERIC null", IsNullable = true)]
         [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal? Price { get; set; }
     }
 
@@ -597,7 +597,7 @@ public sealed class ColumnDataTypeFitTests
         { typeof(DecimalReal), "DecimalReal.Price", "ColumnDataType = \"real\")] and is a decimal property" },
         { typeof(DecimalNullableDouble), "DecimalNullableDouble.Price", "ColumnDataType = \"Double Precision\")] and is a decimal? property" },
         { typeof(DecimalBare), "DecimalBare.Price", "ColumnDataType = \"decimal\")] and is a decimal property" },
-        { typeof(NumericBareNullable), "NumericBareNullable.Price", "ColumnDataType = \"NUMERIC not null\")] and is a decimal? property" },
+        { typeof(NumericBareNullable), "NumericBareNullable.Price", "ColumnDataType = \"NUMERIC null\")] and is a decimal? property" },
         { typeof(BoolVarchar), "BoolVarchar.Flag", "ColumnDataType = \"varchar(5)\")] and is a bool property" },
         { typeof(BoolNullableText), "BoolNullableText.Flag", "ColumnDataType = \"text\")] and is a bool? property" },
     };
@@ -694,7 +694,7 @@ public sealed class ColumnDataTypeFitTests
         act.Should().Throw<MetadataException>().Which.Message.Should().Be(
             "Field 'DecimalBare.Price' has [SugarColumn(ColumnDataType = \"decimal\")] and is a decimal property. " +
             "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType: " +
-            "a column with no scale keeps no fraction on MySQL and MariaDB (decimal(10,0)) and, " +
+            "a decimal type written with no precision gets scale 0 on MySQL and MariaDB (decimal(10,0)) and, " +
             "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
             "and the check is the same on every backend.");
     }
